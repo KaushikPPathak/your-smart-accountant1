@@ -20,6 +20,13 @@ import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppLedgersRouteImport } from './routes/app.ledgers'
 import { Route as AppItemsRouteImport } from './routes/app.items'
 import { Route as AppCompaniesRouteImport } from './routes/app.companies'
+import { Route as AppVouchersNewSalesRouteImport } from './routes/app.vouchers.new.sales'
+import { Route as AppVouchersNewReceiptRouteImport } from './routes/app.vouchers.new.receipt'
+import { Route as AppVouchersNewPurchaseRouteImport } from './routes/app.vouchers.new.purchase'
+import { Route as AppVouchersNewPaymentRouteImport } from './routes/app.vouchers.new.payment'
+import { Route as AppVouchersNewJournalRouteImport } from './routes/app.vouchers.new.journal'
+import { Route as AppVouchersNewDebit_noteRouteImport } from './routes/app.vouchers.new.debit_note'
+import { Route as AppVouchersNewCredit_noteRouteImport } from './routes/app.vouchers.new.credit_note'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -76,6 +83,43 @@ const AppCompaniesRoute = AppCompaniesRouteImport.update({
   path: '/companies',
   getParentRoute: () => AppRoute,
 } as any)
+const AppVouchersNewSalesRoute = AppVouchersNewSalesRouteImport.update({
+  id: '/new/sales',
+  path: '/new/sales',
+  getParentRoute: () => AppVouchersRoute,
+} as any)
+const AppVouchersNewReceiptRoute = AppVouchersNewReceiptRouteImport.update({
+  id: '/new/receipt',
+  path: '/new/receipt',
+  getParentRoute: () => AppVouchersRoute,
+} as any)
+const AppVouchersNewPurchaseRoute = AppVouchersNewPurchaseRouteImport.update({
+  id: '/new/purchase',
+  path: '/new/purchase',
+  getParentRoute: () => AppVouchersRoute,
+} as any)
+const AppVouchersNewPaymentRoute = AppVouchersNewPaymentRouteImport.update({
+  id: '/new/payment',
+  path: '/new/payment',
+  getParentRoute: () => AppVouchersRoute,
+} as any)
+const AppVouchersNewJournalRoute = AppVouchersNewJournalRouteImport.update({
+  id: '/new/journal',
+  path: '/new/journal',
+  getParentRoute: () => AppVouchersRoute,
+} as any)
+const AppVouchersNewDebit_noteRoute =
+  AppVouchersNewDebit_noteRouteImport.update({
+    id: '/new/debit_note',
+    path: '/new/debit_note',
+    getParentRoute: () => AppVouchersRoute,
+  } as any)
+const AppVouchersNewCredit_noteRoute =
+  AppVouchersNewCredit_noteRouteImport.update({
+    id: '/new/credit_note',
+    path: '/new/credit_note',
+    getParentRoute: () => AppVouchersRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -87,8 +131,15 @@ export interface FileRoutesByFullPath {
   '/app/ledgers': typeof AppLedgersRoute
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
-  '/app/vouchers': typeof AppVouchersRoute
+  '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
+  '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
+  '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
+  '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
+  '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
+  '/app/vouchers/new/receipt': typeof AppVouchersNewReceiptRoute
+  '/app/vouchers/new/sales': typeof AppVouchersNewSalesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -99,8 +150,15 @@ export interface FileRoutesByTo {
   '/app/ledgers': typeof AppLedgersRoute
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
-  '/app/vouchers': typeof AppVouchersRoute
+  '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app': typeof AppIndexRoute
+  '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
+  '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
+  '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
+  '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
+  '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
+  '/app/vouchers/new/receipt': typeof AppVouchersNewReceiptRoute
+  '/app/vouchers/new/sales': typeof AppVouchersNewSalesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -113,8 +171,15 @@ export interface FileRoutesById {
   '/app/ledgers': typeof AppLedgersRoute
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
-  '/app/vouchers': typeof AppVouchersRoute
+  '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
+  '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
+  '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
+  '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
+  '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
+  '/app/vouchers/new/receipt': typeof AppVouchersNewReceiptRoute
+  '/app/vouchers/new/sales': typeof AppVouchersNewSalesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -130,6 +195,13 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app/'
+    | '/app/vouchers/new/credit_note'
+    | '/app/vouchers/new/debit_note'
+    | '/app/vouchers/new/journal'
+    | '/app/vouchers/new/payment'
+    | '/app/vouchers/new/purchase'
+    | '/app/vouchers/new/receipt'
+    | '/app/vouchers/new/sales'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -142,6 +214,13 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app'
+    | '/app/vouchers/new/credit_note'
+    | '/app/vouchers/new/debit_note'
+    | '/app/vouchers/new/journal'
+    | '/app/vouchers/new/payment'
+    | '/app/vouchers/new/purchase'
+    | '/app/vouchers/new/receipt'
+    | '/app/vouchers/new/sales'
   id:
     | '__root__'
     | '/'
@@ -155,6 +234,13 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app/'
+    | '/app/vouchers/new/credit_note'
+    | '/app/vouchers/new/debit_note'
+    | '/app/vouchers/new/journal'
+    | '/app/vouchers/new/payment'
+    | '/app/vouchers/new/purchase'
+    | '/app/vouchers/new/receipt'
+    | '/app/vouchers/new/sales'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -243,8 +329,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCompaniesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/vouchers/new/sales': {
+      id: '/app/vouchers/new/sales'
+      path: '/new/sales'
+      fullPath: '/app/vouchers/new/sales'
+      preLoaderRoute: typeof AppVouchersNewSalesRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
+    '/app/vouchers/new/receipt': {
+      id: '/app/vouchers/new/receipt'
+      path: '/new/receipt'
+      fullPath: '/app/vouchers/new/receipt'
+      preLoaderRoute: typeof AppVouchersNewReceiptRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
+    '/app/vouchers/new/purchase': {
+      id: '/app/vouchers/new/purchase'
+      path: '/new/purchase'
+      fullPath: '/app/vouchers/new/purchase'
+      preLoaderRoute: typeof AppVouchersNewPurchaseRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
+    '/app/vouchers/new/payment': {
+      id: '/app/vouchers/new/payment'
+      path: '/new/payment'
+      fullPath: '/app/vouchers/new/payment'
+      preLoaderRoute: typeof AppVouchersNewPaymentRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
+    '/app/vouchers/new/journal': {
+      id: '/app/vouchers/new/journal'
+      path: '/new/journal'
+      fullPath: '/app/vouchers/new/journal'
+      preLoaderRoute: typeof AppVouchersNewJournalRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
+    '/app/vouchers/new/debit_note': {
+      id: '/app/vouchers/new/debit_note'
+      path: '/new/debit_note'
+      fullPath: '/app/vouchers/new/debit_note'
+      preLoaderRoute: typeof AppVouchersNewDebit_noteRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
+    '/app/vouchers/new/credit_note': {
+      id: '/app/vouchers/new/credit_note'
+      path: '/new/credit_note'
+      fullPath: '/app/vouchers/new/credit_note'
+      preLoaderRoute: typeof AppVouchersNewCredit_noteRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
   }
 }
+
+interface AppVouchersRouteChildren {
+  AppVouchersNewCredit_noteRoute: typeof AppVouchersNewCredit_noteRoute
+  AppVouchersNewDebit_noteRoute: typeof AppVouchersNewDebit_noteRoute
+  AppVouchersNewJournalRoute: typeof AppVouchersNewJournalRoute
+  AppVouchersNewPaymentRoute: typeof AppVouchersNewPaymentRoute
+  AppVouchersNewPurchaseRoute: typeof AppVouchersNewPurchaseRoute
+  AppVouchersNewReceiptRoute: typeof AppVouchersNewReceiptRoute
+  AppVouchersNewSalesRoute: typeof AppVouchersNewSalesRoute
+}
+
+const AppVouchersRouteChildren: AppVouchersRouteChildren = {
+  AppVouchersNewCredit_noteRoute: AppVouchersNewCredit_noteRoute,
+  AppVouchersNewDebit_noteRoute: AppVouchersNewDebit_noteRoute,
+  AppVouchersNewJournalRoute: AppVouchersNewJournalRoute,
+  AppVouchersNewPaymentRoute: AppVouchersNewPaymentRoute,
+  AppVouchersNewPurchaseRoute: AppVouchersNewPurchaseRoute,
+  AppVouchersNewReceiptRoute: AppVouchersNewReceiptRoute,
+  AppVouchersNewSalesRoute: AppVouchersNewSalesRoute,
+}
+
+const AppVouchersRouteWithChildren = AppVouchersRoute._addFileChildren(
+  AppVouchersRouteChildren,
+)
 
 interface AppRouteChildren {
   AppCompaniesRoute: typeof AppCompaniesRoute
@@ -252,7 +411,7 @@ interface AppRouteChildren {
   AppLedgersRoute: typeof AppLedgersRoute
   AppReportsRoute: typeof AppReportsRoute
   AppSettingsRoute: typeof AppSettingsRoute
-  AppVouchersRoute: typeof AppVouchersRoute
+  AppVouchersRoute: typeof AppVouchersRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -262,7 +421,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLedgersRoute: AppLedgersRoute,
   AppReportsRoute: AppReportsRoute,
   AppSettingsRoute: AppSettingsRoute,
-  AppVouchersRoute: AppVouchersRoute,
+  AppVouchersRoute: AppVouchersRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
 }
 
