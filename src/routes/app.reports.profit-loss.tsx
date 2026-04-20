@@ -68,7 +68,7 @@ function ProfitLoss() {
                   <TableRow key={e.id}><TableCell>{e.name}</TableCell><TableCell className="text-right font-mono">{formatINR(e.value)}</TableCell></TableRow>
                 ))}
                 {profit > 0 && (
-                  <TableRow><TableCell className="font-semibold text-emerald-600">Net Profit</TableCell><TableCell className="text-right font-mono font-semibold text-emerald-600">{formatINR(profit)}</TableCell></TableRow>
+                  <TableRow><TableCell className="font-semibold text-primary">Net Profit</TableCell><TableCell className="text-right font-mono font-semibold text-primary">{formatINR(profit)}</TableCell></TableRow>
                 )}
                 <TableRow><TableCell className="font-semibold">Total</TableCell><TableCell className="text-right font-mono font-semibold">{formatINR(totalExp + Math.max(0, profit))}</TableCell></TableRow>
               </TableBody>
