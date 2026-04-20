@@ -423,12 +423,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                           )}
                         </SelectContent>
                       </Select>
-                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New item (F4)" onClick={() => { setFocusedLine(i); setItemDlg({ open: true, editId: null, lineIdx: i }); }}>
-                        <PackagePlus className="h-4 w-4" />
+                      <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 gap-1" title="New item (F4)" onClick={() => { setFocusedLine(i); setItemDlg({ open: true, editId: null, lineIdx: i }); }}>
+                        <PackagePlus className="h-4 w-4" /> Add
                       </Button>
                       {l.item_id && (
-                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Edit item (Shift+F4)" onClick={() => { setFocusedLine(i); setItemDlg({ open: true, editId: l.item_id, lineIdx: i }); }}>
-                          <Pencil className="h-4 w-4" />
+                        <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 gap-1" title="Edit item (Shift+F4)" onClick={() => { setFocusedLine(i); setItemDlg({ open: true, editId: l.item_id, lineIdx: i }); }}>
+                          <Pencil className="h-4 w-4" /> Edit
                         </Button>
                       )}
                     </div>
