@@ -20,6 +20,11 @@ import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppLedgersRouteImport } from './routes/app.ledgers'
 import { Route as AppItemsRouteImport } from './routes/app.items'
 import { Route as AppCompaniesRouteImport } from './routes/app.companies'
+import { Route as AppReportsTrialBalanceRouteImport } from './routes/app.reports.trial-balance'
+import { Route as AppReportsProfitLossRouteImport } from './routes/app.reports.profit-loss'
+import { Route as AppReportsLedgerRouteImport } from './routes/app.reports.ledger'
+import { Route as AppReportsDayBookRouteImport } from './routes/app.reports.day-book'
+import { Route as AppReportsBalanceSheetRouteImport } from './routes/app.reports.balance-sheet'
 import { Route as AppVouchersNewSalesRouteImport } from './routes/app.vouchers.new.sales'
 import { Route as AppVouchersNewReceiptRouteImport } from './routes/app.vouchers.new.receipt'
 import { Route as AppVouchersNewPurchaseRouteImport } from './routes/app.vouchers.new.purchase'
@@ -83,6 +88,31 @@ const AppCompaniesRoute = AppCompaniesRouteImport.update({
   path: '/companies',
   getParentRoute: () => AppRoute,
 } as any)
+const AppReportsTrialBalanceRoute = AppReportsTrialBalanceRouteImport.update({
+  id: '/trial-balance',
+  path: '/trial-balance',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsProfitLossRoute = AppReportsProfitLossRouteImport.update({
+  id: '/profit-loss',
+  path: '/profit-loss',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsLedgerRoute = AppReportsLedgerRouteImport.update({
+  id: '/ledger',
+  path: '/ledger',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsDayBookRoute = AppReportsDayBookRouteImport.update({
+  id: '/day-book',
+  path: '/day-book',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsBalanceSheetRoute = AppReportsBalanceSheetRouteImport.update({
+  id: '/balance-sheet',
+  path: '/balance-sheet',
+  getParentRoute: () => AppReportsRoute,
+} as any)
 const AppVouchersNewSalesRoute = AppVouchersNewSalesRouteImport.update({
   id: '/new/sales',
   path: '/new/sales',
@@ -129,10 +159,15 @@ export interface FileRoutesByFullPath {
   '/app/companies': typeof AppCompaniesRoute
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
-  '/app/reports': typeof AppReportsRoute
+  '/app/reports': typeof AppReportsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
+  '/app/reports/day-book': typeof AppReportsDayBookRoute
+  '/app/reports/ledger': typeof AppReportsLedgerRoute
+  '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
+  '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
@@ -148,10 +183,15 @@ export interface FileRoutesByTo {
   '/app/companies': typeof AppCompaniesRoute
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
-  '/app/reports': typeof AppReportsRoute
+  '/app/reports': typeof AppReportsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app': typeof AppIndexRoute
+  '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
+  '/app/reports/day-book': typeof AppReportsDayBookRoute
+  '/app/reports/ledger': typeof AppReportsLedgerRoute
+  '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
+  '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
@@ -169,10 +209,15 @@ export interface FileRoutesById {
   '/app/companies': typeof AppCompaniesRoute
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
-  '/app/reports': typeof AppReportsRoute
+  '/app/reports': typeof AppReportsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
+  '/app/reports/day-book': typeof AppReportsDayBookRoute
+  '/app/reports/ledger': typeof AppReportsLedgerRoute
+  '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
+  '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
@@ -195,6 +240,11 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app/'
+    | '/app/reports/balance-sheet'
+    | '/app/reports/day-book'
+    | '/app/reports/ledger'
+    | '/app/reports/profit-loss'
+    | '/app/reports/trial-balance'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/journal'
@@ -214,6 +264,11 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app'
+    | '/app/reports/balance-sheet'
+    | '/app/reports/day-book'
+    | '/app/reports/ledger'
+    | '/app/reports/profit-loss'
+    | '/app/reports/trial-balance'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/journal'
@@ -234,6 +289,11 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app/'
+    | '/app/reports/balance-sheet'
+    | '/app/reports/day-book'
+    | '/app/reports/ledger'
+    | '/app/reports/profit-loss'
+    | '/app/reports/trial-balance'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/journal'
@@ -329,6 +389,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCompaniesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/reports/trial-balance': {
+      id: '/app/reports/trial-balance'
+      path: '/trial-balance'
+      fullPath: '/app/reports/trial-balance'
+      preLoaderRoute: typeof AppReportsTrialBalanceRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/profit-loss': {
+      id: '/app/reports/profit-loss'
+      path: '/profit-loss'
+      fullPath: '/app/reports/profit-loss'
+      preLoaderRoute: typeof AppReportsProfitLossRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/ledger': {
+      id: '/app/reports/ledger'
+      path: '/ledger'
+      fullPath: '/app/reports/ledger'
+      preLoaderRoute: typeof AppReportsLedgerRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/day-book': {
+      id: '/app/reports/day-book'
+      path: '/day-book'
+      fullPath: '/app/reports/day-book'
+      preLoaderRoute: typeof AppReportsDayBookRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/balance-sheet': {
+      id: '/app/reports/balance-sheet'
+      path: '/balance-sheet'
+      fullPath: '/app/reports/balance-sheet'
+      preLoaderRoute: typeof AppReportsBalanceSheetRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/vouchers/new/sales': {
       id: '/app/vouchers/new/sales'
       path: '/new/sales'
@@ -381,6 +476,26 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppReportsRouteChildren {
+  AppReportsBalanceSheetRoute: typeof AppReportsBalanceSheetRoute
+  AppReportsDayBookRoute: typeof AppReportsDayBookRoute
+  AppReportsLedgerRoute: typeof AppReportsLedgerRoute
+  AppReportsProfitLossRoute: typeof AppReportsProfitLossRoute
+  AppReportsTrialBalanceRoute: typeof AppReportsTrialBalanceRoute
+}
+
+const AppReportsRouteChildren: AppReportsRouteChildren = {
+  AppReportsBalanceSheetRoute: AppReportsBalanceSheetRoute,
+  AppReportsDayBookRoute: AppReportsDayBookRoute,
+  AppReportsLedgerRoute: AppReportsLedgerRoute,
+  AppReportsProfitLossRoute: AppReportsProfitLossRoute,
+  AppReportsTrialBalanceRoute: AppReportsTrialBalanceRoute,
+}
+
+const AppReportsRouteWithChildren = AppReportsRoute._addFileChildren(
+  AppReportsRouteChildren,
+)
+
 interface AppVouchersRouteChildren {
   AppVouchersNewCredit_noteRoute: typeof AppVouchersNewCredit_noteRoute
   AppVouchersNewDebit_noteRoute: typeof AppVouchersNewDebit_noteRoute
@@ -409,7 +524,7 @@ interface AppRouteChildren {
   AppCompaniesRoute: typeof AppCompaniesRoute
   AppItemsRoute: typeof AppItemsRoute
   AppLedgersRoute: typeof AppLedgersRoute
-  AppReportsRoute: typeof AppReportsRoute
+  AppReportsRoute: typeof AppReportsRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
   AppVouchersRoute: typeof AppVouchersRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
@@ -419,7 +534,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCompaniesRoute: AppCompaniesRoute,
   AppItemsRoute: AppItemsRoute,
   AppLedgersRoute: AppLedgersRoute,
-  AppReportsRoute: AppReportsRoute,
+  AppReportsRoute: AppReportsRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
   AppVouchersRoute: AppVouchersRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
