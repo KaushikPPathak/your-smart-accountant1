@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Save, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Save, Trash2, UserPlus, X } from "lucide-react";
+import { QuickLedgerDialog, type QuickLedger } from "./QuickLedgerDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,6 +77,8 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   );
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [saving, setSaving] = useState(false);
+  const [focusedLine, setFocusedLine] = useState(0);
+  const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -183,11 +186,33 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         if (!saving) save();
       } else if (e.key === "Escape") {
         navigate({ to: "/app/vouchers" });
+      } else if (e.key === "F3") {
+        e.preventDefault();
+        const lid = lines[focusedLine]?.ledger_id ?? null;
+        if (e.shiftKey) {
+          if (lid) setLedgerDlg({ open: true, editId: lid, lineIdx: focusedLine });
+          else toast.info("Pick a ledger on a line first to edit");
+        } else {
+          setLedgerDlg({ open: true, editId: null, lineIdx: focusedLine });
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, navigate, saving]);
+  }, [save, navigate, saving, lines, focusedLine]);
+
+  const onLedgerSaved = (lg: QuickLedger) => {
+    setLedgers((cur) => {
+      const without = cur.filter((x) => x.id !== lg.id);
+      return [...without, { id: lg.id, name: lg.name, type: lg.type }].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+    });
+    const idx = ledgerDlg.lineIdx;
+    if (idx !== null) {
+      setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ledger_id: lg.id } : l)));
+    }
+  };
 
   return (
     <div className="space-y-4">
