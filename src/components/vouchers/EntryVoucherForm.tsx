@@ -1,0 +1,328 @@
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
+import { Plus, Save, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/lib/company-context";
+import { formatINR, rupeesToPaise } from "@/lib/money";
+
+type EntryVoucherType = "receipt" | "payment" | "journal";
+
+interface LedgerOpt {
+  id: string;
+  name: string;
+  type: string;
+}
+
+interface Line {
+  ledger_id: string;
+  debit: string;
+  credit: string;
+  narration: string;
+}
+
+const blank = (): Line => ({ ledger_id: "", debit: "", credit: "", narration: "" });
+
+const CFG: Record<
+  EntryVoucherType,
+  { title: string; subtitle: string; defaultLines: number }
+> = {
+  receipt: {
+    title: "Receipt Voucher",
+    subtitle: "Money received — debit Cash/Bank, credit Party",
+    defaultLines: 2,
+  },
+  payment: {
+    title: "Payment Voucher",
+    subtitle: "Money paid — credit Cash/Bank, debit Party/Expense",
+    defaultLines: 2,
+  },
+  journal: {
+    title: "Journal / Contra",
+    subtitle: "Free double-entry — supports book-to-book (cash↔bank) too",
+    defaultLines: 2,
+  },
+};
+
+export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherType }) {
+  const navigate = useNavigate();
+  const { activeCompanyId, activeMembership } = useCompany();
+  const cfg = CFG[voucherType];
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [refNo, setRefNo] = useState("");
+  const [narration, setNarration] = useState("");
+  const [lines, setLines] = useState<Line[]>(() =>
+    Array.from({ length: cfg.defaultLines }, blank),
+  );
+  const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    supabase
+      .from("ledgers")
+      .select("id, name, type")
+      .eq("company_id", activeCompanyId)
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setLedgers((data || []) as LedgerOpt[]));
+  }, [activeCompanyId]);
+
+  const totalDr = useMemo(
+    () => lines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.debit) || 0), 0),
+    [lines],
+  );
+  const totalCr = useMemo(
+    () => lines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.credit) || 0), 0),
+    [lines],
+  );
+  const balanced = totalDr === totalCr && totalDr > 0;
+
+  const update = (i: number, patch: Partial<Line>) =>
+    setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  const add = () => setLines((cur) => [...cur, blank()]);
+  const remove = (i: number) =>
+    setLines((cur) => (cur.length <= 2 ? cur : cur.filter((_, idx) => idx !== i)));
+
+  const canWrite =
+    activeMembership?.role === "admin" || activeMembership?.role === "accountant";
+
+  const save = useCallback(async () => {
+    if (!activeCompanyId || !canWrite) return;
+    const filled = lines.filter(
+      (l) => l.ledger_id && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0),
+    );
+    if (filled.length < 2) {
+      toast.error("At least 2 ledger lines required");
+      return;
+    }
+    if (!balanced) {
+      toast.error("Debit and Credit totals must match");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
+        _company_id: activeCompanyId,
+        _type: voucherType,
+      });
+      if (numErr) throw numErr;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not signed in");
+
+      // Determine party ledger (first sundry debtor/creditor if any)
+      const partyLine = filled.find((l) => {
+        const lg = ledgers.find((x) => x.id === l.ledger_id);
+        return lg && (lg.type === "sundry_debtor" || lg.type === "sundry_creditor");
+      });
+
+      const { data: vData, error: vErr } = await supabase
+        .from("vouchers")
+        .insert({
+          company_id: activeCompanyId,
+          created_by: user.id,
+          voucher_type: voucherType,
+          voucher_number: numData as string,
+          voucher_date: date,
+          party_ledger_id: partyLine?.ledger_id ?? null,
+          reference_no: refNo || null,
+          narration: narration || null,
+          is_interstate: false,
+          subtotal_paise: totalDr,
+          total_paise: totalDr,
+        })
+        .select("id")
+        .single();
+      if (vErr) throw vErr;
+
+      const entries = filled.map((l, i) => ({
+        voucher_id: vData.id,
+        ledger_id: l.ledger_id,
+        line_no: i + 1,
+        debit_paise: rupeesToPaise(parseFloat(l.debit) || 0),
+        credit_paise: rupeesToPaise(parseFloat(l.credit) || 0),
+        narration: l.narration || null,
+      }));
+      const { error: eErr } = await supabase.from("voucher_entries").insert(entries);
+      if (eErr) throw eErr;
+
+      toast.success(`${cfg.title} ${numData} saved`);
+      navigate({ to: "/app/vouchers" });
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }, [activeCompanyId, canWrite, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, navigate, cfg]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (!saving) save();
+      } else if (e.key === "Escape") {
+        navigate({ to: "/app/vouchers" });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [save, navigate, saving]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">{cfg.title}</h1>
+          <p className="text-xs text-muted-foreground">
+            {cfg.subtitle} · <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
+            <X className="mr-1 h-4 w-4" /> Cancel
+          </Button>
+          <Button onClick={save} disabled={saving || !canWrite || !balanced}>
+            <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+          <div className="space-y-1">
+            <Label>Date</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="space-y-1 md:col-span-2">
+            <Label>Reference No.</Label>
+            <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="Cheque/UTR/Reference" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[40%]">Ledger</TableHead>
+                <TableHead className="text-right">Debit</TableHead>
+                <TableHead className="text-right">Credit</TableHead>
+                <TableHead>Narration</TableHead>
+                <TableHead className="w-10"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {lines.map((l, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <Select value={l.ledger_id} onValueChange={(v) => update(i, { ledger_id: v })}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select ledger" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ledgers.map((lg) => (
+                          <SelectItem key={lg.id} value={lg.id}>
+                            {lg.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      className="h-9 text-right font-mono"
+                      type="number"
+                      step="0.01"
+                      value={l.debit}
+                      onChange={(e) =>
+                        update(i, { debit: e.target.value, credit: e.target.value ? "" : l.credit })
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      className="h-9 text-right font-mono"
+                      type="number"
+                      step="0.01"
+                      value={l.credit}
+                      onChange={(e) =>
+                        update(i, { credit: e.target.value, debit: e.target.value ? "" : l.debit })
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      className="h-9"
+                      value={l.narration}
+                      onChange={(e) => update(i, { narration: e.target.value })}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" onClick={() => remove(i)} disabled={lines.length <= 2}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <div className="border-t p-3">
+            <Button variant="ghost" size="sm" onClick={add}>
+              <Plus className="mr-1 h-4 w-4" /> Add line
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardContent className="p-4">
+            <Label>Narration</Label>
+            <Textarea rows={4} value={narration} onChange={(e) => setNarration(e.target.value)} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="space-y-1.5 p-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total Debit</span>
+              <span className="font-mono">{formatINR(totalDr)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total Credit</span>
+              <span className="font-mono">{formatINR(totalCr)}</span>
+            </div>
+            <div className="my-2 border-t" />
+            <div
+              className={`flex justify-between text-base font-semibold ${balanced ? "text-emerald-600" : "text-destructive"}`}
+            >
+              <span>{balanced ? "Balanced" : "Difference"}</span>
+              <span className="font-mono">{formatINR(Math.abs(totalDr - totalCr))}</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

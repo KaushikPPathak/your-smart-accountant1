@@ -35,6 +35,31 @@ function AppLayout() {
     if (!loading && !user) navigate({ to: "/login" });
   }, [user, loading, navigate]);
 
+  // Global Busy-style hotkeys for new vouchers
+  useEffect(() => {
+    const map: Record<string, string> = {
+      s: "/app/vouchers/new/sales",
+      p: "/app/vouchers/new/purchase",
+      r: "/app/vouchers/new/receipt",
+      y: "/app/vouchers/new/payment",
+      c: "/app/vouchers/new/credit_note",
+      d: "/app/vouchers/new/debit_note",
+      j: "/app/vouchers/new/journal",
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      const dest = map[e.key.toLowerCase()];
+      if (dest) {
+        e.preventDefault();
+        navigate({ to: dest });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
+
   if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
