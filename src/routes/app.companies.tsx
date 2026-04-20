@@ -47,13 +47,22 @@ function CompaniesPage() {
 
   const onCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
     const parsed = schema.safeParse(form);
     if (!parsed.success) {
       toast.error(parsed.error.issues[0].message);
       return;
     }
     setSubmitting(true);
+
+    // Always read the freshest session to avoid stale auth state during signup → first action
+    const { data: sessionData } = await supabase.auth.getSession();
+    const currentUserId = sessionData.session?.user?.id ?? user?.id;
+    if (!currentUserId) {
+      setSubmitting(false);
+      toast.error("Your session has expired. Please sign in again.");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("companies")
       .insert({
@@ -61,12 +70,13 @@ function CompaniesPage() {
         gstin: parsed.data.gstin || null,
         state: parsed.data.state || null,
         state_code: parsed.data.state_code || null,
-        created_by: user.id,
+        created_by: currentUserId,
       })
       .select("id")
-      .single();
+      .maybeSingle();
     setSubmitting(false);
     if (error || !data) {
+      console.error("Create company failed:", error);
       toast.error(error?.message ?? "Failed to create company");
       return;
     }
