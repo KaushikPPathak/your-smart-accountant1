@@ -1,0 +1,482 @@
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
+import { Plus, Save, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/lib/company-context";
+import { formatINR, rupeesToPaise, amountInWords } from "@/lib/money";
+import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/gst";
+import { GST_RATES } from "@/lib/constants";
+
+type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note";
+
+interface LedgerOpt {
+  id: string;
+  name: string;
+  type: string;
+  state_code: string | null;
+}
+interface ItemOpt {
+  id: string;
+  name: string;
+  unit: string;
+  gst_rate: number;
+  hsn_code: string | null;
+}
+
+interface Line {
+  item_id: string;
+  description: string;
+  qty: string;
+  rate: string;
+  discount: string;
+  gst_rate: string;
+}
+
+const blankLine = (): Line => ({
+  item_id: "",
+  description: "",
+  qty: "1",
+  rate: "0",
+  discount: "0",
+  gst_rate: "0",
+});
+
+const TITLES: Record<VoucherType, { title: string; partyLabel: string; partyTypes: string[] }> = {
+  sales: {
+    title: "Sales Invoice",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
+  },
+  purchase: {
+    title: "Purchase Invoice",
+    partyLabel: "Supplier",
+    partyTypes: ["sundry_creditor"],
+  },
+  credit_note: {
+    title: "Credit Note (Sales Return)",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
+  },
+  debit_note: {
+    title: "Debit Note (Purchase Return)",
+    partyLabel: "Supplier",
+    partyTypes: ["sundry_creditor"],
+  },
+};
+
+export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
+  const navigate = useNavigate();
+  const { activeCompanyId, activeMembership } = useCompany();
+  const cfg = TITLES[voucherType];
+
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [partyId, setPartyId] = useState("");
+  const [refNo, setRefNo] = useState("");
+  const [narration, setNarration] = useState("");
+  const [lines, setLines] = useState<Line[]>([blankLine()]);
+  const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
+  const [items, setItems] = useState<ItemOpt[]>([]);
+  const [companyStateCode, setCompanyStateCode] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Load masters
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    (async () => {
+      const [ld, it, co] = await Promise.all([
+        supabase
+          .from("ledgers")
+          .select("id, name, type, state_code")
+          .eq("company_id", activeCompanyId)
+          .eq("is_active", true)
+          .order("name"),
+        supabase
+          .from("items")
+          .select("id, name, unit, gst_rate, hsn_code")
+          .eq("company_id", activeCompanyId)
+          .eq("is_active", true)
+          .order("name"),
+        supabase
+          .from("companies")
+          .select("state_code")
+          .eq("id", activeCompanyId)
+          .single(),
+      ]);
+      setLedgers((ld.data || []) as LedgerOpt[]);
+      setItems((it.data || []) as ItemOpt[]);
+      setCompanyStateCode(co.data?.state_code ?? null);
+    })();
+  }, [activeCompanyId]);
+
+  const partyOpts = useMemo(
+    () => ledgers.filter((l) => cfg.partyTypes.includes(l.type)),
+    [ledgers, cfg.partyTypes],
+  );
+  const partyLedger = useMemo(() => ledgers.find((l) => l.id === partyId), [ledgers, partyId]);
+  const interstate = isInterstate(companyStateCode, partyLedger?.state_code);
+
+  const computed: GstLineResult[] = useMemo(
+    () =>
+      lines.map((l) =>
+        computeLine(
+          {
+            qty: parseFloat(l.qty) || 0,
+            rate: parseFloat(l.rate) || 0,
+            discount: parseFloat(l.discount) || 0,
+            gstRate: parseFloat(l.gst_rate) || 0,
+          },
+          interstate,
+        ),
+      ),
+    [lines, interstate],
+  );
+  const totals = useMemo(() => sumLines(computed), [computed]);
+
+  const updateLine = (idx: number, patch: Partial<Line>) => {
+    setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  };
+  const onPickItem = (idx: number, itemId: string) => {
+    const it = items.find((i) => i.id === itemId);
+    setLines((cur) =>
+      cur.map((l, i) =>
+        i === idx
+          ? { ...l, item_id: itemId, gst_rate: it ? String(it.gst_rate) : l.gst_rate }
+          : l,
+      ),
+    );
+  };
+  const addLine = () => setLines((cur) => [...cur, blankLine()]);
+  const removeLine = (idx: number) =>
+    setLines((cur) => (cur.length === 1 ? cur : cur.filter((_, i) => i !== idx)));
+
+  const canWrite =
+    activeMembership?.role === "admin" || activeMembership?.role === "accountant";
+
+  const save = useCallback(async () => {
+    if (!activeCompanyId || !canWrite) return;
+    if (!partyId) {
+      toast.error(`Select a ${cfg.partyLabel.toLowerCase()}`);
+      return;
+    }
+    const validLines = lines.filter((l, i) => l.item_id && computed[i].total_paise > 0);
+    if (validLines.length === 0) {
+      toast.error("Add at least one item line");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // 1. Get next voucher number
+      const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
+        _company_id: activeCompanyId,
+        _type: voucherType,
+      });
+      if (numErr) throw numErr;
+
+      // 2. Insert voucher
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not signed in");
+
+      const { data: vData, error: vErr } = await supabase
+        .from("vouchers")
+        .insert({
+          company_id: activeCompanyId,
+          created_by: user.id,
+          voucher_type: voucherType,
+          voucher_number: numData as string,
+          voucher_date: date,
+          party_ledger_id: partyId,
+          reference_no: refNo || null,
+          narration: narration || null,
+          is_interstate: interstate,
+          subtotal_paise: totals.subtotal_paise,
+          cgst_paise: totals.cgst_paise,
+          sgst_paise: totals.sgst_paise,
+          igst_paise: totals.igst_paise,
+          total_paise: totals.total_paise,
+        })
+        .select("id")
+        .single();
+      if (vErr) throw vErr;
+
+      // 3. Insert items
+      const itemRows = lines
+        .map((l, i) => {
+          if (!l.item_id || computed[i].total_paise <= 0) return null;
+          const c = computed[i];
+          return {
+            voucher_id: vData.id,
+            item_id: l.item_id,
+            line_no: i + 1,
+            description: l.description || null,
+            qty: parseFloat(l.qty) || 0,
+            rate_paise: rupeesToPaise(parseFloat(l.rate) || 0),
+            discount_paise: c.discount_paise,
+            amount_paise: c.amount_paise,
+            taxable_paise: c.taxable_paise,
+            gst_rate: c.gst_rate,
+            cgst_paise: c.cgst_paise,
+            sgst_paise: c.sgst_paise,
+            igst_paise: c.igst_paise,
+          };
+        })
+        .filter(Boolean) as object[];
+      const { error: iErr } = await supabase
+        .from("voucher_items")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .insert(itemRows as any);
+      if (iErr) throw iErr;
+
+      toast.success(`${cfg.title} ${numData} saved`);
+      navigate({ to: "/app/vouchers" });
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, navigate, cfg]);
+
+  // Hotkeys: Ctrl+S save, Esc cancel
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (!saving) save();
+      } else if (e.key === "Escape") {
+        navigate({ to: "/app/vouchers" });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [save, navigate, saving]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">{cfg.title}</h1>
+          <p className="text-xs text-muted-foreground">
+            <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel
+            {interstate && (
+              <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                Interstate (IGST)
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
+            <X className="mr-1 h-4 w-4" /> Cancel
+          </Button>
+          <Button onClick={save} disabled={saving || !canWrite}>
+            <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+          <div className="space-y-1">
+            <Label>Date</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>{cfg.partyLabel}</Label>
+            <Select value={partyId} onValueChange={setPartyId}>
+              <SelectTrigger>
+                <SelectValue placeholder={`Select ${cfg.partyLabel.toLowerCase()}`} />
+              </SelectTrigger>
+              <SelectContent>
+                {partyOpts.length === 0 ? (
+                  <div className="p-2 text-sm text-muted-foreground">
+                    No {cfg.partyLabel.toLowerCase()}s — create one in Ledgers.
+                  </div>
+                ) : (
+                  partyOpts.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Reference No.</Label>
+            <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="PO / Bill no." />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[28%]">Item</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead className="w-20">Qty</TableHead>
+                <TableHead className="w-24">Rate</TableHead>
+                <TableHead className="w-20">Disc</TableHead>
+                <TableHead className="w-20">GST %</TableHead>
+                <TableHead className="w-28 text-right">Amount</TableHead>
+                <TableHead className="w-10"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {lines.map((l, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <Select value={l.item_id} onValueChange={(v) => onPickItem(i, v)}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select item" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {items.length === 0 ? (
+                          <div className="p-2 text-sm text-muted-foreground">No items yet.</div>
+                        ) : (
+                          items.map((it) => (
+                            <SelectItem key={it.id} value={it.id}>
+                              {it.name} ({it.unit})
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      className="h-9"
+                      value={l.description}
+                      onChange={(e) => updateLine(i, { description: e.target.value })}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      className="h-9"
+                      type="number"
+                      step="0.01"
+                      value={l.qty}
+                      onChange={(e) => updateLine(i, { qty: e.target.value })}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      className="h-9"
+                      type="number"
+                      step="0.01"
+                      value={l.rate}
+                      onChange={(e) => updateLine(i, { rate: e.target.value })}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      className="h-9"
+                      type="number"
+                      step="0.01"
+                      value={l.discount}
+                      onChange={(e) => updateLine(i, { discount: e.target.value })}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={l.gst_rate}
+                      onValueChange={(v) => updateLine(i, { gst_rate: v })}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GST_RATES.map((r) => (
+                          <SelectItem key={r} value={String(r)}>
+                            {r}%
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-sm">
+                    {formatINR(computed[i].total_paise)}
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" onClick={() => removeLine(i)} disabled={lines.length === 1}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <div className="border-t p-3">
+            <Button variant="ghost" size="sm" onClick={addLine}>
+              <Plus className="mr-1 h-4 w-4" /> Add line
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardContent className="p-4">
+            <Label>Narration</Label>
+            <Textarea
+              rows={4}
+              value={narration}
+              onChange={(e) => setNarration(e.target.value)}
+              placeholder="Optional notes"
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="space-y-1.5 p-4 text-sm">
+            <Row label="Taxable" value={formatINR(totals.subtotal_paise)} />
+            {interstate ? (
+              <Row label="IGST" value={formatINR(totals.igst_paise)} />
+            ) : (
+              <>
+                <Row label="CGST" value={formatINR(totals.cgst_paise)} />
+                <Row label="SGST" value={formatINR(totals.sgst_paise)} />
+              </>
+            )}
+            <div className="my-2 border-t" />
+            <Row label="Total" value={formatINR(totals.total_paise)} bold />
+            <p className="pt-2 text-xs italic text-muted-foreground">
+              {amountInWords(totals.total_paise)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className={`flex justify-between ${bold ? "text-base font-semibold" : ""}`}>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono">{value}</span>
+    </div>
+  );
+}
