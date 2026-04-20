@@ -1,17 +1,495 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { z } from "zod";
+import { toast } from "sonner";
+import { Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/lib/company-context";
+import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/money";
+import {
+  GSTIN_REGEX,
+  INDIAN_STATES,
+  LEDGER_TYPES,
+  type LedgerTypeValue,
+} from "@/lib/constants";
+import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/app/ledgers")({
   head: () => ({ meta: [{ title: "Ledgers — Your Mehtaji" }] }),
-  component: () => (
-    <Card>
-      <CardHeader>
-        <CardTitle>Ledgers / Parties</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">
-        Coming in the next iteration: customers, suppliers, expense heads with GSTIN, state and
-        opening balances. The database is ready — UI follows.
-      </CardContent>
-    </Card>
-  ),
+  component: LedgersPage,
 });
+
+interface Ledger {
+  id: string;
+  name: string;
+  type: LedgerTypeValue;
+  gstin: string | null;
+  state: string | null;
+  state_code: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  opening_balance_paise: number;
+  opening_balance_is_debit: boolean;
+  is_active: boolean;
+}
+
+const schema = z.object({
+  name: z.string().trim().min(2, "Name is required").max(120),
+  type: z.string().min(1, "Select a ledger type"),
+  gstin: z
+    .string()
+    .trim()
+    .max(15)
+    .regex(/^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, "Invalid GSTIN")
+    .optional()
+    .or(z.literal("")),
+  state_code: z.string().trim().max(3).optional().or(z.literal("")),
+  state: z.string().trim().max(50).optional().or(z.literal("")),
+  address: z.string().trim().max(500).optional().or(z.literal("")),
+  phone: z.string().trim().max(20).optional().or(z.literal("")),
+  email: z.string().trim().max(255).email("Invalid email").optional().or(z.literal("")),
+  opening_balance: z.string().optional(),
+  opening_balance_is_debit: z.boolean(),
+});
+
+type FormState = {
+  name: string;
+  type: string;
+  gstin: string;
+  state_code: string;
+  state: string;
+  address: string;
+  phone: string;
+  email: string;
+  opening_balance: string;
+  opening_balance_is_debit: boolean;
+};
+
+const emptyForm: FormState = {
+  name: "",
+  type: "",
+  gstin: "",
+  state_code: "",
+  state: "",
+  address: "",
+  phone: "",
+  email: "",
+  opening_balance: "",
+  opening_balance_is_debit: true,
+};
+
+function LedgersPage() {
+  const { activeCompanyId, activeMembership } = useCompany();
+  const [ledgers, setLedgers] = useState<Ledger[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Ledger | null>(null);
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+
+  const load = async () => {
+    if (!activeCompanyId) {
+      setLedgers([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("ledgers")
+      .select("*")
+      .eq("company_id", activeCompanyId)
+      .order("name", { ascending: true });
+    if (error) {
+      toast.error(error.message);
+      setLedgers([]);
+    } else {
+      setLedgers((data ?? []) as Ledger[]);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCompanyId]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return ledgers;
+    return ledgers.filter(
+      (l) =>
+        l.name.toLowerCase().includes(q) ||
+        (l.gstin ?? "").toLowerCase().includes(q) ||
+        (l.phone ?? "").toLowerCase().includes(q),
+    );
+  }, [ledgers, search]);
+
+  const openNew = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setOpen(true);
+  };
+
+  const openEdit = (l: Ledger) => {
+    setEditing(l);
+    setForm({
+      name: l.name,
+      type: l.type,
+      gstin: l.gstin ?? "",
+      state_code: l.state_code ?? "",
+      state: l.state ?? "",
+      address: l.address ?? "",
+      phone: l.phone ?? "",
+      email: l.email ?? "",
+      opening_balance: l.opening_balance_paise
+        ? String(paiseToRupees(l.opening_balance_paise))
+        : "",
+      opening_balance_is_debit: l.opening_balance_is_debit,
+    });
+    setOpen(true);
+  };
+
+  const onStateCodeChange = (code: string) => {
+    const state = INDIAN_STATES.find((s) => s.code === code);
+    setForm((f) => ({ ...f, state_code: code, state: state?.name ?? f.state }));
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCompanyId) {
+      toast.error("Select a company first");
+      return;
+    }
+    const parsed = schema.safeParse(form);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0].message);
+      return;
+    }
+    setSubmitting(true);
+    const ob = parseFloat(parsed.data.opening_balance ?? "");
+    const payload = {
+      company_id: activeCompanyId,
+      name: parsed.data.name,
+      type: parsed.data.type as LedgerTypeValue,
+      gstin: parsed.data.gstin || null,
+      state: parsed.data.state || null,
+      state_code: parsed.data.state_code || null,
+      address: parsed.data.address || null,
+      phone: parsed.data.phone || null,
+      email: parsed.data.email || null,
+      opening_balance_paise: isFinite(ob) ? rupeesToPaise(Math.abs(ob)) : 0,
+      opening_balance_is_debit: parsed.data.opening_balance_is_debit,
+    };
+
+    const { error } = editing
+      ? await supabase.from("ledgers").update(payload).eq("id", editing.id)
+      : await supabase.from("ledgers").insert(payload);
+
+    setSubmitting(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(editing ? "Ledger updated" : "Ledger created");
+    setOpen(false);
+    setEditing(null);
+    setForm(emptyForm);
+    load();
+  };
+
+  const onDelete = async (l: Ledger) => {
+    if (!confirm(`Delete ledger "${l.name}"? This cannot be undone.`)) return;
+    const { error } = await supabase.from("ledgers").delete().eq("id", l.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Ledger deleted");
+    load();
+  };
+
+  const canWrite =
+    activeMembership?.role === "admin" || activeMembership?.role === "accountant";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Ledgers / Parties</h1>
+          <p className="text-sm text-muted-foreground">
+            Customers, suppliers, banks, expense heads — anything that hits the books.
+          </p>
+        </div>
+        {canWrite && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={openNew}>
+                <Plus className="mr-2 h-4 w-4" /> New ledger
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{editing ? "Edit ledger" : "Create new ledger"}</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={onSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label htmlFor="name">Ledger name *</Label>
+                    <Input
+                      id="name"
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label htmlFor="type">Type *</Label>
+                    <Select
+                      value={form.type}
+                      onValueChange={(v) => setForm({ ...form, type: v })}
+                    >
+                      <SelectTrigger id="type">
+                        <SelectValue placeholder="Select ledger type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LEDGER_TYPES.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gstin">GSTIN</Label>
+                    <Input
+                      id="gstin"
+                      value={form.gstin}
+                      onChange={(e) =>
+                        setForm({ ...form, gstin: e.target.value.toUpperCase() })
+                      }
+                      maxLength={15}
+                      placeholder="22AAAAA0000A1Z5"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="state_code">State</Label>
+                    <Select value={form.state_code} onValueChange={onStateCodeChange}>
+                      <SelectTrigger id="state_code">
+                        <SelectValue placeholder="Select state" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {INDIAN_STATES.map((s) => (
+                          <SelectItem key={s.code} value={s.code}>
+                            {s.code} — {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="phone">Phone</Label>
+                    <Input
+                      id="phone"
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      maxLength={20}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      maxLength={255}
+                    />
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label htmlFor="address">Address</Label>
+                    <Textarea
+                      id="address"
+                      value={form.address}
+                      onChange={(e) => setForm({ ...form, address: e.target.value })}
+                      maxLength={500}
+                      rows={2}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="opening_balance">Opening balance (₹)</Label>
+                    <Input
+                      id="opening_balance"
+                      type="number"
+                      step="0.01"
+                      value={form.opening_balance}
+                      onChange={(e) =>
+                        setForm({ ...form, opening_balance: e.target.value })
+                      }
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ob_type">Dr / Cr</Label>
+                    <Select
+                      value={form.opening_balance_is_debit ? "dr" : "cr"}
+                      onValueChange={(v) =>
+                        setForm({ ...form, opening_balance_is_debit: v === "dr" })
+                      }
+                    >
+                      <SelectTrigger id="ob_type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dr">Debit (Dr)</SelectItem>
+                        <SelectItem value="cr">Credit (Cr)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? "Saving…" : editing ? "Save changes" : "Create ledger"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+          <CardTitle className="text-base">All ledgers ({ledgers.length})</CardTitle>
+          <div className="relative w-full max-w-xs">
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, GSTIN, phone…"
+              className="pl-8"
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <p className="p-8 text-center text-sm text-muted-foreground">Loading…</p>
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title={ledgers.length === 0 ? "No ledgers yet" : "No matches"}
+              description={
+                ledgers.length === 0
+                  ? "Create customers, suppliers, banks and expense heads to start booking entries."
+                  : "Try a different search term."
+              }
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>GSTIN</TableHead>
+                    <TableHead>State</TableHead>
+                    <TableHead className="text-right">Opening</TableHead>
+                    {canWrite && <TableHead className="w-[100px]" />}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((l) => {
+                    const typeLabel =
+                      LEDGER_TYPES.find((t) => t.value === l.type)?.label ?? l.type;
+                    return (
+                      <TableRow key={l.id}>
+                        <TableCell className="font-medium">{l.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {typeLabel}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {l.gstin ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {l.state_code ? `${l.state_code} — ${l.state ?? ""}` : "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {l.opening_balance_paise
+                            ? `${formatINR(l.opening_balance_paise)} ${l.opening_balance_is_debit ? "Dr" : "Cr"}`
+                            : "—"}
+                        </TableCell>
+                        {canWrite && (
+                          <TableCell>
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openEdit(l)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => onDelete(l)}
+                                disabled={activeMembership?.role !== "admin"}
+                                title={
+                                  activeMembership?.role !== "admin"
+                                    ? "Only admins can delete"
+                                    : "Delete"
+                                }
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

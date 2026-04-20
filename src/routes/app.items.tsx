@@ -1,16 +1,457 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { z } from "zod";
+import { toast } from "sonner";
+import { Boxes, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/lib/company-context";
+import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/money";
+import { GST_RATES, UNITS } from "@/lib/constants";
+import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/app/items")({
   head: () => ({ meta: [{ title: "Items — Your Mehtaji" }] }),
-  component: () => (
-    <Card>
-      <CardHeader>
-        <CardTitle>Items / Stock</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">
-        Coming in the next iteration: items with HSN, unit, GST rate and opening stock.
-      </CardContent>
-    </Card>
-  ),
+  component: ItemsPage,
 });
+
+interface Item {
+  id: string;
+  name: string;
+  hsn_code: string | null;
+  unit: string;
+  gst_rate: number;
+  opening_stock_qty: number;
+  opening_stock_rate_paise: number;
+  reorder_level: number;
+  is_active: boolean;
+}
+
+const schema = z.object({
+  name: z.string().trim().min(2, "Name is required").max(120),
+  hsn_code: z.string().trim().max(10).optional().or(z.literal("")),
+  unit: z.string().min(1, "Select a unit").max(10),
+  gst_rate: z.string(),
+  opening_stock_qty: z.string().optional(),
+  opening_stock_rate: z.string().optional(),
+  reorder_level: z.string().optional(),
+});
+
+type FormState = {
+  name: string;
+  hsn_code: string;
+  unit: string;
+  gst_rate: string;
+  opening_stock_qty: string;
+  opening_stock_rate: string;
+  reorder_level: string;
+};
+
+const emptyForm: FormState = {
+  name: "",
+  hsn_code: "",
+  unit: "NOS",
+  gst_rate: "18",
+  opening_stock_qty: "",
+  opening_stock_rate: "",
+  reorder_level: "",
+};
+
+function ItemsPage() {
+  const { activeCompanyId, activeMembership } = useCompany();
+  const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Item | null>(null);
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+
+  const load = async () => {
+    if (!activeCompanyId) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("items")
+      .select("*")
+      .eq("company_id", activeCompanyId)
+      .order("name", { ascending: true });
+    if (error) {
+      toast.error(error.message);
+      setItems([]);
+    } else {
+      setItems((data ?? []) as Item[]);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCompanyId]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(
+      (i) =>
+        i.name.toLowerCase().includes(q) ||
+        (i.hsn_code ?? "").toLowerCase().includes(q),
+    );
+  }, [items, search]);
+
+  const openNew = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setOpen(true);
+  };
+
+  const openEdit = (i: Item) => {
+    setEditing(i);
+    setForm({
+      name: i.name,
+      hsn_code: i.hsn_code ?? "",
+      unit: i.unit,
+      gst_rate: String(i.gst_rate),
+      opening_stock_qty: i.opening_stock_qty ? String(i.opening_stock_qty) : "",
+      opening_stock_rate: i.opening_stock_rate_paise
+        ? String(paiseToRupees(i.opening_stock_rate_paise))
+        : "",
+      reorder_level: i.reorder_level ? String(i.reorder_level) : "",
+    });
+    setOpen(true);
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCompanyId) {
+      toast.error("Select a company first");
+      return;
+    }
+    const parsed = schema.safeParse(form);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0].message);
+      return;
+    }
+    setSubmitting(true);
+    const qty = parseFloat(parsed.data.opening_stock_qty ?? "");
+    const rate = parseFloat(parsed.data.opening_stock_rate ?? "");
+    const reorder = parseFloat(parsed.data.reorder_level ?? "");
+    const payload = {
+      company_id: activeCompanyId,
+      name: parsed.data.name,
+      hsn_code: parsed.data.hsn_code || null,
+      unit: parsed.data.unit,
+      gst_rate: parseFloat(parsed.data.gst_rate),
+      opening_stock_qty: isFinite(qty) ? qty : 0,
+      opening_stock_rate_paise: isFinite(rate) ? rupeesToPaise(rate) : 0,
+      reorder_level: isFinite(reorder) ? reorder : 0,
+    };
+
+    const { error } = editing
+      ? await supabase.from("items").update(payload).eq("id", editing.id)
+      : await supabase.from("items").insert(payload);
+
+    setSubmitting(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(editing ? "Item updated" : "Item created");
+    setOpen(false);
+    setEditing(null);
+    setForm(emptyForm);
+    load();
+  };
+
+  const onDelete = async (i: Item) => {
+    if (!confirm(`Delete item "${i.name}"? This cannot be undone.`)) return;
+    const { error } = await supabase.from("items").delete().eq("id", i.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Item deleted");
+    load();
+  };
+
+  const canWrite =
+    activeMembership?.role === "admin" || activeMembership?.role === "accountant";
+
+  const totalStockValue = items.reduce(
+    (acc, i) => acc + i.opening_stock_qty * i.opening_stock_rate_paise,
+    0,
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Items / Stock</h1>
+          <p className="text-sm text-muted-foreground">
+            Stock items with HSN, unit, GST rate and opening stock. Used in invoices.
+          </p>
+        </div>
+        {canWrite && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={openNew}>
+                <Plus className="mr-2 h-4 w-4" /> New item
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{editing ? "Edit item" : "Create new item"}</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={onSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label htmlFor="name">Item name *</Label>
+                    <Input
+                      id="name"
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="hsn_code">HSN / SAC code</Label>
+                    <Input
+                      id="hsn_code"
+                      value={form.hsn_code}
+                      onChange={(e) => setForm({ ...form, hsn_code: e.target.value })}
+                      maxLength={10}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="unit">Unit *</Label>
+                    <Select
+                      value={form.unit}
+                      onValueChange={(v) => setForm({ ...form, unit: v })}
+                    >
+                      <SelectTrigger id="unit">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {UNITS.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {u}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gst_rate">GST rate (%) *</Label>
+                    <Select
+                      value={form.gst_rate}
+                      onValueChange={(v) => setForm({ ...form, gst_rate: v })}
+                    >
+                      <SelectTrigger id="gst_rate">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GST_RATES.map((r) => (
+                          <SelectItem key={r} value={String(r)}>
+                            {r}%
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="reorder_level">Reorder level</Label>
+                    <Input
+                      id="reorder_level"
+                      type="number"
+                      step="0.001"
+                      value={form.reorder_level}
+                      onChange={(e) =>
+                        setForm({ ...form, reorder_level: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="opening_stock_qty">Opening stock qty</Label>
+                    <Input
+                      id="opening_stock_qty"
+                      type="number"
+                      step="0.001"
+                      value={form.opening_stock_qty}
+                      onChange={(e) =>
+                        setForm({ ...form, opening_stock_qty: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="opening_stock_rate">Opening rate (₹ per unit)</Label>
+                    <Input
+                      id="opening_stock_rate"
+                      type="number"
+                      step="0.01"
+                      value={form.opening_stock_rate}
+                      onChange={(e) =>
+                        setForm({ ...form, opening_stock_rate: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? "Saving…" : editing ? "Save changes" : "Create item"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+          <div>
+            <CardTitle className="text-base">All items ({items.length})</CardTitle>
+            {items.length > 0 && (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Opening stock value: {formatINR(totalStockValue)}
+              </p>
+            )}
+          </div>
+          <div className="relative w-full max-w-xs">
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, HSN…"
+              className="pl-8"
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <p className="p-8 text-center text-sm text-muted-foreground">Loading…</p>
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              icon={Boxes}
+              title={items.length === 0 ? "No items yet" : "No matches"}
+              description={
+                items.length === 0
+                  ? "Create stock items so you can use them in sales and purchase invoices."
+                  : "Try a different search term."
+              }
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>HSN</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead className="text-right">GST</TableHead>
+                    <TableHead className="text-right">Op. Qty</TableHead>
+                    <TableHead className="text-right">Op. Rate</TableHead>
+                    <TableHead className="text-right">Op. Value</TableHead>
+                    {canWrite && <TableHead className="w-[100px]" />}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((i) => {
+                    const value = i.opening_stock_qty * i.opening_stock_rate_paise;
+                    return (
+                      <TableRow key={i.id}>
+                        <TableCell className="font-medium">{i.name}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {i.hsn_code ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {i.unit}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {i.gst_rate}%
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {i.opening_stock_qty || "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {i.opening_stock_rate_paise
+                            ? formatINR(i.opening_stock_rate_paise)
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {value ? formatINR(value) : "—"}
+                        </TableCell>
+                        {canWrite && (
+                          <TableCell>
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openEdit(i)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => onDelete(i)}
+                                disabled={activeMembership?.role !== "admin"}
+                                title={
+                                  activeMembership?.role !== "admin"
+                                    ? "Only admins can delete"
+                                    : "Delete"
+                                }
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
