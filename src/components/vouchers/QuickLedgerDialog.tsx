@@ -31,14 +31,18 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   const [type, setType] = useState<string>("sundry_debtor");
   const [gstin, setGstin] = useState("");
   const [stateCode, setStateCode] = useState<string>("");
+  const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
+  const [looking, setLooking] = useState(false);
+  const lookedRef = useRef<string>("");
 
   useEffect(() => {
     if (!open) return;
+    lookedRef.current = "";
     if (editId) {
       supabase
         .from("ledgers")
-        .select("name, type, gstin, state_code")
+        .select("name, type, gstin, state_code, address")
         .eq("id", editId)
         .single()
         .then(({ data }) => {
@@ -47,6 +51,8 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
             setType(data.type);
             setGstin(data.gstin || "");
             setStateCode(data.state_code || "");
+            setAddress(data.address || "");
+            lookedRef.current = data.gstin || "";
           }
         });
     } else {
@@ -54,8 +60,31 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
       setType("sundry_debtor");
       setGstin("");
       setStateCode("");
+      setAddress("");
     }
   }, [open, editId]);
+
+  useEffect(() => {
+    const g = gstin.trim().toUpperCase();
+    if (g.length !== 15 || !GSTIN_REGEX.test(g) || g === lookedRef.current) return;
+    lookedRef.current = g;
+    setLooking(true);
+    lookupGstin({ data: { gstin: g } })
+      .then((res) => {
+        if (!res.ok || !res.data) {
+          toast.error(res.error || "GSTIN lookup failed");
+          return;
+        }
+        const d = res.data;
+        if (!name.trim()) setName(d.tradeName || d.legalName);
+        if (!address.trim()) setAddress(d.address);
+        if (!stateCode && d.stateCode) setStateCode(d.stateCode);
+        toast.success("GSTIN details fetched");
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Lookup failed"))
+      .finally(() => setLooking(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gstin]);
 
   const submit = async () => {
     if (!name.trim()) {
