@@ -323,7 +323,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         <div>
           <h1 className="text-2xl font-semibold">{cfg.title}</h1>
           <p className="text-xs text-muted-foreground">
-            <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel
+            <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit party · <kbd className="rounded border px-1">F4</kbd> new item · <kbd className="rounded border px-1">Shift+F4</kbd> edit item
             {interstate && (
               <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
                 Interstate (IGST)
@@ -348,7 +348,19 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>{cfg.partyLabel}</Label>
+            <Label className="flex items-center justify-between">
+              <span>{cfg.partyLabel}</span>
+              <span className="flex gap-2">
+                <button type="button" className="text-primary hover:underline text-xs inline-flex items-center gap-0.5" onClick={() => setLedgerDlg({ open: true, editId: null })} title="New ledger (F3)">
+                  <UserPlus className="h-3 w-3" /> New
+                </button>
+                {partyId && (
+                  <button type="button" className="text-primary hover:underline text-xs inline-flex items-center gap-0.5" onClick={() => setLedgerDlg({ open: true, editId: partyId })} title="Edit party (Shift+F3)">
+                    <Pencil className="h-3 w-3" /> Edit
+                  </button>
+                )}
+              </span>
+            </Label>
             <Select value={partyId} onValueChange={setPartyId}>
               <SelectTrigger>
                 <SelectValue placeholder={`Select ${cfg.partyLabel.toLowerCase()}`} />
@@ -356,7 +368,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
               <SelectContent>
                 {partyOpts.length === 0 ? (
                   <div className="p-2 text-sm text-muted-foreground">
-                    No {cfg.partyLabel.toLowerCase()}s — create one in Ledgers.
+                    No {cfg.partyLabel.toLowerCase()}s yet — press <kbd className="rounded border px-1">F3</kbd> to create.
                   </div>
                 ) : (
                   partyOpts.map((p) => (
