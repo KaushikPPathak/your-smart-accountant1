@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Save, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Save, Trash2, UserPlus, PackagePlus, X } from "lucide-react";
+import { QuickLedgerDialog, type QuickLedger } from "./QuickLedgerDialog";
+import { QuickItemDialog, type QuickItem } from "./QuickItemDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -99,6 +101,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [items, setItems] = useState<ItemOpt[]>([]);
   const [companyStateCode, setCompanyStateCode] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [focusedLine, setFocusedLine] = useState<number>(0);
+  const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null }>({ open: false, editId: null });
+  const [itemDlg, setItemDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
 
   // Load masters
   useEffect(() => {
