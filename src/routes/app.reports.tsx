@@ -11,8 +11,15 @@ const TABS = [
   { to: "/app/reports/day-book", label: "Day Book" },
   { to: "/app/reports/ledger", label: "Ledger" },
   { to: "/app/reports/trial-balance", label: "Trial Balance" },
-  { to: "/app/reports/profit-loss", label: "Profit & Loss" },
+  { to: "/app/reports/profit-loss", label: "P&L" },
   { to: "/app/reports/balance-sheet", label: "Balance Sheet" },
+  { to: "/app/reports/receivables", label: "Receivables" },
+  { to: "/app/reports/payables", label: "Payables" },
+  { to: "/app/reports/sales-register", label: "Sales Register" },
+  { to: "/app/reports/purchase-register", label: "Purchase Register" },
+  { to: "/app/reports/gstr1", label: "GSTR-1" },
+  { to: "/app/reports/gstr3b", label: "GSTR-3B" },
+  { to: "/app/reports/stock-summary", label: "Stock Summary" },
 ] as const;
 
 function ReportsLayout() {
@@ -29,7 +36,7 @@ function ReportsLayout() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Reports</h1>
-        <p className="text-xs text-muted-foreground">Books of accounts, GST-ready summaries — date filters & CSV export.</p>
+        <p className="text-xs text-muted-foreground">Books of accounts, GST-ready summaries — date filters, PDF & Excel export.</p>
       </div>
       <Card className="print:hidden">
         <CardContent className="p-2">

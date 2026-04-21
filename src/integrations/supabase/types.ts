@@ -17,13 +17,19 @@ export type Database = {
       companies: {
         Row: {
           address: string | null
+          bank_account_no: string | null
+          bank_branch: string | null
+          bank_ifsc: string | null
+          bank_name: string | null
           created_at: string
           created_by: string
           email: string | null
           financial_year_start: string
           gstin: string | null
           id: string
+          logo_url: string | null
           name: string
+          pan: string | null
           phone: string | null
           state: string | null
           state_code: string | null
@@ -31,13 +37,19 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          bank_account_no?: string | null
+          bank_branch?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
           created_at?: string
           created_by: string
           email?: string | null
           financial_year_start?: string
           gstin?: string | null
           id?: string
+          logo_url?: string | null
           name: string
+          pan?: string | null
           phone?: string | null
           state?: string | null
           state_code?: string | null
@@ -45,13 +57,19 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          bank_account_no?: string | null
+          bank_branch?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
           created_at?: string
           created_by?: string
           email?: string | null
           financial_year_start?: string
           gstin?: string | null
           id?: string
+          logo_url?: string | null
           name?: string
+          pan?: string | null
           phone?: string | null
           state?: string | null
           state_code?: string | null
@@ -91,6 +109,53 @@ export type Database = {
           },
         ]
       }
+      company_settings: {
+        Row: {
+          company_id: string
+          created_at: string
+          invoice_footer_note: string | null
+          invoice_prefix: string
+          invoice_starting_number: number
+          invoice_terms: string | null
+          show_bank_details: boolean
+          show_signatory: boolean
+          theme: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          invoice_footer_note?: string | null
+          invoice_prefix?: string
+          invoice_starting_number?: number
+          invoice_terms?: string | null
+          show_bank_details?: boolean
+          show_signatory?: boolean
+          theme?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          invoice_footer_note?: string | null
+          invoice_prefix?: string
+          invoice_starting_number?: number
+          invoice_terms?: string | null
+          show_bank_details?: boolean
+          show_signatory?: boolean
+          theme?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       items: {
         Row: {
           company_id: string
@@ -102,7 +167,9 @@ export type Database = {
           name: string
           opening_stock_qty: number
           opening_stock_rate_paise: number
+          purchase_price_paise: number
           reorder_level: number
+          sale_price_paise: number
           unit: string
           updated_at: string
         }
@@ -116,7 +183,9 @@ export type Database = {
           name: string
           opening_stock_qty?: number
           opening_stock_rate_paise?: number
+          purchase_price_paise?: number
           reorder_level?: number
+          sale_price_paise?: number
           unit?: string
           updated_at?: string
         }
@@ -130,7 +199,9 @@ export type Database = {
           name?: string
           opening_stock_qty?: number
           opening_stock_rate_paise?: number
+          purchase_price_paise?: number
           reorder_level?: number
+          sale_price_paise?: number
           unit?: string
           updated_at?: string
         }
@@ -149,6 +220,8 @@ export type Database = {
           address: string | null
           company_id: string
           created_at: string
+          credit_days: number
+          credit_limit_paise: number
           email: string | null
           gstin: string | null
           id: string
@@ -156,6 +229,7 @@ export type Database = {
           name: string
           opening_balance_is_debit: boolean
           opening_balance_paise: number
+          pan: string | null
           phone: string | null
           state: string | null
           state_code: string | null
@@ -166,6 +240,8 @@ export type Database = {
           address?: string | null
           company_id: string
           created_at?: string
+          credit_days?: number
+          credit_limit_paise?: number
           email?: string | null
           gstin?: string | null
           id?: string
@@ -173,6 +249,7 @@ export type Database = {
           name: string
           opening_balance_is_debit?: boolean
           opening_balance_paise?: number
+          pan?: string | null
           phone?: string | null
           state?: string | null
           state_code?: string | null
@@ -183,6 +260,8 @@ export type Database = {
           address?: string | null
           company_id?: string
           created_at?: string
+          credit_days?: number
+          credit_limit_paise?: number
           email?: string | null
           gstin?: string | null
           id?: string
@@ -190,6 +269,7 @@ export type Database = {
           name?: string
           opening_balance_is_debit?: boolean
           opening_balance_paise?: number
+          pan?: string | null
           phone?: string | null
           state?: string | null
           state_code?: string | null
@@ -389,12 +469,18 @@ export type Database = {
           igst_paise: number
           is_interstate: boolean
           narration: string | null
+          original_voucher_id: string | null
           party_ledger_id: string | null
+          place_of_supply_code: string | null
+          reason: string | null
           reference_no: string | null
+          round_off_paise: number
           sgst_paise: number
           subtotal_paise: number
           total_paise: number
           updated_at: string
+          vendor_invoice_date: string | null
+          vendor_invoice_no: string | null
           voucher_date: string
           voucher_number: string
           voucher_type: Database["public"]["Enums"]["voucher_type"]
@@ -408,12 +494,18 @@ export type Database = {
           igst_paise?: number
           is_interstate?: boolean
           narration?: string | null
+          original_voucher_id?: string | null
           party_ledger_id?: string | null
+          place_of_supply_code?: string | null
+          reason?: string | null
           reference_no?: string | null
+          round_off_paise?: number
           sgst_paise?: number
           subtotal_paise?: number
           total_paise?: number
           updated_at?: string
+          vendor_invoice_date?: string | null
+          vendor_invoice_no?: string | null
           voucher_date: string
           voucher_number: string
           voucher_type: Database["public"]["Enums"]["voucher_type"]
@@ -427,12 +519,18 @@ export type Database = {
           igst_paise?: number
           is_interstate?: boolean
           narration?: string | null
+          original_voucher_id?: string | null
           party_ledger_id?: string | null
+          place_of_supply_code?: string | null
+          reason?: string | null
           reference_no?: string | null
+          round_off_paise?: number
           sgst_paise?: number
           subtotal_paise?: number
           total_paise?: number
           updated_at?: string
+          vendor_invoice_date?: string | null
+          vendor_invoice_no?: string | null
           voucher_date?: string
           voucher_number?: string
           voucher_type?: Database["public"]["Enums"]["voucher_type"]
@@ -443,6 +541,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vouchers_original_voucher_id_fkey"
+            columns: ["original_voucher_id"]
+            isOneToOne: false
+            referencedRelation: "vouchers"
             referencedColumns: ["id"]
           },
           {

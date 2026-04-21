@@ -6,6 +6,7 @@ import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolba
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
+import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { fetchLedgerBalances, PL_INCOME, PL_EXPENSE, type LedgerBalance } from "@/lib/reports";
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
@@ -33,27 +34,55 @@ function ProfitLoss() {
     return { incomes, expenses, totalInc, totalExp, profit: totalInc - totalExp };
   }, [balances]);
 
-  const onExport = () => {
-    const data: (string | number)[][] = [
-      [`Profit & Loss: ${from} to ${to}`, ""],
-      ["EXPENSES", ""],
-      ...expenses.filter((e) => e.value).map((e) => [e.name, (e.value / 100).toFixed(2)]),
-      ["Total Expenses", (totalExp / 100).toFixed(2)],
-      ["", ""],
-      ["INCOMES", ""],
-      ...incomes.filter((e) => e.value).map((e) => [e.name, (e.value / 100).toFixed(2)]),
-      ["Total Income", (totalInc / 100).toFixed(2)],
-      ["", ""],
-      [profit >= 0 ? "Net Profit" : "Net Loss", (Math.abs(profit) / 100).toFixed(2)],
-    ];
-    downloadCsv(`profit-loss-${from}_to_${to}.csv`, data);
-  };
+  const csvRows = (): (string | number)[][] => [
+    [`Profit & Loss: ${from} to ${to}`, ""],
+    ["EXPENSES", ""],
+    ...expenses.filter((e) => e.value).map((e) => [e.name, (e.value / 100).toFixed(2)]),
+    ["Total Expenses", (totalExp / 100).toFixed(2)],
+    ["", ""],
+    ["INCOMES", ""],
+    ...incomes.filter((e) => e.value).map((e) => [e.name, (e.value / 100).toFixed(2)]),
+    ["Total Income", (totalInc / 100).toFixed(2)],
+    ["", ""],
+    [profit >= 0 ? "Net Profit" : "Net Loss", (Math.abs(profit) / 100).toFixed(2)],
+  ];
+
+  const onExportCsv = () => downloadCsv(`profit-loss-${from}_to_${to}.csv`, csvRows());
+  const onExportXlsx = () =>
+    downloadXlsx(`profit-loss-${from}_to_${to}.xlsx`, [{ name: "P&L", rows: csvRows() }]);
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title: "Profit & Loss",
+      subtitle: `${from} to ${to}`,
+      head: [["Particulars", "Amount (₹)"]],
+      body: [
+        ["— EXPENSES —", ""],
+        ...expenses.filter((e) => e.value).map((e) => [e.name, r(e.value).toFixed(2)]),
+        ["Total Expenses", r(totalExp).toFixed(2)],
+        ["", ""],
+        ["— INCOME —", ""],
+        ...incomes.filter((e) => e.value).map((e) => [e.name, r(e.value).toFixed(2)]),
+        ["Total Income", r(totalInc).toFixed(2)],
+      ],
+      foot: [[profit >= 0 ? "Net Profit" : "Net Loss", r(Math.abs(profit)).toFixed(2)]],
+      fileName: `profit-loss-${from}_to_${to}.pdf`,
+      rightAlignCols: [1],
+    });
 
   return (
     <div className="space-y-3">
       <Card>
         <CardContent className="p-3">
-          <ReportToolbar from={from} to={to} onFrom={setFrom} onTo={setTo} onExport={onExport} onPrint={() => window.print()} />
+          <ReportToolbar
+            from={from}
+            to={to}
+            onFrom={setFrom}
+            onTo={setTo}
+            onExportCsv={onExportCsv}
+            onExportXlsx={onExportXlsx}
+            onExportPdf={onExportPdf}
+            onPrint={() => window.print()}
+          />
         </CardContent>
       </Card>
       <div className="grid gap-3 md:grid-cols-2">

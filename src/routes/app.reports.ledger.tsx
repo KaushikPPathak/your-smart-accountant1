@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
+import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 
 export const Route = createFileRoute("/app/reports/ledger")({
   head: () => ({ meta: [{ title: "Ledger Statement — Reports" }] }),
@@ -108,26 +109,54 @@ function LedgerStatement() {
 
   const fmtBal = (p: number) => `${formatINR(Math.abs(p))} ${p >= 0 ? "Dr" : "Cr"}`;
 
-  const onExport = () => {
-    const data: (string | number)[][] = [
-      [`Ledger: ${ledger?.name ?? ""}`, "", "", "", "", ""],
-      [`Period: ${from} to ${to}`, "", "", "", "", ""],
-      ["Date", "Voucher", "Type", "Narration", "Debit", "Credit", "Balance"],
-      ["", "", "", "Opening", "", "", (openingBeforeFrom / 100).toFixed(2)],
-      ...running.map((r) => [
-        r.vouchers?.voucher_date ?? "",
-        r.vouchers?.voucher_number ?? "",
-        r.vouchers?.voucher_type ?? "",
-        r.narration ?? r.vouchers?.narration ?? "",
-        r.debit_paise ? (r.debit_paise / 100).toFixed(2) : "",
-        r.credit_paise ? (r.credit_paise / 100).toFixed(2) : "",
-        (r.balance / 100).toFixed(2),
-      ]),
-      ["", "", "", "Totals", (totals.dr / 100).toFixed(2), (totals.cr / 100).toFixed(2), ""],
-      ["", "", "", "Closing", "", "", (closing / 100).toFixed(2)],
-    ];
-    downloadCsv(`ledger-${ledger?.name ?? "x"}-${from}_to_${to}.csv`, data);
-  };
+  const csvRows = (): (string | number)[][] => [
+    [`Ledger: ${ledger?.name ?? ""}`, "", "", "", "", "", ""],
+    [`Period: ${from} to ${to}`, "", "", "", "", "", ""],
+    ["Date", "Voucher", "Type", "Narration", "Debit", "Credit", "Balance"],
+    ["", "", "", "Opening", "", "", (openingBeforeFrom / 100).toFixed(2)],
+    ...running.map((r2) => [
+      r2.vouchers?.voucher_date ?? "",
+      r2.vouchers?.voucher_number ?? "",
+      r2.vouchers?.voucher_type ?? "",
+      r2.narration ?? r2.vouchers?.narration ?? "",
+      r2.debit_paise ? (r2.debit_paise / 100).toFixed(2) : "",
+      r2.credit_paise ? (r2.credit_paise / 100).toFixed(2) : "",
+      (r2.balance / 100).toFixed(2),
+    ]),
+    ["", "", "", "Totals", (totals.dr / 100).toFixed(2), (totals.cr / 100).toFixed(2), ""],
+    ["", "", "", "Closing", "", "", (closing / 100).toFixed(2)],
+  ];
+
+  const onExportCsv = () => downloadCsv(`ledger-${ledger?.name ?? "x"}-${from}_to_${to}.csv`, csvRows());
+  const onExportXlsx = () =>
+    downloadXlsx(`ledger-${ledger?.name ?? "x"}-${from}_to_${to}.xlsx`, [
+      { name: "Ledger", rows: csvRows() },
+    ]);
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title: `Ledger Statement — ${ledger?.name ?? ""}`,
+      subtitle: `${from} to ${to}`,
+      head: [["Date", "Voucher", "Type", "Narration", "Debit", "Credit", "Balance"]],
+      body: [
+        ["", "", "", "Opening", "", "", r(openingBeforeFrom).toFixed(2)],
+        ...running.map((r2) => [
+          r2.vouchers?.voucher_date ?? "",
+          r2.vouchers?.voucher_number ?? "",
+          r2.vouchers?.voucher_type ?? "",
+          r2.narration ?? r2.vouchers?.narration ?? "",
+          r2.debit_paise ? r(r2.debit_paise).toFixed(2) : "",
+          r2.credit_paise ? r(r2.credit_paise).toFixed(2) : "",
+          r(r2.balance).toFixed(2),
+        ]),
+      ],
+      foot: [
+        ["", "", "", "Totals", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+        ["", "", "", "Closing", "", "", r(closing).toFixed(2)],
+      ],
+      fileName: `ledger-${ledger?.name ?? "x"}-${from}_to_${to}.pdf`,
+      orientation: "l",
+      rightAlignCols: [4, 5, 6],
+    });
 
   return (
     <div className="space-y-3">
@@ -138,7 +167,9 @@ function LedgerStatement() {
             to={to}
             onFrom={setFrom}
             onTo={setTo}
-            onExport={onExport}
+            onExportCsv={onExportCsv}
+            onExportXlsx={onExportXlsx}
+            onExportPdf={onExportPdf}
             onPrint={() => window.print()}
             extra={
               <div className="space-y-1">

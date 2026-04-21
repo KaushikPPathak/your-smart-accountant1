@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
+import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 
 export const Route = createFileRoute("/app/reports/trial-balance")({
   head: () => ({ meta: [{ title: "Trial Balance — Reports" }] }),
@@ -72,23 +73,45 @@ function TrialBalance() {
     { dr: 0, cr: 0 },
   );
 
-  const onExport = () => {
-    const data: (string | number)[][] = [
-      [`Trial Balance as on ${to}`, "", ""],
-      ["Ledger", "Debit", "Credit"],
-      ...rows
-        .filter((r) => r.debit || r.credit)
-        .map((r) => [r.name, r.debit ? (r.debit / 100).toFixed(2) : "", r.credit ? (r.credit / 100).toFixed(2) : ""]),
-      ["Total", (totals.dr / 100).toFixed(2), (totals.cr / 100).toFixed(2)],
-    ];
-    downloadCsv(`trial-balance-${to}.csv`, data);
-  };
+  const csvRows = (): (string | number)[][] => [
+    [`Trial Balance as on ${to}`, "", ""],
+    ["Ledger", "Debit", "Credit"],
+    ...rows
+      .filter((r2) => r2.debit || r2.credit)
+      .map((r2) => [r2.name, r2.debit ? (r2.debit / 100).toFixed(2) : "", r2.credit ? (r2.credit / 100).toFixed(2) : ""]),
+    ["Total", (totals.dr / 100).toFixed(2), (totals.cr / 100).toFixed(2)],
+  ];
+
+  const onExportCsv = () => downloadCsv(`trial-balance-${to}.csv`, csvRows());
+  const onExportXlsx = () =>
+    downloadXlsx(`trial-balance-${to}.xlsx`, [{ name: "Trial Balance", rows: csvRows() }]);
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title: "Trial Balance",
+      subtitle: `As on ${to}`,
+      head: [["Ledger", "Debit", "Credit"]],
+      body: rows
+        .filter((r2) => r2.debit || r2.credit)
+        .map((r2) => [r2.name, r2.debit ? r(r2.debit).toFixed(2) : "", r2.credit ? r(r2.credit).toFixed(2) : ""]),
+      foot: [["Total", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2)]],
+      fileName: `trial-balance-${to}.pdf`,
+      rightAlignCols: [1, 2],
+    });
 
   return (
     <div className="space-y-3">
       <Card>
         <CardContent className="p-3">
-          <ReportToolbar from={from} to={to} onFrom={setFrom} onTo={setTo} onExport={onExport} onPrint={() => window.print()} />
+          <ReportToolbar
+            from={from}
+            to={to}
+            onFrom={setFrom}
+            onTo={setTo}
+            onExportCsv={onExportCsv}
+            onExportXlsx={onExportXlsx}
+            onExportPdf={onExportPdf}
+            onPrint={() => window.print()}
+          />
           <p className="mt-2 text-xs text-muted-foreground">Closing balances as on <strong>{to}</strong> (opening balance + all postings up to date).</p>
         </CardContent>
       </Card>

@@ -1,38 +1,66 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Download, Printer } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, Printer } from "lucide-react";
 
 interface Props {
   from: string;
   to: string;
   onFrom: (v: string) => void;
   onTo: (v: string) => void;
-  onExport?: () => void;
+  onExportCsv?: () => void;
+  onExportPdf?: () => void;
+  onExportXlsx?: () => void;
   onPrint?: () => void;
   extra?: React.ReactNode;
+  hideDates?: boolean;
 }
 
-export function ReportToolbar({ from, to, onFrom, onTo, onExport, onPrint, extra }: Props) {
+export function ReportToolbar({
+  from,
+  to,
+  onFrom,
+  onTo,
+  onExportCsv,
+  onExportPdf,
+  onExportXlsx,
+  onPrint,
+  extra,
+  hideDates,
+}: Props) {
   return (
     <div className="flex flex-wrap items-end gap-3 print:hidden">
-      <div className="space-y-1">
-        <Label className="text-xs">From</Label>
-        <Input type="date" value={from} onChange={(e) => onFrom(e.target.value)} className="h-9 w-[160px]" />
-      </div>
-      <div className="space-y-1">
-        <Label className="text-xs">To</Label>
-        <Input type="date" value={to} onChange={(e) => onTo(e.target.value)} className="h-9 w-[160px]" />
-      </div>
+      {!hideDates && (
+        <>
+          <div className="space-y-1">
+            <Label className="text-xs">From</Label>
+            <Input type="date" value={from} onChange={(e) => onFrom(e.target.value)} className="h-9 w-[160px]" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">To</Label>
+            <Input type="date" value={to} onChange={(e) => onTo(e.target.value)} className="h-9 w-[160px]" />
+          </div>
+        </>
+      )}
       {extra}
       <div className="ml-auto flex gap-2">
-        {onExport && (
-          <Button variant="outline" size="sm" onClick={onExport}>
+        {onExportCsv && (
+          <Button variant="outline" size="sm" onClick={onExportCsv}>
             <Download className="mr-1 h-4 w-4" /> CSV
           </Button>
         )}
+        {onExportXlsx && (
+          <Button variant="outline" size="sm" onClick={onExportXlsx}>
+            <FileSpreadsheet className="mr-1 h-4 w-4" /> Excel
+          </Button>
+        )}
+        {onExportPdf && (
+          <Button variant="outline" size="sm" onClick={onExportPdf}>
+            <FileText className="mr-1 h-4 w-4" /> PDF
+          </Button>
+        )}
         {onPrint && (
-          <Button variant="outline" size="sm" onClick={() => (onPrint ? onPrint() : window.print())}>
+          <Button variant="outline" size="sm" onClick={onPrint}>
             <Printer className="mr-1 h-4 w-4" /> Print
           </Button>
         )}

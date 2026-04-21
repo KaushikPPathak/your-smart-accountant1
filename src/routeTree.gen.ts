@@ -21,8 +21,15 @@ import { Route as AppLedgersRouteImport } from './routes/app.ledgers'
 import { Route as AppItemsRouteImport } from './routes/app.items'
 import { Route as AppCompaniesRouteImport } from './routes/app.companies'
 import { Route as AppReportsTrialBalanceRouteImport } from './routes/app.reports.trial-balance'
+import { Route as AppReportsStockSummaryRouteImport } from './routes/app.reports.stock-summary'
+import { Route as AppReportsSalesRegisterRouteImport } from './routes/app.reports.sales-register'
+import { Route as AppReportsReceivablesRouteImport } from './routes/app.reports.receivables'
+import { Route as AppReportsPurchaseRegisterRouteImport } from './routes/app.reports.purchase-register'
 import { Route as AppReportsProfitLossRouteImport } from './routes/app.reports.profit-loss'
+import { Route as AppReportsPayablesRouteImport } from './routes/app.reports.payables'
 import { Route as AppReportsLedgerRouteImport } from './routes/app.reports.ledger'
+import { Route as AppReportsGstr3bRouteImport } from './routes/app.reports.gstr3b'
+import { Route as AppReportsGstr1RouteImport } from './routes/app.reports.gstr1'
 import { Route as AppReportsDayBookRouteImport } from './routes/app.reports.day-book'
 import { Route as AppReportsBalanceSheetRouteImport } from './routes/app.reports.balance-sheet'
 import { Route as AppVouchersNewSalesRouteImport } from './routes/app.vouchers.new.sales'
@@ -93,14 +100,50 @@ const AppReportsTrialBalanceRoute = AppReportsTrialBalanceRouteImport.update({
   path: '/trial-balance',
   getParentRoute: () => AppReportsRoute,
 } as any)
+const AppReportsStockSummaryRoute = AppReportsStockSummaryRouteImport.update({
+  id: '/stock-summary',
+  path: '/stock-summary',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsSalesRegisterRoute = AppReportsSalesRegisterRouteImport.update({
+  id: '/sales-register',
+  path: '/sales-register',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsReceivablesRoute = AppReportsReceivablesRouteImport.update({
+  id: '/receivables',
+  path: '/receivables',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsPurchaseRegisterRoute =
+  AppReportsPurchaseRegisterRouteImport.update({
+    id: '/purchase-register',
+    path: '/purchase-register',
+    getParentRoute: () => AppReportsRoute,
+  } as any)
 const AppReportsProfitLossRoute = AppReportsProfitLossRouteImport.update({
   id: '/profit-loss',
   path: '/profit-loss',
   getParentRoute: () => AppReportsRoute,
 } as any)
+const AppReportsPayablesRoute = AppReportsPayablesRouteImport.update({
+  id: '/payables',
+  path: '/payables',
+  getParentRoute: () => AppReportsRoute,
+} as any)
 const AppReportsLedgerRoute = AppReportsLedgerRouteImport.update({
   id: '/ledger',
   path: '/ledger',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsGstr3bRoute = AppReportsGstr3bRouteImport.update({
+  id: '/gstr3b',
+  path: '/gstr3b',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsGstr1Route = AppReportsGstr1RouteImport.update({
+  id: '/gstr1',
+  path: '/gstr1',
   getParentRoute: () => AppReportsRoute,
 } as any)
 const AppReportsDayBookRoute = AppReportsDayBookRouteImport.update({
@@ -165,8 +208,15 @@ export interface FileRoutesByFullPath {
   '/app/': typeof AppIndexRoute
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
+  '/app/reports/gstr1': typeof AppReportsGstr1Route
+  '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
+  '/app/reports/payables': typeof AppReportsPayablesRoute
   '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
+  '/app/reports/purchase-register': typeof AppReportsPurchaseRegisterRoute
+  '/app/reports/receivables': typeof AppReportsReceivablesRoute
+  '/app/reports/sales-register': typeof AppReportsSalesRegisterRoute
+  '/app/reports/stock-summary': typeof AppReportsStockSummaryRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
@@ -189,8 +239,15 @@ export interface FileRoutesByTo {
   '/app': typeof AppIndexRoute
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
+  '/app/reports/gstr1': typeof AppReportsGstr1Route
+  '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
+  '/app/reports/payables': typeof AppReportsPayablesRoute
   '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
+  '/app/reports/purchase-register': typeof AppReportsPurchaseRegisterRoute
+  '/app/reports/receivables': typeof AppReportsReceivablesRoute
+  '/app/reports/sales-register': typeof AppReportsSalesRegisterRoute
+  '/app/reports/stock-summary': typeof AppReportsStockSummaryRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
@@ -215,8 +272,15 @@ export interface FileRoutesById {
   '/app/': typeof AppIndexRoute
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
+  '/app/reports/gstr1': typeof AppReportsGstr1Route
+  '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
+  '/app/reports/payables': typeof AppReportsPayablesRoute
   '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
+  '/app/reports/purchase-register': typeof AppReportsPurchaseRegisterRoute
+  '/app/reports/receivables': typeof AppReportsReceivablesRoute
+  '/app/reports/sales-register': typeof AppReportsSalesRegisterRoute
+  '/app/reports/stock-summary': typeof AppReportsStockSummaryRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
@@ -242,8 +306,15 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/reports/balance-sheet'
     | '/app/reports/day-book'
+    | '/app/reports/gstr1'
+    | '/app/reports/gstr3b'
     | '/app/reports/ledger'
+    | '/app/reports/payables'
     | '/app/reports/profit-loss'
+    | '/app/reports/purchase-register'
+    | '/app/reports/receivables'
+    | '/app/reports/sales-register'
+    | '/app/reports/stock-summary'
     | '/app/reports/trial-balance'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
@@ -266,8 +337,15 @@ export interface FileRouteTypes {
     | '/app'
     | '/app/reports/balance-sheet'
     | '/app/reports/day-book'
+    | '/app/reports/gstr1'
+    | '/app/reports/gstr3b'
     | '/app/reports/ledger'
+    | '/app/reports/payables'
     | '/app/reports/profit-loss'
+    | '/app/reports/purchase-register'
+    | '/app/reports/receivables'
+    | '/app/reports/sales-register'
+    | '/app/reports/stock-summary'
     | '/app/reports/trial-balance'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
@@ -291,8 +369,15 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/reports/balance-sheet'
     | '/app/reports/day-book'
+    | '/app/reports/gstr1'
+    | '/app/reports/gstr3b'
     | '/app/reports/ledger'
+    | '/app/reports/payables'
     | '/app/reports/profit-loss'
+    | '/app/reports/purchase-register'
+    | '/app/reports/receivables'
+    | '/app/reports/sales-register'
+    | '/app/reports/stock-summary'
     | '/app/reports/trial-balance'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
@@ -396,6 +481,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsTrialBalanceRouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/stock-summary': {
+      id: '/app/reports/stock-summary'
+      path: '/stock-summary'
+      fullPath: '/app/reports/stock-summary'
+      preLoaderRoute: typeof AppReportsStockSummaryRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/sales-register': {
+      id: '/app/reports/sales-register'
+      path: '/sales-register'
+      fullPath: '/app/reports/sales-register'
+      preLoaderRoute: typeof AppReportsSalesRegisterRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/receivables': {
+      id: '/app/reports/receivables'
+      path: '/receivables'
+      fullPath: '/app/reports/receivables'
+      preLoaderRoute: typeof AppReportsReceivablesRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/purchase-register': {
+      id: '/app/reports/purchase-register'
+      path: '/purchase-register'
+      fullPath: '/app/reports/purchase-register'
+      preLoaderRoute: typeof AppReportsPurchaseRegisterRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/reports/profit-loss': {
       id: '/app/reports/profit-loss'
       path: '/profit-loss'
@@ -403,11 +516,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsProfitLossRouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/payables': {
+      id: '/app/reports/payables'
+      path: '/payables'
+      fullPath: '/app/reports/payables'
+      preLoaderRoute: typeof AppReportsPayablesRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/reports/ledger': {
       id: '/app/reports/ledger'
       path: '/ledger'
       fullPath: '/app/reports/ledger'
       preLoaderRoute: typeof AppReportsLedgerRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/gstr3b': {
+      id: '/app/reports/gstr3b'
+      path: '/gstr3b'
+      fullPath: '/app/reports/gstr3b'
+      preLoaderRoute: typeof AppReportsGstr3bRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/gstr1': {
+      id: '/app/reports/gstr1'
+      path: '/gstr1'
+      fullPath: '/app/reports/gstr1'
+      preLoaderRoute: typeof AppReportsGstr1RouteImport
       parentRoute: typeof AppReportsRoute
     }
     '/app/reports/day-book': {
@@ -479,16 +613,30 @@ declare module '@tanstack/react-router' {
 interface AppReportsRouteChildren {
   AppReportsBalanceSheetRoute: typeof AppReportsBalanceSheetRoute
   AppReportsDayBookRoute: typeof AppReportsDayBookRoute
+  AppReportsGstr1Route: typeof AppReportsGstr1Route
+  AppReportsGstr3bRoute: typeof AppReportsGstr3bRoute
   AppReportsLedgerRoute: typeof AppReportsLedgerRoute
+  AppReportsPayablesRoute: typeof AppReportsPayablesRoute
   AppReportsProfitLossRoute: typeof AppReportsProfitLossRoute
+  AppReportsPurchaseRegisterRoute: typeof AppReportsPurchaseRegisterRoute
+  AppReportsReceivablesRoute: typeof AppReportsReceivablesRoute
+  AppReportsSalesRegisterRoute: typeof AppReportsSalesRegisterRoute
+  AppReportsStockSummaryRoute: typeof AppReportsStockSummaryRoute
   AppReportsTrialBalanceRoute: typeof AppReportsTrialBalanceRoute
 }
 
 const AppReportsRouteChildren: AppReportsRouteChildren = {
   AppReportsBalanceSheetRoute: AppReportsBalanceSheetRoute,
   AppReportsDayBookRoute: AppReportsDayBookRoute,
+  AppReportsGstr1Route: AppReportsGstr1Route,
+  AppReportsGstr3bRoute: AppReportsGstr3bRoute,
   AppReportsLedgerRoute: AppReportsLedgerRoute,
+  AppReportsPayablesRoute: AppReportsPayablesRoute,
   AppReportsProfitLossRoute: AppReportsProfitLossRoute,
+  AppReportsPurchaseRegisterRoute: AppReportsPurchaseRegisterRoute,
+  AppReportsReceivablesRoute: AppReportsReceivablesRoute,
+  AppReportsSalesRegisterRoute: AppReportsSalesRegisterRoute,
+  AppReportsStockSummaryRoute: AppReportsStockSummaryRoute,
   AppReportsTrialBalanceRoute: AppReportsTrialBalanceRoute,
 }
 
@@ -551,12 +699,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
