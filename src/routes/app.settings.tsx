@@ -56,6 +56,15 @@ function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "accountant" | "viewer">("accountant");
   const [exporting, setExporting] = useState(false);
+  // Setu / GST API credentials
+  const [setuEnv, setSetuEnv] = useState<"sandbox" | "production">("sandbox");
+  const [setuClientId, setSetuClientId] = useState("");
+  const [setuClientSecret, setSetuClientSecret] = useState("");
+  const [gstnUsername, setGstnUsername] = useState("");
+  const [eiEnabled, setEiEnabled] = useState(false);
+  const [ewbEnabled, setEwbEnabled] = useState(false);
+  const [setuStatus, setSetuStatus] = useState<{ configured: boolean } | null>(null);
+  const [savingSetu, setSavingSetu] = useState(false);
 
   const isAdmin = activeMembership?.role === "admin";
 
@@ -89,8 +98,50 @@ function SettingsPage() {
           })),
         );
       }
+
+      // Load Setu status (admin only)
+      if (isAdmin) {
+        try {
+          const s = await getSetuStatus({ data: { companyId: activeCompanyId } });
+          setSetuStatus({ configured: s.configured });
+          setSetuEnv((s.environment as "sandbox" | "production") || "sandbox");
+          setEiEnabled(s.einvoice_enabled);
+          setEwbEnabled(s.ewaybill_enabled);
+          setGstnUsername(s.gstn_username ?? "");
+        } catch { /* not admin or no row yet */ }
+      }
     })();
-  }, [activeCompanyId]);
+  }, [activeCompanyId, isAdmin]);
+
+  const saveSetu = async () => {
+    if (!activeCompanyId) return;
+    if (!setuClientId || !setuClientSecret) {
+      toast.error("Setu Client ID and Secret are required");
+      return;
+    }
+    setSavingSetu(true);
+    try {
+      const res = await saveSetuCredentials({
+        data: {
+          companyId: activeCompanyId,
+          environment: setuEnv,
+          setuClientId, setuClientSecret,
+          gstnUsername: gstnUsername || undefined,
+          einvoiceEnabled: eiEnabled,
+          ewaybillEnabled: ewbEnabled,
+        },
+      });
+      if (res.success) {
+        toast.success("Setu credentials saved");
+        setSetuClientSecret(""); // clear from memory
+        setSetuStatus({ configured: true });
+      } else {
+        toast.error(res.error ?? "Failed to save");
+      }
+    } finally {
+      setSavingSetu(false);
+    }
+  };
 
   const saveSettings = async () => {
     if (!activeCompanyId) return;

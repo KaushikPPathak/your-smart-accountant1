@@ -425,6 +425,26 @@ export function EwayBillPrepDialog({
           </TabsContent>
         </Tabs>
 
+        {setu && (
+          <div className="rounded border p-3 bg-primary/5 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold flex items-center gap-1"><Zap className="h-3 w-3" /> Setu API ({setu.environment})</span>
+              <Badge variant={setu.configured ? "default" : "outline"}>{setu.configured ? "Connected" : "Not configured"}</Badge>
+            </div>
+            {setu.configured ? (
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="default" disabled={!setu.einvoice_enabled || genIrn || !irpPayload} onClick={autoGenerateIrn}>
+                  <Zap className="h-3 w-3 mr-1" />{genIrn ? "Generating IRN…" : "Generate IRN via Setu"}
+                </Button>
+                <Button size="sm" variant="default" disabled={!setu.ewaybill_enabled || genEwb || !ewbPayload} onClick={autoGenerateEwb}>
+                  <Zap className="h-3 w-3 mr-1" />{genEwb ? "Generating EWB…" : "Generate E-Way Bill via Setu"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-muted-foreground">Add Setu API credentials in <strong>Settings → GST APIs</strong> (admin only) to enable one-click IRN / EWB generation.</p>
+            )}
+          </div>
+        )}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button>
           <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save details"}</Button>
