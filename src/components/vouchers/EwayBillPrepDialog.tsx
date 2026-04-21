@@ -244,7 +244,7 @@ export function EwayBillPrepDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Truck className="h-4 w-4" /> E-Way Bill & E-Invoice — {voucher.voucher_number}
-            {requiresEwb && <Badge variant="destructive">EWB Required (> ₹50,000)</Badge>}
+            {requiresEwb && <Badge variant="destructive">EWB Required (&gt; ₹50,000)</Badge>}
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
             Invoice value <span className="font-mono">{formatINR(voucher.total_paise)}</span>.
