@@ -1,0 +1,99 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'electron/**'
+      - '.github/workflows/build-windows-installer.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Electron + Packager
+        working-directory: electron
+        run: |
+          npm init -y
+          npm pkg set name="your-mehtaji" productName="Your Mehtaji" version="1.0.0" main="main.cjs" author="Your Mehtaji"
+          npm install --save-dev electron@latest @electron/packager@latest
+
+      - name: Package Electron app (win32-x64)
+        working-directory: electron
+        run: npx @electron/packager . "Your Mehtaji" --platform=win32 --arch=x64 --out=release --overwrite --icon=icon.ico
+
+      - name: Write NSIS installer script
+        shell: bash
+        run: |
+          cat > installer.nsi << 'EOF'
+          !include "MUI2.nsh"
+          Name "Your Mehtaji"
+          OutFile "YourMehtaji-Setup-1.0.0.exe"
+          InstallDir "$PROGRAMFILES64\Your Mehtaji"
+          InstallDirRegKey HKCU "Software\YourMehtaji" "InstallDir"
+          RequestExecutionLevel admin
+
+          !define MUI_ICON "electron\icon.ico"
+          !define MUI_UNICON "electron\icon.ico"
+
+          !insertmacro MUI_PAGE_WELCOME
+          !insertmacro MUI_PAGE_DIRECTORY
+          !insertmacro MUI_PAGE_INSTFILES
+          !insertmacro MUI_PAGE_FINISH
+          !insertmacro MUI_UNPAGE_CONFIRM
+          !insertmacro MUI_UNPAGE_INSTFILES
+          !insertmacro MUI_LANGUAGE "English"
+
+          Section "Install"
+            SetOutPath "$INSTDIR"
+            File /r "electron\release\Your Mehtaji-win32-x64\*.*"
+            WriteRegStr HKCU "Software\YourMehtaji" "InstallDir" "$INSTDIR"
+            CreateDirectory "$SMPROGRAMS\Your Mehtaji"
+            CreateShortCut "$SMPROGRAMS\Your Mehtaji\Your Mehtaji.lnk" "$INSTDIR\Your Mehtaji.exe"
+            CreateShortCut "$SMPROGRAMS\Your Mehtaji\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
+            CreateShortCut "$DESKTOP\Your Mehtaji.lnk" "$INSTDIR\Your Mehtaji.exe"
+            WriteUninstaller "$INSTDIR\Uninstall.exe"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YourMehtaji" "DisplayName" "Your Mehtaji"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YourMehtaji" "UninstallString" "$INSTDIR\Uninstall.exe"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YourMehtaji" "DisplayIcon" "$INSTDIR\Your Mehtaji.exe"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YourMehtaji" "DisplayVersion" "1.0.0"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YourMehtaji" "Publisher" "Your Mehtaji"
+          SectionEnd
+
+          Section "Uninstall"
+            RMDir /r "$INSTDIR"
+            Delete "$DESKTOP\Your Mehtaji.lnk"
+            RMDir /r "$SMPROGRAMS\Your Mehtaji"
+            DeleteRegKey HKCU "Software\YourMehtaji"
+            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YourMehtaji"
+          SectionEnd
+          EOF
+
+      - name: Build NSIS installer
+        run: |
+          choco install nsis -y --no-progress
+          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YourMehtaji-Setup
+          path: YourMehtaji-Setup-1.0.0.exe
+
+      - name: Create GitHub Release
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: YourMehtaji-Setup-1.0.0.exe
+          tag_name: v1.0.0-${{ github.run_number }}
+          name: Your Mehtaji Setup (build ${{ github.run_number }})
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
