@@ -142,7 +142,14 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     [ledgers, cfg.partyTypes],
   );
   const partyLedger = useMemo(() => ledgers.find((l) => l.id === partyId), [ledgers, partyId]);
-  const interstate = isInterstate(companyStateCode, partyLedger?.state_code);
+  const interstate = isInterstate(companyStateCode, placeOfSupply || partyLedger?.state_code);
+
+  // Auto-fill place of supply from party state when party changes
+  useEffect(() => {
+    if (partyLedger?.state_code && !placeOfSupply) {
+      setPlaceOfSupply(partyLedger.state_code);
+    }
+  }, [partyLedger, placeOfSupply]);
 
   const computed: GstLineResult[] = useMemo(
     () =>
@@ -159,7 +166,16 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       ),
     [lines, interstate],
   );
-  const totals = useMemo(() => sumLines(computed), [computed]);
+  const rawTotals = useMemo(() => sumLines(computed), [computed]);
+  const roundOffPaise = useMemo(() => {
+    if (!roundOff) return 0;
+    const rounded = Math.round(rawTotals.total_paise / 100) * 100;
+    return rounded - rawTotals.total_paise;
+  }, [rawTotals.total_paise, roundOff]);
+  const totals = useMemo(
+    () => ({ ...rawTotals, total_paise: rawTotals.total_paise + roundOffPaise }),
+    [rawTotals, roundOffPaise],
+  );
 
   const updateLine = (idx: number, patch: Partial<Line>) => {
     setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
