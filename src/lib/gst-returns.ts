@@ -3,6 +3,9 @@
 // All amounts handled in paise internally; converted to rupees (2dp) on output.
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type VoucherTypeEnum = Database["public"]["Enums"]["voucher_type"];
 
 const r = (paise: number): number => Number((paise / 100).toFixed(2));
 
@@ -184,7 +187,7 @@ export async function fetchVouchers(
   companyId: string,
   from: string,
   to: string,
-  types: string[],
+  types: VoucherTypeEnum[],
 ): Promise<VoucherRow[]> {
   const { data } = await supabase
     .from("vouchers")
