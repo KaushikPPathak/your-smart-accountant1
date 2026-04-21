@@ -6,6 +6,7 @@ import { ReportToolbar, defaultFyRange } from "@/components/reports/ReportToolba
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
+import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import {
   fetchLedgerBalances,
   PL_INCOME,
@@ -57,25 +58,52 @@ function BalanceSheet() {
   const grandL = totalL + Math.max(0, profit);
   const grandA = totalA + Math.max(0, -profit);
 
-  const onExport = () => {
-    const data: (string | number)[][] = [
-      [`Balance Sheet as on ${to}`, ""],
-      ["LIABILITIES", ""],
-      ...liabExtended.filter((x) => x.value).map((x) => [x.name, (x.value / 100).toFixed(2)]),
-      ["Total Liabilities", (grandL / 100).toFixed(2)],
-      ["", ""],
-      ["ASSETS", ""],
-      ...assetExtended.filter((x) => x.value).map((x) => [x.name, (x.value / 100).toFixed(2)]),
-      ["Total Assets", (grandA / 100).toFixed(2)],
-    ];
-    downloadCsv(`balance-sheet-${to}.csv`, data);
-  };
+  const csvRows = (): (string | number)[][] => [
+    [`Balance Sheet as on ${to}`, ""],
+    ["LIABILITIES", ""],
+    ...liabExtended.filter((x) => x.value).map((x) => [x.name, (x.value / 100).toFixed(2)]),
+    ["Total Liabilities", (grandL / 100).toFixed(2)],
+    ["", ""],
+    ["ASSETS", ""],
+    ...assetExtended.filter((x) => x.value).map((x) => [x.name, (x.value / 100).toFixed(2)]),
+    ["Total Assets", (grandA / 100).toFixed(2)],
+  ];
+
+  const onExportCsv = () => downloadCsv(`balance-sheet-${to}.csv`, csvRows());
+  const onExportXlsx = () =>
+    downloadXlsx(`balance-sheet-${to}.xlsx`, [{ name: "Balance Sheet", rows: csvRows() }]);
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title: "Balance Sheet",
+      subtitle: `As on ${to}`,
+      head: [["Particulars", "Amount (₹)"]],
+      body: [
+        ["— LIABILITIES —", ""],
+        ...liabExtended.filter((x) => x.value).map((x) => [x.name, r(x.value).toFixed(2)]),
+        ["Total Liabilities", r(grandL).toFixed(2)],
+        ["", ""],
+        ["— ASSETS —", ""],
+        ...assetExtended.filter((x) => x.value).map((x) => [x.name, r(x.value).toFixed(2)]),
+        ["Total Assets", r(grandA).toFixed(2)],
+      ],
+      fileName: `balance-sheet-${to}.pdf`,
+      rightAlignCols: [1],
+    });
 
   return (
     <div className="space-y-3">
       <Card>
         <CardContent className="p-3">
-          <ReportToolbar from={from} to={to} onFrom={setFrom} onTo={setTo} onExport={onExport} onPrint={() => window.print()} />
+          <ReportToolbar
+            from={from}
+            to={to}
+            onFrom={setFrom}
+            onTo={setTo}
+            onExportCsv={onExportCsv}
+            onExportXlsx={onExportXlsx}
+            onExportPdf={onExportPdf}
+            onPrint={() => window.print()}
+          />
           <p className="mt-2 text-xs text-muted-foreground">Closing position as on <strong>{to}</strong>. Net profit/loss for the period is added to balance the sheet.</p>
         </CardContent>
       </Card>

@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
+import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { EmptyState } from "@/components/EmptyState";
 import { BookOpen } from "lucide-react";
 
@@ -63,26 +64,55 @@ function DayBook() {
 
   const total = useMemo(() => rows.reduce((s, r) => s + r.total_paise, 0), [rows]);
 
-  const onExport = () => {
-    const data: (string | number)[][] = [
-      ["Date", "Type", "Number", "Party", "Narration", "Amount"],
-      ...rows.map((r) => [
-        r.voucher_date,
-        TYPE_LABEL[r.voucher_type] ?? r.voucher_type,
-        r.voucher_number,
-        r.ledgers?.name ?? "",
-        r.narration ?? "",
-        (r.total_paise / 100).toFixed(2),
+  const csvRows = (): (string | number)[][] => [
+    ["Date", "Type", "Number", "Party", "Narration", "Amount"],
+    ...rows.map((r2) => [
+      r2.voucher_date,
+      TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type,
+      r2.voucher_number,
+      r2.ledgers?.name ?? "",
+      r2.narration ?? "",
+      (r2.total_paise / 100).toFixed(2),
+    ]),
+    ["", "", "", "", "Total", (total / 100).toFixed(2)],
+  ];
+
+  const onExportCsv = () => downloadCsv(`day-book-${from}_to_${to}.csv`, csvRows());
+  const onExportXlsx = () =>
+    downloadXlsx(`day-book-${from}_to_${to}.xlsx`, [{ name: "Day Book", rows: csvRows() }]);
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title: "Day Book",
+      subtitle: `${from} to ${to}`,
+      head: [["Date", "Type", "Number", "Party", "Narration", "Amount"]],
+      body: rows.map((r2) => [
+        r2.voucher_date,
+        TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type,
+        r2.voucher_number,
+        r2.ledgers?.name ?? "",
+        r2.narration ?? "",
+        r(r2.total_paise).toFixed(2),
       ]),
-    ];
-    downloadCsv(`day-book-${from}_to_${to}.csv`, data);
-  };
+      foot: [["", "", "", "", "Total", r(total).toFixed(2)]],
+      fileName: `day-book-${from}_to_${to}.pdf`,
+      orientation: "l",
+      rightAlignCols: [5],
+    });
 
   return (
     <div className="space-y-3">
       <Card>
         <CardContent className="p-3">
-          <ReportToolbar from={from} to={to} onFrom={setFrom} onTo={setTo} onExport={onExport} onPrint={() => window.print()} />
+          <ReportToolbar
+            from={from}
+            to={to}
+            onFrom={setFrom}
+            onTo={setTo}
+            onExportCsv={onExportCsv}
+            onExportXlsx={onExportXlsx}
+            onExportPdf={onExportPdf}
+            onPrint={() => window.print()}
+          />
         </CardContent>
       </Card>
       <Card>
