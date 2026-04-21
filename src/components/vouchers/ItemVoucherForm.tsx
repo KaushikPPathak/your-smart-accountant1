@@ -32,7 +32,7 @@ import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/g
 import { GST_RATES, INDIAN_STATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 
-type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note";
+type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note" | "sales_order" | "delivery_note" | "quotation";
 
 interface LedgerOpt {
   id: string;
@@ -86,6 +86,21 @@ const TITLES: Record<VoucherType, { title: string; partyLabel: string; partyType
     title: "Debit Note (Purchase Return)",
     partyLabel: "Supplier",
     partyTypes: ["sundry_creditor"],
+  },
+  sales_order: {
+    title: "Sales Order",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
+  },
+  delivery_note: {
+    title: "Delivery Challan",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
+  },
+  quotation: {
+    title: "Quotation",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
   },
 };
 
@@ -277,23 +292,27 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if (iErr) throw iErr;
 
       // 4. Auto-post double-entry ledger postings so reports balance.
-      const postings = await buildItemVoucherPostings(
-        activeCompanyId,
-        voucherType,
-        partyId,
-        totals,
-      );
-      const entryRows = postings.map((p) => ({
-        voucher_id: vData.id,
-        ledger_id: p.ledger_id,
-        debit_paise: p.debit_paise,
-        credit_paise: p.credit_paise,
-        line_no: p.line_no,
-      }));
-      const { error: eErr } = await supabase
-        .from("voucher_entries")
-        .insert(entryRows);
-      if (eErr) throw eErr;
+      // Sales orders, delivery challans, and quotations are non-financial — no postings.
+      const skipPostings = voucherType === "sales_order" || voucherType === "delivery_note" || voucherType === "quotation";
+      if (!skipPostings) {
+        const postings = await buildItemVoucherPostings(
+          activeCompanyId,
+          voucherType as "sales" | "purchase" | "credit_note" | "debit_note",
+          partyId,
+          totals,
+        );
+        const entryRows = postings.map((p) => ({
+          voucher_id: vData.id,
+          ledger_id: p.ledger_id,
+          debit_paise: p.debit_paise,
+          credit_paise: p.credit_paise,
+          line_no: p.line_no,
+        }));
+        const { error: eErr } = await supabase
+          .from("voucher_entries")
+          .insert(entryRows);
+        if (eErr) throw eErr;
+      }
 
       toast.success(`${cfg.title} ${numData} saved`);
 
