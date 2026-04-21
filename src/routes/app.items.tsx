@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Boxes, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Boxes, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,6 +50,8 @@ interface Item {
   gst_rate: number;
   opening_stock_qty: number;
   opening_stock_rate_paise: number;
+  purchase_price_paise: number;
+  sale_price_paise: number;
   reorder_level: number;
   is_active: boolean;
 }
@@ -59,6 +61,8 @@ const schema = z.object({
   hsn_code: z.string().trim().max(10).optional().or(z.literal("")),
   unit: z.string().min(1, "Select a unit").max(10),
   gst_rate: z.string(),
+  purchase_price: z.string().optional(),
+  sale_price: z.string().optional(),
   opening_stock_qty: z.string().optional(),
   opening_stock_rate: z.string().optional(),
   reorder_level: z.string().optional(),
@@ -69,6 +73,8 @@ type FormState = {
   hsn_code: string;
   unit: string;
   gst_rate: string;
+  purchase_price: string;
+  sale_price: string;
   opening_stock_qty: string;
   opening_stock_rate: string;
   reorder_level: string;
@@ -79,6 +85,8 @@ const emptyForm: FormState = {
   hsn_code: "",
   unit: "NOS",
   gst_rate: "18",
+  purchase_price: "",
+  sale_price: "",
   opening_stock_qty: "",
   opening_stock_rate: "",
   reorder_level: "",
@@ -89,6 +97,7 @@ function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [showLowOnly, setShowLowOnly] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -120,15 +129,22 @@ function ItemsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompanyId]);
 
+  const isLow = (i: Item) =>
+    i.reorder_level > 0 && i.opening_stock_qty <= i.reorder_level;
+
+  const lowCount = useMemo(() => items.filter(isLow).length, [items]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter(
-      (i) =>
+    return items.filter((i) => {
+      if (showLowOnly && !isLow(i)) return false;
+      if (!q) return true;
+      return (
         i.name.toLowerCase().includes(q) ||
-        (i.hsn_code ?? "").toLowerCase().includes(q),
-    );
-  }, [items, search]);
+        (i.hsn_code ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [items, search, showLowOnly]);
 
   const openNew = () => {
     setEditing(null);
@@ -143,6 +159,12 @@ function ItemsPage() {
       hsn_code: i.hsn_code ?? "",
       unit: i.unit,
       gst_rate: String(i.gst_rate),
+      purchase_price: i.purchase_price_paise
+        ? String(paiseToRupees(i.purchase_price_paise))
+        : "",
+      sale_price: i.sale_price_paise
+        ? String(paiseToRupees(i.sale_price_paise))
+        : "",
       opening_stock_qty: i.opening_stock_qty ? String(i.opening_stock_qty) : "",
       opening_stock_rate: i.opening_stock_rate_paise
         ? String(paiseToRupees(i.opening_stock_rate_paise))
@@ -164,18 +186,21 @@ function ItemsPage() {
       return;
     }
     setSubmitting(true);
-    const qty = parseFloat(parsed.data.opening_stock_qty ?? "");
-    const rate = parseFloat(parsed.data.opening_stock_rate ?? "");
-    const reorder = parseFloat(parsed.data.reorder_level ?? "");
+    const num = (s?: string) => {
+      const v = parseFloat(s ?? "");
+      return isFinite(v) ? v : 0;
+    };
     const payload = {
       company_id: activeCompanyId,
       name: parsed.data.name,
       hsn_code: parsed.data.hsn_code || null,
       unit: parsed.data.unit,
       gst_rate: parseFloat(parsed.data.gst_rate),
-      opening_stock_qty: isFinite(qty) ? qty : 0,
-      opening_stock_rate_paise: isFinite(rate) ? rupeesToPaise(rate) : 0,
-      reorder_level: isFinite(reorder) ? reorder : 0,
+      purchase_price_paise: rupeesToPaise(num(parsed.data.purchase_price)),
+      sale_price_paise: rupeesToPaise(num(parsed.data.sale_price)),
+      opening_stock_qty: num(parsed.data.opening_stock_qty),
+      opening_stock_rate_paise: rupeesToPaise(num(parsed.data.opening_stock_rate)),
+      reorder_level: num(parsed.data.reorder_level),
     };
 
     const { error } = editing
@@ -219,7 +244,7 @@ function ItemsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Items / Stock</h1>
           <p className="text-sm text-muted-foreground">
-            Stock items with HSN, unit, GST rate and opening stock. Used in invoices.
+            Stock items with HSN, unit, GST, purchase/sale price and low-stock alerts.
           </p>
         </div>
         {canWrite && (
@@ -291,6 +316,30 @@ function ItemsPage() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
+                    <Label htmlFor="purchase_price">Purchase price (₹)</Label>
+                    <Input
+                      id="purchase_price"
+                      type="number"
+                      step="0.01"
+                      value={form.purchase_price}
+                      onChange={(e) =>
+                        setForm({ ...form, purchase_price: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="sale_price">Sale price (₹)</Label>
+                    <Input
+                      id="sale_price"
+                      type="number"
+                      step="0.01"
+                      value={form.sale_price}
+                      onChange={(e) =>
+                        setForm({ ...form, sale_price: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
                     <Label htmlFor="reorder_level">Reorder level</Label>
                     <Input
                       id="reorder_level"
@@ -348,17 +397,32 @@ function ItemsPage() {
             {items.length > 0 && (
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Opening stock value: {formatINR(totalStockValue)}
+                {lowCount > 0 && (
+                  <span className="ml-2 inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                    <AlertTriangle className="h-3 w-3" /> {lowCount} low stock
+                  </span>
+                )}
               </p>
             )}
           </div>
-          <div className="relative w-full max-w-xs">
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, HSN…"
-              className="pl-8"
-            />
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showLowOnly ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowLowOnly((s) => !s)}
+              disabled={lowCount === 0}
+            >
+              <AlertTriangle className="mr-1 h-3.5 w-3.5" /> Low stock
+            </Button>
+            <div className="relative w-full max-w-xs">
+              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name, HSN…"
+                className="pl-8"
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -383,18 +447,27 @@ function ItemsPage() {
                     <TableHead>HSN</TableHead>
                     <TableHead>Unit</TableHead>
                     <TableHead className="text-right">GST</TableHead>
-                    <TableHead className="text-right">Op. Qty</TableHead>
-                    <TableHead className="text-right">Op. Rate</TableHead>
-                    <TableHead className="text-right">Op. Value</TableHead>
+                    <TableHead className="text-right">Purchase ₹</TableHead>
+                    <TableHead className="text-right">Sale ₹</TableHead>
+                    <TableHead className="text-right">Stock</TableHead>
+                    <TableHead className="text-right">Value</TableHead>
                     {canWrite && <TableHead className="w-[100px]" />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.map((i) => {
                     const value = i.opening_stock_qty * i.opening_stock_rate_paise;
+                    const low = isLow(i);
                     return (
-                      <TableRow key={i.id}>
-                        <TableCell className="font-medium">{i.name}</TableCell>
+                      <TableRow key={i.id} className={low ? "bg-amber-50/40 dark:bg-amber-900/10" : ""}>
+                        <TableCell className="font-medium">
+                          {i.name}
+                          {low && (
+                            <Badge variant="outline" className="ml-2 border-amber-400 text-amber-700 text-[10px] dark:text-amber-300">
+                              Low
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="font-mono text-xs">
                           {i.hsn_code ?? "—"}
                         </TableCell>
@@ -407,12 +480,18 @@ function ItemsPage() {
                           {i.gst_rate}%
                         </TableCell>
                         <TableCell className="text-right font-mono text-xs">
-                          {i.opening_stock_qty || "—"}
+                          {i.purchase_price_paise ? formatINR(i.purchase_price_paise) : "—"}
                         </TableCell>
                         <TableCell className="text-right font-mono text-xs">
-                          {i.opening_stock_rate_paise
-                            ? formatINR(i.opening_stock_rate_paise)
-                            : "—"}
+                          {i.sale_price_paise ? formatINR(i.sale_price_paise) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {i.opening_stock_qty || "—"}
+                          {i.reorder_level > 0 && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">
+                              / {i.reorder_level}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right font-mono text-xs">
                           {value ? formatINR(value) : "—"}
