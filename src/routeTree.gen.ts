@@ -20,6 +20,7 @@ import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppRecurringRouteImport } from './routes/app.recurring'
 import { Route as AppLedgersRouteImport } from './routes/app.ledgers'
 import { Route as AppItemsRouteImport } from './routes/app.items'
+import { Route as AppHousekeepingRouteImport } from './routes/app.housekeeping'
 import { Route as AppEinvoiceRouteImport } from './routes/app.einvoice'
 import { Route as AppCompaniesRouteImport } from './routes/app.companies'
 import { Route as AppBankRouteImport } from './routes/app.bank'
@@ -105,6 +106,11 @@ const AppLedgersRoute = AppLedgersRouteImport.update({
 const AppItemsRoute = AppItemsRouteImport.update({
   id: '/items',
   path: '/items',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppHousekeepingRoute = AppHousekeepingRouteImport.update({
+  id: '/housekeeping',
+  path: '/housekeeping',
   getParentRoute: () => AppRoute,
 } as any)
 const AppEinvoiceRoute = AppEinvoiceRouteImport.update({
@@ -276,6 +282,7 @@ export interface FileRoutesByFullPath {
   '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
   '/app/einvoice': typeof AppEinvoiceRoute
+  '/app/housekeeping': typeof AppHousekeepingRoute
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
   '/app/recurring': typeof AppRecurringRoute
@@ -319,6 +326,7 @@ export interface FileRoutesByTo {
   '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
   '/app/einvoice': typeof AppEinvoiceRoute
+  '/app/housekeeping': typeof AppHousekeepingRoute
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
   '/app/recurring': typeof AppRecurringRoute
@@ -364,6 +372,7 @@ export interface FileRoutesById {
   '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
   '/app/einvoice': typeof AppEinvoiceRoute
+  '/app/housekeeping': typeof AppHousekeepingRoute
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
   '/app/recurring': typeof AppRecurringRoute
@@ -410,6 +419,7 @@ export interface FileRouteTypes {
     | '/app/bank'
     | '/app/companies'
     | '/app/einvoice'
+    | '/app/housekeeping'
     | '/app/items'
     | '/app/ledgers'
     | '/app/recurring'
@@ -453,6 +463,7 @@ export interface FileRouteTypes {
     | '/app/bank'
     | '/app/companies'
     | '/app/einvoice'
+    | '/app/housekeeping'
     | '/app/items'
     | '/app/ledgers'
     | '/app/recurring'
@@ -497,6 +508,7 @@ export interface FileRouteTypes {
     | '/app/bank'
     | '/app/companies'
     | '/app/einvoice'
+    | '/app/housekeeping'
     | '/app/items'
     | '/app/ledgers'
     | '/app/recurring'
@@ -618,6 +630,13 @@ declare module '@tanstack/react-router' {
       path: '/items'
       fullPath: '/app/items'
       preLoaderRoute: typeof AppItemsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/housekeeping': {
+      id: '/app/housekeeping'
+      path: '/housekeeping'
+      fullPath: '/app/housekeeping'
+      preLoaderRoute: typeof AppHousekeepingRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/einvoice': {
@@ -920,6 +939,7 @@ interface AppRouteChildren {
   AppBankRoute: typeof AppBankRoute
   AppCompaniesRoute: typeof AppCompaniesRoute
   AppEinvoiceRoute: typeof AppEinvoiceRoute
+  AppHousekeepingRoute: typeof AppHousekeepingRoute
   AppItemsRoute: typeof AppItemsRoute
   AppLedgersRoute: typeof AppLedgersRoute
   AppRecurringRoute: typeof AppRecurringRoute
@@ -933,6 +953,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBankRoute: AppBankRoute,
   AppCompaniesRoute: AppCompaniesRoute,
   AppEinvoiceRoute: AppEinvoiceRoute,
+  AppHousekeepingRoute: AppHousekeepingRoute,
   AppItemsRoute: AppItemsRoute,
   AppLedgersRoute: AppLedgersRoute,
   AppRecurringRoute: AppRecurringRoute,

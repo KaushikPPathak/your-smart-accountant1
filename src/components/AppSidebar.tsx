@@ -1,4 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
+import { useState } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -10,6 +11,25 @@ import {
   Landmark,
   Repeat,
   FileCode2,
+  ChevronDown,
+  Briefcase,
+  ShieldCheck,
+  ArrowLeftRight,
+  Printer,
+  Wrench,
+  BookOpen,
+  Calculator,
+  ScrollText,
+  FileSpreadsheet,
+  Receipt,
+  Banknote,
+  TrendingUp,
+  TrendingDown,
+  Layers,
+  ClipboardList,
+  Boxes,
+  CalendarClock,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -21,47 +41,80 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-const groups: { label: string; items: { title: string; url: string; icon: typeof Users }[] }[] = [
+interface NavItem {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+}
+interface NavSection {
+  label: string;
+  icon: LucideIcon;
+  items: NavItem[];
+}
+
+// Busy-style top-level menu structure
+const SECTIONS: NavSection[] = [
   {
-    label: "Overview",
-    items: [{ title: "Dashboard", url: "/app", icon: LayoutDashboard }],
+    label: "Company",
+    icon: Briefcase,
+    items: [
+      { title: "Dashboard", url: "/app", icon: LayoutDashboard },
+      { title: "Companies", url: "/app/companies", icon: Building2 },
+      { title: "Company Settings", url: "/app/settings", icon: Settings },
+    ],
   },
   {
-    label: "Masters",
+    label: "Administration",
+    icon: ShieldCheck,
     items: [
       { title: "Ledgers / Parties", url: "/app/ledgers", icon: Users },
       { title: "Items / Stock", url: "/app/items", icon: Package },
+      { title: "Recurring Invoices", url: "/app/recurring", icon: Repeat },
     ],
   },
   {
-    label: "Vouchers",
+    label: "Transactions",
+    icon: ArrowLeftRight,
     items: [
       { title: "All Vouchers", url: "/app/vouchers", icon: ReceiptText },
-      { title: "Recurring", url: "/app/recurring", icon: Repeat },
+      { title: "New Sales", url: "/app/vouchers/new/sales", icon: TrendingUp },
+      { title: "New Purchase", url: "/app/vouchers/new/purchase", icon: TrendingDown },
+      { title: "Receipt", url: "/app/vouchers/new/receipt", icon: ArrowLeftRight },
+      { title: "Payment", url: "/app/vouchers/new/payment", icon: Banknote },
+      { title: "Journal", url: "/app/vouchers/new/journal", icon: BookOpen },
     ],
   },
   {
-    label: "Compliance",
+    label: "Display / Print",
+    icon: Printer,
     items: [
-      { title: "Reports", url: "/app/reports", icon: FileBarChart },
-      { title: "E-Invoice / EWB", url: "/app/einvoice", icon: FileCode2 },
+      { title: "Reports Hub", url: "/app/reports", icon: FileBarChart },
+      { title: "Day Book", url: "/app/reports/day-book", icon: CalendarClock },
+      { title: "Ledger Statement", url: "/app/reports/ledger", icon: ScrollText },
+      { title: "Group Ledger (B/S & P&L)", url: "/app/reports/group-ledger", icon: Layers },
+      { title: "Trial Balance", url: "/app/reports/trial-balance", icon: Calculator },
+      { title: "Balance Sheet", url: "/app/reports/balance-sheet", icon: FileSpreadsheet },
+      { title: "Profit & Loss", url: "/app/reports/profit-loss", icon: TrendingUp },
+      { title: "Outstanding", url: "/app/reports/outstanding", icon: ClipboardList },
+      { title: "Stock Summary", url: "/app/reports/stock-summary", icon: Boxes },
+      { title: "GSTR-1 / 3B / 2B", url: "/app/reports/gstr1", icon: Receipt },
     ],
   },
   {
-    label: "Banking",
+    label: "Housekeeping",
+    icon: Wrench,
     items: [
+      { title: "Accounting Tools", url: "/app/housekeeping", icon: Wrench },
       { title: "Bank Reconciliation", url: "/app/bank", icon: Landmark },
       { title: "BRS (Book vs Bank)", url: "/app/reports/brs", icon: Landmark },
-    ],
-  },
-  {
-    label: "Setup",
-    items: [
-      { title: "Companies", url: "/app/companies", icon: Building2 },
-      { title: "Settings", url: "/app/settings", icon: Settings },
+      { title: "E-Invoice / EWB", url: "/app/einvoice", icon: FileCode2 },
     ],
   },
 ];
@@ -72,7 +125,21 @@ export function AppSidebar() {
   const location = useLocation();
 
   const isActive = (url: string) =>
-    url === "/app" ? location.pathname === "/app" : location.pathname.startsWith(url);
+    url === "/app" ? location.pathname === "/app" : location.pathname === url;
+
+  const sectionHasActive = (section: NavSection) =>
+    section.items.some((i) =>
+      i.url === "/app" ? location.pathname === "/app" : location.pathname.startsWith(i.url),
+    );
+
+  // Track which sections are open. Auto-open the section containing the active route.
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>(() => {
+    const o: Record<string, boolean> = {};
+    SECTIONS.forEach((s) => {
+      o[s.label] = sectionHasActive(s) || s.label === "Company";
+    });
+    return o;
+  });
 
   return (
     <Sidebar collapsible="icon">
@@ -85,32 +152,75 @@ export function AppSidebar() {
             <div className="flex flex-col">
               <span className="text-sm font-semibold text-sidebar-foreground">Your Mehtaji</span>
               <span className="text-[10px] uppercase tracking-wide text-sidebar-foreground/60">
-                Accounting
+                Accounting Suite
               </span>
             </div>
           )}
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {groups.map((g) => (
-          <SidebarGroup key={g.label}>
-            {!collapsed && <SidebarGroupLabel>{g.label}</SidebarGroupLabel>}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {g.items.map((item) => (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-                      <Link to={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        {SECTIONS.map((section) => {
+          // When collapsed, render flat icon list (no collapsible groups)
+          if (collapsed) {
+            return (
+              <SidebarGroup key={section.label}>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {section.items.map((item) => (
+                      <SidebarMenuItem key={item.url}>
+                        <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
+                          <Link to={item.url}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            );
+          }
+
+          const open = openMap[section.label] ?? false;
+          return (
+            <Collapsible
+              key={section.label}
+              open={open}
+              onOpenChange={(v) => setOpenMap((m) => ({ ...m, [section.label]: v }))}
+            >
+              <SidebarGroup>
+                <SidebarGroupLabel asChild>
+                  <CollapsibleTrigger className="group/label flex w-full items-center justify-between rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                    <span className="flex items-center gap-2">
+                      <section.icon className="h-3.5 w-3.5" />
+                      {section.label}
+                    </span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-0" : "-rotate-90"}`}
+                    />
+                  </CollapsibleTrigger>
+                </SidebarGroupLabel>
+                <CollapsibleContent>
+                  <SidebarGroupContent>
+                    <SidebarMenuSub>
+                      {section.items.map((item) => (
+                        <SidebarMenuSubItem key={item.url}>
+                          <SidebarMenuSubButton asChild isActive={isActive(item.url)}>
+                            <Link to={item.url}>
+                              <item.icon className="h-3.5 w-3.5" />
+                              <span>{item.title}</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </SidebarGroupContent>
+                </CollapsibleContent>
+              </SidebarGroup>
+            </Collapsible>
+          );
+        })}
       </SidebarContent>
     </Sidebar>
   );
