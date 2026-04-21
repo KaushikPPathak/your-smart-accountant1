@@ -90,7 +90,10 @@ function VouchersHub() {
       .order("voucher_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(500);
-    if (type !== "all") q = q.eq("voucher_type", type);
+    if (type !== "all") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      q = q.eq("voucher_type", type as any);
+    }
     if (from) q = q.gte("voucher_date", from);
     if (to) q = q.lte("voucher_date", to);
     const { data, error } = await q;
