@@ -11,11 +11,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Copy, Download, Truck, FileCode2 } from "lucide-react";
+import { Copy, Download, Truck, FileCode2, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { upsertEinvoice, ddmmyyyy } from "@/lib/einvoice";
 import { formatINR } from "@/lib/money";
 import { INDIAN_STATES } from "@/lib/constants";
+import { generateIrn, generateEwb, getSetuStatus } from "@/utils/setu.functions";
 import { toast } from "sonner";
 
 interface VoucherSnapshot {
