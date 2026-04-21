@@ -23,6 +23,7 @@ import { Route as AppItemsRouteImport } from './routes/app.items'
 import { Route as AppEinvoiceRouteImport } from './routes/app.einvoice'
 import { Route as AppCompaniesRouteImport } from './routes/app.companies'
 import { Route as AppBankRouteImport } from './routes/app.bank'
+import { Route as AppVouchersVoucherIdRouteImport } from './routes/app.vouchers.$voucherId'
 import { Route as AppReportsTrialBalanceRouteImport } from './routes/app.reports.trial-balance'
 import { Route as AppReportsStockSummaryRouteImport } from './routes/app.reports.stock-summary'
 import { Route as AppReportsSalesRegisterRouteImport } from './routes/app.reports.sales-register'
@@ -112,6 +113,11 @@ const AppBankRoute = AppBankRouteImport.update({
   id: '/bank',
   path: '/bank',
   getParentRoute: () => AppRoute,
+} as any)
+const AppVouchersVoucherIdRoute = AppVouchersVoucherIdRouteImport.update({
+  id: '/$voucherId',
+  path: '/$voucherId',
+  getParentRoute: () => AppVouchersRoute,
 } as any)
 const AppReportsTrialBalanceRoute = AppReportsTrialBalanceRouteImport.update({
   id: '/trial-balance',
@@ -239,6 +245,7 @@ export interface FileRoutesByFullPath {
   '/app/reports/sales-register': typeof AppReportsSalesRegisterRoute
   '/app/reports/stock-summary': typeof AppReportsStockSummaryRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
+  '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
@@ -273,6 +280,7 @@ export interface FileRoutesByTo {
   '/app/reports/sales-register': typeof AppReportsSalesRegisterRoute
   '/app/reports/stock-summary': typeof AppReportsStockSummaryRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
+  '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
@@ -309,6 +317,7 @@ export interface FileRoutesById {
   '/app/reports/sales-register': typeof AppReportsSalesRegisterRoute
   '/app/reports/stock-summary': typeof AppReportsStockSummaryRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
+  '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
@@ -346,6 +355,7 @@ export interface FileRouteTypes {
     | '/app/reports/sales-register'
     | '/app/reports/stock-summary'
     | '/app/reports/trial-balance'
+    | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/journal'
@@ -380,6 +390,7 @@ export interface FileRouteTypes {
     | '/app/reports/sales-register'
     | '/app/reports/stock-summary'
     | '/app/reports/trial-balance'
+    | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/journal'
@@ -415,6 +426,7 @@ export interface FileRouteTypes {
     | '/app/reports/sales-register'
     | '/app/reports/stock-summary'
     | '/app/reports/trial-balance'
+    | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/journal'
@@ -530,6 +542,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/bank'
       preLoaderRoute: typeof AppBankRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/app/vouchers/$voucherId': {
+      id: '/app/vouchers/$voucherId'
+      path: '/$voucherId'
+      fullPath: '/app/vouchers/$voucherId'
+      preLoaderRoute: typeof AppVouchersVoucherIdRouteImport
+      parentRoute: typeof AppVouchersRoute
     }
     '/app/reports/trial-balance': {
       id: '/app/reports/trial-balance'
@@ -702,6 +721,7 @@ const AppReportsRouteWithChildren = AppReportsRoute._addFileChildren(
 )
 
 interface AppVouchersRouteChildren {
+  AppVouchersVoucherIdRoute: typeof AppVouchersVoucherIdRoute
   AppVouchersNewCredit_noteRoute: typeof AppVouchersNewCredit_noteRoute
   AppVouchersNewDebit_noteRoute: typeof AppVouchersNewDebit_noteRoute
   AppVouchersNewJournalRoute: typeof AppVouchersNewJournalRoute
@@ -712,6 +732,7 @@ interface AppVouchersRouteChildren {
 }
 
 const AppVouchersRouteChildren: AppVouchersRouteChildren = {
+  AppVouchersVoucherIdRoute: AppVouchersVoucherIdRoute,
   AppVouchersNewCredit_noteRoute: AppVouchersNewCredit_noteRoute,
   AppVouchersNewDebit_noteRoute: AppVouchersNewDebit_noteRoute,
   AppVouchersNewJournalRoute: AppVouchersNewJournalRoute,
