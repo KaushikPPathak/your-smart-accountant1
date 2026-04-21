@@ -624,6 +624,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <p className="pt-2 text-xs italic text-muted-foreground">
               {amountInWords(totals.total_paise)}
             </p>
+            {(voucherType === "sales" || voucherType === "credit_note") && totals.total_paise > 5_000_000 && (
+              <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                <Truck className="inline h-3 w-3 mr-1" />
+                Invoice value exceeds <strong>₹50,000</strong>. An <strong>E-Way Bill</strong> is mandatory for inter-state movement, and for intra-state movement beyond city limits (typically &gt; 50&nbsp;km) per state rules. The E-Way Bill prep tool will open after save.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -646,6 +652,14 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           />
         </>
       )}
+      <EwayBillPrepDialog
+        open={ewbDlg.open}
+        onOpenChange={(o) => {
+          setEwbDlg((s) => ({ ...s, open: o }));
+          if (!o) navigate({ to: "/app/vouchers" });
+        }}
+        voucher={ewbDlg.voucher}
+      />
     </div>
   );
 }
