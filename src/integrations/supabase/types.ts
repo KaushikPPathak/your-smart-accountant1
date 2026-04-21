@@ -292,6 +292,60 @@ export type Database = {
           },
         ]
       }
+      einvoice_api_log: {
+        Row: {
+          action: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          id: string
+          request_summary: Json | null
+          response_summary: Json | null
+          success: boolean
+          voucher_id: string | null
+        }
+        Insert: {
+          action: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          request_summary?: Json | null
+          response_summary?: Json | null
+          success?: boolean
+          voucher_id?: string | null
+        }
+        Update: {
+          action?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          request_summary?: Json | null
+          response_summary?: Json | null
+          success?: boolean
+          voucher_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "einvoice_api_log_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "einvoice_api_log_voucher_id_fkey"
+            columns: ["voucher_id"]
+            isOneToOne: false
+            referencedRelation: "vouchers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       einvoice_details: {
         Row: {
           ack_date: string | null
@@ -369,6 +423,62 @@ export type Database = {
             columns: ["voucher_id"]
             isOneToOne: true
             referencedRelation: "vouchers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gst_api_credentials: {
+        Row: {
+          company_id: string
+          created_at: string
+          einvoice_enabled: boolean
+          environment: string
+          ewaybill_enabled: boolean
+          gstn_password_encrypted: string | null
+          gstn_username: string | null
+          last_token: string | null
+          last_token_expires_at: string | null
+          provider: string
+          setu_client_id: string | null
+          setu_client_secret: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          einvoice_enabled?: boolean
+          environment?: string
+          ewaybill_enabled?: boolean
+          gstn_password_encrypted?: string | null
+          gstn_username?: string | null
+          last_token?: string | null
+          last_token_expires_at?: string | null
+          provider?: string
+          setu_client_id?: string | null
+          setu_client_secret?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          einvoice_enabled?: boolean
+          environment?: string
+          ewaybill_enabled?: boolean
+          gstn_password_encrypted?: string | null
+          gstn_username?: string | null
+          last_token?: string | null
+          last_token_expires_at?: string | null
+          provider?: string
+          setu_client_id?: string | null
+          setu_client_secret?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gst_api_credentials_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
