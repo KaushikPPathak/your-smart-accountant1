@@ -238,7 +238,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           cgst_paise: totals.cgst_paise,
           sgst_paise: totals.sgst_paise,
           igst_paise: totals.igst_paise,
+          round_off_paise: roundOffPaise,
           total_paise: totals.total_paise,
+          place_of_supply_code: placeOfSupply || null,
         })
         .select("id")
         .single();
