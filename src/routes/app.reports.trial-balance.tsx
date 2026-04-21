@@ -31,6 +31,7 @@ interface Entry {
 
 function TrialBalance() {
   const { activeCompanyId } = useCompany();
+  const navigate = useNavigate();
   const initial = defaultFyRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -127,7 +128,12 @@ function TrialBalance() {
             </TableHeader>
             <TableBody>
               {rows.filter((r) => r.debit || r.credit).map((r) => (
-                <TableRow key={r.id}>
+                <TableRow
+                  key={r.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => navigate({ to: "/app/reports/ledger", search: { ledgerId: r.id, from, to } })}
+                  title="Drill down to ledger statement"
+                >
                   <TableCell>{r.name}</TableCell>
                   <TableCell className="text-right font-mono">{r.debit ? formatINR(r.debit) : ""}</TableCell>
                   <TableCell className="text-right font-mono">{r.credit ? formatINR(r.credit) : ""}</TableCell>
