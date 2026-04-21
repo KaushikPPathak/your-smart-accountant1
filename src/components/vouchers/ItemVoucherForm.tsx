@@ -583,7 +583,19 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
               </>
             )}
             <div className="my-2 border-t" />
-            <Row label="Total" value={formatINR(totals.total_paise)} bold />
+            <div className="flex items-center justify-between text-xs">
+              <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={roundOff}
+                  onChange={(e) => setRoundOff(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-primary"
+                />
+                Round off
+              </label>
+              <span className="font-mono">{roundOffPaise === 0 ? "—" : formatINR(roundOffPaise)}</span>
+            </div>
+            <Row label="Grand Total" value={formatINR(totals.total_paise)} bold />
             <p className="pt-2 text-xs italic text-muted-foreground">
               {amountInWords(totals.total_paise)}
             </p>
