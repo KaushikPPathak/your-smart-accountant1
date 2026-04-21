@@ -218,37 +218,50 @@ function SettingsPage() {
     if (!activeCompanyId) return;
     setExporting(true);
     try {
-      const [c, l, i, v, vi, ve, s] = await Promise.all([
-        supabase.from("companies").select("*").eq("id", activeCompanyId).single(),
-        supabase.from("ledgers").select("*").eq("company_id", activeCompanyId),
-        supabase.from("items").select("*").eq("company_id", activeCompanyId),
-        supabase.from("vouchers").select("*").eq("company_id", activeCompanyId),
-        supabase.from("voucher_items").select("*, vouchers!inner(company_id)").eq("vouchers.company_id", activeCompanyId),
-        supabase.from("voucher_entries").select("*, vouchers!inner(company_id)").eq("vouchers.company_id", activeCompanyId),
-        supabase.from("company_settings").select("*").eq("company_id", activeCompanyId).maybeSingle(),
-      ]);
-      const payload = {
-        exported_at: new Date().toISOString(),
-        company: c.data,
-        ledgers: l.data,
-        items: i.data,
-        vouchers: v.data,
-        voucher_items: vi.data,
-        voucher_entries: ve.data,
-        settings: s.data,
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `backup-${c.data?.name?.replace(/\s+/g, "_")}-${Date.now()}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Backup downloaded");
+      const name = activeMembership?.companies.name ?? "company";
+      const res = await exportCompanyBackup(activeCompanyId, name);
+      toast.success(res.desktopPath ? `Saved to ${res.desktopPath}` : `Downloaded ${res.fileName}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Backup failed");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const exportAll = async () => {
+    if (!memberships.length) return;
+    setExportingAll(true);
+    try {
+      const list = memberships.map((m) => ({ id: m.company_id, name: m.companies.name }));
+      const res = await exportAllCompaniesBackup(list);
+      toast.success(res.desktopPath ? `Saved to ${res.desktopPath}` : `Downloaded ${res.fileName}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Backup failed");
+    } finally {
+      setExportingAll(false);
+    }
+  };
+
+  const onRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !activeCompanyId) return;
+    if (!isAdmin) { toast.error("Only admins can restore"); return; }
+    if (wipeBeforeRestore && !confirm("This will DELETE all current data in this company before restoring. Continue?")) return;
+    setRestoring(true);
+    try {
+      const text = await file.text();
+      const parsed = parseBackupFile(text);
+      const single = parsed.kind === "single" ? parsed.data : parsed.data.companies[0];
+      if (!single) throw new Error("Backup file is empty");
+      const summary = await restoreCompanyBackup(activeCompanyId, single, { wipeExisting: wipeBeforeRestore });
+      toast.success(
+        `Restored: ${summary.ledgers} ledgers, ${summary.items} items, ${summary.vouchers} vouchers`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Restore failed");
+    } finally {
+      setRestoring(false);
     }
   };
 
