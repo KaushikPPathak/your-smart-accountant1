@@ -97,6 +97,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [partyId, setPartyId] = useState("");
   const [refNo, setRefNo] = useState("");
   const [narration, setNarration] = useState("");
+  const [placeOfSupply, setPlaceOfSupply] = useState<string>("");
+  const [roundOff, setRoundOff] = useState<boolean>(true);
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [items, setItems] = useState<ItemOpt[]>([]);
