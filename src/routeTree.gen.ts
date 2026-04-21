@@ -17,9 +17,12 @@ import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppVouchersRouteImport } from './routes/app.vouchers'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
+import { Route as AppRecurringRouteImport } from './routes/app.recurring'
 import { Route as AppLedgersRouteImport } from './routes/app.ledgers'
 import { Route as AppItemsRouteImport } from './routes/app.items'
+import { Route as AppEinvoiceRouteImport } from './routes/app.einvoice'
 import { Route as AppCompaniesRouteImport } from './routes/app.companies'
+import { Route as AppBankRouteImport } from './routes/app.bank'
 import { Route as AppReportsTrialBalanceRouteImport } from './routes/app.reports.trial-balance'
 import { Route as AppReportsStockSummaryRouteImport } from './routes/app.reports.stock-summary'
 import { Route as AppReportsSalesRegisterRouteImport } from './routes/app.reports.sales-register'
@@ -80,6 +83,11 @@ const AppReportsRoute = AppReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AppRoute,
 } as any)
+const AppRecurringRoute = AppRecurringRouteImport.update({
+  id: '/recurring',
+  path: '/recurring',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLedgersRoute = AppLedgersRouteImport.update({
   id: '/ledgers',
   path: '/ledgers',
@@ -90,9 +98,19 @@ const AppItemsRoute = AppItemsRouteImport.update({
   path: '/items',
   getParentRoute: () => AppRoute,
 } as any)
+const AppEinvoiceRoute = AppEinvoiceRouteImport.update({
+  id: '/einvoice',
+  path: '/einvoice',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCompaniesRoute = AppCompaniesRouteImport.update({
   id: '/companies',
   path: '/companies',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBankRoute = AppBankRouteImport.update({
+  id: '/bank',
+  path: '/bank',
   getParentRoute: () => AppRoute,
 } as any)
 const AppReportsTrialBalanceRoute = AppReportsTrialBalanceRouteImport.update({
@@ -199,9 +217,12 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
+  '/app/einvoice': typeof AppEinvoiceRoute
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
+  '/app/recurring': typeof AppRecurringRoute
   '/app/reports': typeof AppReportsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
@@ -230,9 +251,12 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
+  '/app/einvoice': typeof AppEinvoiceRoute
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
+  '/app/recurring': typeof AppRecurringRoute
   '/app/reports': typeof AppReportsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
@@ -263,9 +287,12 @@ export interface FileRoutesById {
   '/app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
+  '/app/einvoice': typeof AppEinvoiceRoute
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
+  '/app/recurring': typeof AppRecurringRoute
   '/app/reports': typeof AppReportsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
@@ -297,9 +324,12 @@ export interface FileRouteTypes {
     | '/app'
     | '/login'
     | '/signup'
+    | '/app/bank'
     | '/app/companies'
+    | '/app/einvoice'
     | '/app/items'
     | '/app/ledgers'
+    | '/app/recurring'
     | '/app/reports'
     | '/app/settings'
     | '/app/vouchers'
@@ -328,9 +358,12 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/signup'
+    | '/app/bank'
     | '/app/companies'
+    | '/app/einvoice'
     | '/app/items'
     | '/app/ledgers'
+    | '/app/recurring'
     | '/app/reports'
     | '/app/settings'
     | '/app/vouchers'
@@ -360,9 +393,12 @@ export interface FileRouteTypes {
     | '/app'
     | '/login'
     | '/signup'
+    | '/app/bank'
     | '/app/companies'
+    | '/app/einvoice'
     | '/app/items'
     | '/app/ledgers'
+    | '/app/recurring'
     | '/app/reports'
     | '/app/settings'
     | '/app/vouchers'
@@ -453,6 +489,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/recurring': {
+      id: '/app/recurring'
+      path: '/recurring'
+      fullPath: '/app/recurring'
+      preLoaderRoute: typeof AppRecurringRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/ledgers': {
       id: '/app/ledgers'
       path: '/ledgers'
@@ -467,11 +510,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppItemsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/einvoice': {
+      id: '/app/einvoice'
+      path: '/einvoice'
+      fullPath: '/app/einvoice'
+      preLoaderRoute: typeof AppEinvoiceRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/companies': {
       id: '/app/companies'
       path: '/companies'
       fullPath: '/app/companies'
       preLoaderRoute: typeof AppCompaniesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/bank': {
+      id: '/app/bank'
+      path: '/bank'
+      fullPath: '/app/bank'
+      preLoaderRoute: typeof AppBankRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/reports/trial-balance': {
@@ -669,9 +726,12 @@ const AppVouchersRouteWithChildren = AppVouchersRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppBankRoute: typeof AppBankRoute
   AppCompaniesRoute: typeof AppCompaniesRoute
+  AppEinvoiceRoute: typeof AppEinvoiceRoute
   AppItemsRoute: typeof AppItemsRoute
   AppLedgersRoute: typeof AppLedgersRoute
+  AppRecurringRoute: typeof AppRecurringRoute
   AppReportsRoute: typeof AppReportsRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
   AppVouchersRoute: typeof AppVouchersRouteWithChildren
@@ -679,9 +739,12 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppBankRoute: AppBankRoute,
   AppCompaniesRoute: AppCompaniesRoute,
+  AppEinvoiceRoute: AppEinvoiceRoute,
   AppItemsRoute: AppItemsRoute,
   AppLedgersRoute: AppLedgersRoute,
+  AppRecurringRoute: AppRecurringRoute,
   AppReportsRoute: AppReportsRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
   AppVouchersRoute: AppVouchersRouteWithChildren,
@@ -699,3 +762,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}

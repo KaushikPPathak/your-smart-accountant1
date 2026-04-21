@@ -231,10 +231,10 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
                     <TableCell className="print:hidden">
                       <div className="flex justify-center gap-1">
                         <Button size="icon" variant="ghost" onClick={() => sendWhatsApp(x)} title="WhatsApp reminder">
-                          <MessageCircle className="h-4 w-4 text-green-600" />
+                          <MessageCircle className="h-4 w-4 text-accent-foreground" />
                         </Button>
                         <Button size="icon" variant="ghost" onClick={() => sendEmail(x)} title="Email reminder">
-                          <Mail className="h-4 w-4 text-blue-600" />
+                          <Mail className="h-4 w-4 text-primary" />
                         </Button>
                       </div>
                     </TableCell>
