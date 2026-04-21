@@ -447,12 +447,69 @@ function SettingsPage() {
       )}
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Data backup</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-sm text-muted-foreground">Download a JSON snapshot of all data for this company.</p>
-          <Button variant="outline" onClick={exportBackup} disabled={exporting}>
-            <Download className="mr-2 h-4 w-4" /> {exporting ? "Exporting…" : "Download backup"}
-          </Button>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Database className="h-4 w-4" /> Backup &amp; Restore
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">This company</p>
+            <p className="text-xs text-muted-foreground">
+              Download a JSON snapshot of every ledger, item, voucher, allocation and recurring template for{" "}
+              <span className="font-medium text-foreground">{activeMembership?.companies.name ?? "—"}</span>.
+              On the Windows app, files are auto-saved to{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px]">Documents/YourMehtaji/&lt;Company&gt;/backups/</code>.
+            </p>
+            <Button variant="outline" onClick={exportBackup} disabled={exporting}>
+              <Download className="mr-2 h-4 w-4" /> {exporting ? "Exporting…" : "Download company backup"}
+            </Button>
+          </div>
+
+          <div className="space-y-2 border-t border-border pt-4">
+            <p className="text-sm font-medium">All companies ({memberships.length})</p>
+            <p className="text-xs text-muted-foreground">
+              One file containing snapshots of every company you have access to. Useful for off-site safekeeping.
+            </p>
+            <Button variant="outline" onClick={exportAll} disabled={exportingAll || memberships.length === 0}>
+              <Download className="mr-2 h-4 w-4" /> {exportingAll ? "Exporting all…" : "Download all-companies backup"}
+            </Button>
+          </div>
+
+          <div className="space-y-2 border-t border-border pt-4">
+            <p className="text-sm font-medium">Restore into this company</p>
+            <p className="text-xs text-muted-foreground">
+              Imports a backup JSON into <span className="font-medium text-foreground">{activeMembership?.companies.name ?? "—"}</span>.
+              Multi-company files restore only the first company — switch companies and run again for the rest.
+            </p>
+            <div className="flex items-center justify-between rounded-md border border-warning/40 bg-warning/10 p-3">
+              <div className="flex items-start gap-2 text-xs">
+                <AlertTriangle className="mt-0.5 h-4 w-4 text-warning" />
+                <div>
+                  <div className="font-medium text-foreground">Wipe existing data first</div>
+                  <div className="text-muted-foreground">Deletes current ledgers, items, vouchers before importing. Cannot be undone.</div>
+                </div>
+              </div>
+              <Switch checked={wipeBeforeRestore} onCheckedChange={setWipeBeforeRestore} />
+            </div>
+            <input
+              ref={restoreFileRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={onRestoreFile}
+            />
+            <Button
+              variant="outline"
+              onClick={() => restoreFileRef.current?.click()}
+              disabled={restoring || !isAdmin}
+            >
+              <Upload className="mr-2 h-4 w-4" /> {restoring ? "Restoring…" : "Choose backup file…"}
+            </Button>
+            {!isAdmin && (
+              <p className="text-xs text-muted-foreground">Only company admins can restore.</p>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
