@@ -1,7 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Download, Moon, Save, Sun, UserPlus, KeyRound } from "lucide-react";
+import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound } from "lucide-react";
+import {
+  exportAllCompaniesBackup,
+  exportCompanyBackup,
+  parseBackupFile,
+  restoreCompanyBackup,
+} from "@/lib/backup";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
