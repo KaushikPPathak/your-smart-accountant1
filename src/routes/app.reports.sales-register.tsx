@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -28,6 +28,7 @@ interface VRow {
 }
 
 export function Register({ kind }: { kind: "sales" | "purchase" }) {
+  const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
   const initial = defaultFyRange();
   const [from, setFrom] = useState(initial.from);
@@ -159,7 +160,12 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
             </TableHeader>
             <TableBody>
               {rows.map((x) => (
-                <TableRow key={x.id}>
+                <TableRow
+                  key={x.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: x.id } })}
+                  title="Click to edit"
+                >
                   <TableCell>{x.voucher_date}</TableCell>
                   <TableCell className="font-mono text-xs">{x.voucher_number}</TableCell>
                   <TableCell>{x.ledgers?.name ?? "—"}</TableCell>
