@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ShoppingCart,
@@ -69,6 +69,7 @@ const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "cre
 
 function VouchersHub() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { activeCompanyId, activeMembership } = useCompany();
   const [rows, setRows] = useState<VoucherRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -223,14 +224,19 @@ function VouchersHub() {
                 {filtered.map((r) => {
                   const printable = ["sales", "purchase", "credit_note", "debit_note"].includes(r.voucher_type);
                   return (
-                    <TableRow key={r.id}>
+                    <TableRow
+                      key={r.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } })}
+                      title="Click to edit"
+                    >
                       <TableCell>{r.voucher_date}</TableCell>
                       <TableCell className="capitalize">{r.voucher_type.replace("_", " ")}</TableCell>
                       <TableCell className="font-mono text-xs">{r.voucher_number}</TableCell>
                       <TableCell>{r.ledgers?.name ?? "—"}</TableCell>
                       <TableCell>{r.reference_no ?? "—"}</TableCell>
                       <TableCell className="text-right font-mono">{formatINR(r.total_paise)}</TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end gap-1">
                           {printable && (
                             <Button variant="ghost" size="icon" title="Print invoice" onClick={() => onPrint(r)}>

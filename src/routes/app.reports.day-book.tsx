@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -38,6 +38,7 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 function DayBook() {
+  const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
   const initial = defaultFyRange();
   const [from, setFrom] = useState(initial.from);
@@ -137,7 +138,12 @@ function DayBook() {
               </TableHeader>
               <TableBody>
                 {rows.map((r) => (
-                  <TableRow key={r.id}>
+                  <TableRow
+                    key={r.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } })}
+                    title="Click to edit"
+                  >
                     <TableCell>{r.voucher_date}</TableCell>
                     <TableCell>{TYPE_LABEL[r.voucher_type] ?? r.voucher_type}</TableCell>
                     <TableCell className="font-mono text-xs">{r.voucher_number}</TableCell>

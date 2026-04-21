@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -38,6 +38,7 @@ interface EntryRow {
 }
 
 function LedgerStatement() {
+  const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
   const initial = defaultFyRange();
   const [from, setFrom] = useState(initial.from);
@@ -214,7 +215,12 @@ function LedgerStatement() {
                   <TableCell className="text-right font-mono">{fmtBal(openingBeforeFrom)}</TableCell>
                 </TableRow>
                 {running.map((r) => (
-                  <TableRow key={r.id}>
+                  <TableRow
+                    key={r.id}
+                    className={r.vouchers ? "cursor-pointer hover:bg-muted/50" : ""}
+                    onClick={() => r.vouchers && navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.vouchers.id } })}
+                    title={r.vouchers ? "Click to edit voucher" : ""}
+                  >
                     <TableCell>{r.vouchers?.voucher_date}</TableCell>
                     <TableCell className="font-mono text-xs">{r.vouchers?.voucher_number}</TableCell>
                     <TableCell className="capitalize">{r.vouchers?.voucher_type.replace("_", " ")}</TableCell>
