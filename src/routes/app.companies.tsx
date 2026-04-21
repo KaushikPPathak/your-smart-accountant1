@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Building2, Check, Plus } from "lucide-react";
+import { Building2, Check, Plus, Pencil, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -15,10 +16,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
+import { INDIAN_STATES } from "@/lib/constants";
 
 export const Route = createFileRoute("/app/companies")({
   head: () => ({ meta: [{ title: "Companies — Your Mehtaji" }] }),
@@ -34,18 +43,116 @@ const schema = z.object({
     .regex(/^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, "Invalid GSTIN")
     .optional()
     .or(z.literal("")),
+  pan: z.string().trim().max(10).optional().or(z.literal("")),
   state: z.string().trim().max(50).optional().or(z.literal("")),
   state_code: z.string().trim().max(3).optional().or(z.literal("")),
+  address: z.string().trim().max(500).optional().or(z.literal("")),
+  email: z.string().trim().max(255).optional().or(z.literal("")),
+  phone: z.string().trim().max(20).optional().or(z.literal("")),
+  financial_year_start: z.string().optional(),
+  bank_name: z.string().trim().max(100).optional().or(z.literal("")),
+  bank_account_no: z.string().trim().max(30).optional().or(z.literal("")),
+  bank_ifsc: z.string().trim().max(15).optional().or(z.literal("")),
+  bank_branch: z.string().trim().max(100).optional().or(z.literal("")),
 });
+
+interface FormState {
+  name: string;
+  gstin: string;
+  pan: string;
+  state: string;
+  state_code: string;
+  address: string;
+  email: string;
+  phone: string;
+  financial_year_start: string;
+  bank_name: string;
+  bank_account_no: string;
+  bank_ifsc: string;
+  bank_branch: string;
+  logo_url: string | null;
+}
+
+const empty: FormState = {
+  name: "",
+  gstin: "",
+  pan: "",
+  state: "",
+  state_code: "",
+  address: "",
+  email: "",
+  phone: "",
+  financial_year_start: `${new Date().getFullYear()}-04-01`,
+  bank_name: "",
+  bank_account_no: "",
+  bank_ifsc: "",
+  bank_branch: "",
+  logo_url: null,
+};
 
 function CompaniesPage() {
   const { user } = useAuth();
   const { memberships, activeCompanyId, setActiveCompanyId, refresh } = useCompany();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: "", gstin: "", state: "", state_code: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(empty);
+  const [uploading, setUploading] = useState(false);
 
-  const onCreate = async (e: React.FormEvent) => {
+  const openNew = () => {
+    setEditingId(null);
+    setForm(empty);
+    setOpen(true);
+  };
+
+  const openEdit = async (id: string) => {
+    const { data, error } = await supabase.from("companies").select("*").eq("id", id).single();
+    if (error || !data) {
+      toast.error(error?.message || "Failed to load company");
+      return;
+    }
+    setEditingId(id);
+    setForm({
+      name: data.name,
+      gstin: data.gstin ?? "",
+      pan: data.pan ?? "",
+      state: data.state ?? "",
+      state_code: data.state_code ?? "",
+      address: data.address ?? "",
+      email: data.email ?? "",
+      phone: data.phone ?? "",
+      financial_year_start: data.financial_year_start ?? `${new Date().getFullYear()}-04-01`,
+      bank_name: data.bank_name ?? "",
+      bank_account_no: data.bank_account_no ?? "",
+      bank_ifsc: data.bank_ifsc ?? "",
+      bank_branch: data.bank_branch ?? "",
+      logo_url: data.logo_url ?? null,
+    });
+    setOpen(true);
+  };
+
+  const onUploadLogo = async (file: File) => {
+    if (!user) return;
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop() || "png";
+      const path = `${user.id}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("company-logos").upload(path, file, {
+        upsert: true,
+        contentType: file.type,
+      });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("company-logos").getPublicUrl(path);
+      setForm((f) => ({ ...f, logo_url: pub.publicUrl }));
+      toast.success("Logo uploaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = schema.safeParse(form);
     if (!parsed.success) {
@@ -53,38 +160,56 @@ function CompaniesPage() {
       return;
     }
     setSubmitting(true);
-
-    // Always read the freshest session to avoid stale auth state during signup → first action
     const { data: sessionData } = await supabase.auth.getSession();
     const currentUserId = sessionData.session?.user?.id ?? user?.id;
     if (!currentUserId) {
       setSubmitting(false);
-      toast.error("Your session has expired. Please sign in again.");
+      toast.error("Session expired. Sign in again.");
       return;
     }
 
-    const { data, error } = await supabase
-      .from("companies")
-      .insert({
-        name: parsed.data.name,
-        gstin: parsed.data.gstin || null,
-        state: parsed.data.state || null,
-        state_code: parsed.data.state_code || null,
-        created_by: currentUserId,
-      })
-      .select("id")
-      .maybeSingle();
-    setSubmitting(false);
-    if (error || !data) {
-      console.error("Create company failed:", error);
-      toast.error(error?.message ?? "Failed to create company");
-      return;
+    const payload = {
+      name: parsed.data.name,
+      gstin: parsed.data.gstin || null,
+      pan: parsed.data.pan || null,
+      state: parsed.data.state || null,
+      state_code: parsed.data.state_code || null,
+      address: parsed.data.address || null,
+      email: parsed.data.email || null,
+      phone: parsed.data.phone || null,
+      financial_year_start: parsed.data.financial_year_start || `${new Date().getFullYear()}-04-01`,
+      bank_name: parsed.data.bank_name || null,
+      bank_account_no: parsed.data.bank_account_no || null,
+      bank_ifsc: parsed.data.bank_ifsc || null,
+      bank_branch: parsed.data.bank_branch || null,
+      logo_url: form.logo_url,
+    };
+
+    if (editingId) {
+      const { error } = await supabase.from("companies").update(payload).eq("id", editingId);
+      setSubmitting(false);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Company updated");
+    } else {
+      const { data, error } = await supabase
+        .from("companies")
+        .insert({ ...payload, created_by: currentUserId })
+        .select("id")
+        .maybeSingle();
+      setSubmitting(false);
+      if (error || !data) { toast.error(error?.message ?? "Failed to create"); return; }
+      setActiveCompanyId(data.id);
+      toast.success("Company created");
     }
-    toast.success("Company created");
     await refresh();
-    setActiveCompanyId(data.id);
-    setForm({ name: "", gstin: "", state: "", state_code: "" });
+    setForm(empty);
+    setEditingId(null);
     setOpen(false);
+  };
+
+  const onStateCodeChange = (code: string) => {
+    const state = INDIAN_STATES.find((s) => s.code === code);
+    setForm((f) => ({ ...f, state_code: code, state: state?.name ?? f.state }));
   };
 
   return (
@@ -98,63 +223,82 @@ function CompaniesPage() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={openNew}>
               <Plus className="mr-2 h-4 w-4" /> New company
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-3xl">
             <DialogHeader>
-              <DialogTitle>Create a new company</DialogTitle>
+              <DialogTitle>{editingId ? "Edit company" : "Create a new company"}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={onCreate} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="name">Company name *</Label>
-                <Input
-                  id="name"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Acme Traders Pvt Ltd"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="gstin">GSTIN</Label>
-                  <Input
-                    id="gstin"
-                    value={form.gstin}
-                    onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
-                    placeholder="22AAAAA0000A1Z5"
-                    maxLength={15}
-                  />
+            <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label>Company name *</Label>
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="state_code">State code</Label>
-                  <Input
-                    id="state_code"
-                    value={form.state_code}
-                    onChange={(e) => setForm({ ...form, state_code: e.target.value })}
-                    placeholder="27"
-                    maxLength={3}
-                  />
+                  <Label>GSTIN</Label>
+                  <Input value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })} maxLength={15} />
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="state">State</Label>
-                <Input
-                  id="state"
-                  value={form.state}
-                  onChange={(e) => setForm({ ...form, state: e.target.value })}
-                  placeholder="Maharashtra"
-                />
+                <div className="space-y-1.5">
+                  <Label>PAN</Label>
+                  <Input value={form.pan} onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })} maxLength={10} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>State</Label>
+                  <Select value={form.state_code} onValueChange={onStateCodeChange}>
+                    <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
+                    <SelectContent>
+                      {INDIAN_STATES.map((s) => <SelectItem key={s.code} value={s.code}>{s.code} — {s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Financial Year Start</Label>
+                  <Input type="date" value={form.financial_year_start} onChange={(e) => setForm({ ...form, financial_year_start: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Phone</Label>
+                  <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Email</Label>
+                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label>Address</Label>
+                  <Textarea rows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label>Logo</Label>
+                  <div className="flex items-center gap-3">
+                    {form.logo_url && <img src={form.logo_url} alt="Logo" className="h-12 w-12 rounded border object-contain bg-white" />}
+                    <Input type="file" accept="image/*" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) onUploadLogo(f); }} />
+                  </div>
+                  {uploading && <p className="text-xs text-muted-foreground"><Upload className="inline h-3 w-3" /> Uploading…</p>}
+                </div>
+                <div className="md:col-span-2 mt-2 border-t pt-3 text-sm font-semibold text-muted-foreground">Bank Details</div>
+                <div className="space-y-1.5">
+                  <Label>Bank name</Label>
+                  <Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Account no.</Label>
+                  <Input value={form.bank_account_no} onChange={(e) => setForm({ ...form, bank_account_no: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>IFSC</Label>
+                  <Input value={form.bank_ifsc} onChange={(e) => setForm({ ...form, bank_ifsc: e.target.value.toUpperCase() })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Branch</Label>
+                  <Input value={form.bank_branch} onChange={(e) => setForm({ ...form, bank_branch: e.target.value })} />
+                </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? "Creating…" : "Create company"}
-                </Button>
+                <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={submitting}>{submitting ? "Saving…" : editingId ? "Save changes" : "Create company"}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -173,45 +317,26 @@ function CompaniesPage() {
           {memberships.map((m) => {
             const isActive = m.company_id === activeCompanyId;
             return (
-              <Card
-                key={m.company_id}
-                className={isActive ? "border-primary ring-1 ring-primary/30" : ""}
-              >
+              <Card key={m.company_id} className={isActive ? "border-primary ring-1 ring-primary/30" : ""}>
                 <CardHeader className="flex flex-row items-start justify-between space-y-0">
                   <div>
                     <CardTitle className="text-base">{m.companies.name}</CardTitle>
-                    <Badge variant="secondary" className="mt-1 text-[10px] uppercase">
-                      {m.role}
-                    </Badge>
+                    <Badge variant="secondary" className="mt-1 text-[10px] uppercase">{m.role}</Badge>
                   </div>
                   <Building2 className="h-5 w-5 text-muted-foreground" />
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>GSTIN</span>
-                    <span className="font-mono">{m.companies.gstin ?? "—"}</span>
-                  </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>State</span>
-                    <span>
-                      {m.companies.state ?? "—"}
-                      {m.companies.state_code ? ` (${m.companies.state_code})` : ""}
-                    </span>
-                  </div>
-                  <div className="pt-2">
+                  <div className="flex justify-between text-muted-foreground"><span>GSTIN</span><span className="font-mono">{m.companies.gstin ?? "—"}</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>State</span><span>{m.companies.state ?? "—"}{m.companies.state_code ? ` (${m.companies.state_code})` : ""}</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>FY Start</span><span>{m.companies.financial_year_start}</span></div>
+                  <div className="flex gap-2 pt-2">
                     {isActive ? (
-                      <Button variant="secondary" size="sm" className="w-full" disabled>
-                        <Check className="mr-2 h-4 w-4" /> Active
-                      </Button>
+                      <Button variant="secondary" size="sm" className="flex-1" disabled><Check className="mr-2 h-4 w-4" /> Active</Button>
                     ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => setActiveCompanyId(m.company_id)}
-                      >
-                        Switch to this company
-                      </Button>
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => setActiveCompanyId(m.company_id)}>Switch</Button>
+                    )}
+                    {m.role === "admin" && (
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(m.company_id)} title="Edit"><Pencil className="h-4 w-4" /></Button>
                     )}
                   </div>
                 </CardContent>

@@ -54,6 +54,7 @@ interface Ledger {
   name: string;
   type: LedgerTypeValue;
   gstin: string | null;
+  pan: string | null;
   state: string | null;
   state_code: string | null;
   address: string | null;
@@ -61,6 +62,8 @@ interface Ledger {
   email: string | null;
   opening_balance_paise: number;
   opening_balance_is_debit: boolean;
+  credit_limit_paise: number;
+  credit_days: number;
   is_active: boolean;
 }
 
@@ -74,6 +77,7 @@ const schema = z.object({
     .regex(/^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, "Invalid GSTIN")
     .optional()
     .or(z.literal("")),
+  pan: z.string().trim().max(10).optional().or(z.literal("")),
   state_code: z.string().trim().max(3).optional().or(z.literal("")),
   state: z.string().trim().max(50).optional().or(z.literal("")),
   address: z.string().trim().max(500).optional().or(z.literal("")),
@@ -81,12 +85,15 @@ const schema = z.object({
   email: z.string().trim().max(255).email("Invalid email").optional().or(z.literal("")),
   opening_balance: z.string().optional(),
   opening_balance_is_debit: z.boolean(),
+  credit_limit: z.string().optional(),
+  credit_days: z.string().optional(),
 });
 
 type FormState = {
   name: string;
   type: string;
   gstin: string;
+  pan: string;
   state_code: string;
   state: string;
   address: string;
@@ -94,12 +101,15 @@ type FormState = {
   email: string;
   opening_balance: string;
   opening_balance_is_debit: boolean;
+  credit_limit: string;
+  credit_days: string;
 };
 
 const emptyForm: FormState = {
   name: "",
   type: "",
   gstin: "",
+  pan: "",
   state_code: "",
   state: "",
   address: "",
@@ -107,6 +117,8 @@ const emptyForm: FormState = {
   email: "",
   opening_balance: "",
   opening_balance_is_debit: true,
+  credit_limit: "",
+  credit_days: "",
 };
 
 function LedgersPage() {
@@ -201,6 +213,7 @@ function LedgersPage() {
       name: l.name,
       type: l.type,
       gstin: l.gstin ?? "",
+      pan: l.pan ?? "",
       state_code: l.state_code ?? "",
       state: l.state ?? "",
       address: l.address ?? "",
@@ -210,6 +223,8 @@ function LedgersPage() {
         ? String(paiseToRupees(l.opening_balance_paise))
         : "",
       opening_balance_is_debit: l.opening_balance_is_debit,
+      credit_limit: l.credit_limit_paise ? String(paiseToRupees(l.credit_limit_paise)) : "",
+      credit_days: l.credit_days ? String(l.credit_days) : "",
     });
     lookedRef.current = l.gstin ?? "";
     setOpen(true);
@@ -233,11 +248,14 @@ function LedgersPage() {
     }
     setSubmitting(true);
     const ob = parseFloat(parsed.data.opening_balance ?? "");
+    const cl = parseFloat(parsed.data.credit_limit ?? "");
+    const cd = parseInt(parsed.data.credit_days ?? "");
     const payload = {
       company_id: activeCompanyId,
       name: parsed.data.name,
       type: parsed.data.type as LedgerTypeValue,
       gstin: parsed.data.gstin || null,
+      pan: parsed.data.pan || null,
       state: parsed.data.state || null,
       state_code: parsed.data.state_code || null,
       address: parsed.data.address || null,
@@ -245,6 +263,8 @@ function LedgersPage() {
       email: parsed.data.email || null,
       opening_balance_paise: isFinite(ob) ? rupeesToPaise(Math.abs(ob)) : 0,
       opening_balance_is_debit: parsed.data.opening_balance_is_debit,
+      credit_limit_paise: isFinite(cl) ? rupeesToPaise(cl) : 0,
+      credit_days: isFinite(cd) ? cd : 0,
     };
 
     const { error } = editing
@@ -386,6 +406,10 @@ function LedgersPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
+                    <Label htmlFor="pan">PAN</Label>
+                    <Input id="pan" value={form.pan} onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })} maxLength={10} placeholder="ABCDE1234F" />
+                  </div>
+                  <div className="space-y-1.5">
                     <Label htmlFor="opening_balance">Opening balance (₹)</Label>
                     <Input
                       id="opening_balance"
@@ -414,6 +438,14 @@ function LedgersPage() {
                         <SelectItem value="cr">Credit (Cr)</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="credit_limit">Credit limit (₹)</Label>
+                    <Input id="credit_limit" type="number" step="0.01" value={form.credit_limit} onChange={(e) => setForm({ ...form, credit_limit: e.target.value })} placeholder="0.00" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="credit_days">Credit days</Label>
+                    <Input id="credit_days" type="number" value={form.credit_days} onChange={(e) => setForm({ ...form, credit_days: e.target.value })} placeholder="0" />
                   </div>
                 </div>
                 <DialogFooter>

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ShoppingCart,
   ShoppingBag,
@@ -9,10 +9,22 @@ import {
   FilePlus,
   BookOpen,
   ListOrdered,
+  Printer,
+  Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -25,6 +37,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { EmptyState } from "@/components/EmptyState";
+import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 
 export const Route = createFileRoute("/app/vouchers")({
   head: () => ({ meta: [{ title: "Vouchers — Your Mehtaji" }] }),
@@ -52,35 +65,85 @@ interface VoucherRow {
   ledgers?: { name: string } | null;
 }
 
+const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "credit_note", "debit_note"] as const;
+
 function VouchersHub() {
   const location = useLocation();
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeMembership } = useCompany();
   const [rows, setRows] = useState<VoucherRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [type, setType] = useState<string>("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [search, setSearch] = useState("");
 
   const isNested = location.pathname !== "/app/vouchers";
+  const canDelete = activeMembership?.role === "admin";
+
+  const load = async () => {
+    if (!activeCompanyId) return;
+    setLoading(true);
+    let q = supabase
+      .from("vouchers")
+      .select("id, voucher_date, voucher_number, voucher_type, total_paise, party_ledger_id, reference_no, ledgers:party_ledger_id(name)")
+      .eq("company_id", activeCompanyId)
+      .order("voucher_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (type !== "all") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      q = q.eq("voucher_type", type as any);
+    }
+    if (from) q = q.gte("voucher_date", from);
+    if (to) q = q.lte("voucher_date", to);
+    const { data, error } = await q;
+    if (error) console.error(error);
+    setRows((data as unknown as VoucherRow[]) || []);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    if (isNested || !activeCompanyId) return;
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("vouchers")
-        .select("id, voucher_date, voucher_number, voucher_type, total_paise, party_ledger_id, reference_no, ledgers:party_ledger_id(name)")
-        .eq("company_id", activeCompanyId)
-        .order("voucher_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(100);
-      if (!alive) return;
-      if (error) console.error(error);
-      setRows((data as unknown as VoucherRow[]) || []);
-      setLoading(false);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [activeCompanyId, isNested]);
+    if (isNested) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCompanyId, isNested, type, from, to]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        r.voucher_number.toLowerCase().includes(q) ||
+        (r.ledgers?.name ?? "").toLowerCase().includes(q) ||
+        (r.reference_no ?? "").toLowerCase().includes(q),
+    );
+  }, [rows, search]);
+
+  const onPrint = async (r: VoucherRow) => {
+    if (!activeCompanyId) return;
+    const printable = ["sales", "purchase", "credit_note", "debit_note"];
+    if (!printable.includes(r.voucher_type)) {
+      toast.error("Print is available only for invoices and credit/debit notes");
+      return;
+    }
+    try {
+      await downloadInvoicePdf(r.id, activeCompanyId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate PDF");
+    }
+  };
+
+  const onDelete = async (r: VoucherRow) => {
+    if (!confirm(`Delete voucher ${r.voucher_number}? This cannot be undone.`)) return;
+    const { error: e1 } = await supabase.from("voucher_entries").delete().eq("voucher_id", r.id);
+    if (e1) { toast.error(e1.message); return; }
+    const { error: e2 } = await supabase.from("voucher_items").delete().eq("voucher_id", r.id);
+    if (e2) { toast.error(e2.message); return; }
+    const { error: e3 } = await supabase.from("vouchers").delete().eq("id", r.id);
+    if (e3) { toast.error(e3.message); return; }
+    toast.success("Voucher deleted");
+    load();
+  };
 
   if (isNested) return <Outlet />;
 
@@ -108,14 +171,41 @@ function VouchersHub() {
       </div>
 
       <Card>
-        <CardContent className="p-0">
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <h2 className="font-medium">Recent vouchers</h2>
+        <CardContent className="p-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Type</Label>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TYPES.map((t) => (
+                    <SelectItem key={t} value={t} className="capitalize">{t === "all" ? "All types" : t.replace("_", " ")}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">From</Label>
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-[160px]" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">To</Label>
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-[160px]" />
+            </div>
+            <div className="space-y-1 flex-1 min-w-[200px]">
+              <Label className="text-xs">Search</Label>
+              <Input placeholder="Number / party / reference" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9" />
+            </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-0">
           {loading ? (
             <div className="p-6 text-sm text-muted-foreground">Loading…</div>
-          ) : rows.length === 0 ? (
-            <EmptyState icon={ListOrdered} title="No vouchers yet" description="Pick a voucher type above to start." />
+          ) : filtered.length === 0 ? (
+            <EmptyState icon={ListOrdered} title="No vouchers" description="Pick a voucher type above to start." />
           ) : (
             <Table>
               <TableHeader>
@@ -126,19 +216,37 @@ function VouchersHub() {
                   <TableHead>Party</TableHead>
                   <TableHead>Ref</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="w-[120px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell>{r.voucher_date}</TableCell>
-                    <TableCell className="capitalize">{r.voucher_type.replace("_", " ")}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.voucher_number}</TableCell>
-                    <TableCell>{r.ledgers?.name ?? "—"}</TableCell>
-                    <TableCell>{r.reference_no ?? "—"}</TableCell>
-                    <TableCell className="text-right font-mono">{formatINR(r.total_paise)}</TableCell>
-                  </TableRow>
-                ))}
+                {filtered.map((r) => {
+                  const printable = ["sales", "purchase", "credit_note", "debit_note"].includes(r.voucher_type);
+                  return (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.voucher_date}</TableCell>
+                      <TableCell className="capitalize">{r.voucher_type.replace("_", " ")}</TableCell>
+                      <TableCell className="font-mono text-xs">{r.voucher_number}</TableCell>
+                      <TableCell>{r.ledgers?.name ?? "—"}</TableCell>
+                      <TableCell>{r.reference_no ?? "—"}</TableCell>
+                      <TableCell className="text-right font-mono">{formatINR(r.total_paise)}</TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-1">
+                          {printable && (
+                            <Button variant="ghost" size="icon" title="Print invoice" onClick={() => onPrint(r)}>
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button variant="ghost" size="icon" title="Delete" onClick={() => onDelete(r)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
