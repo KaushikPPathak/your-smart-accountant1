@@ -377,7 +377,7 @@ function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <KeyRound className="h-4 w-4" /> GST APIs (Setu) {setuStatus?.configured && <span className="text-xs font-normal text-green-600">● Connected</span>}
+              <KeyRound className="h-4 w-4" /> GST APIs (Setu) {setuStatus?.configured && <span className="text-xs font-normal text-primary">● Connected</span>}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
