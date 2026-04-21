@@ -3,16 +3,12 @@ import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileCode2, Truck } from "lucide-react";
+import { Truck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
-import { upsertEinvoice } from "@/lib/einvoice";
-import { toast } from "sonner";
+import { EwayBillPrepDialog } from "@/components/vouchers/EwayBillPrepDialog";
 
 export const Route = createFileRoute("/app/einvoice")({
   head: () => ({ meta: [{ title: "E-Invoice & E-Way Bill — Your Mehtaji" }] }),
@@ -20,7 +16,17 @@ export const Route = createFileRoute("/app/einvoice")({
 });
 
 interface Row {
-  id: string; voucher_number: string; voucher_date: string; total_paise: number;
+  id: string;
+  voucher_number: string;
+  voucher_date: string;
+  total_paise: number;
+  subtotal_paise: number;
+  cgst_paise: number;
+  sgst_paise: number;
+  igst_paise: number;
+  is_interstate: boolean;
+  place_of_supply_code: string | null;
+  company_id: string;
   ledgers: { name: string; gstin: string | null } | null;
   einvoice_details: { irn: string | null; status: string; ewb_no: string | null; ewb_valid_until: string | null } | null;
 }
@@ -29,12 +35,13 @@ function EinvoicePage() {
   const { activeCompanyId } = useCompany();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dlg, setDlg] = useState<{ open: boolean; voucher: Row | null }>({ open: false, voucher: null });
 
   async function load() {
     if (!activeCompanyId) return;
     setLoading(true);
     const { data } = await supabase.from("vouchers")
-      .select("id, voucher_number, voucher_date, total_paise, ledgers:party_ledger_id(name, gstin), einvoice_details(irn, status, ewb_no, ewb_valid_until)")
+      .select("id, voucher_number, voucher_date, total_paise, subtotal_paise, cgst_paise, sgst_paise, igst_paise, is_interstate, place_of_supply_code, company_id, ledgers:party_ledger_id(name, gstin), einvoice_details(irn, status, ewb_no, ewb_valid_until)")
       .eq("company_id", activeCompanyId).eq("voucher_type", "sales")
       .order("voucher_date", { ascending: false }).limit(200);
     setRows((data || []) as unknown as Row[]);
@@ -45,9 +52,9 @@ function EinvoicePage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">E-Invoice & E-Way Bill</h1>
+        <h1 className="text-2xl font-semibold">E-Invoice &amp; E-Way Bill</h1>
         <p className="text-xs text-muted-foreground">
-          Track IRN/QR generation status for sales invoices &gt; ₹5 Cr turnover. Connect your GSP credentials in Settings to auto-push.
+          E-Way Bill is mandatory for any consignment &gt; ₹50,000 moving inter-state, or intra-state beyond city limits (typically &gt; 50&nbsp;km). Use the prep tool to build the portal-ready JSON.
         </p>
       </div>
 
@@ -65,28 +72,38 @@ function EinvoicePage() {
                 <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">Loading…</TableCell></TableRow>
               ) : rows.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">No sales invoices yet.</TableCell></TableRow>
-              ) : rows.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell className="font-mono text-xs">{r.voucher_date}</TableCell>
-                  <TableCell className="font-medium">{r.voucher_number}</TableCell>
-                  <TableCell>{r.ledgers?.name || "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{r.ledgers?.gstin || "—"}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(r.total_paise)}</TableCell>
-                  <TableCell>
-                    <Badge variant={r.einvoice_details?.irn ? "default" : "outline"}>
-                      {r.einvoice_details?.irn ? "Generated" : (r.einvoice_details?.status || "Pending")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {r.einvoice_details?.ewb_no
-                      ? <span className="font-mono">{r.einvoice_details.ewb_no}</span>
-                      : <span className="text-muted-foreground">—</span>}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <ManualEntry voucherId={r.id} companyId={activeCompanyId!} onSaved={load} />
-                  </TableCell>
-                </TableRow>
-              ))}
+              ) : rows.map((r) => {
+                const requiresEwb = r.total_paise > 5_000_000;
+                return (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-mono text-xs">{r.voucher_date}</TableCell>
+                    <TableCell className="font-medium">
+                      {r.voucher_number}
+                      {requiresEwb && !r.einvoice_details?.ewb_no && (
+                        <Badge variant="destructive" className="ml-2 text-[10px]">EWB needed</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>{r.ledgers?.name || "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">{r.ledgers?.gstin || "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(r.total_paise)}</TableCell>
+                    <TableCell>
+                      <Badge variant={r.einvoice_details?.irn ? "default" : "outline"}>
+                        {r.einvoice_details?.irn ? "Generated" : (r.einvoice_details?.status || "Pending")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {r.einvoice_details?.ewb_no
+                        ? <span className="font-mono">{r.einvoice_details.ewb_no}</span>
+                        : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="outline" onClick={() => setDlg({ open: true, voucher: r })}>
+                        <Truck className="h-3 w-3 mr-1" />Prepare
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
@@ -94,52 +111,17 @@ function EinvoicePage() {
 
       <Card>
         <CardContent className="p-4 text-xs text-muted-foreground space-y-2">
-          <p><strong>Manual entry mode:</strong> If you generate the IRN/EWB on the GST portal, paste the values back here so they appear on the invoice PDF.</p>
+          <p><strong>How it works:</strong> Open the prep tool to fill consignor/consignee, transport &amp; vehicle details. Copy the generated JSON to the GST EWB portal (or hand to your GSP) and paste the issued EWB number / IRN back to keep the invoice PDF in sync.</p>
           <p><Link to="/app/settings" className="underline">Go to Settings</Link> to enable e-invoicing and add your UPI ID for payment-link QRs.</p>
         </CardContent>
       </Card>
+
+      <EwayBillPrepDialog
+        open={dlg.open}
+        onOpenChange={(o) => setDlg((s) => ({ ...s, open: o }))}
+        voucher={dlg.voucher}
+        onSaved={load}
+      />
     </div>
-  );
-}
-
-function ManualEntry({ voucherId, companyId, onSaved }: { voucherId: string; companyId: string; onSaved: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [irn, setIrn] = useState("");
-  const [ackNo, setAckNo] = useState("");
-  const [ewbNo, setEwbNo] = useState("");
-  const [ewbValid, setEwbValid] = useState("");
-  const [vehicle, setVehicle] = useState("");
-
-  async function save() {
-    await upsertEinvoice({
-      voucherId, companyId,
-      irn: irn || undefined, ackNo: ackNo || undefined,
-      status: irn ? "generated" : "pending",
-      ewbNo: ewbNo || undefined, ewbValidUntil: ewbValid || undefined, vehicleNo: vehicle || undefined,
-    });
-    toast.success("Saved");
-    setOpen(false);
-    onSaved();
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline"><FileCode2 className="h-3 w-3 mr-1" />Update</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader><DialogTitle>IRN / E-Way Bill details</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1"><Label className="text-xs">IRN</Label><Input value={irn} onChange={(e) => setIrn(e.target.value)} placeholder="64-char IRN" /></div>
-          <div className="space-y-1"><Label className="text-xs">Acknowledgement No.</Label><Input value={ackNo} onChange={(e) => setAckNo(e.target.value)} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1"><Label className="text-xs flex items-center gap-1"><Truck className="h-3 w-3" /> EWB No.</Label><Input value={ewbNo} onChange={(e) => setEwbNo(e.target.value)} /></div>
-            <div className="space-y-1"><Label className="text-xs">Valid until</Label><Input type="datetime-local" value={ewbValid} onChange={(e) => setEwbValid(e.target.value)} /></div>
-          </div>
-          <div className="space-y-1"><Label className="text-xs">Vehicle No.</Label><Input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="MH12AB1234" /></div>
-        </div>
-        <DialogFooter><Button onClick={save}>Save</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

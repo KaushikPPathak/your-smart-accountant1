@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Pencil, Plus, Save, Trash2, UserPlus, PackagePlus, X } from "lucide-react";
+import { Pencil, Plus, Save, Trash2, Truck, UserPlus, PackagePlus, X } from "lucide-react";
 import { QuickLedgerDialog, type QuickLedger } from "./QuickLedgerDialog";
 import { QuickItemDialog, type QuickItem } from "./QuickItemDialog";
+import { EwayBillPrepDialog } from "./EwayBillPrepDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -107,6 +108,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [focusedLine, setFocusedLine] = useState<number>(0);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null }>({ open: false, editId: null });
   const [itemDlg, setItemDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
+  const [ewbDlg, setEwbDlg] = useState<{ open: boolean; voucher: { id: string; company_id: string; voucher_number: string; voucher_date: string; total_paise: number; subtotal_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number; is_interstate: boolean; place_of_supply_code: string | null } | null }>({ open: false, voucher: null });
 
   // Load masters
   useEffect(() => {
@@ -294,7 +296,30 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if (eErr) throw eErr;
 
       toast.success(`${cfg.title} ${numData} saved`);
-      navigate({ to: "/app/vouchers" });
+
+      // Auto-prompt E-Way Bill / E-Invoice for sales-side vouchers above ₹50,000
+      // (interstate, or intra-state where goods cross city limits — user decides).
+      const isSalesSide = voucherType === "sales" || voucherType === "credit_note";
+      if (isSalesSide && totals.total_paise > 5_000_000) {
+        setEwbDlg({
+          open: true,
+          voucher: {
+            id: vData.id,
+            company_id: activeCompanyId,
+            voucher_number: numData as string,
+            voucher_date: date,
+            total_paise: totals.total_paise,
+            subtotal_paise: totals.subtotal_paise,
+            cgst_paise: totals.cgst_paise,
+            sgst_paise: totals.sgst_paise,
+            igst_paise: totals.igst_paise,
+            is_interstate: interstate,
+            place_of_supply_code: placeOfSupply || null,
+          },
+        });
+      } else {
+        navigate({ to: "/app/vouchers" });
+      }
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Failed to save");
@@ -599,6 +624,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <p className="pt-2 text-xs italic text-muted-foreground">
               {amountInWords(totals.total_paise)}
             </p>
+            {(voucherType === "sales" || voucherType === "credit_note") && totals.total_paise > 5_000_000 && (
+              <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                <Truck className="inline h-3 w-3 mr-1" />
+                Invoice value exceeds <strong>₹50,000</strong>. An <strong>E-Way Bill</strong> is mandatory for inter-state movement, and for intra-state movement beyond city limits (typically &gt; 50&nbsp;km) per state rules. The E-Way Bill prep tool will open after save.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -621,6 +652,14 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           />
         </>
       )}
+      <EwayBillPrepDialog
+        open={ewbDlg.open}
+        onOpenChange={(o) => {
+          setEwbDlg((s) => ({ ...s, open: o }));
+          if (!o) navigate({ to: "/app/vouchers" });
+        }}
+        voucher={ewbDlg.voucher}
+      />
     </div>
   );
 }
