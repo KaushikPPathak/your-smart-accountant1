@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { ReportToolbar } from "@/components/reports/ReportToolbar";
-import { downloadCsv, downloadXlsx, downloadPdfTable } from "@/lib/exporters";
+import { downloadXlsx, downloadPdfTable, r } from "@/lib/exporters";
 import type { LedgerTypeValue } from "@/lib/constants";
 
 export const Route = createFileRoute("/app/reports/group-ledger")({
@@ -163,8 +163,15 @@ function GroupLedgerReport() {
   }), [rows]);
 
   const headers = ["Ledger", "Opening", "Debit", "Credit", "Closing"];
-  const tableRows = rows.map((r) => [r.name, formatINR(r.opening_paise), formatINR(r.debit_paise), formatINR(r.credit_paise), formatINR(r.closing_paise)]);
+  const tableRows = rows.map((row) => [row.name, r(row.opening_paise), r(row.debit_paise), r(row.credit_paise), r(row.closing_paise)]);
   const fileBase = `${group.label.replace(/\s+/g, "_")}_${from}_to_${to}`;
+
+  function exportCsv() {
+    const lines = [headers.join(","), ...tableRows.map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))];
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `${fileBase}.csv`; a.click(); URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="space-y-4">
@@ -172,6 +179,43 @@ function GroupLedgerReport() {
         <CardContent className="grid gap-3 p-4 md:grid-cols-4">
           <div className="space-y-1 md:col-span-2">
             <Label>Group</Label>
+            <Select value={groupKey} onValueChange={(v) => setGroupKey(v as GroupKey)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-80">
+                <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">Balance Sheet</div>
+                {GROUPS.filter((g) => g.section === "Balance Sheet").map((g) => (
+                  <SelectItem key={g.key} value={g.key}>{g.label}</SelectItem>
+                ))}
+                <div className="px-2 py-1 mt-1 text-[10px] font-semibold uppercase text-muted-foreground">Profit & Loss</div>
+                {GROUPS.filter((g) => g.section === "Profit & Loss").map((g) => (
+                  <SelectItem key={g.key} value={g.key}>{g.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>From</Label>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>To</Label>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <ReportToolbar
+        from={from}
+        to={to}
+        onFrom={setFrom}
+        onTo={setTo}
+        hideDates
+        onExportCsv={exportCsv}
+        onExportXlsx={() => downloadXlsx(`${fileBase}.xlsx`, [{ name: group.label.slice(0, 31), rows: [headers, ...tableRows] }])}
+        onExportPdf={() => downloadPdfTable({ title: group.label, subtitle: `${group.section} · ${from} → ${to}`, head: [headers], body: tableRows, fileName: `${fileBase}.pdf`, rightAlignCols: [1, 2, 3, 4] })}
+        onPrint={() => window.print()}
+      />
+
             <Select value={groupKey} onValueChange={(v) => setGroupKey(v as GroupKey)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-80">
