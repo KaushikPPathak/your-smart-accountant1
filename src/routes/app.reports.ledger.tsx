@@ -11,8 +11,15 @@ import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 
+type LedgerSearch = { ledgerId?: string; from?: string; to?: string };
+
 export const Route = createFileRoute("/app/reports/ledger")({
   head: () => ({ meta: [{ title: "Ledger Statement — Reports" }] }),
+  validateSearch: (s: Record<string, unknown>): LedgerSearch => ({
+    ledgerId: typeof s.ledgerId === "string" ? s.ledgerId : undefined,
+    from: typeof s.from === "string" ? s.from : undefined,
+    to: typeof s.to === "string" ? s.to : undefined,
+  }),
   component: LedgerStatement,
 });
 
@@ -40,11 +47,12 @@ interface EntryRow {
 function LedgerStatement() {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
+  const search = Route.useSearch();
   const initial = defaultFyRange();
-  const [from, setFrom] = useState(initial.from);
-  const [to, setTo] = useState(initial.to);
+  const [from, setFrom] = useState(search.from || initial.from);
+  const [to, setTo] = useState(search.to || initial.to);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
-  const [ledgerId, setLedgerId] = useState<string>("");
+  const [ledgerId, setLedgerId] = useState<string>(search.ledgerId || "");
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [openingBeforeFrom, setOpeningBeforeFrom] = useState(0);
 
@@ -62,6 +70,14 @@ function LedgerStatement() {
         if (!ledgerId && list[0]) setLedgerId(list[0].id);
       });
   }, [activeCompanyId, ledgerId]);
+
+  // Sync from search param changes (when navigating from another report)
+  useEffect(() => {
+    if (search.ledgerId && search.ledgerId !== ledgerId) setLedgerId(search.ledgerId);
+    if (search.from) setFrom(search.from);
+    if (search.to) setTo(search.to);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.ledgerId, search.from, search.to]);
 
   const ledger = ledgers.find((l) => l.id === ledgerId);
 

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,6 +16,7 @@ export const Route = createFileRoute("/app/reports/profit-loss")({
 
 function ProfitLoss() {
   const { activeCompanyId } = useCompany();
+  const navigate = useNavigate();
   const initial = defaultFyRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -94,7 +95,11 @@ function ProfitLoss() {
               </TableHeader>
               <TableBody>
                 {expenses.filter((e) => e.value).map((e) => (
-                  <TableRow key={e.id}><TableCell>{e.name}</TableCell><TableCell className="text-right font-mono">{formatINR(e.value)}</TableCell></TableRow>
+                  <TableRow
+                    key={e.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => navigate({ to: "/app/reports/ledger", search: { ledgerId: e.id, from, to } })}
+                  ><TableCell>{e.name}</TableCell><TableCell className="text-right font-mono">{formatINR(e.value)}</TableCell></TableRow>
                 ))}
                 {profit > 0 && (
                   <TableRow><TableCell className="font-semibold text-primary">Net Profit</TableCell><TableCell className="text-right font-mono font-semibold text-primary">{formatINR(profit)}</TableCell></TableRow>
@@ -112,7 +117,11 @@ function ProfitLoss() {
               </TableHeader>
               <TableBody>
                 {incomes.filter((e) => e.value).map((e) => (
-                  <TableRow key={e.id}><TableCell>{e.name}</TableCell><TableCell className="text-right font-mono">{formatINR(e.value)}</TableCell></TableRow>
+                  <TableRow
+                    key={e.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => navigate({ to: "/app/reports/ledger", search: { ledgerId: e.id, from, to } })}
+                  ><TableCell>{e.name}</TableCell><TableCell className="text-right font-mono">{formatINR(e.value)}</TableCell></TableRow>
                 ))}
                 {profit < 0 && (
                   <TableRow><TableCell className="font-semibold text-destructive">Net Loss</TableCell><TableCell className="text-right font-mono font-semibold text-destructive">{formatINR(-profit)}</TableCell></TableRow>

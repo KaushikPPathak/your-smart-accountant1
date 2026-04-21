@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -90,6 +90,7 @@ interface EntryRow {
 
 function GroupLedgerReport() {
   const { activeCompanyId } = useCompany();
+  const navigate = useNavigate();
   const [groupKey, setGroupKey] = useState<GroupKey>("sundry_debtors");
   const [from, setFrom] = useState(() => new Date(new Date().getFullYear(), 3, 1).toISOString().slice(0, 10));
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
@@ -235,15 +236,14 @@ function GroupLedgerReport() {
               ) : rows.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="p-6 text-center text-sm text-muted-foreground">No ledgers in this group.</TableCell></TableRow>
               ) : rows.map((r) => (
-                <TableRow key={r.id}>
+                <TableRow
+                  key={r.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => navigate({ to: "/app/reports/ledger", search: { ledgerId: r.id, from, to } })}
+                  title="Drill down to ledger statement"
+                >
                   <TableCell>
-                    <Link
-                      to="/app/reports/ledger"
-                      search={{ ledgerId: r.id, from, to } as never}
-                      className="font-medium hover:underline"
-                    >
-                      {r.name}
-                    </Link>
+                    <span className="font-medium hover:underline">{r.name}</span>
                     <Badge variant="outline" className="ml-2 text-[10px]">{r.type.replace(/_/g, " ")}</Badge>
                   </TableCell>
                   <TableCell className="text-right font-mono">{formatINR(r.opening_paise)}</TableCell>

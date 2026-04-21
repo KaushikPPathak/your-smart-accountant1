@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,6 +23,7 @@ export const Route = createFileRoute("/app/reports/balance-sheet")({
 
 function BalanceSheet() {
   const { activeCompanyId } = useCompany();
+  const navigate = useNavigate();
   const initial = defaultFyRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -114,7 +115,11 @@ function BalanceSheet() {
               <TableHeader><TableRow><TableHead>Liabilities</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
               <TableBody>
                 {liabExtended.filter((x) => x.value).map((x) => (
-                  <TableRow key={x.id}><TableCell>{x.name}</TableCell><TableCell className="text-right font-mono">{formatINR(x.value)}</TableCell></TableRow>
+                  <TableRow
+                    key={x.id}
+                    className={x.id !== "__pl" ? "cursor-pointer hover:bg-muted/50" : ""}
+                    onClick={() => x.id !== "__pl" && navigate({ to: "/app/reports/ledger", search: { ledgerId: x.id, from, to } })}
+                  ><TableCell>{x.name}</TableCell><TableCell className="text-right font-mono">{formatINR(x.value)}</TableCell></TableRow>
                 ))}
                 <TableRow><TableCell className="font-semibold">Total</TableCell><TableCell className="text-right font-mono font-semibold">{formatINR(grandL)}</TableCell></TableRow>
               </TableBody>
@@ -127,7 +132,11 @@ function BalanceSheet() {
               <TableHeader><TableRow><TableHead>Assets</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
               <TableBody>
                 {assetExtended.filter((x) => x.value).map((x) => (
-                  <TableRow key={x.id}><TableCell>{x.name}</TableCell><TableCell className="text-right font-mono">{formatINR(x.value)}</TableCell></TableRow>
+                  <TableRow
+                    key={x.id}
+                    className={x.id !== "__pl" ? "cursor-pointer hover:bg-muted/50" : ""}
+                    onClick={() => x.id !== "__pl" && navigate({ to: "/app/reports/ledger", search: { ledgerId: x.id, from, to } })}
+                  ><TableCell>{x.name}</TableCell><TableCell className="text-right font-mono">{formatINR(x.value)}</TableCell></TableRow>
                 ))}
                 <TableRow><TableCell className="font-semibold">Total</TableCell><TableCell className="text-right font-mono font-semibold">{formatINR(grandA)}</TableCell></TableRow>
               </TableBody>
