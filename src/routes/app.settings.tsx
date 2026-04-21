@@ -1,7 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Download, Moon, Save, Sun, UserPlus, KeyRound } from "lucide-react";
+import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound } from "lucide-react";
+import {
+  exportAllCompaniesBackup,
+  exportCompanyBackup,
+  parseBackupFile,
+  restoreCompanyBackup,
+} from "@/lib/backup";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +46,11 @@ interface Member {
 }
 
 function SettingsPage() {
-  const { activeCompanyId, activeMembership } = useCompany();
+  const { activeCompanyId, activeMembership, memberships } = useCompany();
+  const restoreFileRef = useRef<HTMLInputElement | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
+  const [wipeBeforeRestore, setWipeBeforeRestore] = useState(false);
   const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState<Settings>({
     invoice_prefix: "INV",
@@ -208,37 +218,50 @@ function SettingsPage() {
     if (!activeCompanyId) return;
     setExporting(true);
     try {
-      const [c, l, i, v, vi, ve, s] = await Promise.all([
-        supabase.from("companies").select("*").eq("id", activeCompanyId).single(),
-        supabase.from("ledgers").select("*").eq("company_id", activeCompanyId),
-        supabase.from("items").select("*").eq("company_id", activeCompanyId),
-        supabase.from("vouchers").select("*").eq("company_id", activeCompanyId),
-        supabase.from("voucher_items").select("*, vouchers!inner(company_id)").eq("vouchers.company_id", activeCompanyId),
-        supabase.from("voucher_entries").select("*, vouchers!inner(company_id)").eq("vouchers.company_id", activeCompanyId),
-        supabase.from("company_settings").select("*").eq("company_id", activeCompanyId).maybeSingle(),
-      ]);
-      const payload = {
-        exported_at: new Date().toISOString(),
-        company: c.data,
-        ledgers: l.data,
-        items: i.data,
-        vouchers: v.data,
-        voucher_items: vi.data,
-        voucher_entries: ve.data,
-        settings: s.data,
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `backup-${c.data?.name?.replace(/\s+/g, "_")}-${Date.now()}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Backup downloaded");
+      const name = activeMembership?.companies.name ?? "company";
+      const res = await exportCompanyBackup(activeCompanyId, name);
+      toast.success(res.desktopPath ? `Saved to ${res.desktopPath}` : `Downloaded ${res.fileName}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Backup failed");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const exportAll = async () => {
+    if (!memberships.length) return;
+    setExportingAll(true);
+    try {
+      const list = memberships.map((m) => ({ id: m.company_id, name: m.companies.name }));
+      const res = await exportAllCompaniesBackup(list);
+      toast.success(res.desktopPath ? `Saved to ${res.desktopPath}` : `Downloaded ${res.fileName}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Backup failed");
+    } finally {
+      setExportingAll(false);
+    }
+  };
+
+  const onRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !activeCompanyId) return;
+    if (!isAdmin) { toast.error("Only admins can restore"); return; }
+    if (wipeBeforeRestore && !confirm("This will DELETE all current data in this company before restoring. Continue?")) return;
+    setRestoring(true);
+    try {
+      const text = await file.text();
+      const parsed = parseBackupFile(text);
+      const single = parsed.kind === "single" ? parsed.data : parsed.data.companies[0];
+      if (!single) throw new Error("Backup file is empty");
+      const summary = await restoreCompanyBackup(activeCompanyId, single, { wipeExisting: wipeBeforeRestore });
+      toast.success(
+        `Restored: ${summary.ledgers} ledgers, ${summary.items} items, ${summary.vouchers} vouchers`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Restore failed");
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -424,12 +447,69 @@ function SettingsPage() {
       )}
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Data backup</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-sm text-muted-foreground">Download a JSON snapshot of all data for this company.</p>
-          <Button variant="outline" onClick={exportBackup} disabled={exporting}>
-            <Download className="mr-2 h-4 w-4" /> {exporting ? "Exporting…" : "Download backup"}
-          </Button>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Database className="h-4 w-4" /> Backup &amp; Restore
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">This company</p>
+            <p className="text-xs text-muted-foreground">
+              Download a JSON snapshot of every ledger, item, voucher, allocation and recurring template for{" "}
+              <span className="font-medium text-foreground">{activeMembership?.companies.name ?? "—"}</span>.
+              On the Windows app, files are auto-saved to{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px]">Documents/YourMehtaji/&lt;Company&gt;/backups/</code>.
+            </p>
+            <Button variant="outline" onClick={exportBackup} disabled={exporting}>
+              <Download className="mr-2 h-4 w-4" /> {exporting ? "Exporting…" : "Download company backup"}
+            </Button>
+          </div>
+
+          <div className="space-y-2 border-t border-border pt-4">
+            <p className="text-sm font-medium">All companies ({memberships.length})</p>
+            <p className="text-xs text-muted-foreground">
+              One file containing snapshots of every company you have access to. Useful for off-site safekeeping.
+            </p>
+            <Button variant="outline" onClick={exportAll} disabled={exportingAll || memberships.length === 0}>
+              <Download className="mr-2 h-4 w-4" /> {exportingAll ? "Exporting all…" : "Download all-companies backup"}
+            </Button>
+          </div>
+
+          <div className="space-y-2 border-t border-border pt-4">
+            <p className="text-sm font-medium">Restore into this company</p>
+            <p className="text-xs text-muted-foreground">
+              Imports a backup JSON into <span className="font-medium text-foreground">{activeMembership?.companies.name ?? "—"}</span>.
+              Multi-company files restore only the first company — switch companies and run again for the rest.
+            </p>
+            <div className="flex items-center justify-between rounded-md border border-warning/40 bg-warning/10 p-3">
+              <div className="flex items-start gap-2 text-xs">
+                <AlertTriangle className="mt-0.5 h-4 w-4 text-warning" />
+                <div>
+                  <div className="font-medium text-foreground">Wipe existing data first</div>
+                  <div className="text-muted-foreground">Deletes current ledgers, items, vouchers before importing. Cannot be undone.</div>
+                </div>
+              </div>
+              <Switch checked={wipeBeforeRestore} onCheckedChange={setWipeBeforeRestore} />
+            </div>
+            <input
+              ref={restoreFileRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={onRestoreFile}
+            />
+            <Button
+              variant="outline"
+              onClick={() => restoreFileRef.current?.click()}
+              disabled={restoring || !isAdmin}
+            >
+              <Upload className="mr-2 h-4 w-4" /> {restoring ? "Restoring…" : "Choose backup file…"}
+            </Button>
+            {!isAdmin && (
+              <p className="text-xs text-muted-foreground">Only company admins can restore.</p>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
