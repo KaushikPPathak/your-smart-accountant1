@@ -1,14 +1,15 @@
 name: Build Windows Installer
 
 on:
-permissions:
-  contents: write
   push:
     branches: [main]
     paths:
       - 'electron/**'
       - '.github/workflows/build-windows-installer.yml'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -41,10 +42,8 @@ jobs:
           InstallDir "$PROGRAMFILES64\Your Mehtaji"
           InstallDirRegKey HKCU "Software\YourMehtaji" "InstallDir"
           RequestExecutionLevel admin
-
           !define MUI_ICON "electron\icon.ico"
           !define MUI_UNICON "electron\icon.ico"
-
           !insertmacro MUI_PAGE_WELCOME
           !insertmacro MUI_PAGE_DIRECTORY
           !insertmacro MUI_PAGE_INSTFILES
@@ -52,7 +51,6 @@ jobs:
           !insertmacro MUI_UNPAGE_CONFIRM
           !insertmacro MUI_UNPAGE_INSTFILES
           !insertmacro MUI_LANGUAGE "English"
-
           Section "Install"
             SetOutPath "$INSTDIR"
             File /r "electron\release\Your Mehtaji-win32-x64\*.*"
@@ -68,7 +66,6 @@ jobs:
             WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YourMehtaji" "DisplayVersion" "1.0.0"
             WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\YourMehtaji" "Publisher" "Your Mehtaji"
           SectionEnd
-
           Section "Uninstall"
             RMDir /r "$INSTDIR"
             Delete "$DESKTOP\Your Mehtaji.lnk"
