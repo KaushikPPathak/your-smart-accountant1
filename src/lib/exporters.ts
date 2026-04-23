@@ -35,9 +35,10 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     head: opts.head,
     body: opts.body,
     foot: opts.foot,
-    styles: { fontSize: 9, cellPadding: 4 },
-    headStyles: { fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold" },
-    footStyles: { fillColor: [240, 240, 240], textColor: 20, fontStyle: "bold" },
+    theme: "grid",
+    styles: { fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
+    headStyles: { fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
+    footStyles: { fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
     columnStyles,
     didDrawPage: () => {
       const str = `Page ${doc.getNumberOfPages()}`;
