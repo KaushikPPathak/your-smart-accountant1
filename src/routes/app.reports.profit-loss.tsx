@@ -73,16 +73,30 @@ function ProfitLoss() {
   const grandLeft = totalExp + Math.max(0, profit);
   const grandRight = totalInc + Math.max(0, -profit);
 
+  // Plain export rows derived from source data (not JSX TRow.label).
+  type ExportRow = { label: string; paise: number };
+  const lExp = expenses.filter((e) => e.value);
+  const lInc = incomes.filter((e) => e.value);
+  const drExport: ExportRow[] = lExp.map((e) => ({ label: `To ${e.name}`, paise: e.value }));
+  if (profit > 0) drExport.push({ label: "To Net Profit c/d", paise: profit });
+  const crExport: ExportRow[] = lInc.map((e) => ({ label: `By ${e.name}`, paise: e.value }));
+  if (profit < 0) crExport.push({ label: "By Net Loss c/d", paise: -profit });
+
+  const exportBody = (): (string | number)[][] => {
+    const max = Math.max(drExport.length, crExport.length);
+    return Array.from({ length: max }).map((_, i) => [
+      drExport[i]?.label ?? "",
+      drExport[i] ? r(drExport[i].paise).toFixed(2) : "",
+      crExport[i]?.label ?? "",
+      crExport[i] ? r(crExport[i].paise).toFixed(2) : "",
+    ]);
+  };
+
   const csvRows = (): (string | number)[][] => [
     [`Profit & Loss A/c: ${from} to ${to}`, "", "", ""],
     ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
-    ...Array.from({ length: Math.max(expenseRows.length, incomeRows.length) }).map((_, i) => [
-      typeof expenseRows[i]?.label === "string" ? (expenseRows[i].label as string) : "",
-      expenseRows[i] ? r(expenses[i]?.value ?? (profit > 0 && i === expenseRows.length - 1 ? profit : 0)).toFixed(2) : "",
-      typeof incomeRows[i]?.label === "string" ? (incomeRows[i].label as string) : "",
-      incomeRows[i] ? r(incomes[i]?.value ?? (profit < 0 && i === incomeRows.length - 1 ? -profit : 0)).toFixed(2) : "",
-    ]),
-    ["Total", (grandLeft / 100).toFixed(2), "Total", (grandRight / 100).toFixed(2)],
+    ...exportBody(),
+    ["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)],
   ];
 
   const onExportCsv = () => downloadCsv(`profit-loss-${from}_to_${to}.csv`, csvRows());
@@ -93,15 +107,7 @@ function ProfitLoss() {
       title: "Profit & Loss A/c",
       subtitle: `${from} to ${to}`,
       head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
-      body: Array.from({ length: Math.max(expenses.length + (profit > 0 ? 1 : 0), incomes.length + (profit < 0 ? 1 : 0)) }).map((_, i) => {
-        const lExp = expenses.filter((e) => e.value);
-        const lInc = incomes.filter((e) => e.value);
-        const lLabel = i < lExp.length ? `To ${lExp[i].name}` : profit > 0 && i === lExp.length ? "To Net Profit c/d" : "";
-        const lAmt = i < lExp.length ? r(lExp[i].value).toFixed(2) : profit > 0 && i === lExp.length ? r(profit).toFixed(2) : "";
-        const rLabel = i < lInc.length ? `By ${lInc[i].name}` : profit < 0 && i === lInc.length ? "By Net Loss c/d" : "";
-        const rAmt = i < lInc.length ? r(lInc[i].value).toFixed(2) : profit < 0 && i === lInc.length ? r(-profit).toFixed(2) : "";
-        return [lLabel, lAmt, rLabel, rAmt];
-      }),
+      body: exportBody(),
       foot: [["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)]],
       fileName: `profit-loss-${from}_to_${to}.pdf`,
       orientation: "l",

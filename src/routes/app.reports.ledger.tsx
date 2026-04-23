@@ -169,26 +169,40 @@ function LedgerStatement() {
 
   const grandTotal = Math.max(drSubtotal, crSubtotal);
 
-  const csvRows = (): (string | number)[][] => {
-    const max = Math.max(drRows.length, crRows.length);
-    return [
-      [`Ledger: ${ledger?.name ?? ""}`, "", "", ""],
-      [`Period: ${from} to ${to}`, "", "", ""],
-      ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
-      ...Array.from({ length: max }).map((_, i) => {
-        const lLabel = typeof drRows[i]?.label === "string" ? (drRows[i].label as string) : drRows[i] ? String(drRows[i].label) : "";
-        const rLabel = typeof crRows[i]?.label === "string" ? (crRows[i].label as string) : crRows[i] ? String(crRows[i].label) : "";
-        return [
-          lLabel,
-          drRows[i] ? String(drRows[i].amount).replace(/[₹,\s]/g, "") : "",
-          rLabel,
-          crRows[i] ? String(crRows[i].amount).replace(/[₹,\s]/g, "") : "",
-        ];
-      }),
-      ["Total", (grandTotal / 100).toFixed(2), "Total", (grandTotal / 100).toFixed(2)],
-      ["", "", "Closing", (closing / 100).toFixed(2)],
-    ];
+  // Plain export rows derived from source data (not JSX TRow.label).
+  type ExportRow = { label: string; paise: number };
+  const drExport: ExportRow[] = [];
+  const crExport: ExportRow[] = [];
+  if (openingBeforeFrom > 0) drExport.push({ label: "To Opening Balance", paise: openingBeforeFrom });
+  else if (openingBeforeFrom < 0) crExport.push({ label: "By Opening Balance", paise: -openingBeforeFrom });
+  for (const e of entries) {
+    const v = e.vouchers;
+    const desc = e.narration || v?.narration || (v?.voucher_type ?? "").replace(/_/g, " ");
+    const ref = v ? ` (${v.voucher_date} ${v.voucher_number})` : "";
+    if (e.debit_paise > 0) drExport.push({ label: `To ${desc}${ref}`, paise: e.debit_paise });
+    if (e.credit_paise > 0) crExport.push({ label: `By ${desc}${ref}`, paise: e.credit_paise });
+  }
+  if (drSubtotal > crSubtotal) crExport.push({ label: "By Balance c/d", paise: drSubtotal - crSubtotal });
+  else if (crSubtotal > drSubtotal) drExport.push({ label: "To Balance c/d", paise: crSubtotal - drSubtotal });
+
+  const exportBody = (): (string | number)[][] => {
+    const max = Math.max(drExport.length, crExport.length);
+    return Array.from({ length: max }).map((_, i) => [
+      drExport[i]?.label ?? "",
+      drExport[i] ? r(drExport[i].paise).toFixed(2) : "",
+      crExport[i]?.label ?? "",
+      crExport[i] ? r(crExport[i].paise).toFixed(2) : "",
+    ]);
   };
+
+  const csvRows = (): (string | number)[][] => [
+    [`Ledger: ${ledger?.name ?? ""}`, "", "", ""],
+    [`Period: ${from} to ${to}`, "", "", ""],
+    ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
+    ...exportBody(),
+    ["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)],
+    ["", "", "Closing", r(closing).toFixed(2)],
+  ];
 
   const onExportCsv = () => downloadCsv(`ledger-${ledger?.name ?? "x"}-${from}_to_${to}.csv`, csvRows());
   const onExportXlsx = () =>
@@ -200,12 +214,7 @@ function LedgerStatement() {
       title: `Ledger A/c — ${ledger?.name ?? ""}`,
       subtitle: `${from} to ${to}`,
       head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
-      body: Array.from({ length: Math.max(drRows.length, crRows.length) }).map((_, i) => [
-        drRows[i] ? String(drRows[i].label) : "",
-        drRows[i] ? r(parseInt(String(drRows[i].amount).replace(/[₹,\s]/g, ""), 10) || 0).toFixed(2) : "",
-        crRows[i] ? String(crRows[i].label) : "",
-        crRows[i] ? r(parseInt(String(crRows[i].amount).replace(/[₹,\s]/g, ""), 10) || 0).toFixed(2) : "",
-      ]),
+      body: exportBody(),
       foot: [["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)]],
       fileName: `ledger-${ledger?.name ?? "x"}-${from}_to_${to}.pdf`,
       orientation: "l",

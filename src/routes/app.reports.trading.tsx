@@ -93,20 +93,35 @@ function TradingAccount() {
   const grandLeft = openingStock + totalDirect + Math.max(0, gp);
   const grandRight = totalSales + closingStock + Math.max(0, -gp);
 
-  const csvRows = (): (string | number)[][] => {
-    const max = Math.max(drRows.length, crRows.length);
-    return [
-      [`Trading A/c: ${from} to ${to}`, "", "", ""],
-      ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
-      ...Array.from({ length: max }).map((_, i) => [
-        drRows[i] ? String(drRows[i].label) : "",
-        drRows[i] ? String(drRows[i].amount).replace(/[₹,\s]/g, "") : "",
-        crRows[i] ? String(crRows[i].label) : "",
-        crRows[i] ? String(crRows[i].amount).replace(/[₹,\s]/g, "") : "",
-      ]),
-      ["Total", (grandLeft / 100).toFixed(2), "Total", (grandRight / 100).toFixed(2)],
-    ];
+  // Plain (string-only) export rows derived from source data,
+  // independent of the JSX TRow rendering used on screen.
+  type ExportRow = { label: string; paise: number };
+  const drExport: ExportRow[] = [];
+  if (openingStock) drExport.push({ label: "To Opening Stock", paise: openingStock });
+  for (const e of directExp.filter((x) => x.value)) drExport.push({ label: `To ${e.name}`, paise: e.value });
+  if (gp > 0) drExport.push({ label: "To Gross Profit c/d", paise: gp });
+
+  const crExport: ExportRow[] = [];
+  for (const e of directIncome.filter((x) => x.value)) crExport.push({ label: `By ${e.name}`, paise: e.value });
+  if (closingStock) crExport.push({ label: "By Closing Stock", paise: closingStock });
+  if (gp < 0) crExport.push({ label: "By Gross Loss c/d", paise: -gp });
+
+  const exportBody = (): (string | number)[][] => {
+    const max = Math.max(drExport.length, crExport.length);
+    return Array.from({ length: max }).map((_, i) => [
+      drExport[i]?.label ?? "",
+      drExport[i] ? r(drExport[i].paise).toFixed(2) : "",
+      crExport[i]?.label ?? "",
+      crExport[i] ? r(crExport[i].paise).toFixed(2) : "",
+    ]);
   };
+
+  const csvRows = (): (string | number)[][] => [
+    [`Trading A/c: ${from} to ${to}`, "", "", ""],
+    ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
+    ...exportBody(),
+    ["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)],
+  ];
 
   const onExportCsv = () => downloadCsv(`trading-${from}_to_${to}.csv`, csvRows());
   const onExportXlsx = () => downloadXlsx(`trading-${from}_to_${to}.xlsx`, [{ name: "Trading", rows: csvRows() }]);
@@ -115,12 +130,7 @@ function TradingAccount() {
       title: "Trading Account",
       subtitle: `${from} to ${to}`,
       head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
-      body: Array.from({ length: Math.max(drRows.length, crRows.length) }).map((_, i) => [
-        drRows[i] ? String(drRows[i].label) : "",
-        drRows[i] ? r(parseInt(String(drRows[i].amount).replace(/[₹,\s]/g, ""), 10) || 0).toFixed(2) : "",
-        crRows[i] ? String(crRows[i].label) : "",
-        crRows[i] ? r(parseInt(String(crRows[i].amount).replace(/[₹,\s]/g, ""), 10) || 0).toFixed(2) : "",
-      ]),
+      body: exportBody(),
       foot: [["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)]],
       fileName: `trading-${from}_to_${to}.pdf`,
       orientation: "l",
