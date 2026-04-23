@@ -4,6 +4,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import { amountInWords, formatINR } from "@/lib/money";
+import { saveExport } from "@/lib/desktop-save";
 
 const r = (paise: number) => (paise / 100).toFixed(2);
 
@@ -392,5 +393,12 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
   // suppress unused-warning helper
   void formatINR;
 
-  doc.save(`${TYPE_TITLE[v.voucher_type] || "invoice"}-${v.voucher_number}.pdf`);
+  const fileName = `${TYPE_TITLE[v.voucher_type] || "invoice"}-${v.voucher_number}.pdf`;
+  const buf = doc.output("arraybuffer");
+  await saveExport({
+    subFolder: "Invoices",
+    fileName,
+    contents: buf,
+    mime: "application/pdf",
+  });
 }
