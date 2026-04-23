@@ -1,4 +1,6 @@
-// Minimal CSV exporter
+// Minimal CSV exporter — routes through the desktop saver when available.
+import { saveExport } from "./desktop-save";
+
 export function toCsv(rows: (string | number)[][]): string {
   return rows
     .map((r) =>
@@ -12,14 +14,11 @@ export function toCsv(rows: (string | number)[][]): string {
     .join("\n");
 }
 
-export function downloadCsv(filename: string, rows: (string | number)[][]) {
-  const blob = new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+export function downloadCsv(filename: string, rows: (string | number)[][], subFolder = "Reports"): void {
+  void saveExport({
+    subFolder,
+    fileName: filename,
+    contents: toCsv(rows),
+    mime: "text/csv;charset=utf-8",
+  });
 }

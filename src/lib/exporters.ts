@@ -1,7 +1,11 @@
 // Shared exporters: PDF (jsPDF + autotable) and Excel (SheetJS).
+// Files are routed through the desktop saver — in the .exe they land in
+// Documents/YourMehtaji/Exports/<Company>/<subFolder>/ and auto-open;
+// in the browser they fall back to a normal download.
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { saveExport } from "./desktop-save";
 
 export interface PdfTableOptions {
   title: string;
@@ -12,6 +16,8 @@ export interface PdfTableOptions {
   fileName: string;
   orientation?: "p" | "l";
   rightAlignCols?: number[]; // column indexes that should be right aligned (numeric)
+  /** Folder under the company export root. Defaults to "Reports". */
+  subFolder?: string;
 }
 
 export function downloadPdfTable(opts: PdfTableOptions): void {
@@ -49,7 +55,13 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     },
   });
 
-  doc.save(opts.fileName);
+  const buf = doc.output("arraybuffer");
+  void saveExport({
+    subFolder: opts.subFolder || "Reports",
+    fileName: opts.fileName,
+    contents: buf,
+    mime: "application/pdf",
+  });
 }
 
 export interface XlsxSheet {
@@ -57,14 +69,21 @@ export interface XlsxSheet {
   rows: (string | number)[][]; // first row may be header
 }
 
-export function downloadXlsx(fileName: string, sheets: XlsxSheet[]): void {
+export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = "Reports"): void {
   const wb = XLSX.utils.book_new();
   for (const s of sheets) {
     const ws = XLSX.utils.aoa_to_sheet(s.rows);
     XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
   }
-  XLSX.writeFile(wb, fileName);
+  const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+  void saveExport({
+    subFolder,
+    fileName,
+    contents: buf,
+    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
 }
 
 // Convenience: paise → rupees number for sheets
 export const r = (paise: number): number => Number((paise / 100).toFixed(2));
+
