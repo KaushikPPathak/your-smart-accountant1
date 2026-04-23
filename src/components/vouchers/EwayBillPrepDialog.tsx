@@ -277,13 +277,12 @@ export function EwayBillPrepDialog({
     toast.success(`${label} JSON copied`);
   }
   function downloadJson(data: unknown, name: string) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(url);
+    void saveExport({
+      subFolder: "Eway-Einvoice",
+      fileName: name,
+      contents: JSON.stringify(data, null, 2),
+      mime: "application/json",
+    });
   }
 
   if (!voucher) return null;

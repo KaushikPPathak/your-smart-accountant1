@@ -670,10 +670,13 @@ export function gstr3bToXlsxSheets(b: BuiltGstr3B): XlsxSheet[] {
   return [{ name: "GSTR-3B", rows: summary }];
 }
 
+import { saveExport as _saveExport } from "./desktop-save";
+
 export const downloadJson = (fileName: string, payload: unknown): void => {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = fileName; a.click();
-  URL.revokeObjectURL(url);
+  void _saveExport({
+    subFolder: "GST",
+    fileName,
+    contents: JSON.stringify(payload, null, 2),
+    mime: "application/json",
+  });
 };
