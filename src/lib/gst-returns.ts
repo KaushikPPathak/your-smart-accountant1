@@ -622,7 +622,12 @@ export function gstr1ToJson(g: BuiltGstr1): Record<string, unknown> {
     out.exp = Array.from(byTyp.entries()).map(([exp_typ, inv]) => ({ exp_typ, inv }));
   }
   if (g.nil.length) out.nil = { inv: g.nil };
-  if (g.hsn.length) out.hsn = { data: g.hsn.map((h, i) => ({ num: i + 1, ...h })) };
+  if (g.hsn_b2b.length || g.hsn_b2c.length) {
+    out.hsn = {
+      hsn_b2b: g.hsn_b2b.map((h, i) => ({ num: i + 1, ...h })),
+      hsn_b2c: g.hsn_b2c.map((h, i) => ({ num: i + 1, ...h })),
+    };
+  }
   out.doc_issue = {
     doc_det: [
       { doc_num: 1, docs: g.docs.filter((d) => d.doc_typ.startsWith("Invoices")).map((d, i) => ({ num: i + 1, from: d.from, to: d.to, totnum: d.totnum, cancel: d.cancel, net_issue: d.net_issue })) },
