@@ -900,7 +900,7 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
   const samt_payable = Math.max(0, outSamt - itc_net.samt * 100);
 
   return {
-    meta: { gstin: company.gstin || "", fp, from, to },
+    meta: { gstin: company.gstin || "", fp, from, to, legal_name: company.name },
     sup_details: {
       osup_det: { txval: r(osup_det.txval), iamt: r(osup_det.iamt), camt: r(osup_det.camt), samt: r(osup_det.samt), csamt: 0 },
       osup_zero: { txval: r(osup_zero.txval), iamt: r(osup_zero.iamt), camt: 0, samt: 0, csamt: 0 },
