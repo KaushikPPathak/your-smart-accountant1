@@ -6,16 +6,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Download, FileSpreadsheet, FileJson, Printer } from "lucide-react";
+import { FileSpreadsheet, FileJson, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadXlsx } from "@/lib/exporters";
 import {
   buildGstr1, fetchVouchers, fetchCompanyMeta, gstr1ToJson, gstr1ToXlsxSheets,
-  monthRange, quarterRange, periodFP, downloadJson,
+  monthRange, quarterRange, periodFP, downloadJson, validateGstr1,
   type VoucherRow, type CompanyMeta, type BuiltGstr1,
 } from "@/lib/gst-returns";
+import { ValidationPanel } from "@/components/reports/ValidationPanel";
 
 export const Route = createFileRoute("/app/reports/gstr1")({
   head: () => ({ meta: [{ title: "GSTR-1 — Reports" }] }),
@@ -180,6 +181,8 @@ function GSTR1Page() {
 
       {built && (
         <>
+          <ValidationPanel issues={validateGstr1(built)} />
+
           <SectionTable title={`B2B (${built.b2b.length})`} headers={["GSTIN", "Invoice", "Date", "POS", "Value", "Taxable", "IGST", "CGST", "SGST"]}
             rows={built.b2b.map((x) => [x.ctin, x.inum, x.idt, x.pos, money(x.val), money(sumLine(x.itms, "txval")), money(sumLine(x.itms, "iamt")), money(sumLine(x.itms, "camt")), money(sumLine(x.itms, "samt"))])} />
 
@@ -191,6 +194,24 @@ function GSTR1Page() {
 
           <SectionTable title={`CDNR (${built.cdnr.length}) — Credit/Debit notes (registered)`} headers={["GSTIN", "Note", "Date", "Type", "POS", "Value", "Taxable"]}
             rows={built.cdnr.map((x) => [x.ctin, x.nt_num, x.nt_dt, x.ntty, x.pos, money(x.val), money(sumLine(x.itms, "txval"))])} />
+
+          <SectionTable title={`CDNUR (${built.cdnur.length}) — Notes to unregistered / exports`} headers={["Type", "Note", "Date", "POS", "Value"]}
+            rows={built.cdnur.map((x) => [x.typ, x.nt_num, x.nt_dt, x.pos, money(x.val)])} />
+
+          <SectionTable title={`EXP (${built.exp.length}) — Exports & SEZ`} headers={["Type", "Invoice", "Date", "Port", "SB No", "SB Date", "Value"]}
+            rows={built.exp.map((e) => [e.exp_typ, e.inum, e.idt, e.sbpcode || "", e.sbnum || "", e.sbdt || "", money(e.val)])} />
+
+          <SectionTable title={`NIL / Exempted / Non-GST (${built.nil.length})`} headers={["Type", "Nil-rated", "Exempted", "Non-GST"]}
+            rows={built.nil.map((n) => [n.sply_ty, money(n.nil_amt), money(n.expt_amt), money(n.ngsup_amt)])} />
+
+          {built.b2ba.length > 0 && (
+            <SectionTable title={`B2BA (${built.b2ba.length}) — B2B Amendments`} headers={["GSTIN", "Orig Inv", "Orig Date", "New Inv", "New Date", "Value"]}
+              rows={built.b2ba.map((x) => [x.ctin, x.oinum, x.oidt, x.inum, x.idt, money(x.val)])} />
+          )}
+          {built.cdnra.length > 0 && (
+            <SectionTable title={`CDNRA (${built.cdnra.length}) — Note Amendments`} headers={["GSTIN", "Orig Note", "Orig Date", "New Note", "New Date", "Value"]}
+              rows={built.cdnra.map((x) => [x.ctin, x.ont_num, x.ont_dt, x.nt_num, x.nt_dt, money(x.val)])} />
+          )}
 
           <SectionTable title={`HSN (${built.hsn.length})`} headers={["HSN", "UQC", "Qty", "Rate", "Taxable", "IGST", "CGST", "SGST", "Total"]}
             rows={built.hsn.map((h) => [h.hsn_sc, h.uqc, h.qty, `${h.rt}%`, money(h.txval), money(h.iamt), money(h.camt), money(h.samt), money(h.val)])} />

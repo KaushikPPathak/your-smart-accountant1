@@ -678,6 +678,94 @@ export type Database = {
           },
         ]
       }
+      gstr3b_inward_summary: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          inter_paise: number
+          intra_paise: number
+          period: string
+          ty: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          inter_paise?: number
+          intra_paise?: number
+          period: string
+          ty: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          inter_paise?: number
+          intra_paise?: number
+          period?: string
+          ty?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gstr3b_inward_summary_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gstr3b_itc_reversal: {
+        Row: {
+          camt_paise: number
+          company_id: string
+          created_at: string
+          csamt_paise: number
+          iamt_paise: number
+          id: string
+          period: string
+          samt_paise: number
+          ty: string
+          updated_at: string
+        }
+        Insert: {
+          camt_paise?: number
+          company_id: string
+          created_at?: string
+          csamt_paise?: number
+          iamt_paise?: number
+          id?: string
+          period: string
+          samt_paise?: number
+          ty: string
+          updated_at?: string
+        }
+        Update: {
+          camt_paise?: number
+          company_id?: string
+          created_at?: string
+          csamt_paise?: number
+          iamt_paise?: number
+          id?: string
+          period?: string
+          samt_paise?: number
+          ty?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gstr3b_itc_reversal_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       items: {
         Row: {
           company_id: string
@@ -741,10 +829,12 @@ export type Database = {
         Row: {
           address: string | null
           company_id: string
+          country: string | null
           created_at: string
           credit_days: number
           credit_limit_paise: number
           email: string | null
+          gst_treatment: Database["public"]["Enums"]["gst_treatment"]
           gstin: string | null
           id: string
           is_active: boolean
@@ -763,10 +853,12 @@ export type Database = {
         Insert: {
           address?: string | null
           company_id: string
+          country?: string | null
           created_at?: string
           credit_days?: number
           credit_limit_paise?: number
           email?: string | null
+          gst_treatment?: Database["public"]["Enums"]["gst_treatment"]
           gstin?: string | null
           id?: string
           is_active?: boolean
@@ -785,10 +877,12 @@ export type Database = {
         Update: {
           address?: string | null
           company_id?: string
+          country?: string | null
           created_at?: string
           credit_days?: number
           credit_limit_paise?: number
           email?: string | null
+          gst_treatment?: Database["public"]["Enums"]["gst_treatment"]
           gstin?: string | null
           id?: string
           is_active?: boolean
@@ -1134,17 +1228,25 @@ export type Database = {
           due_date: string | null
           id: string
           igst_paise: number
+          is_amendment: boolean
           is_interstate: boolean
           linked_voucher_ids: Json
           narration: string | null
+          orig_invoice_date: string | null
+          orig_invoice_no: string | null
+          orig_period: string | null
           original_voucher_id: string | null
           party_ledger_id: string | null
           place_of_supply_code: string | null
+          port_code: string | null
           reason: string | null
           reference_no: string | null
           round_off_paise: number
           sgst_paise: number
+          shipping_bill_date: string | null
+          shipping_bill_no: string | null
           subtotal_paise: number
+          supply_nature: Database["public"]["Enums"]["supply_nature"]
           total_paise: number
           updated_at: string
           vendor_invoice_date: string | null
@@ -1162,17 +1264,25 @@ export type Database = {
           due_date?: string | null
           id?: string
           igst_paise?: number
+          is_amendment?: boolean
           is_interstate?: boolean
           linked_voucher_ids?: Json
           narration?: string | null
+          orig_invoice_date?: string | null
+          orig_invoice_no?: string | null
+          orig_period?: string | null
           original_voucher_id?: string | null
           party_ledger_id?: string | null
           place_of_supply_code?: string | null
+          port_code?: string | null
           reason?: string | null
           reference_no?: string | null
           round_off_paise?: number
           sgst_paise?: number
+          shipping_bill_date?: string | null
+          shipping_bill_no?: string | null
           subtotal_paise?: number
+          supply_nature?: Database["public"]["Enums"]["supply_nature"]
           total_paise?: number
           updated_at?: string
           vendor_invoice_date?: string | null
@@ -1190,17 +1300,25 @@ export type Database = {
           due_date?: string | null
           id?: string
           igst_paise?: number
+          is_amendment?: boolean
           is_interstate?: boolean
           linked_voucher_ids?: Json
           narration?: string | null
+          orig_invoice_date?: string | null
+          orig_invoice_no?: string | null
+          orig_period?: string | null
           original_voucher_id?: string | null
           party_ledger_id?: string | null
           place_of_supply_code?: string | null
+          port_code?: string | null
           reason?: string | null
           reference_no?: string | null
           round_off_paise?: number
           sgst_paise?: number
+          shipping_bill_date?: string | null
+          shipping_bill_no?: string | null
           subtotal_paise?: number
+          supply_nature?: Database["public"]["Enums"]["supply_nature"]
           total_paise?: number
           updated_at?: string
           vendor_invoice_date?: string | null
@@ -1265,6 +1383,16 @@ export type Database = {
     }
     Enums: {
       company_role: "admin" | "accountant" | "viewer"
+      gst_treatment:
+        | "regular"
+        | "composition"
+        | "unregistered"
+        | "consumer"
+        | "sez_with_payment"
+        | "sez_without_payment"
+        | "overseas"
+        | "deemed_export"
+        | "uin_holder"
       ledger_type:
         | "sundry_debtor"
         | "sundry_creditor"
@@ -1281,6 +1409,15 @@ export type Database = {
         | "capital"
         | "duties_taxes"
         | "stock_in_hand"
+      supply_nature:
+        | "taxable"
+        | "zero_rated_wp"
+        | "zero_rated_wop"
+        | "nil_rated"
+        | "exempt"
+        | "non_gst"
+        | "rcm_inward"
+        | "deemed_export"
       voucher_type:
         | "sales"
         | "purchase"
@@ -1421,6 +1558,17 @@ export const Constants = {
   public: {
     Enums: {
       company_role: ["admin", "accountant", "viewer"],
+      gst_treatment: [
+        "regular",
+        "composition",
+        "unregistered",
+        "consumer",
+        "sez_with_payment",
+        "sez_without_payment",
+        "overseas",
+        "deemed_export",
+        "uin_holder",
+      ],
       ledger_type: [
         "sundry_debtor",
         "sundry_creditor",
@@ -1437,6 +1585,16 @@ export const Constants = {
         "capital",
         "duties_taxes",
         "stock_in_hand",
+      ],
+      supply_nature: [
+        "taxable",
+        "zero_rated_wp",
+        "zero_rated_wop",
+        "nil_rated",
+        "exempt",
+        "non_gst",
+        "rcm_inward",
+        "deemed_export",
       ],
       voucher_type: [
         "sales",

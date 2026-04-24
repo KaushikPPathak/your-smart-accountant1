@@ -4,16 +4,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { FileSpreadsheet, FileJson, Printer } from "lucide-react";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadXlsx } from "@/lib/exporters";
 import {
   buildGstr3B, fetchVouchers, fetchCompanyMeta, gstr3bToJson, gstr3bToXlsxSheets,
-  monthRange, periodFP, downloadJson,
-  type CompanyMeta, type BuiltGstr3B,
+  monthRange, periodFP, downloadJson, fetchInwardSummary, fetchItcReversal, validateGstr3B,
+  type CompanyMeta, type BuiltGstr3B, type InwardSummaryRow, type ItcReversalRow,
 } from "@/lib/gst-returns";
+import { ValidationPanel } from "@/components/reports/ValidationPanel";
 
 export const Route = createFileRoute("/app/reports/gstr3b")({
   head: () => ({ meta: [{ title: "GSTR-3B — Reports" }] }),
@@ -32,6 +36,8 @@ function GSTR3BPage() {
   const [month, setMonth] = useState<string>(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`);
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [built, setBuilt] = useState<BuiltGstr3B | null>(null);
+  const [inward, setInward] = useState<InwardSummaryRow[]>([]);
+  const [reversal, setReversal] = useState<ItcReversalRow[]>([]);
 
   const period = useMemo(() => {
     const r = monthRange(month);
@@ -46,13 +52,21 @@ function GSTR3BPage() {
   useEffect(() => {
     if (!activeCompanyId || !company) return;
     (async () => {
-      const [sales, purchases, creditNotes, debitNotes] = await Promise.all([
+      const [sales, purchases, creditNotes, debitNotes, inwardRows, reversalRows] = await Promise.all([
         fetchVouchers(activeCompanyId, period.from, period.to, ["sales"]),
         fetchVouchers(activeCompanyId, period.from, period.to, ["purchase"]),
         fetchVouchers(activeCompanyId, period.from, period.to, ["credit_note"]),
         fetchVouchers(activeCompanyId, period.from, period.to, ["debit_note"]),
+        fetchInwardSummary(activeCompanyId, period.fp),
+        fetchItcReversal(activeCompanyId, period.fp),
       ]);
-      setBuilt(buildGstr3B({ company, from: period.from, to: period.to, fp: period.fp, sales, purchases, creditNotes, debitNotes }));
+      setInward(inwardRows);
+      setReversal(reversalRows);
+      setBuilt(buildGstr3B({
+        company, from: period.from, to: period.to, fp: period.fp,
+        sales, purchases, creditNotes, debitNotes,
+        inwardSummary: inwardRows, itcReversal: reversalRows,
+      }));
     })();
   }, [activeCompanyId, company, period.from, period.to, period.fp]);
 
@@ -94,6 +108,27 @@ function GSTR3BPage() {
 
       {built && (
         <>
+          <ValidationPanel issues={validateGstr3B(built)} />
+
+          <ManualEntryCard
+            companyId={activeCompanyId!}
+            period={period.fp}
+            inward={inward}
+            reversal={reversal}
+            onChanged={async () => {
+              if (!activeCompanyId || !company) return;
+              const [i, r] = await Promise.all([fetchInwardSummary(activeCompanyId, period.fp), fetchItcReversal(activeCompanyId, period.fp)]);
+              setInward(i); setReversal(r);
+              const [sales, purchases, creditNotes, debitNotes] = await Promise.all([
+                fetchVouchers(activeCompanyId, period.from, period.to, ["sales"]),
+                fetchVouchers(activeCompanyId, period.from, period.to, ["purchase"]),
+                fetchVouchers(activeCompanyId, period.from, period.to, ["credit_note"]),
+                fetchVouchers(activeCompanyId, period.from, period.to, ["debit_note"]),
+              ]);
+              setBuilt(buildGstr3B({ company, from: period.from, to: period.to, fp: period.fp, sales, purchases, creditNotes, debitNotes, inwardSummary: i, itcReversal: r }));
+            }}
+          />
+
           <Card>
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">3.1 Outward & inward supplies on RCM</div>
@@ -154,18 +189,50 @@ function GSTR3BPage() {
                   <TableHead className="text-right">SGST</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  <TableRow>
-                    <TableCell>(A) ITC Available — All other ITC</TableCell>
-                    <TableCell className="text-right font-mono">{moneyR(built.itc_elg.itc_avl[0].iamt)}</TableCell>
-                    <TableCell className="text-right font-mono">{moneyR(built.itc_elg.itc_avl[0].camt)}</TableCell>
-                    <TableCell className="text-right font-mono">{moneyR(built.itc_elg.itc_avl[0].samt)}</TableCell>
-                  </TableRow>
+                  {built.itc_elg.itc_avl.map((x, i) => (
+                    <TableRow key={`avl-${i}`}>
+                      <TableCell>(A) ITC Available — {x.ty === "ISRC" ? "Inward supplies (RCM)" : "All other ITC"}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.iamt)}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.camt)}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.samt)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {built.itc_elg.itc_rev.map((x, i) => (
+                    <TableRow key={`rev-${i}`}>
+                      <TableCell>(B) ITC Reversed — {x.ty === "RUL" ? "As per Rule 42 & 43" : "Others"}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.iamt)}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.camt)}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.samt)}</TableCell>
+                    </TableRow>
+                  ))}
                   <TableRow>
                     <TableCell className="font-semibold">(C) Net ITC Available</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{moneyR(built.itc_elg.itc_net.iamt)}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{moneyR(built.itc_elg.itc_net.camt)}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{moneyR(built.itc_elg.itc_net.samt)}</TableCell>
                   </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-0">
+              <div className="border-b px-4 py-3 font-medium">5. Values of exempt, nil-rated and non-GST inward supplies</div>
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Nature</TableHead>
+                  <TableHead className="text-right">Inter-state</TableHead>
+                  <TableHead className="text-right">Intra-state</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {built.inward_sup.isup_details.map((x) => (
+                    <TableRow key={x.ty}>
+                      <TableCell>{x.ty === "GST" ? "From a supplier under composition / exempt / nil-rated" : "Non-GST supply"}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.inter)}</TableCell>
+                      <TableCell className="text-right font-mono">{moneyR(x.intra)}</TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
@@ -207,5 +274,85 @@ function Sup({ row }: { row: [string, { txval: number; iamt: number; camt: numbe
       <TableCell className="text-right font-mono">{moneyR(s.samt)}</TableCell>
       <TableCell className="text-right font-mono">{moneyR(s.csamt)}</TableCell>
     </TableRow>
+  );
+}
+
+function ManualEntryCard({ companyId, period, inward, reversal, onChanged }: {
+  companyId: string; period: string;
+  inward: InwardSummaryRow[]; reversal: ItcReversalRow[];
+  onChanged: () => void | Promise<void>;
+}) {
+  const inwGst = inward.find((x) => x.ty === "GST") ?? { ty: "GST" as const, inter_paise: 0, intra_paise: 0 };
+  const inwNon = inward.find((x) => x.ty === "NONGST") ?? { ty: "NONGST" as const, inter_paise: 0, intra_paise: 0 };
+  const revRul = reversal.find((x) => x.ty === "RUL") ?? { ty: "RUL" as const, iamt_paise: 0, camt_paise: 0, samt_paise: 0, csamt_paise: 0 };
+  const revOth = reversal.find((x) => x.ty === "OTH") ?? { ty: "OTH" as const, iamt_paise: 0, camt_paise: 0, samt_paise: 0, csamt_paise: 0 };
+
+  const [gInter, setGInter] = useState((inwGst.inter_paise / 100).toString());
+  const [gIntra, setGIntra] = useState((inwGst.intra_paise / 100).toString());
+  const [nInter, setNInter] = useState((inwNon.inter_paise / 100).toString());
+  const [nIntra, setNIntra] = useState((inwNon.intra_paise / 100).toString());
+  const [rRulI, setRRulI] = useState((revRul.iamt_paise / 100).toString());
+  const [rRulC, setRRulC] = useState((revRul.camt_paise / 100).toString());
+  const [rRulS, setRRulS] = useState((revRul.samt_paise / 100).toString());
+  const [rOthI, setROthI] = useState((revOth.iamt_paise / 100).toString());
+  const [rOthC, setROthC] = useState((revOth.camt_paise / 100).toString());
+  const [rOthS, setROthS] = useState((revOth.samt_paise / 100).toString());
+  const [saving, setSaving] = useState(false);
+
+  const toPaise = (v: string) => Math.round((Number(v) || 0) * 100);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const inwardRows = [
+        { company_id: companyId, period, ty: "GST", inter_paise: toPaise(gInter), intra_paise: toPaise(gIntra) },
+        { company_id: companyId, period, ty: "NONGST", inter_paise: toPaise(nInter), intra_paise: toPaise(nIntra) },
+      ];
+      const revRows = [
+        { company_id: companyId, period, ty: "RUL", iamt_paise: toPaise(rRulI), camt_paise: toPaise(rRulC), samt_paise: toPaise(rRulS), csamt_paise: 0 },
+        { company_id: companyId, period, ty: "OTH", iamt_paise: toPaise(rOthI), camt_paise: toPaise(rOthC), samt_paise: toPaise(rOthS), csamt_paise: 0 },
+      ];
+      const [r1, r2] = await Promise.all([
+        supabase.from("gstr3b_inward_summary").upsert(inwardRows, { onConflict: "company_id,period,ty" }),
+        supabase.from("gstr3b_itc_reversal").upsert(revRows, { onConflict: "company_id,period,ty" }),
+      ]);
+      if (r1.error) throw r1.error;
+      if (r2.error) throw r2.error;
+      toast.success("Saved manual entries");
+      await onChanged();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-4 print:hidden">
+        <div className="text-sm font-medium">Manual entries for {period}</div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <div className="mb-2 text-xs font-semibold text-muted-foreground">Section 5 — Inward exempt/nil/non-GST (₹)</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label className="text-xs">GST inter-state</Label><Input value={gInter} onChange={(e) => setGInter(e.target.value)} /></div>
+              <div><Label className="text-xs">GST intra-state</Label><Input value={gIntra} onChange={(e) => setGIntra(e.target.value)} /></div>
+              <div><Label className="text-xs">Non-GST inter</Label><Input value={nInter} onChange={(e) => setNInter(e.target.value)} /></div>
+              <div><Label className="text-xs">Non-GST intra</Label><Input value={nIntra} onChange={(e) => setNIntra(e.target.value)} /></div>
+            </div>
+          </div>
+          <div>
+            <div className="mb-2 text-xs font-semibold text-muted-foreground">Section 4(B) — ITC Reversal (₹)</div>
+            <div className="grid grid-cols-3 gap-2">
+              <div><Label className="text-xs">Rule 42/43 IGST</Label><Input value={rRulI} onChange={(e) => setRRulI(e.target.value)} /></div>
+              <div><Label className="text-xs">Rule 42/43 CGST</Label><Input value={rRulC} onChange={(e) => setRRulC(e.target.value)} /></div>
+              <div><Label className="text-xs">Rule 42/43 SGST</Label><Input value={rRulS} onChange={(e) => setRRulS(e.target.value)} /></div>
+              <div><Label className="text-xs">Others IGST</Label><Input value={rOthI} onChange={(e) => setROthI(e.target.value)} /></div>
+              <div><Label className="text-xs">Others CGST</Label><Input value={rOthC} onChange={(e) => setROthC(e.target.value)} /></div>
+              <div><Label className="text-xs">Others SGST</Label><Input value={rOthS} onChange={(e) => setROthS(e.target.value)} /></div>
+            </div>
+          </div>
+        </div>
+        <Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save manual entries"}</Button>
+      </CardContent>
+    </Card>
   );
 }
