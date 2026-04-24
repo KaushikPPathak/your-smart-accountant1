@@ -706,10 +706,11 @@ export function gstr1ToXlsxSheets(g: BuiltGstr1): XlsxSheet[] {
   ];
   for (const n of g.nil) nilRows.push([n.sply_ty, n.nil_amt, n.expt_amt, n.ngsup_amt]);
 
-  const hsnRows: (string | number)[][] = [
-    ["HSN", "Description", "UQC", "Total Quantity", "Rate", "Taxable Value", "Integrated Tax Amount", "Central Tax Amount", "State/UT Tax Amount", "Cess Amount", "Total Value"],
-  ];
-  for (const h of g.hsn) hsnRows.push([h.hsn_sc, h.desc, h.uqc, h.qty, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt, h.val]);
+  const hsnHeader = ["HSN", "Description", "UQC", "Total Quantity", "Rate", "Taxable Value", "Integrated Tax Amount", "Central Tax Amount", "State/UT Tax Amount", "Cess Amount", "Total Value"];
+  const hsnB2BRows: (string | number)[][] = [hsnHeader];
+  for (const h of g.hsn_b2b) hsnB2BRows.push([h.hsn_sc, h.desc, h.uqc, h.qty, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt, h.val]);
+  const hsnB2CRows: (string | number)[][] = [hsnHeader];
+  for (const h of g.hsn_b2c) hsnB2CRows.push([h.hsn_sc, h.desc, h.uqc, h.qty, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt, h.val]);
 
   const docsRows: (string | number)[][] = [
     ["Nature of Document", "Sr. No. From", "Sr. No. To", "Total Number", "Cancelled", "Net Issued"],
@@ -727,7 +728,8 @@ export function gstr1ToXlsxSheets(g: BuiltGstr1): XlsxSheet[] {
     { name: "cdnur", rows: headerRows(cdnurRows) },
     { name: "exp", rows: headerRows(expRows) },
     { name: "nil", rows: headerRows(nilRows) },
-    { name: "hsn", rows: headerRows(hsnRows) },
+    { name: "hsn_b2b", rows: headerRows(hsnB2BRows) },
+    { name: "hsn_b2c", rows: headerRows(hsnB2CRows) },
     { name: "docs", rows: headerRows(docsRows) },
   ];
 }
