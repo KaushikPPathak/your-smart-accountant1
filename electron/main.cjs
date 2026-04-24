@@ -67,10 +67,16 @@ ipcMain.handle('save-company-file', async (_evt, payload) => {
     const dir = path.join(dataRoot(), safe(company), safe(subFolder || 'files'));
     fs.mkdirSync(dir, { recursive: true });
     const target = path.join(dir, fileName);
-    if (encoding === 'binary' && contents && contents.byteLength != null) {
-      fs.writeFileSync(target, Buffer.from(contents));
+    if (encoding === 'binary' && contents != null) {
+      let buf;
+      if (Buffer.isBuffer(contents)) buf = contents;
+      else if (contents instanceof Uint8Array) buf = Buffer.from(contents.buffer, contents.byteOffset, contents.byteLength);
+      else if (contents instanceof ArrayBuffer) buf = Buffer.from(new Uint8Array(contents));
+      else if (ArrayBuffer.isView(contents)) buf = Buffer.from(contents.buffer, contents.byteOffset, contents.byteLength);
+      else buf = Buffer.from(contents);
+      fs.writeFileSync(target, buf);
     } else {
-      fs.writeFileSync(target, contents, 'utf8');
+      fs.writeFileSync(target, String(contents ?? ''), 'utf8');
     }
     // Auto-open in default app (silent — toast in the UI handles "show in folder").
     shell.openPath(target);
