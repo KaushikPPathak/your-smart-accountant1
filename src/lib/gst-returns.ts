@@ -510,12 +510,15 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     ...g, nil_amt: r(g.nil_amt), expt_amt: r(g.expt_amt), ngsup_amt: r(g.ngsup_amt),
   }));
 
-  // HSN summary across taxable + zero-rated sales (CDN reduces with sign)
-  const hsnMap = new Map<string, HSNRow>();
+  // HSN summary — split B2B (party has GSTIN) and B2C (no GSTIN / unregistered)
+  const hsnB2BMap = new Map<string, HSNRow>();
+  const hsnB2CMap = new Map<string, HSNRow>();
   const accumulate = (v: VoucherRow, sign: 1 | -1) => {
+    const isB2B = !!(v.ledgers?.gstin && v.ledgers.gstin.trim());
+    const map = isB2B ? hsnB2BMap : hsnB2CMap;
     for (const it of v.voucher_items) {
       const key = `${it.items?.hsn_code || ""}|${it.gst_rate}|${it.items?.unit || "OTH"}`;
-      const cur = hsnMap.get(key) ?? {
+      const cur = map.get(key) ?? {
         hsn_sc: it.items?.hsn_code || "",
         desc: it.items?.name || "",
         uqc: (it.items?.unit || "OTH").toUpperCase().slice(0, 3) + "-" + (it.items?.unit || "OTH").toUpperCase(),
@@ -528,17 +531,20 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       cur.camt += sign * it.cgst_paise;
       cur.samt += sign * it.sgst_paise;
       cur.val += sign * (it.taxable_paise + it.cgst_paise + it.sgst_paise + it.igst_paise);
-      hsnMap.set(key, cur);
+      map.set(key, cur);
     }
   };
   for (const v of sales) accumulate(v, 1);
   if (!iffOnly) for (const v of creditNotes) accumulate(v, v.voucher_type === "credit_note" ? -1 : 1);
 
-  const hsn = Array.from(hsnMap.values()).map((h) => ({
-    ...h,
-    qty: Number(h.qty.toFixed(3)),
-    txval: r(h.txval), iamt: r(h.iamt), camt: r(h.camt), samt: r(h.samt), val: r(h.val),
-  }));
+  const finalizeHsn = (m: Map<string, HSNRow>): HSNRow[] =>
+    Array.from(m.values()).map((h) => ({
+      ...h,
+      qty: Number(h.qty.toFixed(3)),
+      txval: r(h.txval), iamt: r(h.iamt), camt: r(h.camt), samt: r(h.samt), val: r(h.val),
+    }));
+  const hsn_b2b = finalizeHsn(hsnB2BMap);
+  const hsn_b2c = finalizeHsn(hsnB2CMap);
 
   const docs: DocSummary[] = [];
   const buildDocFor = (label: string, nums: string[]) => {
