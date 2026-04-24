@@ -13,9 +13,10 @@ import { formatINR } from "@/lib/money";
 import { downloadXlsx } from "@/lib/exporters";
 import {
   buildGstr1, fetchVouchers, fetchCompanyMeta, gstr1ToJson, gstr1ToXlsxSheets,
-  monthRange, quarterRange, periodFP, downloadJson,
+  monthRange, quarterRange, periodFP, downloadJson, validateGstr1,
   type VoucherRow, type CompanyMeta, type BuiltGstr1,
 } from "@/lib/gst-returns";
+import { ValidationPanel } from "@/components/reports/ValidationPanel";
 
 export const Route = createFileRoute("/app/reports/gstr1")({
   head: () => ({ meta: [{ title: "GSTR-1 — Reports" }] }),
