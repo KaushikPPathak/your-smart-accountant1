@@ -77,7 +77,8 @@ export interface BuiltGstr1 {
   cdnur: CDNURInvoice[];
   exp: EXPInvoice[];
   nil: NilGroup[];
-  hsn: HSNRow[];
+  hsn_b2b: HSNRow[];
+  hsn_b2c: HSNRow[];
   docs: DocSummary[];
 }
 
