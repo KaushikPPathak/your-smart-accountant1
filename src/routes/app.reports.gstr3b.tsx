@@ -33,6 +33,8 @@ function GSTR3BPage() {
   const [month, setMonth] = useState<string>(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`);
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [built, setBuilt] = useState<BuiltGstr3B | null>(null);
+  const [inward, setInward] = useState<InwardSummaryRow[]>([]);
+  const [reversal, setReversal] = useState<ItcReversalRow[]>([]);
 
   const period = useMemo(() => {
     const r = monthRange(month);
@@ -47,13 +49,21 @@ function GSTR3BPage() {
   useEffect(() => {
     if (!activeCompanyId || !company) return;
     (async () => {
-      const [sales, purchases, creditNotes, debitNotes] = await Promise.all([
+      const [sales, purchases, creditNotes, debitNotes, inwardRows, reversalRows] = await Promise.all([
         fetchVouchers(activeCompanyId, period.from, period.to, ["sales"]),
         fetchVouchers(activeCompanyId, period.from, period.to, ["purchase"]),
         fetchVouchers(activeCompanyId, period.from, period.to, ["credit_note"]),
         fetchVouchers(activeCompanyId, period.from, period.to, ["debit_note"]),
+        fetchInwardSummary(activeCompanyId, period.fp),
+        fetchItcReversal(activeCompanyId, period.fp),
       ]);
-      setBuilt(buildGstr3B({ company, from: period.from, to: period.to, fp: period.fp, sales, purchases, creditNotes, debitNotes }));
+      setInward(inwardRows);
+      setReversal(reversalRows);
+      setBuilt(buildGstr3B({
+        company, from: period.from, to: period.to, fp: period.fp,
+        sales, purchases, creditNotes, debitNotes,
+        inwardSummary: inwardRows, itcReversal: reversalRows,
+      }));
     })();
   }, [activeCompanyId, company, period.from, period.to, period.fp]);
 
