@@ -105,6 +105,27 @@ function GSTR3BPage() {
 
       {built && (
         <>
+          <ValidationPanel issues={validateGstr3B(built)} />
+
+          <ManualEntryCard
+            companyId={activeCompanyId!}
+            period={period.fp}
+            inward={inward}
+            reversal={reversal}
+            onChanged={async () => {
+              if (!activeCompanyId || !company) return;
+              const [i, r] = await Promise.all([fetchInwardSummary(activeCompanyId, period.fp), fetchItcReversal(activeCompanyId, period.fp)]);
+              setInward(i); setReversal(r);
+              const [sales, purchases, creditNotes, debitNotes] = await Promise.all([
+                fetchVouchers(activeCompanyId, period.from, period.to, ["sales"]),
+                fetchVouchers(activeCompanyId, period.from, period.to, ["purchase"]),
+                fetchVouchers(activeCompanyId, period.from, period.to, ["credit_note"]),
+                fetchVouchers(activeCompanyId, period.from, period.to, ["debit_note"]),
+              ]);
+              setBuilt(buildGstr3B({ company, from: period.from, to: period.to, fp: period.fp, sales, purchases, creditNotes, debitNotes, inwardSummary: i, itcReversal: r }));
+            }}
+          />
+
           <Card>
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">3.1 Outward & inward supplies on RCM</div>
