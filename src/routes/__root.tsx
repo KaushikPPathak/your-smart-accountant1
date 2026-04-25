@@ -33,14 +33,14 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Your Mehtaji — Modern Accounting for India" },
+      { title: "Account Mate — Modern Accounting for India" },
       {
         name: "description",
         content:
           "GST-ready accounting software for Indian businesses. Multi-company, multi-user, with sales, purchase, inventory and reports. Inspired by Busy.",
       },
       { name: "author", content: "Your Mehtaji" },
-      { property: "og:title", content: "Your Mehtaji — Modern Accounting for India" },
+      { property: "og:title", content: "Account Mate — Modern Accounting for India" },
       {
         property: "og:description",
         content:
@@ -48,7 +48,7 @@ export const Route = createRootRoute({
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Your Mehtaji — Modern Accounting for India" },
+      { name: "twitter:title", content: "Account Mate — Modern Accounting for India" },
       { name: "description", content: "My Account Buddy is a Windows accounting application for Indian GST compliance." },
       { property: "og:description", content: "My Account Buddy is a Windows accounting application for Indian GST compliance." },
       { name: "twitter:description", content: "My Account Buddy is a Windows accounting application for Indian GST compliance." },
