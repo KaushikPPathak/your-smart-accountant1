@@ -125,51 +125,116 @@ export interface ExtractedOpening {
   side: "Dr" | "Cr";
 }
 
+// Group headings commonly found in Tally / standard Indian balance sheets.
+// Used to (a) skip the heading line itself and (b) infer Dr/Cr side for the
+// detail rows that follow it.
+const GROUP_HEADINGS: { rx: RegExp; side: "Dr" | "Cr" }[] = [
+  // Liabilities / Equity → Cr
+  { rx: /^(capital(\s+account)?|reserves?(\s+&?\s*surplus)?|owners?\s+equity)\b/i, side: "Cr" },
+  { rx: /^(current\s+liabilit(y|ies)|liabilit(y|ies))\b/i, side: "Cr" },
+  { rx: /^(sundry\s+creditors?|creditors?|accounts?\s+payable|trade\s+payables?)\b/i, side: "Cr" },
+  { rx: /^(duties\s*(ies)?\s*&?\s*taxes|gst\s+payable)\b/i, side: "Cr" },
+  { rx: /^(loans?\s*\(?liabilit(y|ies)?\)?|secured\s+loans?|unsecured\s+loans?|borrowings?)\b/i, side: "Cr" },
+  { rx: /^(provisions?|outstanding\s+expenses?|expenses?\s+payable)\b/i, side: "Cr" },
+  { rx: /^source(s)?\s+of\s+funds\b/i, side: "Cr" },
+  // Assets → Dr
+  { rx: /^(fixed\s+assets?)\b/i, side: "Dr" },
+  { rx: /^(current\s+assets?)\b/i, side: "Dr" },
+  { rx: /^(investments?)\b/i, side: "Dr" },
+  { rx: /^(bank\s+accounts?|bank\s+ocd?\s+a\/c)\b/i, side: "Dr" },
+  { rx: /^(cash[\s-]*in[\s-]*hand|cash\s+account)\b/i, side: "Dr" },
+  { rx: /^(sundry\s+debtors?|debtors?|accounts?\s+receivable|trade\s+receivables?)\b/i, side: "Dr" },
+  { rx: /^(loans?\s*&?\s*advances?(\s*\(?asset\)?)?)\b/i, side: "Dr" },
+  { rx: /^(stock[\s-]*in[\s-]*hand|inventory|closing\s+stock|opening\s+stock)\b/i, side: "Dr" },
+  { rx: /^(misc(ellaneous)?\s+expenses?|profit\s*&?\s*loss\s+a\/c|loss\s+to\s+be\s+adjusted)\b/i, side: "Dr" },
+  { rx: /^application(s)?\s+of\s+funds\b/i, side: "Dr" },
+];
+
+const SKIP_LINE_RX =
+  /^(particulars|trial\s+balance|balance\s+sheet|profit\s*&?\s*loss|grand\s+total|sub.?total|total\b|opening\s+balance|closing\s+balance|company|gstin|address|date|page|continued|note|notes|schedule|amount\s*\(?rs)/i;
+
 /**
  * Parse OCR text from a trial balance / balance sheet image.
- * Heuristic: each line = "<Account name> <amount> [Dr|Cr]"
- * or two-column layout: "<Account> <Debit> <Credit>" (one is 0/blank).
+ *
+ * Handles two layouts:
+ *  1. Trial balance:  "<Account> <Debit> <Credit>"  (one column blank or 0)
+ *  2. Tally balance sheet (sectioned):
+ *        Capital Account
+ *          Kaushik P Pathak       2,51,497.53     2,51,497.53
+ *        Current Liabilities
+ *          Duties & Taxes          -9,549.46
+ *          Sundry Creditors       -25,401.00
+ *                                                 -31,950.46
+ *     Sub-total / group-total numbers (no leading account name) are skipped.
+ *     Negative amounts flip the side inherited from the surrounding heading.
  */
 export function parseTrialBalanceText(text: string): ExtractedOpening[] {
-  const lines = text
+  // Some OCR engines insert spaces between every letter for stylised headings
+  // like "B A L A N C E   S H E E T". Collapse those before parsing.
+  const normalised = text.replace(/\b((?:[A-Z]\s){2,}[A-Z])\b/g, (m) => m.replace(/\s+/g, ""));
+
+  const lines = normalised
     .split(/\n+/)
     .map((l) => l.replace(/\s+/g, " ").trim())
-    .filter((l) => l.length > 4);
+    .filter((l) => l.length > 2);
 
   const out: ExtractedOpening[] = [];
+  let currentSide: "Dr" | "Cr" = "Dr"; // updated as we walk through sections
+
   for (const raw of lines) {
-    // Skip headings
-    if (/^(particulars|account|ledger|trial balance|balance sheet|total|grand total|sub.?total)\b/i.test(raw))
-      continue;
+    if (SKIP_LINE_RX.test(raw)) continue;
 
-    const tokens = raw.match(/[-]?\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?|[-]?\d+(?:\.\d{1,2})?/g) || [];
-    if (tokens.length === 0) continue;
+    // Section heading: sets the side for following detail rows. Heading lines
+    // typically have NO numbers, or only a single group-total number.
+    const headingHit = GROUP_HEADINGS.find((h) => h.rx.test(raw));
+    const numericTokens = raw.match(/-?\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?|-?\d+(?:\.\d{1,2})?/g) || [];
 
-    const tail = tokens.slice(-2).map(num);
-    const sideMatch = raw.match(/\b(Dr|Cr|Debit|Credit)\b\.?\s*$/i);
-    let side: "Dr" | "Cr" | null = null;
-    if (sideMatch) side = /^d/i.test(sideMatch[1]) ? "Dr" : "Cr";
-
-    let amount = 0;
-    if (tail.length === 2 && tail[0] && !tail[1]) { amount = tail[0]; side = side ?? "Dr"; }
-    else if (tail.length === 2 && !tail[0] && tail[1]) { amount = tail[1]; side = side ?? "Cr"; }
-    else if (tail.length === 2 && tail[0] && tail[1]) {
-      // Both nonzero → take larger and infer side
-      if (tail[0] >= tail[1]) { amount = tail[0]; side = side ?? "Dr"; }
-      else { amount = tail[1]; side = side ?? "Cr"; }
-    } else {
-      amount = tail[tail.length - 1];
-      side = side ?? "Dr";
+    if (headingHit) {
+      currentSide = headingHit.side;
+      // Pure heading (no numbers) → skip. Otherwise this is a condensed
+      // balance-sheet line that doubles as both heading AND data row
+      // (e.g. "Bank Accounts 530.58") — fall through and emit it.
+      if (numericTokens.length === 0) continue;
     }
-    if (!amount) continue;
+
+    if (numericTokens.length === 0) continue;
 
     // Account name = everything before the first numeric token
-    const firstNumIdx = raw.search(/[-]?\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?|[-]?\d+(?:\.\d{1,2})?/);
-    let name = (firstNumIdx > 0 ? raw.slice(0, firstNumIdx) : raw).trim();
-    name = name.replace(/[:\-|]+$/g, "").trim();
+    const firstNumIdx = raw.search(/-?\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?|-?\d+(?:\.\d{1,2})?/);
+    let name = (firstNumIdx > 0 ? raw.slice(0, firstNumIdx) : "").trim();
+    name = name.replace(/[:\-|.]+$/g, "").trim();
+
+    // Lines that start with numbers (no name) are sub-totals — skip.
     if (name.length < 2) continue;
+
+    const tail = numericTokens.slice(-3).map(num);
+    const sideMatch = raw.match(/\b(Dr|Cr|Debit|Credit)\b\.?\s*$/i);
+    let explicitSide: "Dr" | "Cr" | null = null;
+    if (sideMatch) explicitSide = /^d/i.test(sideMatch[1]) ? "Dr" : "Cr";
+
+    let amount = 0;
+    let side: "Dr" | "Cr" = explicitSide ?? currentSide;
+
+    if (tail.length >= 2 && tail[0] && tail[1] && Math.abs(Math.abs(tail[0]) - Math.abs(tail[1])) < 0.5) {
+      // Tally pattern: "<amount> <same amount as group sub-total>" → take first
+      amount = Math.abs(tail[0]);
+      if (tail[0] < 0) side = side === "Dr" ? "Cr" : "Dr";
+    } else if (tail.length === 2 && tail[0] && !tail[1]) {
+      amount = Math.abs(tail[0]); if (tail[0] < 0) side = side === "Dr" ? "Cr" : "Dr";
+      if (!explicitSide) side = "Dr";
+    } else if (tail.length === 2 && !tail[0] && tail[1]) {
+      amount = Math.abs(tail[1]); if (tail[1] < 0) side = side === "Dr" ? "Cr" : "Dr";
+      if (!explicitSide) side = "Cr";
+    } else {
+      const first = tail[0];
+      amount = Math.abs(first);
+      if (first < 0) side = side === "Dr" ? "Cr" : "Dr";
+    }
+
+    if (!amount || amount < 0.01) continue;
 
     out.push({ account_name: name, amount, side });
   }
+
   return out;
 }
