@@ -40,6 +40,7 @@ function BankRecPage() {
   const [lines, setLines] = useState<Line[]>([]);
   const [candidates, setCandidates] = useState<VoucherCandidate[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [ocrOpen, setOcrOpen] = useState(false);
 
   useEffect(() => {
     if (!activeCompanyId) return;
