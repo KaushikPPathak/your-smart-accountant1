@@ -33,7 +33,11 @@ import {
   Database,
   Trash2,
   CheckCircle2,
+  Upload,
+  HardDrive,
 } from "lucide-react";
+import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceImport";
+import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -55,6 +59,7 @@ interface LedgerOpt {
 function HousekeepingPage() {
   const { activeCompanyId, activeMembership } = useCompany();
   const isAdmin = activeMembership?.role === "admin";
+  const companyName = activeMembership?.companies?.name ?? "company";
 
   return (
     <div className="space-y-4">
@@ -80,8 +85,14 @@ function HousekeepingPage() {
         </Card>
       )}
 
-      <Tabs defaultValue="merge" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
+      <Tabs defaultValue="opening" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-7">
+          <TabsTrigger value="opening">
+            <Upload className="mr-1 h-3.5 w-3.5" /> Opening Balances
+          </TabsTrigger>
+          <TabsTrigger value="backup">
+            <HardDrive className="mr-1 h-3.5 w-3.5" /> Backup / Restore
+          </TabsTrigger>
           <TabsTrigger value="merge">
             <Merge className="mr-1 h-3.5 w-3.5" /> Merge Ledgers
           </TabsTrigger>
@@ -99,6 +110,16 @@ function HousekeepingPage() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="opening">
+          {activeCompanyId ? (
+            <OpeningBalanceImport companyId={activeCompanyId} disabled={!isAdmin} />
+          ) : <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a company first.</CardContent></Card>}
+        </TabsContent>
+        <TabsContent value="backup">
+          {activeCompanyId ? (
+            <BackupRestoreTool companyId={activeCompanyId} companyName={companyName} disabled={!isAdmin} />
+          ) : <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a company first.</CardContent></Card>}
+        </TabsContent>
         <TabsContent value="merge">
           <MergeLedgersTool companyId={activeCompanyId} disabled={!isAdmin} />
         </TabsContent>

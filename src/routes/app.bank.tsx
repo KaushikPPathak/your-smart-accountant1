@@ -6,12 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Link2, X } from "lucide-react";
+import { Link2, X, FileScan } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { useAuth } from "@/lib/auth-context";
 import { formatINR } from "@/lib/money";
 import { parseBankCsv, suggestMatch, type ParsedBankLine, type VoucherCandidate } from "@/lib/bank-rec";
+import { BankOcrImportDialog } from "@/components/bank/BankOcrImportDialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/bank")({
@@ -39,6 +40,7 @@ function BankRecPage() {
   const [lines, setLines] = useState<Line[]>([]);
   const [candidates, setCandidates] = useState<VoucherCandidate[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [ocrOpen, setOcrOpen] = useState(false);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -107,7 +109,7 @@ function BankRecPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Bank Reconciliation</h1>
-        <p className="text-xs text-muted-foreground">Import bank CSV → auto-match by amount + date → confirm or ignore.</p>
+        <p className="text-xs text-muted-foreground">Import bank CSV or scan a PDF/photo of a statement → auto-match → confirm or ignore.</p>
       </div>
       <Card>
         <CardContent className="p-3">
@@ -126,6 +128,12 @@ function BankRecPage() {
               <input ref={fileRef} type="file" accept=".csv,text/csv" disabled={!bankLedgerId}
                 onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
                 className="block text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Or scan PDF / Image (offline OCR)</Label>
+              <Button size="sm" variant="outline" disabled={!bankLedgerId} onClick={() => setOcrOpen(true)}>
+                <FileScan className="mr-2 h-3.5 w-3.5" /> Import from PDF / Image
+              </Button>
             </div>
             <div className="ml-auto flex gap-2 text-xs">
               <Badge variant="outline">Matched: {counts.matched || 0}</Badge>
@@ -183,6 +191,17 @@ function BankRecPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {activeCompanyId && bankLedgerId && user && (
+        <BankOcrImportDialog
+          open={ocrOpen}
+          onOpenChange={setOcrOpen}
+          companyId={activeCompanyId}
+          bankLedgerId={bankLedgerId}
+          userId={user.id}
+          onPosted={loadLines}
+        />
+      )}
     </div>
   );
 }
