@@ -160,6 +160,97 @@ const SKIP_LINE_RX =
 
 // Hard skip: standalone summary/total rows (no account name).
 const TOTAL_LINE_RX = /^(grand\s+total|sub.?total|total)\s*[:\-]?\s*[\d.,\-]*\s*(dr|cr)?\.?\s*$/i;
+const AMOUNT_TOKEN_PATTERN = "-?\\d{1,3}(?:,\\d{2,3})*(?:\\.\\d{1,2})?|-?\\d+(?:\\.\\d{1,2})?";
+const AMOUNT_TOKEN_RX = new RegExp(AMOUNT_TOKEN_PATTERN, "g");
+const FIRST_AMOUNT_TOKEN_RX = new RegExp(AMOUNT_TOKEN_PATTERN);
+
+function normaliseOpeningText(text: string): string {
+  return text
+    // Some OCR engines insert spaces between every letter for stylised headings
+    // like "B A L A N C E   S H E E T". Collapse those before parsing.
+    .replace(/\b((?:[A-Z]\s){2,}[A-Z])\b/g, (m) => m.replace(/\s+/g, ""))
+    .replace(/\bSOURCESOFFUNDS\b/gi, "Sources of Funds")
+    .replace(/\bAPPLICATIONSOFFUNDS\b/gi, "Applications of Funds")
+    .replace(/\bAPPLICATIONOFFUNDS\b/gi, "Application of Funds")
+    .replace(/\bBALANCESHEET\b/gi, "Balance Sheet")
+    .replace(/\bTRIALBALANCE\b/gi, "Trial Balance");
+}
+
+function stripOpeningContext(label: string, fallbackSide: "Dr" | "Cr") {
+  let name = label.replace(/[|:]+/g, " ").replace(/\s+/g, " ").trim();
+  let side = fallbackSide;
+
+  let changed = true;
+  while (changed && name) {
+    changed = false;
+
+    const mainHeading = name.match(/^(sources?\s+of\s+funds|application(s)?\s+of\s+funds|balance\s+sheet|trial\s+balance)\b/i);
+    if (mainHeading) {
+      if (/^sources?/i.test(mainHeading[0])) side = "Cr";
+      if (/^application/i.test(mainHeading[0])) side = "Dr";
+      name = name.slice(mainHeading[0].length).trim();
+      changed = true;
+      continue;
+    }
+
+    for (const heading of GROUP_HEADINGS) {
+      const match = name.match(heading.rx);
+      if (match) {
+        side = heading.side;
+        name = name.slice(match[0].length).trim();
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  name = name.replace(/^[.\-–—]+|[.\-–—]+$/g, "").trim();
+  return { name, side };
+}
+
+function dedupeOpenings(rows: ExtractedOpening[]): ExtractedOpening[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = `${row.account_name.toLowerCase()}|${row.amount.toFixed(2)}|${row.side}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
+  const sectionMatch = text.match(
+    /\b(sources?\s+of\s+funds|application(s)?\s+of\s+funds|capital(\s+account)?|current\s+liabilit(y|ies)|fixed\s+assets?|current\s+assets?)\b/i,
+  );
+  const focused = sectionMatch?.index && sectionMatch.index > 0 ? text.slice(sectionMatch.index) : text;
+  const matches = [...focused.matchAll(AMOUNT_TOKEN_RX)];
+  const out: ExtractedOpening[] = [];
+  let currentSide: "Dr" | "Cr" = "Dr";
+  let previousEnd = 0;
+
+  for (const match of matches) {
+    const index = match.index ?? 0;
+    const prefix = focused.slice(previousEnd, index).replace(/\s+/g, " ").trim();
+    previousEnd = index + match[0].length;
+
+    const stripped = stripOpeningContext(prefix, currentSide);
+    currentSide = stripped.side;
+    let name = stripped.name.replace(/\s+(dr|cr|debit|credit)\.?$/i, "").trim();
+
+    if (!name || name.length < 2) continue;
+    if (/^(grand\s+total|sub.?total|total)$/i.test(name)) continue;
+    if (GROUP_HEADINGS.some((heading) => heading.rx.test(name))) continue;
+
+    const value = num(match[0]);
+    if (!value || Math.abs(value) < 0.01) continue;
+
+    let side = stripped.side;
+    if (value < 0) side = side === "Dr" ? "Cr" : "Dr";
+    out.push({ account_name: name, amount: Math.abs(value), side });
+  }
+
+  return dedupeOpenings(out);
+}
 
 /**
  * Parse OCR text from a trial balance / balance sheet image.
