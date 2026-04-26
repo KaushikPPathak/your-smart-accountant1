@@ -191,6 +191,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
 
   for (const raw of lines) {
     if (SKIP_LINE_RX.test(raw)) continue;
+    if (TOTAL_LINE_RX.test(raw)) continue;
 
     // Section heading: sets the side for following detail rows. Heading lines
     // typically have NO numbers, or only a single group-total number.
