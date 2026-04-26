@@ -268,9 +268,16 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
  *     Negative amounts flip the side inherited from the surrounding heading.
  */
 export function parseTrialBalanceText(text: string): ExtractedOpening[] {
-  // Some OCR engines insert spaces between every letter for stylised headings
-  // like "B A L A N C E   S H E E T". Collapse those before parsing.
-  const normalised = text.replace(/\b((?:[A-Z]\s){2,}[A-Z])\b/g, (m) => m.replace(/\s+/g, ""));
+  const normalised = normaliseOpeningText(text);
+
+  // When PDF/image OCR returns the balance sheet as one long paragraph instead
+  // of rows, line-based parsing merges many accounts into one. In that case,
+  // parse every "label amount" segment from the paragraph directly.
+  const physicalLines = normalised.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+  if (physicalLines.length <= 2) {
+    const paragraphRows = parseRunOnOpeningBalanceText(normalised);
+    if (paragraphRows.length > 1) return paragraphRows;
+  }
 
   const lines = normalised
     .split(/\n+/)
@@ -287,7 +294,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
     // Section heading: sets the side for following detail rows. Heading lines
     // typically have NO numbers, or only a single group-total number.
     const headingHit = GROUP_HEADINGS.find((h) => h.rx.test(raw));
-    const numericTokens = raw.match(/-?\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?|-?\d+(?:\.\d{1,2})?/g) || [];
+    const numericTokens = raw.match(AMOUNT_TOKEN_RX) || [];
 
     if (headingHit) {
       currentSide = headingHit.side;
@@ -300,7 +307,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
     if (numericTokens.length === 0) continue;
 
     // Account name = everything before the first numeric token
-    const firstNumIdx = raw.search(/-?\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?|-?\d+(?:\.\d{1,2})?/);
+    const firstNumIdx = raw.search(FIRST_AMOUNT_TOKEN_RX);
     let name = (firstNumIdx > 0 ? raw.slice(0, firstNumIdx) : "").trim();
     name = name.replace(/[:\-|.]+$/g, "").trim();
 
@@ -340,5 +347,10 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
     out.push({ account_name: name, amount, side });
   }
 
-  return out;
+  if (out.length <= 1) {
+    const paragraphRows = parseRunOnOpeningBalanceText(normalised);
+    if (paragraphRows.length > out.length) return paragraphRows;
+  }
+
+  return dedupeOpenings(out);
 }
