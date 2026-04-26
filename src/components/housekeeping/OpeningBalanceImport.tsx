@@ -114,6 +114,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
     setBusy(true);
     try {
       const text = await extractTextFromFile(file, setProgress);
+      setRawText(text);
       const parsed = parseTrialBalanceText(text);
       setRows(parsed.map((p, i) => ({
         ...p,
@@ -122,7 +123,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
         ledger_id: autoMatch(p.account_name),
         new_type: guessType(p.account_name, p.side),
       })));
-      toast.success(`Extracted ${parsed.length} accounts`);
+      toast.success(`Extracted ${parsed.length} accounts. Click "Show OCR text" to see what was read.`);
     } catch (e) {
       const err = e as Error;
       toast.error(err.message || "OCR failed");
