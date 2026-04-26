@@ -150,8 +150,16 @@ const GROUP_HEADINGS: { rx: RegExp; side: "Dr" | "Cr" }[] = [
   { rx: /^application(s)?\s+of\s+funds\b/i, side: "Dr" },
 ];
 
+// Lines we ALWAYS skip — pure document chrome, never an account name.
+// Note: we deliberately do NOT skip lines starting with "Total" / "Opening" /
+// "Closing" because real ledger names contain those words (e.g. "Opening Stock",
+// "Total Salary"). We only skip them later if they have no useful amount or
+// look like a grand-total summary line.
 const SKIP_LINE_RX =
-  /^(particulars|trial\s+balance|balance\s+sheet|profit\s*&?\s*loss|grand\s+total|sub.?total|total\b|opening\s+balance|closing\s+balance|company|gstin|address|date|page|continued|note|notes|schedule|amount\s*\(?rs)/i;
+  /^(particulars|trial\s+balance|balance\s+sheet|profit\s*&?\s*loss|company|gstin|address|date\s*[:\-]|page\s+\d|continued|note(s)?\s*[:\-]|schedule\s*[:\-]|amount\s*\(?rs|in\s+rupees|figures\s+in)/i;
+
+// Hard skip: standalone summary/total rows (no account name).
+const TOTAL_LINE_RX = /^(grand\s+total|sub.?total|total)\s*[:\-]?\s*[\d.,\-]*\s*(dr|cr)?\.?\s*$/i;
 
 /**
  * Parse OCR text from a trial balance / balance sheet image.
@@ -183,6 +191,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
 
   for (const raw of lines) {
     if (SKIP_LINE_RX.test(raw)) continue;
+    if (TOTAL_LINE_RX.test(raw)) continue;
 
     // Section heading: sets the side for following detail rows. Heading lines
     // typically have NO numbers, or only a single group-total number.
@@ -232,6 +241,10 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
     }
 
     if (!amount || amount < 0.01) continue;
+
+    // Strip trailing Dr/Cr marker from name if present
+    name = name.replace(/\s+(dr|cr|debit|credit)\.?$/i, "").trim();
+    if (name.length < 2) continue;
 
     out.push({ account_name: name, amount, side });
   }

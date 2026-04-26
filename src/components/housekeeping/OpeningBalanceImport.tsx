@@ -59,6 +59,8 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<OcrProgress | null>(null);
   const [rows, setRows] = useState<EditableRow[]>([]);
+  const [rawText, setRawText] = useState("");
+  const [showRaw, setShowRaw] = useState(false);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [posting, setPosting] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -112,6 +114,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
     setBusy(true);
     try {
       const text = await extractTextFromFile(file, setProgress);
+      setRawText(text);
       const parsed = parseTrialBalanceText(text);
       setRows(parsed.map((p, i) => ({
         ...p,
@@ -120,7 +123,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
         ledger_id: autoMatch(p.account_name),
         new_type: guessType(p.account_name, p.side),
       })));
-      toast.success(`Extracted ${parsed.length} accounts`);
+      toast.success(`Extracted ${parsed.length} accounts. Click "Show OCR text" to see what was read.`);
     } catch (e) {
       const err = e as Error;
       toast.error(err.message || "OCR failed");
@@ -245,6 +248,11 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
             )}
           </div>
           <div className="ml-auto flex items-center gap-2 text-xs">
+            {rawText && (
+              <Button size="sm" variant="outline" onClick={() => setShowRaw((v) => !v)}>
+                {showRaw ? "Hide" : "Show"} OCR text
+              </Button>
+            )}
             <Badge variant="outline">Rows: {stats.count}</Badge>
             <Badge variant="outline">Dr ₹{stats.dr.toFixed(2)}</Badge>
             <Badge variant="outline">Cr ₹{stats.cr.toFixed(2)}</Badge>
@@ -253,6 +261,15 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
             </Badge>
           </div>
         </div>
+
+        {showRaw && rawText && (
+          <div className="rounded-md border bg-muted/30 p-2">
+            <div className="text-[11px] font-medium mb-1 text-muted-foreground">
+              Raw OCR text — copy any line that's missing from the table and use "+ Add row" to enter it manually.
+            </div>
+            <pre className="text-[11px] whitespace-pre-wrap max-h-[260px] overflow-auto font-mono">{rawText}</pre>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-3 min-h-[400px]">
           <div className="rounded-md border bg-muted/30 overflow-hidden">
