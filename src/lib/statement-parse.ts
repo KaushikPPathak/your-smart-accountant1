@@ -355,7 +355,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
     out.push({ account_name: name, amount, side });
   }
 
-  if (out.length <= 1) {
+  if (out.length <= 1 || /sources?\s+of\s+funds|application(s)?\s+of\s+funds/i.test(normalised)) {
     const paragraphRows = parseRunOnOpeningBalanceText(normalised);
     if (paragraphRows.length > out.length) return paragraphRows;
   }
