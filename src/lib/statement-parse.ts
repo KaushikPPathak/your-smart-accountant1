@@ -180,7 +180,11 @@ function normaliseOpeningText(text: string): string {
 }
 
 function stripOpeningContext(label: string, fallbackSide: "Dr" | "Cr") {
-  let name = label.replace(/[|:]+/g, " ").replace(/\s+/g, " ").trim();
+  let name = label
+    .replace(/---\s*page\s*break\s*---/gi, " ")
+    .replace(/[|:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   let side = fallbackSide;
 
   let changed = true;
@@ -226,7 +230,8 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
     /\b(sources?\s+of\s+funds|application(s)?\s+of\s+funds|capital(\s+account)?|current\s+liabilit(y|ies)|fixed\s+assets?|current\s+assets?)\b/i,
   );
   const focused = sectionMatch?.index && sectionMatch.index > 0 ? text.slice(sectionMatch.index) : text;
-  const matches = [...focused.matchAll(AMOUNT_TOKEN_RX)];
+  OPENING_AMOUNT_TOKEN_RX.lastIndex = 0;
+  const matches = [...focused.matchAll(OPENING_AMOUNT_TOKEN_RX)];
   const out: ExtractedOpening[] = [];
   let currentSide: "Dr" | "Cr" = "Dr";
   let previousEnd = 0;
