@@ -228,10 +228,18 @@ function dedupeOpenings(rows: ExtractedOpening[]): ExtractedOpening[] {
   });
 }
 
+function isOpeningGroupLabel(name: string): boolean {
+  return GROUP_HEADINGS.some((heading) => heading.rx.test(name));
+}
+
 function removeOpeningSubtotalRows(rows: ExtractedOpening[]): ExtractedOpening[] {
   const tolerance = 0.75;
   return rows.filter((row, index) => {
     if (/^(grand\s+total|sub.?total|totals?)$/i.test(row.account_name)) return false;
+    if (isOpeningGroupLabel(row.account_name)) {
+      const next = rows[index + 1];
+      if (next && next.side === row.side && next.amount <= row.amount + tolerance) return false;
+    }
 
     let sum = 0;
     let childCount = 0;
