@@ -99,6 +99,7 @@ const schema = z.object({
 type FormState = {
   name: string;
   type: string;
+  group_code: string;
   gstin: string;
   pan: string;
   state_code: string;
@@ -115,6 +116,7 @@ type FormState = {
 const emptyForm: FormState = {
   name: "",
   type: "",
+  group_code: "",
   gstin: "",
   pan: "",
   state_code: "",
