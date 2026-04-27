@@ -41,6 +41,15 @@ async function pageToImageData(page: pdfjsLib.PDFPageProxy): Promise<HTMLCanvasE
   return canvas;
 }
 
+function isReadablePdfText(text: string): boolean {
+  const compact = text.replace(/\s+/g, "");
+  if (compact.length < 30) return false;
+  const asciiLetters = compact.match(/[A-Za-z]/g)?.length ?? 0;
+  const controls = compact.match(/[\u0000-\u001f\u007f-\u009f]/g)?.length ?? 0;
+  const commonWords = text.match(/\b(balance|sheet|trial|account|assets?|liabilit(y|ies)|funds?|total|amount|cash|bank)\b/gi)?.length ?? 0;
+  return controls / compact.length < 0.08 && (asciiLetters >= 20 || commonWords >= 2);
+}
+
 export async function extractTextFromFile(
   file: File,
   onProgress?: OcrProgressCb,
@@ -62,7 +71,7 @@ export async function extractTextFromFile(
         .join(" ")
         .replace(/\s+/g, " ")
         .trim();
-      if (txt.length < 30) needOcr = true;
+      if (!isReadablePdfText(txt)) needOcr = true;
       pages.push(txt);
     }
     // If most pages had no text layer (scanned PDF), OCR them.
