@@ -130,6 +130,7 @@ export interface ExtractedOpening {
 // detail rows that follow it.
 const GROUP_HEADINGS: { rx: RegExp; side: "Dr" | "Cr" }[] = [
   // Liabilities / Equity → Cr
+  { rx: /^(profit\s+for\s+the\s+period)\b/i, side: "Cr" },
   { rx: /^(capital(\s+account)?|reserves?(\s+&?\s*surplus)?|owners?\s+equity)\b/i, side: "Cr" },
   { rx: /^(current\s+liabilit(y|ies)|liabilit(y|ies))\b/i, side: "Cr" },
   { rx: /^(sundry\s+creditors?|creditors?|accounts?\s+payable|trade\s+payables?)\b/i, side: "Cr" },
@@ -146,6 +147,7 @@ const GROUP_HEADINGS: { rx: RegExp; side: "Dr" | "Cr" }[] = [
   { rx: /^(sundry\s+debtors?|debtors?|accounts?\s+receivable|trade\s+receivables?)\b/i, side: "Dr" },
   { rx: /^(loans?\s*&?\s*advances?(\s*\(?asset\)?)?)\b/i, side: "Dr" },
   { rx: /^(stock[\s-]*in[\s-]*hand|inventory|closing\s+stock|opening\s+stock)\b/i, side: "Dr" },
+  { rx: /^(profit\s*\/\s*loss\s+adjusted)\b/i, side: "Dr" },
   { rx: /^(misc(ellaneous)?\s+expenses?|profit\s*&?\s*loss\s+a\/c|loss\s+to\s+be\s+adjusted)\b/i, side: "Dr" },
   { rx: /^application(s)?\s+of\s+funds\b/i, side: "Dr" },
 ];
@@ -163,6 +165,7 @@ const TOTAL_LINE_RX = /^(grand\s+total|sub.?total|total)\s*[:\-]?\s*[\d.,\-]*\s*
 const AMOUNT_TOKEN_PATTERN = "-?\\d{1,3}(?:,\\d{2,3})*(?:\\.\\d{1,2})?|-?\\d+(?:\\.\\d{1,2})?";
 const AMOUNT_TOKEN_RX = new RegExp(AMOUNT_TOKEN_PATTERN, "g");
 const FIRST_AMOUNT_TOKEN_RX = new RegExp(AMOUNT_TOKEN_PATTERN);
+const OPENING_AMOUNT_TOKEN_RX = /-?\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?|-?\d+(?:\.\d{1,2})/g;
 
 function normaliseOpeningText(text: string): string {
   return text
@@ -177,7 +180,11 @@ function normaliseOpeningText(text: string): string {
 }
 
 function stripOpeningContext(label: string, fallbackSide: "Dr" | "Cr") {
-  let name = label.replace(/[|:]+/g, " ").replace(/\s+/g, " ").trim();
+  let name = label
+    .replace(/---\s*page\s*break\s*---/gi, " ")
+    .replace(/[|:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   let side = fallbackSide;
 
   let changed = true;
@@ -197,8 +204,11 @@ function stripOpeningContext(label: string, fallbackSide: "Dr" | "Cr") {
       const match = name.match(heading.rx);
       if (match) {
         side = heading.side;
-        name = name.slice(match[0].length).trim();
-        changed = true;
+        const rest = name.slice(match[0].length).trim();
+        if (rest) {
+          name = rest;
+          changed = true;
+        }
         break;
       }
     }
@@ -218,12 +228,42 @@ function dedupeOpenings(rows: ExtractedOpening[]): ExtractedOpening[] {
   });
 }
 
+function isOpeningGroupLabel(name: string): boolean {
+  return GROUP_HEADINGS.some((heading) => heading.rx.test(name));
+}
+
+function removeOpeningSubtotalRows(rows: ExtractedOpening[]): ExtractedOpening[] {
+  const tolerance = 0.75;
+  return rows.filter((row, index) => {
+    if (/^(grand\s+total|sub.?total|totals?)$/i.test(row.account_name)) return false;
+    if (isOpeningGroupLabel(row.account_name)) {
+      const next = rows[index + 1];
+      if (next && next.side === row.side && next.amount <= row.amount + tolerance) return false;
+    }
+
+    let sum = 0;
+    let childCount = 0;
+    for (let i = index + 1; i < rows.length; i += 1) {
+      const next = rows[i];
+      if (next.side !== row.side || /^(grand\s+total|sub.?total|totals?)$/i.test(next.account_name)) break;
+      if (next.amount > row.amount + tolerance) break;
+      sum += next.amount;
+      childCount += 1;
+      if (Math.abs(sum - row.amount) <= tolerance) return false;
+      if (sum > row.amount + tolerance) break;
+    }
+
+    return true;
+  });
+}
+
 function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
   const sectionMatch = text.match(
     /\b(sources?\s+of\s+funds|application(s)?\s+of\s+funds|capital(\s+account)?|current\s+liabilit(y|ies)|fixed\s+assets?|current\s+assets?)\b/i,
   );
   const focused = sectionMatch?.index && sectionMatch.index > 0 ? text.slice(sectionMatch.index) : text;
-  const matches = [...focused.matchAll(AMOUNT_TOKEN_RX)];
+  OPENING_AMOUNT_TOKEN_RX.lastIndex = 0;
+  const matches = [...focused.matchAll(OPENING_AMOUNT_TOKEN_RX)];
   const out: ExtractedOpening[] = [];
   let currentSide: "Dr" | "Cr" = "Dr";
   let previousEnd = 0;
@@ -238,8 +278,7 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
     let name = stripped.name.replace(/\s+(dr|cr|debit|credit)\.?$/i, "").trim();
 
     if (!name || name.length < 2) continue;
-    if (/^(grand\s+total|sub.?total|total)$/i.test(name)) continue;
-    if (GROUP_HEADINGS.some((heading) => heading.rx.test(name))) continue;
+    if (/^(grand\s+total|sub.?total|totals?)$/i.test(name)) continue;
 
     const value = num(match[0]);
     if (!value || Math.abs(value) < 0.01) continue;
@@ -249,7 +288,7 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
     out.push({ account_name: name, amount: Math.abs(value), side });
   }
 
-  return dedupeOpenings(out);
+  return dedupeOpenings(removeOpeningSubtotalRows(out));
 }
 
 /**
@@ -347,7 +386,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
     out.push({ account_name: name, amount, side });
   }
 
-  if (out.length <= 1) {
+  if (out.length <= 1 || /sources?\s+of\s+funds|application(s)?\s+of\s+funds/i.test(normalised)) {
     const paragraphRows = parseRunOnOpeningBalanceText(normalised);
     if (paragraphRows.length > out.length) return paragraphRows;
   }
