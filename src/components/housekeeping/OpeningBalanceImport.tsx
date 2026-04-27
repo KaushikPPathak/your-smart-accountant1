@@ -290,6 +290,12 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
           </div>
         )}
 
+        {(documentTotals.sourcesTotal != null || documentTotals.applicationsTotal != null) && (
+          <div className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
+            Balance Sheet check: selected Cr heads must equal Sources of Funds and selected Dr heads must equal Applications of Funds before posting.
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-3 min-h-[400px]">
           <div className="rounded-md border bg-muted/30 overflow-hidden">
             {!preview ? (
