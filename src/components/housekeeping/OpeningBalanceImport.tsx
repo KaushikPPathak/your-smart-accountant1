@@ -18,7 +18,7 @@ import { Loader2, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { extractTextFromFile, type OcrProgress } from "@/lib/ocr";
-import { parseTrialBalanceText, type ExtractedOpening } from "@/lib/statement-parse";
+import { extractOpeningBalanceTotals, parseTrialBalanceText, type ExtractedOpening } from "@/lib/statement-parse";
 import type { Database } from "@/integrations/supabase/types";
 
 type LedgerType = Database["public"]["Enums"]["ledger_type"];
@@ -60,6 +60,10 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
   const [progress, setProgress] = useState<OcrProgress | null>(null);
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [rawText, setRawText] = useState("");
+  const [documentTotals, setDocumentTotals] = useState<{ sourcesTotal: number | null; applicationsTotal: number | null }>({
+    sourcesTotal: null,
+    applicationsTotal: null,
+  });
   const [showRaw, setShowRaw] = useState(false);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [posting, setPosting] = useState(false);
@@ -85,10 +89,11 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
 
   function autoMatch(name: string): string {
     const norm = name.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
-    const exact = ledgers.find((l) => l.name.toLowerCase() === norm);
+    const normaliseLedger = (ledgerName: string) => ledgerName.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+    const exact = ledgers.find((l) => normaliseLedger(l.name) === norm);
     if (exact) return exact.id;
     const partial = ledgers.find((l) =>
-      l.name.toLowerCase().includes(norm) || norm.includes(l.name.toLowerCase()),
+      normaliseLedger(l.name).includes(norm) || norm.includes(normaliseLedger(l.name)),
     );
     return partial?.id ?? "";
   }
@@ -115,6 +120,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
     try {
       const text = await extractTextFromFile(file, setProgress);
       setRawText(text);
+      setDocumentTotals(extractOpeningBalanceTotals(text));
       const parsed = parseTrialBalanceText(text);
       setRows(parsed.map((p, i) => ({
         ...p,
@@ -150,12 +156,23 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
     const sel = rows.filter((r) => r._selected);
     const dr = sel.filter((r) => r.side === "Dr").reduce((a, r) => a + r.amount, 0);
     const cr = sel.filter((r) => r.side === "Cr").reduce((a, r) => a + r.amount, 0);
-    return { count: sel.length, dr, cr, diff: dr - cr };
-  }, [rows]);
+    const diff = dr - cr;
+    const sourceDiff = documentTotals.sourcesTotal == null ? 0 : cr - documentTotals.sourcesTotal;
+    const applicationDiff = documentTotals.applicationsTotal == null ? 0 : dr - documentTotals.applicationsTotal;
+    return { count: sel.length, dr, cr, diff, sourceDiff, applicationDiff };
+  }, [documentTotals, rows]);
 
   async function postOpenings() {
     const sel = rows.filter((r) => r._selected && r.account_name.trim() && r.amount > 0);
     if (!sel.length) { toast.error("Nothing to post"); return; }
+    if (Math.abs(stats.diff) >= 0.5) {
+      toast.error("Debit and Credit totals must match before posting opening balances.");
+      return;
+    }
+    if (Math.abs(stats.sourceDiff) >= 0.5 || Math.abs(stats.applicationDiff) >= 0.5) {
+      toast.error("Selected ledger heads must match the Balance Sheet Sources and Applications totals.");
+      return;
+    }
     setPosting(true);
     try {
       let created = 0, updated = 0;
