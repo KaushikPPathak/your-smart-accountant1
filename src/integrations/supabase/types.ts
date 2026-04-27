@@ -834,6 +834,7 @@ export type Database = {
           credit_days: number
           credit_limit_paise: number
           email: string | null
+          group_code: string | null
           gst_treatment: Database["public"]["Enums"]["gst_treatment"]
           gstin: string | null
           id: string
@@ -858,6 +859,7 @@ export type Database = {
           credit_days?: number
           credit_limit_paise?: number
           email?: string | null
+          group_code?: string | null
           gst_treatment?: Database["public"]["Enums"]["gst_treatment"]
           gstin?: string | null
           id?: string
@@ -882,6 +884,7 @@ export type Database = {
           credit_days?: number
           credit_limit_paise?: number
           email?: string | null
+          group_code?: string | null
           gst_treatment?: Database["public"]["Enums"]["gst_treatment"]
           gstin?: string | null
           id?: string
