@@ -241,7 +241,7 @@ function removeOpeningSubtotalRows(rows: ExtractedOpening[]): ExtractedOpening[]
       if (next.amount > row.amount + tolerance) break;
       sum += next.amount;
       childCount += 1;
-      if (Math.abs(sum - row.amount) <= tolerance) return childCount > 0;
+      if (Math.abs(sum - row.amount) <= tolerance) return false;
       if (sum > row.amount + tolerance) break;
     }
 
