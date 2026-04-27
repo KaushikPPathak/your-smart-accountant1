@@ -159,7 +159,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
   function addBlank() {
     setRows((rs) => [...rs, {
       _key: `n${Date.now()}`, _selected: true, ledger_id: "", new_type: "current_asset",
-      account_name: "", amount: 0, side: "Dr",
+      account_name: "", amount: 0, side: "Dr", group_code: "CURRENT_ASSETS",
     }]);
   }
 
