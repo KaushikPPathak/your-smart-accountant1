@@ -379,15 +379,37 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
                           </SelectContent>
                         </Select>
                         {!r.ledger_id && (
-                          <Select value={r.new_type}
-                            onValueChange={(v) => update(r._key, { new_type: v as LedgerType })}>
-                            <SelectTrigger className="h-7 text-xs mt-1"><SelectValue /></SelectTrigger>
+                          <Select value={r.group_code}
+                            onValueChange={(v) => update(r._key, {
+                              group_code: v,
+                              new_type: defaultLedgerTypeForGroup(v),
+                            })}>
+                            <SelectTrigger className="h-7 text-xs mt-1">
+                              <SelectValue placeholder="Group (IT-norms)" />
+                            </SelectTrigger>
                             <SelectContent>
-                              {LEDGER_TYPES.map((t) => (
-                                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                              {(["BS_LIAB", "BS_ASSET", "TRADING", "PL"] as const).map((sec) => (
+                                <div key={sec}>
+                                  <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                                    {sec === "BS_LIAB" ? "Liabilities"
+                                      : sec === "BS_ASSET" ? "Assets"
+                                      : sec === "TRADING" ? "Trading"
+                                      : "P&L"}
+                                  </div>
+                                  {ACCOUNT_GROUPS.filter((g) => g.section === sec)
+                                    .sort((a, b) => a.order - b.order)
+                                    .map((g) => (
+                                      <SelectItem key={g.code} value={g.code}>{g.label}</SelectItem>
+                                    ))}
+                                </div>
                               ))}
                             </SelectContent>
                           </Select>
+                        )}
+                        {r.ledger_id && r.group_code && (
+                          <div className="text-[10px] text-muted-foreground mt-1">
+                            Group: {GROUP_BY_CODE[r.group_code]?.label ?? r.group_code}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell>
