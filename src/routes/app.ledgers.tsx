@@ -345,7 +345,18 @@ function LedgersPage() {
                     <Label htmlFor="type">Type *</Label>
                     <Select
                       value={form.type}
-                      onValueChange={(v) => setForm({ ...form, type: v })}
+                      onValueChange={(v) => {
+                        const newType = v as LedgerTypeValue;
+                        // Auto-pick a sensible group when changing type, unless the
+                        // currently selected group is still valid for this type.
+                        const cur = form.group_code ? GROUP_BY_CODE[form.group_code] : undefined;
+                        const stillValid = cur?.ledgerTypes.includes(newType);
+                        setForm({
+                          ...form,
+                          type: v,
+                          group_code: stillValid ? form.group_code : defaultGroupCodeForType(newType),
+                        });
+                      }}
                     >
                       <SelectTrigger id="type">
                         <SelectValue placeholder="Select ledger type" />
@@ -355,6 +366,44 @@ function LedgersPage() {
                           <SelectItem key={t.value} value={t.value}>
                             {t.label}
                           </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label htmlFor="group_code">Group (Income-Tax / Schedule III) *</Label>
+                    <Select
+                      value={form.group_code}
+                      onValueChange={(v) => {
+                        // When group changes, also normalise the underlying ledger.type
+                        // so postings & legacy reports keep working.
+                        const grp = GROUP_BY_CODE[v];
+                        const compatible = grp && (grp.ledgerTypes.includes(form.type as LedgerTypeValue));
+                        setForm({
+                          ...form,
+                          group_code: v,
+                          type: compatible ? form.type : defaultLedgerTypeForGroup(v),
+                        });
+                      }}
+                    >
+                      <SelectTrigger id="group_code">
+                        <SelectValue placeholder="Select group" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(["BS_LIAB", "BS_ASSET", "TRADING", "PL"] as const).map((sec) => (
+                          <div key={sec}>
+                            <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                              {sec === "BS_LIAB" ? "Sources of Funds (Liabilities)"
+                                : sec === "BS_ASSET" ? "Application of Funds (Assets)"
+                                : sec === "TRADING" ? "Trading Account"
+                                : "Profit & Loss Account"}
+                            </div>
+                            {ACCOUNT_GROUPS.filter((g) => g.section === sec)
+                              .sort((a, b) => a.order - b.order)
+                              .map((g) => (
+                                <SelectItem key={g.code} value={g.code}>{g.label}</SelectItem>
+                              ))}
+                          </div>
                         ))}
                       </SelectContent>
                     </Select>
