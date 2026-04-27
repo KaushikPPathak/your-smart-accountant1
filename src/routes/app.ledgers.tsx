@@ -555,6 +555,7 @@ function LedgersPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Group</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>GSTIN</TableHead>
                     <TableHead>State</TableHead>
@@ -566,9 +567,14 @@ function LedgersPage() {
                   {filtered.map((l) => {
                     const typeLabel =
                       LEDGER_TYPES.find((t) => t.value === l.type)?.label ?? l.type;
+                    const groupCode = l.group_code ?? defaultGroupCodeForType(l.type);
+                    const groupLbl = GROUP_BY_CODE[groupCode]?.label ?? "—";
                     return (
                       <TableRow key={l.id}>
                         <TableCell className="font-medium">{l.name}</TableCell>
+                        <TableCell>
+                          <Badge className="text-[10px]">{groupLbl}</Badge>
+                        </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-[10px]">
                             {typeLabel}
