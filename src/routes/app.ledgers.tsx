@@ -59,6 +59,7 @@ interface Ledger {
   id: string;
   name: string;
   type: LedgerTypeValue;
+  group_code: string | null;
   gstin: string | null;
   pan: string | null;
   state: string | null;
