@@ -944,62 +944,93 @@ export function gstr3bToXlsxSheets(b: BuiltGstr3B): XlsxSheet[] {
     const mon = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(m.slice(0, 2))] || m.slice(0, 2);
     return `${mon} ${m.slice(2)}`;
   })();
+  // Layout mirrors the official "GSTR3B Excel Utility" worksheet (rule 61(5)),
+  // including header block, sections 3.1, 3.1.1, 4 (with sub-rows), 5, 5.1
+  // and Table 3.2 placed at the bottom (as per the GSTN utility).
+  const sup_eco = b.sup_eco ?? { txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0 };
+  const itc = b.itc_elg;
+  const find = (arr: { ty: string; iamt: number; camt: number; samt: number; csamt: number }[], ty: string) =>
+    arr.find((x) => x.ty === ty) ?? { ty, iamt: 0, camt: 0, samt: 0, csamt: 0 };
+  const impg = find(itc.itc_avl, "IMPG");
+  const imps = find(itc.itc_avl, "IMPS");
+  const isrc = find(itc.itc_avl, "ISRC");
+  const isd  = find(itc.itc_avl, "ISD");
+  const oth  = find(itc.itc_avl, "OTH");
+  const revR = find(itc.itc_rev, "RUL");
+  const revO = find(itc.itc_rev, "OTH");
+  const inelgRcl = find(itc.itc_inelg, "RUL");
+  const inelgOth = find(itc.itc_inelg, "OTH");
+  const inwGst = b.inward_sup.isup_details.find((x) => x.ty === "GST") ?? { ty: "GST", inter: 0, intra: 0 };
+  const inwNon = b.inward_sup.isup_details.find((x) => x.ty === "NONGST") ?? { ty: "NONGST", inter: 0, intra: 0 };
+
+  const tot31Tx = s.osup_det.txval + s.osup_zero.txval + s.osup_nil_exmp.txval + s.isup_rev.txval + s.osup_nongst.txval;
+  const tot31I  = s.osup_det.iamt + s.osup_zero.iamt + s.isup_rev.iamt;
+  const tot31C  = s.osup_det.camt + s.isup_rev.camt;
+  const tot31S  = s.osup_det.samt + s.isup_rev.samt;
+  const tot31Cs = s.osup_det.csamt + s.osup_zero.csamt + s.isup_rev.csamt;
+
   const summary: (string | number)[][] = [
-    ["Form GSTR-3B"],
+    ["GSTR-3B"],
     ["[See rule 61(5)]"],
     [],
-    ["Year", b.meta.fp.slice(2), "", "Period", fpLabel],
-    ["GSTIN", b.meta.gstin, "", "Legal name of the registered person", b.meta.legal_name || ""],
+    ["GSTIN", b.meta.gstin, "", "Year", b.meta.fp.slice(2)],
+    ["Legal name of the registered person", b.meta.legal_name || "", "", "Month", fpLabel],
     [],
     ["3.1 Details of Outward Supplies and inward supplies liable to reverse charge"],
-    ["Nature of Supplies", "Total Taxable Value", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
-    ["(a) Outward taxable supplies (other than zero rated, nil rated and exempted)", s.osup_det.txval, s.osup_det.iamt, s.osup_det.camt, s.osup_det.samt, s.osup_det.csamt],
-    ["(b) Outward taxable supplies (zero rated)", s.osup_zero.txval, s.osup_zero.iamt, 0, 0, s.osup_zero.csamt],
-    ["(c) Other outward supplies (Nil rated, exempted)", s.osup_nil_exmp.txval, 0, 0, 0, 0],
+    ["Nature of Supplies", "Total Taxable value", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
+    ["1", "2", "3", "4", "5", "6"],
+    ["(a) Outward Taxable  supplies  (other than zero rated, nil rated and exempted)", s.osup_det.txval, s.osup_det.iamt, s.osup_det.camt, s.osup_det.samt, s.osup_det.csamt],
+    ["(b) Outward Taxable  supplies  (zero rated )", s.osup_zero.txval, s.osup_zero.iamt, "", "", s.osup_zero.csamt],
+    ["(c) Other Outward Taxable  supplies (Nil rated, exempted)", s.osup_nil_exmp.txval, "", "", "", ""],
     ["(d) Inward supplies (liable to reverse charge)", s.isup_rev.txval, s.isup_rev.iamt, s.isup_rev.camt, s.isup_rev.samt, s.isup_rev.csamt],
-    ["(e) Non-GST outward supplies", s.osup_nongst.txval, 0, 0, 0, 0],
+    ["(e) Non-GST Outward supplies", s.osup_nongst.txval, "", "", "", ""],
+    ["Total", tot31Tx, tot31I, tot31C, tot31S, tot31Cs],
     [],
-    ["3.1.1 Details of Supplies notified under section 9(5) of the CGST Act, 2017 and corresponding provisions in IGST/UTGST/SGST Acts"],
-    ["Nature of Supplies", "Total Taxable Value", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
-    ["(i) Taxable supplies on which electronic commerce operator pays tax u/s 9(5)", b.sup_eco?.txval || 0, b.sup_eco?.iamt || 0, b.sup_eco?.camt || 0, b.sup_eco?.samt || 0, b.sup_eco?.csamt || 0],
-    ["(ii) Taxable supplies made by registered person through electronic commerce operator", 0, 0, 0, 0, 0],
-    [],
-    ["3.2 Of the supplies shown in 3.1(a) above, details of inter-state supplies made to unregistered persons, composition taxable persons and UIN holders"],
-    ["", "Place of Supply (State/UT)", "Total Taxable Value", "Amount of Integrated Tax"],
-    ["Supplies made to Unregistered Persons", "", "", ""],
-    ...b.inter_sup.unreg_details.map((p) => ["", p.pos, p.txval, p.iamt]),
-    ["Supplies made to Composition Taxable Persons", "", "", ""],
-    ["Supplies made to UIN holders", "", "", ""],
+    ["3.1.1 Details of supplies notified under section 9(5) of the CGST Act, 2017 and corresponding provisions in IGST/UTGST/SGST Acts"],
+    ["Nature of Supplies", "Total Taxable value", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
+    ["1", "2", "3", "4", "5", "6"],
+    ["(i) Taxable supplies on which electronic commerce operator pays tax u/s 9(5) [to be furnished by electronic commerce operator]", sup_eco.txval, sup_eco.iamt, sup_eco.camt, sup_eco.samt, sup_eco.csamt],
+    ["(ii) Taxable supplies made by registered person through electronic commerce operator, on which electronic commerce operator is required to pay tax u/s 9(5) [to be furnished by registered person making supplies through electronic commerce operator]", 0, 0, 0, 0, 0],
     [],
     ["4. Eligible ITC"],
     ["Details", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
-    ["(A) ITC Available (whether in full or part)", "", "", "", ""],
-    ...b.itc_elg.itc_avl.map((x) => [
-      x.ty === "IMPG" ? "  (1) Import of goods" :
-      x.ty === "IMPS" ? "  (2) Import of services" :
-      x.ty === "ISRC" ? "  (3) Inward supplies liable to reverse charge (other than 1 & 2 above)" :
-      x.ty === "ISD"  ? "  (4) Inward supplies from ISD" :
-      "  (5) All other ITC",
-      x.iamt, x.camt, x.samt, x.csamt,
-    ]),
+    ["1", "2", "3", "4", "5"],
+    ["(A) ITC Available (Whether in full or part)", "", "", "", ""],
+    ["(1)   Import of goods", impg.iamt, "", "", impg.csamt],
+    ["(2)   Import of services", imps.iamt, "", "", imps.csamt],
+    ["(3)   Inward supplies liable to reverse charge (other than 1 & 2 above)", isrc.iamt, isrc.camt, isrc.samt, isrc.csamt],
+    ["(4)   Inward supplies from ISD", isd.iamt, isd.camt, isd.samt, isd.csamt],
+    ["(5)   All other ITC", oth.iamt, oth.camt, oth.samt, oth.csamt],
     ["(B) ITC Reversed", "", "", "", ""],
-    ...b.itc_elg.itc_rev.map((x) => [
-      x.ty === "RUL" ? "  (1) As per rules 38, 42 & 43 of CGST Rules and section 17(5)" : "  (2) Others",
-      x.iamt, x.camt, x.samt, x.csamt,
-    ]),
-    ["(C) Net ITC available (A) - (B)", b.itc_elg.itc_net.iamt, b.itc_elg.itc_net.camt, b.itc_elg.itc_net.samt, b.itc_elg.itc_net.csamt],
+    ["(1) As per rules 38, 42 & 43 of CGST Rules and section 17(5)", revR.iamt, revR.camt, revR.samt, revR.csamt],
+    ["(2)   Others", revO.iamt, revO.camt, revO.samt, revO.csamt],
+    ["(C) Net ITC Available (A)-(B)", itc.itc_net.iamt, itc.itc_net.camt, itc.itc_net.samt, itc.itc_net.csamt],
     ["(D) Other Details", "", "", "", ""],
-    ...b.itc_elg.itc_inelg.map((x) => [
-      x.ty === "RUL" ? "  (1) ITC reclaimed which was reversed under Table 4(B)(2) in earlier tax period" : "  (2) Ineligible ITC under section 16(4) and ITC restricted due to PoS provisions",
-      x.iamt, x.camt, x.samt, x.csamt,
-    ]),
+    ["(1) ITC reclaimed which was reversed under Table 4(B)(2) in earlier tax period", inelgRcl.iamt, inelgRcl.camt, inelgRcl.samt, inelgRcl.csamt],
+    ["(2) Ineligible ITC under section 16(4) & ITC restricted due to PoS rules", inelgOth.iamt, inelgOth.camt, inelgOth.samt, inelgOth.csamt],
     [],
-    ["5. Values of exempt, nil-rated and non-GST inward supplies"],
-    ["Nature of Supplies", "Inter-State Supplies", "Intra-State Supplies"],
-    ...b.inward_sup.isup_details.map((x) => [
-      x.ty === "GST" ? "From a supplier under composition scheme, Exempt and Nil rated supply" : "Non GST supply",
-      x.inter, x.intra,
-    ]),
+    ["5. Values of exempt, Nil-rated and non-GST inward supplies"],
+    ["Nature of supplies", "Inter-State supplies", "Intra-state supplies"],
+    ["1", "2", "3"],
+    ["From a supplier under composition scheme, Exempt  and Nil rated supply", inwGst.inter, inwGst.intra],
+    ["Non GST supply", inwNon.inter, inwNon.intra],
+    ["Total", inwGst.inter + inwNon.inter, inwGst.intra + inwNon.intra],
+    [],
+    ["5.1 Interest & late fee payable"],
+    ["Description", "Integrated Tax", "Central Tax", "State/UT Tax", "Cess"],
+    ["1", "2", "3", "4", "5"],
+    ["Interest", 0, 0, 0, 0],
+    [],
+    ["3.2  Of the supplies shown in 3.1 (a), details of inter-state supplies made to unregistered persons, composition taxable person and UIN holders"],
+    ["Place of Supply(State/UT)", "Supplies made to Unregistered Persons", "", "Supplies made to Composition Taxable Persons", "", "Supplies made to UIN holders", ""],
+    ["", "Total Taxable value", "Amount of Integrated Tax", "Total Taxable value", "Amount of Integrated Tax", "Total Taxable value", "Amount of Integrated Tax"],
+    ["1", "2", "3", "4", "5", "6", "7"],
+    ...b.inter_sup.unreg_details.map((p) => [p.pos, p.txval, p.iamt, "", "", "", ""] as (string | number)[]),
+    ["Total",
+      b.inter_sup.unreg_details.reduce((a, x) => a + x.txval, 0),
+      b.inter_sup.unreg_details.reduce((a, x) => a + x.iamt, 0),
+      0, 0, 0, 0,
+    ],
     [],
     ["6.1 Payment of tax"],
     ["Description", "Total tax payable", "Tax paid through ITC — IGST", "CGST", "SGST/UTGST", "Cess", "Tax paid TDS./TCS", "Tax/Cess paid in cash", "Interest", "Late Fee"],
