@@ -97,7 +97,16 @@ function GSTR3BPage() {
                 onClick={() => built && downloadJson(`${fileBase}.json`, gstr3bToJson(built))}>
                 <FileJson className="mr-1 h-4 w-4" /> GSTN JSON
               </Button>
-              <Button variant="outline" size="sm" onClick={() => window.print()}>
+              <Button variant="outline" size="sm" onClick={() => {
+                const prev = document.title;
+                document.title = fileBase;
+                const restore = () => {
+                  document.title = prev;
+                  window.removeEventListener("afterprint", restore);
+                };
+                window.addEventListener("afterprint", restore);
+                window.print();
+              }}>
                 <Printer className="mr-1 h-4 w-4" /> Print
               </Button>
             </div>
