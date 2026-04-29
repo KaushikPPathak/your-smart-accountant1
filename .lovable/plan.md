@@ -1,67 +1,80 @@
+# Goal
 
+Make sure this remixed project is a **fully working copy** of your old account's app — code AND Lovable Cloud backend — and prevent another "continuous data error" like 27 April.
 
-# Your Mehtaji — Phase 1 Plan
+Important up front: a remix only copies **code**. The Cloud backend (database tables, RLS, functions, storage, secrets) is **always fresh and empty** on a remix. There is no "import the old Supabase" button. What we *can* do is make sure every migration in the code has actually been applied to this new backend, and that secrets/buckets are in place. That is what failed last time.
 
-A modern web-based accounting app (with a Windows desktop build) inspired by Busy. Hybrid UI: clean modern visuals + Busy-style keyboard shortcuts and dense data grids for fast entry.
+This plan does NOT touch your accounting data (companies, ledgers, vouchers). You said you'll restore those yourself via the in-app Backup/Restore tool — that's correct.
 
-## Phase 1 Scope
+---
 
-**Multi-company, multi-user accounting workspace** with:
+## Step 1 — Audit this remix's backend vs the code
 
-### 1. Auth & Companies
-- Email/password login (Lovable Cloud)
-- User roles: **Admin, Accountant, Viewer** (stored in `user_roles` table)
-- **Multi-company**: create companies, switch via top-bar company picker; all data scoped per-company
-- Invite team members to a company with a role
+I'll check, on the new Cloud project (`lrizbsazbgpzyehktwvk`):
 
-### 2. Masters
-- **Ledgers / Parties** (customers, suppliers, expense heads) with GSTIN, address, opening balance
-- **Items / Stock** with HSN code, unit, GST rate, opening stock & rate
-- **Tax rates** (GST 0/5/12/18/28 + custom)
+1. **Migrations applied** — list every `.sql` file in `supabase/migrations/` and confirm every table, enum, function, trigger, and RLS policy it defines actually exists in the live database.
+2. **Functions present** — confirm `has_company_role`, `is_company_member`, `can_write_company`, `next_voucher_number`, `handle_new_company`, `handle_new_user`, `handle_new_company_settings`, `update_updated_at_column`, `voucher_company_id` all exist (the secrets panel says they do — good).
+3. **Triggers present** — the secrets panel says "no triggers", which is **suspicious**. `handle_new_user` and `handle_new_company` need to be wired as triggers on `auth.users` and `public.companies` or new signups / new companies will silently fail (this is a very likely cause of your 27 April errors).
+4. **Storage bucket** — `company-logos` exists and is public. ✅ confirmed.
+5. **Secrets** — `APPYFLOW_GST_API_KEY`, `LOVABLE_API_KEY`, Supabase keys all present. ✅ confirmed.
+6. **RLS** — run the Supabase linter to catch tables without RLS or weak policies.
 
-### 3. Vouchers (data entry, keyboard-first)
-- **Sales Invoice** (with item lines, auto CGST/SGST/IGST split based on party state)
-- **Purchase Invoice**
-- **Receipt, Payment, Journal, Contra**
-- **Credit Note / Debit Note**
-- Auto voucher numbering per company per type
-- Hotkeys: `Alt+S` Sales, `Alt+P` Purchase, `Alt+R` Receipt, `Alt+J` Journal, `F2` date, `Ctrl+S` save, `Esc` cancel
+## Step 2 — Repair anything missing
 
-### 4. Inventory
-- Auto stock in/out from purchase/sales
-- Stock summary, item movement, low-stock view
+Most likely findings and fixes:
 
-### 5. Reports
-- **Day Book**, **Ledger statement**, **Trial Balance**
-- **Profit & Loss**, **Balance Sheet**
-- **GSTR-1 summary** (outward supplies) & **GSTR-3B summary**
-- **Stock Summary**
-- Date-range filter, export to CSV/Excel, print-friendly view
+- **Missing triggers** → write a migration that creates:
+  - `on_auth_user_created` AFTER INSERT ON `auth.users` → `handle_new_user()`
+  - `on_company_created` AFTER INSERT ON `public.companies` → `handle_new_company()` and `handle_new_company_settings()`
+  - `updated_at` triggers on tables that have an `updated_at` column
+- **Missing tables / columns** from later migrations that didn't replay → re-run them as a fresh migration.
+- **Missing RLS policies** → add them.
 
-### 6. Invoice printing
-- A4 GST-compliant tax invoice template with company logo, HSN, tax breakup, amount in words
+Each fix is a new SQL migration file (safe, idempotent — uses `IF NOT EXISTS` / `CREATE OR REPLACE`).
 
-## UX
+## Step 3 — Smoke test the critical paths
 
-- Left collapsible sidebar (Dashboard, Masters, Vouchers, Reports, Settings)
-- Top bar: company switcher, financial-year selector, global search (`Ctrl+K`), user menu
-- Dashboard: cash/bank balance, receivables, payables, sales this month, top items, recent vouchers
-- Voucher entry: dense tabular grid, Tab navigation, inline party/item lookup
-- Light + dark theme
+After repairs, I'll verify by reading the DB:
 
-## Delivery
+- Can a new auth user → row in `profiles`? (tests `handle_new_user` trigger)
+- Can a new company → row in `company_members` + `company_settings`? (tests `handle_new_company` triggers)
+- Does `next_voucher_number` increment correctly?
+- Are RLS policies blocking cross-company reads?
 
-1. **Web app first** — fully working at your Lovable URL, multi-user, multi-company
-2. **Windows desktop build** — once web is stable, package the same app via Electron as a portable Windows folder you can run (`.exe` inside). For a signed installer, you'd run one final command on a Windows PC — I'll provide instructions.
+I won't insert test data into your real account — I'll only read schema and existing rows.
 
-## Out of scope for Phase 1 (can add later)
-Payroll, e-invoice/IRN integration, bank reconciliation import, barcode scanning, mobile app, actual GSTR JSON filing upload, manufacturing/BOM, branch transfers.
+## Step 4 — Give you a "remix safety checklist"
 
-## Tech notes
-- Lovable Cloud (Postgres + Auth) with Row-Level Security so each company's data is isolated
-- Roles in a separate `user_roles` table (security best practice)
-- All money stored as integers (paise) to avoid float errors
-- Numbers in Indian format (₹ 1,23,456.00)
+So next time you remix or move accounts, you have a 1-page checklist that prevents the 27 April situation:
 
-Click **Implement plan** to start building Phase 1.
+1. Immediately after remix: open this app, ask Lovable "audit backend vs migrations".
+2. Re-add all secrets (list provided).
+3. Confirm triggers exist (list provided).
+4. Run a smoke test (create throwaway company, delete it).
+5. *Then* restore your accounting JSON backup.
 
+I'll save this checklist into the project as `docs/REMIX_CHECKLIST.md` so it travels with the code.
+
+---
+
+## Technical details (for the record)
+
+- **Read-only inspection** uses `supabase--read_query` against `information_schema` and `pg_catalog` to enumerate tables, columns, functions, triggers, and policies.
+- **Repairs** are written as new files in `supabase/migrations/` with timestamped names and approved via the migration tool. All DDL uses `IF NOT EXISTS` / `CREATE OR REPLACE` / `DROP TRIGGER IF EXISTS` so re-running is safe.
+- **No destructive operations.** No `DROP TABLE`, no `TRUNCATE`, no data deletion.
+- **No edits to** `src/integrations/supabase/client.ts`, `types.ts`, or `.env` (all auto-generated).
+- **Storage bucket contents** (existing logos in your old account) are NOT migrated — buckets contents don't move on remix and there's no API call I can make from one project's storage to another's. If you need old logos, download them from the old account's Cloud → Storage and re-upload here.
+
+---
+
+## What this plan does NOT do
+
+- Does NOT copy data (companies, ledgers, vouchers) from old account → use the in-app Backup/Restore for that.
+- Does NOT copy storage bucket files → re-upload manually.
+- Does NOT touch your old (working) account in any way.
+
+---
+
+## Approve to proceed
+
+If you approve, I'll start with Step 1 (audit) and report findings before making any schema changes. You'll see the exact list of "missing X" before I write any migration.
