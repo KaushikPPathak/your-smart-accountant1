@@ -102,10 +102,6 @@ function GSTR3BPage() {
                 }}>
                 <FileSpreadsheet className="mr-1 h-4 w-4" /> GSTR-3B Utility (.xlsm)
               </Button>
-              <Button variant="ghost" size="sm" disabled={!built}
-                onClick={() => built && downloadXlsx(`${fileBase}_summary.xlsx`, gstr3bToXlsxSheets(built))}>
-                <FileSpreadsheet className="mr-1 h-4 w-4" /> Summary
-              </Button>
               <Button variant="outline" size="sm" disabled={!built}
                 onClick={() => built && downloadJson(`${fileBase}.json`, gstr3bToJson(built))}>
                 <FileJson className="mr-1 h-4 w-4" /> GSTN JSON
