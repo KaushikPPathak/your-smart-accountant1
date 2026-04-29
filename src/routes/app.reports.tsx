@@ -40,7 +40,7 @@ function ReportsLayout() {
 
   return (
     <div className="space-y-4">
-      <div>
+      <div className="print:hidden">
         <h1 className="text-2xl font-semibold">Reports</h1>
         <p className="text-xs text-muted-foreground">Books of accounts, GST-ready summaries — date filters, PDF & Excel export.</p>
       </div>

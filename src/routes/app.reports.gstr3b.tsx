@@ -97,7 +97,16 @@ function GSTR3BPage() {
                 onClick={() => built && downloadJson(`${fileBase}.json`, gstr3bToJson(built))}>
                 <FileJson className="mr-1 h-4 w-4" /> GSTN JSON
               </Button>
-              <Button variant="outline" size="sm" onClick={() => window.print()}>
+              <Button variant="outline" size="sm" onClick={() => {
+                const prev = document.title;
+                document.title = fileBase;
+                const restore = () => {
+                  document.title = prev;
+                  window.removeEventListener("afterprint", restore);
+                };
+                window.addEventListener("afterprint", restore);
+                window.print();
+              }}>
                 <Printer className="mr-1 h-4 w-4" /> Print
               </Button>
             </div>
@@ -108,6 +117,32 @@ function GSTR3BPage() {
 
       {built && (
         <>
+          <div className="hidden print:block">
+            <div className="text-center">
+              <div className="text-lg font-bold">FORM GSTR-3B</div>
+              <div className="text-xs">[See rule 61(5)]</div>
+            </div>
+            <table className="mt-3 w-full text-sm">
+              <tbody>
+                <tr>
+                  <td className="w-1/4 font-medium">GSTIN</td>
+                  <td className="w-1/4">{company?.gstin || ""}</td>
+                  <td className="w-1/4 font-medium">Year</td>
+                  <td className="w-1/4">{period.fp.slice(2)}</td>
+                </tr>
+                <tr>
+                  <td className="font-medium">Legal name of the registered person</td>
+                  <td>{company?.name || ""}</td>
+                  <td className="font-medium">Month</td>
+                  <td>{(() => {
+                    const names = ["", "January","February","March","April","May","June","July","August","September","October","November","December"];
+                    return `${names[Number(period.fp.slice(0,2))] || period.fp.slice(0,2)} ${period.fp.slice(2)}`;
+                  })()}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
           <ValidationPanel issues={validateGstr3B(built)} />
 
           <ManualEntryCard
