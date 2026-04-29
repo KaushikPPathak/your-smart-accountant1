@@ -150,7 +150,7 @@ function GSTR3BPage() {
 
           <InputOutputCalculator built={built} />
 
-          <Card>
+          <Card className="print:hidden">
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">3.1 Outward & inward supplies on RCM</div>
               <Table>
@@ -173,7 +173,7 @@ function GSTR3BPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="print:hidden">
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">3.2 Inter-state to Unregistered (from 3.1(a))</div>
               {built.inter_sup.unreg_details.length === 0 ? (
@@ -199,7 +199,7 @@ function GSTR3BPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="print:hidden">
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">4. Eligible ITC</div>
               <Table>
@@ -237,7 +237,7 @@ function GSTR3BPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="print:hidden">
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">5. Values of exempt, nil-rated and non-GST inward supplies</div>
               <Table>
@@ -259,7 +259,7 @@ function GSTR3BPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="print:hidden">
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">6.1 Payment of Tax</div>
               <Table>
