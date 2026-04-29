@@ -621,9 +621,13 @@ function InputOutputCalculator({ built, eligibleOverride }: { built: BuiltGstr3B
               <TableCell className="text-right font-mono">{fmt(out_c)}</TableCell>
               <TableCell className="text-right font-mono">{fmt(out_s)}</TableCell></TableRow>
             <TableRow><TableCell className="font-medium">Input tax credit available (Table 4C)</TableCell>
-              <TableCell className="text-right font-mono">{fmt(built.itc_elg.itc_net.iamt)}</TableCell>
-              <TableCell className="text-right font-mono">{fmt(built.itc_elg.itc_net.camt)}</TableCell>
-              <TableCell className="text-right font-mono">{fmt(built.itc_elg.itc_net.samt)}</TableCell></TableRow>
+              <TableCell className="text-right font-mono">{fmt(itc_i + u_ii + u_ci + u_si)}</TableCell>
+              <TableCell className="text-right font-mono">{fmt(itc_c + u_cc + u_ic)}</TableCell>
+              <TableCell className="text-right font-mono">{fmt(itc_s + u_ss + u_is)}</TableCell></TableRow>
+            {eligibleOverride && (
+              <TableRow><TableCell className="text-xs text-muted-foreground">↳ sourced from Purchase &amp; Expense Ledger (Sec 17(5) applied)</TableCell>
+                <TableCell colSpan={3} className="text-right text-xs text-muted-foreground">Original Table 4C: IGST {fmt(baseI)} · CGST {fmt(baseC)} · SGST {fmt(baseS)}</TableCell></TableRow>
+            )}
             <TableRow className="bg-muted/40"><TableCell colSpan={4} className="text-xs font-semibold">Set-off as per Sec 49A/49B + Rule 88A</TableCell></TableRow>
             <TableRow><TableCell>Less: IGST credit utilised</TableCell>
               <TableCell className="text-right font-mono">{fmt(u_ii)}</TableCell>
