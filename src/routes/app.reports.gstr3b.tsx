@@ -38,6 +38,8 @@ function GSTR3BPage() {
   const [built, setBuilt] = useState<BuiltGstr3B | null>(null);
   const [inward, setInward] = useState<InwardSummaryRow[]>([]);
   const [reversal, setReversal] = useState<ItcReversalRow[]>([]);
+  const [eligibleItc, setEligibleItc] = useState<{ i: number; c: number; s: number } | null>(null);
+  const [ineligible, setIneligible] = useState<{ i: number; c: number; s: number }>({ i: 0, c: 0, s: 0 });
 
   const period = useMemo(() => {
     const r = monthRange(month);
