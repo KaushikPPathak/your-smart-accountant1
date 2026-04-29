@@ -241,6 +241,8 @@ export type Database = {
           created_by: string
           email: string | null
           financial_year_start: string
+          gst_filing_frequency: string
+          gst_registered: boolean
           gstin: string | null
           id: string
           logo_url: string | null
@@ -263,6 +265,8 @@ export type Database = {
           created_by: string
           email?: string | null
           financial_year_start?: string
+          gst_filing_frequency?: string
+          gst_registered?: boolean
           gstin?: string | null
           id?: string
           logo_url?: string | null
@@ -285,6 +289,8 @@ export type Database = {
           created_by?: string
           email?: string | null
           financial_year_start?: string
+          gst_filing_frequency?: string
+          gst_registered?: boolean
           gstin?: string | null
           id?: string
           logo_url?: string | null
