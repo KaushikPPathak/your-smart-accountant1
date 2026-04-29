@@ -54,6 +54,8 @@ const schema = z.object({
   bank_account_no: z.string().trim().max(30).optional().or(z.literal("")),
   bank_ifsc: z.string().trim().max(15).optional().or(z.literal("")),
   bank_branch: z.string().trim().max(100).optional().or(z.literal("")),
+  gst_registered: z.boolean(),
+  gst_filing_frequency: z.enum(["monthly", "quarterly", "iff"]),
 });
 
 interface FormState {
@@ -71,6 +73,8 @@ interface FormState {
   bank_ifsc: string;
   bank_branch: string;
   logo_url: string | null;
+  gst_registered: boolean;
+  gst_filing_frequency: "monthly" | "quarterly" | "iff";
 }
 
 const empty: FormState = {
@@ -88,6 +92,8 @@ const empty: FormState = {
   bank_ifsc: "",
   bank_branch: "",
   logo_url: null,
+  gst_registered: false,
+  gst_filing_frequency: "monthly",
 };
 
 function CompaniesPage() {
@@ -127,6 +133,8 @@ function CompaniesPage() {
       bank_ifsc: data.bank_ifsc ?? "",
       bank_branch: data.bank_branch ?? "",
       logo_url: data.logo_url ?? null,
+      gst_registered: data.gst_registered ?? (data.gstin ? true : false),
+      gst_filing_frequency: (data.gst_filing_frequency ?? "monthly") as "monthly" | "quarterly" | "iff",
     });
     setOpen(true);
   };
@@ -170,7 +178,7 @@ function CompaniesPage() {
 
     const payload = {
       name: parsed.data.name,
-      gstin: parsed.data.gstin || null,
+      gstin: parsed.data.gst_registered ? (parsed.data.gstin || null) : null,
       pan: parsed.data.pan || null,
       state: parsed.data.state || null,
       state_code: parsed.data.state_code || null,
@@ -183,6 +191,8 @@ function CompaniesPage() {
       bank_ifsc: parsed.data.bank_ifsc || null,
       bank_branch: parsed.data.bank_branch || null,
       logo_url: form.logo_url,
+      gst_registered: parsed.data.gst_registered,
+      gst_filing_frequency: parsed.data.gst_registered ? parsed.data.gst_filing_frequency : "monthly",
     };
 
     if (editingId) {
@@ -237,9 +247,54 @@ function CompaniesPage() {
                   <Label>Company name *</Label>
                   <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
                 </div>
+                <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
+                  <Label className="text-sm font-semibold">GST Registration</Label>
+                  <div className="flex flex-wrap items-center gap-4 pt-1">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="gst_reg"
+                        checked={form.gst_registered === true}
+                        onChange={() => setForm({ ...form, gst_registered: true })}
+                      />
+                      Registered Dealer
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="gst_reg"
+                        checked={form.gst_registered === false}
+                        onChange={() => setForm({ ...form, gst_registered: false, gstin: "" })}
+                      />
+                      Not Registered
+                    </label>
+                  </div>
+                  {form.gst_registered && (
+                    <div className="mt-3 space-y-1.5">
+                      <Label className="text-xs">Return Filing Frequency</Label>
+                      <Select
+                        value={form.gst_filing_frequency}
+                        onValueChange={(v) => setForm({ ...form, gst_filing_frequency: v as "monthly" | "quarterly" | "iff" })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="monthly">Monthly (GSTR-1 + GSTR-3B every month)</SelectItem>
+                          <SelectItem value="quarterly">Quarterly (QRMP — GSTR-1 + 3B each quarter)</SelectItem>
+                          <SelectItem value="iff">IFF (QRMP with monthly Invoice Furnishing Facility)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-1.5">
                   <Label>GSTIN</Label>
-                  <Input value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })} maxLength={15} />
+                  <Input
+                    value={form.gstin}
+                    onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
+                    maxLength={15}
+                    disabled={!form.gst_registered}
+                    placeholder={form.gst_registered ? "" : "Not applicable"}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>PAN</Label>

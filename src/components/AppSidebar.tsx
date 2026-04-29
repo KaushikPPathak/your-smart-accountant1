@@ -47,6 +47,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useCompany } from "@/lib/company-context";
 
 interface NavItem {
   title: string;
@@ -57,6 +58,7 @@ interface NavSection {
   label: string;
   icon: LucideIcon;
   items: NavItem[];
+  requiresGst?: boolean;
 }
 
 // Busy-style top-level menu structure
@@ -120,10 +122,22 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
+const GST_URLS = new Set([
+  "/app/reports/gstr1",
+  "/app/einvoice",
+]);
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const { activeMembership } = useCompany();
+  const gstEnabled = activeMembership?.companies?.gst_registered ?? false;
+
+  const visibleSections = SECTIONS.map((s) => ({
+    ...s,
+    items: s.items.filter((i) => gstEnabled || !GST_URLS.has(i.url)),
+  })).filter((s) => s.items.length > 0);
 
   const isActive = (url: string) =>
     url === "/app" ? location.pathname === "/app" : location.pathname === url;
@@ -160,7 +174,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {SECTIONS.map((section) => {
+        {visibleSections.map((section) => {
           // When collapsed, render flat icon list (no collapsible groups)
           if (collapsed) {
             return (

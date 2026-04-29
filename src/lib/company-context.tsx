@@ -13,6 +13,8 @@ export interface CompanyMembership {
     state: string | null;
     state_code: string | null;
     financial_year_start: string;
+    gst_registered: boolean;
+    gst_filing_frequency: "monthly" | "quarterly" | "iff";
   };
 }
 
@@ -44,7 +46,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     const { data, error } = await supabase
       .from("company_members")
-      .select("company_id, role, companies(id, name, gstin, state, state_code, financial_year_start)")
+      .select("company_id, role, companies(id, name, gstin, state, state_code, financial_year_start, gst_registered, gst_filing_frequency)")
       .order("created_at", { ascending: true });
 
     if (error) {
