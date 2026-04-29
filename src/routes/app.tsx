@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { LogOut, User as UserIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Lock, Building2 } from "lucide-react";
 import {
   SidebarProvider,
   SidebarTrigger,
@@ -10,16 +10,13 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
+import {
+  ensureTechSession,
+  isCompanyUnlocked,
+  lockWorkspace,
+} from "@/lib/tech-user";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
@@ -29,12 +26,24 @@ export const Route = createFileRoute("/app")({
 function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading, signOut } = useAuth();
-  const { loading: companyLoading, memberships } = useCompany();
+  const { user, loading } = useAuth();
+  const { loading: companyLoading, memberships, activeCompanyId, activeMembership } = useCompany();
+  const [bootstrapping, setBootstrapping] = useState(true);
 
+  // Auto sign-in (silent) so RLS works. No user-visible login.
   useEffect(() => {
-    if (!loading && !user) navigate({ to: "/" });
-  }, [user, loading, navigate]);
+    let cancelled = false;
+    (async () => {
+      try {
+        await ensureTechSession();
+      } finally {
+        if (!cancelled) setBootstrapping(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Global Busy-style hotkeys for new vouchers
   useEffect(() => {
@@ -61,7 +70,21 @@ function AppLayout() {
     return () => window.removeEventListener("keydown", onKey);
   }, [navigate]);
 
-  if (loading || !user) {
+  const onCompaniesPage = location.pathname.startsWith("/app/companies");
+
+  // Gate: every page under /app requires a chosen + unlocked company
+  // (except /app/companies, which is reachable when the user clicked "+ New company")
+  useEffect(() => {
+    if (bootstrapping || loading || companyLoading) return;
+    if (!user) return; // tech sign-in still in flight or failed
+    if (memberships.length === 0) return; // empty-state handled below
+    if (onCompaniesPage) return;
+    if (!activeCompanyId || !isCompanyUnlocked(activeCompanyId)) {
+      navigate({ to: "/" });
+    }
+  }, [bootstrapping, loading, companyLoading, user, memberships.length, activeCompanyId, onCompaniseFlag(onCompaniesPage), navigate]);
+
+  if (bootstrapping || loading || !user || companyLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
         Loading…
@@ -69,10 +92,8 @@ function AppLayout() {
     );
   }
 
-  const onCompaniesPage = location.pathname.startsWith("/app/companies");
-
-  // No companies yet → force them to create one (unless already on companies page)
-  if (!companyLoading && memberships.length === 0 && !onCompaniesPage) {
+  // No companies yet → invite to create one
+  if (memberships.length === 0 && !onCompaniesPage) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-muted/30 px-4 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-xl">
@@ -85,12 +106,14 @@ function AppLayout() {
         <Button asChild>
           <Link to="/app/companies">Create company</Link>
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => signOut().then(() => navigate({ to: "/" }))}>
-          Sign out
-        </Button>
       </div>
     );
   }
+
+  const onLock = () => {
+    lockWorkspace();
+    navigate({ to: "/" });
+  };
 
   return (
     <SidebarProvider>
@@ -102,27 +125,16 @@ function AppLayout() {
             <div className="h-5 w-px bg-border" />
             <CompanySwitcher />
             <div className="ml-auto flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-2">
-                    <UserIcon className="h-4 w-4" />
-                    <span className="hidden sm:inline text-sm">{user.email}</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">
-                    {user.email}
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => signOut().then(() => navigate({ to: "/" }))}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sign out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {activeMembership && (
+                <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:inline-flex">
+                  <Building2 className="h-3.5 w-3.5" />
+                  {activeMembership.companies.name}
+                </span>
+              )}
+              <Button variant="ghost" size="sm" onClick={onLock} className="gap-2" title="Lock & return to company picker">
+                <Lock className="h-4 w-4" />
+                <span className="hidden sm:inline text-sm">Lock</span>
+              </Button>
             </div>
           </header>
           <QuickActionsRibbon />
@@ -133,4 +145,9 @@ function AppLayout() {
       </div>
     </SidebarProvider>
   );
+}
+
+// Tiny helper so the dependency array stays primitive (avoid string churn)
+function onCompaniseFlag(v: boolean) {
+  return v ? 1 : 0;
 }
