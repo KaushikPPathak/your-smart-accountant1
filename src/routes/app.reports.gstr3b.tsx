@@ -17,6 +17,7 @@ import {
   monthRange, periodFP, downloadJson, fetchInwardSummary, fetchItcReversal, validateGstr3B,
   type CompanyMeta, type BuiltGstr3B, type InwardSummaryRow, type ItcReversalRow,
 } from "@/lib/gst-returns";
+import { downloadGstr3bOfficial } from "@/lib/gstr3b-template";
 import { ValidationPanel } from "@/components/reports/ValidationPanel";
 
 export const Route = createFileRoute("/app/reports/gstr3b")({
@@ -90,8 +91,20 @@ function GSTR3BPage() {
             </div>
             <div className="ml-auto flex gap-2">
               <Button variant="outline" size="sm" disabled={!built}
-                onClick={() => built && downloadXlsx(`${fileBase}.xlsx`, gstr3bToXlsxSheets(built))}>
-                <FileSpreadsheet className="mr-1 h-4 w-4" /> Excel Summary
+                onClick={async () => {
+                  if (!built) return;
+                  try {
+                    await downloadGstr3bOfficial(fileBase, built);
+                    toast.success("GSTR-3B utility (.xlsm) generated");
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Failed to generate utility");
+                  }
+                }}>
+                <FileSpreadsheet className="mr-1 h-4 w-4" /> GSTR-3B Utility (.xlsm)
+              </Button>
+              <Button variant="ghost" size="sm" disabled={!built}
+                onClick={() => built && downloadXlsx(`${fileBase}_summary.xlsx`, gstr3bToXlsxSheets(built))}>
+                <FileSpreadsheet className="mr-1 h-4 w-4" /> Summary
               </Button>
               <Button variant="outline" size="sm" disabled={!built}
                 onClick={() => built && downloadJson(`${fileBase}.json`, gstr3bToJson(built))}>
