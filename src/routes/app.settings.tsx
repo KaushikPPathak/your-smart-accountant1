@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound } from "lucide-react";
+import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound, Lock as LockIcon } from "lucide-react";
 import {
   exportAllCompaniesBackup,
   exportCompanyBackup,
@@ -77,6 +77,46 @@ function SettingsPage() {
   const [savingSetu, setSavingSetu] = useState(false);
 
   const isAdmin = activeMembership?.role === "admin";
+
+  // ---- Company access password ----
+  const [hasCompanyPwd, setHasCompanyPwd] = useState<boolean>(false);
+  const [newCompanyPwd, setNewCompanyPwd] = useState("");
+  const [savingCompanyPwd, setSavingCompanyPwd] = useState(false);
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("companies_picker")
+        .select("has_password")
+        .eq("id", activeCompanyId)
+        .maybeSingle();
+      setHasCompanyPwd(!!data?.has_password);
+    })();
+  }, [activeCompanyId]);
+
+  const saveCompanyPwd = async (clear: boolean) => {
+    if (!activeCompanyId) return;
+    if (!clear && newCompanyPwd.length < 4) {
+      toast.error("Password must be at least 4 characters");
+      return;
+    }
+    setSavingCompanyPwd(true);
+    try {
+      const { error } = await supabase.rpc("set_company_password", {
+        _company_id: activeCompanyId,
+        _new_password: clear ? null : newCompanyPwd,
+      });
+      if (error) throw error;
+      toast.success(clear ? "Password removed" : "Password set");
+      setHasCompanyPwd(!clear);
+      setNewCompanyPwd("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save password");
+    } finally {
+      setSavingCompanyPwd(false);
+    }
+  };
 
   useEffect(() => {
     if (!activeCompanyId) return;
