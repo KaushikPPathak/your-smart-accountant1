@@ -56,6 +56,7 @@ const schema = z.object({
   bank_branch: z.string().trim().max(100).optional().or(z.literal("")),
   gst_registered: z.boolean(),
   gst_filing_frequency: z.enum(["monthly", "quarterly", "iff"]),
+  inventory_enabled: z.boolean(),
 });
 
 interface FormState {
@@ -75,6 +76,7 @@ interface FormState {
   logo_url: string | null;
   gst_registered: boolean;
   gst_filing_frequency: "monthly" | "quarterly" | "iff";
+  inventory_enabled: boolean;
 }
 
 const empty: FormState = {
@@ -94,6 +96,7 @@ const empty: FormState = {
   logo_url: null,
   gst_registered: false,
   gst_filing_frequency: "monthly",
+  inventory_enabled: true,
 };
 
 function CompaniesPage() {
@@ -135,6 +138,7 @@ function CompaniesPage() {
       logo_url: data.logo_url ?? null,
       gst_registered: data.gst_registered ?? (data.gstin ? true : false),
       gst_filing_frequency: (data.gst_filing_frequency ?? "monthly") as "monthly" | "quarterly" | "iff",
+      inventory_enabled: data.inventory_enabled ?? true,
     });
     setOpen(true);
   };
@@ -193,6 +197,7 @@ function CompaniesPage() {
       logo_url: form.logo_url,
       gst_registered: parsed.data.gst_registered,
       gst_filing_frequency: parsed.data.gst_registered ? parsed.data.gst_filing_frequency : "monthly",
+      inventory_enabled: parsed.data.inventory_enabled,
     };
 
     if (editingId) {
@@ -285,6 +290,32 @@ function CompaniesPage() {
                       </Select>
                     </div>
                   )}
+                </div>
+                <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
+                  <Label className="text-sm font-semibold">Inventory</Label>
+                  <div className="flex flex-wrap items-center gap-4 pt-1">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="inv_enabled"
+                        checked={form.inventory_enabled === true}
+                        onChange={() => setForm({ ...form, inventory_enabled: true })}
+                      />
+                      Maintain Inventory (Items / Stock)
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="inv_enabled"
+                        checked={form.inventory_enabled === false}
+                        onChange={() => setForm({ ...form, inventory_enabled: false })}
+                      />
+                      Accounts Only (No Inventory)
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    When off, Items / Stock and Stock Summary are hidden from the menu.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>GSTIN</Label>
