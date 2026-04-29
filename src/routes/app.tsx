@@ -82,7 +82,7 @@ function AppLayout() {
     if (!activeCompanyId || !isCompanyUnlocked(activeCompanyId)) {
       navigate({ to: "/" });
     }
-  }, [bootstrapping, loading, companyLoading, user, memberships.length, activeCompanyId, onCompaniseFlag(onCompaniesPage), navigate]);
+  }, [bootstrapping, loading, companyLoading, user, memberships.length, activeCompanyId, onCompaniesPage, navigate]);
 
   if (bootstrapping || loading || !user || companyLoading) {
     return (
@@ -147,7 +147,3 @@ function AppLayout() {
   );
 }
 
-// Tiny helper so the dependency array stays primitive (avoid string churn)
-function onCompaniseFlag(v: boolean) {
-  return v ? 1 : 0;
-}
