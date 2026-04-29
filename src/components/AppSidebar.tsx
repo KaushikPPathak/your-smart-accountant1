@@ -108,6 +108,8 @@ const SECTIONS: NavSection[] = [
       { title: "Outstanding", url: "/app/reports/outstanding", icon: ClipboardList },
       { title: "Stock Summary", url: "/app/reports/stock-summary", icon: Boxes },
       { title: "GSTR-1 / 3B / 2B", url: "/app/reports/gstr1", icon: Receipt },
+      { title: "GST Sales Book", url: "/app/reports/gst-sales-book", icon: Receipt },
+      { title: "GST Purchase Book", url: "/app/reports/gst-purchase-book", icon: Receipt },
     ],
   },
   {
