@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileSpreadsheet, FileJson, Printer } from "lucide-react";
+import { FileSpreadsheet, FileJson, Printer, Plus, Trash2, BookOpen } from "lucide-react";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import {
@@ -148,7 +148,12 @@ function GSTR3BPage() {
             }}
           />
 
-          <InputOutputCalculator built={built} />
+          <PurchaseExpenseLedger
+            onEligibleItcChange={(v) => setEligibleItc(v)}
+            ineligibleTotals={ineligible}
+            setIneligibleTotals={setIneligible}
+          />
+          <InputOutputCalculator built={built} eligibleOverride={eligibleItc} />
 
           <Card className="print:hidden">
             <CardContent className="p-0">
