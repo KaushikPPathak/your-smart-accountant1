@@ -555,16 +555,19 @@ function ManualEntryCard({ companyId, period, inward, reversal, onChanged }: {
  * Output tax (liability) is offset against eligible ITC in the prescribed
  * order; remainder is the net cash payable per head.
  */
-function InputOutputCalculator({ built }: { built: BuiltGstr3B }) {
+function InputOutputCalculator({ built, eligibleOverride }: { built: BuiltGstr3B; eligibleOverride?: { i: number; c: number; s: number } | null }) {
   // Output tax liability (₹) — Table 3.1(a) + 3.1(b) IGST + 3.1(d) RCM
   const out_i = built.sup_details.osup_det.iamt + built.sup_details.osup_zero.iamt + built.sup_details.isup_rev.iamt;
   const out_c = built.sup_details.osup_det.camt + built.sup_details.isup_rev.camt;
   const out_s = built.sup_details.osup_det.samt + built.sup_details.isup_rev.samt;
 
   // Net ITC available (Table 4C)
-  let itc_i = built.itc_elg.itc_net.iamt;
-  let itc_c = built.itc_elg.itc_net.camt;
-  let itc_s = built.itc_elg.itc_net.samt;
+  const baseI = built.itc_elg.itc_net.iamt;
+  const baseC = built.itc_elg.itc_net.camt;
+  const baseS = built.itc_elg.itc_net.samt;
+  let itc_i = eligibleOverride ? eligibleOverride.i : baseI;
+  let itc_c = eligibleOverride ? eligibleOverride.c : baseC;
+  let itc_s = eligibleOverride ? eligibleOverride.s : baseS;
 
   // Utilisation per Section 49A/49B + Rule 88A (IGST exhausted first; CGST/SGST cannot cross-set-off).
   // Step 1: pay IGST liability with IGST credit
