@@ -284,6 +284,170 @@ function GSTR3BPage() {
 
 function moneyR(v: number) { return formatINR(Math.round(v * 100)); }
 
+/**
+ * Print-only replica of the official GSTR-3B form (matches utility V5.8 layout/colors).
+ * Uses inline styles so print PDFs render identically regardless of host theme.
+ */
+function PrintableGstr3B({ built, company, fp }: { built: BuiltGstr3B; company: CompanyMeta | null; fp: string }) {
+  const monthNames = ["", "January","February","March","April","May","June","July","August","September","October","November","December"];
+  const mm = Number(fp.slice(0, 2));
+  const yyyy = Number(fp.slice(2));
+  const fyStart = mm >= 4 ? yyyy : yyyy - 1;
+  const yearLabel = `${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
+  const monthLabel = monthNames[mm] || "";
+
+  const HDR = "#fff2cc"; // utility yellow band
+  const SUB = "#d9e1f2"; // section sub-band (light blue)
+  const BORDER = "1px solid #000";
+  const cellPad = "4px 6px";
+  const tblStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse", fontSize: 11, color: "#000" };
+  const th: React.CSSProperties = { border: BORDER, padding: cellPad, background: SUB, fontWeight: 600, textAlign: "center" };
+  const td: React.CSSProperties = { border: BORDER, padding: cellPad, textAlign: "right", fontFamily: "monospace" };
+  const tdL: React.CSSProperties = { border: BORDER, padding: cellPad, textAlign: "left" };
+  const sectionTitle: React.CSSProperties = { border: BORDER, padding: cellPad, background: HDR, fontWeight: 700, textAlign: "left" };
+
+  const s = built.sup_details;
+  const fmt = (v: number) => v ? v.toFixed(2) : "0.00";
+
+  return (
+    <div className="hidden print:block" style={{ color: "#000", background: "#fff", fontFamily: "Arial, sans-serif" }}>
+      <div style={{ textAlign: "center", marginBottom: 6 }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>FORM GSTR-3B</div>
+        <div style={{ fontSize: 10 }}>[See rule 61(5)]</div>
+      </div>
+      <table style={tblStyle}>
+        <tbody>
+          <tr><td style={{ ...tdL, background: HDR, width: "20%", fontWeight: 600 }}>1. GSTIN</td><td style={tdL}>{company?.gstin || ""}</td><td style={{ ...tdL, background: HDR, width: "15%", fontWeight: 600 }}>Year</td><td style={tdL}>{yearLabel}</td></tr>
+          <tr><td style={{ ...tdL, background: HDR, fontWeight: 600 }}>2(a). Legal name</td><td style={tdL}>{company?.name || ""}</td><td style={{ ...tdL, background: HDR, fontWeight: 600 }}>Month</td><td style={tdL}>{monthLabel}</td></tr>
+        </tbody>
+      </table>
+
+      <table style={{ ...tblStyle, marginTop: 8 }}>
+        <tbody>
+          <tr><td colSpan={6} style={sectionTitle}>3.1 Details of Outward Supplies and inward supplies liable to reverse charge</td></tr>
+          <tr>
+            <th style={{ ...th, width: "40%", textAlign: "left" }}>Nature of Supplies</th>
+            <th style={th}>Total taxable value</th>
+            <th style={th}>Integrated Tax</th>
+            <th style={th}>Central Tax</th>
+            <th style={th}>State/UT Tax</th>
+            <th style={th}>Cess</th>
+          </tr>
+          {[
+            ["(a) Outward taxable supplies (other than zero rated, nil rated and exempted)", s.osup_det],
+            ["(b) Outward taxable supplies (zero rated)", s.osup_zero],
+            ["(c) Other outward supplies (Nil rated, exempted)", s.osup_nil_exmp],
+            ["(d) Inward supplies (liable to reverse charge)", s.isup_rev],
+            ["(e) Non-GST outward supplies", s.osup_nongst],
+          ].map(([label, v]) => {
+            const x = v as { txval: number; iamt: number; camt: number; samt: number; csamt: number };
+            return (
+              <tr key={label as string}>
+                <td style={tdL}>{label as string}</td>
+                <td style={td}>{fmt(x.txval)}</td>
+                <td style={td}>{fmt(x.iamt)}</td>
+                <td style={td}>{fmt(x.camt)}</td>
+                <td style={td}>{fmt(x.samt)}</td>
+                <td style={td}>{fmt(x.csamt)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <table style={{ ...tblStyle, marginTop: 8 }}>
+        <tbody>
+          <tr><td colSpan={3} style={sectionTitle}>3.2 Of the supplies shown in 3.1(a) above, details of inter-State supplies made to unregistered persons, composition taxable persons and UIN holders</td></tr>
+          <tr>
+            <th style={{ ...th, textAlign: "left" }}>Place of Supply (State/UT)</th>
+            <th style={th}>Total Taxable value</th>
+            <th style={th}>Amount of Integrated Tax</th>
+          </tr>
+          {built.inter_sup.unreg_details.length === 0 ? (
+            <tr><td colSpan={3} style={{ ...tdL, textAlign: "center" }}>—</td></tr>
+          ) : built.inter_sup.unreg_details.map((p) => (
+            <tr key={p.pos}>
+              <td style={tdL}>{p.pos}</td>
+              <td style={td}>{fmt(p.txval)}</td>
+              <td style={td}>{fmt(p.iamt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <table style={{ ...tblStyle, marginTop: 8 }}>
+        <tbody>
+          <tr><td colSpan={4} style={sectionTitle}>4. Eligible ITC</td></tr>
+          <tr>
+            <th style={{ ...th, width: "55%", textAlign: "left" }}>Details</th>
+            <th style={th}>Integrated Tax</th>
+            <th style={th}>Central Tax</th>
+            <th style={th}>State/UT Tax</th>
+          </tr>
+          {built.itc_elg.itc_avl.map((x, i) => (
+            <tr key={`avl-${i}`}>
+              <td style={tdL}>(A) ITC Available — {x.ty}</td>
+              <td style={td}>{fmt(x.iamt)}</td>
+              <td style={td}>{fmt(x.camt)}</td>
+              <td style={td}>{fmt(x.samt)}</td>
+            </tr>
+          ))}
+          {built.itc_elg.itc_rev.map((x, i) => (
+            <tr key={`rev-${i}`}>
+              <td style={tdL}>(B) ITC Reversed — {x.ty === "RUL" ? "Rule 38, 42 & 43 + Sec 17(5)" : "Others"}</td>
+              <td style={td}>{fmt(x.iamt)}</td>
+              <td style={td}>{fmt(x.camt)}</td>
+              <td style={td}>{fmt(x.samt)}</td>
+            </tr>
+          ))}
+          <tr style={{ background: HDR, fontWeight: 700 }}>
+            <td style={tdL}>(C) Net ITC available (A) - (B)</td>
+            <td style={td}>{fmt(built.itc_elg.itc_net.iamt)}</td>
+            <td style={td}>{fmt(built.itc_elg.itc_net.camt)}</td>
+            <td style={td}>{fmt(built.itc_elg.itc_net.samt)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table style={{ ...tblStyle, marginTop: 8 }}>
+        <tbody>
+          <tr><td colSpan={3} style={sectionTitle}>5. Values of exempt, nil-rated and non-GST inward supplies</td></tr>
+          <tr>
+            <th style={{ ...th, textAlign: "left" }}>Nature of supplies</th>
+            <th style={th}>Inter-State supplies</th>
+            <th style={th}>Intra-State supplies</th>
+          </tr>
+          {built.inward_sup.isup_details.map((x) => (
+            <tr key={x.ty}>
+              <td style={tdL}>{x.ty === "GST" ? "From a supplier under composition scheme, Exempt and Nil rated supply" : "Non-GST supply"}</td>
+              <td style={td}>{fmt(x.inter)}</td>
+              <td style={td}>{fmt(x.intra)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <table style={{ ...tblStyle, marginTop: 8 }}>
+        <tbody>
+          <tr><td colSpan={3} style={sectionTitle}>6.1 Payment of tax</td></tr>
+          <tr>
+            <th style={{ ...th, textAlign: "left" }}>Description</th>
+            <th style={th}>Tax Payable</th>
+            <th style={th}>Paid in Cash</th>
+          </tr>
+          <tr><td style={tdL}>Integrated Tax</td><td style={td}>{fmt(built.tax_pmt.iamt)}</td><td style={td}>{fmt(built.tax_pmt.iamt_payable)}</td></tr>
+          <tr><td style={tdL}>Central Tax</td><td style={td}>{fmt(built.tax_pmt.camt)}</td><td style={td}>{fmt(built.tax_pmt.camt_payable)}</td></tr>
+          <tr><td style={tdL}>State/UT Tax</td><td style={td}>{fmt(built.tax_pmt.samt)}</td><td style={td}>{fmt(built.tax_pmt.samt_payable)}</td></tr>
+        </tbody>
+      </table>
+
+      <div style={{ marginTop: 12, fontSize: 10 }}>
+        Verification: I hereby solemnly affirm and declare that the information given herein above is true and correct to the best of my knowledge and belief and nothing has been concealed therefrom.
+      </div>
+    </div>
+  );
+}
+
 function Sup({ row }: { row: [string, { txval: number; iamt: number; camt: number; samt: number; csamt: number }] }) {
   const [label, s] = row;
   return (
