@@ -401,3 +401,103 @@ function ManualEntryCard({ companyId, period, inward, reversal, onChanged }: {
     </Card>
   );
 }
+
+/**
+ * GST Input / Output Calculator — Section 49 of CGST Act, 2017 read with
+ * Rules 86A/86B and Section 49A/49B (ITC utilisation order).
+ * Output tax (liability) is offset against eligible ITC in the prescribed
+ * order; remainder is the net cash payable per head.
+ */
+function InputOutputCalculator({ built }: { built: BuiltGstr3B }) {
+  // Output tax liability (₹) — Table 3.1(a) + 3.1(b) IGST + 3.1(d) RCM
+  const out_i = built.sup_details.osup_det.iamt + built.sup_details.osup_zero.iamt + built.sup_details.isup_rev.iamt;
+  const out_c = built.sup_details.osup_det.camt + built.sup_details.isup_rev.camt;
+  const out_s = built.sup_details.osup_det.samt + built.sup_details.isup_rev.samt;
+
+  // Net ITC available (Table 4C)
+  let itc_i = built.itc_elg.itc_net.iamt;
+  let itc_c = built.itc_elg.itc_net.camt;
+  let itc_s = built.itc_elg.itc_net.samt;
+
+  // Utilisation per Section 49A/49B + Rule 88A (IGST exhausted first; CGST/SGST cannot cross-set-off).
+  // Step 1: pay IGST liability with IGST credit
+  const u_ii = Math.min(out_i, itc_i); itc_i -= u_ii;
+  // Step 2: pay CGST liability with IGST credit
+  const remCAfterIGST = out_c - 0;
+  const u_ic = Math.min(remCAfterIGST, itc_i); itc_i -= u_ic;
+  // Step 3: pay SGST liability with remaining IGST credit
+  const remSAfterIGST = out_s - 0;
+  const u_is = Math.min(remSAfterIGST, itc_i); itc_i -= u_is;
+  // Step 4: pay remaining CGST liability with CGST credit
+  const remC2 = out_c - u_ic;
+  const u_cc = Math.min(remC2, itc_c); itc_c -= u_cc;
+  // Step 5: pay remaining SGST liability with SGST credit
+  const remS2 = out_s - u_is;
+  const u_ss = Math.min(remS2, itc_s); itc_s -= u_ss;
+  // Step 6: pay remaining IGST liability with CGST then SGST (rare but legal)
+  const remI2 = out_i - u_ii;
+  const u_ci = Math.min(remI2, itc_c); itc_c -= u_ci;
+  const u_si = Math.min(remI2 - u_ci, itc_s); itc_s -= u_si;
+
+  const cash_i = Math.max(0, out_i - u_ii - u_ci - u_si);
+  const cash_c = Math.max(0, out_c - u_cc - u_ic);
+  const cash_s = Math.max(0, out_s - u_ss - u_is);
+
+  const closing_i = itc_i;
+  const closing_c = itc_c;
+  const closing_s = itc_s;
+
+  const fmt = (v: number) => formatINR(Math.round(v * 100));
+
+  return (
+    <Card className="print:hidden">
+      <CardContent className="p-0">
+        <div className="border-b px-4 py-3">
+          <div className="font-medium">GST Input / Output Calculator</div>
+          <div className="text-xs text-muted-foreground">As per Section 49, 49A, 49B of CGST Act, 2017 and Rule 88A — ITC utilisation in prescribed order.</div>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Particulars</TableHead>
+              <TableHead className="text-right">IGST</TableHead>
+              <TableHead className="text-right">CGST</TableHead>
+              <TableHead className="text-right">SGST/UTGST</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow><TableCell className="font-medium">Output tax (liability)</TableCell>
+              <TableCell className="text-right font-mono">{fmt(out_i)}</TableCell>
+              <TableCell className="text-right font-mono">{fmt(out_c)}</TableCell>
+              <TableCell className="text-right font-mono">{fmt(out_s)}</TableCell></TableRow>
+            <TableRow><TableCell className="font-medium">Input tax credit available (Table 4C)</TableCell>
+              <TableCell className="text-right font-mono">{fmt(built.itc_elg.itc_net.iamt)}</TableCell>
+              <TableCell className="text-right font-mono">{fmt(built.itc_elg.itc_net.camt)}</TableCell>
+              <TableCell className="text-right font-mono">{fmt(built.itc_elg.itc_net.samt)}</TableCell></TableRow>
+            <TableRow className="bg-muted/40"><TableCell colSpan={4} className="text-xs font-semibold">Set-off as per Sec 49A/49B + Rule 88A</TableCell></TableRow>
+            <TableRow><TableCell>Less: IGST credit utilised</TableCell>
+              <TableCell className="text-right font-mono">{fmt(u_ii)}</TableCell>
+              <TableCell className="text-right font-mono">{fmt(u_ic)}</TableCell>
+              <TableCell className="text-right font-mono">{fmt(u_is)}</TableCell></TableRow>
+            <TableRow><TableCell>Less: CGST credit utilised</TableCell>
+              <TableCell className="text-right font-mono">{fmt(u_ci)}</TableCell>
+              <TableCell className="text-right font-mono">{fmt(u_cc)}</TableCell>
+              <TableCell className="text-right font-mono">—</TableCell></TableRow>
+            <TableRow><TableCell>Less: SGST credit utilised</TableCell>
+              <TableCell className="text-right font-mono">{fmt(u_si)}</TableCell>
+              <TableCell className="text-right font-mono">—</TableCell>
+              <TableCell className="text-right font-mono">{fmt(u_ss)}</TableCell></TableRow>
+            <TableRow className="bg-primary/5"><TableCell className="font-semibold">Net tax payable in cash</TableCell>
+              <TableCell className="text-right font-mono font-semibold">{fmt(cash_i)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold">{fmt(cash_c)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold">{fmt(cash_s)}</TableCell></TableRow>
+            <TableRow><TableCell className="text-xs text-muted-foreground">Closing ITC balance (carried forward)</TableCell>
+              <TableCell className="text-right font-mono text-xs">{fmt(closing_i)}</TableCell>
+              <TableCell className="text-right font-mono text-xs">{fmt(closing_c)}</TableCell>
+              <TableCell className="text-right font-mono text-xs">{fmt(closing_s)}</TableCell></TableRow>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
