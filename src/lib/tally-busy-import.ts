@@ -2,10 +2,6 @@
 // Used by both the per-type tabs and the "All-in-One" combined tab.
 
 import { supabase } from "@/integrations/supabase/client";
-import { XMLParser } from "fast-xml-parser";
-import * as XLSX from "xlsx";
-import Papa from "papaparse";
-import JSZip from "jszip";
 import {
   guessGroupCode,
   defaultLedgerTypeForGroup,
@@ -100,7 +96,8 @@ function flattenObject(
 }
 
 /** Walk Tally XML and emit row records tagged with __tally_kind. */
-export function parseTallyXml(xml: string): ParsedRow[] {
+export async function parseTallyXml(xml: string): Promise<ParsedRow[]> {
+  const { XMLParser } = await import("fast-xml-parser");
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "@_",
@@ -141,10 +138,11 @@ export async function parseAnyFile(f: File | Blob, name: string): Promise<Parsed
   const lname = name.toLowerCase();
   if (lname.endsWith(".xml")) {
     const text = await readText(f);
-    return parseTallyXml(text);
+    return await parseTallyXml(text);
   }
   if (lname.endsWith(".csv") || lname.endsWith(".txt")) {
     const text = await readText(f);
+    const Papa = (await import("papaparse")).default;
     const out = Papa.parse<Record<string, unknown>>(text, {
       header: true,
       skipEmptyLines: true,
@@ -156,6 +154,7 @@ export async function parseAnyFile(f: File | Blob, name: string): Promise<Parsed
   }
   // Excel
   const buf = await readBuffer(f);
+  const XLSX = await import("xlsx");
   const wb = XLSX.read(buf, { type: "array" });
   const rows: ParsedRow[] = [];
   for (const sheet of wb.SheetNames) {
@@ -173,6 +172,7 @@ export async function parseAnyFile(f: File | Blob, name: string): Promise<Parsed
 export async function parseFileOrZip(f: File): Promise<ParsedRow[]> {
   const lname = f.name.toLowerCase();
   if (lname.endsWith(".zip")) {
+    const JSZip = (await import("jszip")).default;
     const zip = await JSZip.loadAsync(f);
     const all: ParsedRow[] = [];
     for (const fname of Object.keys(zip.files)) {
