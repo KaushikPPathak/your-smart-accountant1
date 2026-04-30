@@ -9,6 +9,7 @@ import {
 import { AppSidebar } from "@/components/AppSidebar";
 import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
@@ -125,6 +126,7 @@ function AppLayout() {
             <div className="h-5 w-px bg-border" />
             <CompanySwitcher />
             <div className="ml-auto flex items-center gap-2">
+              <LanguageSwitcher compact />
               {activeMembership && (
                 <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:inline-flex">
                   <Building2 className="h-3.5 w-3.5" />
