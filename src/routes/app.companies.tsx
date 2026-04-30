@@ -57,6 +57,7 @@ const schema = z.object({
   gst_registered: z.boolean(),
   gst_filing_frequency: z.enum(["monthly", "quarterly", "iff"]),
   inventory_enabled: z.boolean(),
+  annual_turnover_lakhs: z.string().optional(),
 });
 
 interface FormState {
@@ -77,6 +78,7 @@ interface FormState {
   gst_registered: boolean;
   gst_filing_frequency: "monthly" | "quarterly" | "iff";
   inventory_enabled: boolean;
+  annual_turnover_lakhs: string;
 }
 
 const empty: FormState = {
@@ -97,6 +99,7 @@ const empty: FormState = {
   gst_registered: false,
   gst_filing_frequency: "monthly",
   inventory_enabled: true,
+  annual_turnover_lakhs: "",
 };
 
 function CompaniesPage() {
