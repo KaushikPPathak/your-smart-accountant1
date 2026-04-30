@@ -102,7 +102,7 @@ export function CompanyFlyout() {
 
   return (
     <div
-      className="relative"
+      className="relative z-50"
       onMouseEnter={show}
       onMouseLeave={scheduleHide}
       onFocus={show}
@@ -120,7 +120,8 @@ export function CompanyFlyout() {
 
       {open && (
         <div
-          className="absolute left-full top-0 z-50 ml-2 w-[22rem] max-w-[80vw] rounded-lg border bg-popover p-3 text-popover-foreground shadow-xl"
+          className="fixed left-[var(--sidebar-width,16rem)] top-auto z-[100] ml-2 -translate-y-2 w-[22rem] max-w-[80vw] rounded-lg border bg-popover p-3 text-popover-foreground shadow-xl"
+          style={{ marginTop: "-0.5rem" }}
           onMouseEnter={show}
           onMouseLeave={scheduleHide}
         >
