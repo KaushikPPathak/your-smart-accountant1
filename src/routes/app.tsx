@@ -13,6 +13,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
+import { useI18n } from "@/lib/i18n";
 import {
   ensureTechSession,
   isCompanyUnlocked,
@@ -29,6 +30,7 @@ function AppLayout() {
   const location = useLocation();
   const { user, loading } = useAuth();
   const { loading: companyLoading, memberships, activeCompanyId, activeMembership } = useCompany();
+  const { t } = useI18n();
   const [bootstrapping, setBootstrapping] = useState(true);
 
   // Auto sign-in (silent) so RLS works. No user-visible login.
@@ -135,7 +137,7 @@ function AppLayout() {
               )}
               <Button variant="ghost" size="sm" onClick={onLock} className="gap-2" title="Lock & return to company picker">
                 <Lock className="h-4 w-4" />
-                <span className="hidden sm:inline text-sm">Lock</span>
+                <span className="hidden sm:inline text-sm">{t("common.lock")}</span>
               </Button>
             </div>
           </header>

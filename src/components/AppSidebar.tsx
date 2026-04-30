@@ -49,78 +49,86 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useCompany } from "@/lib/company-context";
 import { CompanyFlyout } from "@/components/CompanyFlyout";
+import { useI18n } from "@/lib/i18n";
 
 interface NavItem {
   title: string;
   url: string;
   icon: LucideIcon;
+  i18nKey?: string;
 }
 interface NavSection {
   label: string;
   icon: LucideIcon;
   items: NavItem[];
   requiresGst?: boolean;
+  i18nKey?: string;
 }
 
 // Busy-style top-level menu structure
 const SECTIONS: NavSection[] = [
   {
     label: "Company",
+    i18nKey: "nav.section.company",
     icon: Briefcase,
     items: [
-      { title: "Dashboard", url: "/app", icon: LayoutDashboard },
-      { title: "Companies", url: "/app/companies", icon: Building2 },
-      { title: "Company Settings", url: "/app/settings", icon: Settings },
+      { title: "Dashboard", url: "/app", icon: LayoutDashboard, i18nKey: "nav.dashboard" },
+      { title: "Companies", url: "/app/companies", icon: Building2, i18nKey: "nav.companies" },
+      { title: "Company Settings", url: "/app/settings", icon: Settings, i18nKey: "nav.companySettings" },
     ],
   },
   {
     label: "Administration",
+    i18nKey: "nav.section.administration",
     icon: ShieldCheck,
     items: [
-      { title: "Ledgers / Parties", url: "/app/ledgers", icon: Users },
-      { title: "Items / Stock", url: "/app/items", icon: Package },
-      { title: "Recurring Invoices", url: "/app/recurring", icon: Repeat },
+      { title: "Ledgers / Parties", url: "/app/ledgers", icon: Users, i18nKey: "nav.ledgers" },
+      { title: "Items / Stock", url: "/app/items", icon: Package, i18nKey: "nav.items" },
+      { title: "Recurring Invoices", url: "/app/recurring", icon: Repeat, i18nKey: "nav.recurring" },
     ],
   },
   {
     label: "Transactions",
+    i18nKey: "nav.section.transactions",
     icon: ArrowLeftRight,
     items: [
-      { title: "All Vouchers", url: "/app/vouchers", icon: ReceiptText },
-      { title: "New Sales", url: "/app/vouchers/new/sales", icon: TrendingUp },
-      { title: "New Purchase", url: "/app/vouchers/new/purchase", icon: TrendingDown },
-      { title: "Receipt", url: "/app/vouchers/new/receipt", icon: ArrowLeftRight },
-      { title: "Payment", url: "/app/vouchers/new/payment", icon: Banknote },
-      { title: "Journal", url: "/app/vouchers/new/journal", icon: BookOpen },
+      { title: "All Vouchers", url: "/app/vouchers", icon: ReceiptText, i18nKey: "nav.allVouchers" },
+      { title: "New Sales", url: "/app/vouchers/new/sales", icon: TrendingUp, i18nKey: "nav.newSales" },
+      { title: "New Purchase", url: "/app/vouchers/new/purchase", icon: TrendingDown, i18nKey: "nav.newPurchase" },
+      { title: "Receipt", url: "/app/vouchers/new/receipt", icon: ArrowLeftRight, i18nKey: "nav.receipt" },
+      { title: "Payment", url: "/app/vouchers/new/payment", icon: Banknote, i18nKey: "nav.payment" },
+      { title: "Journal", url: "/app/vouchers/new/journal", icon: BookOpen, i18nKey: "nav.journal" },
     ],
   },
   {
     label: "Display / Print",
+    i18nKey: "nav.section.display",
     icon: Printer,
     items: [
-      { title: "Reports Hub", url: "/app/reports", icon: FileBarChart },
-      { title: "Day Book", url: "/app/reports/day-book", icon: CalendarClock },
-      { title: "Ledger Statement", url: "/app/reports/ledger", icon: ScrollText },
-      { title: "Group Ledger (B/S & P&L)", url: "/app/reports/group-ledger", icon: Layers },
-      { title: "Trial Balance", url: "/app/reports/trial-balance", icon: Calculator },
-      { title: "Trading Account", url: "/app/reports/trading", icon: TrendingUp },
-      { title: "Profit & Loss", url: "/app/reports/profit-loss", icon: TrendingUp },
-      { title: "Balance Sheet", url: "/app/reports/balance-sheet", icon: FileSpreadsheet },
-      { title: "Outstanding", url: "/app/reports/outstanding", icon: ClipboardList },
-      { title: "Stock Summary", url: "/app/reports/stock-summary", icon: Boxes },
-      { title: "GSTR-1 / 3B / 2B", url: "/app/reports/gstr1", icon: Receipt },
-      { title: "GST Sales Book", url: "/app/reports/gst-sales-book", icon: Receipt },
-      { title: "GST Purchase Book", url: "/app/reports/gst-purchase-book", icon: Receipt },
+      { title: "Reports Hub", url: "/app/reports", icon: FileBarChart, i18nKey: "nav.reportsHub" },
+      { title: "Day Book", url: "/app/reports/day-book", icon: CalendarClock, i18nKey: "nav.dayBook" },
+      { title: "Ledger Statement", url: "/app/reports/ledger", icon: ScrollText, i18nKey: "nav.ledgerStatement" },
+      { title: "Group Ledger (B/S & P&L)", url: "/app/reports/group-ledger", icon: Layers, i18nKey: "nav.groupLedger" },
+      { title: "Trial Balance", url: "/app/reports/trial-balance", icon: Calculator, i18nKey: "nav.trialBalance" },
+      { title: "Trading Account", url: "/app/reports/trading", icon: TrendingUp, i18nKey: "nav.tradingAccount" },
+      { title: "Profit & Loss", url: "/app/reports/profit-loss", icon: TrendingUp, i18nKey: "nav.profitLoss" },
+      { title: "Balance Sheet", url: "/app/reports/balance-sheet", icon: FileSpreadsheet, i18nKey: "nav.balanceSheet" },
+      { title: "Outstanding", url: "/app/reports/outstanding", icon: ClipboardList, i18nKey: "nav.outstanding" },
+      { title: "Stock Summary", url: "/app/reports/stock-summary", icon: Boxes, i18nKey: "nav.stockSummary" },
+      { title: "GSTR-1 / 3B / 2B", url: "/app/reports/gstr1", icon: Receipt, i18nKey: "nav.gstReturns" },
+      { title: "GST Sales Book", url: "/app/reports/gst-sales-book", icon: Receipt, i18nKey: "nav.gstSalesBook" },
+      { title: "GST Purchase Book", url: "/app/reports/gst-purchase-book", icon: Receipt, i18nKey: "nav.gstPurchaseBook" },
     ],
   },
   {
     label: "Housekeeping",
+    i18nKey: "nav.section.housekeeping",
     icon: Wrench,
     items: [
-      { title: "Accounting Tools", url: "/app/housekeeping", icon: Wrench },
-      { title: "Bank Reconciliation", url: "/app/bank", icon: Landmark },
-      { title: "BRS (Book vs Bank)", url: "/app/reports/brs", icon: Landmark },
-      { title: "E-Invoice / EWB", url: "/app/einvoice", icon: FileCode2 },
+      { title: "Accounting Tools", url: "/app/housekeeping", icon: Wrench, i18nKey: "nav.accountingTools" },
+      { title: "Bank Reconciliation", url: "/app/bank", icon: Landmark, i18nKey: "nav.bankRecon" },
+      { title: "BRS (Book vs Bank)", url: "/app/reports/brs", icon: Landmark, i18nKey: "nav.brs" },
+      { title: "E-Invoice / EWB", url: "/app/einvoice", icon: FileCode2, i18nKey: "nav.einvoice" },
     ],
   },
 ];
@@ -142,8 +150,12 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const { activeMembership } = useCompany();
+  const { t } = useI18n();
   const gstEnabled = activeMembership?.companies?.gst_registered ?? false;
   const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
+
+  const tt = (item: { title: string; i18nKey?: string }) =>
+    item.i18nKey ? t(item.i18nKey) : item.title;
 
   const visibleSections = SECTIONS.map((s) => ({
     ...s,
@@ -180,9 +192,9 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div className="flex flex-col">
-              <span className="text-sm font-semibold text-sidebar-foreground">Your Mehtaji</span>
+              <span className="text-sm font-semibold text-sidebar-foreground">{t("header.brand")}</span>
               <span className="text-[10px] uppercase tracking-wide text-sidebar-foreground/60">
-                Accounting Suite
+                {t("header.tagline")}
               </span>
             </div>
           )}
@@ -198,10 +210,10 @@ export function AppSidebar() {
                   <SidebarMenu>
                     {section.items.map((item) => (
                       <SidebarMenuItem key={item.url}>
-                        <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
+                        <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={tt(item)}>
                           <Link to={item.url}>
                             <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
+                            <span>{tt(item)}</span>
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -235,7 +247,7 @@ export function AppSidebar() {
                   <CollapsibleTrigger className="group/label flex w-full items-center justify-between rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
                     <span className="flex items-center gap-2">
                       <section.icon className="h-3.5 w-3.5" />
-                      {section.label}
+                      {section.i18nKey ? t(section.i18nKey) : section.label}
                     </span>
                     <ChevronDown
                       className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-0" : "-rotate-90"}`}
@@ -250,7 +262,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton asChild isActive={isActive(item.url)}>
                             <Link to={item.url}>
                               <item.icon className="h-3.5 w-3.5" />
-                              <span>{item.title}</span>
+                              <span>{tt(item)}</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
