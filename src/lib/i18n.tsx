@@ -16,6 +16,58 @@ export const LANGUAGES: { code: LangCode; label: string; native: string }[] = [
 
 type Dict = Record<string, string>;
 
+// Shared keys used across the app (sidebar sections, items, header, ribbon).
+// Keep keys consistent across all language dictionaries.
+const NAV_KEYS = {
+  // Sections
+  "nav.section.company": "Company",
+  "nav.section.administration": "Administration",
+  "nav.section.transactions": "Transactions",
+  "nav.section.display": "Display / Print",
+  "nav.section.housekeeping": "Housekeeping",
+  // Items
+  "nav.dashboard": "Dashboard",
+  "nav.companies": "Companies",
+  "nav.companySettings": "Company Settings",
+  "nav.ledgers": "Ledgers / Parties",
+  "nav.items": "Items / Stock",
+  "nav.recurring": "Recurring Invoices",
+  "nav.allVouchers": "All Vouchers",
+  "nav.newSales": "New Sales",
+  "nav.newPurchase": "New Purchase",
+  "nav.receipt": "Receipt",
+  "nav.payment": "Payment",
+  "nav.journal": "Journal",
+  "nav.reportsHub": "Reports Hub",
+  "nav.dayBook": "Day Book",
+  "nav.ledgerStatement": "Ledger Statement",
+  "nav.groupLedger": "Group Ledger (B/S & P&L)",
+  "nav.trialBalance": "Trial Balance",
+  "nav.tradingAccount": "Trading Account",
+  "nav.profitLoss": "Profit & Loss",
+  "nav.balanceSheet": "Balance Sheet",
+  "nav.outstanding": "Outstanding",
+  "nav.stockSummary": "Stock Summary",
+  "nav.gstReturns": "GSTR-1 / 3B / 2B",
+  "nav.gstSalesBook": "GST Sales Book",
+  "nav.gstPurchaseBook": "GST Purchase Book",
+  "nav.accountingTools": "Accounting Tools",
+  "nav.bankRecon": "Bank Reconciliation",
+  "nav.brs": "BRS (Book vs Bank)",
+  "nav.einvoice": "E-Invoice / EWB",
+  // Header / chrome
+  "header.brand": "Your Mehtaji",
+  "header.tagline": "Accounting Suite",
+  // Quick entry ribbon
+  "ribbon.quickEntry": "Quick Entry",
+  "ribbon.sales": "Sales",
+  "ribbon.purchase": "Purchase",
+  "ribbon.receipt": "Receipt",
+  "ribbon.payment": "Payment",
+  "ribbon.journal": "Journal",
+  "ribbon.contra": "Contra",
+};
+
 // Common UI strings. Add keys as needed; missing keys fall back to English then to the key itself.
 const STRINGS: Record<LangCode, Dict> = {
   en: {
@@ -37,6 +89,7 @@ const STRINGS: Record<LangCode, Dict> = {
     "common.exit": "Exit",
     "common.language": "Language",
     "common.lock": "Lock",
+    ...NAV_KEYS,
   },
   hi: {
     "app.title": "योर मेहताजी",
