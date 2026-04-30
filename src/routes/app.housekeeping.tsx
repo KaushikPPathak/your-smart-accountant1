@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -39,7 +39,11 @@ import {
 import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceImport";
 import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport";
 import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
-import { TallyBusyImport } from "@/components/housekeeping/TallyBusyImport";
+const TallyBusyImport = lazy(() =>
+  import("@/components/housekeeping/TallyBusyImport").then((m) => ({
+    default: m.TallyBusyImport,
+  })),
+);
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -136,7 +140,9 @@ function HousekeepingPage() {
         )}
         <TabsContent value="tally">
           {activeCompanyId ? (
-            <TallyBusyImport companyId={activeCompanyId} disabled={!isAdmin} />
+            <Suspense fallback={<Card><CardContent className="p-6 text-sm text-muted-foreground">Loading importer…</CardContent></Card>}>
+              <TallyBusyImport companyId={activeCompanyId} disabled={!isAdmin} />
+            </Suspense>
           ) : <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a company first.</CardContent></Card>}
         </TabsContent>
         <TabsContent value="backup">
