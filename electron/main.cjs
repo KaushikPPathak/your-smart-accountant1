@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const APP_URL = 'https://the-ledger-buddy.lovable.app';
+const APP_URL = 'https://biz-account-hero.lovable.app';
 
 // Per-company root: %USERPROFILE%\Documents\YourMehtaji\Exports\<Company>\<subFolder>\
 function dataRoot() {

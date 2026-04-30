@@ -1,46 +1,73 @@
-## Why
+# Plan: Test Your Mehtaji on Windows
 
-Today the Tally / Busy importer has three separate tabs (Ledgers, Items, Vouchers) and asks you to upload one file per tab. That works well for **CSV / Excel** exports from Busy, because Busy exports each report (Account Books → Ledgers, Inventory → Items, Day Book → Vouchers) into its own file.
+Your Electron desktop app is a **thin wrapper** that loads your published Lovable site (`https://biz-account-hero.lovable.app`) inside a native window. The Windows installer build pipeline already exists in `.github/workflows/build-windows-installer.yml` and `electron/icon.ico` is present. Two fixes needed before you build:
 
-But Tally has a **"Masters + Transactions" XML export** that contains all three in one file, and Busy has a **"Complete Backup"** that does the same. You want to upload that single file once.
+## Issues found
 
-## What changes
+1. **Wrong URL hardcoded in `electron/main.cjs`**
+   Currently points to `https://the-ledger-buddy.lovable.app` (an old project). Your published site is `https://biz-account-hero.lovable.app`. The desktop app would open the wrong app.
 
-Add a new first tab called **"All-in-One File"** to the Tally / Busy import card, alongside the existing three tabs.
+2. **No portable build output**
+   Workflow only produces an installer `.exe`. Adding a portable zip lets you test without installing (just unzip and double-click).
 
-Behaviour:
+## Changes I'll make
 
-1. User uploads **one** file (XML, CSV, Excel, or ZIP).
-2. The parser walks the file and **classifies every record** as a Ledger / Stock Item / Voucher using:
-   - For Tally XML: the existing `__tally_kind` tag (`LEDGER`, `STOCKITEM`, `VOUCHER`) — already extracted.
-   - For CSV / Excel: detect by columns present (Opening Balance + Group → ledger; HSN + Unit → item; Voucher No + Date + Amount → voucher) and by sheet name when the workbook has multiple sheets named "Ledgers", "Items", "Day Book", etc.
-   - For Busy ZIP: unzip in-browser (`jszip`) and route each inner file through the same logic.
-3. Show a single combined preview with three collapsible sections:
+### 1. `electron/main.cjs`
+Change `APP_URL` from `the-ledger-buddy.lovable.app` → `biz-account-hero.lovable.app`.
 
-   ```text
-   ┌─ Ledgers (124 found, 124 selected) ─ [▼]
-   ├─ Items   ( 87 found,  87 selected) ─ [▼]
-   └─ Vouchers(412 found, 412 selected) ─ [▼]
-   ```
-   Each section is the same review table used today, with row-level checkboxes.
-4. One **"Import everything"** button posts in the correct order:
-   1. Ledgers first (so vouchers can resolve party names).
-   2. Items next.
-   3. Vouchers last (auto-creating any party / Sales / Cash ledger still missing).
-5. Progress toast: `Importing… 124 ledgers, 87 items, 412 vouchers (3 of 623 done)`.
+### 2. `.github/workflows/build-windows-installer.yml`
+Add a step that zips `electron/release/Your Mehtaji-win32-x64/` into `YourMehtaji-Portable-1.0.0.zip` and uploads it as a second artifact alongside the installer.
 
-The existing three single-purpose tabs stay as-is for users who prefer to import one type at a time.
+That's it — no other code changes needed. The desktop app already has:
+- Per-company file saving to `Documents\YourMehtaji\Exports\<Company>\...`
+- Auto-open in default viewer with "Show in folder" toast
+- Menu bar with Reload, Open Exports Folder, Quit, etc.
 
-## Technical notes
+## How to test on Windows after I push these changes
 
-- Reuse `parseAnyFile()` and `parseTallyXml()` — they already produce row-shaped records with a `__tally_kind` marker.
-- Add a small classifier `classifyRow(row)` that returns `"ledger" | "item" | "voucher" | "unknown"` based on the tag or column fingerprint.
-- Extract the three "post" routines (`postLedgers`, `postItems`, `postVouchers`) from the existing components into shared helper functions in `src/lib/tally-busy-import.ts` so the new combined tab and the existing tabs both call them.
-- Add `jszip` (~25 KB) to handle Busy `.zip` backups; skip if file isn't a zip.
-- No database changes required.
+### Step 1 — Connect to GitHub (if not already)
+In Lovable editor: **Connectors** (left sidebar) → **GitHub** → **Connect project** → authorize → **Create Repository**. Lovable auto-syncs all changes to that repo.
 
-## Files
+### Step 2 — Run the Windows build
+1. Go to your repo on **github.com** → **Actions** tab
+2. Click **"Build Windows Installer"** in the left list
+3. Click **"Run workflow"** button (top-right) → **Run workflow**
+4. Wait ~5–8 minutes for the green checkmark
 
-- new `src/lib/tally-busy-import.ts` — shared parsers + posters.
-- edit `src/components/housekeeping/TallyBusyImport.tsx` — add **All-in-One** tab, refactor existing tabs to use the shared posters.
-- `bun add jszip @types/jszip`.
+### Step 3 — Download the build
+On the completed run page, scroll to **Artifacts**:
+- **`YourMehtaji-Setup`** → installer `.exe` (Option A)
+- **`YourMehtaji-Portable`** → portable zip (Option B)
+
+Or grab from the auto-created **Release** in the repo's Releases section.
+
+### Step 4 — Run on Windows
+
+**Option A (installer):**
+- Double-click `YourMehtaji-Setup-1.0.0.exe`
+- Windows SmartScreen warning → **More info** → **Run anyway** (normal for unsigned apps)
+- Install completes → launch from Desktop shortcut or Start Menu → "Your Mehtaji"
+
+**Option B (portable, no install):**
+- Unzip `YourMehtaji-Portable-1.0.0.zip` anywhere
+- Open the folder → double-click `Your Mehtaji.exe`
+- App opens immediately
+
+### Step 5 — Verify it works
+- Login with your existing account (data is shared with the web version since it loads the same site)
+- Try **File → Open Exports Folder** (top menu)
+- Export a report → confirm it saves to `Documents\YourMehtaji\Exports\<CompanyName>\` and auto-opens
+
+## Notes & limitations
+
+- **Unsigned installer** — Windows shows "Unknown publisher" warning. Code signing requires a paid certificate (~$100/yr). Safe to ignore for personal testing.
+- **Internet required** — the desktop app loads your published Lovable site, so it needs an internet connection. (Truly offline mode would require a separate larger refactor.)
+- **Updates are automatic** — when you publish updates in Lovable, the desktop app picks them up on next launch (no need to reinstall).
+- **Data lives in the cloud** (Lovable Cloud / Supabase), not on the Windows PC. Exported files (PDFs/Excel/CSV) are saved locally to `Documents\YourMehtaji\Exports\`.
+
+## After you approve
+
+I will:
+1. Patch `electron/main.cjs` with the correct URL
+2. Update the workflow to also produce the portable zip
+3. Confirm everything is committed so the workflow is ready to run on GitHub
