@@ -384,6 +384,59 @@ export function mapVoucher(r: ParsedRow): VoucherRecord | null {
 
 export interface PostResult { created: number; updated: number; skipped: number }
 
+export interface PostResultEx extends PostResult {
+  failed: { name: string; reason: string }[];
+}
+
+export type ProgressCb = (done: number, total: number, label?: string) => void;
+
+/** Estimated parse-time band (used by the UI to warn about big files). */
+export function estimateBand(sizeBytes: number): {
+  band: "tiny" | "small" | "medium" | "large" | "huge";
+  label: string;
+  warn: boolean;
+} {
+  const mb = sizeBytes / (1024 * 1024);
+  if (mb < 2) return { band: "tiny", label: "A few seconds", warn: false };
+  if (mb < 10) return { band: "small", label: "5–30 seconds", warn: false };
+  if (mb < 50) return { band: "medium", label: "30 seconds to 2 minutes — keep this tab open", warn: true };
+  if (mb < 200) return { band: "large", label: "2–5 minutes — keep this tab open and your laptop plugged in", warn: true };
+  return { band: "huge", label: "Several minutes — large files may stress the browser", warn: true };
+}
+
+export interface ClassifiedBatch {
+  ledgers: LedgerRecord[];
+  items: ItemRecord[];
+  vouchers: VoucherRecord[];
+  unknown: number;
+}
+
+/** Classify + map rows in chunks, yielding to the UI between batches. */
+export async function classifyAndMap(
+  rows: ParsedRow[],
+  onProgress?: ProgressCb,
+  chunkSize = 2000,
+): Promise<ClassifiedBatch> {
+  const out: ClassifiedBatch = { ledgers: [], items: [], vouchers: [], unknown: 0 };
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const end = Math.min(i + chunkSize, rows.length);
+    for (let j = i; j < end; j++) {
+      const row = rows[j];
+      const kind = classifyRow(row);
+      if (kind === "ledger") {
+        const x = mapLedger(row); if (x) out.ledgers.push(x); else out.unknown++;
+      } else if (kind === "item") {
+        const x = mapItem(row); if (x) out.items.push(x); else out.unknown++;
+      } else if (kind === "voucher") {
+        const x = mapVoucher(row); if (x) out.vouchers.push(x); else out.unknown++;
+      } else { out.unknown++; }
+    }
+    onProgress?.(end, rows.length, "Classifying records");
+    await yieldToUI();
+  }
+  return out;
+}
+
 export async function postLedgers(
   companyId: string,
   rows: LedgerRecord[],
