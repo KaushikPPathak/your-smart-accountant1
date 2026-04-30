@@ -121,6 +121,11 @@ function CompaniesPage() {
       setForm(empty);
       setOpen(true);
     }
+    const editId = sp.get("edit");
+    if (editId) {
+      openEdit(editId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openNew = () => {
