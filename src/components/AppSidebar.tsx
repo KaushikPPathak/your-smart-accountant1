@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useCompany } from "@/lib/company-context";
+import { CompanyFlyout } from "@/components/CompanyFlyout";
 
 interface NavItem {
   title: string;
@@ -206,6 +207,17 @@ export function AppSidebar() {
                       </SidebarMenuItem>
                     ))}
                   </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            );
+          }
+
+          // Special-cased Company section: hover-flyout with company picker.
+          if (section.label === "Company") {
+            return (
+              <SidebarGroup key={section.label}>
+                <SidebarGroupContent>
+                  <CompanyFlyout />
                 </SidebarGroupContent>
               </SidebarGroup>
             );
