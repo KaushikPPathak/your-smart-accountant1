@@ -108,6 +108,18 @@ function CompaniesPage() {
   const [form, setForm] = useState<FormState>(empty);
   const [uploading, setUploading] = useState(false);
 
+  // Auto-open the "Create company" dialog when the URL carries ?new=1
+  // (used by the sidebar Company flyout's "+ New company" button).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("new") === "1") {
+      setEditingId(null);
+      setForm(empty);
+      setOpen(true);
+    }
+  }, []);
+
   const openNew = () => {
     setEditingId(null);
     setForm(empty);
