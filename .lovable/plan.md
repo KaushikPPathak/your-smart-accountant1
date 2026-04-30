@@ -1,51 +1,89 @@
-# Why nothing was restored
+## Goal
 
-Your uploaded file `123456.rar` is a **WinRAR archive** (~18 MB), confirmed by its file signature (`Rar!...`).
+Stop the white screen on big Tally / Busy files (your `Master.xml` is ~416k lines / UTF-16) and make the importer comfortably handle very large exports — tens of thousands of ledgers / items / vouchers — with clear feedback at every step.
 
-The app's **Restore from Backup** feature only accepts **`.json`** files produced by its own **Export full backup (.json)** button (see Housekeeping → Backup & Restore). It reads JSON text and validates a specific schema (`schema_version: 1`, with `ledgers`, `vouchers`, `voucher_entries`, etc.).
+## What the user will see
 
-A `.rar` file is:
-- Not JSON (it's compressed binary), so parsing fails immediately.
-- Not even one file — RAR is a container that may hold many files inside.
-- Likely **not a YourMehtaji backup at all** — our Export feature has never produced `.rar`. This looks like a Tally/Busy/manual archive of documents.
+1. **Before parsing** — as soon as a file is picked, a small info card shows:
+   - File name, size in MB, detected type (XML / ZIP / Excel / CSV)
+   - Estimated load time band ("Small <5s", "Medium 5–30s", "Large 30s–2 min", "Very large 2+ min — please keep this tab open")
+   - A confirm button for files >10 MB so users don't accidentally freeze the tab.
 
-That's why the restore silently produced nothing usable.
+2. **During parsing** — a progress card replaces the spinner:
+   - Stage label ("Decoding file…", "Parsing XML…", "Classifying records…", "Building preview…")
+   - Progress bar (% where measurable, indeterminate otherwise)
+   - Live counters: ledgers / items / vouchers found so far
+   - Cancel button.
 
----
+3. **After parsing** — summary card always shows totals first:
+   - "Found 12,431 ledgers, 8,902 items, 47,118 vouchers"
+   - Preview tables show only the first 200 rows of each kind with a "Showing 200 of N — use search to find more" note and a search box. Selection ("import all / none / only filtered") works on the full set, not just the visible slice.
+   - For >5,000 rows the preview switches to a virtualized list so the DOM stays small.
 
-## What you can do
+4. **During posting** — progress bar with "Posted 3,400 / 12,431 ledgers" and ETA. Errors don't abort the whole batch; failed rows are collected and shown at the end with a "Download failed rows as CSV" button.
 
-### Option A — You have the original JSON backup somewhere
-Locate the file produced earlier by **Housekeeping → Export full backup (.json)**. On the desktop app it's saved at:
-```
-Documents\YourMehtaji\Exports\<Company>\backups\*.json
-```
-Upload that `.json` file in **Housekeeping → Restore from Backup** and it will restore correctly.
+5. **Safety net** — if anything still crashes, a local error boundary shows a friendly card ("Import ran into a problem — file was too large or malformed") instead of a blank screen, with a "Reset" button.
 
-### Option B — The .rar contains a JSON backup inside
-If you (or someone) zipped a `.json` backup into a `.rar`, extract it first using **WinRAR / 7-Zip** on Windows, then upload only the `.json` file inside.
+## Technical plan
 
-### Option C — The .rar is Tally/Busy data (not our backup)
-If the archive contains Tally/Busy export files (XML, CSV, Excel), those need the **Tally/Busy Import** tool in Housekeeping, not Restore. You'd extract the archive first and feed each file (Day Book CSV, Ledger Master, etc.) into the corresponding importer.
+### A. Robust file decoding (`src/lib/tally-busy-import.ts`)
+- New `decodeFileSmart(file)` that:
+  - Reads first 4 bytes to detect BOM: UTF-16 LE (`FF FE`), UTF-16 BE (`FE FF`), UTF-8 BOM (`EF BB BF`).
+  - Falls back to heuristic: if >30% of first 1 KB are NUL bytes → treat as UTF-16LE.
+  - Uses `TextDecoder('utf-16le' | 'utf-16be' | 'utf-8')` on the full ArrayBuffer.
+  - Strips stray NULs and the BOM from the resulting string.
+- Replace direct `readText` calls in `parseAnyFile` and `parseTallyXml` with `decodeFileSmart`.
 
----
+### B. Streaming-style XML parsing
+- Keep `fast-xml-parser` (already a dep) but run it inside a Web Worker so the main thread stays responsive on 50–500 MB strings.
+- New file `src/workers/tally-parser.worker.ts` exposing `parse({ buffer, filename })` → returns `{ rows, stats }` and posts periodic `{ stage, percent, counts }` progress messages.
+- New `parseFileOrZipWithProgress(file, onProgress, signal)` wrapper around the worker; falls back to in-thread parsing if Workers are unavailable (Electron edge case).
+- ZIP path: iterate entries one-by-one and emit progress per entry instead of awaiting all.
 
-## Optional improvement to the app (needs your approval to build)
+### C. Chunked classification & mapping
+- After parsing, run `classifyRow` / `mapLedger` / `mapItem` / `mapVoucher` in batches of 2,000 using `requestIdleCallback` (or `setTimeout(0)` fallback) so the UI can paint progress between batches.
 
-I can make Restore **fail more clearly** so this doesn't waste your time again:
+### D. Virtualized, paginated preview (`TallyBusyImport.tsx`)
+- Add `react-window` (small dep, ~6 KB) for the preview tables. When `rows.length > 500`, render with `FixedSizeList`; otherwise keep the current `<Table>`.
+- Add a search input above each preview that filters the underlying full array (not the slice).
+- Selection state stored as a `Set<string>` of keys instead of cloning the whole array on each toggle — fixes O(N) re-renders on big lists.
 
-1. **Detect non-JSON files early** — if the uploaded file isn't `.json` or doesn't start with `{`, show a toast like:
-   > *"This file is not a valid YourMehtaji backup. Restore only accepts the .json file from Export full backup."*
-2. **Detect archive formats** (RAR/ZIP/7z by magic bytes) and show:
-   > *"Archive detected. Please extract the .json backup file from this archive first, then upload it."*
-3. Add a tiny help line under the file picker: *"Only .json files exported from this app are supported."*
+### E. Pre-flight + progress UI
+- New component `src/components/housekeeping/ImportProgressCard.tsx` showing file metadata, size band, estimated time, current stage, percent, counts, and Cancel.
+- Size bands (rough rule of thumb):
+  - <2 MB → "A few seconds"
+  - 2–10 MB → "5–30 seconds"
+  - 10–50 MB → "30 seconds to 2 minutes — keep this tab open"
+  - >50 MB → "Several minutes — keep this tab open and your laptop plugged in"
+- For files >10 MB show a confirm dialog before parsing starts.
 
----
+### F. Chunked posting (`postLedgers` / `postItems` / `postVouchers`)
+- Update each poster to:
+  - Insert in chunks of 500 rows (Supabase REST limit-friendly).
+  - Accept an `onProgress(done, total)` callback.
+  - Catch per-chunk errors, accumulate failed rows, and return `{ created, updated, skipped, failed: FailedRow[] }`.
+- UI shows the progress bar and offers a CSV download of failed rows.
 
-## What I need from you
+### G. Error boundary
+- New `src/components/housekeeping/ImportErrorBoundary.tsx` (class component) wrapping `TallyBusyImport`'s content. On error: friendly message, "Reset" button that clears state, and a "Copy diagnostics" button (file name, size, stage, error message) so the user can paste it back to support.
 
-Please reply with one of:
-- **"I have the JSON file"** — and upload it; I'll confirm restore works.
-- **"It's inside the RAR"** — extract on your PC and upload the `.json`.
-- **"It's Tally/Busy data"** — I'll guide you to the right importer.
-- **"Add the clearer error messages"** — I'll implement the Restore validation improvements above.
+### H. Documentation hint update
+- Update the helper text on the All-in-One tab to:
+  - Recommend exporting **separate** XML files (Masters, Day Book) for very large companies.
+  - Mention that .001 / TDBK files are Tally binary backups and must be restored in Tally first.
+
+## Files to add
+- `src/workers/tally-parser.worker.ts`
+- `src/components/housekeeping/ImportProgressCard.tsx`
+- `src/components/housekeeping/ImportErrorBoundary.tsx`
+
+## Files to edit
+- `src/lib/tally-busy-import.ts` — `decodeFileSmart`, worker wrapper, chunked posters.
+- `src/components/housekeeping/TallyBusyImport.tsx` — pre-flight, progress, virtualized preview, search, error boundary, Set-based selection.
+
+## New dependency
+- `react-window` (and `@types/react-window`) for virtualization.
+
+## Out of scope (can do later if you want)
+- Resuming interrupted imports across page reloads.
+- Server-side parsing via an edge function (would also fix the issue, but Tally exports are private and processing client-side keeps your data on your machine).
