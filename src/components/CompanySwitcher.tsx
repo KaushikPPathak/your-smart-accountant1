@@ -9,9 +9,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCompany } from "@/lib/company-context";
+import { useI18n } from "@/lib/i18n";
 
 export function CompanySwitcher() {
   const { memberships, activeMembership, setActiveCompanyId } = useCompany();
+  const { t } = useI18n();
 
   return (
     <DropdownMenu>
@@ -20,7 +22,7 @@ export function CompanySwitcher() {
           <div className="flex items-center gap-2 truncate">
             <Building2 className="h-4 w-4 text-muted-foreground" />
             <span className="truncate text-sm font-medium">
-              {activeMembership?.companies.name ?? "No company"}
+              {activeMembership?.companies.name ?? t("company.noneShort")}
             </span>
           </div>
           <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -28,7 +30,7 @@ export function CompanySwitcher() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[260px]">
         {memberships.length === 0 && (
-          <div className="px-2 py-3 text-xs text-muted-foreground">No companies yet</div>
+          <div className="px-2 py-3 text-xs text-muted-foreground">{t("company.noneYet")}</div>
         )}
         {memberships.map((m) => (
           <DropdownMenuItem
@@ -49,7 +51,7 @@ export function CompanySwitcher() {
         <DropdownMenuItem asChild>
           <Link to="/app/companies" className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
-            <span>New / manage companies</span>
+            <span>{t("company.manage")}</span>
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>

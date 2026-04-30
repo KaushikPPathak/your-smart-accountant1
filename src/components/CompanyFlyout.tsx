@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Building2, Plus, ChevronLeft, ChevronRight, Check, Settings, Pencil } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCompany, type CompanyMembership } from "@/lib/company-context";
+import { useI18n } from "@/lib/i18n";
 
 // Compute the FY label (e.g. "2025-26") from a YYYY-MM-DD start string + offset (years).
 function fyLabel(fyStart: string, offset: number) {
@@ -23,6 +24,7 @@ function CompanyMiniCard({
   onPick: (id: string) => void;
   onEdit: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const [offset, setOffset] = useState(0);
   const fy = useMemo(() => fyLabel(m.companies.financial_year_start, offset), [m.companies.financial_year_start, offset]);
   return (
@@ -37,7 +39,7 @@ function CompanyMiniCard({
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold leading-tight">{m.companies.name}</div>
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              {m.companies.gst_registered ? "GST" : "Unreg."} • {m.role}
+              {m.companies.gst_registered ? t("company.gst") : t("company.unreg")} • {m.role}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -47,8 +49,8 @@ function CompanyMiniCard({
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onEdit(m.company_id); }}
                 className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                aria-label="Edit company"
-                title="Edit"
+                aria-label={t("company.editAria")}
+                title={t("company.editAria")}
               >
                 <Pencil className="h-3.5 w-3.5" />
               </button>
@@ -60,16 +62,16 @@ function CompanyMiniCard({
             type="button"
             className="rounded p-0.5 hover:bg-background"
             onClick={(e) => { e.stopPropagation(); setOffset((o) => o - 1); }}
-            aria-label="Previous year"
+            aria-label={t("company.prevYear")}
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-          <span className="font-mono text-xs">FY {fy}</span>
+          <span className="font-mono text-xs">{t("common.fy")} {fy}</span>
           <button
             type="button"
             className="rounded p-0.5 hover:bg-background"
             onClick={(e) => { e.stopPropagation(); setOffset((o) => o + 1); }}
-            aria-label="Next year"
+            aria-label={t("company.nextYear")}
           >
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
@@ -87,6 +89,7 @@ function CompanyMiniCard({
 export function CompanyFlyout() {
   const navigate = useNavigate();
   const { memberships, activeCompanyId, setActiveCompanyId } = useCompany();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"menu" | "list">("menu");
   const [hideTimer, setHideTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
@@ -157,7 +160,7 @@ export function CompanyFlyout() {
         onClick={() => setOpen((v) => !v)}
       >
         <Building2 className="h-3.5 w-3.5" />
-        <span>Company</span>
+        <span>{t("company.flyoutTitle")}</span>
         <ChevronRight className="ml-auto h-3.5 w-3.5 opacity-60" />
       </button>
 
@@ -176,7 +179,7 @@ export function CompanyFlyout() {
                 className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
               >
                 <Plus className="h-4 w-4" />
-                <span>New company</span>
+                <span>{t("company.new")}</span>
               </button>
               <button
                 type="button"
@@ -184,7 +187,7 @@ export function CompanyFlyout() {
                 className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
               >
                 <Building2 className="h-4 w-4" />
-                <span>Existing companies</span>
+                <span>{t("company.existing")}</span>
                 <span className="ml-auto text-xs text-muted-foreground">{memberships.length}</span>
                 <ChevronRight className="h-3.5 w-3.5 opacity-60" />
               </button>
@@ -194,7 +197,7 @@ export function CompanyFlyout() {
                 className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
               >
                 <Settings className="h-4 w-4" />
-                <span>Company settings</span>
+                <span>{t("nav.companySettings")}</span>
               </button>
             </div>
           ) : (
@@ -205,15 +208,15 @@ export function CompanyFlyout() {
                   onClick={() => setView("menu")}
                   className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-accent"
                 >
-                  <ChevronLeft className="h-3.5 w-3.5" /> Back
+                  <ChevronLeft className="h-3.5 w-3.5" /> {t("common.back")}
                 </button>
                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Click pencil to edit
+                  {t("company.editPencilHint")}
                 </span>
               </div>
               {memberships.length === 0 ? (
                 <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
-                  No companies yet.
+                  {t("company.noneYet")}.
                 </div>
               ) : (
                 <div className="grid max-h-[60vh] grid-cols-2 gap-2 overflow-y-auto pr-1">
