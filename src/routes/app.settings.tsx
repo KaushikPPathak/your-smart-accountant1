@@ -21,6 +21,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { useTheme } from "@/lib/theme-context";
+import { useI18n } from "@/lib/i18n";
 import { getSetuStatus, saveSetuCredentials } from "@/utils/setu.functions";
 
 export const Route = createFileRoute("/app/settings")({
@@ -47,6 +48,7 @@ interface Member {
 
 function SettingsPage() {
   const { activeCompanyId, activeMembership, memberships } = useCompany();
+  const { t } = useI18n();
   const restoreFileRef = useRef<HTMLInputElement | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [exportingAll, setExportingAll] = useState(false);
@@ -308,20 +310,20 @@ function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("settings.title")}</h1>
         <p className="text-sm text-muted-foreground">
-          Customize invoices, manage users, theme and backups for {activeMembership?.companies.name ?? "—"}.
+          {t("settings.subtitle")} {activeMembership?.companies.name ?? "—"}.
         </p>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Theme</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("settings.theme")}</CardTitle></CardHeader>
         <CardContent className="flex items-center gap-3">
           <Button variant={theme === "light" ? "default" : "outline"} size="sm" onClick={() => setTheme("light")}>
-            <Sun className="mr-2 h-4 w-4" /> Light
+            <Sun className="mr-2 h-4 w-4" /> {t("settings.light")}
           </Button>
           <Button variant={theme === "dark" ? "default" : "outline"} size="sm" onClick={() => setTheme("dark")}>
-            <Moon className="mr-2 h-4 w-4" /> Dark
+            <Moon className="mr-2 h-4 w-4" /> {t("settings.dark")}
           </Button>
         </CardContent>
       </Card>
@@ -330,36 +332,35 @@ function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <LockIcon className="h-4 w-4" /> Company access password
+              <LockIcon className="h-4 w-4" /> {t("settings.companyPwd")}
               {hasCompanyPwd ? (
-                <span className="text-xs font-normal text-primary">● Set</span>
+                <span className="text-xs font-normal text-primary">{t("settings.companyPwd.set")}</span>
               ) : (
-                <span className="text-xs font-normal text-muted-foreground">Not set (opens directly)</span>
+                <span className="text-xs font-normal text-muted-foreground">{t("settings.companyPwd.notSet")}</span>
               )}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Optional. When set, this company will prompt for a password on the start screen before opening.
-              Other companies are unaffected. Forgot password? An admin can clear it here.
+              {t("settings.companyPwd.help")}
             </p>
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[200px] space-y-1.5">
-                <Label>{hasCompanyPwd ? "New password" : "Set password"}</Label>
+                <Label>{hasCompanyPwd ? t("settings.companyPwd.new") : t("settings.companyPwd.setLabel")}</Label>
                 <Input
                   type="password"
                   value={newCompanyPwd}
                   onChange={(e) => setNewCompanyPwd(e.target.value)}
-                  placeholder="Min 4 characters"
+                  placeholder={t("settings.companyPwd.minHint")}
                   autoComplete="new-password"
                 />
               </div>
               <Button onClick={() => saveCompanyPwd(false)} disabled={savingCompanyPwd || !newCompanyPwd}>
-                <Save className="mr-2 h-4 w-4" /> {hasCompanyPwd ? "Change password" : "Set password"}
+                <Save className="mr-2 h-4 w-4" /> {hasCompanyPwd ? t("settings.companyPwd.changeBtn") : t("settings.companyPwd.setLabel")}
               </Button>
               {hasCompanyPwd && (
                 <Button variant="outline" onClick={() => saveCompanyPwd(true)} disabled={savingCompanyPwd}>
-                  Remove password
+                  {t("settings.companyPwd.removeBtn")}
                 </Button>
               )}
             </div>
@@ -368,35 +369,35 @@ function SettingsPage() {
       )}
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Invoice customization</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("settings.invoice")}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Invoice prefix</Label>
+              <Label>{t("settings.invoice.prefix")}</Label>
               <Input value={settings.invoice_prefix} onChange={(e) => setSettings({ ...settings, invoice_prefix: e.target.value })} placeholder="INV / BILL / TAX" />
             </div>
             <div className="space-y-1.5">
-              <Label>Starting number</Label>
+              <Label>{t("settings.invoice.starting")}</Label>
               <Input type="number" value={settings.invoice_starting_number} onChange={(e) => setSettings({ ...settings, invoice_starting_number: parseInt(e.target.value) || 1 })} />
             </div>
             <div className="space-y-1.5 md:col-span-2">
-              <Label>Footer note</Label>
+              <Label>{t("settings.invoice.footer")}</Label>
               <Input value={settings.invoice_footer_note ?? ""} onChange={(e) => setSettings({ ...settings, invoice_footer_note: e.target.value })} placeholder="Thank you for your business!" />
             </div>
             <div className="space-y-1.5 md:col-span-2">
-              <Label>Terms & conditions</Label>
+              <Label>{t("settings.invoice.terms")}</Label>
               <Textarea rows={4} value={settings.invoice_terms ?? ""} onChange={(e) => setSettings({ ...settings, invoice_terms: e.target.value })} />
             </div>
             <div className="flex items-center justify-between rounded border p-3">
-              <Label>Show bank details on invoice</Label>
+              <Label>{t("settings.invoice.bank")}</Label>
               <Switch checked={settings.show_bank_details} onCheckedChange={(v) => setSettings({ ...settings, show_bank_details: v })} />
             </div>
             <div className="flex items-center justify-between rounded border p-3">
-              <Label>Show signatory section</Label>
+              <Label>{t("settings.invoice.signatory")}</Label>
               <Switch checked={settings.show_signatory} onCheckedChange={(v) => setSettings({ ...settings, show_signatory: v })} />
             </div>
             <div className="space-y-1.5 md:col-span-2">
-              <Label>GST filing frequency</Label>
+              <Label>{t("settings.invoice.gstFreq")}</Label>
               <Select value={settings.gst_filing_frequency} onValueChange={(v) => setSettings({ ...settings, gst_filing_frequency: v as "monthly" | "quarterly" })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -404,17 +405,17 @@ function SettingsPage() {
                   <SelectItem value="quarterly">Quarterly (QRMP — turnover up to ₹5 Cr)</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">Used by GSTR-1 / IFF and GSTR-3B reports.</p>
+              <p className="text-xs text-muted-foreground">{t("settings.invoice.gstFreq.help")}</p>
             </div>
           </div>
           <Button onClick={saveSettings} disabled={savingSettings || !isAdmin}>
-            <Save className="mr-2 h-4 w-4" /> {savingSettings ? "Saving…" : "Save settings"}
+            <Save className="mr-2 h-4 w-4" /> {savingSettings ? t("settings.invoice.saving") : t("settings.invoice.save")}
           </Button>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">User management</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("settings.users")}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {isAdmin && (
             <div className="flex flex-wrap items-end gap-2">
