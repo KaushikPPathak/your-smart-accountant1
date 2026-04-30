@@ -87,7 +87,10 @@ export async function decodeFileSmart(f: File | Blob): Promise<string> {
     const sample = bytes.subarray(0, Math.min(2048, bytes.length));
     let nulEven = 0, nulOdd = 0;
     for (let i = 0; i < sample.length; i++) {
-      if (sample[i] === 0) (i % 2 === 0 ? nulOdd : nulEven)++;
+      if (sample[i] === 0) {
+        if (i % 2 === 0) nulOdd++;
+        else nulEven++;
+      }
     }
     if (nulEven > sample.length * 0.2) encoding = "utf-16le";
     else if (nulOdd > sample.length * 0.2) encoding = "utf-16be";
