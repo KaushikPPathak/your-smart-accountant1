@@ -358,12 +358,25 @@ export async function restoreCompanyBackup(
 export function parseBackupFile(
   text: string,
 ): { kind: "single"; data: CompanyBackup } | { kind: "multi"; data: MultiCompanyBackup } {
-  const j = JSON.parse(text) as Record<string, unknown>;
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith("{")) {
+    throw new Error(
+      "This file is not a Your Mehtaji backup. Restore only accepts the .json file produced by 'Export full backup'.",
+    );
+  }
+  let j: Record<string, unknown>;
+  try {
+    j = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error(
+      "Backup file is not valid JSON. Please upload the .json file produced by 'Export full backup'.",
+    );
+  }
   if (j.kind === "all_companies" && Array.isArray(j.companies)) {
     return { kind: "multi", data: j as unknown as MultiCompanyBackup };
   }
   if (typeof j.schema_version === "number") {
     return { kind: "single", data: j as unknown as CompanyBackup };
   }
-  throw new Error("Not a Your Mehtaji backup file");
+  throw new Error("Not a Your Mehtaji backup file (missing schema_version).");
 }

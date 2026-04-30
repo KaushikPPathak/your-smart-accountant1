@@ -48,6 +48,29 @@ export function BackupRestoreTool({ companyId, companyName, disabled }: Props) {
     if (!pendingFile) return;
     setRestoring(true);
     try {
+      // Detect archive formats (RAR / ZIP / 7z) by magic bytes before reading as text
+      const head = new Uint8Array(await pendingFile.slice(0, 8).arrayBuffer());
+      const isRar =
+        head[0] === 0x52 && head[1] === 0x61 && head[2] === 0x72 && head[3] === 0x21; // "Rar!"
+      const isZip = head[0] === 0x50 && head[1] === 0x4b; // "PK"
+      const is7z =
+        head[0] === 0x37 && head[1] === 0x7a && head[2] === 0xbc && head[3] === 0xaf; // "7z.."
+      if (isRar || isZip || is7z) {
+        const kind = isRar ? "RAR" : isZip ? "ZIP" : "7z";
+        toast.error(
+          `${kind} archive detected. Please extract the .json backup file from the archive first, then upload only the .json file.`,
+        );
+        return;
+      }
+
+      const lower = pendingFile.name.toLowerCase();
+      if (!lower.endsWith(".json")) {
+        toast.error(
+          "Restore only accepts the .json file produced by 'Export full backup'. The selected file is not a .json file.",
+        );
+        return;
+      }
+
       const text = await pendingFile.text();
       const parsed = parseBackupFile(text);
       if (parsed.kind !== "single") {
@@ -126,6 +149,10 @@ export function BackupRestoreTool({ companyId, companyName, disabled }: Props) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Only the <strong>.json</strong> file produced by <em>Export full backup</em> is supported.
+            Archives like .rar / .zip / .7z must be extracted first.
+          </p>
           <input
             ref={fileRef}
             type="file"
