@@ -233,6 +233,7 @@ export type Database = {
           access_password_hash: string | null
           access_password_set_at: string | null
           address: string | null
+          annual_turnover_paise: number
           bank_account_no: string | null
           bank_branch: string | null
           bank_ifsc: string | null
@@ -258,6 +259,7 @@ export type Database = {
           access_password_hash?: string | null
           access_password_set_at?: string | null
           address?: string | null
+          annual_turnover_paise?: number
           bank_account_no?: string | null
           bank_branch?: string | null
           bank_ifsc?: string | null
@@ -283,6 +285,7 @@ export type Database = {
           access_password_hash?: string | null
           access_password_set_at?: string | null
           address?: string | null
+          annual_turnover_paise?: number
           bank_account_no?: string | null
           bank_branch?: string | null
           bank_ifsc?: string | null
