@@ -4,14 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/**'
-      - 'public/**'
       - 'electron/**'
-      - 'index.html'
-      - 'package.json'
-      - 'bun.lockb'
-      - 'vite.config.ts'
-      - 'tsconfig.json'
       - '.github/workflows/build-windows-installer.yml'
   workflow_dispatch:
 
