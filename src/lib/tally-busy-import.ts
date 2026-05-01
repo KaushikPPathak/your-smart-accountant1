@@ -73,6 +73,7 @@ export type EncodingChoice = "auto" | "utf-8" | "utf-16le" | "utf-16be";
 export async function decodeFileSmart(
   f: File | Blob,
   forced: EncodingChoice = "auto",
+  stripNuls = true,
 ): Promise<string> {
   const buf = await readBuffer(f);
   const bytes = new Uint8Array(buf);
@@ -107,8 +108,9 @@ export async function decodeFileSmart(
   }
   const view = sliceFrom > 0 ? bytes.subarray(sliceFrom) : bytes;
   const decoded = new TextDecoder(encoding, { fatal: false }).decode(view);
-  // Strip residual NULs and BOM character.
-  return decoded.replace(/\u0000/g, "").replace(/^\uFEFF/, "");
+  // Always strip leading BOM character; strip residual NULs only when requested.
+  const noBom = decoded.replace(/^\uFEFF/, "");
+  return stripNuls ? noBom.replace(/\u0000/g, "") : noBom;
 }
 
 /** Utility: yield to the browser so the UI can paint between heavy batches. */
