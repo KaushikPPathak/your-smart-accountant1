@@ -307,6 +307,17 @@ function CombinedImporter({ companyId, disabled }: Props) {
 
       {grandTotal > 0 && !busy && (
         <>
+          {ledgers.length > 0 && (
+            <LedgerMappingPanel
+              companyId={companyId}
+              ledgers={ledgers}
+              previewLimit={settings.previewLimit}
+              disabled={posting || disabled}
+              onChange={(next) => {
+                setLedgers(next.map((r, i) => ({ ...r, _key: ledgers[i]?._key ?? `l${i}` })));
+              }}
+            />
+          )}
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 p-3">
             <div className="flex flex-wrap gap-2 text-xs">
               <Badge variant="secondary"><DbIcon className="mr-1 h-3 w-3" /> {selL.size} / {ledgers.length} ledgers</Badge>
