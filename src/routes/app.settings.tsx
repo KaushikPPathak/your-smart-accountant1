@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound, Lock as LockIcon } from "lucide-react";
+import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound, Lock as LockIcon, Trash2 } from "lucide-react";
 import {
   exportAllCompaniesBackup,
   exportCompanyBackup,
@@ -23,6 +23,10 @@ import { useCompany } from "@/lib/company-context";
 import { useTheme } from "@/lib/theme-context";
 import { useI18n } from "@/lib/i18n";
 import { getSetuStatus, saveSetuCredentials } from "@/utils/setu.functions";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({ meta: [{ title: "Settings — Your Mehtaji" }] }),
@@ -47,8 +51,12 @@ interface Member {
 }
 
 function SettingsPage() {
-  const { activeCompanyId, activeMembership, memberships } = useCompany();
+  const { activeCompanyId, activeMembership, memberships, refresh: refreshCompanies } = useCompany();
   const { t } = useI18n();
+  const navigate = useNavigate();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const restoreFileRef = useRef<HTMLInputElement | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [exportingAll, setExportingAll] = useState(false);
@@ -594,6 +602,85 @@ function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {isAdmin && (
+        <Card className="border-destructive/50">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" /> Danger zone
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium">Delete this company</p>
+                <p className="text-xs text-muted-foreground">
+                  Permanently removes <span className="font-semibold">{activeMembership?.companies.name}</span> and all its vouchers, ledgers, items, and settings. This cannot be undone.
+                </p>
+              </div>
+              <Dialog open={deleteOpen} onOpenChange={(o) => { setDeleteOpen(o); if (!o) setDeleteConfirm(""); }}>
+                <DialogTrigger asChild>
+                  <Button variant="destructive" size="sm">
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete company
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-destructive">
+                      <AlertTriangle className="h-4 w-4" /> Delete company
+                    </DialogTitle>
+                    <DialogDescription>
+                      This will permanently delete <span className="font-semibold">{activeMembership?.companies.name}</span> and all of its data. Type the company name to confirm.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-2">
+                    <Label htmlFor="delete-confirm">Company name</Label>
+                    <Input
+                      id="delete-confirm"
+                      value={deleteConfirm}
+                      onChange={(e) => setDeleteConfirm(e.target.value)}
+                      placeholder={activeMembership?.companies.name ?? ""}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      disabled={deleting || deleteConfirm.trim() !== (activeMembership?.companies.name ?? "").trim()}
+                      onClick={async () => {
+                        if (!activeCompanyId) return;
+                        setDeleting(true);
+                        const { error } = await supabase
+                          .from("companies")
+                          .delete()
+                          .eq("id", activeCompanyId);
+                        setDeleting(false);
+                        if (error) {
+                          toast.error(error.message || "Failed to delete company");
+                          return;
+                        }
+                        toast.success("Company deleted");
+                        setDeleteOpen(false);
+                        setDeleteConfirm("");
+                        if (typeof window !== "undefined") {
+                          localStorage.removeItem("ym_active_company_id");
+                        }
+                        await refreshCompanies();
+                        navigate({ to: "/app/companies" });
+                      }}
+                    >
+                      {deleting ? "Deleting…" : "Delete permanently"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
