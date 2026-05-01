@@ -27,11 +27,12 @@ import {
   parseFileOrZip, classifyAndMap, estimateBand,
   postLedgers, postItems, postVouchers,
   type LedgerRecord, type ItemRecord, type VoucherRecord, type PostResultEx,
+  type ImportSettings, DEFAULT_IMPORT_SETTINGS,
 } from "@/lib/tally-busy-import";
 import { ImportProgressCard } from "./ImportProgressCard";
 import { ImportErrorBoundary } from "./ImportErrorBoundary";
+import { ImportSettingsPanel } from "./ImportSettingsPanel";
 
-const PREVIEW_LIMIT = 200;
 const SIZE_CONFIRM_BYTES = 10 * 1024 * 1024; // 10 MB
 
 interface Props { companyId: string; disabled: boolean }
