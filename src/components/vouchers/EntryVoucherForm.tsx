@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Pencil, Plus, Save, Trash2, UserPlus, X } from "lucide-react";
+import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { QuickLedgerDialog, type QuickLedger } from "./QuickLedgerDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,6 +80,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const [saving, setSaving] = useState(false);
   const [focusedLine, setFocusedLine] = useState(0);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
+  const { lock, locked } = usePeriodLock(date);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -227,11 +229,13 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
             <X className="mr-1 h-4 w-4" /> Cancel
           </Button>
-          <Button onClick={save} disabled={saving || !canWrite || !balanced}>
+          <Button onClick={save} disabled={saving || !canWrite || !balanced || locked}>
             <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       </div>
+
+      <PeriodLockBanner lock={lock} />
 
       <Card>
         <CardContent className="grid gap-3 p-4 md:grid-cols-3">
