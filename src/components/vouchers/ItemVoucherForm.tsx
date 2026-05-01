@@ -31,6 +31,7 @@ import { formatINR, rupeesToPaise, amountInWords } from "@/lib/money";
 import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/gst";
 import { GST_RATES, INDIAN_STATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
+import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 
 type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note" | "sales_order" | "delivery_note" | "quotation";
 
@@ -124,6 +125,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null }>({ open: false, editId: null });
   const [itemDlg, setItemDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
   const [ewbDlg, setEwbDlg] = useState<{ open: boolean; voucher: { id: string; company_id: string; voucher_number: string; voucher_date: string; total_paise: number; subtotal_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number; is_interstate: boolean; place_of_supply_code: string | null } | null }>({ open: false, voucher: null });
+  const { lock, locked } = usePeriodLock(date);
 
   // Load masters
   useEffect(() => {
@@ -419,11 +421,13 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
             <X className="mr-1 h-4 w-4" /> Cancel
           </Button>
-          <Button onClick={save} disabled={saving || !canWrite}>
+          <Button onClick={save} disabled={saving || !canWrite || locked}>
             <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       </div>
+
+      <PeriodLockBanner lock={lock} />
 
       <Card>
         <CardContent className="grid gap-3 p-4 md:grid-cols-4">
