@@ -22,6 +22,7 @@ import { Route as AppHousekeepingRouteImport } from './routes/app.housekeeping'
 import { Route as AppEinvoiceRouteImport } from './routes/app.einvoice'
 import { Route as AppCompaniesRouteImport } from './routes/app.companies'
 import { Route as AppBankRouteImport } from './routes/app.bank'
+import { Route as AppAssistantRouteImport } from './routes/app.assistant'
 import { Route as AppVouchersVoucherIdRouteImport } from './routes/app.vouchers.$voucherId'
 import { Route as AppReportsTrialBalanceRouteImport } from './routes/app.reports.trial-balance'
 import { Route as AppReportsTradingRouteImport } from './routes/app.reports.trading'
@@ -117,6 +118,11 @@ const AppCompaniesRoute = AppCompaniesRouteImport.update({
 const AppBankRoute = AppBankRouteImport.update({
   id: '/bank',
   path: '/bank',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAssistantRoute = AppAssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
   getParentRoute: () => AppRoute,
 } as any)
 const AppVouchersVoucherIdRoute = AppVouchersVoucherIdRouteImport.update({
@@ -284,6 +290,7 @@ const AppVouchersNewCredit_noteRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
   '/app/einvoice': typeof AppEinvoiceRoute
@@ -329,6 +336,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
   '/app/einvoice': typeof AppEinvoiceRoute
@@ -376,6 +384,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
   '/app/einvoice': typeof AppEinvoiceRoute
@@ -424,6 +433,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/app/assistant'
     | '/app/bank'
     | '/app/companies'
     | '/app/einvoice'
@@ -469,6 +479,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/app/assistant'
     | '/app/bank'
     | '/app/companies'
     | '/app/einvoice'
@@ -515,6 +526,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/app/assistant'
     | '/app/bank'
     | '/app/companies'
     | '/app/einvoice'
@@ -655,6 +667,13 @@ declare module '@tanstack/react-router' {
       path: '/bank'
       fullPath: '/app/bank'
       preLoaderRoute: typeof AppBankRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/assistant': {
+      id: '/app/assistant'
+      path: '/assistant'
+      fullPath: '/app/assistant'
+      preLoaderRoute: typeof AppAssistantRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/vouchers/$voucherId': {
@@ -960,6 +979,7 @@ const AppVouchersRouteWithChildren = AppVouchersRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppAssistantRoute: typeof AppAssistantRoute
   AppBankRoute: typeof AppBankRoute
   AppCompaniesRoute: typeof AppCompaniesRoute
   AppEinvoiceRoute: typeof AppEinvoiceRoute
@@ -974,6 +994,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAssistantRoute: AppAssistantRoute,
   AppBankRoute: AppBankRoute,
   AppCompaniesRoute: AppCompaniesRoute,
   AppEinvoiceRoute: AppEinvoiceRoute,

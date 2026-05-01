@@ -29,6 +29,7 @@ import {
   ClipboardList,
   Boxes,
   CalendarClock,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -129,6 +130,7 @@ const SECTIONS: NavSection[] = [
       { title: "Bank Reconciliation", url: "/app/bank", icon: Landmark, i18nKey: "nav.bankRecon" },
       { title: "BRS (Book vs Bank)", url: "/app/reports/brs", icon: Landmark, i18nKey: "nav.brs" },
       { title: "E-Invoice / EWB", url: "/app/einvoice", icon: FileCode2, i18nKey: "nav.einvoice" },
+      { title: "AI Assistant", url: "/app/assistant", icon: Sparkles },
     ],
   },
 ];
