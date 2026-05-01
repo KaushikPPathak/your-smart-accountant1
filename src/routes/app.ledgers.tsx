@@ -325,13 +325,13 @@ function LedgersPage() {
                 <Plus className="mr-2 h-4 w-4" /> New ledger
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0">
-              <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
-                <DialogTitle>{editing ? "Edit ledger" : "Create new ledger"}</DialogTitle>
+            <DialogContent className="max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col p-0 gap-0">
+              <DialogHeader className="px-4 sm:px-6 pt-4 pb-2 border-b shrink-0">
+                <DialogTitle className="text-base sm:text-lg">{editing ? "Edit ledger" : "Create new ledger"}</DialogTitle>
               </DialogHeader>
               <form onSubmit={onSubmit} className="flex flex-col flex-1 min-h-0">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 overflow-y-auto px-6 py-4 flex-1 min-h-0">
-                  <div className="space-y-1.5 md:col-span-2">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2 overflow-y-auto px-4 sm:px-6 py-3 flex-1 min-h-0">
+                  <div className="space-y-1 col-span-2">
                     <Label htmlFor="name">Ledger name *</Label>
                     <Input
                       id="name"
@@ -341,7 +341,7 @@ function LedgersPage() {
                       autoFocus
                     />
                   </div>
-                  <div className="space-y-1.5 md:col-span-2">
+                  <div className="space-y-1 col-span-2">
                     <Label htmlFor="type">Type *</Label>
                     <Select
                       value={form.type}
@@ -370,7 +370,7 @@ function LedgersPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1.5 md:col-span-2">
+                  <div className="space-y-1 col-span-2">
                     <Label htmlFor="group_code">Group (Income-Tax / Schedule III) *</Label>
                     <Select
                       value={form.group_code}
@@ -408,7 +408,7 @@ function LedgersPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label htmlFor="gstin" className="flex items-center gap-2">
                       GSTIN {gstinLooking && <Loader2 className="h-3 w-3 animate-spin" />}
                     </Label>
@@ -422,7 +422,7 @@ function LedgersPage() {
                       placeholder="22AAAAA0000A1Z5"
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label htmlFor="state_code">State</Label>
                     <Select value={form.state_code} onValueChange={onStateCodeChange}>
                       <SelectTrigger id="state_code">
@@ -437,7 +437,7 @@ function LedgersPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label htmlFor="phone">Phone</Label>
                     <Input
                       id="phone"
@@ -446,7 +446,7 @@ function LedgersPage() {
                       maxLength={20}
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label htmlFor="email">Email</Label>
                     <Input
                       id="email"
@@ -456,7 +456,7 @@ function LedgersPage() {
                       maxLength={255}
                     />
                   </div>
-                  <div className="space-y-1.5 md:col-span-2">
+                  <div className="space-y-1 col-span-2">
                     <Label htmlFor="address">Address</Label>
                     <Textarea
                       id="address"
@@ -466,11 +466,11 @@ function LedgersPage() {
                       rows={2}
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label htmlFor="pan">PAN</Label>
                     <Input id="pan" value={form.pan} onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })} maxLength={10} placeholder="ABCDE1234F" />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label htmlFor="opening_balance">Opening balance (₹)</Label>
                     <Input
                       id="opening_balance"
@@ -483,7 +483,7 @@ function LedgersPage() {
                       placeholder="0.00"
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label htmlFor="ob_type">Dr / Cr</Label>
                     <Select
                       value={form.opening_balance_is_debit ? "dr" : "cr"}
@@ -500,16 +500,16 @@ function LedgersPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label htmlFor="credit_limit">Credit limit (₹)</Label>
                     <Input id="credit_limit" type="number" step="0.01" value={form.credit_limit} onChange={(e) => setForm({ ...form, credit_limit: e.target.value })} placeholder="0.00" />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <Label htmlFor="credit_days">Credit days</Label>
                     <Input id="credit_days" type="number" value={form.credit_days} onChange={(e) => setForm({ ...form, credit_days: e.target.value })} placeholder="0" />
                   </div>
                 </div>
-                <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background">
+                <DialogFooter className="px-4 sm:px-6 py-3 border-t shrink-0 bg-background gap-2">
                   <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                     Cancel
                   </Button>
