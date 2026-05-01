@@ -66,6 +66,7 @@ function BalanceSheet() {
   }
   const grandL = liab.totalPaise + Math.max(0, profitPaise);
   const grandA = asset.totalPaise + Math.max(0, -profitPaise);
+  const diffPaise = grandA - grandL;
 
   // Exports
   const liabExp = groupedExportRows(liabBuckets);
@@ -124,6 +125,22 @@ function BalanceSheet() {
             (Capital, Reserves, Loans, Sundry Creditors, Duties &amp; Taxes, Current Liabilities;
             Fixed Assets, Investments, Stock, Debtors, Cash, Bank, Loans &amp; Advances, Current Assets).
           </p>
+          <div
+            className={`mt-2 flex items-center justify-between rounded border px-3 py-2 text-sm ${
+              diffPaise === 0
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                : "border-destructive/30 bg-destructive/10 text-destructive"
+            }`}
+          >
+            <span className="font-medium">
+              {diffPaise === 0 ? "Balance Sheet is tallied" : "Difference in Balance Sheet"}
+            </span>
+            <span className="font-mono">
+              {diffPaise === 0
+                ? formatINR(0)
+                : `${formatINR(Math.abs(diffPaise))} ${diffPaise > 0 ? "(Assets > Liabilities)" : "(Liabilities > Assets)"}`}
+            </span>
+          </div>
         </CardContent>
       </Card>
       <TAccount

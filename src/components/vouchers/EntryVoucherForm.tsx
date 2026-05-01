@@ -36,6 +36,10 @@ interface LedgerOpt {
   type: string;
 }
 
+interface LedgerBalanceInfo {
+  paise: number; // signed: +Dr / -Cr
+}
+
 interface Line {
   ledger_id: string;
   debit: string;
@@ -77,6 +81,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     Array.from({ length: cfg.defaultLines }, blank),
   );
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
+  const [ledgerBalances, setLedgerBalances] = useState<Record<string, LedgerBalanceInfo>>({});
   const [saving, setSaving] = useState(false);
   const [focusedLine, setFocusedLine] = useState(0);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
@@ -92,6 +97,33 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       .order("name")
       .then(({ data }) => setLedgers((data || []) as LedgerOpt[]));
   }, [activeCompanyId]);
+
+  // Load current closing balance for any ledger picked on a line (as of voucher date).
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    const ids = Array.from(new Set(lines.map((l) => l.ledger_id).filter(Boolean)));
+    const missing = ids.filter((id) => !(id in ledgerBalances));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { fetchLedgerBalances } = await import("@/lib/reports");
+      const all = await fetchLedgerBalances(activeCompanyId, date);
+      if (cancelled) return;
+      setLedgerBalances((prev) => {
+        const next = { ...prev };
+        for (const b of all) next[b.id] = { paise: b.closing_paise };
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCompanyId, lines, date, ledgerBalances]);
+
+  // Reset cache when date changes so balances reflect the new as-of date.
+  useEffect(() => {
+    setLedgerBalances({});
+  }, [date]);
 
   const totalDr = useMemo(
     () => lines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.debit) || 0), 0),
@@ -290,6 +322,17 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                         </Button>
                       )}
                     </div>
+                    {l.ledger_id && ledgerBalances[l.ledger_id] && (
+                      <div className="mt-1 inline-flex items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
+                        <span className="text-muted-foreground/80">Bal:</span>
+                        <span className={ledgerBalances[l.ledger_id].paise >= 0 ? "text-foreground" : "text-foreground"}>
+                          {formatINR(Math.abs(ledgerBalances[l.ledger_id].paise))}
+                        </span>
+                        <span className="text-muted-foreground/80">
+                          {ledgerBalances[l.ledger_id].paise >= 0 ? "Dr" : "Cr"}
+                        </span>
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Input
