@@ -24,6 +24,7 @@ import {
   ACCOUNT_GROUPS,
   GROUP_BY_CODE,
   defaultLedgerTypeForGroup,
+  defaultGroupCodeForType,
   guessGroupCode,
 } from "@/lib/account-groups";
 
@@ -188,6 +189,16 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
     try {
       let created = 0, updated = 0;
       for (const r of sel) {
+        // Enforce group ↔ type contract: if the chosen type is not valid for the
+        // chosen group, snap the group back to the type's natural group.
+        // This guarantees Balance Sheet / Group Ledger reports show the same numbers.
+        let groupCode = r.group_code || "";
+        let ledgerType = r.new_type;
+        const grp = groupCode ? GROUP_BY_CODE[groupCode] : null;
+        if (grp && !grp.ledgerTypes.includes(ledgerType)) {
+          // Type drives — re-derive group from type
+          groupCode = defaultGroupCodeForType(ledgerType);
+        }
         let ledgerId = r.ledger_id;
         if (!ledgerId) {
           const { data, error } = await supabase
@@ -195,8 +206,8 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
             .insert({
               company_id: companyId,
               name: r.account_name.trim(),
-              type: r.new_type,
-              group_code: r.group_code || null,
+              type: ledgerType,
+              group_code: groupCode || null,
               opening_balance_paise: Math.round(r.amount * 100),
               opening_balance_is_debit: r.side === "Dr",
             })
@@ -209,7 +220,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
           const { error } = await supabase
             .from("ledgers")
             .update({
-              group_code: r.group_code || null,
+              group_code: groupCode || null,
               opening_balance_paise: Math.round(r.amount * 100),
               opening_balance_is_debit: r.side === "Dr",
             })
