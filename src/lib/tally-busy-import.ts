@@ -209,14 +209,18 @@ export async function parseTallyXml(xml: string): Promise<ParsedRow[]> {
 }
 
 /** Parse any single (non-zip) file into row records. */
-export async function parseAnyFile(f: File | Blob, name: string): Promise<ParsedRow[]> {
+export async function parseAnyFile(
+  f: File | Blob,
+  name: string,
+  settings: ImportSettings = DEFAULT_IMPORT_SETTINGS,
+): Promise<ParsedRow[]> {
   const lname = name.toLowerCase();
   if (lname.endsWith(".xml")) {
-    const text = await decodeFileSmart(f);
+    const text = await decodeFileSmart(f, settings.encoding, settings.stripNuls);
     return await parseTallyXml(text);
   }
   if (lname.endsWith(".csv") || lname.endsWith(".txt")) {
-    const text = await decodeFileSmart(f);
+    const text = await decodeFileSmart(f, settings.encoding, settings.stripNuls);
     const Papa = (await import("papaparse")).default;
     const out = Papa.parse<Record<string, unknown>>(text, {
       header: true,
@@ -244,7 +248,10 @@ export async function parseAnyFile(f: File | Blob, name: string): Promise<Parsed
 }
 
 /** Top-level entry: handles ZIP archives by recursing into each inner file. */
-export async function parseFileOrZip(f: File): Promise<ParsedRow[]> {
+export async function parseFileOrZip(
+  f: File,
+  settings: ImportSettings = DEFAULT_IMPORT_SETTINGS,
+): Promise<ParsedRow[]> {
   const lname = f.name.toLowerCase();
   if (lname.endsWith(".zip")) {
     const JSZip = (await import("jszip")).default;
@@ -256,7 +263,7 @@ export async function parseFileOrZip(f: File): Promise<ParsedRow[]> {
       const lower = fname.toLowerCase();
       if (!/\.(xml|csv|txt|xlsx|xls)$/.test(lower)) continue;
       const blob = await entry.async("blob");
-      const inner = await parseAnyFile(blob, fname);
+      const inner = await parseAnyFile(blob, fname, settings);
       for (const r of inner) {
         if (!r.__sheet) r.__sheet = fname;
         all.push(r);
@@ -264,7 +271,7 @@ export async function parseFileOrZip(f: File): Promise<ParsedRow[]> {
     }
     return all;
   }
-  return parseAnyFile(f, f.name);
+  return parseAnyFile(f, f.name, settings);
 }
 
 // ---------------- Classification ----------------
