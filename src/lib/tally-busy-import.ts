@@ -48,6 +48,132 @@ export function applyMappingsToLedgers(
   });
 }
 
+// ---------------- Fuzzy matching ----------------
+
+/** Normalize a name for fuzzy comparison: lowercase, strip punctuation,
+ *  collapse whitespace, drop common noise tokens. */
+export function normalizeName(s: string): string {
+  return String(s ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\b(a|an|the|and|of|m\/s|messrs|ltd|limited|pvt|private|llp|inc|co|company|corp|corporation|enterprises?|trader|traders|trading|industries|industry|services?|store|stores)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenize(s: string): string[] {
+  return normalizeName(s).split(" ").filter((t) => t.length > 1);
+}
+
+/** Damerau–Levenshtein distance, capped for performance. */
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  const al = a.length, bl = b.length;
+  if (al === 0) return bl;
+  if (bl === 0) return al;
+  const prev = new Array(bl + 1);
+  const cur = new Array(bl + 1);
+  for (let j = 0; j <= bl; j++) prev[j] = j;
+  for (let i = 1; i <= al; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= bl; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      cur[j] = Math.min(
+        cur[j - 1] + 1,
+        prev[j] + 1,
+        prev[j - 1] + cost,
+      );
+    }
+    for (let j = 0; j <= bl; j++) prev[j] = cur[j];
+  }
+  return prev[bl];
+}
+
+/** Similarity in [0,1] combining edit distance + token overlap. */
+export function similarity(a: string, b: string): number {
+  const na = normalizeName(a);
+  const nb = normalizeName(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+
+  // Edit-distance ratio on the normalized strings.
+  const d = editDistance(na, nb);
+  const editScore = 1 - d / Math.max(na.length, nb.length);
+
+  // Token Jaccard with substring credit (handles word reorder + abbreviations).
+  const ta = new Set(tokenize(a));
+  const tb = new Set(tokenize(b));
+  if (ta.size === 0 || tb.size === 0) return Math.max(0, editScore);
+  let inter = 0;
+  for (const t of ta) {
+    if (tb.has(t)) { inter++; continue; }
+    // partial credit for prefix / contains (e.g. "hdfc" vs "hdfcbank")
+    for (const u of tb) {
+      if (t.length >= 3 && (u.startsWith(t) || t.startsWith(u) || u.includes(t) || t.includes(u))) {
+        inter += 0.5; break;
+      }
+    }
+  }
+  const union = ta.size + tb.size - Math.min(ta.size, tb.size);
+  const jaccard = inter / union;
+
+  return Math.max(editScore, 0.6 * jaccard + 0.4 * editScore);
+}
+
+export interface FuzzySuggestion {
+  index: number;            // index into the input ledgers array
+  source: string;           // original ledger name being matched
+  match: LedgerMappingRow;  // the saved mapping that was matched
+  score: number;            // similarity score in [0,1]
+}
+
+/** Build fuzzy-match suggestions for ledger rows that have NO exact saved match. */
+export function buildFuzzySuggestions(
+  rows: LedgerRecord[],
+  mappings: Map<string, LedgerMappingRow>,
+  threshold = 0.78,
+): FuzzySuggestion[] {
+  if (mappings.size === 0) return [];
+  const candidates = Array.from(mappings.values());
+  const normCandidates = candidates.map((c) => ({
+    cand: c,
+    norm: normalizeName(c.source_name),
+  }));
+  const out: FuzzySuggestion[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (mappings.has(lc(r.name))) continue; // exact match already handled
+    const nr = normalizeName(r.name);
+    if (!nr) continue;
+    let best: { cand: LedgerMappingRow; score: number } | null = null;
+    for (const { cand, norm } of normCandidates) {
+      // Cheap length filter to skip obvious mismatches
+      if (Math.abs(norm.length - nr.length) > Math.max(nr.length, norm.length) * 0.6) continue;
+      const s = similarity(r.name, cand.source_name);
+      if (!best || s > best.score) best = { cand, score: s };
+      if (best.score >= 0.99) break;
+    }
+    if (best && best.score >= threshold) {
+      out.push({ index: i, source: r.name, match: best.cand, score: best.score });
+    }
+  }
+  return out;
+}
+
+/** Apply a set of accepted fuzzy suggestions to ledger rows, returning a new array. */
+export function applyFuzzySuggestions(
+  rows: LedgerRecord[],
+  accepted: FuzzySuggestion[],
+): LedgerRecord[] {
+  if (accepted.length === 0) return rows;
+  const byIdx = new Map(accepted.map((s) => [s.index, s]));
+  return rows.map((r, i) => {
+    const s = byIdx.get(i);
+    if (!s) return r;
+    return { ...r, group_code: s.match.group_code, type: s.match.ledger_type };
+  });
+}
+
 /** Persist (upsert) mappings for the given ledger rows. */
 export async function saveLedgerMappings(
   companyId: string,
