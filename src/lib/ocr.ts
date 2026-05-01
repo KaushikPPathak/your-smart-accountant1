@@ -163,11 +163,13 @@ export async function extractTextFromFile(
       onProgress?.({ stage: "pdf-text", page: p, totalPages: pdf.numPages });
       const page = await pdf.getPage(p);
       const tc = await page.getTextContent();
-      const txt = reconstructPageText(
-        tc.items.filter((it): it is { str: string; transform: number[]; width?: number } =>
-          "str" in it && "transform" in it,
-        ),
-      );
+      const textItems = tc.items
+        .filter((it) => "str" in it && "transform" in it)
+        .map((it) => {
+          const ti = it as { str: string; transform: number[]; width?: number };
+          return { str: ti.str, transform: ti.transform, width: ti.width };
+        });
+      const txt = reconstructPageText(textItems);
       if (!isReadablePdfText(txt)) needOcr = true;
       pages.push(txt);
     }
