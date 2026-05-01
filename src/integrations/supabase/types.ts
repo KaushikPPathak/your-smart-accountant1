@@ -934,6 +934,42 @@ export type Database = {
           },
         ]
       }
+      ledger_group_mappings: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          group_code: string
+          id: string
+          ledger_type: string
+          source_name: string
+          source_name_lc: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          group_code: string
+          id?: string
+          ledger_type: string
+          source_name: string
+          source_name_lc: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          group_code?: string
+          id?: string
+          ledger_type?: string
+          source_name?: string
+          source_name_lc?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ledgers: {
         Row: {
           address: string | null
