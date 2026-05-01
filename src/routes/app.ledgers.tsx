@@ -325,7 +325,11 @@ function LedgersPage() {
                 <Plus className="mr-2 h-4 w-4" /> New ledger
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col p-0 gap-0">
+            <DialogContent
+              className="max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col p-0 gap-0"
+              onPointerDownOutside={(e) => e.preventDefault()}
+              onInteractOutside={(e) => e.preventDefault()}
+            >
               <DialogHeader className="px-4 sm:px-6 pt-4 pb-2 border-b shrink-0">
                 <DialogTitle className="text-base sm:text-lg">{editing ? "Edit ledger" : "Create new ledger"}</DialogTitle>
               </DialogHeader>
