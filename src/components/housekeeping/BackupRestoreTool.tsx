@@ -53,8 +53,8 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     try {
       const r = await writeLocalMirror(companyId, companyName, partyCode ?? null);
       toast.success(
-        r.isDesktop ? "Local copy saved to your PC" : "JSON + Excel downloaded",
-        { description: `${r.jsonFile} • ${r.xlsxFile}`, duration: 6000 },
+        r.isDesktop ? "Local copy saved to your PC" : "JSON backup downloaded",
+        { description: r.jsonFile, duration: 6000 },
       );
       try { localStorage.setItem(`lastBackup:${companyId}`, new Date().toISOString()); } catch { /* ignore */ }
     } catch (e) {
