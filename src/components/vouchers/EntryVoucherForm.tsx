@@ -98,27 +98,52 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       .then(({ data }) => setLedgers((data || []) as LedgerOpt[]));
   }, [activeCompanyId]);
 
-  // Load current closing balance for any ledger picked on a line (as of voucher date).
+  // Stable signature for the set of selected ledgers — prevents the balance
+  // fetch from firing on every keystroke in narration/debit/credit.
+  const selectedLedgerKey = useMemo(
+    () => Array.from(new Set(lines.map((l) => l.ledger_id).filter(Boolean))).sort().join(","),
+    [lines],
+  );
+
+  // Load closing balance only for newly-picked ledgers (scoped query, not a
+  // full company-wide scan). Scales to large databases.
   useEffect(() => {
     if (!activeCompanyId) return;
-    const ids = Array.from(new Set(lines.map((l) => l.ledger_id).filter(Boolean)));
-    const missing = ids.filter((id) => !(id in ledgerBalances));
+    const ids = selectedLedgerKey ? selectedLedgerKey.split(",") : [];
+    const missing = ids.filter((id) => id && !(id in ledgerBalances));
     if (missing.length === 0) return;
     let cancelled = false;
     (async () => {
-      const { fetchLedgerBalances } = await import("@/lib/reports");
-      const all = await fetchLedgerBalances(activeCompanyId, date);
+      const [{ data: ledgerRows }, { data: entryRows }] = await Promise.all([
+        supabase
+          .from("ledgers")
+          .select("id, opening_balance_paise, opening_balance_is_debit")
+          .in("id", missing),
+        supabase
+          .from("voucher_entries")
+          .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
+          .in("ledger_id", missing)
+          .eq("vouchers.company_id", activeCompanyId)
+          .lte("vouchers.voucher_date", date),
+      ]);
       if (cancelled) return;
+      const movement = new Map<string, number>();
+      for (const e of (entryRows || []) as { ledger_id: string; debit_paise: number; credit_paise: number }[]) {
+        movement.set(e.ledger_id, (movement.get(e.ledger_id) || 0) + e.debit_paise - e.credit_paise);
+      }
       setLedgerBalances((prev) => {
         const next = { ...prev };
-        for (const b of all) next[b.id] = { paise: b.closing_paise };
+        for (const lg of (ledgerRows || []) as { id: string; opening_balance_paise: number; opening_balance_is_debit: boolean }[]) {
+          const ob = (lg.opening_balance_is_debit ? 1 : -1) * lg.opening_balance_paise;
+          next[lg.id] = { paise: ob + (movement.get(lg.id) || 0) };
+        }
         return next;
       });
     })();
     return () => {
       cancelled = true;
     };
-  }, [activeCompanyId, lines, date, ledgerBalances]);
+  }, [activeCompanyId, selectedLedgerKey, date, ledgerBalances]);
 
   // Reset cache when date changes so balances reflect the new as-of date.
   useEffect(() => {
