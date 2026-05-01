@@ -116,6 +116,27 @@ export function yieldToUI(): Promise<void> {
   return new Promise((res) => setTimeout(res, 0));
 }
 
+/** User-tweakable import settings (from the settings panel). */
+export interface ImportSettings {
+  encoding: EncodingChoice;
+  stripNuls: boolean;
+  chunkSize: number;
+  previewLimit: number;
+}
+
+export const DEFAULT_IMPORT_SETTINGS: ImportSettings = {
+  encoding: "auto",
+  stripNuls: true,
+  chunkSize: 2000,
+  previewLimit: 200,
+};
+
+function postDecode(text: string, stripNuls: boolean): string {
+  let out = text.replace(/^\uFEFF/, "");
+  if (stripNuls) out = out.replace(/\u0000/g, "");
+  return out;
+}
+
 // ---------------- Parsing ----------------
 
 /** Row record + originating sheet name (helps classify CSV/Excel). */
