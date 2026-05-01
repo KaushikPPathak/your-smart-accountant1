@@ -17,6 +17,8 @@ export interface GstLineResult {
   sgst_paise: number;
   igst_paise: number;
   total_paise: number; // taxable + taxes
+  /** Leftover 1 paise when CGST/SGST split is odd. Folded into voucher round-off. */
+  rounding_paise: number;
 }
 
 /** Compute one line. interstate=true => IGST, else CGST+SGST split */
@@ -28,12 +30,18 @@ export function computeLine(input: GstLineInput, interstate: boolean): GstLineRe
 
   let cgst = 0,
     sgst = 0,
-    igst = 0;
+    igst = 0,
+    rounding = 0;
   if (interstate) {
     igst = gstAmount;
   } else {
-    cgst = Math.round(gstAmount / 2);
-    sgst = gstAmount - cgst;
+    // GST law requires CGST = SGST on every B2B invoice (GSTN portal validates).
+    // If gstAmount is odd, the leftover 1 paise becomes a voucher-level round-off
+    // so each line still has CGST exactly equal to SGST.
+    const half = Math.floor(gstAmount / 2);
+    cgst = half;
+    sgst = half;
+    rounding = gstAmount - (cgst + sgst); // 0 or 1 paise
   }
 
   return {
@@ -44,7 +52,8 @@ export function computeLine(input: GstLineInput, interstate: boolean): GstLineRe
     cgst_paise: cgst,
     sgst_paise: sgst,
     igst_paise: igst,
-    total_paise: taxable_paise + cgst + sgst + igst,
+    total_paise: taxable_paise + cgst + sgst + igst + rounding,
+    rounding_paise: rounding,
   };
 }
 
@@ -54,6 +63,8 @@ export interface VoucherTotals {
   sgst_paise: number;
   igst_paise: number;
   total_paise: number;
+  /** Sum of per-line CGST/SGST rounding remainders (paise). Already included in total_paise. */
+  rounding_paise: number;
 }
 
 export function sumLines(lines: GstLineResult[]): VoucherTotals {
@@ -64,8 +75,9 @@ export function sumLines(lines: GstLineResult[]): VoucherTotals {
       sgst_paise: acc.sgst_paise + l.sgst_paise,
       igst_paise: acc.igst_paise + l.igst_paise,
       total_paise: acc.total_paise + l.total_paise,
+      rounding_paise: acc.rounding_paise + l.rounding_paise,
     }),
-    { subtotal_paise: 0, cgst_paise: 0, sgst_paise: 0, igst_paise: 0, total_paise: 0 },
+    { subtotal_paise: 0, cgst_paise: 0, sgst_paise: 0, igst_paise: 0, total_paise: 0, rounding_paise: 0 },
   );
 }
 
