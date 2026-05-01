@@ -210,6 +210,14 @@ export function LedgerMappingPanel({
               disabled={disabled || loading || saved.size === 0}>
               <Wand2 className="mr-1 h-3.5 w-3.5" /> Apply saved
             </Button>
+            <Button size="sm" variant="outline" onClick={openFuzzyReview}
+              disabled={disabled || loading || saved.size === 0 || !fuzzyOn}>
+              <Sparkles className="mr-1 h-3.5 w-3.5" /> Review fuzzy matches
+            </Button>
+            <Button size="sm" variant="outline" onClick={autoMatchAndApply}
+              disabled={disabled || loading || saved.size === 0}>
+              <Sparkles className="mr-1 h-3.5 w-3.5" /> Auto-match all
+            </Button>
             <Button size="sm" variant="outline" onClick={() => persist("changed")}
               disabled={disabled || saving}>
               {saving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1 h-3.5 w-3.5" />}
@@ -220,6 +228,31 @@ export function LedgerMappingPanel({
               Save all as future defaults
             </Button>
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Switch id="fuzzy-on" checked={fuzzyOn} onCheckedChange={setFuzzyOn} disabled={disabled} />
+            <Label htmlFor="fuzzy-on" className="text-xs">
+              Fuzzy match when exact name not found
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Sensitivity</span>
+            <Slider
+              value={[Math.round(threshold * 100)]}
+              onValueChange={(v) => setThreshold((v[0] ?? 80) / 100)}
+              min={60} max={98} step={1}
+              className="w-[160px]"
+              disabled={disabled || !fuzzyOn}
+            />
+            <Badge variant="outline" className="text-[10px] tabular-nums">
+              ≥ {Math.round(threshold * 100)}%
+            </Badge>
+          </div>
+          <span className="text-[11px] text-muted-foreground">
+            Higher = stricter matches. Use <strong>Review fuzzy matches</strong> to confirm before applying.
+          </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
