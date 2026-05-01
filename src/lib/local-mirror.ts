@@ -236,14 +236,18 @@ export function getLastLocalMirror(companyId: string): string | null {
 export async function writeLocalMirror(
   companyId: string,
   companyName: string,
+  partyCode?: string | null,
 ): Promise<MirrorResult> {
   const backup = await buildCompanyBackup(companyId);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const safe = safeName(companyName);
-  const jsonFile = `${safe}_${stamp}.json`;
-  const xlsxFile = `${safe}_${stamp}.xlsx`;
-  const latestJson = `${safe}_latest.json`;
-  const latestXlsx = `${safe}_latest.xlsx`;
+  // Embed party code (GSTIN/PAN) into filename so backups are easy to recognise
+  // on the hard disk even when the company is renamed later.
+  const codePart = partyCode ? `_${safeName(partyCode)}` : "";
+  const jsonFile = `${safe}${codePart}_${stamp}.json`;
+  const xlsxFile = `${safe}${codePart}_${stamp}.xlsx`;
+  const latestJson = `${safe}${codePart}_latest.json`;
+  const latestXlsx = `${safe}${codePart}_latest.xlsx`;
 
   const jsonStr = JSON.stringify(backup, null, 2);
   const xlsxBytes = buildWorkbook(backup, companyName);

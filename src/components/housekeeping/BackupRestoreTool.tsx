@@ -20,10 +20,11 @@ import { writeLocalMirror } from "@/lib/local-mirror";
 interface Props {
   companyId: string;
   companyName: string;
+  partyCode?: string | null;
   disabled: boolean;
 }
 
-export function BackupRestoreTool({ companyId, companyName, disabled }: Props) {
+export function BackupRestoreTool({ companyId, companyName, partyCode, disabled }: Props) {
   const [exporting, setExporting] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [mirroring, setMirroring] = useState(false);
@@ -50,7 +51,7 @@ export function BackupRestoreTool({ companyId, companyName, disabled }: Props) {
     if (!companyId) return;
     setMirroring(true);
     try {
-      const r = await writeLocalMirror(companyId, companyName);
+      const r = await writeLocalMirror(companyId, companyName, partyCode ?? null);
       toast.success(
         r.isDesktop ? "Local copy saved to your PC" : "JSON + Excel downloaded",
         { description: `${r.jsonFile} • ${r.xlsxFile}`, duration: 6000 },

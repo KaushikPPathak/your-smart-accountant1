@@ -147,7 +147,14 @@ function HousekeepingPage() {
         </TabsContent>
         <TabsContent value="backup">
           {activeCompanyId ? (
-            <BackupRestoreTool companyId={activeCompanyId} companyName={companyName} disabled={!isAdmin} />
+            <BackupRestoreTool
+              companyId={activeCompanyId}
+              companyName={companyName}
+              partyCode={(activeMembership?.companies as { gstin?: string | null; pan?: string | null } | undefined)?.gstin
+                ?? (activeMembership?.companies as { gstin?: string | null; pan?: string | null } | undefined)?.pan
+                ?? null}
+              disabled={!isAdmin}
+            />
           ) : <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a company first.</CardContent></Card>}
         </TabsContent>
         <TabsContent value="merge">

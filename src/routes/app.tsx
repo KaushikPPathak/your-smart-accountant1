@@ -41,24 +41,17 @@ function AppLayout() {
   const isTrial = activeMembership?.companies?.mode === "trial_local";
   const lastSaveAt = activeCompanyId ? getLastLocalMirror(activeCompanyId) : null;
   void lastSaveTick;
+  const partyCode = (activeMembership?.companies as { gstin?: string | null; pan?: string | null } | undefined)?.gstin
+    ?? (activeMembership?.companies as { gstin?: string | null; pan?: string | null } | undefined)?.pan
+    ?? null;
 
-  // Manual "Backup now" handler
+  // Manual "Backup now" handler — silent. No toast on success; failures still
+  // surface so the user knows if the disk write failed.
   const onBackupNow = async () => {
     if (!activeCompanyId || !activeMembership) return;
     setSavingMirror(true);
     try {
-      const r = await writeLocalMirror(activeCompanyId, activeMembership.companies.name);
-      if (r.isDesktop) {
-        toast.success("Local copy saved", {
-          description: `${r.jsonFile} + ${r.xlsxFile}`,
-          duration: 5000,
-        });
-      } else {
-        toast.success("Local copy downloaded", {
-          description: "Browsers cannot write silently to disk — JSON + Excel were downloaded to your Downloads folder.",
-          duration: 6000,
-        });
-      }
+      await writeLocalMirror(activeCompanyId, activeMembership.companies.name, partyCode);
       setLastSaveTick((n) => n + 1);
     } catch (e) {
       toast.error((e as Error).message || "Local save failed");
@@ -67,19 +60,25 @@ function AppLayout() {
     }
   };
 
-  // Auto-save on app close for Trial / Local-only companies (best-effort).
-  // Browsers do NOT allow async work in beforeunload — we only attempt a sync
-  // best-effort flush. The Electron `before-quit` hook (in main.cjs) is the
-  // reliable path; the renderer informs it which company is active.
+  // Auto-save on app close for Trial / Local-only companies. This is the ONLY
+  // place where we surface a closing notification — silent during normal work,
+  // visible right before the window closes.
   useEffect(() => {
     if (!isTrial || !activeCompanyId || !activeMembership) return;
     const handler = () => {
-      // Fire and forget — we cannot await in beforeunload.
-      void writeLocalMirror(activeCompanyId, activeMembership.companies.name).catch(() => undefined);
+      // Show a brief closing notification (visible until the window unloads).
+      try {
+        toast.message("Saving local backup before close…", {
+          description: `${activeMembership.companies.name}${partyCode ? ` · ${partyCode}` : ""}`,
+          duration: 8000,
+        });
+      } catch { /* ignore */ }
+      // Fire and forget — beforeunload cannot await.
+      void writeLocalMirror(activeCompanyId, activeMembership.companies.name, partyCode).catch(() => undefined);
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [isTrial, activeCompanyId, activeMembership]);
+  }, [isTrial, activeCompanyId, activeMembership, partyCode]);
 
   // Auto sign-in (silent) so RLS works. No user-visible login.
   useEffect(() => {
@@ -194,6 +193,11 @@ function AppLayout() {
                     {savingMirror ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <HardDriveDownload className="h-3.5 w-3.5" />}
                     <span className="hidden sm:inline text-xs">{savingMirror ? "Saving…" : "Backup now"}</span>
                   </Button>
+                  {lastSaveAt && !savingMirror && (
+                    <span className="hidden text-[10px] text-muted-foreground md:inline" title={new Date(lastSaveAt).toLocaleString()}>
+                      Saved {new Date(lastSaveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
                 </>
               )}
               {activeMembership && (
