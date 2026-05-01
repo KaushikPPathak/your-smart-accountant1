@@ -193,6 +193,11 @@ function AppLayout() {
                     {savingMirror ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <HardDriveDownload className="h-3.5 w-3.5" />}
                     <span className="hidden sm:inline text-xs">{savingMirror ? "Saving…" : "Backup now"}</span>
                   </Button>
+                  {lastSaveAt && !savingMirror && (
+                    <span className="hidden text-[10px] text-muted-foreground md:inline" title={new Date(lastSaveAt).toLocaleString()}>
+                      Saved {new Date(lastSaveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
                 </>
               )}
               {activeMembership && (
