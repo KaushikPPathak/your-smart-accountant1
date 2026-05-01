@@ -18,7 +18,14 @@ import { Loader2, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { extractTextFromFile, type OcrProgress } from "@/lib/ocr";
-import { extractOpeningBalanceTotals, parseTrialBalanceText, type ExtractedOpening } from "@/lib/statement-parse";
+import {
+  extractOpeningBalanceTotals,
+  parseTrialBalanceText,
+  detectBalanceSheetShape,
+  detectAsOfDate,
+  type BalanceSheetShape,
+  type ExtractedOpening,
+} from "@/lib/statement-parse";
 import type { Database } from "@/integrations/supabase/types";
 import {
   ACCOUNT_GROUPS,
@@ -61,7 +68,18 @@ interface EditableRow extends ExtractedOpening {
 interface Props { companyId: string; disabled: boolean }
 
 export function OpeningBalanceImport({ companyId, disabled }: Props) {
-  const [year, setYear] = useState<number>(new Date().getFullYear());
+  // The date that opening balances will be posted as (editable; auto-derived
+  // from the document's "as at …" date).
+  const [openingDate, setOpeningDate] = useState<string>(() => {
+    const d = new Date();
+    // Default to next 1-Apr if before April, else this year's 1-Apr.
+    const y = d.getMonth() < 3 ? d.getFullYear() : d.getFullYear() + 1;
+    return `${y}-04-01`;
+  });
+  const [asOfDate, setAsOfDate] = useState<string | null>(null);
+  const [shape, setShape] = useState<BalanceSheetShape>("unknown");
+  const [matchedPhrase, setMatchedPhrase] = useState<string | null>(null);
+  const [isFyEnd, setIsFyEnd] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [busy, setBusy] = useState(false);
@@ -129,6 +147,14 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
       const text = await extractTextFromFile(file, setProgress);
       setRawText(text);
       setDocumentTotals(extractOpeningBalanceTotals(text));
+      // Detect document shape + as-of date
+      const detectedShape = detectBalanceSheetShape(text);
+      setShape(detectedShape);
+      const dateInfo = detectAsOfDate(text);
+      setAsOfDate(dateInfo.asOfDate);
+      setMatchedPhrase(dateInfo.matchedPhrase);
+      setIsFyEnd(dateInfo.isFinancialYearEnd);
+      if (dateInfo.asOfDate) setOpeningDate(dateInfo.openingDate);
       const parsed = parseTrialBalanceText(text);
       setRows(parsed.map((p, i) => {
         const groupCode = guessGroupCode(p.account_name, p.side, p.section_hint);
@@ -141,7 +167,12 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
           group_code: groupCode,
         };
       }));
-      toast.success(`Extracted ${parsed.length} accounts. Click "Show OCR text" to see what was read.`);
+      const shapeLabel = detectedShape === "horizontal" ? "Horizontal BS"
+        : detectedShape === "vertical" ? "Vertical BS"
+        : detectedShape === "t-format" ? "T-format Trial Balance"
+        : detectedShape === "trial-balance" ? "Trial Balance"
+        : "Unknown layout";
+      toast.success(`${shapeLabel}: extracted ${parsed.length} accounts${dateInfo.asOfDate ? ` as at ${dateInfo.asOfDate}` : ""}. Posting date set to ${dateInfo.openingDate}.`);
     } catch (e) {
       const err = e as Error;
       toast.error(err.message || "OCR failed");
@@ -185,6 +216,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
       toast.error("Selected ledger heads must match the Balance Sheet Sources and Applications totals.");
       return;
     }
+    if (!openingDate) { toast.error("Set the opening date first."); return; }
     setPosting(true);
     try {
       let created = 0, updated = 0;
@@ -229,7 +261,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
           updated++;
         }
       }
-      toast.success(`Opening balances posted as of 01/04/${year} — ${created} created, ${updated} updated`);
+      toast.success(`Opening balances posted as of ${openingDate} — ${created} created, ${updated} updated`);
       setRows([]); setFile(null);
       // refresh ledger list
       const { data } = await supabase
@@ -256,17 +288,31 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
           <Upload className="h-4 w-4" /> Opening Balance Import (Trial Balance / BS)
         </CardTitle>
         <CardDescription>
-          Upload a trial balance or balance sheet PDF/image. Offline OCR extracts account names and
-          amounts. Map each row to an existing ledger (or create new), then post opening balances as of
-          01/04/&lt;FY&gt;.
+          Upload a trial balance or balance sheet PDF/image — horizontal (Liabilities | Assets),
+          vertical (Sources / Applications), T-format or tabular trial balance are all auto-detected.
+          Offline OCR extracts account names + amounts; the as-at date is read from the document and
+          opening balances are posted as of the next day (so a 31-Mar sheet → 1-Apr opening).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
-            <Label className="text-xs">Financial Year (1 Apr)</Label>
-            <Input type="number" className="h-9 w-28" value={year}
-              onChange={(e) => setYear(parseInt(e.target.value) || new Date().getFullYear())} />
+            <Label className="text-xs">Opening date (posting)</Label>
+            <Input
+              type="date"
+              className="h-9 w-44"
+              value={openingDate}
+              onChange={(e) => setOpeningDate(e.target.value)}
+            />
+            {asOfDate ? (
+              <div className="text-[11px] text-muted-foreground">
+                Sheet dated <span className="font-medium">{asOfDate}</span>
+                {isFyEnd ? " (FY end → next day)" : ""}
+                {matchedPhrase ? ` · "${matchedPhrase}"` : ""}
+              </div>
+            ) : (
+              <div className="text-[11px] text-muted-foreground">No date in document — set manually.</div>
+            )}
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Document</Label>
@@ -289,6 +335,9 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
             )}
           </div>
           <div className="ml-auto flex items-center gap-2 text-xs">
+            {shape !== "unknown" && (
+              <Badge variant="secondary" className="capitalize">{shape.replace("-", " ")}</Badge>
+            )}
             {rawText && (
               <Button size="sm" variant="outline" onClick={() => setShowRaw((v) => !v)}>
                 {showRaw ? "Hide" : "Show"} OCR text

@@ -265,6 +265,153 @@ export function extractOpeningBalanceTotals(text: string): OpeningBalanceTotals 
   return totals;
 }
 
+// ============================================================================
+// Document shape + as-of date detection
+// ============================================================================
+
+export type BalanceSheetShape =
+  | "horizontal"      // Two-column "Liabilities | Assets" (Tally / Busy print)
+  | "vertical"        // Single column with section headings (Sources / Applications)
+  | "t-format"        // Two columns: Dr accounts left, Cr accounts right
+  | "trial-balance"   // "Particulars | Debit | Credit" tabular trial balance
+  | "unknown";
+
+/**
+ * Best-effort layout detector. We look at the linearised OCR/PDF text and
+ * decide which of the 4 common Indian-accounting layouts the document is in.
+ * The parser then chooses the right strategy. (For PDFs the ocr.ts layer
+ * already split horizontal two-column pages into "left then right" — but we
+ * still detect the shape here so the UI can show it and so that pure-image
+ * OCR scans get the same treatment.)
+ */
+export function detectBalanceSheetShape(text: string): BalanceSheetShape {
+  const t = normaliseOpeningText(text);
+  const lower = t.toLowerCase();
+
+  // Trial-balance tabular: explicit Debit + Credit column headers near the top
+  if (/\bparticulars\b[\s\S]{0,80}\bdebit\b[\s\S]{0,40}\bcredit\b/i.test(t)) return "trial-balance";
+  if (/\bdr\.?\s*amount\b[\s\S]{0,60}\bcr\.?\s*amount\b/i.test(t)) return "trial-balance";
+
+  // T-format trial balance: "Dr." and "Cr." appear as column headers AND a pipe/gap split
+  if (/\bdr\.\s*$/im.test(t) && /\bcr\.\s*$/im.test(t)) return "t-format";
+
+  // Horizontal balance sheet: BOTH "Liabilities" and "Assets" present at top
+  const hasLiab = /\bliabilit(y|ies)\b/i.test(lower);
+  const hasAsst = /\bassets?\b/i.test(lower);
+  if (hasLiab && hasAsst) return "horizontal";
+
+  // Vertical (Schedule III / Tally vertical): Sources of Funds + Applications of Funds
+  if (/\bsources?\s+of\s+funds\b/i.test(lower) && /\bapplication(s)?\s+of\s+funds\b/i.test(lower))
+    return "vertical";
+  // Vertical Schedule III variant
+  if (/\bequity\s+and\s+liabilit(y|ies)\b/i.test(lower) && /\b(non[- ]current|current)\s+assets?\b/i.test(lower))
+    return "vertical";
+
+  return "unknown";
+}
+
+export interface AsOfDateInfo {
+  /** ISO date parsed from the document, e.g. "2025-03-31" — null if not found. */
+  asOfDate: string | null;
+  /** The date that opening balances should be posted as (always one day after asOfDate). */
+  openingDate: string;
+  /** True when asOfDate is 31-Mar (Indian FY end) → opening = 1-Apr next FY. */
+  isFinancialYearEnd: boolean;
+  /** Human-friendly source phrase from the document (for the UI). */
+  matchedPhrase: string | null;
+}
+
+const AS_OF_RXES: RegExp[] = [
+  // "as at 31-03-2025", "as on 31/03/2025", "as of 31.03.2025"
+  /\bas\s+(?:at|on|of)\s+(\d{1,2}[./\-\s](?:\d{1,2}|[A-Za-z]{3,9})[./\-\s]\d{2,4})\b/i,
+  // "at the end of 31-03-2025"
+  /\bat\s+the\s+end\s+of\s+(\d{1,2}[./\-\s](?:\d{1,2}|[A-Za-z]{3,9})[./\-\s]\d{2,4})\b/i,
+  // "for the (year|period) ended 31-03-2025"
+  /\b(?:year|period|quarter|month)\s+end(?:ed|ing)\s+(\d{1,2}[./\-\s](?:\d{1,2}|[A-Za-z]{3,9})[./\-\s]\d{2,4})\b/i,
+  // "Date: 31/03/2025"
+  /\bdate\s*[:\-]\s*(\d{1,2}[./\-\s](?:\d{1,2}|[A-Za-z]{3,9})[./\-\s]\d{2,4})\b/i,
+  // Bare ( ... 31-03-2025 ... )
+  /\(\s*[^()]*?(\d{1,2}[./\-\s](?:\d{1,2}|[A-Za-z]{3,9})[./\-\s]\d{2,4})[^()]*?\)/i,
+  // "31st March 2025"
+  /\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})[\s,]+(\d{2,4})\b/i,
+];
+
+function parseDateLoose(s: string): string | null {
+  // Normalise separators and try DATE_RX first
+  const cleaned = s.trim().replace(/\s+/g, " ");
+  const m = cleaned.match(DATE_RX);
+  if (m) return isoFromMatch(m);
+  // "31 March 2025" form
+  const ddmmyyyy = cleaned.match(/^(\d{1,2})[\s.\-/]+([A-Za-z]{3,9})[\s.\-/,]+(\d{2,4})$/);
+  if (ddmmyyyy) return isoFromMatch(ddmmyyyy as RegExpMatchArray);
+  return null;
+}
+
+function addOneDayIso(iso: string): string {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Parse the "as of" date from a balance sheet / trial balance and decide the
+ * opening-balance posting date.
+ *
+ * Indian convention:
+ *   - A balance sheet "as at 31-Mar-YYYY" represents CLOSING balances of
+ *     FY (YYYY-1)–YYYY. The OPENING balances of the next FY (YYYY)–(YYYY+1)
+ *     equal those closing balances dated 01-Apr-YYYY.
+ *   - A balance sheet dated 01-Apr-YYYY represents the OPENING balances of
+ *     FY YYYY–(YYYY+1) directly (no shift needed).
+ *   - For any other intermediate date, opening = next day.
+ */
+export function detectAsOfDate(text: string, fallback?: string): AsOfDateInfo {
+  const t = normaliseOpeningText(text);
+
+  let phrase: string | null = null;
+  let iso: string | null = null;
+
+  for (const rx of AS_OF_RXES) {
+    const m = t.match(rx);
+    if (!m) continue;
+    if (m.length === 4 && /^[A-Za-z]/.test(m[2])) {
+      // "31st March 2025" form
+      iso = parseDateLoose(`${m[1]} ${m[2]} ${m[3]}`);
+    } else {
+      iso = parseDateLoose(m[1]);
+    }
+    if (iso) {
+      phrase = m[0];
+      break;
+    }
+  }
+
+  // Fallback: any standalone DD-MM-YYYY appearing in the first 400 chars (header).
+  if (!iso) {
+    const head = t.slice(0, 400);
+    const m = head.match(DATE_RX);
+    if (m) {
+      iso = isoFromMatch(m);
+      if (iso) phrase = m[0];
+    }
+  }
+
+  if (!iso) {
+    const fb = fallback || new Date().toISOString().slice(0, 10);
+    return { asOfDate: null, openingDate: fb, isFinancialYearEnd: false, matchedPhrase: null };
+  }
+
+  const [, mo, dd] = iso.split("-");
+  const isFyEnd = mo === "03" && dd === "31";
+  const isAprilFirst = mo === "04" && dd === "01";
+
+  // 01-Apr → that IS the opening date already.
+  // Anything else (including 31-Mar) → opening = next day.
+  const openingDate = isAprilFirst ? iso : addOneDayIso(iso);
+
+  return { asOfDate: iso, openingDate, isFinancialYearEnd: isFyEnd, matchedPhrase: phrase };
+}
+
 function isOpeningGroupLabel(name: string): boolean {
   return GROUP_HEADINGS.some((heading) => heading.rx.test(name));
 }
