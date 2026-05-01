@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -16,7 +22,7 @@ import {
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
-import { Loader2, Save, Wand2, RotateCcw, Tags } from "lucide-react";
+import { Loader2, Save, Wand2, RotateCcw, Tags, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
   ACCOUNT_GROUPS,
@@ -26,8 +32,11 @@ import {
 import { LEDGER_TYPES, type LedgerTypeValue } from "@/lib/constants";
 import {
   applyMappingsToLedgers,
+  applyFuzzySuggestions,
+  buildFuzzySuggestions,
   fetchLedgerMappings,
   saveLedgerMappings,
+  type FuzzySuggestion,
   type LedgerMappingRow,
   type LedgerRecord,
   type LedgerType,
@@ -50,6 +59,13 @@ export function LedgerMappingPanel({
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "mapped" | "unmapped">("all");
 
+  // Fuzzy matching settings + review state.
+  const [fuzzyOn, setFuzzyOn] = useState(true);
+  const [threshold, setThreshold] = useState(0.82); // 0..1
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<FuzzySuggestion[]>([]);
+  const [accepted, setAccepted] = useState<Set<number>>(new Set());
+
   // Load existing saved mappings on mount / company change.
   useEffect(() => {
     if (!companyId) return;
@@ -67,6 +83,49 @@ export function LedgerMappingPanel({
     onChange(next);
     const hits = ledgers.filter((r) => saved.has(r.name.toLowerCase())).length;
     toast.success(`Applied ${hits} saved mapping${hits === 1 ? "" : "s"}`);
+  }
+
+  function openFuzzyReview() {
+    if (saved.size === 0) {
+      toast.info("No saved mappings yet — save some first to enable fuzzy match.");
+      return;
+    }
+    const sugg = buildFuzzySuggestions(ledgers, saved, threshold);
+    if (sugg.length === 0) {
+      toast.info("No close matches found above the current threshold.");
+      return;
+    }
+    setSuggestions(sugg);
+    setAccepted(new Set(sugg.map((s) => s.index))); // accept all by default
+    setReviewOpen(true);
+  }
+
+  function applyAcceptedFuzzy() {
+    const picks = suggestions.filter((s) => accepted.has(s.index));
+    if (picks.length === 0) {
+      setReviewOpen(false);
+      return;
+    }
+    const next = applyFuzzySuggestions(ledgers, picks);
+    onChange(next);
+    toast.success(`Auto-matched ${picks.length} ledger${picks.length === 1 ? "" : "s"}`);
+    setReviewOpen(false);
+  }
+
+  function autoMatchAndApply() {
+    if (saved.size === 0) {
+      toast.info("No saved mappings yet — save some first.");
+      return;
+    }
+    // First exact, then fuzzy in one shot.
+    const exact = applyMappingsToLedgers(ledgers, saved);
+    const sugg = buildFuzzySuggestions(exact, saved, threshold);
+    const next = applyFuzzySuggestions(exact, sugg);
+    onChange(next);
+    const exactHits = ledgers.filter((r) => saved.has(r.name.toLowerCase())).length;
+    toast.success(
+      `Auto-mapped ${exactHits} exact + ${sugg.length} fuzzy match${sugg.length === 1 ? "" : "es"}`,
+    );
   }
 
   function setRowGroup(idx: number, code: string) {
