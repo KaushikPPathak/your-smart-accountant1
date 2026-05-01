@@ -165,6 +165,7 @@ function downloadFailedCsv(name: string, rows: { name: string; reason: string }[
 // =====================================================================
 function CombinedImporter({ companyId, disabled }: Props) {
   const [file, setFile] = useState<File | null>(null);
+  const [settings, setSettings] = useState<ImportSettings>(DEFAULT_IMPORT_SETTINGS);
   const [stage, setStage] = useState("");
   const [done, setDone] = useState(0);
   const [total, setTotal] = useState(0);
@@ -189,12 +190,14 @@ function CombinedImporter({ companyId, disabled }: Props) {
     try {
       setStage("Decoding & parsing file");
       setDone(0); setTotal(0);
-      const data = await parseFileOrZip(f);
+      const data = await parseFileOrZip(f, settings);
       setStage("Classifying records");
       setTotal(data.length);
-      const out = await classifyAndMap(data, (d, t, label) => {
-        setDone(d); setTotal(t); if (label) setStage(label);
-      });
+      const out = await classifyAndMap(
+        data,
+        (d, t, label) => { setDone(d); setTotal(t); if (label) setStage(label); },
+        settings.chunkSize,
+      );
       const lRows: LedgerRow[] = out.ledgers.map((x, i) => ({ ...x, _key: `l${i}` }));
       const iRows: ItemRow[] = out.items.map((x, i) => ({ ...x, _key: `i${i}` }));
       const vRows: VoucherRow[] = out.vouchers.map((x, i) => ({ ...x, _key: `v${i}` }));
@@ -271,6 +274,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
   return (
     <div className="space-y-3">
       {dialog}
+      <ImportSettingsPanel value={settings} onChange={setSettings} disabled={busy || posting} />
       <div className="space-y-1">
         <Label>Single Tally / Busy export (XML, ZIP, Excel, CSV)</Label>
         {input}
@@ -327,6 +331,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
                 <AccordionContent>
                   <PreviewSection
                     rows={ledgers} sel={selL} setSel={setSelL}
+                    previewLimit={settings.previewLimit}
                     headers={<><TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Type</TableHead><TableHead>GSTIN</TableHead><TableHead className="text-right">Opening</TableHead></>}
                     render={(r) => <LedgerCols r={r} />}
                     matches={(r, q) => r.name.toLowerCase().includes(q) || r.gstin.toLowerCase().includes(q)}
@@ -344,6 +349,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
                 <AccordionContent>
                   <PreviewSection
                     rows={items} sel={selI} setSel={setSelI}
+                    previewLimit={settings.previewLimit}
                     headers={<><TableHead>Name</TableHead><TableHead>HSN</TableHead><TableHead>Unit</TableHead><TableHead className="text-right">GST %</TableHead><TableHead className="text-right">Op. Qty</TableHead><TableHead className="text-right">Op. Rate</TableHead><TableHead className="text-right">Sale ₹</TableHead></>}
                     render={(r) => <ItemCols r={r} />}
                     matches={(r, q) => r.name.toLowerCase().includes(q) || r.hsn.toLowerCase().includes(q)}
@@ -361,6 +367,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
                 <AccordionContent>
                   <PreviewSection
                     rows={vouchers} sel={selV} setSel={setSelV}
+                    previewLimit={settings.previewLimit}
                     headers={<><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Vch No</TableHead><TableHead>Party</TableHead><TableHead className="text-right">Amount ₹</TableHead></>}
                     render={(r) => <VoucherCols r={r} />}
                     matches={(r, q) => r.party.toLowerCase().includes(q) || r.voucher_no.toLowerCase().includes(q) || r.date.includes(q)}
