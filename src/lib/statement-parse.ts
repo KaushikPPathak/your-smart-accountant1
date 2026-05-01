@@ -198,6 +198,7 @@ function stripOpeningContext(label: string, fallbackSide: "Dr" | "Cr") {
     .replace(/\s+/g, " ")
     .trim();
   let side = fallbackSide;
+  let section = "";
 
   let changed = true;
   while (changed && name) {
@@ -216,6 +217,7 @@ function stripOpeningContext(label: string, fallbackSide: "Dr" | "Cr") {
       const match = name.match(heading.rx);
       if (match) {
         side = heading.side;
+        if (heading.group) section = heading.group;
         const rest = name.slice(match[0].length).trim();
         if (rest) {
           name = rest;
@@ -227,7 +229,7 @@ function stripOpeningContext(label: string, fallbackSide: "Dr" | "Cr") {
   }
 
   name = name.replace(/^[.\-–—]+|[.\-–—]+$/g, "").trim();
-  return { name, side };
+  return { name, side, section };
 }
 
 function dedupeOpenings(rows: ExtractedOpening[]): ExtractedOpening[] {
