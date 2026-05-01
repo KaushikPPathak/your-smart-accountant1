@@ -533,10 +533,11 @@ interface PreviewProps<T extends Keyed> {
   headers: React.ReactNode;
   render: (r: T) => React.ReactNode;
   matches: (r: T, q: string) => boolean;
+  previewLimit?: number;
 }
 
 function PreviewSection<T extends Keyed>(props: PreviewProps<T>) {
-  const { rows, sel, setSel, headers, render, matches } = props;
+  const { rows, sel, setSel, headers, render, matches, previewLimit = 200 } = props;
   const [q, setQ] = useState("");
 
   const filtered = useMemo(() => {
@@ -544,7 +545,7 @@ function PreviewSection<T extends Keyed>(props: PreviewProps<T>) {
     return s ? rows.filter((r) => matches(r, s)) : rows;
   }, [rows, q, matches]);
 
-  const visible = filtered.slice(0, PREVIEW_LIMIT);
+  const visible = filtered.slice(0, previewLimit);
   const allFilteredSelected = filtered.length > 0 && filtered.every((r) => sel.has(r._key));
 
   function toggleAllFiltered(on: boolean) {
@@ -571,11 +572,11 @@ function PreviewSection<T extends Keyed>(props: PreviewProps<T>) {
           className="h-8 max-w-xs"
         />
         <span className="text-xs text-muted-foreground">
-          Showing {Math.min(visible.length, PREVIEW_LIMIT)} of {filtered.length}
+          Showing {Math.min(visible.length, previewLimit)} of {filtered.length}
           {q && ` (filtered from ${rows.length})`}
         </span>
-        {filtered.length > PREVIEW_LIMIT && (
-          <Badge variant="outline" className="text-[10px]">Preview capped at {PREVIEW_LIMIT} rows</Badge>
+        {filtered.length > previewLimit && (
+          <Badge variant="outline" className="text-[10px]">Preview capped at {previewLimit} rows</Badge>
         )}
       </div>
       <div className="max-h-[360px] overflow-auto rounded border">
