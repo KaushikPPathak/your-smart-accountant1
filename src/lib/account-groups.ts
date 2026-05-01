@@ -204,6 +204,22 @@ export function defaultGroupCodeForType(type: LedgerTypeValue): string {
   return map[type];
 }
 
+/** Patterns that are strong enough to override an explicit section heading.
+ *  Used when an OCR'd PDF mistakenly lists, e.g., "HDFC Bank Loan A/c" under
+ *  "Capital Account" — a name with a strong identifier (HDFC) takes priority.
+ *  Anything not in this list defers to the section heading. */
+const STRONG_OVERRIDE_HINTS: { rx: RegExp; code: string }[] = [
+  { rx: /\b(hdfc|icici|sbi|axis|kotak|yes\s*bank|idfc|canara|bob|bank\s+of\s+baroda|sutex)\b/i, code: "BANK_ACCOUNTS" },
+  { rx: /\b(cgst|sgst|igst|tds|tcs|gst\s+payable)\b/i, code: "DUTIES_AND_TAXES" },
+  { rx: /\b(petty\s+cash|cash\s+a\/c|cash\s+in\s+hand)\b/i, code: "CASH_IN_HAND" },
+];
+/** Generic catch-all section codes that LOSE to a strong override. */
+const GENERIC_HINT_CODES = new Set([
+  "CURRENT_ASSETS",
+  "CURRENT_LIABILITIES",
+  "MISC_EXPENSES_ASSET",
+]);
+
 /** Best-guess group code for an account name + Dr/Cr side, using regex hints. */
 export function guessGroupCode(name: string, side: AccountSide, sectionHint?: string): string {
   const n = name.trim();
@@ -212,21 +228,18 @@ export function guessGroupCode(name: string, side: AccountSide, sectionHint?: st
     return side === "Dr" ? "CURRENT_ASSETS" : "CURRENT_LIABILITIES";
   }
 
-  // If the OCR section heading gave us a strong hint AND the row's name doesn't
-  // strongly belong to a different specific group on the same side, prefer the
-  // section hint. This matches Tally-style sectioned balance sheets where the
-  // heading is the source of truth (e.g. all rows under "Capital Account" go
-  // to CAPITAL_ACCOUNT even when the row name is just a person's name).
+  // Section heading is normally the source of truth. We only override it when:
+  //   (a) the section is a generic catch-all (CURRENT_ASSETS / CURRENT_LIABILITIES), AND
+  //   (b) the row name contains a STRONG identifier (HDFC, CGST, etc.).
+  // This prevents the previous bug where any same-side regex hit (e.g. the
+  // word "bank" in a person's name) silently overrode an explicit section
+  // heading like "Capital Account".
   if (sectionHint && GROUP_BY_CODE[sectionHint]) {
-    const hintGroup = GROUP_BY_CODE[sectionHint];
-    // Look for a same-side group whose hints clearly match the name
-    const overrideMatch = ACCOUNT_GROUPS.find(
-      (g) => g.side === side && g.code !== sectionHint && g.hints?.some((rx) => rx.test(n)),
-    );
-    if (!overrideMatch) return sectionHint;
-    // If the section hint itself also matches the name, keep the hint
-    if (hintGroup.hints?.some((rx) => rx.test(n))) return sectionHint;
-    return overrideMatch.code;
+    if (GENERIC_HINT_CODES.has(sectionHint)) {
+      const strong = STRONG_OVERRIDE_HINTS.find((h) => h.rx.test(n));
+      if (strong && GROUP_BY_CODE[strong.code]?.side === side) return strong.code;
+    }
+    return sectionHint;
   }
 
   // Try to match hints, preferring groups whose natural side matches the row's side.
