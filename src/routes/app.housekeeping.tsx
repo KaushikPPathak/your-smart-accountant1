@@ -770,6 +770,7 @@ function CleanupTool({ companyId, disabled }: { companyId: string | null; disabl
 // ============================================================================
 function RecomputeTool({ companyId, disabled }: { companyId: string | null; disabled: boolean }) {
   const [busy, setBusy] = useState(false);
+  const [snapBusy, setSnapBusy] = useState(false);
 
   async function recomputeSeq() {
     if (!companyId) return;
@@ -806,6 +807,23 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
     }
   }
 
+  async function rebuildSnapshot() {
+    if (!companyId) return;
+    setSnapBusy(true);
+    try {
+      const { data, error } = await supabase.rpc("recompute_monthly_balances", {
+        _company_id: companyId,
+      });
+      if (error) throw error;
+      toast.success(`Monthly balance snapshot rebuilt — ${data ?? 0} rows`);
+    } catch (err) {
+      const e = err as { message?: string };
+      toast.error(`Snapshot rebuild failed: ${e.message || "unknown"}`);
+    } finally {
+      setSnapBusy(false);
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -818,10 +836,20 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Button onClick={recomputeSeq} disabled={busy || disabled}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />
-          {busy ? "Recomputing…" : "Recompute next-number for all voucher types"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={recomputeSeq} disabled={busy || disabled}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+            {busy ? "Recomputing…" : "Recompute next-number for all voucher types"}
+          </Button>
+          <Button onClick={rebuildSnapshot} disabled={snapBusy || disabled} variant="outline">
+            <RefreshCw className={`mr-2 h-4 w-4 ${snapBusy ? "animate-spin" : ""}`} />
+            {snapBusy ? "Rebuilding…" : "Rebuild monthly balance snapshot"}
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          The monthly balance snapshot keeps Trial Balance, P&amp;L and Balance Sheet instant on large
+          datasets. Rebuild after big imports, restores, or any direct database change.
+        </p>
       </CardContent>
     </Card>
   );
