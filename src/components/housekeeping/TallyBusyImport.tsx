@@ -389,6 +389,7 @@ function SingleImporter({
   companyId, disabled, kind, hint,
 }: Props & { kind: "ledger" | "item" | "voucher"; hint: string }) {
   const [file, setFile] = useState<File | null>(null);
+  const [settings, setSettings] = useState<ImportSettings>(DEFAULT_IMPORT_SETTINGS);
   const [busy, setBusy] = useState(false);
   const [posting, setPosting] = useState(false);
   const [stage, setStage] = useState("");
@@ -407,11 +408,13 @@ function SingleImporter({
     setLedgers([]); setItems([]); setVouchers([]);
     try {
       setStage("Decoding & parsing file");
-      const data = await parseFileOrZip(f);
+      const data = await parseFileOrZip(f, settings);
       setStage("Classifying records"); setTotal(data.length); setDone(0);
-      const out = await classifyAndMap(data, (d, t, l) => {
-        setDone(d); setTotal(t); if (l) setStage(l);
-      });
+      const out = await classifyAndMap(
+        data,
+        (d, t, l) => { setDone(d); setTotal(t); if (l) setStage(l); },
+        settings.chunkSize,
+      );
       if (kind === "ledger") {
         const rows: LedgerRow[] = out.ledgers.map((x, i) => ({ ...x, _key: `l${i}` }));
         setLedgers(rows); setSelL(new Set(rows.map((r) => r._key)));
@@ -470,6 +473,7 @@ function SingleImporter({
   return (
     <div className="space-y-3">
       {dialog}
+      <ImportSettingsPanel value={settings} onChange={setSettings} disabled={busy || posting} />
       <div className="space-y-1">
         <Label>Tally XML, CSV, Excel, or ZIP</Label>
         {input}
@@ -495,6 +499,7 @@ function SingleImporter({
       {kind === "ledger" && ledgers.length > 0 && !busy && (
         <SectionPreview
           title="Ledgers" rows={ledgers} sel={selL} setSel={setSelL}
+          previewLimit={settings.previewLimit}
           onPost={onPost} posting={posting} disabled={disabled}
           render={(r) => <LedgerCols r={r} />}
           headers={<><TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Type</TableHead><TableHead>GSTIN</TableHead><TableHead className="text-right">Opening</TableHead></>}
@@ -504,6 +509,7 @@ function SingleImporter({
       {kind === "item" && items.length > 0 && !busy && (
         <SectionPreview
           title="Items" rows={items} sel={selI} setSel={setSelI}
+          previewLimit={settings.previewLimit}
           onPost={onPost} posting={posting} disabled={disabled}
           render={(r) => <ItemCols r={r} />}
           headers={<><TableHead>Name</TableHead><TableHead>HSN</TableHead><TableHead>Unit</TableHead><TableHead className="text-right">GST %</TableHead><TableHead className="text-right">Op. Qty</TableHead><TableHead className="text-right">Op. Rate</TableHead><TableHead className="text-right">Sale ₹</TableHead></>}
@@ -513,6 +519,7 @@ function SingleImporter({
       {kind === "voucher" && vouchers.length > 0 && !busy && (
         <SectionPreview
           title="Vouchers" rows={vouchers} sel={selV} setSel={setSelV}
+          previewLimit={settings.previewLimit}
           onPost={onPost} posting={posting} disabled={disabled}
           render={(r) => <VoucherCols r={r} />}
           headers={<><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Vch No</TableHead><TableHead>Party</TableHead><TableHead className="text-right">Amount ₹</TableHead></>}
