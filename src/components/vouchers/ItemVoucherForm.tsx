@@ -211,13 +211,13 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const canWrite =
     activeMembership?.role === "admin" || activeMembership?.role === "accountant";
 
-  const save = useCallback(async () => {
+  const performSave = useCallback(async () => {
     if (!activeCompanyId || !canWrite) return;
     if (!partyId) {
       toast.error(`Select a ${cfg.partyLabel.toLowerCase()}`);
       return;
     }
-    const validLines = lines.filter((l, i) => l.item_id && computed[i].total_paise > 0);
+    const validLines = lines.filter((l, i) => l.item_id && computed[i]?.total_paise > 0);
     if (validLines.length === 0) {
       toast.error("Add at least one item line");
       return;
@@ -266,80 +266,76 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       return;
     }
 
-    setSaving(true);
-    try {
-      // 1. Get next voucher number
+    // Snapshot for background save
+    const snap = {
+      companyId: activeCompanyId,
+      voucherType, voucherDate: date, partyId,
+      refNo, narration, placeOfSupply, interstate,
+      totals: { ...totals, round_off_paise: roundOffPaise },
+      lines: lines.map((l, i) => ({ l, c: computed[i] })).filter((x) => x.l.item_id && x.c?.total_paise > 0),
+    };
+    rememberNarration(voucherType, narration);
+    // Reset form INSTANTLY
+    setPartyId("");
+    setRefNo("");
+    setNarration("");
+    setLines([blankLine()]);
+    setFocusedLine(0);
+    setSavedTick((n) => n + 1);
+    enqueueSave(`${cfg.title} ${snap.voucherDate}`, async () => {
       const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
-        _company_id: activeCompanyId,
-        _type: voucherType,
+        _company_id: snap.companyId, _type: snap.voucherType,
       });
       if (numErr) throw numErr;
-
-      // 2. Insert voucher
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
-
       const { data: vData, error: vErr } = await supabase
         .from("vouchers")
         .insert({
-          company_id: activeCompanyId,
+          company_id: snap.companyId,
           created_by: user.id,
-          voucher_type: voucherType,
+          voucher_type: snap.voucherType,
           voucher_number: numData as string,
-          voucher_date: date,
-          party_ledger_id: partyId,
-          reference_no: refNo || null,
-          narration: narration || null,
-          is_interstate: interstate,
-          subtotal_paise: totals.subtotal_paise,
-          cgst_paise: totals.cgst_paise,
-          sgst_paise: totals.sgst_paise,
-          igst_paise: totals.igst_paise,
-          round_off_paise: roundOffPaise,
-          total_paise: totals.total_paise,
-          place_of_supply_code: placeOfSupply || null,
+          voucher_date: snap.voucherDate,
+          party_ledger_id: snap.partyId,
+          reference_no: snap.refNo || null,
+          narration: snap.narration || null,
+          is_interstate: snap.interstate,
+          subtotal_paise: snap.totals.subtotal_paise,
+          cgst_paise: snap.totals.cgst_paise,
+          sgst_paise: snap.totals.sgst_paise,
+          igst_paise: snap.totals.igst_paise,
+          round_off_paise: snap.totals.round_off_paise,
+          total_paise: snap.totals.total_paise,
+          place_of_supply_code: snap.placeOfSupply || null,
         })
-        .select("id")
-        .single();
+        .select("id").single();
       if (vErr) throw vErr;
-
-      // 3. Insert items
-      const itemRows = lines
-        .map((l, i) => {
-          if (!l.item_id || computed[i].total_paise <= 0) return null;
-          const c = computed[i];
-          return {
-            voucher_id: vData.id,
-            item_id: l.item_id,
-            line_no: i + 1,
-            description: l.description || null,
-            qty: parseFloat(l.qty) || 0,
-            rate_paise: rupeesToPaise(parseFloat(l.rate) || 0),
-            discount_paise: c.discount_paise,
-            amount_paise: c.amount_paise,
-            taxable_paise: c.taxable_paise,
-            gst_rate: c.gst_rate,
-            cgst_paise: c.cgst_paise,
-            sgst_paise: c.sgst_paise,
-            igst_paise: c.igst_paise,
-          };
-        })
-        .filter(Boolean) as object[];
-      const { error: iErr } = await supabase
-        .from("voucher_items")
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .insert(itemRows as any);
+      const itemRows = snap.lines.map(({ l, c }, i) => ({
+        voucher_id: vData.id,
+        item_id: l.item_id,
+        line_no: i + 1,
+        description: l.description || null,
+        qty: parseFloat(l.qty) || 0,
+        rate_paise: rupeesToPaise(parseFloat(l.rate) || 0),
+        discount_paise: c.discount_paise,
+        amount_paise: c.amount_paise,
+        taxable_paise: c.taxable_paise,
+        gst_rate: c.gst_rate,
+        cgst_paise: c.cgst_paise,
+        sgst_paise: c.sgst_paise,
+        igst_paise: c.igst_paise,
+      }));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: iErr } = await supabase.from("voucher_items").insert(itemRows as any);
       if (iErr) throw iErr;
-
-      // 4. Auto-post double-entry ledger postings so reports balance.
-      // Sales orders, delivery challans, and quotations are non-financial — no postings.
-      const skipPostings = voucherType === "sales_order" || voucherType === "delivery_note" || voucherType === "quotation";
+      const skipPostings = snap.voucherType === "sales_order" || snap.voucherType === "delivery_note" || snap.voucherType === "quotation";
       if (!skipPostings) {
         const postings = await buildItemVoucherPostings(
-          activeCompanyId,
-          voucherType as "sales" | "purchase" | "credit_note" | "debit_note",
-          partyId,
-          { ...totals, round_off_paise: roundOffPaise },
+          snap.companyId,
+          snap.voucherType as "sales" | "purchase" | "credit_note" | "debit_note",
+          snap.partyId,
+          snap.totals,
         );
         const entryRows = postings.map((p) => ({
           voucher_id: vData.id,
@@ -348,50 +344,34 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           credit_paise: p.credit_paise,
           line_no: p.line_no,
         }));
-        const { error: eErr } = await supabase
-          .from("voucher_entries")
-          .insert(entryRows);
+        const { error: eErr } = await supabase.from("voucher_entries").insert(entryRows);
         if (eErr) throw eErr;
       }
-
-      toast.success(`${cfg.title} ${numData} saved`);
-
-      // Auto-prompt E-Way Bill / E-Invoice for any goods-movement voucher above ₹50,000
-      // (sales/purchase + their notes — interstate, or intra-state beyond city limits).
-      const movesGoods = voucherType === "sales" || voucherType === "purchase" || voucherType === "credit_note" || voucherType === "debit_note";
-      if (movesGoods && totals.total_paise > 5_000_000) {
+      const movesGoods = snap.voucherType === "sales" || snap.voucherType === "purchase" || snap.voucherType === "credit_note" || snap.voucherType === "debit_note";
+      if (movesGoods && snap.totals.total_paise > 5_000_000) {
         setEwbDlg({
           open: true,
           voucher: {
             id: vData.id,
-            company_id: activeCompanyId,
+            company_id: snap.companyId,
             voucher_number: numData as string,
-            voucher_date: date,
-            total_paise: totals.total_paise,
-            subtotal_paise: totals.subtotal_paise,
-            cgst_paise: totals.cgst_paise,
-            sgst_paise: totals.sgst_paise,
-            igst_paise: totals.igst_paise,
-            is_interstate: interstate,
-            place_of_supply_code: placeOfSupply || null,
+            voucher_date: snap.voucherDate,
+            total_paise: snap.totals.total_paise,
+            subtotal_paise: snap.totals.subtotal_paise,
+            cgst_paise: snap.totals.cgst_paise,
+            sgst_paise: snap.totals.sgst_paise,
+            igst_paise: snap.totals.igst_paise,
+            is_interstate: snap.interstate,
+            place_of_supply_code: snap.placeOfSupply || null,
           },
         });
-      } else {
-        // Tally/Busy-style continuous entry: clear and stay on the same voucher type.
-        setPartyId("");
-        setRefNo("");
-        setNarration("");
-        setLines([blankLine()]);
-        setFocusedLine(0);
-        setSavedTick((n) => n + 1);
       }
-    } catch (e) {
-      console.error(e);
-      toast.error(e instanceof Error ? e.message : "Failed to save");
-    } finally {
-      setSaving(false);
-    }
-  }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, roundOffPaise, placeOfSupply, navigate, cfg]);
+    });
+  }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, roundOffPaise, placeOfSupply, cfg]);
+
+  const save = useCallback(() => {
+    setConfirmOpen(true);
+  }, []);
 
   // Hotkeys: Ctrl+S save (stay & start next), F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
   useEffect(() => {
@@ -399,6 +379,13 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (!saving) save();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        const last = recallNarration(voucherType);
+        if (last) { setNarration(last); toast.message("Narration recalled"); }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        if (lines.length > 1) removeLine(focusedLine);
       } else if (e.key === "F3") {
         e.preventDefault();
         if (e.shiftKey) {
@@ -420,7 +407,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, navigate, saving, partyId, lines, focusedLine]);
+  }, [save, navigate, saving, partyId, lines, focusedLine, voucherType, removeLine]);
 
   const onLedgerSaved = (lg: QuickLedger) => {
     upsertCachedLedger({ id: lg.id, name: lg.name, type: lg.type, state_code: lg.state_code, is_active: true });
