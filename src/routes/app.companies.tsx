@@ -70,7 +70,6 @@ const schema = z.object({
     ctx.addIssue({ code: "custom", path: ["cin"], message: "Invalid CIN (e.g. U12345MH2020PTC123456)" });
   }
 });
-
 interface FormState {
   name: string;
   entity_status: EntityStatus;
