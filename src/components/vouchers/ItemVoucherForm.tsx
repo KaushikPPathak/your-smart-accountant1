@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useDeferredValue, startTransition } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Pencil, Plus, Save, Trash2, Truck, UserPlus, PackagePlus, X } from "lucide-react";
+import { Pencil, Plus, Save, Truck, UserPlus, X } from "lucide-react";
 import { QuickLedgerDialog, type QuickLedger } from "./QuickLedgerDialog";
 import { QuickItemDialog, type QuickItem } from "./QuickItemDialog";
 import { EwayBillPrepDialog } from "./EwayBillPrepDialog";
@@ -20,7 +20,6 @@ import {
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -30,7 +29,7 @@ import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/money";
 import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/gst";
-import { GST_RATES, INDIAN_STATES } from "@/lib/constants";
+import { INDIAN_STATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { useEnterAsTab } from "./useEnterAsTab";
@@ -38,6 +37,10 @@ import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { Combo } from "./Combo";
 import { getAllLedgers, getAllItems, upsertCachedLedger, upsertCachedItem, useMastersVersion } from "@/lib/masters-cache";
 import { validateItemVoucher } from "@/lib/schemas/voucher";
+import { enqueueSave } from "@/lib/save-queue";
+import { ItemRow, type ItemRowData } from "@/components/fast-form/ItemRow";
+import { AcceptConfirm } from "@/components/fast-form/AcceptConfirm";
+import { rememberNarration, recallNarration } from "@/lib/recall-store";
 
 type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note" | "sales_order" | "delivery_note" | "quotation";
 
@@ -55,16 +58,10 @@ interface ItemOpt {
   hsn_code: string | null;
 }
 
-interface Line {
-  item_id: string;
-  description: string;
-  qty: string;
-  rate: string;
-  discount: string;
-  gst_rate: string;
-}
+type Line = ItemRowData;
 
 const blankLine = (): Line => ({
+  id: crypto.randomUUID(),
   item_id: "",
   description: "",
   qty: "1",
@@ -133,6 +130,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null }>({ open: false, editId: null });
   const [itemDlg, setItemDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
   const [ewbDlg, setEwbDlg] = useState<{ open: boolean; voucher: { id: string; company_id: string; voucher_number: string; voucher_date: string; total_paise: number; subtotal_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number; is_interstate: boolean; place_of_supply_code: string | null } | null }>({ open: false, voucher: null });
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const { lock, locked } = usePeriodLock(date);
 
   // Load company state once; ledgers + items come from the in-memory masters cache.
@@ -161,9 +159,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
   }, [partyLedger, placeOfSupply]);
 
+  const deferredLines = useDeferredValue(lines);
   const computed: GstLineResult[] = useMemo(
     () =>
-      lines.map((l) =>
+      deferredLines.map((l) =>
         computeLine(
           {
             qty: parseFloat(l.qty) || 0,
@@ -174,7 +173,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           interstate,
         ),
       ),
-    [lines, interstate],
+    [deferredLines, interstate],
   );
   const rawTotals = useMemo(() => sumLines(computed), [computed]);
   const roundOffPaise = useMemo(() => {
@@ -187,22 +186,27 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     [rawTotals, roundOffPaise],
   );
 
-  const updateLine = (idx: number, patch: Partial<Line>) => {
-    setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
-  };
-  const onPickItem = (idx: number, itemId: string) => {
-    const it = items.find((i) => i.id === itemId);
-    setLines((cur) =>
-      cur.map((l, i) =>
-        i === idx
-          ? { ...l, item_id: itemId, gst_rate: it ? String(it.gst_rate) : l.gst_rate }
-          : l,
-      ),
-    );
-  };
-  const addLine = () => setLines((cur) => [...cur, blankLine()]);
-  const removeLine = (idx: number) =>
+  const updateLine = useCallback((idx: number, patch: Partial<Line>) => {
+    startTransition(() => {
+      setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+    });
+  }, []);
+  const onPickItem = useCallback((idx: number, itemId: string) => {
+    startTransition(() => {
+      setLines((cur) => {
+        const it = items.find((x) => x.id === itemId);
+        return cur.map((l, i) =>
+          i === idx
+            ? { ...l, item_id: itemId, gst_rate: it ? String(it.gst_rate) : l.gst_rate }
+            : l,
+        );
+      });
+    });
+  }, [items]);
+  const addLine = useCallback(() => setLines((cur) => [...cur, blankLine()]), []);
+  const removeLine = useCallback((idx: number) => {
     setLines((cur) => (cur.length === 1 ? cur : cur.filter((_, i) => i !== idx)));
+  }, []);
 
   const canWrite =
     activeMembership?.role === "admin" || activeMembership?.role === "accountant";
