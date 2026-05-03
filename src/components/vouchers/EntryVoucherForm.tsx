@@ -280,6 +280,27 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       refNo, narration, total: totalForVoucher,
       entries: entriesToInsert,
     };
+    // Shared validation (same schema would run server-side via createServerFn).
+    const check = validateEntryVoucher({
+      company_id: snap.companyId,
+      voucher_type: snap.voucherType,
+      voucher_date: snap.voucherDate,
+      party_ledger_id: snap.partyLedgerId,
+      reference_no: snap.refNo || null,
+      narration: snap.narration || null,
+      total_paise: snap.total,
+      entries: snap.entries.map((e) => ({
+        ledger_id: e.ledger_id,
+        debit_paise: e.debit_paise,
+        credit_paise: e.credit_paise,
+        narration: e.narration ?? null,
+        line_no: e.line_no,
+      })),
+    });
+    if (!check.ok) {
+      toast.error(check.message);
+      return;
+    }
     setRefNo("");
     setNarration("");
     setLines(Array.from({ length: cfg.defaultLines }, blank));
