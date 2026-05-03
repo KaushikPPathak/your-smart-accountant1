@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { ReportToolbar, useFyRangeStrings } from "@/components/reports/ReportToolbar";
+import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
@@ -26,9 +26,7 @@ function ProfitLoss() {
   const surplusLabel = isIE ? "To Excess of Income over Expenditure" : "To Net Profit c/d";
   const deficitLabel = isIE ? "By Excess of Expenditure over Income" : "By Net Loss c/d";
   const navigate = useNavigate();
-  const initial = useFyRangeStrings();
-  const [from, setFrom] = useState(initial.from);
-  const [to, setTo] = useState(initial.to);
+  const { from, to, setFrom, setTo } = useFyRangeState();
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
 
   useEffect(() => {
