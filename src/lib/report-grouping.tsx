@@ -66,12 +66,14 @@ export function groupBalances(
 export function groupedTRows(
   buckets: GroupBucket[],
   onLedgerClick?: (ledgerId: string) => void,
+  labelFor?: (code: string, fallback: string) => string,
 ): { rows: TRow[]; totalPaise: number } {
   const rows: TRow[] = [];
   let total = 0;
   for (const b of buckets) {
+    const groupLabelText = labelFor ? labelFor(b.group.code, b.group.label) : b.group.label;
     rows.push({
-      label: <span className="uppercase tracking-wide text-[11px]">{b.group.label}</span>,
+      label: <span className="uppercase tracking-wide text-[11px]">{groupLabelText}</span>,
       amount: "",
       emphasis: "bold",
     });
@@ -83,7 +85,7 @@ export function groupedTRows(
       });
     }
     rows.push({
-      label: <span className="pl-3 italic text-muted-foreground">Subtotal — {b.group.label}</span>,
+      label: <span className="pl-3 italic text-muted-foreground">Subtotal — {groupLabelText}</span>,
       amount: formatINR(b.subtotalPaise),
       emphasis: "total",
     });
