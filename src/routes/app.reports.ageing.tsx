@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
+import { useFyAsOfState } from "@/components/reports/ReportToolbar";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -36,7 +37,7 @@ interface AllocRow { invoice_voucher_id: string; amount_paise: number }
 function AgeingPage() {
   const { activeCompanyId } = useCompany();
   const [mode, setMode] = useState<"receivables" | "payables">("receivables");
-  const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
+  const { asOf, setAsOf } = useFyAsOfState();
   const [invs, setInvs] = useState<InvRow[]>([]);
   const [allocs, setAllocs] = useState<AllocRow[]>([]);
 
