@@ -26,6 +26,8 @@ import { AccountGroupsProvider } from "@/lib/account-groups-runtime";
 import { KeyboardCheatSheet } from "@/components/vouchers/KeyboardCheatSheet";
 import { MastersProvider } from "@/lib/masters-cache";
 import { PendingSavesTray } from "@/components/fast-form/PendingSavesTray";
+import { FocusHintsProvider } from "@/components/fast-form/FocusHints";
+import { StatusBar } from "@/components/fast-form/StatusBar";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
@@ -42,6 +44,7 @@ function AppLayout() {
   const [savingMirror, setSavingMirror] = useState(false);
   const [lastSaveTick, setLastSaveTick] = useState(0); // forces re-render after save
   const [helpOpen, setHelpOpen] = useState(false);
+  const [trayOpen, setTrayOpen] = useState(false);
 
   const isTrial = activeMembership?.companies?.mode === "trial_local";
   const lastSaveAt = activeCompanyId ? getLastLocalMirror(activeCompanyId) : null;
@@ -250,28 +253,14 @@ function AppLayout() {
           </header>
           <AccountGroupsProvider>
           <MastersProvider>
+          <FocusHintsProvider>
             <QuickActionsRibbon />
             <main className="flex-1 p-4 md:p-6">
               <Outlet />
             </main>
-            <div className="sticky bottom-0 z-10 hidden items-center justify-between gap-3 border-t border-border bg-muted/40 px-4 py-1 text-[11px] text-muted-foreground backdrop-blur md:flex print:hidden">
-              <div className="flex items-center gap-3 overflow-x-auto whitespace-nowrap">
-                <span><kbd className="rounded border bg-background px-1 font-mono">Enter</kbd> next</span>
-                <span><kbd className="rounded border bg-background px-1 font-mono">Esc</kbd> back</span>
-                <span><kbd className="rounded border bg-background px-1 font-mono">Ctrl+S</kbd> save</span>
-                <span><kbd className="rounded border bg-background px-1 font-mono">Alt+C</kbd> create in picker</span>
-                <span><kbd className="rounded border bg-background px-1 font-mono">F3/F4</kbd> ledger/item</span>
-                <span><kbd className="rounded border bg-background px-1 font-mono">Alt+L</kbd> ledger report</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setHelpOpen(true)}
-                className="shrink-0 rounded border bg-background px-2 py-0.5 hover:bg-accent"
-              >
-                <kbd className="font-mono">F1</kbd> Keyboard help
-              </button>
-            </div>
-            <PendingSavesTray />
+            <StatusBar onOpenHelp={() => setHelpOpen(true)} onOpenTray={() => setTrayOpen(true)} />
+            <PendingSavesTray forceOpen={trayOpen} onClose={() => setTrayOpen(false)} />
+          </FocusHintsProvider>
           </MastersProvider>
           </AccountGroupsProvider>
         </SidebarInset>
