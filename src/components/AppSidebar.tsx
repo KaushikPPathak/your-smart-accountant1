@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -184,6 +184,22 @@ export function AppSidebar() {
     });
     return o;
   });
+
+  useEffect(() => {
+    setOpenMap((current) => {
+      const next = { ...current };
+      let changed = false;
+
+      visibleSections.forEach((section) => {
+        if (section.label !== "Company" && sectionHasActive(section) && !next[section.label]) {
+          next[section.label] = true;
+          changed = true;
+        }
+      });
+
+      return changed ? next : current;
+    });
+  }, [location.pathname, visibleSections]);
 
   return (
     <Sidebar collapsible="icon">
