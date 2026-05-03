@@ -219,6 +219,49 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       return;
     }
 
+    // Shared validation — same schema is the source of truth for any future server fn.
+    const itemRowsForValidation = lines
+      .map((l, i) => {
+        if (!l.item_id || computed[i].total_paise <= 0) return null;
+        const c = computed[i];
+        return {
+          item_id: l.item_id,
+          line_no: i + 1,
+          description: l.description || null,
+          qty: parseFloat(l.qty) || 0,
+          rate_paise: rupeesToPaise(parseFloat(l.rate) || 0),
+          discount_paise: c.discount_paise,
+          amount_paise: c.amount_paise,
+          taxable_paise: c.taxable_paise,
+          gst_rate: c.gst_rate,
+          cgst_paise: c.cgst_paise,
+          sgst_paise: c.sgst_paise,
+          igst_paise: c.igst_paise,
+        };
+      })
+      .filter(Boolean) as Array<Record<string, unknown>>;
+    const check = validateItemVoucher({
+      company_id: activeCompanyId,
+      voucher_type: voucherType,
+      voucher_date: date,
+      party_ledger_id: partyId,
+      reference_no: refNo || null,
+      narration: narration || null,
+      is_interstate: interstate,
+      place_of_supply_code: placeOfSupply || null,
+      subtotal_paise: totals.subtotal_paise,
+      cgst_paise: totals.cgst_paise,
+      sgst_paise: totals.sgst_paise,
+      igst_paise: totals.igst_paise,
+      round_off_paise: roundOffPaise,
+      total_paise: totals.total_paise,
+      items: itemRowsForValidation,
+    });
+    if (!check.ok) {
+      toast.error(check.message);
+      return;
+    }
+
     setSaving(true);
     try {
       // 1. Get next voucher number
