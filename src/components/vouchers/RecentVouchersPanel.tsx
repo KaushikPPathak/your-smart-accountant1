@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { Pencil } from "lucide-react";
@@ -42,7 +43,7 @@ export function RecentVouchersPanel({
         .from("vouchers")
         .select("id, voucher_number, voucher_date, total_paise, party_ledger_id")
         .eq("company_id", activeCompanyId)
-        .eq("voucher_type", voucherType)
+        .eq("voucher_type", voucherType as Database["public"]["Enums"]["voucher_type"])
         .order("voucher_date", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(limit);
