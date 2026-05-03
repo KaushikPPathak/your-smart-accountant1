@@ -1,7 +1,9 @@
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Download, FileSpreadsheet, FileText, Printer } from "lucide-react";
-import { FyDatePicker } from "@/components/ui/fy-date-picker";
+import { FyDatePicker, useFyRange } from "@/components/ui/fy-date-picker";
+import { format } from "date-fns";
+import * as React from "react";
 
 interface Props {
   from: string;
@@ -73,4 +75,14 @@ export function defaultFyRange(): { from: string; to: string } {
   const now = new Date();
   const y = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
   return { from: `${y}-04-01`, to: `${y + 1}-03-31` };
+}
+
+/** Returns from/to ISO strings for the active company's financial year.
+ *  Falls back to the calendar-derived FY when no company is loaded. */
+export function useFyRangeStrings(): { from: string; to: string } {
+  const { start, end } = useFyRange();
+  return React.useMemo(
+    () => ({ from: format(start, "yyyy-MM-dd"), to: format(end, "yyyy-MM-dd") }),
+    [start, end],
+  );
 }
