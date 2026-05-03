@@ -47,7 +47,15 @@ interface Line {
   narration: string;
 }
 
+/** Busy/Tally-style single-side line: one party ledger + one amount */
+interface SimpleLine {
+  ledger_id: string;
+  amount: string;
+  narration: string;
+}
+
 const blank = (): Line => ({ ledger_id: "", debit: "", credit: "", narration: "" });
+const blankSimple = (): SimpleLine => ({ ledger_id: "", amount: "", narration: "" });
 
 const CFG: Record<
   EntryVoucherType,
@@ -74,11 +82,16 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const navigate = useNavigate();
   const { activeCompanyId, activeMembership } = useCompany();
   const cfg = CFG[voucherType];
+  const isSimple = voucherType === "receipt" || voucherType === "payment";
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [refNo, setRefNo] = useState("");
   const [narration, setNarration] = useState("");
   const [lines, setLines] = useState<Line[]>(() =>
     Array.from({ length: cfg.defaultLines }, blank),
+  );
+  const [cashBankId, setCashBankId] = useState<string>("");
+  const [simpleLines, setSimpleLines] = useState<SimpleLine[]>(() =>
+    Array.from({ length: 2 }, blankSimple),
   );
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [ledgerBalances, setLedgerBalances] = useState<Record<string, LedgerBalanceInfo>>({});
@@ -100,10 +113,12 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
 
   // Stable signature for the set of selected ledgers — prevents the balance
   // fetch from firing on every keystroke in narration/debit/credit.
-  const selectedLedgerKey = useMemo(
-    () => Array.from(new Set(lines.map((l) => l.ledger_id).filter(Boolean))).sort().join(","),
-    [lines],
-  );
+  const selectedLedgerKey = useMemo(() => {
+    const ids = isSimple
+      ? [cashBankId, ...simpleLines.map((l) => l.ledger_id)]
+      : lines.map((l) => l.ledger_id);
+    return Array.from(new Set(ids.filter(Boolean))).sort().join(",");
+  }, [isSimple, cashBankId, simpleLines, lines]);
 
   // Load closing balance only for newly-picked ledgers (scoped query, not a
   // full company-wide scan). Scales to large databases.
@@ -158,7 +173,18 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     () => lines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.credit) || 0), 0),
     [lines],
   );
-  const balanced = totalDr === totalCr && totalDr > 0;
+  const simpleTotal = useMemo(
+    () => simpleLines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.amount) || 0), 0),
+    [simpleLines],
+  );
+  const balanced = isSimple
+    ? cashBankId !== "" && simpleTotal > 0 && simpleLines.some((l) => l.ledger_id && parseFloat(l.amount) > 0)
+    : totalDr === totalCr && totalDr > 0;
+
+  const cashBankOptions = useMemo(
+    () => ledgers.filter((l) => l.type === "cash" || l.type === "bank"),
+    [ledgers],
+  );
 
   const update = (i: number, patch: Partial<Line>) =>
     setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -166,21 +192,85 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const remove = (i: number) =>
     setLines((cur) => (cur.length <= 2 ? cur : cur.filter((_, idx) => idx !== i)));
 
+  const updateSimple = (i: number, patch: Partial<SimpleLine>) =>
+    setSimpleLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  const addSimple = () => setSimpleLines((cur) => [...cur, blankSimple()]);
+  const removeSimple = (i: number) =>
+    setSimpleLines((cur) => (cur.length <= 1 ? cur : cur.filter((_, idx) => idx !== i)));
+
   const canWrite =
     activeMembership?.role === "admin" || activeMembership?.role === "accountant";
 
   const save = useCallback(async () => {
     if (!activeCompanyId || !canWrite) return;
-    const filled = lines.filter(
-      (l) => l.ledger_id && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0),
-    );
-    if (filled.length < 2) {
-      toast.error("At least 2 ledger lines required");
-      return;
-    }
-    if (!balanced) {
-      toast.error("Debit and Credit totals must match");
-      return;
+    let entriesToInsert: { ledger_id: string; debit_paise: number; credit_paise: number; narration: string | null; line_no: number }[] = [];
+    let totalForVoucher = 0;
+    let partyLedgerId: string | null = null;
+
+    if (isSimple) {
+      if (!cashBankId) {
+        toast.error("Select a Cash/Bank account");
+        return;
+      }
+      const filled = simpleLines.filter((l) => l.ledger_id && parseFloat(l.amount) > 0);
+      if (filled.length < 1) {
+        toast.error("Add at least one party/ledger line");
+        return;
+      }
+      if (filled.some((l) => l.ledger_id === cashBankId)) {
+        toast.error("Particulars cannot be the same as the Cash/Bank account");
+        return;
+      }
+      totalForVoucher = filled.reduce((s, l) => s + rupeesToPaise(parseFloat(l.amount) || 0), 0);
+      // Receipt: Dr Cash/Bank, Cr Party. Payment: Cr Cash/Bank, Dr Party.
+      const isReceipt = voucherType === "receipt";
+      entriesToInsert = [
+        {
+          ledger_id: cashBankId,
+          debit_paise: isReceipt ? totalForVoucher : 0,
+          credit_paise: isReceipt ? 0 : totalForVoucher,
+          narration: null,
+          line_no: 1,
+        },
+        ...filled.map((l, i) => ({
+          ledger_id: l.ledger_id,
+          debit_paise: isReceipt ? 0 : rupeesToPaise(parseFloat(l.amount) || 0),
+          credit_paise: isReceipt ? rupeesToPaise(parseFloat(l.amount) || 0) : 0,
+          narration: l.narration || null,
+          line_no: i + 2,
+        })),
+      ];
+      const partyLine = filled.find((l) => {
+        const lg = ledgers.find((x) => x.id === l.ledger_id);
+        return lg && (lg.type === "sundry_debtor" || lg.type === "sundry_creditor");
+      });
+      partyLedgerId = partyLine?.ledger_id ?? null;
+    } else {
+      const filled = lines.filter(
+        (l) => l.ledger_id && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0),
+      );
+      if (filled.length < 2) {
+        toast.error("At least 2 ledger lines required");
+        return;
+      }
+      if (!balanced) {
+        toast.error("Debit and Credit totals must match");
+        return;
+      }
+      totalForVoucher = totalDr;
+      entriesToInsert = filled.map((l, i) => ({
+        voucher_id: "" as unknown as string, // assigned below
+        ledger_id: l.ledger_id,
+        line_no: i + 1,
+        debit_paise: rupeesToPaise(parseFloat(l.debit) || 0),
+        credit_paise: rupeesToPaise(parseFloat(l.credit) || 0),
+        narration: l.narration || null,
+      })) as typeof entriesToInsert;
+      const partyLine = filled.find((l) => {
+        const lg = ledgers.find((x) => x.id === l.ledger_id);
+        return lg && (lg.type === "sundry_debtor" || lg.type === "sundry_creditor");
+      });
+      partyLedgerId = partyLine?.ledger_id ?? null;
     }
     setSaving(true);
     try {
@@ -192,12 +282,6 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
 
-      // Determine party ledger (first sundry debtor/creditor if any)
-      const partyLine = filled.find((l) => {
-        const lg = ledgers.find((x) => x.id === l.ledger_id);
-        return lg && (lg.type === "sundry_debtor" || lg.type === "sundry_creditor");
-      });
-
       const { data: vData, error: vErr } = await supabase
         .from("vouchers")
         .insert({
@@ -206,25 +290,18 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           voucher_type: voucherType,
           voucher_number: numData as string,
           voucher_date: date,
-          party_ledger_id: partyLine?.ledger_id ?? null,
+          party_ledger_id: partyLedgerId,
           reference_no: refNo || null,
           narration: narration || null,
           is_interstate: false,
-          subtotal_paise: totalDr,
-          total_paise: totalDr,
+          subtotal_paise: totalForVoucher,
+          total_paise: totalForVoucher,
         })
         .select("id")
         .single();
       if (vErr) throw vErr;
 
-      const entries = filled.map((l, i) => ({
-        voucher_id: vData.id,
-        ledger_id: l.ledger_id,
-        line_no: i + 1,
-        debit_paise: rupeesToPaise(parseFloat(l.debit) || 0),
-        credit_paise: rupeesToPaise(parseFloat(l.credit) || 0),
-        narration: l.narration || null,
-      }));
+      const entries = entriesToInsert.map((e) => ({ ...e, voucher_id: vData.id }));
       const { error: eErr } = await supabase.from("voucher_entries").insert(entries);
       if (eErr) throw eErr;
 
@@ -236,7 +313,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     } finally {
       setSaving(false);
     }
-  }, [activeCompanyId, canWrite, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, navigate, cfg]);
+  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, navigate, cfg]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -269,7 +346,11 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     });
     const idx = ledgerDlg.lineIdx;
     if (idx !== null) {
-      setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ledger_id: lg.id } : l)));
+      if (isSimple) {
+        setSimpleLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ledger_id: lg.id } : l)));
+      } else {
+        setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ledger_id: lg.id } : l)));
+      }
     }
   };
 
@@ -300,13 +381,122 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             <Label>Date</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
-          <div className="space-y-1 md:col-span-2">
+          {isSimple && (
+            <div className="space-y-1">
+              <Label>{voucherType === "receipt" ? "Received In (Cash/Bank)" : "Paid From (Cash/Bank)"}</Label>
+              <Select value={cashBankId} onValueChange={setCashBankId}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Select Cash / Bank account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cashBankOptions.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground">No Cash/Bank ledgers found.</div>
+                  ) : (
+                    cashBankOptions.map((lg) => (
+                      <SelectItem key={lg.id} value={lg.id}>
+                        {lg.name} <span className="text-xs text-muted-foreground">({lg.type})</span>
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {cashBankId && ledgerBalances[cashBankId] && (
+                <div className="text-[11px] font-mono text-muted-foreground">
+                  Bal: {formatINR(Math.abs(ledgerBalances[cashBankId].paise))} {ledgerBalances[cashBankId].paise >= 0 ? "Dr" : "Cr"}
+                </div>
+              )}
+            </div>
+          )}
+          <div className={`space-y-1 ${isSimple ? "" : "md:col-span-2"}`}>
             <Label>Reference No.</Label>
             <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="Cheque/UTR/Reference" />
           </div>
         </CardContent>
       </Card>
 
+      {isSimple ? (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[45%]">Particulars ({voucherType === "receipt" ? "Received From" : "Paid To"})</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Narration</TableHead>
+                  <TableHead className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {simpleLines.map((l, i) => (
+                  <TableRow key={i} onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Select value={l.ledger_id} onValueChange={(v) => { setFocusedLine(i); updateSimple(i, { ledger_id: v }); }}>
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Select ledger" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ledgers.length === 0 ? (
+                              <div className="p-2 text-sm text-muted-foreground">No ledgers — press F3.</div>
+                            ) : (
+                              ledgers
+                                .filter((lg) => lg.id !== cashBankId)
+                                .map((lg) => (
+                                  <SelectItem key={lg.id} value={lg.id}>{lg.name}</SelectItem>
+                                ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New ledger (F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}>
+                          <UserPlus className="h-4 w-4" />
+                        </Button>
+                        {l.ledger_id && (
+                          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Edit ledger (Shift+F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: l.ledger_id, lineIdx: i }); }}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      {l.ledger_id && ledgerBalances[l.ledger_id] && (
+                        <div className="mt-1 inline-flex items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
+                          <span>Bal:</span>
+                          <span>{formatINR(Math.abs(ledgerBalances[l.ledger_id].paise))}</span>
+                          <span>{ledgerBalances[l.ledger_id].paise >= 0 ? "Dr" : "Cr"}</span>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        className="h-9 text-right font-mono"
+                        type="number"
+                        step="0.01"
+                        value={l.amount}
+                        onChange={(e) => updateSimple(i, { amount: e.target.value })}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        className="h-9"
+                        value={l.narration}
+                        onChange={(e) => updateSimple(i, { narration: e.target.value })}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" onClick={() => removeSimple(i)} disabled={simpleLines.length <= 1}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="border-t p-3">
+              <Button variant="ghost" size="sm" onClick={addSimple}>
+                <Plus className="mr-1 h-4 w-4" /> Add line
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -404,6 +594,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           </div>
         </CardContent>
       </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
@@ -414,21 +605,37 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         </Card>
         <Card>
           <CardContent className="space-y-1.5 p-4 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Debit</span>
-              <span className="font-mono">{formatINR(totalDr)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Credit</span>
-              <span className="font-mono">{formatINR(totalCr)}</span>
-            </div>
-            <div className="my-2 border-t" />
-            <div
-              className={`flex justify-between text-base font-semibold ${balanced ? "text-emerald-600" : "text-destructive"}`}
-            >
-              <span>{balanced ? "Balanced" : "Difference"}</span>
-              <span className="font-mono">{formatINR(Math.abs(totalDr - totalCr))}</span>
-            </div>
+            {isSimple ? (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{voucherType === "receipt" ? "Total Received" : "Total Paid"}</span>
+                  <span className="font-mono">{formatINR(simpleTotal)}</span>
+                </div>
+                <div className="my-2 border-t" />
+                <div className={`flex justify-between text-base font-semibold ${balanced ? "text-emerald-600" : "text-muted-foreground"}`}>
+                  <span>{balanced ? "Ready to save" : "Pick account & enter amount"}</span>
+                  <span className="font-mono">{formatINR(simpleTotal)}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total Debit</span>
+                  <span className="font-mono">{formatINR(totalDr)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total Credit</span>
+                  <span className="font-mono">{formatINR(totalCr)}</span>
+                </div>
+                <div className="my-2 border-t" />
+                <div
+                  className={`flex justify-between text-base font-semibold ${balanced ? "text-emerald-600" : "text-destructive"}`}
+                >
+                  <span>{balanced ? "Balanced" : "Difference"}</span>
+                  <span className="font-mono">{formatINR(Math.abs(totalDr - totalCr))}</span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
