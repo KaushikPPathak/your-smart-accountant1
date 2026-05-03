@@ -27,6 +27,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR, rupeesToPaise } from "@/lib/money";
+import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -83,7 +84,11 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const { activeCompanyId, activeMembership } = useCompany();
   const cfg = CFG[voucherType];
   const isSimple = voucherType === "receipt" || voucherType === "payment";
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const defaultDate = useDefaultFyDate();
+  const [date, setDate] = useState(defaultDate);
+  useEffect(() => {
+    if (!date && defaultDate) setDate(defaultDate);
+  }, [defaultDate, date]);
   const [refNo, setRefNo] = useState("");
   const [narration, setNarration] = useState("");
   const [lines, setLines] = useState<Line[]>(() =>
@@ -379,7 +384,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         <CardContent className="grid gap-3 p-4 md:grid-cols-3">
           <div className="space-y-1">
             <Label>Date</Label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <FyDatePicker value={date} onChange={setDate} />
           </div>
           {isSimple && (
             <div className="space-y-1">
