@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -212,11 +213,11 @@ function GroupLedgerReport() {
           </div>
           <div className="space-y-1">
             <Label>From</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <FyDatePicker value={from} onChange={setFrom} />
           </div>
           <div className="space-y-1">
             <Label>To</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <FyDatePicker value={to} onChange={setTo} />
           </div>
         </CardContent>
       </Card>
