@@ -412,13 +412,16 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
   };
 
+  const enterTab = useEnterAsTab(() => { if (!saving) save(); });
+
   return (
-    <div className="space-y-4">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div ref={enterTab.ref} onKeyDown={enterTab.onKeyDown} className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{cfg.title}</h1>
           <p className="text-xs text-muted-foreground">
-            <kbd className="rounded border px-1">Ctrl+S</kbd> save & next · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit party · <kbd className="rounded border px-1">F4</kbd> new item · <kbd className="rounded border px-1">Shift+F4</kbd> edit item
+            <kbd className="rounded border px-1">Enter</kbd> next field · <kbd className="rounded border px-1">Ctrl+S</kbd> save & next · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit party · <kbd className="rounded border px-1">F4</kbd> new item · <kbd className="rounded border px-1">Shift+F4</kbd> edit item
             {interstate && (
               <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
                 Interstate (IGST)
@@ -696,10 +699,15 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             setNarration("");
             setLines([blankLine()]);
             setFocusedLine(0);
+            setSavedTick((n) => n + 1);
           }
         }}
         voucher={ewbDlg.voucher}
       />
+      </div>
+      <div className="space-y-3">
+        <RecentVouchersPanel voucherType={voucherType} refreshKey={savedTick} />
+      </div>
     </div>
   );
 }
