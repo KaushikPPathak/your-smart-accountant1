@@ -39,7 +39,6 @@ import { getAllLedgers, getAllItems, upsertCachedLedger, upsertCachedItem, useMa
 import { validateItemVoucher } from "@/lib/schemas/voucher";
 import { enqueueSave } from "@/lib/save-queue";
 import { ItemRow, type ItemRowData } from "@/components/fast-form/ItemRow";
-import { AcceptConfirm } from "@/components/fast-form/AcceptConfirm";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
 
 type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note" | "sales_order" | "delivery_note" | "quotation";
@@ -130,7 +129,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null }>({ open: false, editId: null });
   const [itemDlg, setItemDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
   const [ewbDlg, setEwbDlg] = useState<{ open: boolean; voucher: { id: string; company_id: string; voucher_number: string; voucher_date: string; total_paise: number; subtotal_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number; is_interstate: boolean; place_of_supply_code: string | null } | null }>({ open: false, voucher: null });
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const { lock, locked } = usePeriodLock(date);
 
   // Load company state once; ledgers + items come from the in-memory masters cache.
@@ -370,8 +368,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, roundOffPaise, placeOfSupply, cfg]);
 
   const save = useCallback(() => {
-    setConfirmOpen(true);
-  }, []);
+    void performSave();
+  }, [performSave]);
 
   // Hotkeys: Ctrl+S save (stay & start next), F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
   useEffect(() => {
@@ -619,12 +617,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         open={ewbDlg.open}
         onOpenChange={(o) => setEwbDlg((s) => ({ ...s, open: o }))}
         voucher={ewbDlg.voucher}
-      />
-      <AcceptConfirm
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        onAccept={() => { void performSave(); }}
-        title={`Accept ${cfg.title}?`}
       />
       </div>
       <div className="space-y-3">
