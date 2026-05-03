@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { z } from "zod";
 import { toast } from "sonner";
 import { Loader2, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { lookupGstin } from "@/lib/gstin-lookup.functions";
@@ -50,6 +49,7 @@ import {
 } from "@/lib/account-groups";
 import { useAccountGroups, resolveGroupLabel, subgroupsFor } from "@/lib/account-groups-runtime";
 import { EmptyState } from "@/components/EmptyState";
+import { ledgerFormSchema as schema } from "@/lib/schemas/ledger";
 
 export const Route = createFileRoute("/app/ledgers")({
   head: () => ({ meta: [{ title: "Ledgers — Your Mehtaji" }] }),
@@ -76,27 +76,6 @@ interface Ledger {
   is_active: boolean;
 }
 
-const schema = z.object({
-  name: z.string().trim().min(2, "Name is required").max(120),
-  type: z.string().min(1, "Select a ledger type"),
-  gstin: z
-    .string()
-    .trim()
-    .max(15)
-    .regex(/^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, "Invalid GSTIN")
-    .optional()
-    .or(z.literal("")),
-  pan: z.string().trim().max(10).optional().or(z.literal("")),
-  state_code: z.string().trim().max(3).optional().or(z.literal("")),
-  state: z.string().trim().max(50).optional().or(z.literal("")),
-  address: z.string().trim().max(500).optional().or(z.literal("")),
-  phone: z.string().trim().max(20).optional().or(z.literal("")),
-  email: z.string().trim().max(255).email("Invalid email").optional().or(z.literal("")),
-  opening_balance: z.string().optional(),
-  opening_balance_is_debit: z.boolean(),
-  credit_limit: z.string().optional(),
-  credit_days: z.string().optional(),
-});
 
 type FormState = {
   name: string;
