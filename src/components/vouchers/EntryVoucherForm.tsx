@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Pencil, Plus, Save, Trash2, UserPlus, X } from "lucide-react";
@@ -23,7 +23,9 @@ import { formatINR, rupeesToPaise } from "@/lib/money";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
-import { Combo } from "./Combo";
+import { LedgerPicker } from "@/components/fast-form/FastPicker";
+import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/masters-cache";
+import { enqueueSave } from "@/lib/save-queue";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -94,24 +96,20 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const [simpleLines, setSimpleLines] = useState<SimpleLine[]>(() =>
     Array.from({ length: 2 }, blankSimple),
   );
-  const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [ledgerBalances, setLedgerBalances] = useState<Record<string, LedgerBalanceInfo>>({});
-  const [saving, setSaving] = useState(false);
   const [focusedLine, setFocusedLine] = useState(0);
   const [savedTick, setSavedTick] = useState(0);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
   const { lock, locked } = usePeriodLock(date);
+  const dateInputRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    if (!activeCompanyId) return;
-    supabase
-      .from("ledgers")
-      .select("id, name, type")
-      .eq("company_id", activeCompanyId)
-      .eq("is_active", true)
-      .order("name")
-      .then(({ data }) => setLedgers((data || []) as LedgerOpt[]));
-  }, [activeCompanyId]);
+  // Re-render when masters change so the local `ledgers` snapshot stays fresh.
+  useMastersVersion();
+  const ledgers: LedgerOpt[] = useMemo(
+    () => getAllLedgers().map((l) => ({ id: l.id, name: l.name, type: l.type })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeCompanyId, useMastersVersion()],
+  );
 
   // Stable signature for the set of selected ledgers — prevents the balance
   // fetch from firing on every keystroke in narration/debit/credit.
