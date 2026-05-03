@@ -28,6 +28,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR, rupeesToPaise } from "@/lib/money";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
+import { useEnterAsTab } from "./useEnterAsTab";
+import { RecentVouchersPanel } from "./RecentVouchersPanel";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -102,6 +104,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const [ledgerBalances, setLedgerBalances] = useState<Record<string, LedgerBalanceInfo>>({});
   const [saving, setSaving] = useState(false);
   const [focusedLine, setFocusedLine] = useState(0);
+  const [savedTick, setSavedTick] = useState(0);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
   const { lock, locked } = usePeriodLock(date);
 
@@ -318,6 +321,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       setLines(Array.from({ length: cfg.defaultLines }, blank));
       setSimpleLines(Array.from({ length: 2 }, blankSimple));
       setFocusedLine(0);
+      setSavedTick((n) => n + 1);
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Failed to save");
@@ -363,13 +367,16 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     }
   };
 
+  const enterTab = useEnterAsTab(() => { if (!saving && balanced) save(); });
+
   return (
-    <div className="space-y-4">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div ref={enterTab.ref} onKeyDown={enterTab.onKeyDown} className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{cfg.title}</h1>
           <p className="text-xs text-muted-foreground">
-            {cfg.subtitle} · <kbd className="rounded border px-1">Ctrl+S</kbd> save & next · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit ledger
+            {cfg.subtitle} · <kbd className="rounded border px-1">Enter</kbd> next field · <kbd className="rounded border px-1">Ctrl+S</kbd> save & next · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit ledger
           </p>
         </div>
         <div className="flex gap-2">
