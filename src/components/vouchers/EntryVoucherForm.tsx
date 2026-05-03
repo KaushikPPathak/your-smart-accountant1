@@ -369,7 +369,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         <div>
           <h1 className="text-2xl font-semibold">{cfg.title}</h1>
           <p className="text-xs text-muted-foreground">
-            {cfg.subtitle} · <kbd className="rounded border px-1">Ctrl+S</kbd> save · <kbd className="rounded border px-1">Esc</kbd> cancel · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit ledger
+            {cfg.subtitle} · <kbd className="rounded border px-1">Ctrl+S</kbd> save & next · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit ledger
           </p>
         </div>
         <div className="flex gap-2">
