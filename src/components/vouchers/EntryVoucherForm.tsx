@@ -311,7 +311,13 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       if (eErr) throw eErr;
 
       toast.success(`${cfg.title} ${numData} saved`);
-      navigate({ to: "/app/vouchers" });
+      // Tally/Busy-style continuous entry: stay in the same voucher type and
+      // reset the form for the next entry instead of leaving the screen.
+      setRefNo("");
+      setNarration("");
+      setLines(Array.from({ length: cfg.defaultLines }, blank));
+      setSimpleLines(Array.from({ length: 2 }, blankSimple));
+      setFocusedLine(0);
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Failed to save");
@@ -325,8 +331,6 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (!saving) save();
-      } else if (e.key === "Escape") {
-        navigate({ to: "/app/vouchers" });
       } else if (e.key === "F3") {
         e.preventDefault();
         const lid = lines[focusedLine]?.ledger_id ?? null;
