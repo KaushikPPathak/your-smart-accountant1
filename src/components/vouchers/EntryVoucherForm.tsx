@@ -26,6 +26,7 @@ import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { Combo } from "./Combo";
 import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/masters-cache";
 import { enqueueSave } from "@/lib/save-queue";
+import { validateEntryVoucher } from "@/lib/schemas/voucher";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
