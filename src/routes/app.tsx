@@ -22,6 +22,7 @@ import {
   lockWorkspace,
 } from "@/lib/tech-user";
 import { writeLocalMirror, getLastLocalMirror } from "@/lib/local-mirror";
+import { AccountGroupsProvider } from "@/lib/account-groups-runtime";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
