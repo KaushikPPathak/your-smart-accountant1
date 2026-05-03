@@ -343,11 +343,10 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   }, [save, navigate, saving, lines, focusedLine]);
 
   const onLedgerSaved = (lg: QuickLedger) => {
-    setLedgers((cur) => {
-      const without = cur.filter((x) => x.id !== lg.id);
-      return [...without, { id: lg.id, name: lg.name, type: lg.type }].sort((a, b) =>
-        a.name.localeCompare(b.name),
-      );
+    upsertCachedLedger({
+      id: lg.id, name: lg.name, type: lg.type,
+      state_code: (lg as { state_code?: string | null }).state_code ?? null,
+      is_active: true,
     });
     const idx = ledgerDlg.lineIdx;
     if (idx !== null) {
