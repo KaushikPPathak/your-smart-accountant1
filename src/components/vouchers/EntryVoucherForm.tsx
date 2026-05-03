@@ -102,7 +102,6 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const [savedTick, setSavedTick] = useState(0);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
   const { lock, locked } = usePeriodLock(date);
-  const dateInputRef = useRef<HTMLElement | null>(null);
   const formRootRef = useRef<HTMLDivElement | null>(null);
 
   // Re-render when masters change so the ledger list stays fresh.
