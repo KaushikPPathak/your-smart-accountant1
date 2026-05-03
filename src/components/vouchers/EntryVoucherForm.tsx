@@ -10,13 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -30,6 +23,7 @@ import { formatINR, rupeesToPaise } from "@/lib/money";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
+import { Combo } from "./Combo";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -400,22 +394,15 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           {isSimple && (
             <div className="space-y-1">
               <Label>{voucherType === "receipt" ? "Received In (Cash/Bank)" : "Paid From (Cash/Bank)"}</Label>
-              <Select value={cashBankId} onValueChange={setCashBankId}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Select Cash / Bank account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashBankOptions.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground">No Cash/Bank ledgers found.</div>
-                  ) : (
-                    cashBankOptions.map((lg) => (
-                      <SelectItem key={lg.id} value={lg.id}>
-                        {lg.name} <span className="text-xs text-muted-foreground">({lg.type})</span>
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <Combo
+                value={cashBankId}
+                onChange={setCashBankId}
+                options={cashBankOptions.map((lg) => ({ value: lg.id, label: lg.name, hint: lg.type }))}
+                placeholder="Select Cash / Bank account"
+                emptyText="No Cash/Bank ledgers found"
+                onCreate={() => setLedgerDlg({ open: true, editId: null, lineIdx: null })}
+                createLabel="New Cash/Bank ledger"
+              />
               {cashBankId && ledgerBalances[cashBankId] && (
                 <div className="text-[11px] font-mono text-muted-foreground">
                   Bal: {formatINR(Math.abs(ledgerBalances[cashBankId].paise))} {ledgerBalances[cashBankId].paise >= 0 ? "Dr" : "Cr"}
@@ -447,22 +434,16 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                   <TableRow key={i} onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Select value={l.ledger_id} onValueChange={(v) => { setFocusedLine(i); updateSimple(i, { ledger_id: v }); }}>
-                          <SelectTrigger className="h-9">
-                            <SelectValue placeholder="Select ledger" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ledgers.length === 0 ? (
-                              <div className="p-2 text-sm text-muted-foreground">No ledgers — press F3.</div>
-                            ) : (
-                              ledgers
-                                .filter((lg) => lg.id !== cashBankId)
-                                .map((lg) => (
-                                  <SelectItem key={lg.id} value={lg.id}>{lg.name}</SelectItem>
-                                ))
-                            )}
-                          </SelectContent>
-                        </Select>
+                        <Combo
+                          className="flex-1"
+                          value={l.ledger_id}
+                          onChange={(v) => { setFocusedLine(i); updateSimple(i, { ledger_id: v }); }}
+                          options={ledgers.filter((lg) => lg.id !== cashBankId).map((lg) => ({ value: lg.id, label: lg.name, hint: lg.type }))}
+                          placeholder="Select ledger"
+                          emptyText="No ledgers — Alt+C to create"
+                          onCreate={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}
+                          createLabel="New ledger"
+                        />
                         <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New ledger (F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}>
                           <UserPlus className="h-4 w-4" />
                         </Button>
@@ -530,20 +511,16 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                 <TableRow key={i} onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Select value={l.ledger_id} onValueChange={(v) => { setFocusedLine(i); update(i, { ledger_id: v }); }}>
-                        <SelectTrigger className="h-9">
-                          <SelectValue placeholder="Select ledger" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ledgers.length === 0 ? (
-                            <div className="p-2 text-sm text-muted-foreground">No ledgers — press F3.</div>
-                          ) : (
-                            ledgers.map((lg) => (
-                              <SelectItem key={lg.id} value={lg.id}>{lg.name}</SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <Combo
+                        className="flex-1"
+                        value={l.ledger_id}
+                        onChange={(v) => { setFocusedLine(i); update(i, { ledger_id: v }); }}
+                        options={ledgers.map((lg) => ({ value: lg.id, label: lg.name, hint: lg.type }))}
+                        placeholder="Select ledger"
+                        emptyText="No ledgers — Alt+C to create"
+                        onCreate={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}
+                        createLabel="New ledger"
+                      />
                       <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New ledger (F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}>
                         <UserPlus className="h-4 w-4" />
                       </Button>

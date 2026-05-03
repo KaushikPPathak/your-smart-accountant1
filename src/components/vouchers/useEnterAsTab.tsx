@@ -15,7 +15,10 @@ export function useEnterAsTab(onLast?: () => void) {
     const t = e.target as HTMLElement;
     const tag = t.tagName;
     if (tag === "TEXTAREA") return; // newline
-    if (tag === "BUTTON") return; // let buttons activate
+    // Buttons normally activate on Enter, but our Combo trigger uses
+    // <button role="combobox"> and should advance like a field once a value
+    // is selected (popover closed). Submit/icon buttons fall through.
+    if (tag === "BUTTON" && t.getAttribute("role") !== "combobox") return;
     // Radix Select trigger has role=combobox; Enter opens it — leave alone unless closed
     if (t.getAttribute("role") === "combobox" && t.getAttribute("aria-expanded") === "true") return;
 

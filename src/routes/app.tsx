@@ -23,6 +23,7 @@ import {
 } from "@/lib/tech-user";
 import { writeLocalMirror, getLastLocalMirror } from "@/lib/local-mirror";
 import { AccountGroupsProvider } from "@/lib/account-groups-runtime";
+import { KeyboardCheatSheet } from "@/components/vouchers/KeyboardCheatSheet";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
@@ -38,6 +39,7 @@ function AppLayout() {
   const [bootstrapping, setBootstrapping] = useState(true);
   const [savingMirror, setSavingMirror] = useState(false);
   const [lastSaveTick, setLastSaveTick] = useState(0); // forces re-render after save
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const isTrial = activeMembership?.companies?.mode === "trial_local";
   const lastSaveAt = activeCompanyId ? getLastLocalMirror(activeCompanyId) : null;
@@ -108,6 +110,28 @@ function AppLayout() {
       j: "/app/vouchers/new/journal",
     };
     const onKey = (e: KeyboardEvent) => {
+      // F1: keyboard cheatsheet (always)
+      if (e.key === "F1") {
+        e.preventDefault();
+        setHelpOpen(true);
+        return;
+      }
+      // Esc on a voucher entry page → back to vouchers list
+      if (e.key === "Escape" && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        const target = e.target as HTMLElement | null;
+        const inField = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
+        const inDialog = target?.closest('[role="dialog"]');
+        if (!inDialog && location.pathname.startsWith("/app/vouchers/new/")) {
+          if (!inField) {
+            e.preventDefault();
+            navigate({ to: "/app/vouchers" });
+            return;
+          }
+          // If inside a field, blur it first so a second Esc exits
+          (target as HTMLElement | null)?.blur?.();
+          return;
+        }
+      }
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
@@ -227,9 +251,27 @@ function AppLayout() {
             <main className="flex-1 p-4 md:p-6">
               <Outlet />
             </main>
+            <div className="sticky bottom-0 z-10 hidden items-center justify-between gap-3 border-t border-border bg-muted/40 px-4 py-1 text-[11px] text-muted-foreground backdrop-blur md:flex print:hidden">
+              <div className="flex items-center gap-3 overflow-x-auto whitespace-nowrap">
+                <span><kbd className="rounded border bg-background px-1 font-mono">Enter</kbd> next</span>
+                <span><kbd className="rounded border bg-background px-1 font-mono">Esc</kbd> back</span>
+                <span><kbd className="rounded border bg-background px-1 font-mono">Ctrl+S</kbd> save</span>
+                <span><kbd className="rounded border bg-background px-1 font-mono">Alt+C</kbd> create in picker</span>
+                <span><kbd className="rounded border bg-background px-1 font-mono">F3/F4</kbd> ledger/item</span>
+                <span><kbd className="rounded border bg-background px-1 font-mono">Alt+L</kbd> ledger report</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHelpOpen(true)}
+                className="shrink-0 rounded border bg-background px-2 py-0.5 hover:bg-accent"
+              >
+                <kbd className="font-mono">F1</kbd> Keyboard help
+              </button>
+            </div>
           </AccountGroupsProvider>
         </SidebarInset>
       </div>
+      <KeyboardCheatSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </SidebarProvider>
   );
 }
