@@ -567,7 +567,18 @@ function CompaniesPage() {
                 <CardHeader className="flex flex-row items-start justify-between space-y-0">
                   <div>
                     <CardTitle className="text-base">{m.companies.name}</CardTitle>
-                    <Badge variant="secondary" className="mt-1 text-[10px] uppercase">{m.role}</Badge>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <Badge variant="secondary" className="text-[10px] uppercase">{m.role}</Badge>
+                      {(() => {
+                        const meta = getEntityMeta((m.companies as { entity_status?: EntityStatus }).entity_status);
+                        const Icon = meta.icon;
+                        return (
+                          <Badge variant="outline" className="text-[10px]">
+                            <Icon className="mr-1 h-3 w-3" /> {meta.short}
+                          </Badge>
+                        );
+                      })()}
+                    </div>
                   </div>
                   <Building2 className="h-5 w-5 text-muted-foreground" />
                 </CardHeader>
