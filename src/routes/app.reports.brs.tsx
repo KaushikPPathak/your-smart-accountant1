@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -99,7 +100,7 @@ function BrsPage() {
           </div>
           <div className="space-y-1">
             <Label>As of</Label>
-            <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+            <FyDatePicker value={asOf} onChange={setAsOf} />
           </div>
           <div className="space-y-1">
             <Label>Bank Statement Balance (₹)</Label>
