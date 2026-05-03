@@ -1,5 +1,5 @@
 import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,6 +14,12 @@ import { useI18n } from "@/lib/i18n";
 export function CompanySwitcher() {
   const { memberships, activeMembership, setActiveCompanyId } = useCompany();
   const { t } = useI18n();
+  const navigate = useNavigate();
+
+  const handleCompanyPick = (companyId: string) => {
+    setActiveCompanyId(companyId);
+    navigate({ to: "/app" });
+  };
 
   return (
     <DropdownMenu>
@@ -35,7 +41,7 @@ export function CompanySwitcher() {
         {memberships.map((m) => (
           <DropdownMenuItem
             key={m.company_id}
-            onClick={() => setActiveCompanyId(m.company_id)}
+            onSelect={() => handleCompanyPick(m.company_id)}
             className="flex items-center justify-between"
           >
             <div className="flex flex-col">
