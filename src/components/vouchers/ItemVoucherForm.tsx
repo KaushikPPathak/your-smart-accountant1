@@ -36,6 +36,7 @@ import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { Combo } from "./Combo";
+import { getAllLedgers, getAllItems, upsertCachedLedger, upsertCachedItem, useMastersVersion } from "@/lib/masters-cache";
 
 type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note" | "sales_order" | "delivery_note" | "quotation";
 
@@ -133,34 +134,17 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [ewbDlg, setEwbDlg] = useState<{ open: boolean; voucher: { id: string; company_id: string; voucher_number: string; voucher_date: string; total_paise: number; subtotal_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number; is_interstate: boolean; place_of_supply_code: string | null } | null }>({ open: false, voucher: null });
   const { lock, locked } = usePeriodLock(date);
 
-  // Load masters
+  // Load company state once; ledgers + items come from the in-memory masters cache.
   useEffect(() => {
     if (!activeCompanyId) return;
-    (async () => {
-      const [ld, it, co] = await Promise.all([
-        supabase
-          .from("ledgers")
-          .select("id, name, type, state_code")
-          .eq("company_id", activeCompanyId)
-          .eq("is_active", true)
-          .order("name"),
-        supabase
-          .from("items")
-          .select("id, name, unit, gst_rate, hsn_code")
-          .eq("company_id", activeCompanyId)
-          .eq("is_active", true)
-          .order("name"),
-        supabase
-          .from("companies")
-          .select("state_code")
-          .eq("id", activeCompanyId)
-          .single(),
-      ]);
-      setLedgers((ld.data || []) as LedgerOpt[]);
-      setItems((it.data || []) as ItemOpt[]);
-      setCompanyStateCode(co.data?.state_code ?? null);
-    })();
+    supabase.from("companies").select("state_code").eq("id", activeCompanyId).single()
+      .then(({ data }) => setCompanyStateCode(data?.state_code ?? null));
   }, [activeCompanyId]);
+  const mastersVersion = useMastersVersion();
+  useEffect(() => {
+    setLedgers(getAllLedgers().map((l) => ({ id: l.id, name: l.name, type: l.type, state_code: l.state_code })));
+    setItems(getAllItems().map((i) => ({ id: i.id, name: i.name, unit: i.unit, gst_rate: i.gst_rate, hsn_code: i.hsn_code })));
+  }, [mastersVersion, activeCompanyId]);
 
   const partyOpts = useMemo(
     () => ledgers.filter((l) => cfg.partyTypes.includes(l.type)),
@@ -391,20 +375,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   }, [save, navigate, saving, partyId, lines, focusedLine]);
 
   const onLedgerSaved = (lg: QuickLedger) => {
-    setLedgers((cur) => {
-      const without = cur.filter((x) => x.id !== lg.id);
-      return [...without, { id: lg.id, name: lg.name, type: lg.type, state_code: lg.state_code }].sort((a, b) =>
-        a.name.localeCompare(b.name),
-      );
-    });
+    upsertCachedLedger({ id: lg.id, name: lg.name, type: lg.type, state_code: lg.state_code, is_active: true });
     if (cfg.partyTypes.includes(lg.type)) setPartyId(lg.id);
   };
 
   const onItemSaved = (it: QuickItem) => {
-    setItems((cur) => {
-      const without = cur.filter((x) => x.id !== it.id);
-      return [...without, it].sort((a, b) => a.name.localeCompare(b.name));
-    });
+    upsertCachedItem({ id: it.id, name: it.name, unit: it.unit, gst_rate: it.gst_rate, hsn_code: it.hsn_code, is_active: true });
     const idx = itemDlg.lineIdx;
     if (idx !== null) {
       setLines((cur) =>
