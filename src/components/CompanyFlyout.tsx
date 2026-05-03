@@ -148,8 +148,6 @@ export function CompanyFlyout() {
   return (
     <div
       className="relative"
-      onMouseEnter={show}
-      onMouseLeave={scheduleHide}
       onFocus={show}
       onBlur={scheduleHide}
     >
@@ -165,11 +163,14 @@ export function CompanyFlyout() {
       </button>
 
       {open && (
+        <>
+        <div
+          className="fixed inset-0 z-[99]"
+          onClick={() => { setOpen(false); setView("menu"); }}
+        />
         <div
           className="fixed z-[100] w-[22rem] max-w-[80vw] rounded-lg border bg-popover p-3 text-popover-foreground shadow-xl"
           style={{ top: pos.top, left: pos.left }}
-          onMouseEnter={show}
-          onMouseLeave={scheduleHide}
         >
           {view === "menu" ? (
             <div className="space-y-1">
@@ -234,6 +235,7 @@ export function CompanyFlyout() {
             </div>
           )}
         </div>
+        </>
       )}
     </div>
   );
