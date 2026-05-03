@@ -35,6 +35,7 @@ import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
+import { Combo } from "./Combo";
 
 type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note" | "sales_order" | "delivery_note" | "quotation";
 
@@ -461,24 +462,15 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 )}
               </span>
             </Label>
-            <Select value={partyId} onValueChange={setPartyId}>
-              <SelectTrigger>
-                <SelectValue placeholder={`Select ${cfg.partyLabel.toLowerCase()}`} />
-              </SelectTrigger>
-              <SelectContent>
-                {partyOpts.length === 0 ? (
-                  <div className="p-2 text-sm text-muted-foreground">
-                    No {cfg.partyLabel.toLowerCase()}s yet — press <kbd className="rounded border px-1">F3</kbd> to create.
-                  </div>
-                ) : (
-                  partyOpts.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <Combo
+              value={partyId}
+              onChange={setPartyId}
+              options={partyOpts.map((p) => ({ value: p.id, label: p.name, hint: p.state_code ?? undefined }))}
+              placeholder={`Select ${cfg.partyLabel.toLowerCase()}`}
+              emptyText={`No ${cfg.partyLabel.toLowerCase()}s yet — Alt+C to create`}
+              onCreate={() => setLedgerDlg({ open: true, editId: null })}
+              createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
+            />
           </div>
           <div className="space-y-1">
             <Label>Reference No.</Label>
@@ -522,22 +514,16 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 <TableRow key={i}>
                   <TableCell onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
                     <div className="flex gap-1">
-                      <Select value={l.item_id} onValueChange={(v) => { setFocusedLine(i); onPickItem(i, v); }}>
-                        <SelectTrigger className="h-9">
-                          <SelectValue placeholder="Select item" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {items.length === 0 ? (
-                            <div className="p-2 text-sm text-muted-foreground">No items yet — press F4.</div>
-                          ) : (
-                            items.map((it) => (
-                              <SelectItem key={it.id} value={it.id}>
-                                {it.name} ({it.unit})
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <Combo
+                        className="flex-1"
+                        value={l.item_id}
+                        onChange={(v) => { setFocusedLine(i); onPickItem(i, v); }}
+                        options={items.map((it) => ({ value: it.id, label: it.name, hint: it.unit }))}
+                        placeholder="Select item"
+                        emptyText="No items — Alt+C to create"
+                        onCreate={() => { setFocusedLine(i); setItemDlg({ open: true, editId: null, lineIdx: i }); }}
+                        createLabel="New item"
+                      />
                       <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 gap-1" title="New item (F4)" onClick={() => { setFocusedLine(i); setItemDlg({ open: true, editId: null, lineIdx: i }); }}>
                         <PackagePlus className="h-4 w-4" /> Add
                       </Button>
