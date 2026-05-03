@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_group_overrides: {
+        Row: {
+          company_id: string
+          created_at: string
+          group_code: string
+          id: string
+          label: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          group_code: string
+          id?: string
+          label: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          group_code?: string
+          id?: string
+          label?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      account_subgroups: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+          parent_group_code: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          name: string
+          parent_group_code: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          parent_group_code?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bank_statement_lines: {
         Row: {
           balance_paise: number | null
@@ -1139,6 +1193,7 @@ export type Database = {
           reminders_enabled: boolean
           state: string | null
           state_code: string | null
+          subgroup_id: string | null
           type: Database["public"]["Enums"]["ledger_type"]
           updated_at: string
           whatsapp_number: string | null
@@ -1164,6 +1219,7 @@ export type Database = {
           reminders_enabled?: boolean
           state?: string | null
           state_code?: string | null
+          subgroup_id?: string | null
           type: Database["public"]["Enums"]["ledger_type"]
           updated_at?: string
           whatsapp_number?: string | null
@@ -1189,6 +1245,7 @@ export type Database = {
           reminders_enabled?: boolean
           state?: string | null
           state_code?: string | null
+          subgroup_id?: string | null
           type?: Database["public"]["Enums"]["ledger_type"]
           updated_at?: string
           whatsapp_number?: string | null
@@ -1206,6 +1263,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ledgers_subgroup_id_fkey"
+            columns: ["subgroup_id"]
+            isOneToOne: false
+            referencedRelation: "account_subgroups"
             referencedColumns: ["id"]
           },
         ]
