@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -94,7 +95,7 @@ function OutstandingPage() {
           </div>
           <div className="space-y-1">
             <Label>As of</Label>
-            <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+            <FyDatePicker value={asOf} onChange={setAsOf} />
           </div>
           <div className="flex items-end justify-end">
             <div className="text-right">
