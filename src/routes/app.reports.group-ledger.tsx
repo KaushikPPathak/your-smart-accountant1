@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
-import { ReportToolbar } from "@/components/reports/ReportToolbar";
+import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { downloadXlsx, downloadPdfTable, r } from "@/lib/exporters";
 import type { LedgerTypeValue } from "@/lib/constants";
@@ -88,8 +88,7 @@ function GroupLedgerReport() {
   const { activeCompanyId } = useCompany();
   const navigate = useNavigate();
   const [groupKey, setGroupKey] = useState<GroupKey>("sundry_debtors");
-  const [from, setFrom] = useState(() => new Date(new Date().getFullYear(), 3, 1).toISOString().slice(0, 10));
-  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const { from, to, setFrom, setTo } = useFyRangeState();
   const [ledgers, setLedgers] = useState<LedgerRow[]>([]);
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [loading, setLoading] = useState(true);
