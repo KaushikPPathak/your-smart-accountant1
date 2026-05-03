@@ -587,6 +587,12 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           onSaved={onLedgerSaved}
         />
       )}
+      <AcceptConfirm
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        onAccept={() => { void performSave(); }}
+        title={`Accept ${cfg.title}?`}
+      />
       </div>
       <div className="space-y-3">
         <RecentVouchersPanel voucherType={voucherType} refreshKey={savedTick} />
