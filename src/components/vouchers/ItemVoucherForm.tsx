@@ -341,7 +341,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           },
         });
       } else {
-        navigate({ to: "/app/vouchers" });
+        // Tally/Busy-style continuous entry: clear and stay on the same voucher type.
+        setPartyId("");
+        setRefNo("");
+        setNarration("");
+        setLines([blankLine()]);
+        setFocusedLine(0);
       }
     } catch (e) {
       console.error(e);
@@ -357,8 +362,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (!saving) save();
-      } else if (e.key === "Escape") {
-        navigate({ to: "/app/vouchers" });
       } else if (e.key === "F3") {
         e.preventDefault();
         if (e.shiftKey) {
