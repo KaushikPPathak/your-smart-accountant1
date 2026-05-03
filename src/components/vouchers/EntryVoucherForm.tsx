@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, useDeferredValue, startTransition } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Pencil, Plus, Save, Trash2, UserPlus, X } from "lucide-react";
+import { Plus, Save, X } from "lucide-react";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { QuickLedgerDialog, type QuickLedger } from "./QuickLedgerDialog";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -27,6 +26,9 @@ import { Combo } from "./Combo";
 import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/masters-cache";
 import { enqueueSave } from "@/lib/save-queue";
 import { validateEntryVoucher } from "@/lib/schemas/voucher";
+import { EntryRow } from "@/components/fast-form/EntryRow";
+import { AcceptConfirm } from "@/components/fast-form/AcceptConfirm";
+import { rememberNarration, recallNarration } from "@/lib/recall-store";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -41,21 +43,23 @@ interface LedgerBalanceInfo {
 }
 
 interface Line {
+  id: string;
   ledger_id: string;
   debit: string;
   credit: string;
   narration: string;
 }
 
-/** Busy/Tally-style single-side line: one party ledger + one amount */
+/** Single-side line: one party ledger + one amount (used for receipt/payment) */
 interface SimpleLine {
+  id: string;
   ledger_id: string;
   amount: string;
   narration: string;
 }
 
-const blank = (): Line => ({ ledger_id: "", debit: "", credit: "", narration: "" });
-const blankSimple = (): SimpleLine => ({ ledger_id: "", amount: "", narration: "" });
+const blank = (): Line => ({ id: crypto.randomUUID(), ledger_id: "", debit: "", credit: "", narration: "" });
+const blankSimple = (): SimpleLine => ({ id: crypto.randomUUID(), ledger_id: "", amount: "", narration: "" });
 
 const CFG: Record<
   EntryVoucherType,
@@ -166,17 +170,19 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     setLedgerBalances({});
   }, [date]);
 
+  const deferredLines = useDeferredValue(lines);
+  const deferredSimple = useDeferredValue(simpleLines);
   const totalDr = useMemo(
-    () => lines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.debit) || 0), 0),
-    [lines],
+    () => deferredLines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.debit) || 0), 0),
+    [deferredLines],
   );
   const totalCr = useMemo(
-    () => lines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.credit) || 0), 0),
-    [lines],
+    () => deferredLines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.credit) || 0), 0),
+    [deferredLines],
   );
   const simpleTotal = useMemo(
-    () => simpleLines.reduce((s, l) => s + rupeesToPaise(parseFloat(l.amount) || 0), 0),
-    [simpleLines],
+    () => deferredSimple.reduce((s, l) => s + rupeesToPaise(parseFloat(l.amount) || 0), 0),
+    [deferredSimple],
   );
   const balanced = isSimple
     ? cashBankId !== "" && simpleTotal > 0 && simpleLines.some((l) => l.ledger_id && parseFloat(l.amount) > 0)
@@ -187,22 +193,25 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     [ledgers],
   );
 
-  const update = (i: number, patch: Partial<Line>) =>
-    setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
-  const add = () => setLines((cur) => [...cur, blank()]);
-  const remove = (i: number) =>
+  const update = useCallback((i: number, patch: Partial<Line>) => {
+    startTransition(() => setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l))));
+  }, []);
+  const add = useCallback(() => setLines((cur) => [...cur, blank()]), []);
+  const remove = useCallback((i: number) => {
     setLines((cur) => (cur.length <= 2 ? cur : cur.filter((_, idx) => idx !== i)));
-
-  const updateSimple = (i: number, patch: Partial<SimpleLine>) =>
-    setSimpleLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
-  const addSimple = () => setSimpleLines((cur) => [...cur, blankSimple()]);
-  const removeSimple = (i: number) =>
+  }, []);
+  const updateSimple = useCallback((i: number, patch: Partial<SimpleLine>) => {
+    startTransition(() => setSimpleLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l))));
+  }, []);
+  const addSimple = useCallback(() => setSimpleLines((cur) => [...cur, blankSimple()]), []);
+  const removeSimple = useCallback((i: number) => {
     setSimpleLines((cur) => (cur.length <= 1 ? cur : cur.filter((_, idx) => idx !== i)));
+  }, []);
 
   const canWrite =
     activeMembership?.role === "admin" || activeMembership?.role === "accountant";
 
-  const save = useCallback(async () => {
+  const performSave = useCallback(async () => {
     if (!activeCompanyId || !canWrite) return;
     let entriesToInsert: { ledger_id: string; debit_paise: number; credit_paise: number; narration: string | null; line_no: number }[] = [];
     let totalForVoucher = 0;
@@ -301,6 +310,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       toast.error(check.message);
       return;
     }
+    rememberNarration(voucherType, narration);
     setRefNo("");
     setNarration("");
     setLines(Array.from({ length: cfg.defaultLines }, blank));
@@ -335,15 +345,25 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       const entries = snap.entries.map((e) => ({ ...e, voucher_id: vData.id }));
       const { error: eErr } = await supabase.from("voucher_entries").insert(entries);
       if (eErr) throw eErr;
-      toast.success(`${cfg.title} ${numData} saved`);
     });
   }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg]);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const save = useCallback(() => setConfirmOpen(true), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (!saving) save();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        const last = recallNarration(voucherType);
+        if (last) { setNarration(last); toast.message("Narration recalled"); }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        if (isSimple) { if (simpleLines.length > 1) removeSimple(focusedLine); }
+        else if (lines.length > 2) remove(focusedLine);
       } else if (e.key === "F3") {
         e.preventDefault();
         const lid = lines[focusedLine]?.ledger_id ?? null;
@@ -357,7 +377,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, navigate, saving, lines, focusedLine]);
+  }, [save, navigate, saving, lines, focusedLine, voucherType, isSimple, simpleLines, remove, removeSimple]);
 
   const onLedgerSaved = (lg: QuickLedger) => {
     upsertCachedLedger({
@@ -449,58 +469,20 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
               </TableHeader>
               <TableBody>
                 {simpleLines.map((l, i) => (
-                  <TableRow key={i} onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Combo
-                          className="flex-1"
-                          value={l.ledger_id}
-                          onChange={(v) => { setFocusedLine(i); updateSimple(i, { ledger_id: v }); }}
-                          options={ledgers.filter((lg) => lg.id !== cashBankId).map((lg) => ({ value: lg.id, label: lg.name, hint: lg.type }))}
-                          placeholder="Select ledger"
-                          emptyText="No ledgers — Alt+C to create"
-                          onCreate={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}
-                          createLabel="New ledger"
-                        />
-                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New ledger (F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}>
-                          <UserPlus className="h-4 w-4" />
-                        </Button>
-                        {l.ledger_id && (
-                          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Edit ledger (Shift+F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: l.ledger_id, lineIdx: i }); }}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                      {l.ledger_id && ledgerBalances[l.ledger_id] && (
-                        <div className="mt-1 inline-flex items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
-                          <span>Bal:</span>
-                          <span>{formatINR(Math.abs(ledgerBalances[l.ledger_id].paise))}</span>
-                          <span>{ledgerBalances[l.ledger_id].paise >= 0 ? "Dr" : "Cr"}</span>
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        className="h-9 text-right font-mono"
-                        type="number"
-                        step="0.01"
-                        value={l.amount}
-                        onChange={(e) => updateSimple(i, { amount: e.target.value })}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        className="h-9"
-                        value={l.narration}
-                        onChange={(e) => updateSimple(i, { narration: e.target.value })}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => removeSimple(i)} disabled={simpleLines.length <= 1}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                  <EntryRow
+                    key={l.id}
+                    mode="simple"
+                    idx={i}
+                    row={{ id: l.id, ledger_id: l.ledger_id, amount: l.amount, narration: l.narration }}
+                    ledgerOptions={ledgers.filter((lg) => lg.id !== cashBankId)}
+                    balance={ledgerBalances[l.ledger_id]}
+                    canDelete={simpleLines.length > 1}
+                    onCommit={(idx, patch) => updateSimple(idx, patch as Partial<SimpleLine>)}
+                    onFocusRow={setFocusedLine}
+                    onDelete={removeSimple}
+                    onAddLedger={(idx) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: null, lineIdx: idx }); }}
+                    onEditLedger={(idx, lid) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: lid, lineIdx: idx }); }}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -526,75 +508,20 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             </TableHeader>
             <TableBody>
               {lines.map((l, i) => (
-                <TableRow key={i} onFocusCapture={() => setFocusedLine(i)} onClick={() => setFocusedLine(i)}>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Combo
-                        className="flex-1"
-                        value={l.ledger_id}
-                        onChange={(v) => { setFocusedLine(i); update(i, { ledger_id: v }); }}
-                        options={ledgers.map((lg) => ({ value: lg.id, label: lg.name, hint: lg.type }))}
-                        placeholder="Select ledger"
-                        emptyText="No ledgers — Alt+C to create"
-                        onCreate={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}
-                        createLabel="New ledger"
-                      />
-                      <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New ledger (F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: null, lineIdx: i }); }}>
-                        <UserPlus className="h-4 w-4" />
-                      </Button>
-                      {l.ledger_id && (
-                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Edit ledger (Shift+F3)" onClick={() => { setFocusedLine(i); setLedgerDlg({ open: true, editId: l.ledger_id, lineIdx: i }); }}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                    {l.ledger_id && ledgerBalances[l.ledger_id] && (
-                      <div className="mt-1 inline-flex items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
-                        <span className="text-muted-foreground/80">Bal:</span>
-                        <span className={ledgerBalances[l.ledger_id].paise >= 0 ? "text-foreground" : "text-foreground"}>
-                          {formatINR(Math.abs(ledgerBalances[l.ledger_id].paise))}
-                        </span>
-                        <span className="text-muted-foreground/80">
-                          {ledgerBalances[l.ledger_id].paise >= 0 ? "Dr" : "Cr"}
-                        </span>
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-9 text-right font-mono"
-                      type="number"
-                      step="0.01"
-                      value={l.debit}
-                      onChange={(e) =>
-                        update(i, { debit: e.target.value, credit: e.target.value ? "" : l.credit })
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-9 text-right font-mono"
-                      type="number"
-                      step="0.01"
-                      value={l.credit}
-                      onChange={(e) =>
-                        update(i, { credit: e.target.value, debit: e.target.value ? "" : l.debit })
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      className="h-9"
-                      value={l.narration}
-                      onChange={(e) => update(i, { narration: e.target.value })}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => remove(i)} disabled={lines.length <= 2}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                <EntryRow
+                  key={l.id}
+                  mode="double"
+                  idx={i}
+                  row={{ id: l.id, ledger_id: l.ledger_id, debit: l.debit, credit: l.credit, narration: l.narration }}
+                  ledgerOptions={ledgers}
+                  balance={ledgerBalances[l.ledger_id]}
+                  canDelete={lines.length > 2}
+                  onCommit={(idx, patch) => update(idx, patch as Partial<Line>)}
+                  onFocusRow={setFocusedLine}
+                  onDelete={remove}
+                  onAddLedger={(idx) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: null, lineIdx: idx }); }}
+                  onEditLedger={(idx, lid) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: lid, lineIdx: idx }); }}
+                />
               ))}
             </TableBody>
           </Table>
@@ -660,6 +587,12 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           onSaved={onLedgerSaved}
         />
       )}
+      <AcceptConfirm
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        onAccept={() => { void performSave(); }}
+        title={`Accept ${cfg.title}?`}
+      />
       </div>
       <div className="space-y-3">
         <RecentVouchersPanel voucherType={voucherType} refreshKey={savedTick} />

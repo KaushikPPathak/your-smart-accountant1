@@ -1,55 +1,85 @@
-# Shared Validation Layer
+## Rapid Entry Mode — Status Bar, Focus Hints, Sub-10ms Item Grid
 
-Goal: one source of truth for validation rules. Same zod schemas run in the form (instant inline errors) and in a server function (rejects bad payloads before they hit Postgres). DB triggers + RLS remain the final guard.
+Neutral, generic terminology throughout. No references to legacy desktop accounting brands in code, comments, or UI copy.
 
-## What gets built
+### 1. Fast-Form Primitives
 
-### 1. `src/lib/schemas/` — shared, client-safe
-- `voucher.ts`
-  - `voucherEntrySchema` — ledger_id (uuid), debit_paise/credit_paise (int ≥ 0, exactly one > 0), narration (≤500)
-  - `itemRowSchema` — item_id, qty > 0, rate_paise ≥ 0, gst %, computed line total
-  - `voucherHeaderSchema` — voucher_type enum, voucher_date (valid ISO, not in future > 1 day), party_ledger_id optional, narration ≤ 1000
-  - `entryVoucherSchema` — header + entries[]; refine: sum(debit) === sum(credit), at least 2 entries
-  - `itemVoucherSchema` — header + items[] + tax entries; refine: totals balance
-  - Exported helper: `validateVoucher(input): { ok, errors }`
-- `ledger.ts`, `item.ts`, `company.ts` — move inline zod from route files here, re-export.
+**Create `src/lib/save-status.ts`** — module-level pub/sub holding `{ lastSavedLabel, lastSavedAt, failureCount }`. Exposes `markSaved(label)`, `useSaveStatus()`, `useHasFailures()`.
 
-### 2. `src/server/vouchers.functions.ts` — new server function
-- `saveVoucherFn = createServerFn({ method: "POST" })`
-  - `.inputValidator(entryVoucherSchema.or(itemVoucherSchema).parse)`
-  - `.middleware([requireSupabaseAuth])`
-  - `.handler(...)` — calls `next_voucher_number` RPC, inserts voucher + entries with the auth-scoped client (RLS applies), returns `{ id, voucher_no }`.
-- Errors mapped to typed shape `{ ok:false, code, message, fieldErrors? }`.
+**Edit `src/lib/save-queue.tsx`**
+- After a successful `queue.shift()`, call `markSaved(job.label)`
+- On failure, increment failure count in save-status (in addition to existing toast)
+- Drop the per-form `toast.success(...)` calls — status bar is now the success channel; toasts remain for errors only
 
-### 3. Wire frontend
-- `EntryVoucherForm` / `ItemVoucherForm`: replace ad-hoc Dr=Cr / required-field checks with `validateVoucher(snapshot)`. Show first error inline; block enqueue only on validation failure (matches earlier "block on validation, async on network" decision).
-- `save-queue.tsx`: replace direct `supabase.from('vouchers').insert(...)` path for vouchers with `saveVoucherFn({ data })`. Failure → existing pending tray + retry.
-- Ledger / Item / Company route files: import schemas from `@/lib/schemas/*` instead of declaring inline.
+**Create `src/components/fast-form/FocusHints.tsx`**
+- `FocusHintsProvider` with `setHints(zone, string[])` / `clearHints(zone)` and `useCurrentHints()` hook
+- Default zone hints (when nothing focused): `Enter: next · Esc: back · Ctrl+S: accept · Alt+L: ledger report`
 
-### 4. Keep as-is (backend depth)
-- RLS policies, `enforce_period_lock_*` triggers, `next_voucher_number` RPC. These continue to enforce stateful rules (period locks, sequences, authorization) that schemas can't express.
+**Create `src/components/fast-form/StatusBar.tsx`** (replaces inline status line in `app.tsx`)
+- Three visual states driven by `useSaveStatus()` + `useHasFailures()`:
+  - **idle** — muted bg, shows `useCurrentHints()`
+  - **success** — green dot + "✓ Saved {label}", auto-reverts to idle after 1500ms (timer keyed off `lastSavedAt`)
+  - **alert** — amber bg + "⚠ {N} background save(s) failed — click to resolve". Click toggles `PendingSavesTray` to expanded mode.
+- Right side keeps the `F1 Keyboard help` button
 
-## Files
+**Edit `src/components/fast-form/PendingSavesTray.tsx`** — accept controlled `open` prop so StatusBar can force it open; auto-shows when in-flight as today.
 
-Created:
-- `src/lib/schemas/voucher.ts`
-- `src/lib/schemas/ledger.ts`
-- `src/lib/schemas/item.ts`
-- `src/lib/schemas/company.ts`
-- `src/server/vouchers.functions.ts`
+### 2. Item Grid Performance (sub-10ms keystroke target)
 
-Edited:
-- `src/components/vouchers/EntryVoucherForm.tsx`
-- `src/components/vouchers/ItemVoucherForm.tsx`
+**Edit `src/components/vouchers/ItemVoucherForm.tsx`**
+- Extract `<ItemRow>` as a `React.memo` component, props: `{ idx, initial: Line, gstRate, onCommit(idx, patch), onFocusZone, registerInput }`
+- Numeric fields (`qty`, `rate`, `discount`) become **uncontrolled** (`defaultValue`, ref-based read), committing to parent state only on `onBlur` or `Enter`
+- Item picker / description stay controlled (low cost) but isolated inside the memoized row
+- Totals: wrap parent `setLines` calls in `startTransition`; derive `computed[]` and `totals` via `useDeferredValue(lines)` so the row a user is typing in feels instant while totals settle on the next idle frame
+- On focus into a row's qty/rate/discount, push contextual hints: `Enter: next · F4: new item · Shift+F4: edit item · Ctrl+D: delete row · Ctrl+S: accept`
+
+**Edit `src/components/vouchers/EntryVoucherForm.tsx`**
+- Same memoized `<EntryRow>` pattern for journal/simple line grids
+- Uncontrolled `debit` / `credit` / `amount` numeric inputs, commit on blur
+- Defer totalDr/totalCr via `useDeferredValue`
+- Focus hints: `Enter: next · F3: new ledger · Shift+F3: edit ledger · Ctrl+D: delete row · Ctrl+S: accept`
+
+**Verification step (post-implementation)** — run `browser--start_profiling` while typing into a 25-row item grid and confirm keypress→paint self-time stays under 10ms.
+
+### 3. Workflow Enhancements
+
+**Recall Last Narration (`Ctrl+R`)**
+- Add `src/lib/recall-store.ts` — module-level `lastNarrationByType: Record<voucherType, string>`
+- After a successful enqueue, store the narration keyed by voucher type
+- In both forms, `Ctrl+R` while focused in the narration field fills it with the last value (with a tiny inline "recalled" hint via FocusHints)
+
+**Delete Row (`Ctrl+D`)** — within row focus, deletes that row (respecting min-row rule)
+
+**Accept Confirmation Overlay**
+- New `src/components/fast-form/AcceptConfirm.tsx` — small keyboard-first dialog: "Accept this voucher? (Y / N)" with `Y`/`Enter` to accept, `N`/`Esc` to cancel
+- The Save button + `Ctrl+S` open this overlay first; Y proceeds to validate + enqueue
+- Trap focus, no mouse needed
+
+### 4. Files
+
+**Create**
+- `src/lib/save-status.ts`
+- `src/lib/recall-store.ts`
+- `src/components/fast-form/StatusBar.tsx`
+- `src/components/fast-form/FocusHints.tsx`
+- `src/components/fast-form/AcceptConfirm.tsx`
+- `src/components/fast-form/ItemRow.tsx` (memoized row extracted from ItemVoucherForm)
+- `src/components/fast-form/EntryRow.tsx` (memoized row extracted from EntryVoucherForm)
+
+**Edit**
 - `src/lib/save-queue.tsx`
-- `src/routes/app.ledgers.tsx`
-- `src/routes/app.items.tsx`
-- `src/routes/app.companies.tsx`
+- `src/components/fast-form/PendingSavesTray.tsx`
+- `src/routes/app.tsx` (mount `FocusHintsProvider` + `<StatusBar />`)
+- `src/components/vouchers/ItemVoucherForm.tsx`
+- `src/components/vouchers/EntryVoucherForm.tsx`
 
-No DB migrations needed.
+### 5. Terminology Discipline
 
-## Acceptance
+- Use "Rapid Entry Mode", "Power User Shortcuts", "Recall", "Accept", "Status Bar"
+- No code/UI strings referencing legacy desktop accounting product names
+- Comments describe the *behavior* (e.g. "uncontrolled numeric input committed on blur"), not lineage
 
-- Same malformed voucher payload is rejected with the same error code whether sent from the form or via direct `saveVoucherFn` call.
-- Removing client validation still results in server rejection (defense in depth verified).
-- Existing zero-latency behavior preserved: validation runs synchronously on the snapshot before `enqueueSave`; UI reset/focus is unaffected.
+### Out of scope (ask if you want them)
+- Persisting recall across page reloads (currently in-memory only)
+- Undo of an enqueued save (separate feature)
+- Animated transitions beyond Tailwind `transition-colors`

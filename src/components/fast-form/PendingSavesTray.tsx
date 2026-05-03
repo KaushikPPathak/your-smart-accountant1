@@ -2,21 +2,33 @@ import { Loader2, RefreshCw, X } from "lucide-react";
 import { dropPending, retryPending, usePendingSaves } from "@/lib/save-queue";
 import { Button } from "@/components/ui/button";
 
-export function PendingSavesTray() {
+interface Props {
+  forceOpen?: boolean;
+  onClose?: () => void;
+}
+
+export function PendingSavesTray({ forceOpen, onClose }: Props = {}) {
   const jobs = usePendingSaves();
-  if (jobs.length === 0) return null;
+  if (jobs.length === 0 && !forceOpen) return null;
   const failed = jobs.filter((j) => j.attempts > 0);
   return (
     <div className="fixed bottom-10 right-4 z-30 w-[320px] rounded-md border border-border bg-background/95 shadow-lg backdrop-blur print:hidden">
       <div className="flex items-center justify-between border-b px-3 py-1.5 text-xs">
         <span className="font-medium">
-          {failed.length > 0 ? `${failed.length} failed save${failed.length === 1 ? "" : "s"}` : "Saving in background…"}
+          {failed.length > 0 ? `${failed.length} failed save${failed.length === 1 ? "" : "s"}` : jobs.length > 0 ? "Saving in background…" : "No pending saves"}
         </span>
-        {failed.length > 0 && (
-          <Button size="sm" variant="ghost" className="h-6 gap-1 px-2 text-xs" onClick={retryPending}>
-            <RefreshCw className="h-3 w-3" /> Retry
-          </Button>
-        )}
+        <span className="flex items-center gap-1">
+          {failed.length > 0 && (
+            <Button size="sm" variant="ghost" className="h-6 gap-1 px-2 text-xs" onClick={retryPending}>
+              <RefreshCw className="h-3 w-3" /> Retry
+            </Button>
+          )}
+          {onClose && (
+            <button type="button" className="text-muted-foreground hover:text-foreground" onClick={onClose} title="Close">
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </span>
       </div>
       <ul className="max-h-48 overflow-auto py-1 text-xs">
         {jobs.map((j) => (
