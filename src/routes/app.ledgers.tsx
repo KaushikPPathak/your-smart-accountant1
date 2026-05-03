@@ -272,6 +272,7 @@ function LedgersPage() {
       name: parsed.data.name,
       type: parsed.data.type as LedgerTypeValue,
       group_code: groupCode,
+      subgroup_id: form.subgroup_id || null,
       gstin: parsed.data.gstin || null,
       pan: parsed.data.pan || null,
       state: parsed.data.state || null,
