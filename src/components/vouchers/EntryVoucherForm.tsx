@@ -665,6 +665,10 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           onSaved={onLedgerSaved}
         />
       )}
+      </div>
+      <div className="space-y-3">
+        <RecentVouchersPanel voucherType={voucherType} refreshKey={savedTick} />
+      </div>
     </div>
   );
 }
