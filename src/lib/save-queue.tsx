@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode, startTransition } from "react";
 import { toast } from "sonner";
+import { markSaved, markFailure, clearFailures } from "./save-status";
 
 export interface PendingJob {
   id: string;
@@ -31,10 +32,12 @@ async function flush() {
       try {
         await job.run();
         queue.shift();
+        markSaved(job.label);
         bump();
       } catch (e) {
         job.attempts += 1;
         job.lastError = e instanceof Error ? e.message : String(e);
+        markFailure();
         bump();
         toast.error(`Save failed: ${job.label}`, { description: job.lastError });
         // Stop auto-retry; user retries from tray.
@@ -63,6 +66,7 @@ export function retryPending() {
 export function dropPending(id: string) {
   const i = queue.findIndex((j) => j.id === id);
   if (i >= 0) { queue.splice(i, 1); bump(); }
+  if (queue.every((j) => j.attempts === 0)) clearFailures();
 }
 
 export function usePendingSaves(): PendingJob[] {
