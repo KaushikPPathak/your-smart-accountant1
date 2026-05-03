@@ -24,6 +24,8 @@ import {
 import { writeLocalMirror, getLastLocalMirror } from "@/lib/local-mirror";
 import { AccountGroupsProvider } from "@/lib/account-groups-runtime";
 import { KeyboardCheatSheet } from "@/components/vouchers/KeyboardCheatSheet";
+import { MastersProvider } from "@/lib/masters-cache";
+import { PendingSavesTray } from "@/components/fast-form/PendingSavesTray";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
@@ -247,6 +249,7 @@ function AppLayout() {
             </div>
           </header>
           <AccountGroupsProvider>
+          <MastersProvider>
             <QuickActionsRibbon />
             <main className="flex-1 p-4 md:p-6">
               <Outlet />
@@ -268,6 +271,8 @@ function AppLayout() {
                 <kbd className="font-mono">F1</kbd> Keyboard help
               </button>
             </div>
+            <PendingSavesTray />
+          </MastersProvider>
           </AccountGroupsProvider>
         </SidebarInset>
       </div>
