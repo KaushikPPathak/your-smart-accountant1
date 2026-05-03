@@ -226,6 +226,7 @@ function LedgersPage() {
       name: l.name,
       type: l.type,
       group_code: l.group_code ?? defaultGroupCodeForType(l.type),
+      subgroup_id: l.subgroup_id ?? "",
       gstin: l.gstin ?? "",
       pan: l.pan ?? "",
       state_code: l.state_code ?? "",
