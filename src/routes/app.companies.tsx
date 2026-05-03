@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -124,6 +124,7 @@ const empty: FormState = {
 };
 
 function CompaniesPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { memberships, activeCompanyId, setActiveCompanyId, refresh } = useCompany();
   const [open, setOpen] = useState(false);
@@ -282,6 +283,11 @@ function CompaniesPage() {
   const onStateCodeChange = (code: string) => {
     const state = INDIAN_STATES.find((s) => s.code === code);
     setForm((f) => ({ ...f, state_code: code, state: state?.name ?? f.state }));
+  };
+
+  const openMembershipCompany = (companyId: string) => {
+    setActiveCompanyId(companyId);
+    navigate({ to: "/app" });
   };
 
   return (
@@ -590,7 +596,7 @@ function CompaniesPage() {
                     {isActive ? (
                       <Button variant="secondary" size="sm" className="flex-1" disabled><Check className="mr-2 h-4 w-4" /> Active</Button>
                     ) : (
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => setActiveCompanyId(m.company_id)}>Switch</Button>
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openMembershipCompany(m.company_id)}>Switch</Button>
                     )}
                     {m.role === "admin" && (
                       <Button variant="ghost" size="icon" onClick={() => openEdit(m.company_id)} title="Edit"><Pencil className="h-4 w-4" /></Button>
