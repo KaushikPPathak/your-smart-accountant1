@@ -310,6 +310,66 @@ function CompaniesPage() {
                   <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
                 </div>
                 <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
+                  <Label className="text-sm font-semibold">Entity Status</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Determines which fields, ledger groups and report formats apply (Schedule III for Pvt Ltd, Income & Expenditure for Trust, etc.).
+                  </p>
+                  <Select
+                    value={form.entity_status}
+                    onValueChange={(v) => setForm({ ...form, entity_status: v as EntityStatus })}
+                  >
+                    <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ENTITY_STATUSES.map((e) => {
+                        const Icon = e.icon;
+                        return (
+                          <SelectItem key={e.value} value={e.value}>
+                            <span className="inline-flex items-center gap-2">
+                              <Icon className="h-3.5 w-3.5" /> {e.label}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-2 text-[11px] text-muted-foreground italic">
+                    {getEntityMeta(form.entity_status).description}
+                  </p>
+                  {(() => {
+                    const f = getEntityFeatures(form.entity_status);
+                    if (!f.showCIN && !f.showShareCapital && !f.showCorpusFund) return null;
+                    return (
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        {f.showCIN && (
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">CIN</Label>
+                            <Input
+                              value={form.cin}
+                              onChange={(e) => setForm({ ...form, cin: e.target.value.toUpperCase() })}
+                              maxLength={21}
+                              placeholder="U12345MH2020PTC123456"
+                            />
+                          </div>
+                        )}
+                        {f.showShareCapital && (
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Authorised Share Capital (₹ in Lakhs)</Label>
+                            <Input type="number" step="0.01" value={form.share_capital_lakhs}
+                              onChange={(e) => setForm({ ...form, share_capital_lakhs: e.target.value })} />
+                          </div>
+                        )}
+                        {f.showCorpusFund && (
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Corpus Fund (₹ in Lakhs)</Label>
+                            <Input type="number" step="0.01" value={form.corpus_fund_lakhs}
+                              onChange={(e) => setForm({ ...form, corpus_fund_lakhs: e.target.value })} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
                   <Label className="text-sm font-semibold">GST Registration</Label>
                   <div className="flex flex-wrap items-center gap-4 pt-1">
                     <label className="flex items-center gap-2 text-sm">
@@ -471,6 +531,17 @@ function CompaniesPage() {
                   <Input value={form.bank_branch} onChange={(e) => setForm({ ...form, bank_branch: e.target.value })} />
                 </div>
               </div>
+              {editingId && getEntityFeatures(form.entity_status).membersTabLabel && (
+                <EntityMembersEditor
+                  companyId={editingId}
+                  features={getEntityFeatures(form.entity_status)}
+                />
+              )}
+              {!editingId && getEntityFeatures(form.entity_status).membersTabLabel && (
+                <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                  Save the company first — you'll then be able to add {getEntityFeatures(form.entity_status).membersTabLabel} (PAN/DIN, share %, profit-sharing ratio, capital contribution) on edit.
+                </p>
+              )}
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={submitting}>{submitting ? "Saving…" : editingId ? "Save changes" : "Create company"}</Button>
