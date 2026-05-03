@@ -20,6 +20,7 @@ import {
 } from "@/lib/tech-user";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { setCompanyLang, getCompanyLang, useI18n } from "@/lib/i18n";
+import { useCompany } from "@/lib/company-context";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -39,6 +40,7 @@ interface PickerCompany {
 
 function StartScreen() {
   const navigate = useNavigate();
+  const { setActiveCompanyId } = useCompany();
   const { t, lang, setLang } = useI18n();
   const [loading, setLoading] = useState(true);
   const [companies, setCompanies] = useState<PickerCompany[]>([]);
@@ -72,6 +74,7 @@ function StartScreen() {
     else setCompanyLang(c.id, lang);
     if (!c.has_password || isCompanyUnlocked(c.id)) {
       localStorage.setItem("ym_active_company_id", c.id);
+      setActiveCompanyId(c.id);
       markCompanyUnlocked(c.id);
       navigate({ to: "/app" });
       return;
@@ -97,6 +100,7 @@ function StartScreen() {
       }
       markCompanyUnlocked(pendingCompany.id);
       localStorage.setItem("ym_active_company_id", pendingCompany.id);
+      setActiveCompanyId(pendingCompany.id);
       setCompanyLang(pendingCompany.id, lang);
       setPendingCompany(null);
       navigate({ to: "/app" });
