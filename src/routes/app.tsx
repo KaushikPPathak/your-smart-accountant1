@@ -95,7 +95,7 @@ function AppLayout() {
     };
   }, []);
 
-  // Global Busy-style hotkeys for new vouchers
+  // Global Busy-style hotkeys for new vouchers + Alt+L = jump to Ledger
   useEffect(() => {
     const map: Record<string, string> = {
       s: "/app/vouchers/new/sales",
@@ -110,6 +110,18 @@ function AppLayout() {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        // Remember where we came from so Esc on the Ledger report returns here.
+        try {
+          sessionStorage.setItem(
+            "ledgerReturnTo",
+            location.pathname + location.search,
+          );
+        } catch { /* ignore */ }
+        navigate({ to: "/app/reports/ledger" });
+        return;
+      }
       const dest = map[e.key.toLowerCase()];
       if (dest) {
         e.preventDefault();
@@ -118,7 +130,7 @@ function AppLayout() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
+  }, [navigate, location.pathname, location.search]);
 
   const onCompaniesPage = location.pathname.startsWith("/app/companies");
   const onAssistantPage = location.pathname.startsWith("/app/assistant");
