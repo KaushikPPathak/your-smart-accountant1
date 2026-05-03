@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./auth-context";
 import { rememberActiveCompanyName } from "./desktop-save";
+import type { EntityStatus } from "./entity-status";
 
 export interface CompanyMembership {
   company_id: string;
@@ -18,6 +19,10 @@ export interface CompanyMembership {
     inventory_enabled: boolean;
     annual_turnover_paise: number;
     mode: "normal" | "trial_local";
+    entity_status: EntityStatus;
+    cin: string | null;
+    share_capital_paise: number;
+    corpus_fund_paise: number;
   };
 }
 
@@ -49,7 +54,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     const { data, error } = await supabase
       .from("company_members")
-      .select("company_id, role, companies(id, name, gstin, state, state_code, financial_year_start, gst_registered, gst_filing_frequency, inventory_enabled, annual_turnover_paise, mode)")
+      .select("company_id, role, companies(id, name, gstin, state, state_code, financial_year_start, gst_registered, gst_filing_frequency, inventory_enabled, annual_turnover_paise, mode, entity_status, cin, share_capital_paise, corpus_fund_paise)")
       .order("created_at", { ascending: true });
 
     if (error) {

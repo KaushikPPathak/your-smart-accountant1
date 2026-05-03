@@ -9,6 +9,7 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
+import { getEntityFeatures } from "@/lib/entity-status";
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
   head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
@@ -16,7 +17,14 @@ export const Route = createFileRoute("/app/reports/profit-loss")({
 });
 
 function ProfitLoss() {
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeMembership } = useCompany();
+  const features = getEntityFeatures(activeMembership?.companies?.entity_status ?? "individual");
+  const isIE = features.plLabel === "Income & Expenditure A/c";
+  const reportTitle = isIE ? "Income & Expenditure Account" : "Profit & Loss Account";
+  const dr = isIE ? "Expenditure" : "Dr. Particulars";
+  const cr = isIE ? "Income" : "Cr. Particulars";
+  const surplusLabel = isIE ? "To Excess of Income over Expenditure" : "To Net Profit c/d";
+  const deficitLabel = isIE ? "By Excess of Expenditure over Income" : "By Net Loss c/d";
   const navigate = useNavigate();
   const initial = defaultFyRange();
   const [from, setFrom] = useState(initial.from);
@@ -56,17 +64,17 @@ function ProfitLoss() {
 
   const expenseRows: TRow[] = [...exp.rows];
   const incomeRows: TRow[] = [...inc.rows];
-  if (profit > 0) expenseRows.push({ label: "To Net Profit c/d", amount: formatINR(profit), emphasis: "bold" });
-  if (profit < 0) incomeRows.push({ label: "By Net Loss c/d", amount: formatINR(-profit), emphasis: "bold" });
+  if (profit > 0) expenseRows.push({ label: surplusLabel, amount: formatINR(profit), emphasis: "bold" });
+  if (profit < 0) incomeRows.push({ label: deficitLabel, amount: formatINR(-profit), emphasis: "bold" });
 
   const grandLeft = exp.totalPaise + Math.max(0, profit);
   const grandRight = inc.totalPaise + Math.max(0, -profit);
 
   // Exports
-  const drExp = groupedExportRows(expenseBuckets, "To ");
-  const crExp = groupedExportRows(incomeBuckets, "By ");
-  if (profit > 0) drExp.push({ label: "  To Net Profit c/d", paise: profit, isSubtotal: true });
-  if (profit < 0) crExp.push({ label: "  By Net Loss c/d", paise: -profit, isSubtotal: true });
+  const drExp = groupedExportRows(expenseBuckets, isIE ? "" : "To ");
+  const crExp = groupedExportRows(incomeBuckets, isIE ? "" : "By ");
+  if (profit > 0) drExp.push({ label: `  ${surplusLabel}`, paise: profit, isSubtotal: true });
+  if (profit < 0) crExp.push({ label: `  ${deficitLabel}`, paise: -profit, isSubtotal: true });
 
   const exportBody = (): (string | number)[][] => {
     const max = Math.max(drExp.length, crExp.length);
@@ -79,23 +87,24 @@ function ProfitLoss() {
   };
 
   const csvRows = (): (string | number)[][] => [
-    [`Profit & Loss A/c: ${from} to ${to}`, "", "", ""],
-    ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
+    [`${reportTitle}: ${from} to ${to}`, "", "", ""],
+    [dr, "Amount (₹)", cr, "Amount (₹)"],
     ...exportBody(),
     ["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)],
   ];
 
-  const onExportCsv = () => downloadCsv(`profit-loss-${from}_to_${to}.csv`, csvRows());
+  const fileSlug = isIE ? "income-expenditure" : "profit-loss";
+  const onExportCsv = () => downloadCsv(`${fileSlug}-${from}_to_${to}.csv`, csvRows());
   const onExportXlsx = () =>
-    downloadXlsx(`profit-loss-${from}_to_${to}.xlsx`, [{ name: "P&L", rows: csvRows() }]);
+    downloadXlsx(`${fileSlug}-${from}_to_${to}.xlsx`, [{ name: isIE ? "I&E" : "P&L", rows: csvRows() }]);
   const onExportPdf = () =>
     downloadPdfTable({
-      title: "Profit & Loss A/c",
+      title: reportTitle,
       subtitle: `${from} to ${to}`,
-      head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
+      head: [[dr, "Amount (₹)", cr, "Amount (₹)"]],
       body: exportBody(),
       foot: [["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)]],
-      fileName: `profit-loss-${from}_to_${to}.pdf`,
+      fileName: `${fileSlug}-${from}_to_${to}.pdf`,
       orientation: "l",
       rightAlignCols: [1, 3],
     });
@@ -115,13 +124,17 @@ function ProfitLoss() {
             onPrint={() => window.print()}
           />
           <p className="mt-2 text-xs text-muted-foreground">
-            Indirect Income &amp; Indirect Expenses, grouped per IT-norms. Gross Profit/Loss flows in from the <strong>Trading Account</strong>.
+            {isIE
+              ? <>Income &amp; Expenditure for the period — surplus/deficit transfers to the <strong>Corpus / General Fund</strong>.</>
+              : <>Indirect Income &amp; Indirect Expenses, grouped per IT-norms. Gross Profit/Loss flows in from the <strong>Trading Account</strong>.</>}
           </p>
         </CardContent>
       </Card>
       <TAccount
-        title="Profit & Loss Account"
+        title={reportTitle}
         subtitle={`for the period ${from} to ${to}`}
+        leftHeader={dr}
+        rightHeader={cr}
         leftRows={expenseRows}
         rightRows={incomeRows}
         leftTotal={formatINR(grandLeft)}
