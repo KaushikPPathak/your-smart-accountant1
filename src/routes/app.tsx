@@ -114,10 +114,7 @@ function AppLayout() {
         e.preventDefault();
         // Remember where we came from so Esc on the Ledger report returns here.
         try {
-          sessionStorage.setItem(
-            "ledgerReturnTo",
-            location.pathname + location.search,
-          );
+          sessionStorage.setItem("ledgerReturnTo", location.pathname);
         } catch { /* ignore */ }
         navigate({ to: "/app/reports/ledger" });
         return;
@@ -130,7 +127,7 @@ function AppLayout() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navigate, location.pathname, location.search]);
+  }, [navigate, location.pathname]);
 
   const onCompaniesPage = location.pathname.startsWith("/app/companies");
   const onAssistantPage = location.pathname.startsWith("/app/assistant");
