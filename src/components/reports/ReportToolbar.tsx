@@ -113,3 +113,24 @@ export function useFyRangeState(initialFrom?: string, initialTo?: string): {
   const setTo = React.useCallback((v: string) => { userEdited.current = true; setToState(v); }, []);
   return { from, to, setFrom, setTo };
 }
+
+/** Reactive single-date state, defaulting to today if it's inside the FY,
+ *  otherwise to the FY end date. */
+export function useFyAsOfState(): { asOf: string; setAsOf: (v: string) => void } {
+  const fy = useFyRangeStrings();
+  const compute = React.useCallback(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (today >= fy.from && today <= fy.to) return today;
+    return fy.to;
+  }, [fy]);
+  const [asOf, setAsOfState] = React.useState(compute);
+  const lastFy = React.useRef(fy);
+  const userEdited = React.useRef(false);
+  React.useEffect(() => {
+    if (lastFy.current.from === fy.from && lastFy.current.to === fy.to) return;
+    lastFy.current = fy;
+    if (!userEdited.current) setAsOfState(compute());
+  }, [fy, compute]);
+  const setAsOf = React.useCallback((v: string) => { userEdited.current = true; setAsOfState(v); }, []);
+  return { asOf, setAsOf };
+}
