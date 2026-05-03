@@ -13,6 +13,7 @@ import {
   groupedTRows,
   groupedExportRows,
 } from "@/lib/report-grouping";
+import { getEntityFeatures } from "@/lib/entity-status";
 
 export const Route = createFileRoute("/app/reports/balance-sheet")({
   head: () => ({ meta: [{ title: "Balance Sheet — Reports" }] }),
@@ -20,7 +21,18 @@ export const Route = createFileRoute("/app/reports/balance-sheet")({
 });
 
 function BalanceSheet() {
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeMembership } = useCompany();
+  const features = getEntityFeatures(activeMembership?.companies?.entity_status ?? "individual");
+  const liabHeader = features.scheduleIII
+    ? "Equity & Liabilities"
+    : `Liabilities (${features.capitalLabel} & Sources of Funds)`;
+  const assetHeader = features.scheduleIII ? "Assets" : "Assets (Application of Funds)";
+  const profitLabelPos = features.plLabel === "Income & Expenditure A/c"
+    ? "Excess of Income over Expenditure"
+    : "Net Profit (current period)";
+  const profitLabelNeg = features.plLabel === "Income & Expenditure A/c"
+    ? "Excess of Expenditure over Income"
+    : "Net Loss (current period)";
   const navigate = useNavigate();
   const initial = defaultFyRange();
   const [from, setFrom] = useState(initial.from);
@@ -60,9 +72,9 @@ function BalanceSheet() {
   const liabRows: TRow[] = [...liab.rows];
   const assetRows: TRow[] = [...asset.rows];
   if (profitPaise > 0) {
-    liabRows.push({ label: "Net Profit (current period)", amount: formatINR(profitPaise), emphasis: "bold" });
+    liabRows.push({ label: profitLabelPos, amount: formatINR(profitPaise), emphasis: "bold" });
   } else if (profitPaise < 0) {
-    assetRows.push({ label: "Net Loss (current period)", amount: formatINR(-profitPaise), emphasis: "bold" });
+    assetRows.push({ label: profitLabelNeg, amount: formatINR(-profitPaise), emphasis: "bold" });
   }
   const grandL = liab.totalPaise + Math.max(0, profitPaise);
   const grandA = asset.totalPaise + Math.max(0, -profitPaise);
@@ -71,8 +83,8 @@ function BalanceSheet() {
   // Exports
   const liabExp = groupedExportRows(liabBuckets);
   const assetExp = groupedExportRows(assetBuckets);
-  if (profitPaise > 0) liabExp.push({ label: "Net Profit (current period)", paise: profitPaise, isSubtotal: true });
-  if (profitPaise < 0) assetExp.push({ label: "Net Loss (current period)", paise: -profitPaise, isSubtotal: true });
+  if (profitPaise > 0) liabExp.push({ label: profitLabelPos, paise: profitPaise, isSubtotal: true });
+  if (profitPaise < 0) assetExp.push({ label: profitLabelNeg, paise: -profitPaise, isSubtotal: true });
 
   const exportBody = (): (string | number)[][] => {
     const max = Math.max(liabExp.length, assetExp.length);
@@ -86,7 +98,7 @@ function BalanceSheet() {
 
   const csvRows = (): (string | number)[][] => [
     [`Balance Sheet as on ${to}`, "", "", ""],
-    ["Liabilities (Sources of Funds)", "Amount (₹)", "Assets (Application of Funds)", "Amount (₹)"],
+    [liabHeader, "Amount (₹)", assetHeader, "Amount (₹)"],
     ...exportBody(),
     ["Total", r(grandL).toFixed(2), "Total", r(grandA).toFixed(2)],
   ];
@@ -98,7 +110,7 @@ function BalanceSheet() {
     downloadPdfTable({
       title: "Balance Sheet",
       subtitle: `As on ${to}`,
-      head: [["Liabilities (Sources of Funds)", "Amount (₹)", "Assets (Application of Funds)", "Amount (₹)"]],
+      head: [[liabHeader, "Amount (₹)", assetHeader, "Amount (₹)"]],
       body: exportBody(),
       foot: [["Total", r(grandL).toFixed(2), "Total", r(grandA).toFixed(2)]],
       fileName: `balance-sheet-${to}.pdf`,
@@ -146,8 +158,8 @@ function BalanceSheet() {
       <TAccount
         title="Balance Sheet"
         subtitle={`as on ${to}`}
-        leftHeader="Liabilities (Sources of Funds)"
-        rightHeader="Assets (Application of Funds)"
+        leftHeader={liabHeader}
+        rightHeader={assetHeader}
         leftRows={liabRows}
         rightRows={assetRows}
         leftTotal={formatINR(grandL)}
