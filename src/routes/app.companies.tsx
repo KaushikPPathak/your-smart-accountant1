@@ -28,6 +28,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
 import { INDIAN_STATES } from "@/lib/constants";
+import { ENTITY_STATUSES, getEntityFeatures, getEntityMeta, CIN_REGEX, type EntityStatus } from "@/lib/entity-status";
+import { EntityMembersEditor } from "@/components/companies/EntityMembersEditor";
 
 export const Route = createFileRoute("/app/companies")({
   head: () => ({ meta: [{ title: "Companies — Your Mehtaji" }] }),
@@ -36,6 +38,10 @@ export const Route = createFileRoute("/app/companies")({
 
 const schema = z.object({
   name: z.string().trim().min(2, "Name is required").max(120),
+  entity_status: z.enum(["individual","huf","aop","pvt_ltd","registered_firm","trust"]),
+  cin: z.string().trim().max(21).optional().or(z.literal("")),
+  share_capital_lakhs: z.string().optional(),
+  corpus_fund_lakhs: z.string().optional(),
   gstin: z
     .string()
     .trim()
@@ -59,10 +65,18 @@ const schema = z.object({
   inventory_enabled: z.boolean(),
   annual_turnover_lakhs: z.string().optional(),
   trial_local: z.boolean(),
+}).superRefine((val, ctx) => {
+  if (val.entity_status === "pvt_ltd" && val.cin && !CIN_REGEX.test(val.cin.toUpperCase())) {
+    ctx.addIssue({ code: "custom", path: ["cin"], message: "Invalid CIN (e.g. U12345MH2020PTC123456)" });
+  }
 });
 
 interface FormState {
   name: string;
+  entity_status: EntityStatus;
+  cin: string;
+  share_capital_lakhs: string;
+  corpus_fund_lakhs: string;
   gstin: string;
   pan: string;
   state: string;
@@ -85,6 +99,10 @@ interface FormState {
 
 const empty: FormState = {
   name: "",
+  entity_status: "individual",
+  cin: "",
+  share_capital_lakhs: "",
+  corpus_fund_lakhs: "",
   gstin: "",
   pan: "",
   state: "",
@@ -146,6 +164,12 @@ function CompaniesPage() {
     setEditingId(id);
     setForm({
       name: data.name,
+      entity_status: ((data as { entity_status?: EntityStatus }).entity_status ?? "individual"),
+      cin: (data as { cin?: string | null }).cin ?? "",
+      share_capital_lakhs: (data as { share_capital_paise?: number }).share_capital_paise
+        ? String(((data as { share_capital_paise: number }).share_capital_paise) / 100 / 100000) : "",
+      corpus_fund_lakhs: (data as { corpus_fund_paise?: number }).corpus_fund_paise
+        ? String(((data as { corpus_fund_paise: number }).corpus_fund_paise) / 100 / 100000) : "",
       gstin: data.gstin ?? "",
       pan: data.pan ?? "",
       state: data.state ?? "",
@@ -207,6 +231,12 @@ function CompaniesPage() {
 
     const payload = {
       name: parsed.data.name,
+      entity_status: parsed.data.entity_status,
+      cin: parsed.data.entity_status === "pvt_ltd" ? (parsed.data.cin?.toUpperCase() || null) : null,
+      share_capital_paise: parsed.data.entity_status === "pvt_ltd"
+        ? Math.round((parseFloat(parsed.data.share_capital_lakhs ?? "") || 0) * 100000 * 100) : 0,
+      corpus_fund_paise: parsed.data.entity_status === "trust"
+        ? Math.round((parseFloat(parsed.data.corpus_fund_lakhs ?? "") || 0) * 100000 * 100) : 0,
       gstin: parsed.data.gst_registered ? (parsed.data.gstin || null) : null,
       pan: parsed.data.pan || null,
       state: parsed.data.state || null,
