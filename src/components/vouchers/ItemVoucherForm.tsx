@@ -617,20 +617,14 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       )}
       <EwayBillPrepDialog
         open={ewbDlg.open}
-        onOpenChange={(o) => {
-          setEwbDlg((s) => ({ ...s, open: o }));
-          if (!o) {
-            // After E-Way prep dialog closes, reset form for the next entry
-            // instead of leaving the voucher screen.
-            setPartyId("");
-            setRefNo("");
-            setNarration("");
-            setLines([blankLine()]);
-            setFocusedLine(0);
-            setSavedTick((n) => n + 1);
-          }
-        }}
+        onOpenChange={(o) => setEwbDlg((s) => ({ ...s, open: o }))}
         voucher={ewbDlg.voucher}
+      />
+      <AcceptConfirm
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        onAccept={() => { void performSave(); }}
+        title={`Accept ${cfg.title}?`}
       />
       </div>
       <div className="space-y-3">
