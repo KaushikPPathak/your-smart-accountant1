@@ -1,7 +1,7 @@
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Download, FileSpreadsheet, FileText, Printer } from "lucide-react";
+import { FyDatePicker } from "@/components/ui/fy-date-picker";
 
 interface Props {
   from: string;
@@ -34,11 +34,11 @@ export function ReportToolbar({
         <>
           <div className="space-y-1">
             <Label className="text-xs">From</Label>
-            <Input type="date" value={from} onChange={(e) => onFrom(e.target.value)} className="h-9 w-[160px]" />
+            <FyDatePicker value={from} onChange={onFrom} className="w-[170px]" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">To</Label>
-            <Input type="date" value={to} onChange={(e) => onTo(e.target.value)} className="h-9 w-[160px]" />
+            <FyDatePicker value={to} onChange={onTo} className="w-[170px]" />
           </div>
         </>
       )}
