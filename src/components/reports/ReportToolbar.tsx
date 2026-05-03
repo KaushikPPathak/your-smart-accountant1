@@ -86,3 +86,30 @@ export function useFyRangeStrings(): { from: string; to: string } {
     [start, end],
   );
 }
+
+/** Reactive [from, to] state seeded from the active company's FY.
+ *  Auto-resyncs to the FY when the company changes, unless the user has
+ *  manually edited the values. */
+export function useFyRangeState(initialFrom?: string, initialTo?: string): {
+  from: string;
+  to: string;
+  setFrom: (v: string) => void;
+  setTo: (v: string) => void;
+} {
+  const fy = useFyRangeStrings();
+  const [from, setFromState] = React.useState(initialFrom ?? fy.from);
+  const [to, setToState] = React.useState(initialTo ?? fy.to);
+  const lastFy = React.useRef(fy);
+  const userEdited = React.useRef(!!(initialFrom || initialTo));
+  React.useEffect(() => {
+    if (lastFy.current.from === fy.from && lastFy.current.to === fy.to) return;
+    lastFy.current = fy;
+    if (!userEdited.current) {
+      setFromState(fy.from);
+      setToState(fy.to);
+    }
+  }, [fy]);
+  const setFrom = React.useCallback((v: string) => { userEdited.current = true; setFromState(v); }, []);
+  const setTo = React.useCallback((v: string) => { userEdited.current = true; setToState(v); }, []);
+  return { from, to, setFrom, setTo };
+}
