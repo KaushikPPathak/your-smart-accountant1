@@ -303,10 +303,16 @@ function CashBankBook() {
     );
   }
 
+  const accountHeading = ledger
+    ? ledger.type === "cash"
+      ? `Cash Book${ledger.name ? `: ${ledger.name}` : ""}`
+      : `Bank Book: ${ledger.name}`
+    : "Cash & Bank Book";
+
   return (
     <ReportViewer
       title="Cash & Bank Book"
-      subtitle={ledger ? `${ledger.name} A/c` : undefined}
+      accountHeading={accountHeading}
       fromDate={from}
       toDate={to}
       toolbar={toolbar}

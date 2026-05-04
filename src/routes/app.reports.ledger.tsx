@@ -413,7 +413,10 @@ function LedgerStatement() {
   return (
     <ReportViewer
       title="Ledger Statement"
-      subtitle={ledger ? `${ledger.name} A/c` : undefined}
+      subtitle={undefined}
+      accountHeading={ledger ? `Ledger Account: ${ledger.name}` : "Ledger Statement"}
+      companyCity={undefined}
+      companyGstin={undefined}
       fromDate={from}
       toDate={to}
       toolbar={toolbar}
