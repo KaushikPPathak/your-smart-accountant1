@@ -5,6 +5,22 @@ import { PrintModeDialog, type PrintMode } from "./PrintModeDialog";
 import { exportElementAsWord } from "@/lib/word-export";
 
 /**
+ * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
+ * GSTR-3B, GSTR-2B recon, GST sales/purchase books) follow the official
+ * GSTN print/export flow and must not be intercepted.
+ */
+const PRINT_PICKER_EXCLUDED = [
+  "/app/reports/gst",       // covers gst-sales-book, gst-purchase-book
+  "/app/reports/gstr1",
+  "/app/reports/gstr3b",
+  "/app/reports/gstr2b",
+];
+
+function isPrintPickerExcludedPath(pathname: string): boolean {
+  return PRINT_PICKER_EXCLUDED.some((p) => pathname.startsWith(p));
+}
+
+/**
  * ReportViewer — print-ready wrapper for any report.
  *
  * Behavior
@@ -36,6 +52,12 @@ export interface ReportViewerProps {
   onExportWord?: () => void;
   /** File-name stem used by the default Word export. Defaults to title. */
   exportFileBase?: string;
+  /**
+   * Opt out of the universal Ctrl+P picker (e.g. GST returns where the
+   * statutory print/export flow must be used instead). When true, Ctrl+P
+   * falls back to the browser's native print dialog.
+   */
+  disablePrintShortcut?: boolean;
   children: React.ReactNode;
 }
 
@@ -52,6 +74,7 @@ export function ReportViewer({
   onExportPdf,
   onExportWord,
   exportFileBase,
+  disablePrintShortcut,
   children,
 }: ReportViewerProps) {
   const { activeMembership } = useCompany();
@@ -105,6 +128,10 @@ export function ReportViewer({
 
   // Global Ctrl+P / Cmd+P → open picker. While picker is open, P/D/W pick.
   React.useEffect(() => {
+    // Honour explicit opt-out and the GST-route exception list. In both
+    // cases we leave Ctrl+P alone so the browser's native dialog runs.
+    if (disablePrintShortcut) return;
+    if (typeof window !== "undefined" && isPrintPickerExcludedPath(window.location.pathname)) return;
     const onKey = (e: KeyboardEvent) => {
       // Open picker
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "p") {
@@ -124,7 +151,7 @@ export function ReportViewer({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pickerOpen, handlePick]);
+  }, [pickerOpen, handlePick, disablePrintShortcut]);
 
   return (
     <div className={cn("report-print-root-wrap space-y-3", className)}>
