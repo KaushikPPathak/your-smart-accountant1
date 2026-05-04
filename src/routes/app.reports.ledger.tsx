@@ -418,6 +418,8 @@ function LedgerStatement() {
       toDate={to}
       toolbar={toolbar}
       orientation="landscape"
+      onExportPdf={onExportPdf}
+      exportFileBase={`${fileBase}-${view}`}
     >
       {!ledger ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a ledger to view its statement.</CardContent></Card>

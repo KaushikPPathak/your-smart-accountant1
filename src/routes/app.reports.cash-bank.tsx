@@ -311,6 +311,8 @@ function CashBankBook() {
       toDate={to}
       toolbar={toolbar}
       orientation="landscape"
+      onExportPdf={onExportPdf}
+      exportFileBase={fileBase}
     >
       {loading ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
