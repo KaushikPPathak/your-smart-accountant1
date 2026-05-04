@@ -58,6 +58,18 @@ export interface ReportViewerProps {
    * falls back to the browser's native print dialog.
    */
   disablePrintShortcut?: boolean;
+  /**
+   * Pre-formatted account / ledger heading line, e.g.
+   *   "Ledger Account: ACME Traders"
+   *   "Cash Book"
+   *   "Bank Book: HDFC Current 0123"
+   * Renders directly under the title on every printed page.
+   */
+  accountHeading?: string;
+  /** Company city (printed on the small address/GST line). */
+  companyCity?: string | null;
+  /** Company GSTIN (printed on the small address/GST line). */
+  companyGstin?: string | null;
   children: React.ReactNode;
 }
 
@@ -75,15 +87,21 @@ export function ReportViewer({
   onExportWord,
   exportFileBase,
   disablePrintShortcut,
+  accountHeading,
+  companyCity,
+  companyGstin,
   children,
 }: ReportViewerProps) {
   const { activeMembership } = useCompany();
   const company = companyName ?? activeMembership?.companies?.name ?? "";
+  const city = companyCity ?? null;
+  const gstin = companyGstin ?? activeMembership?.companies?.gstin ?? null;
   const periodText = asOf
     ? `As on ${asOf}`
     : fromDate && toDate
-      ? `From ${fromDate} to ${toDate}`
+      ? `For the period: ${fromDate} to ${toDate}`
       : "";
+  const addressLine = [city, gstin ? `GSTIN: ${gstin}` : null].filter(Boolean).join(" · ");
 
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [pickerOpen, setPickerOpen] = React.useState(false);
@@ -99,9 +117,11 @@ export function ReportViewer({
     const headerHtml = `
       <div class="report-print-header">
         <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:.5pt">${escape(company)}</div>
-        <div style="font-size:11pt;font-weight:600">${escape(title)}</div>
+        <div style="font-size:11pt;font-weight:600">${escape(accountHeading || title)}</div>
         ${subtitleText ? `<div style="font-size:9pt">${escape(subtitleText)}</div>` : ""}
         ${periodText ? `<div style="font-size:9pt">${escape(periodText)}</div>` : ""}
+        ${addressLine ? `<div style="font-size:8.5pt;color:#444">${escape(addressLine)}</div>` : ""}
+        <div style="border-top:1pt solid #000;border-bottom:1pt solid #000;height:3pt;margin-top:4pt"></div>
       </div>`;
     const stem = (exportFileBase || title).replace(/[^A-Za-z0-9._-]+/g, "-");
     exportElementAsWord({
@@ -111,7 +131,7 @@ export function ReportViewer({
       headerHtml,
       orientation,
     });
-  }, [onExportWord, company, title, subtitleText, periodText, exportFileBase, orientation]);
+  }, [onExportWord, company, title, accountHeading, subtitleText, periodText, addressLine, exportFileBase, orientation]);
 
   const handlePick = React.useCallback(
     (mode: PrintMode) => {
@@ -163,11 +183,17 @@ export function ReportViewer({
           orientation === "landscape" && "report-print-landscape",
         )}
       >
-        <div className="report-print-header mb-3 border-b border-black pb-2 text-center">
-          <div className="text-base font-bold uppercase tracking-wide">{company}</div>
-          <div className="report-print-title text-sm font-semibold">{title}</div>
-          {subtitle && <div className="text-xs">{subtitle}</div>}
+        <div className="report-print-header mb-3 text-center">
+          <div className="text-lg font-bold uppercase tracking-wide leading-tight">{company || "\u00A0"}</div>
+          <div className="report-print-title text-sm font-semibold mt-0.5">
+            {accountHeading || title}
+          </div>
+          {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
           {periodText && <div className="text-[11px]">{periodText}</div>}
+          {addressLine && (
+            <div className="text-[10px] text-muted-foreground">{addressLine}</div>
+          )}
+          <div className="report-header-rule mt-2" aria-hidden />
         </div>
         {children}
       </div>

@@ -301,4 +301,29 @@
 }
 
 /* Header is hidden on screen, shown only when printing. */
-.report-print-header { display: none; }
+/* Header is visible on screen AND on print (was previously hidden on screen). */
+.report-print-header { display: block; }
+
+/* Double-line separator under the report header. Renders as two thin
+   horizontal rules with a small gap, matching traditional ledger books. */
+.report-header-rule {
+  height: 3px;
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
+}
+@media print {
+  .report-header-rule {
+    height: 3pt;
+    border-top: 0.75pt solid #000 !important;
+    border-bottom: 0.75pt solid #000 !important;
+  }
+  /* Ensure the header block is positioned to repeat visually at the top
+     of each printed page (the @page margin boxes still carry the running
+     title + page numbers; this keeps the full identification block at the
+     start of the report body). */
+  .report-print-root .report-print-header {
+    display: block !important;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+}
