@@ -10,6 +10,10 @@ import { saveExport } from "./desktop-save";
 export interface PdfTableOptions {
   title: string;
   subtitle?: string;
+  /** Company / proprietor name printed bold above the report title on every page. */
+  companyName?: string;
+  /** Optional secondary line under the company name (e.g. FY label, GSTIN). */
+  companySubLine?: string;
   head: string[][];
   body: (string | number)[][];
   foot?: (string | number)[][];
@@ -24,20 +28,36 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
   const doc = new jsPDF({ orientation: opts.orientation || "p", unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
 
+  let y = 28;
+  if (opts.companyName) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(opts.companyName.toUpperCase(), pageW / 2, y, { align: "center" });
+    y += 14;
+  }
+  if (opts.companySubLine) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(opts.companySubLine, pageW / 2, y, { align: "center" });
+    y += 12;
+  }
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text(opts.title, pageW / 2, 36, { align: "center" });
+  doc.setFontSize(12);
+  doc.text(opts.title, pageW / 2, y, { align: "center" });
+  y += 14;
   if (opts.subtitle) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.text(opts.subtitle, pageW / 2, 52, { align: "center" });
+    doc.text(opts.subtitle, pageW / 2, y, { align: "center" });
+    y += 12;
   }
+  const tableStartY = y + 4;
 
   const columnStyles: Record<number, { halign: "right" }> = {};
   (opts.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
 
   autoTable(doc, {
-    startY: opts.subtitle ? 64 : 48,
+    startY: tableStartY,
     head: opts.head,
     body: opts.body,
     foot: opts.foot,
@@ -46,7 +66,33 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     headStyles: { fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
     footStyles: { fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
     columnStyles,
-    didDrawPage: () => {
+    margin: { top: tableStartY },
+    didDrawPage: (data) => {
+      // Repeat company / FY / title on every page (page 2+).
+      if (data.pageNumber > 1) {
+        let hy = 28;
+        if (opts.companyName) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(13);
+          doc.text(opts.companyName.toUpperCase(), pageW / 2, hy, { align: "center" });
+          hy += 14;
+        }
+        if (opts.companySubLine) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          doc.text(opts.companySubLine, pageW / 2, hy, { align: "center" });
+          hy += 12;
+        }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text(opts.title, pageW / 2, hy, { align: "center" });
+        if (opts.subtitle) {
+          hy += 14;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(10);
+          doc.text(opts.subtitle, pageW / 2, hy, { align: "center" });
+        }
+      }
       const str = `Page ${doc.getNumberOfPages()}`;
       doc.setFontSize(8);
       doc.setTextColor(120);
