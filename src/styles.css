@@ -195,7 +195,18 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm 10mm 12mm 10mm;
+    margin: 18mm 10mm 14mm 10mm;
+    @top-center {
+      content: string(report-company);
+      font-size: 9pt;
+      font-weight: bold;
+      color: #000;
+    }
+    @top-right {
+      content: string(report-fy);
+      font-size: 8.5pt;
+      color: #000;
+    }
     @bottom-right {
       content: "Page " counter(page) " of " counter(pages);
       font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -246,6 +257,22 @@
      can echo it on the left of every page. */
   .report-print-root .report-print-title {
     string-set: report-title content();
+  }
+  .report-print-root .report-print-company-capture {
+    string-set: report-company content();
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+  .report-print-root .report-print-fy-capture {
+    string-set: report-fy content();
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
   }
   .report-print-landscape {
     page: landscape;
@@ -303,6 +330,11 @@
 /* Header is hidden on screen, shown only when printing. */
 /* Header is visible on screen AND on print (was previously hidden on screen). */
 .report-print-header { display: block; }
+
+/* Capture spans are only used by the print engine to feed @page margin
+   boxes; hide them on screen. */
+.report-print-company-capture,
+.report-print-fy-capture { display: none; }
 
 /* Double-line separator under the report header. Renders as two thin
    horizontal rules with a small gap, matching traditional ledger books. */

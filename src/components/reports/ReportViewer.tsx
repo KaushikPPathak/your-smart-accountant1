@@ -96,6 +96,8 @@ export function ReportViewer({
   const company = companyName ?? activeMembership?.companies?.name ?? "";
   const city = companyCity ?? null;
   const gstin = companyGstin ?? activeMembership?.companies?.gstin ?? null;
+  const fyStart = activeMembership?.companies?.financial_year_start ?? null;
+  const fyText = React.useMemo(() => formatFyRange(fyStart), [fyStart]);
   const periodText = asOf
     ? `As on ${asOf}`
     : fromDate && toDate
@@ -185,11 +187,19 @@ export function ReportViewer({
       >
         <div className="report-print-header mb-3 text-center">
           <div className="text-lg font-bold uppercase tracking-wide leading-tight">{company || "\u00A0"}</div>
+          {/* Hidden running-header capture spans — fed into @page margin
+             boxes via `string-set` so every printed page repeats the
+             company/proprietor name and financial year. */}
+          <span className="report-print-company-capture" aria-hidden>{company || "\u00A0"}</span>
+          {fyText && (
+            <span className="report-print-fy-capture" aria-hidden>{fyText}</span>
+          )}
           <div className="report-print-title text-sm font-semibold mt-0.5">
             {accountHeading || title}
           </div>
           {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
           {periodText && <div className="text-[11px]">{periodText}</div>}
+          {fyText && <div className="text-[10px] text-muted-foreground">{fyText}</div>}
           {addressLine && (
             <div className="text-[10px] text-muted-foreground">{addressLine}</div>
           )}
@@ -210,4 +220,24 @@ export function ReportViewer({
 
 function escape(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Format the company's financial year start (YYYY-MM-DD, typically
+ * 04-01) into a human label that covers a printable page header.
+ * Example: "2025-04-01" -> "FY 2025-26 (01/04/2025 to 31/03/2026)".
+ */
+function formatFyRange(start: string | null | undefined): string {
+  if (!start) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const mo = m[2];
+  const d = m[3];
+  const endY = y + 1;
+  // Indian FY: 1 Apr YYYY to 31 Mar YYYY+1
+  const startStr = `${d}/${mo}/${y}`;
+  const endStr = `31/03/${endY}`;
+  const shortEnd = String(endY).slice(-2);
+  return `FY ${y}-${shortEnd} (${startStr} to ${endStr})`;
 }

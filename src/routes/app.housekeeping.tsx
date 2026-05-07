@@ -78,7 +78,7 @@ function HousekeepingPage() {
   const updateTab = (tab: string) => {
     navigate({
       to: ".",
-      search: (prev) => ({ ...prev, tab }),
+      search: (prev: Record<string, unknown>) => ({ ...prev, tab }),
       replace: true,
       resetScroll: false,
     });
