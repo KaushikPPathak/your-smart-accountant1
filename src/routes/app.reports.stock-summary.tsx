@@ -36,6 +36,7 @@ interface ItemMove {
 
 function StockSummary() {
   const { activeCompanyId } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [items, setItems] = useState<Item[]>([]);
   const [moves, setMoves] = useState<ItemMove[]>([]);
@@ -113,6 +114,8 @@ function StockSummary() {
             onExportPdf={() =>
               downloadPdfTable({
                 title: "Stock Summary",
+                companyName: pdfHeader.companyName,
+                companySubLine: pdfHeader.companySubLine,
                 subtitle: `As on ${to} (movement window: ${from} to ${to})`,
                 head: [["Item", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", "Value (₹)"]],
                 body: rows.map((x) => [x.name, x.hsn_code ?? "", x.unit, String(x.opening), String(x.inWindow), String(x.outWindow), String(x.closing), r(x.stockValue).toFixed(2)]),

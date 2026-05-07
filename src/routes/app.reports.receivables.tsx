@@ -49,6 +49,7 @@ const BUCKETS = [
 
 export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
   const { activeCompanyId, activeMembership } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const { user } = useAuth();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [ledgers, setLedgers] = useState<Ledger[]>([]);

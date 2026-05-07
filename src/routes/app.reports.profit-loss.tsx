@@ -19,6 +19,7 @@ export const Route = createFileRoute("/app/reports/profit-loss")({
 
 function ProfitLoss() {
   const { activeCompanyId, activeMembership } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const features = getEntityFeatures(activeMembership?.companies?.entity_status ?? "individual");
   const isIE = features.plLabel === "Income & Expenditure A/c";
   const reportTitle = isIE ? "Income & Expenditure Account" : "Profit & Loss Account";
@@ -99,6 +100,8 @@ function ProfitLoss() {
   const onExportPdf = () =>
     downloadPdfTable({
       title: reportTitle,
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
       subtitle: `${from} to ${to}`,
       head: [[dr, "Amount (₹)", cr, "Amount (₹)"]],
       body: exportBody(),

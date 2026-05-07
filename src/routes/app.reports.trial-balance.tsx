@@ -32,6 +32,7 @@ interface Entry {
 
 function TrialBalance() {
   const { activeCompanyId } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
@@ -114,6 +115,8 @@ function TrialBalance() {
     const max = Math.max(drList.length, crList.length);
     downloadPdfTable({
       title: "Trial Balance",
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
       subtitle: `As on ${to}`,
       head: [["Dr. Ledger", "Amount (₹)", "Cr. Ledger", "Amount (₹)"]],
       body: Array.from({ length: max }).map((_, i) => [

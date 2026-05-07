@@ -19,6 +19,7 @@ export const Route = createFileRoute("/app/reports/trading")({
 
 function TradingAccount() {
   const { activeCompanyId } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
@@ -123,6 +124,8 @@ function TradingAccount() {
   const onExportPdf = () =>
     downloadPdfTable({
       title: "Trading Account",
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
       subtitle: `${from} to ${to}`,
       head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
       body: exportBody(),
