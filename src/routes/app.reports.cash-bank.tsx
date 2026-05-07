@@ -13,6 +13,7 @@ import { formatINR } from "@/lib/money";
 import { getLedger, useMastersVersion, getAllLedgers } from "@/lib/masters-cache";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 
 type Search = { ledgerId?: string; from?: string; to?: string };
 
