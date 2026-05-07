@@ -70,6 +70,7 @@ const TYPE_LABEL: Record<string, string> = {
 function LedgerStatement() {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const search = Route.useSearch();
   const { from, to, setFrom, setTo } = useFyRangeState(search.from, search.to);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
@@ -324,6 +325,8 @@ function LedgerStatement() {
       downloadPdfTable({
         title: `Ledger A/c — ${ledger?.name ?? ""}`,
         subtitle: `${from} to ${to}`,
+        companyName: pdfHeader.companyName,
+        companySubLine: pdfHeader.companySubLine,
         head: [["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]],
         body: [
           ["", "Opening Balance", "", "", "", "", "", fmtBal(openingBeforeFrom)],
@@ -350,6 +353,8 @@ function LedgerStatement() {
       downloadPdfTable({
         title: `Ledger A/c — ${ledger?.name ?? ""}`,
         subtitle: `${from} to ${to}`,
+        companyName: pdfHeader.companyName,
+        companySubLine: pdfHeader.companySubLine,
         head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
         body: horizontalBody(),
         foot: [["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)]],
