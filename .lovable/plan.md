@@ -1,85 +1,98 @@
-## Rapid Entry Mode — Status Bar, Focus Hints, Sub-10ms Item Grid
 
-Neutral, generic terminology throughout. No references to legacy desktop accounting brands in code, comments, or UI copy.
+# Make Your Mehtaji Work Fully Offline
 
-### 1. Fast-Form Primitives
+Today the Electron shell just loads the hosted website (`APP_URL` in `electron/main.cjs`) and every read/write hits Lovable Cloud. To run with **no internet at all**, three things must change: the UI must be bundled inside the installer, the database must move from Lovable Cloud to a local file on the PC, and login + backups must work without any server.
 
-**Create `src/lib/save-status.ts`** — module-level pub/sub holding `{ lastSavedLabel, lastSavedAt, failureCount }`. Exposes `markSaved(label)`, `useSaveStatus()`, `useHasFailures()`.
+This is a large change — roughly the size of the original build. I recommend doing it in clearly separated phases so each phase is testable on its own and you can keep using the cloud version in parallel until the desktop build is proven.
 
-**Edit `src/lib/save-queue.tsx`**
-- After a successful `queue.shift()`, call `markSaved(job.label)`
-- On failure, increment failure count in save-status (in addition to existing toast)
-- Drop the per-form `toast.success(...)` calls — status bar is now the success channel; toasts remain for errors only
+---
 
-**Create `src/components/fast-form/FocusHints.tsx`**
-- `FocusHintsProvider` with `setHints(zone, string[])` / `clearHints(zone)` and `useCurrentHints()` hook
-- Default zone hints (when nothing focused): `Enter: next · Esc: back · Ctrl+S: accept · Alt+L: ledger report`
+## Phase 1 — Bundle the web UI inside Electron (1 small step)
 
-**Create `src/components/fast-form/StatusBar.tsx`** (replaces inline status line in `app.tsx`)
-- Three visual states driven by `useSaveStatus()` + `useHasFailures()`:
-  - **idle** — muted bg, shows `useCurrentHints()`
-  - **success** — green dot + "✓ Saved {label}", auto-reverts to idle after 1500ms (timer keyed off `lastSavedAt`)
-  - **alert** — amber bg + "⚠ {N} background save(s) failed — click to resolve". Click toggles `PendingSavesTray` to expanded mode.
-- Right side keeps the `F1 Keyboard help` button
+Today, opening the desktop app without internet shows a blank window because it loads `https://biz-account-hero.lovable.app`.
 
-**Edit `src/components/fast-form/PendingSavesTray.tsx`** — accept controlled `open` prop so StatusBar can force it open; auto-shows when in-flight as today.
+- Build the React app (`vite build`) and ship the `dist/` folder inside the installer.
+- Change `electron/main.cjs` to `win.loadFile('dist/index.html')` instead of `win.loadURL(APP_URL)`.
+- Set `base: './'` in `vite.config.ts` so assets resolve under `file://`.
+- Update the GitHub Windows installer workflow to run `vite build` before packaging.
 
-### 2. Item Grid Performance (sub-10ms keystroke target)
+After Phase 1: the UI opens offline, but data still needs internet. This is the safe checkpoint.
 
-**Edit `src/components/vouchers/ItemVoucherForm.tsx`**
-- Extract `<ItemRow>` as a `React.memo` component, props: `{ idx, initial: Line, gstRate, onCommit(idx, patch), onFocusZone, registerInput }`
-- Numeric fields (`qty`, `rate`, `discount`) become **uncontrolled** (`defaultValue`, ref-based read), committing to parent state only on `onBlur` or `Enter`
-- Item picker / description stay controlled (low cost) but isolated inside the memoized row
-- Totals: wrap parent `setLines` calls in `startTransition`; derive `computed[]` and `totals` via `useDeferredValue(lines)` so the row a user is typing in feels instant while totals settle on the next idle frame
-- On focus into a row's qty/rate/discount, push contextual hints: `Enter: next · F4: new item · Shift+F4: edit item · Ctrl+D: delete row · Ctrl+S: accept`
+## Phase 2 — Replace Lovable Cloud with a local SQLite database (the big one)
 
-**Edit `src/components/vouchers/EntryVoucherForm.tsx`**
-- Same memoized `<EntryRow>` pattern for journal/simple line grids
-- Uncontrolled `debit` / `credit` / `amount` numeric inputs, commit on blur
-- Defer totalDr/totalCr via `useDeferredValue`
-- Focus hints: `Enter: next · F3: new ledger · Shift+F3: edit ledger · Ctrl+D: delete row · Ctrl+S: accept`
+This is the heart of "fully offline". Lovable Cloud (Postgres + RLS + auth + storage + edge functions) is replaced with equivalents that live on the user's PC.
 
-**Verification step (post-implementation)** — run `browser--start_profiling` while typing into a 25-row item grid and confirm keypress→paint self-time stays under 10ms.
+**Local database**
+- Add `better-sqlite3` (native Node module, runs inside Electron's main process). One file per installation: `%USERPROFILE%\Documents\YourMehtaji\data\mehtaji.db`.
+- Recreate the current schema (companies, company_members, ledgers, items, vouchers, voucher_entries, period_locks, monthly_balances, etc.) as SQLite tables.
+- Port the SECURITY DEFINER functions (`next_voucher_number`, `recompute_monthly_balances`, `is_period_locked`, `lock_period`, `unlock_period`, `verify_company_password`, `set_company_password`) into TypeScript helpers that run in the Electron main process.
 
-### 3. Workflow Enhancements
+**Replace the Supabase client**
+- Add a thin `localDb` IPC layer in `electron/preload.cjs` exposing `query`, `insert`, `update`, `delete`, `rpc`.
+- Create a new `src/integrations/local/client.ts` that mimics the small subset of the Supabase JS API the app actually uses (`from().select().eq()`, `.insert()`, `.update()`, `.rpc()`). The rest of the app keeps importing a single `supabase` symbol — only this file changes.
+- Period-lock enforcement (currently DB triggers) moves into the same helper functions, called before every voucher write.
 
-**Recall Last Narration (`Ctrl+R`)**
-- Add `src/lib/recall-store.ts` — module-level `lastNarrationByType: Record<voucherType, string>`
-- After a successful enqueue, store the narration keyed by voucher type
-- In both forms, `Ctrl+R` while focused in the narration field fills it with the last value (with a tiny inline "recalled" hint via FocusHints)
+**Drop server functions**
+- `src/lib/tech-user.functions.ts`, `gstin-lookup.functions.ts`, `setu.functions.ts` and any `*.functions.ts` go away or run locally. GST verification (AppyFlow) is the only piece that genuinely needs internet — it gets a "requires internet" badge and is skipped when offline.
 
-**Delete Row (`Ctrl+D`)** — within row focus, deletes that row (respecting min-row rule)
+After Phase 2: everything (companies, ledgers, vouchers, reports, GST books, BRS, backup/restore JSON) works on a laptop in airplane mode.
 
-**Accept Confirmation Overlay**
-- New `src/components/fast-form/AcceptConfirm.tsx` — small keyboard-first dialog: "Accept this voucher? (Y / N)" with `Y`/`Enter` to accept, `N`/`Esc` to cancel
-- The Save button + `Ctrl+S` open this overlay first; Y proceeds to validate + enqueue
-- Trap focus, no mouse needed
+## Phase 3 — Multi-user login on the same PC (no internet)
 
-### 4. Files
+Each Windows account using the app gets its own login inside the app, independent of Windows itself.
 
-**Create**
-- `src/lib/save-status.ts`
-- `src/lib/recall-store.ts`
-- `src/components/fast-form/StatusBar.tsx`
-- `src/components/fast-form/FocusHints.tsx`
-- `src/components/fast-form/AcceptConfirm.tsx`
-- `src/components/fast-form/ItemRow.tsx` (memoized row extracted from ItemVoucherForm)
-- `src/components/fast-form/EntryRow.tsx` (memoized row extracted from EntryVoucherForm)
+- New SQLite tables: `local_users(id, username, full_name, password_hash, role, created_at)` and `local_user_company_access(user_id, company_id, role)`.
+- Login screen at startup: username + password, hashed with `bcryptjs` (pure JS, works in Electron). First run creates an admin.
+- The app still shows the company picker after login, but only companies the user has access to.
+- Roles map to the existing `admin / accountant / viewer` model already used in `company_members`.
 
-**Edit**
-- `src/lib/save-queue.tsx`
-- `src/components/fast-form/PendingSavesTray.tsx`
-- `src/routes/app.tsx` (mount `FocusHintsProvider` + `<StatusBar />`)
-- `src/components/vouchers/ItemVoucherForm.tsx`
-- `src/components/vouchers/EntryVoucherForm.tsx`
+After Phase 3: one installation can be shared by, e.g., the proprietor and a junior accountant on the same desktop.
 
-### 5. Terminology Discipline
+## Phase 4 — Optional cloud-drive backup (Google Drive / OneDrive / Dropbox)
 
-- Use "Rapid Entry Mode", "Power User Shortcuts", "Recall", "Accept", "Status Bar"
-- No code/UI strings referencing legacy desktop accounting product names
-- Comments describe the *behavior* (e.g. "uncontrolled numeric input committed on blur"), not lineage
+This is **backup only** — not sync. The local SQLite file is always the master.
 
-### Out of scope (ask if you want them)
-- Persisting recall across page reloads (currently in-memory only)
-- Undo of an enqueued save (separate feature)
-- Animated transitions beyond Tailwind `transition-colors`
+- Reuse the existing JSON backup (`buildCompanyBackup` in `src/lib/backup.ts`) plus a copy of the raw `mehtaji.db` file.
+- A new "Cloud Backup" panel in Housekeeping with three providers:
+  - **Google Drive** — OAuth via the system browser, then upload to an app folder. Works fully offline-installable but requires internet at the moment of backup.
+  - **OneDrive (Hotmail/Outlook account)** — Microsoft Graph upload, same pattern.
+  - **Plain folder** — point at any synced folder (Dropbox, iCloud Drive, a USB stick). No OAuth needed; simplest option and works for any provider.
+- Schedule: manual button + optional "auto-backup nightly when online".
+- Restore: download the latest backup from the chosen provider and import via the existing restore flow.
+
+OAuth credentials for Google/Microsoft need to be created once in their developer consoles; I'll walk you through that when we get to this phase.
+
+## Phase 5 — Migrate existing cloud data to the desktop install
+
+One-time migration so you don't lose the work already in Lovable Cloud.
+
+- In the current cloud app: **Housekeeping → Backup** to produce the JSON file (already exists).
+- In the new desktop app: **Housekeeping → Restore from cloud backup** — picks up that JSON and writes it into the local SQLite DB.
+- After verifying the desktop copy looks correct, you can stop using the cloud version.
+
+---
+
+## What the user sees at the end
+
+- A `YourMehtaji-Setup-x.y.z.exe` installer (already produced by the GitHub workflow).
+- After install: login screen → company picker → the same accounting app you have today, working with no internet.
+- A "Cloud Backup" tile in Housekeeping with Google / OneDrive / folder options.
+- A "Users" tile (admin only) for adding co-workers on the same PC.
+
+## Recommended order of work (one chat per phase)
+
+1. Phase 1 — bundle the UI (small, ~1 message).
+2. Phase 2 — local SQLite + client shim (largest; will need 3–5 follow-up messages because the schema and every read/write path is touched).
+3. Phase 3 — local users.
+4. Phase 4 — cloud backup providers (Google first, then OneDrive, then folder).
+5. Phase 5 — one-time data migration from your current cloud account.
+
+If you approve, I'll start with **Phase 1** in the next message so you have an offline-loading shell to test immediately, then we'll move to Phase 2.
+
+## Technical notes (for reference, not required reading)
+
+- SQLite via `better-sqlite3` is synchronous, fast, and ships as a prebuilt binary for Windows x64 — `@electron/packager` handles it.
+- The Supabase JS surface used by the app is small (mostly `.from().select/insert/update/delete`, a handful of `.rpc(...)`, and `auth.getUser`). A 300-line shim is enough; no app component needs to change its imports.
+- DB triggers don't exist in SQLite the same way; we'll enforce period locks and auto-timestamps in the helper layer instead. The current cloud project also has zero triggers (per `<db-triggers>`), so behaviour stays identical.
+- `LOVABLE_API_KEY`, `APPYFLOW_GST_API_KEY` and other server secrets stop being needed except for the optional GST verification call, which can read a key entered once in Settings.
+- Storage bucket `company-logos` becomes a local folder under `%USERPROFILE%\Documents\YourMehtaji\logos\`.
