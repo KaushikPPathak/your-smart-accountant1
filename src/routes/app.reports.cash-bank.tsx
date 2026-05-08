@@ -230,8 +230,7 @@ function CashBankBook() {
   const onExportXlsx = () => downloadXlsx(`${fileBase}.xlsx`, [{ name: "Cash & Bank", rows: csvRows() }]);
   const onExportPdf = () =>
     downloadPdfTable({
-      title: `Cash & Bank Book — ${ledger?.name ?? ""}`,
-      subtitle: `${from} to ${to}`,
+      title: ledger?.name ?? "Cash & Bank Book",
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       head: [["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]],
