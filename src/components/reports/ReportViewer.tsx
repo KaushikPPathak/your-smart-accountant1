@@ -240,6 +240,20 @@ function openPrintPreview(
   const w = window.open("", "_blank", "width=900,height=1100");
   if (!w) return;
   const orient = orientation === "landscape" ? "landscape" : "portrait";
+  // Pull every stylesheet (Tailwind, design-tokens, component CSS) from the
+  // host document so utility classes (bg-card, text-muted-foreground,
+  // overflow-hidden, etc.) used inside report children resolve in the popup.
+  // Without this, complex children (Cards, tables wrapped in tokenised
+  // containers) can render with white-on-white text or zero-height boxes.
+  const inheritedStyles = Array.from(
+    document.head.querySelectorAll('link[rel="stylesheet"], style'),
+  )
+    .map((n) => n.outerHTML)
+    .join("\n");
+  const innerHtml = el.innerHTML?.trim() || "";
+  const body = innerHtml
+    ? `<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">${innerHtml}</div>`
+    : `<div class="preview-content"><p style="padding:24pt;text-align:center;color:#666">Nothing to preview yet — the report has no rendered content.</p></div>`;
   // Self-contained CSS so the preview window does not depend on Vite-injected
   // stylesheets from the parent document (which often fail to load cross-window
   // and leave the preview blank).
@@ -255,6 +269,12 @@ function openPrintPreview(
     .preview-bar button { padding: 6px 12px; border: 1px solid #888;
       background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
     .preview-content { margin-top: 48px; }
+    /* Force readable colours regardless of design-token resolution in popup. */
+    .preview-content, .preview-content * { color: #000 !important;
+      background-color: transparent !important; border-color: #000 !important; }
+    .preview-content thead th, .preview-content .row-bold,
+    .preview-content tfoot { background-color: #f0f0f0 !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .report-print-header { text-align: center; margin-bottom: 10pt; }
     .report-print-header > div { margin: 1pt 0; }
     .report-print-header .text-lg,
@@ -277,6 +297,9 @@ function openPrintPreview(
     .narration-cell { white-space: normal; word-break: break-word; }
     /* Strip on-screen-only chrome that lives inside the report root. */
     [class*="print:hidden"] { display: none !important; }
+    /* Some report cards use overflow:hidden which can clip the table when
+       the popup is narrower than the rendered landscape width. */
+    .preview-content .overflow-hidden { overflow: visible !important; }
     @media print {
       .preview-bar { display: none !important; }
       body { padding: 0; }
@@ -287,15 +310,15 @@ function openPrintPreview(
   w.document.write(
     `<!doctype html><html><head><meta charset="utf-8">` +
       `<title>${escape(company)} — ${escape(heading)} — Preview</title>` +
+      inheritedStyles +
       `<style>${css}</style></head><body>` +
       `<div class="preview-bar">` +
         `<button onclick="window.print()">Print</button>` +
         `<button onclick="window.close()">Close</button>` +
         `<span style="margin-left:auto;color:#666">Print Preview</span>` +
       `</div>` +
-      `<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">` +
-        el.innerHTML +
-      `</div></body></html>`,
+      body +
+      `</body></html>`,
   );
   w.document.close();
 }
