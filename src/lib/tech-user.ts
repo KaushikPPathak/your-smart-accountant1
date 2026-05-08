@@ -8,9 +8,10 @@
 // each company in Settings → Company access.
 
 import { supabase } from "@/integrations/supabase/client";
+import { ensureTechnicalUser } from "./tech-user.functions";
+import { TECH_USER_EMAIL, TECH_USER_PASSWORD } from "./tech-user-credentials";
 
-export const TECH_USER_EMAIL = "acauntant@gmail.com";
-export const TECH_USER_PASSWORD = "Pathak*123*";
+export { TECH_USER_EMAIL, TECH_USER_PASSWORD } from "./tech-user-credentials";
 
 let signInPromise: Promise<void> | null = null;
 
@@ -25,8 +26,15 @@ export async function ensureTechSession(): Promise<void> {
         password: TECH_USER_PASSWORD,
       });
       if (error) {
-        console.error("Auto sign-in failed:", error);
-        throw error;
+        await ensureTechnicalUser();
+        const { error: retryError } = await supabase.auth.signInWithPassword({
+          email: TECH_USER_EMAIL,
+          password: TECH_USER_PASSWORD,
+        });
+        if (retryError) {
+          console.error("Auto sign-in failed:", retryError);
+          throw retryError;
+        }
       }
     })().finally(() => {
       signInPromise = null;
