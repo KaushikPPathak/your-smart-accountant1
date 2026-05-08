@@ -239,12 +239,64 @@ function openPrintPreview(
   if (!el) return;
   const w = window.open("", "_blank", "width=900,height=1100");
   if (!w) return;
-  const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-    .map((n) => n.outerHTML)
-    .join("\n");
   const orient = orientation === "landscape" ? "landscape" : "portrait";
+  // Self-contained CSS so the preview window does not depend on Vite-injected
+  // stylesheets from the parent document (which often fail to load cross-window
+  // and leave the preview blank).
+  const css = `
+    @page { size: A4 ${orient}; margin: 14mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #000;
+      font: 10pt/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    body { padding: 14mm; }
+    .preview-bar { position: fixed; top: 0; left: 0; right: 0; display: flex;
+      gap: 8px; padding: 8px 12px; background: #f5f5f5;
+      border-bottom: 1px solid #ddd; font: 13px system-ui; z-index: 10; }
+    .preview-bar button { padding: 6px 12px; border: 1px solid #888;
+      background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
+    .preview-content { margin-top: 48px; }
+    .report-print-header { text-align: center; margin-bottom: 10pt; }
+    .report-print-header > div { margin: 1pt 0; }
+    .report-print-header .text-lg,
+    .report-print-header div:first-child {
+      font-size: 13pt; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .5pt; }
+    .report-print-title { font-size: 11pt; font-weight: 600; }
+    .report-print-company-capture, .report-print-fy-capture { display: none; }
+    .report-header-rule { height: 3px; border-top: 1px solid #000;
+      border-bottom: 1px solid #000; margin: 4pt 0 8pt; }
+    table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+    th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
+      text-align: left; }
+    th { background: #f0f0f0; font-weight: 600;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    td.num, th.num, .num { text-align: right; font-variant-numeric: tabular-nums;
+      white-space: nowrap; }
+    .row-bold td, .row-bold th, tfoot td, tfoot th { font-weight: 700;
+      background: #f7f7f7; }
+    .narration-cell { white-space: normal; word-break: break-word; }
+    /* Strip on-screen-only chrome that lives inside the report root. */
+    [class*="print:hidden"] { display: none !important; }
+    @media print {
+      .preview-bar { display: none !important; }
+      body { padding: 0; }
+      .preview-content { margin-top: 0; }
+    }
+  `;
   w.document.open();
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escape(company)} — ${escape(heading)} — Preview</title>${styleLinks}<style>@page{size:A4 ${orient};margin:14mm}body{margin:0;padding:14mm;background:#fff;color:#000}.preview-bar{position:sticky;top:0;display:flex;gap:8px;padding:8px;background:#f5f5f5;border-bottom:1px solid #ddd;font:13px system-ui;z-index:10}.preview-bar button{padding:6px 12px;border:1px solid #888;background:#fff;border-radius:4px;cursor:pointer}@media print{.preview-bar{display:none}body{padding:0}}</style></head><body><div class="preview-bar"><button onclick="window.print()">Print</button><button onclick="window.close()">Close</button><span style="margin-left:auto;color:#666">Print Preview</span></div><div class="report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">${el.innerHTML}</div></body></html>`);
+  w.document.write(
+    `<!doctype html><html><head><meta charset="utf-8">` +
+      `<title>${escape(company)} — ${escape(heading)} — Preview</title>` +
+      `<style>${css}</style></head><body>` +
+      `<div class="preview-bar">` +
+        `<button onclick="window.print()">Print</button>` +
+        `<button onclick="window.close()">Close</button>` +
+        `<span style="margin-left:auto;color:#666">Print Preview</span>` +
+      `</div>` +
+      `<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">` +
+        el.innerHTML +
+      `</div></body></html>`,
+  );
   w.document.close();
 }
 
