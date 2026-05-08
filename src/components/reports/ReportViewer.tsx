@@ -225,6 +225,30 @@ function escape(s: string): string {
 }
 
 /**
+ * Open a new window containing the rendered report HTML with the same
+ * stylesheets so the user can preview the print layout before sending it
+ * to the printer / PDF / Word. The window auto-invokes window.print()
+ * once content is ready; the user can cancel and just inspect.
+ */
+function openPrintPreview(
+  el: HTMLElement | null,
+  company: string,
+  heading: string,
+  orientation: "portrait" | "landscape",
+): void {
+  if (!el) return;
+  const w = window.open("", "_blank", "width=900,height=1100");
+  if (!w) return;
+  const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+    .map((n) => n.outerHTML)
+    .join("\n");
+  const orient = orientation === "landscape" ? "landscape" : "portrait";
+  w.document.open();
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escape(company)} — ${escape(heading)} — Preview</title>${styleLinks}<style>@page{size:A4 ${orient};margin:14mm}body{margin:0;padding:14mm;background:#fff;color:#000}.preview-bar{position:sticky;top:0;display:flex;gap:8px;padding:8px;background:#f5f5f5;border-bottom:1px solid #ddd;font:13px system-ui;z-index:10}.preview-bar button{padding:6px 12px;border:1px solid #888;background:#fff;border-radius:4px;cursor:pointer}@media print{.preview-bar{display:none}body{padding:0}}</style></head><body><div class="preview-bar"><button onclick="window.print()">Print</button><button onclick="window.close()">Close</button><span style="margin-left:auto;color:#666">Print Preview</span></div><div class="report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">${el.innerHTML}</div></body></html>`);
+  w.document.close();
+}
+
+/**
  * Format the company's financial year start (YYYY-MM-DD, typically
  * 04-01) into a human label that covers a printable page header.
  * Example: "2025-04-01" -> "FY 2025-26 (01/04/2025 to 31/03/2026)".
