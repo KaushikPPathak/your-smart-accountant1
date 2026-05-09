@@ -63,9 +63,14 @@ function DayBook() {
       .gte("voucher_date", from)
       .lte("voucher_date", to)
       .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true })
-      .order("voucher_number", { ascending: true })
       .then(({ data }) => {
-        setRows((data || []) as unknown as Row[]);
+        const list = (data || []) as unknown as Row[];
+        const vchKey = (s: string): number => {
+          const n = parseInt(String(s).replace(/\D+/g, ""), 10);
+          return isNaN(n) ? 0 : n;
+        };
+        list.sort((a, b) => a.voucher_date < b.voucher_date ? -1 : a.voucher_date > b.voucher_date ? 1 : vchKey(a.voucher_number) - vchKey(b.voucher_number));
+        setRows(list);
         setLoading(false);
       });
   }, [activeCompanyId, from, to]);
