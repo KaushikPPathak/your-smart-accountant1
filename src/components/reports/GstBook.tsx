@@ -172,7 +172,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                         {kind === "sales" ? x.voucher_number : x.vendor_invoice_no || x.voucher_number}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
-                        {kind === "sales" ? x.voucher_date : x.vendor_invoice_date || x.voucher_date}
+                        {fmtIndianDate(kind === "sales" ? x.voucher_date : x.vendor_invoice_date || x.voucher_date)}
                       </TableCell>
                       <TableCell>{x.ledgers?.name || "—"}</TableCell>
                       <TableCell className="font-mono text-xs">{x.ledgers?.gstin || "—"}</TableCell>
