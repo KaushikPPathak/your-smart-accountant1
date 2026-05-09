@@ -1,4 +1,6 @@
-import { markVoucherOrigin } from "@/lib/voucher-return";
+import { openVoucherDetail } from "@/lib/voucher-return";
+import { sortVouchersAsc } from "@/lib/voucher-sort";
+import { narrationOf } from "@/lib/voucher-text";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +28,7 @@ interface Row {
   voucher_type: string;
   total_paise: number;
   narration: string | null;
+  reference_no: string | null;
   ledgers: { name: string } | null;
 }
 
@@ -58,19 +61,13 @@ function DayBook() {
     setLoading(true);
     supabase
       .from("vouchers")
-      .select("id, voucher_date, voucher_number, voucher_type, total_paise, narration, ledgers:party_ledger_id(name)")
+      .select("id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, ledgers:party_ledger_id(name)")
       .eq("company_id", activeCompanyId)
       .gte("voucher_date", from)
       .lte("voucher_date", to)
       .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true })
       .then(({ data }) => {
-        const list = (data || []) as unknown as Row[];
-        const vchKey = (s: string): number => {
-          const n = parseInt(String(s).replace(/\D+/g, ""), 10);
-          return isNaN(n) ? 0 : n;
-        };
-        list.sort((a, b) => a.voucher_date < b.voucher_date ? -1 : a.voucher_date > b.voucher_date ? 1 : vchKey(a.voucher_number) - vchKey(b.voucher_number));
-        setRows(list);
+        setRows(sortVouchersAsc((data || []) as unknown as Row[]));
         setLoading(false);
       });
   }, [activeCompanyId, from, to]);
@@ -82,8 +79,9 @@ function DayBook() {
     let crTotal = 0;
     for (const r2 of rows) {
       const label = `${TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type} — ${r2.ledgers?.name ?? "—"}`;
-      const hint = `${fmtIndianDate(r2.voucher_date)} · ${r2.voucher_number}${r2.narration ? ` · ${r2.narration}` : ""}`;
-      const onClick = () => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r2.id } }));
+      const narr = narrationOf(null, r2);
+      const hint = `${fmtIndianDate(r2.voucher_date)} · ${r2.voucher_number}${narr ? ` · ${narr}` : ""}`;
+      const onClick = () => openVoucherDetail(navigate, r2.id);
       const tRow: TRow = { label, hint, amount: formatINR(r2.total_paise), onClick };
       if (DR_TYPES.has(r2.voucher_type)) {
         drRows.push(tRow);
@@ -109,7 +107,7 @@ function DayBook() {
       TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type,
       r2.voucher_number,
       r2.ledgers?.name ?? "",
-      r2.narration ?? "",
+      narrationOf(null, r2),
       DR_TYPES.has(r2.voucher_type) ? "Dr" : CR_TYPES.has(r2.voucher_type) ? "Cr" : "Dr",
       (r2.total_paise / 100).toFixed(2),
     ]),
@@ -131,7 +129,7 @@ function DayBook() {
         TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type,
         r2.voucher_number,
         r2.ledgers?.name ?? "",
-        r2.narration ?? "",
+        narrationOf(null, r2),
         DR_TYPES.has(r2.voucher_type) ? "Dr" : CR_TYPES.has(r2.voucher_type) ? "Cr" : "Dr",
         r(r2.total_paise).toFixed(2),
       ]),

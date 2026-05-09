@@ -1,5 +1,6 @@
-import { markVoucherOrigin } from "@/lib/voucher-return";
+import { openVoucherDetail } from "@/lib/voucher-return";
 import { fmtIndianDate } from "@/lib/format-date";
+import { sortVouchersAsc } from "@/lib/voucher-sort";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,8 +47,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
       .eq("voucher_type", kind)
       .gte("voucher_date", from)
       .lte("voucher_date", to)
-      .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true })
-      .then(({ data }) => setRows((data || []) as unknown as VRow[]));
+      .then(({ data }) => setRows(sortVouchersAsc((data || []) as unknown as VRow[])));
   }, [activeCompanyId, from, to, kind]);
 
   const totals = useMemo(() => rows.reduce(
@@ -121,6 +121,8 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
               downloadPdfTable({
                 title,
                 subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
+                companyName: pdfHeader.companyName,
+                companySubLine: pdfHeader.companySubLine,
                 head: [head],
                 body: rows.map((x) => [
                   fmtIndianDate(x.voucher_date),
@@ -165,7 +167,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                 <TableRow
                   key={x.id}
                   className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: x.id } }))}
+                  onClick={() => openVoucherDetail(navigate, x.id)}
                   title="Click to edit"
                 >
                   <TableCell>{fmtIndianDate(x.voucher_date)}</TableCell>

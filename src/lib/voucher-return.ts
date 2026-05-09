@@ -53,3 +53,26 @@ export function goBackFromVoucher(fallback: () => void): void {
   }
   fallback();
 }
+
+/**
+ * Single helper for "open a voucher detail page from anywhere".
+ * Records the originating screen so the back button returns to it
+ * (with scroll position preserved by TanStack scrollRestoration).
+ *
+ * Usage:
+ *   const navigate = useNavigate();
+ *   onClick={() => openVoucherDetail(navigate, voucherId)}
+ *
+ * The `navigate` argument is typed as a generic callable to avoid
+ * pulling TanStack types into this module — every TanStack
+ * `useNavigate()` return value is compatible with this signature.
+ */
+type NavigateFn = (opts: {
+  to: "/app/vouchers/$voucherId";
+  params: { voucherId: string };
+}) => void | Promise<unknown>;
+
+export function openVoucherDetail(navigate: NavigateFn, voucherId: string): void {
+  markVoucherOrigin();
+  void navigate({ to: "/app/vouchers/$voucherId", params: { voucherId } });
+}

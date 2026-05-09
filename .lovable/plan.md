@@ -1,98 +1,79 @@
+## Goal
 
-# Make Your Mehtaji Work Fully Offline
+Stop the whack-a-mole. Replace scattered, copy-pasted logic across reports, books, vouchers, and PDF exports with a small set of shared helpers, then apply them uniformly across **every** screen — not just the one currently complained about.
 
-Today the Electron shell just loads the hosted website (`APP_URL` in `electron/main.cjs`) and every read/write hits Lovable Cloud. To run with **no internet at all**, three things must change: the UI must be bundled inside the installer, the database must move from Lovable Cloud to a local file on the PC, and login + backups must work without any server.
+## Root causes of the recent regressions
 
-This is a large change — roughly the size of the original build. I recommend doing it in clearly separated phases so each phase is testable on its own and you can keep using the cloud version in parallel until the desktop build is proven.
+1. **Voucher number sorted as text** in many DB queries → "10" sorts before "2", so an edited voucher with a higher number lands "out of order".
+2. **Narration column** built independently in each report → some include `reference_no` fallback, some don't.
+3. **Date formatting** (`DD-MM-YYYY`) applied per file → easy to miss a column, easy to regress.
+4. **Back navigation** (`markVoucherOrigin` / `goBackFromVoucher`) wired in 6 screens but missing from others (Bank, Outstanding, BRS, GST books, Group Ledger, e-invoice, Recurring, Dashboard quick links).
+5. **PDF report layout rules** (totals only on last page, header on every page, page X of Y, narration column hidden when empty, Indian dates) currently live only in the ledger PDF.
 
----
+## Deliverables (central helpers)
 
-## Phase 1 — Bundle the web UI inside Electron (1 small step)
+| Helper | Lives in | Replaces |
+|---|---|---|
+| `vchSortKey(s)` + `sortVouchersByDateThenNumber(rows)` | `src/lib/voucher-sort.ts` (new) | Ad-hoc sort blocks in cash-bank, day-book, ledger, sales/purchase register, bank, outstanding, BRS, group-ledger, GST books, e-invoice, recurring, dashboard, RecentVouchersPanel |
+| `narrationOf(entry, voucher)` → `entry.narration ‖ voucher.narration ‖ voucher.reference_no ‖ ""` | `src/lib/voucher-text.ts` (new) | Inline `?? ""` chains in every report |
+| `fmtIndianDate` (already exists) | `src/lib/format-date.ts` | Audit every `voucher_date`, `due_date`, `cleared_date`, `vendor_invoice_date`, `invoice_date` render and export cell |
+| `openVoucherDetail(navigate, voucherId)` (wraps `markVoucherOrigin` + `navigate`) | extend `src/lib/voucher-return.ts` | Replace the 7 inline `(markVoucherOrigin(), navigate(...))` call sites and add it to the missing screens |
+| `downloadReportPdf({...})` — wraps `downloadPdfTable` and bakes in: header on every page, page X of Y centered footer, totals/closing only on last page, narration column auto-hidden if all values empty, Indian date subtitle | `src/lib/exporters.ts` (extend) | Per-report PDF setup in cash-bank, day-book, ledger, sales/purchase register, outstanding, GST books, BRS, trial balance, P&L, balance sheet |
 
-Today, opening the desktop app without internet shows a blank window because it loads `https://biz-account-hero.lovable.app`.
+## Sweep checklist (every screen touched)
 
-- Build the React app (`vite build`) and ship the `dist/` folder inside the installer.
-- Change `electron/main.cjs` to `win.loadFile('dist/index.html')` instead of `win.loadURL(APP_URL)`.
-- Set `base: './'` in `vite.config.ts` so assets resolve under `file://`.
-- Update the GitHub Windows installer workflow to run `vite build` before packaging.
+**Reports / books — apply all 4 helpers:**
+- `app.reports.cash-bank.tsx`
+- `app.reports.day-book.tsx`
+- `app.reports.ledger.tsx`
+- `app.reports.sales-register.tsx` + `app.reports.purchase-register.tsx`
+- `app.reports.outstanding.tsx` + `receivables.tsx` + `payables.tsx`
+- `app.reports.brs.tsx`
+- `app.reports.group-ledger.tsx`
+- `app.reports.ageing.tsx`
+- `app.reports.trial-balance.tsx`, `profit-loss.tsx`, `balance-sheet.tsx`, `trading.tsx`
+- `app.reports.stock-summary.tsx`
+- `app.reports.gstr1.tsx`, `gstr2b.tsx`, `gstr3b.tsx`, `gst-sales-book.tsx`, `gst-purchase-book.tsx`, `components/reports/GstBook.tsx`
 
-After Phase 1: the UI opens offline, but data still needs internet. This is the safe checkpoint.
+**Voucher entry / list / dashboard — sort + open helper + dates:**
+- `app.vouchers.tsx`, `app.vouchers.$voucherId.tsx`
+- `app.vouchers.new.*` (sales, purchase, receipt, payment, journal, contra, credit_note, debit_note, delivery_note, quotation, sales_order)
+- `components/vouchers/EntryVoucherForm.tsx`, `ItemVoucherForm.tsx`, `RecentVouchersPanel.tsx`, `BillAllocationDialog.tsx`
+- `app.bank.tsx`, `app.einvoice.tsx`, `app.recurring.tsx`, `app.index.tsx`
 
-## Phase 2 — Replace Lovable Cloud with a local SQLite database (the big one)
+**PDF printouts — adopt `downloadReportPdf` + audit `invoice-pdf.ts`:**
+- All report PDFs above
+- `src/lib/invoice-pdf.ts` (sales/purchase invoice printout — verify Indian dates, narration/reference, totals position)
 
-This is the heart of "fully offline". Lovable Cloud (Postgres + RLS + auth + storage + edge functions) is replaced with equivalents that live on the user's PC.
+**Navigation:**
+- Add `markVoucherOrigin` to every place a voucher row is clickable (Bank, Outstanding, BRS, GST books, Group Ledger, e-invoice, Recurring, Dashboard tiles).
+- Confirm `goBackFromVoucher` covers post-save and post-delete paths in `app.vouchers.$voucherId.tsx`.
 
-**Local database**
-- Add `better-sqlite3` (native Node module, runs inside Electron's main process). One file per installation: `%USERPROFILE%\Documents\YourMehtaji\data\mehtaji.db`.
-- Recreate the current schema (companies, company_members, ledgers, items, vouchers, voucher_entries, period_locks, monthly_balances, etc.) as SQLite tables.
-- Port the SECURITY DEFINER functions (`next_voucher_number`, `recompute_monthly_balances`, `is_period_locked`, `lock_period`, `unlock_period`, `verify_company_password`, `set_company_password`) into TypeScript helpers that run in the Electron main process.
+## QA before I declare done
 
-**Replace the Supabase client**
-- Add a thin `localDb` IPC layer in `electron/preload.cjs` exposing `query`, `insert`, `update`, `delete`, `rpc`.
-- Create a new `src/integrations/local/client.ts` that mimics the small subset of the Supabase JS API the app actually uses (`from().select().eq()`, `.insert()`, `.update()`, `.rpc()`). The rest of the app keeps importing a single `supabase` symbol — only this file changes.
-- Period-lock enforcement (currently DB triggers) moves into the same helper functions, called before every voucher write.
+For each of the changes above I will:
+1. Build (auto by harness).
+2. Render the cash-bank, ledger, day-book, sales-register, and outstanding PDFs to image and visually inspect: chronological order, narration column visibility, totals only on last page, header on every page, "Page X of Y", `DD-MM-YYYY` everywhere, reference_no surfacing when narration is blank.
+3. Spot-check the dashboard, vouchers list, and bank screen for sort + back-button behaviour.
+4. Report the QA result in the closing message — what I checked and what I confirmed.
 
-**Drop server functions**
-- `src/lib/tech-user.functions.ts`, `gstin-lookup.functions.ts`, `setu.functions.ts` and any `*.functions.ts` go away or run locally. GST verification (AppyFlow) is the only piece that genuinely needs internet — it gets a "requires internet" badge and is skipped when offline.
+## What I will NOT change
 
-After Phase 2: everything (companies, ledgers, vouchers, reports, GST books, BRS, backup/restore JSON) works on a laptop in airplane mode.
+- Database schema, RLS, totals math, GST logic, balances, or any business rule.
+- Voucher numbering sequence behaviour.
+- Existing UI styling beyond what the helpers require.
 
-## Phase 3 — Multi-user login on the same PC (no internet)
+## Out of scope (postponed unless you ask)
 
-Each Windows account using the app gets its own login inside the app, independent of Windows itself.
+- The earlier "Phase 1" plan you postponed.
+- Any new report or feature.
+- Auth, billing, deployment.
 
-- New SQLite tables: `local_users(id, username, full_name, password_hash, role, created_at)` and `local_user_company_access(user_id, company_id, role)`.
-- Login screen at startup: username + password, hashed with `bcryptjs` (pure JS, works in Electron). First run creates an admin.
-- The app still shows the company picker after login, but only companies the user has access to.
-- Roles map to the existing `admin / accountant / viewer` model already used in `company_members`.
+## Order of execution
 
-After Phase 3: one installation can be shared by, e.g., the proprietor and a junior accountant on the same desktop.
-
-## Phase 4 — Optional cloud-drive backup (Google Drive / OneDrive / Dropbox)
-
-This is **backup only** — not sync. The local SQLite file is always the master.
-
-- Reuse the existing JSON backup (`buildCompanyBackup` in `src/lib/backup.ts`) plus a copy of the raw `mehtaji.db` file.
-- A new "Cloud Backup" panel in Housekeeping with three providers:
-  - **Google Drive** — OAuth via the system browser, then upload to an app folder. Works fully offline-installable but requires internet at the moment of backup.
-  - **OneDrive (Hotmail/Outlook account)** — Microsoft Graph upload, same pattern.
-  - **Plain folder** — point at any synced folder (Dropbox, iCloud Drive, a USB stick). No OAuth needed; simplest option and works for any provider.
-- Schedule: manual button + optional "auto-backup nightly when online".
-- Restore: download the latest backup from the chosen provider and import via the existing restore flow.
-
-OAuth credentials for Google/Microsoft need to be created once in their developer consoles; I'll walk you through that when we get to this phase.
-
-## Phase 5 — Migrate existing cloud data to the desktop install
-
-One-time migration so you don't lose the work already in Lovable Cloud.
-
-- In the current cloud app: **Housekeeping → Backup** to produce the JSON file (already exists).
-- In the new desktop app: **Housekeeping → Restore from cloud backup** — picks up that JSON and writes it into the local SQLite DB.
-- After verifying the desktop copy looks correct, you can stop using the cloud version.
-
----
-
-## What the user sees at the end
-
-- A `YourMehtaji-Setup-x.y.z.exe` installer (already produced by the GitHub workflow).
-- After install: login screen → company picker → the same accounting app you have today, working with no internet.
-- A "Cloud Backup" tile in Housekeeping with Google / OneDrive / folder options.
-- A "Users" tile (admin only) for adding co-workers on the same PC.
-
-## Recommended order of work (one chat per phase)
-
-1. Phase 1 — bundle the UI (small, ~1 message).
-2. Phase 2 — local SQLite + client shim (largest; will need 3–5 follow-up messages because the schema and every read/write path is touched).
-3. Phase 3 — local users.
-4. Phase 4 — cloud backup providers (Google first, then OneDrive, then folder).
-5. Phase 5 — one-time data migration from your current cloud account.
-
-If you approve, I'll start with **Phase 1** in the next message so you have an offline-loading shell to test immediately, then we'll move to Phase 2.
-
-## Technical notes (for reference, not required reading)
-
-- SQLite via `better-sqlite3` is synchronous, fast, and ships as a prebuilt binary for Windows x64 — `@electron/packager` handles it.
-- The Supabase JS surface used by the app is small (mostly `.from().select/insert/update/delete`, a handful of `.rpc(...)`, and `auth.getUser`). A 300-line shim is enough; no app component needs to change its imports.
-- DB triggers don't exist in SQLite the same way; we'll enforce period locks and auto-timestamps in the helper layer instead. The current cloud project also has zero triggers (per `<db-triggers>`), so behaviour stays identical.
-- `LOVABLE_API_KEY`, `APPYFLOW_GST_API_KEY` and other server secrets stop being needed except for the optional GST verification call, which can read a key entered once in Settings.
-- Storage bucket `company-logos` becomes a local folder under `%USERPROFILE%\Documents\YourMehtaji\logos\`.
+1. Create `voucher-sort.ts`, `voucher-text.ts`, extend `voucher-return.ts` and `exporters.ts`.
+2. Migrate cash-bank, day-book, ledger, sales/purchase register first (the screens with active complaints).
+3. Migrate the remaining reports.
+4. Migrate voucher-entry / list / dashboard / bank / e-invoice / recurring.
+5. Audit `invoice-pdf.ts`.
+6. QA pass with rendered PDFs.

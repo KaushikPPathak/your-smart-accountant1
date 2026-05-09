@@ -1,5 +1,7 @@
-import { markVoucherOrigin } from "@/lib/voucher-return";
+import { openVoucherDetail } from "@/lib/voucher-return";
 import { fmtIndianDate } from "@/lib/format-date";
+import { sortEntriesByVoucherAsc } from "@/lib/voucher-sort";
+import { narrationOf, hasAnyNarration } from "@/lib/voucher-text";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -165,16 +167,7 @@ function CashBankBook() {
       balance: number;
     };
     const out: R[] = [];
-    const vchNoSortKey = (s: string): number => {
-      const n = parseInt(String(s).replace(/\D+/g, ""), 10);
-      return isNaN(n) ? 0 : n;
-    };
-    const sorted = [...entries].sort((a, b) => {
-      const da = a.vouchers?.voucher_date ?? "";
-      const db = b.vouchers?.voucher_date ?? "";
-      if (da !== db) return da < db ? -1 : 1;
-      return vchNoSortKey(a.vouchers?.voucher_number ?? "") - vchNoSortKey(b.vouchers?.voucher_number ?? "");
-    });
+    const sorted = sortEntriesByVoucherAsc(entries);
     let bal = opening;
     for (const e of sorted) {
       const v = e.vouchers;
@@ -193,7 +186,7 @@ function CashBankBook() {
         particulars,
         vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
         vchNo: v.voucher_number,
-        narration: e.narration ?? v.narration ?? v.reference_no ?? "",
+        narration: narrationOf(e, v),
         debit: e.debit_paise,
         credit: e.credit_paise,
         balance: bal,
@@ -241,33 +234,50 @@ function CashBankBook() {
   const fileBase = `cash-bank-${ledger?.name ?? "x"}-${from}_to_${to}`;
   const onExportCsv = () => downloadCsv(`${fileBase}.csv`, csvRows());
   const onExportXlsx = () => downloadXlsx(`${fileBase}.xlsx`, [{ name: "Cash & Bank", rows: csvRows() }]);
-  const onExportPdf = () =>
+  const onExportPdf = () => {
+    const showNarr = hasAnyNarration(rows);
+    const head = showNarr
+      ? ["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]
+      : ["Date", "Particulars", "Vch Type", "Vch No", "Debit", "Credit", "Balance"];
+    const opening_row = showNarr
+      ? ["", "Opening Balance", "", "", "", "", "", fmtBal(opening)]
+      : ["", "Opening Balance", "", "", "", "", fmtBal(opening)];
+    const bodyRows = rows.map((row) => {
+      const base = [
+        fmtIndianDate(row.date),
+        row.particulars,
+        row.vchType,
+        row.vchNo,
+      ];
+      const tail = [
+        row.debit ? r(row.debit).toFixed(2) : "",
+        row.credit ? r(row.credit).toFixed(2) : "",
+        fmtBal(row.balance),
+      ];
+      return showNarr ? [...base, row.narration, ...tail] : [...base, ...tail];
+    });
+    const foot = showNarr
+      ? [
+          ["Total", "", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+          ["Closing Balance", "", "", "", "", "", "", fmtBal(closing)],
+        ]
+      : [
+          ["Total", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+          ["Closing Balance", "", "", "", "", "", fmtBal(closing)],
+        ];
     downloadPdfTable({
       title: ledger?.name ?? "Cash & Bank Book",
+      subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
-      head: [["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]],
-      body: [
-        ["", "Opening Balance", "", "", "", "", "", fmtBal(opening)],
-        ...rows.map((row) => [
-          fmtIndianDate(row.date),
-          row.particulars,
-          row.vchType,
-          row.vchNo,
-          row.narration,
-          row.debit ? r(row.debit).toFixed(2) : "",
-          row.credit ? r(row.credit).toFixed(2) : "",
-          fmtBal(row.balance),
-        ]),
-      ],
-      foot: [
-        ["Total", "", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
-        ["Closing Balance", "", "", "", "", "", "", fmtBal(closing)],
-      ],
+      head: [head],
+      body: [opening_row, ...bodyRows],
+      foot,
       fileName: `${fileBase}.pdf`,
       orientation: "l",
-      rightAlignCols: [5, 6, 7],
+      rightAlignCols: showNarr ? [5, 6, 7] : [4, 5, 6],
     });
+  };
 
   const toolbar = (
     <Card>
@@ -374,9 +384,7 @@ function CashBankBook() {
                     <tr
                       key={row.key}
                       className="cursor-pointer hover:bg-muted/40"
-                      onClick={() =>
-                        (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: row.voucherId } }))
-                      }
+                      onClick={() => openVoucherDetail(navigate, row.voucherId)}
                     >
                       <td className="border-b border-border/60 p-2 whitespace-nowrap">{fmtIndianDate(row.date)}</td>
                       <td className="border-b border-border/60 p-2">{row.particulars}</td>
