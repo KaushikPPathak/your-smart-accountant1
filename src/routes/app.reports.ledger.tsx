@@ -252,9 +252,9 @@ function LedgerStatement() {
   const drRows: TRow[] = [];
   const crRows: TRow[] = [];
   if (openingBeforeFrom > 0) {
-    drRows.push({ label: "To Opening Balance", hint: from, amount: formatINR(openingBeforeFrom), emphasis: "bold" });
+    drRows.push({ label: "To Opening Balance", hint: fmtIndianDate(from), amount: formatINR(openingBeforeFrom), emphasis: "bold" });
   } else if (openingBeforeFrom < 0) {
-    crRows.push({ label: "By Opening Balance", hint: from, amount: formatINR(-openingBeforeFrom), emphasis: "bold" });
+    crRows.push({ label: "By Opening Balance", hint: fmtIndianDate(from), amount: formatINR(-openingBeforeFrom), emphasis: "bold" });
   }
   for (const e of entries) {
     const v = e.vouchers;
