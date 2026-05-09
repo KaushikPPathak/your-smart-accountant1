@@ -76,7 +76,7 @@ function DayBook() {
     let crTotal = 0;
     for (const r2 of rows) {
       const label = `${TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type} — ${r2.ledgers?.name ?? "—"}`;
-      const hint = `${r2.voucher_date} · ${r2.voucher_number}${r2.narration ? ` · ${r2.narration}` : ""}`;
+      const hint = `${fmtIndianDate(r2.voucher_date)} · ${r2.voucher_number}${r2.narration ? ` · ${r2.narration}` : ""}`;
       const onClick = () => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r2.id } });
       const tRow: TRow = { label, hint, amount: formatINR(r2.total_paise), onClick };
       if (DR_TYPES.has(r2.voucher_type)) {
