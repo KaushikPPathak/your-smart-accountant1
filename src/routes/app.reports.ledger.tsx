@@ -267,9 +267,9 @@ function LedgerStatement() {
   const drSubtotal = (openingBeforeFrom > 0 ? openingBeforeFrom : 0) + totals.dr;
   const crSubtotal = (openingBeforeFrom < 0 ? -openingBeforeFrom : 0) + totals.cr;
   if (drSubtotal > crSubtotal) {
-    crRows.push({ label: "By Balance c/d", hint: to, amount: formatINR(drSubtotal - crSubtotal), emphasis: "bold" });
+    crRows.push({ label: "By Balance c/d", hint: fmtIndianDate(to), amount: formatINR(drSubtotal - crSubtotal), emphasis: "bold" });
   } else if (crSubtotal > drSubtotal) {
-    drRows.push({ label: "To Balance c/d", hint: to, amount: formatINR(crSubtotal - drSubtotal), emphasis: "bold" });
+    drRows.push({ label: "To Balance c/d", hint: fmtIndianDate(to), amount: formatINR(crSubtotal - drSubtotal), emphasis: "bold" });
   }
   const grandTotal = Math.max(drSubtotal, crSubtotal);
 
