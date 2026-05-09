@@ -61,6 +61,7 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     head: opts.head,
     body: opts.body,
     foot: opts.foot,
+    showFoot: "lastPage",
     theme: "grid",
     styles: { fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
     headStyles: { fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
