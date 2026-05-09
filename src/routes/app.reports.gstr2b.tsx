@@ -297,7 +297,7 @@ function Gstr2BPage() {
                 <TableRow><TableCell colSpan={6} className="p-6 text-center text-sm text-muted-foreground">{lines.length === 0 ? "Upload a 2B file to compare." : "All ITC accounted for."}</TableCell></TableRow>
               ) : missing.map((p) => (
                 <TableRow key={p.id}>
-                  <TableCell className="font-mono text-xs">{p.voucher_date}</TableCell>
+                  <TableCell className="font-mono text-xs">{fmtIndianDate(p.voucher_date)}</TableCell>
                   <TableCell>{p.voucher_number}</TableCell>
                   <TableCell>{p.ledgers?.name || "—"}</TableCell>
                   <TableCell className="font-mono text-xs">{p.ledgers?.gstin || "—"}</TableCell>

@@ -133,7 +133,7 @@ function OutstandingPage() {
                   <TableCell className="font-mono text-xs">{r.voucher_date}</TableCell>
                   <TableCell className="font-medium">{r.voucher_number}</TableCell>
                   <TableCell>{r.ledgers?.name || "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{r.due_date || r.voucher_date}</TableCell>
+                  <TableCell className="font-mono text-xs">{fmtIndianDate(r.due_date || r.voucher_date)}</TableCell>
                   <TableCell className="text-right font-mono">{formatINR(r.total_paise)}</TableCell>
                   <TableCell className="text-right font-mono">{formatINR(r.paid_paise)}</TableCell>
                   <TableCell className="text-right font-mono font-semibold">{formatINR(r.pending_paise)}</TableCell>

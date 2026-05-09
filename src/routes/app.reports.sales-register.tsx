@@ -167,7 +167,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                   onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: x.id } })}
                   title="Click to edit"
                 >
-                  <TableCell>{x.voucher_date}</TableCell>
+                  <TableCell>{fmtIndianDate(x.voucher_date)}</TableCell>
                   <TableCell className="font-mono text-xs">{x.voucher_number}</TableCell>
                   <TableCell>{x.ledgers?.name ?? "—"}</TableCell>
                   <TableCell className="font-mono text-xs">{x.ledgers?.gstin ?? "—"}</TableCell>

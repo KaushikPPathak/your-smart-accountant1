@@ -167,7 +167,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                 ) : (
                   rows.map((x) => (
                     <TableRow key={x.id}>
-                      <TableCell className="whitespace-nowrap">{x.voucher_date}</TableCell>
+                      <TableCell className="whitespace-nowrap">{fmtIndianDate(x.voucher_date)}</TableCell>
                       <TableCell className="font-mono text-xs">
                         {kind === "sales" ? x.voucher_number : x.vendor_invoice_no || x.voucher_number}
                       </TableCell>

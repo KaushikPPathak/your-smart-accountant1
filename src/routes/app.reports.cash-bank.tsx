@@ -366,7 +366,7 @@ function CashBankBook() {
                         navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: row.voucherId } })
                       }
                     >
-                      <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.date}</td>
+                      <td className="border-b border-border/60 p-2 whitespace-nowrap">{fmtIndianDate(row.date)}</td>
                       <td className="border-b border-border/60 p-2">{row.particulars}</td>
                       <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.vchType}</td>
                       <td className="border-b border-border/60 p-2 whitespace-nowrap">{row.vchNo}</td>

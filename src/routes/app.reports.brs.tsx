@@ -140,14 +140,14 @@ function BrsPage() {
                 <TableRow><TableCell colSpan={7} className="p-6 text-center text-sm text-muted-foreground">No entries.</TableCell></TableRow>
               ) : entries.map((e) => (
                 <TableRow key={e.id} className={e.cleared_date ? "opacity-60" : ""}>
-                  <TableCell className="font-mono text-xs">{e.vouchers?.voucher_date}</TableCell>
+                  <TableCell className="font-mono text-xs">{fmtIndianDate(e.vouchers?.voucher_date ?? "")}</TableCell>
                   <TableCell className="text-xs">{e.vouchers?.voucher_number} <span className="text-muted-foreground">({e.vouchers?.voucher_type})</span></TableCell>
                   <TableCell className="text-xs">{e.vouchers?.reference_no || "—"}</TableCell>
                   <TableCell className="text-right font-mono">{e.debit_paise ? formatINR(e.debit_paise) : ""}</TableCell>
                   <TableCell className="text-right font-mono">{e.credit_paise ? formatINR(e.credit_paise) : ""}</TableCell>
                   <TableCell>
                     {e.cleared_date
-                      ? <Badge variant="default">Cleared {e.cleared_date}</Badge>
+                      ? <Badge variant="default">Cleared {fmtIndianDate(e.cleared_date)}</Badge>
                       : <Badge variant="outline">Uncleared</Badge>}
                   </TableCell>
                   <TableCell className="text-right">

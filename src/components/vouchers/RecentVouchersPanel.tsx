@@ -88,7 +88,7 @@ export function RecentVouchersPanel({
                 <span className="flex flex-col items-start">
                   <span className="font-mono text-xs">{r.voucher_number}</span>
                   <span className="text-[11px] text-muted-foreground">
-                    {r.voucher_date}
+                    {fmtIndianDate(r.voucher_date)}
                     {r.party_ledger_id && partyNames[r.party_ledger_id] ? ` · ${partyNames[r.party_ledger_id]}` : ""}
                   </span>
                 </span>
