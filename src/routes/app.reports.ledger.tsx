@@ -261,7 +261,7 @@ function LedgerStatement() {
     const v = e.vouchers;
     const desc = e.narration || v?.narration || v?.reference_no || (v?.voucher_type ?? "").replace(/_/g, " ");
     const hint = v ? `${fmtIndianDate(v.voucher_date)} · ${v.voucher_number}` : "";
-    const goto = v ? () => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: v.id } }) : undefined;
+    const goto = v ? () => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: v.id } })) : undefined;
     if (e.debit_paise > 0) drRows.push({ label: <>To {desc}</>, hint, amount: formatINR(e.debit_paise), onClick: goto });
     if (e.credit_paise > 0) crRows.push({ label: <>By {desc}</>, hint, amount: formatINR(e.credit_paise), onClick: goto });
   }
@@ -492,7 +492,7 @@ function LedgerStatement() {
                     <tr
                       key={row.key}
                       className="cursor-pointer hover:bg-muted/40"
-                      onClick={() => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: row.voucherId } })}
+                      onClick={() => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: row.voucherId } }))}
                     >
                       <td className="border-b border-border/60 p-2 whitespace-nowrap">{fmtIndianDate(row.date)}</td>
                       <td className="border-b border-border/60 p-2">{row.particulars}</td>
