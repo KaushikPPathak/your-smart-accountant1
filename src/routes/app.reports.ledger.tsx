@@ -258,8 +258,8 @@ function LedgerStatement() {
   }
   for (const e of entries) {
     const v = e.vouchers;
-    const desc = e.narration || v?.narration || (v?.voucher_type ?? "").replace(/_/g, " ");
-    const hint = v ? `${v.voucher_date} · ${v.voucher_number}` : "";
+    const desc = e.narration || v?.narration || v?.reference_no || (v?.voucher_type ?? "").replace(/_/g, " ");
+    const hint = v ? `${fmtIndianDate(v.voucher_date)} · ${v.voucher_number}` : "";
     const goto = v ? () => navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: v.id } }) : undefined;
     if (e.debit_paise > 0) drRows.push({ label: <>To {desc}</>, hint, amount: formatINR(e.debit_paise), onClick: goto });
     if (e.credit_paise > 0) crRows.push({ label: <>By {desc}</>, hint, amount: formatINR(e.credit_paise), onClick: goto });
