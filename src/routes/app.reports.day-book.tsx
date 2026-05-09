@@ -116,12 +116,12 @@ function DayBook() {
   const onExportPdf = () =>
     downloadPdfTable({
       title: "Day Book",
-      subtitle: `${from} to ${to}`,
+      subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       head: [["Date", "Type", "Number", "Party", "Narration", "Side", "Amount"]],
       body: rows.map((r2) => [
-        r2.voucher_date,
+        fmtIndianDate(r2.voucher_date),
         TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type,
         r2.voucher_number,
         r2.ledgers?.name ?? "",
