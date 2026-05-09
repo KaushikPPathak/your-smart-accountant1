@@ -48,7 +48,7 @@ export function BillAllocationDialog({
         .eq("company_id", companyId)
         .eq("party_ledger_id", ledgerId)
         .eq("voucher_type", invoiceType)
-        .order("voucher_date"),
+        .order("voucher_date").order("voucher_number", { ascending: true }),
       supabase.from("bill_allocations")
         .select("invoice_voucher_id, amount_paise")
         .eq("ledger_id", ledgerId),

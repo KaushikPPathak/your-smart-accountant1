@@ -117,7 +117,7 @@ function CashBankBook() {
         .eq("vouchers.company_id", activeCompanyId)
         .gte("vouchers.voucher_date", from)
         .lte("vouchers.voucher_date", to)
-        .order("voucher_date", { referencedTable: "vouchers", ascending: true });
+        .order("voucher_date", { referencedTable: "vouchers", ascending: true }).order("voucher_number", { referencedTable: "vouchers", ascending: true });
       const list = (ent || []) as unknown as EntryRow[];
       if (cancelled) return;
       setEntries(list);

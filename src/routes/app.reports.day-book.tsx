@@ -60,7 +60,7 @@ function DayBook() {
       .eq("company_id", activeCompanyId)
       .gte("voucher_date", from)
       .lte("voucher_date", to)
-      .order("voucher_date", { ascending: true })
+      .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true })
       .order("voucher_number", { ascending: true })
       .then(({ data }) => {
         setRows((data || []) as unknown as Row[]);

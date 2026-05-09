@@ -396,7 +396,7 @@ function RenumberVouchersTool({ companyId, disabled }: { companyId: string | nul
       .select("id, voucher_number, voucher_date")
       .eq("company_id", companyId)
       .eq("voucher_type", type)
-      .order("voucher_date", { ascending: true })
+      .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true })
       .order("created_at", { ascending: true });
     const rows = (data || []) as { id: string; voucher_number: string; voucher_date: string }[];
     setPreview(

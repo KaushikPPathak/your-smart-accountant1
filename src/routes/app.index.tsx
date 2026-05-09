@@ -97,7 +97,7 @@ function Dashboard() {
           .from("vouchers")
           .select("id, voucher_date, voucher_number, voucher_type, total_paise, ledgers:party_ledger_id(name)")
           .eq("company_id", activeCompanyId)
-          .order("voucher_date", { ascending: false })
+          .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false })
           .order("created_at", { ascending: false })
           .limit(10),
         supabase

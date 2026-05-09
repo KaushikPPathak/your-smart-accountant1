@@ -149,7 +149,7 @@ function Gstr2BPage() {
       .select("id, voucher_number, voucher_date, total_paise, vendor_invoice_no, ledgers:party_ledger_id(name, gstin)")
       .eq("company_id", activeCompanyId)
       .eq("voucher_type", "purchase")
-      .order("voucher_date", { ascending: false })
+      .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false })
       .limit(2000)
       .then(({ data }) => setPurchases((data || []) as unknown as Purchase[]));
   }, [activeCompanyId]);

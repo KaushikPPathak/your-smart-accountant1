@@ -238,7 +238,7 @@ export async function fetchVouchers(
     .in("voucher_type", types)
     .gte("voucher_date", from)
     .lte("voucher_date", to)
-    .order("voucher_date", { ascending: true });
+    .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true });
   return (data || []) as unknown as VoucherRow[];
 }
 

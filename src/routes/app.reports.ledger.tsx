@@ -144,7 +144,7 @@ function LedgerStatement() {
         .eq("ledger_id", ledgerId)
         .gte("vouchers.voucher_date", from)
         .lte("vouchers.voucher_date", to)
-        .order("voucher_date", { referencedTable: "vouchers", ascending: true });
+        .order("voucher_date", { referencedTable: "vouchers", ascending: true }).order("voucher_number", { referencedTable: "vouchers", ascending: true });
       if (cancelled) return;
       const list = (ent || []) as unknown as EntryRow[];
       setEntries(list);

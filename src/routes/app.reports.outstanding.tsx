@@ -51,7 +51,7 @@ function OutstandingPage() {
         .eq("company_id", activeCompanyId)
         .eq("voucher_type", type)
         .lte("voucher_date", asOf)
-        .order("voucher_date"),
+        .order("voucher_date").order("voucher_number", { ascending: true }),
       supabase.from("bill_allocations")
         .select("invoice_voucher_id, amount_paise")
         .eq("company_id", activeCompanyId),

@@ -51,7 +51,7 @@ function BankRecPage() {
   useEffect(() => {
     if (!activeCompanyId) return;
     supabase.from("vouchers").select("id, voucher_date, voucher_number, reference_no, total_paise, voucher_type")
-      .eq("company_id", activeCompanyId).order("voucher_date", { ascending: false }).limit(2000)
+      .eq("company_id", activeCompanyId).order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false }).limit(2000)
       .then(({ data }) => setCandidates((data || []) as VoucherCandidate[]));
   }, [activeCompanyId]);
 
