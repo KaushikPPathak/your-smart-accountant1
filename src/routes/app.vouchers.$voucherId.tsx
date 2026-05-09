@@ -313,7 +313,7 @@ function VoucherEditPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/app/vouchers" })}>
+          <Button variant="ghost" size="sm" onClick={() => goBackFromVoucher(() => navigate({ to: "/app/vouchers" }))}>
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
           </Button>
           <div>
