@@ -211,7 +211,7 @@ function CashBankBook() {
     const body: (string | number)[][] = [
       ["Opening Balance", "", "", "", "", "", "", fmtBal(opening)],
       ...rows.map((row) => [
-        row.date,
+        fmtIndianDate(row.date),
         row.particulars,
         row.vchType,
         row.vchNo,
@@ -238,7 +238,7 @@ function CashBankBook() {
       body: [
         ["", "Opening Balance", "", "", "", "", "", fmtBal(opening)],
         ...rows.map((row) => [
-          row.date,
+          fmtIndianDate(row.date),
           row.particulars,
           row.vchType,
           row.vchNo,
