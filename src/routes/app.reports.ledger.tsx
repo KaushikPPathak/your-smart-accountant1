@@ -78,6 +78,7 @@ function vchNoSortKey(s: string): number {
   return isNaN(n) ? 0 : n;
 }
 
+function LedgerStatement() {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
   const pdfHeader = useReportPdfHeader();
