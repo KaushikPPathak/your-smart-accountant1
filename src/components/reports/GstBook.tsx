@@ -72,9 +72,9 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
   const billDateLabel = kind === "sales" ? "Invoice Date" : "Bill Date";
 
   const tableRows = rows.map((x) => [
-    x.voucher_date,
+    fmtIndianDate(x.voucher_date),
     kind === "sales" ? x.voucher_number : (x.vendor_invoice_no || x.voucher_number),
-    kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date),
+    fmtIndianDate(kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date)),
     x.ledgers?.name || "—",
     x.ledgers?.gstin || "—",
     x.place_of_supply_code || x.ledgers?.state_code || "—",
