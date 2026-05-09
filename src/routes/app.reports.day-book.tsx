@@ -9,6 +9,7 @@ import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { fmtIndianDate } from "@/lib/format-date";
 import { EmptyState } from "@/components/EmptyState";
 import { BookOpen } from "lucide-react";
 
