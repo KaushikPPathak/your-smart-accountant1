@@ -299,7 +299,7 @@ function VoucherEditPage() {
       return;
     }
     toast.success("Deleted");
-    navigate({ to: "/app/vouchers" });
+    goBackFromVoucher(() => navigate({ to: "/app/vouchers" }));
   }
 
   if (loading || !voucher) {
