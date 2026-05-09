@@ -130,7 +130,7 @@ function OutstandingPage() {
                 <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">No outstanding bills 🎉</TableCell></TableRow>
               ) : rows.map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell className="font-mono text-xs">{r.voucher_date}</TableCell>
+                  <TableCell className="font-mono text-xs">{fmtIndianDate(r.voucher_date)}</TableCell>
                   <TableCell className="font-medium">{r.voucher_number}</TableCell>
                   <TableCell>{r.ledgers?.name || "—"}</TableCell>
                   <TableCell className="font-mono text-xs">{fmtIndianDate(r.due_date || r.voucher_date)}</TableCell>
