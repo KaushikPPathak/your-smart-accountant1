@@ -85,7 +85,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
   const body = (): (string | number)[][] => [
     head,
     ...rows.map((x) => [
-      x.voucher_date,
+      fmtIndianDate(x.voucher_date),
       x.voucher_number,
       x.ledgers?.name ?? "",
       x.ledgers?.gstin ?? "",
@@ -119,10 +119,10 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
             onExportPdf={() =>
               downloadPdfTable({
                 title,
-                subtitle: `${from} to ${to}`,
+                subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
                 head: [head],
                 body: rows.map((x) => [
-                  x.voucher_date,
+                  fmtIndianDate(x.voucher_date),
                   x.voucher_number,
                   x.ledgers?.name ?? "",
                   x.ledgers?.gstin ?? "",
