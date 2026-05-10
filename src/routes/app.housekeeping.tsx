@@ -42,6 +42,7 @@ import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceIm
 import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport";
 import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
 import { YearEndClosure } from "@/components/housekeeping/YearEndClosure";
+import { VerifyAndRepairTool } from "@/components/housekeeping/VerifyAndRepairTool";
 const TallyBusyImport = lazy(() =>
   import("@/components/housekeeping/TallyBusyImport").then((m) => ({
     default: m.TallyBusyImport,
