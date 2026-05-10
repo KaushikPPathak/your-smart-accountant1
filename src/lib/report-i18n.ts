@@ -228,9 +228,126 @@ export const LABELS: Record<string, Partial<Record<LangCode, string>>> = {
   "Inter": { gu: "અંતરરાજ્ય" },
   "Intra": { gu: "રાજ્ય અંદર" },
   "Page": { gu: "પાનું" },
-  "of": { gu: "માંથી" },
+  "of": { gu: "/" },
   "Printed on": { gu: "છાપ્યાની તારીખ" },
+
+  // ---- Toolbar / chrome (also exposed as i18n keys, mirrored here so the
+  //      exporter can localize button labels embedded in headers) ----
+  "From": { gu: "થી" },
+  "To Date": { gu: "સુધી" },
+  "Print": { gu: "પ્રિન્ટ" },
+  "Export": { gu: "નિકાસ" },
+  "CSV": { gu: "CSV" },
+  "Excel": { gu: "એક્સેલ" },
+  "PDF": { gu: "PDF" },
+  "Word": { gu: "વર્ડ" },
+  "Refresh": { gu: "તાજું કરો" },
+  "Loading…": { gu: "લોડ થઈ રહ્યું છે…" },
+  "Loading...": { gu: "લોડ થઈ રહ્યું છે…" },
+
+  // ---- T-account header variants seen across reports ----
+  "Dr.  Particulars": { gu: "ઉધાર  વિગતો" },
+  "Particulars  Cr.": { gu: "વિગતો  જમા" },
+  "Amount (Rs)": { gu: "રકમ (રૂ.)" },
+
+  // ---- Empty-state copy ----
+  "No vouchers in range": { gu: "આ સમયગાળામાં કોઈ વાઉચર નથી" },
+  "Adjust the date filter or post some vouchers.": { gu: "તારીખ બદલો અથવા થોડા વાઉચર નોંધાવો." },
+  "No data": { gu: "કોઈ માહિતી નથી" },
+  "No data for the selected period": { gu: "પસંદ કરેલા સમયગાળા માટે કોઈ માહિતી નથી" },
+  "Nothing to show": { gu: "બતાવવા જેવું કંઈ નથી" },
+  "Select a ledger": { gu: "ખાતું પસંદ કરો" },
+  "Select a group": { gu: "સમૂહ પસંદ કરો" },
+
+  // ---- Print-mode dialog ----
+  "Print this report": { gu: "આ રિપોર્ટ છાપો" },
+  "Choose where to send the report.": { gu: "રિપોર્ટ ક્યાં મોકલવો તે પસંદ કરો." },
+  "Print Preview": { gu: "પ્રિન્ટ પૂર્વાવલોકન" },
+  "System Printer": { gu: "સિસ્ટમ પ્રિન્ટર" },
+  "Save as PDF": { gu: "PDF તરીકે સંગ્રહો" },
+  "Save as Word (.doc)": { gu: "વર્ડ (.doc) તરીકે સંગ્રહો" },
+  "Opens a preview window with the report formatted for print.": { gu: "છપાઈ માટે ગોઠવાયેલા રિપોર્ટ સાથે પૂર્વાવલોકન ખુલે છે." },
+  "Opens the browser print dialog (your Windows default printer).": { gu: "બ્રાઉઝરનો પ્રિન્ટ સંવાદ ખોલે છે (તમારું ડિફોલ્ટ પ્રિન્ટર)." },
+  "Generates a print-ready PDF in your Reports folder.": { gu: "તમારા Reports ફોલ્ડરમાં છાપવા-તૈયાર PDF બનાવે છે." },
+  "Editable Word document with the same table layout.": { gu: "એ જ કોઠા-લેઆઉટ સાથેનો સંપાદનક્ષમ Word દસ્તાવેજ." },
+
+  // ---- Stock summary ----
+  "Stock Item": { gu: "સ્ટોક વસ્તુ" },
+  "Inwards": { gu: "આવક" },
+  "Outwards": { gu: "જાવક" },
+  "Inward Qty": { gu: "આવક જથ્થો" },
+  "Outward Qty": { gu: "જાવક જથ્થો" },
+  "Closing Qty": { gu: "બંધ જથ્થો" },
+  "Opening Qty": { gu: "ઉઘડતો જથ્થો" },
+  "Closing Value": { gu: "બંધ મૂલ્ય" },
+  "Opening Value": { gu: "ઉઘડતું મૂલ્ય" },
+
+  // ---- Ageing ----
+  "Not due": { gu: "બાકી નથી" },
+  "Overdue": { gu: "મુદત વીતેલી" },
+  "Bucket": { gu: "વર્ગ" },
+  "Total Outstanding": { gu: "કુલ બાકી" },
+  "Total Receivable": { gu: "કુલ લેણાં" },
+  "Total Payable": { gu: "કુલ દેણાં" },
+  "Net Receivable": { gu: "ચોખ્ખાં લેણાં" },
+  "Net Payable": { gu: "ચોખ્ખાં દેણાં" },
+
+  // ---- Outstanding / Bill-by-bill ----
+  "Bill Ref": { gu: "બિલ સંદર્ભ" },
+  "Bill Reference": { gu: "બિલ સંદર્ભ" },
+  "Pending": { gu: "બાકી" },
+  "Cleared": { gu: "ચુકવાયેલ" },
+  "Aged": { gu: "જૂનું" },
+
+  // ---- BRS ----
+  "Statement Balance": { gu: "સ્ટેટમેન્ટ સિલક" },
+  "Book Balance": { gu: "ચોપડા સિલક" },
+  "Reconciled": { gu: "મેળવાયેલ" },
+  "Unreconciled": { gu: "નહિ મેળવાયેલ" },
+  "Difference": { gu: "તફાવત" },
+
+  // ---- GST returns / books ----
+  "Place of Supply": { gu: "પુરવઠાનું સ્થળ" },
+  "Reverse Charge": { gu: "વિપરીત શુલ્ક" },
+  "Tax Rate": { gu: "કર દર" },
+  "Tax Amount": { gu: "કરની રકમ" },
+  "Total Tax": { gu: "કુલ કર" },
+  "Total Value": { gu: "કુલ મૂલ્ય" },
+  "B2B": { gu: "B2B" },
+  "B2C": { gu: "B2C" },
+  "B2CL": { gu: "B2CL" },
+  "B2CS": { gu: "B2CS" },
+  "CDNR": { gu: "CDNR" },
+  "CDNUR": { gu: "CDNUR" },
+  "Exports": { gu: "નિકાસ" },
+  "HSN Summary": { gu: "HSN સારાંશ" },
+  "Documents Issued": { gu: "જારી થયેલા દસ્તાવેજો" },
+  "ITC Available": { gu: "મળવાપાત્ર ITC" },
+  "ITC Reversed": { gu: "પાછી ખેંચાયેલ ITC" },
+  "Ineligible ITC": { gu: "અપાત્ર ITC" },
+  "Output Tax": { gu: "આઉટપુટ ટેક્સ" },
+  "Input Tax": { gu: "ઇનપુટ ટેક્સ" },
+  "Round Off": { gu: "રાઉન્ડ ઑફ" },
+  "TDS": { gu: "TDS" },
+  "TCS": { gu: "TCS" },
+
+  // ---- Misc accounting prefixes seen in narrations ----
+  "Less": { gu: "ઓછું" },
+  "Less:": { gu: "ઓછું:" },
+  "Add": { gu: "વધુ" },
+  "Add:": { gu: "વધુ:" },
+  "Net": { gu: "ચોખ્ખું" },
+  "Gross": { gu: "સ્થૂળ" },
+  "Notes": { gu: "નોંધો" },
+  "Remarks": { gu: "ટિપ્પણીઓ" },
+  "Description": { gu: "વર્ણન" },
+  "Note": { gu: "નોંધ" },
 };
+
+import { tReportText as tReportTextRule } from "@/lib/report-i18n-rules";
+export { tReportText } from "@/lib/report-i18n-rules";
+// Re-export so callers can keep importing translation helpers from report-i18n.ts.
+void tReportTextRule;
 
 export function tReportLabel(text: string, lang: LangCode = getStoredLang()): string {
   if (!text || lang === "en") return text;
