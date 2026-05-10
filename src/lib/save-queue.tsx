@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode, startTransition } from "react";
 import { toast } from "sonner";
 import { markSaved, markFailure, clearFailures } from "./save-status";
+import { describeError } from "./error-message";
 
 export interface PendingJob {
   id: string;
@@ -36,7 +37,7 @@ async function flush() {
         bump();
       } catch (e) {
         job.attempts += 1;
-        job.lastError = e instanceof Error ? e.message : String(e);
+        job.lastError = describeError(e);
         markFailure();
         bump();
         toast.error(`Save failed: ${job.label}`, { description: job.lastError });
