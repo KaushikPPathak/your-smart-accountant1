@@ -49,5 +49,5 @@ export function formatDateRange(from: string | null | undefined, to: string | nu
 }
 
 export function formatDatesInText(text: string): string {
-  return text.replace(/\b(\d{4}-\d{2}-\d{2}|\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4})\b/g, (match) => fmtIndianDate(match));
+  return text.replace(/\b(\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/g, (match) => fmtIndianDate(match));
 }
