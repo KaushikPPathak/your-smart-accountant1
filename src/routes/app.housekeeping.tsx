@@ -798,10 +798,11 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
     setBusy(true);
     try {
       // For each voucher type, find max trailing number and reset next_number
-      const { data: vchs } = await supabase
+      const { data: vchs, error: vErr } = await supabase
         .from("vouchers")
         .select("voucher_type, voucher_number")
         .eq("company_id", companyId);
+      if (vErr) throw vErr;
       const maxByType = new Map<string, number>();
       for (const v of (vchs || []) as { voucher_type: string; voucher_number: string }[]) {
         const m = v.voucher_number.match(/(\d+)\s*$/);
@@ -817,7 +818,8 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
           .update({ next_number: maxNum + 1 })
           .eq("company_id", companyId)
           .eq("voucher_type", vtype as never);
-        if (!error) updated++;
+        if (error) throw error;
+        updated++;
       }
       toast.success(`Recomputed ${updated} voucher sequences`);
     } catch (err) {
