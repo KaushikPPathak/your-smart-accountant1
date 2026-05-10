@@ -5,14 +5,38 @@ import { useCompany } from "./company-context";
  * to inject into every PDF report header. Keeps the proprietor's name on
  * every printed page (Day Book, Cash/Bank Book, Ledger, etc.).
  */
-export function useReportPdfHeader(): { companyName: string; companySubLine: string } {
+export function useReportPdfHeader(): {
+  companyName: string;
+  companySubLine: string;
+  fyStart: string | null;
+  fyEnd: string | null;
+  /** Returns the date-range subtitle only when it differs from the FY range, to avoid duplicating the line printed under the company name. */
+  dateRangeSubtitle: (from: string, to: string) => string;
+} {
   const { activeMembership } = useCompany();
   const companyName = activeMembership?.companies?.name ?? "";
   const fyStart = activeMembership?.companies?.financial_year_start ?? null;
   const gstin = activeMembership?.companies?.gstin ?? null;
   const fyText = formatFyRange(fyStart);
   const sub = [fyText, gstin ? `GSTIN: ${gstin}` : null].filter(Boolean).join("  ·  ");
-  return { companyName, companySubLine: sub };
+  const fyEnd = fyEndFromStart(fyStart);
+  const dateRangeSubtitle = (from: string, to: string) => {
+    if (fyStart && fyEnd && from === fyStart && to === fyEnd) return "";
+    return `${fmtDmy(from)} to ${fmtDmy(to)}`;
+  };
+  return { companyName, companySubLine: sub, fyStart, fyEnd, dateRangeSubtitle };
+}
+
+function fyEndFromStart(start: string | null | undefined): string | null {
+  if (!start) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
+  if (!m) return null;
+  return `${Number(m[1]) + 1}-03-31`;
+}
+
+function fmtDmy(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
 function formatFyRange(start: string | null | undefined): string {
@@ -23,5 +47,5 @@ function formatFyRange(start: string | null | undefined): string {
   const mo = m[2];
   const d = m[3];
   const endY = y + 1;
-  return `FY ${y}-${String(endY).slice(-2)} (${d}/${mo}/${y} to 31/03/${endY})`;
+  return `${d}/${mo}/${y} to 31/03/${endY}`;
 }

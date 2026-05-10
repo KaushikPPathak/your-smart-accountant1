@@ -8,6 +8,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadXlsx, downloadPdfTable, r } from "@/lib/exporters";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { sortVouchersAsc } from "@/lib/voucher-sort";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -31,8 +32,9 @@ interface Row {
 }
 
 export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
-  const { activeCompanyId, activeMembership } = useCompany();
+  const { activeCompanyId } = useCompany();
   const { from, to, setFrom, setTo } = useFyRangeState();
+  const pdfHeader = useReportPdfHeader();
   const [rows, setRows] = useState<Row[]>([]);
 
   const types: VoucherType[] = kind === "sales" ? ["sales", "credit_note"] : ["purchase", "debit_note"];
@@ -114,7 +116,9 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
     downloadPdfTable({
       fileName: `${title.replace(/\s+/g, "_")}_${from}_to_${to}.pdf`,
       title,
-      subtitle: `${activeMembership?.companies.name ?? ""} · ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
+      subtitle: pdfHeader.dateRangeSubtitle(from, to),
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
       head: [headers],
       body: tableRows,
     });

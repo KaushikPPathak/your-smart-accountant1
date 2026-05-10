@@ -267,7 +267,7 @@ function CashBankBook() {
         ];
     downloadPdfTable({
       title: ledger?.name ?? "Cash & Bank Book",
-      subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
+      subtitle: pdfHeader.dateRangeSubtitle(from, to),
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       head: [head],
