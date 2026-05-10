@@ -1,4 +1,4 @@
-import { openVoucherDetail } from "@/lib/voucher-return";
+import { openVoucherDetail, hasLedgerOrigin, goBackFromLedger } from "@/lib/voucher-return";
 import { sortEntriesByVoucherAsc } from "@/lib/voucher-sort";
 import { narrationOf } from "@/lib/voucher-text";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
