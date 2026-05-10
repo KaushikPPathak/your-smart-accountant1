@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { openLedgerReport } from "@/lib/voucher-return";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
@@ -72,7 +73,7 @@ function TradingAccount() {
   );
 
   const goLedger = (id: string) =>
-    navigate({ to: "/app/reports/ledger", search: { ledgerId: id, from, to } });
+    openLedgerReport(navigate, { ledgerId: id, from, to });
 
   const drGroup = groupedTRows(drBuckets, goLedger);
   const crGroup = groupedTRows(crBuckets, goLedger);

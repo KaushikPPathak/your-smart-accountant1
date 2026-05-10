@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { openLedgerReport } from "@/lib/voucher-return";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -179,7 +180,7 @@ function GroupLedgerReport() {
         </span>
       ),
       amount: formatINR(r2.closing_paise),
-      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: r2.id, from, to } }),
+      onClick: () => openLedgerReport(navigate, { ledgerId: r2.id, from, to }),
     }));
   const crRows: TRow[] = rows
     .filter((r2) => r2.closing_paise < 0)
@@ -191,7 +192,7 @@ function GroupLedgerReport() {
         </span>
       ),
       amount: formatINR(-r2.closing_paise),
-      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: r2.id, from, to } }),
+      onClick: () => openLedgerReport(navigate, { ledgerId: r2.id, from, to }),
     }));
 
   const drTotal = drRows.reduce((s, _, i) => s + (rows.filter((x) => x.closing_paise > 0)[i]?.closing_paise ?? 0), 0);

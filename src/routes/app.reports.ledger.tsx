@@ -1,4 +1,4 @@
-import { openVoucherDetail } from "@/lib/voucher-return";
+import { openVoucherDetail, hasLedgerOrigin, goBackFromLedger } from "@/lib/voucher-return";
 import { sortEntriesByVoucherAsc } from "@/lib/voucher-sort";
 import { narrationOf } from "@/lib/voucher-text";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -19,7 +19,7 @@ import { downloadPdfTable, downloadPdfMultiTable, downloadXlsx, r, type PdfSecti
 import { exportHtmlAsWord } from "@/lib/word-export";
 import { fmtIndianDate } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
-import { FileText, Eye, FileType2 } from "lucide-react";
+import { FileText, Eye, FileType2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 type ViewMode = "columnar" | "horizontal";
@@ -90,13 +90,20 @@ function LedgerStatement() {
   const [siblings, setSiblings] = useState<Map<string, SiblingRow[]>>(new Map());
   const [siblingNames, setSiblingNames] = useState<Map<string, string>>(new Map());
   const [openingBeforeFrom, setOpeningBeforeFrom] = useState(0);
+  const [showBack, setShowBack] = useState(false);
+  useEffect(() => { setShowBack(hasLedgerOrigin()); }, []);
 
-  // Alt+L brought the user here — Esc returns to the originating screen.
+  // Esc returns to the originating screen (Alt+L launcher or drill-down).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       const tgt = e.target as HTMLElement | null;
       if (tgt && /^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName)) return;
+      if (hasLedgerOrigin()) {
+        e.preventDefault();
+        goBackFromLedger(() => navigate({ to: "/app/reports" }));
+        return;
+      }
       let back: string | null = null;
       try { back = sessionStorage.getItem("ledgerReturnTo"); } catch { /* ignore */ }
       if (back && back !== "/app/reports/ledger") {
@@ -598,6 +605,20 @@ function LedgerStatement() {
           onPrint={() => window.print()}
           extra={
             <div className="flex flex-wrap items-end gap-3">
+              {showBack && (
+                <div className="space-y-1">
+                  <Label className="text-xs">&nbsp;</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9"
+                    onClick={() => goBackFromLedger(() => navigate({ to: "/app/reports" }))}
+                    title="Back to originating report"
+                  >
+                    <ArrowLeft className="mr-1 h-4 w-4" /> Back
+                  </Button>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label className="text-xs">Ledger</Label>
                 <Select value={ledgerId} onValueChange={setLedgerId}>
