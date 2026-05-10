@@ -112,9 +112,24 @@ function HousekeepingPage() {
       )}
 
       <Tabs value={currentTab} onValueChange={updateTab} activationMode="manual" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-11">
-          <TabsTrigger value="verify_repair">
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 p-1">
+          <TabsTrigger value="verify_repair" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <ShieldCheck className="mr-1 h-3.5 w-3.5" /> Verify &amp; Repair
+          </TabsTrigger>
+          <TabsTrigger value="verify">
+            <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Verify Books
+          </TabsTrigger>
+          <TabsTrigger value="recompute">
+            <RefreshCw className="mr-1 h-3.5 w-3.5" /> Recompute
+          </TabsTrigger>
+          <TabsTrigger value="cleanup">
+            <Trash2 className="mr-1 h-3.5 w-3.5" /> Cleanup
+          </TabsTrigger>
+          <TabsTrigger value="merge">
+            <Merge className="mr-1 h-3.5 w-3.5" /> Merge Ledgers
+          </TabsTrigger>
+          <TabsTrigger value="renumber">
+            <Hash className="mr-1 h-3.5 w-3.5" /> Renumber
           </TabsTrigger>
           <TabsTrigger value="opening">
             <Upload className="mr-1 h-3.5 w-3.5" /> Opening Balances
@@ -129,21 +144,6 @@ function HousekeepingPage() {
           </TabsTrigger>
           <TabsTrigger value="backup">
             <HardDrive className="mr-1 h-3.5 w-3.5" /> Backup / Restore
-          </TabsTrigger>
-          <TabsTrigger value="merge">
-            <Merge className="mr-1 h-3.5 w-3.5" /> Merge Ledgers
-          </TabsTrigger>
-          <TabsTrigger value="renumber">
-            <Hash className="mr-1 h-3.5 w-3.5" /> Renumber
-          </TabsTrigger>
-          <TabsTrigger value="verify">
-            <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Verify Books
-          </TabsTrigger>
-          <TabsTrigger value="cleanup">
-            <Trash2 className="mr-1 h-3.5 w-3.5" /> Cleanup
-          </TabsTrigger>
-          <TabsTrigger value="recompute">
-            <RefreshCw className="mr-1 h-3.5 w-3.5" /> Recompute
           </TabsTrigger>
           <TabsTrigger value="closure">
             <CalendarCheck className="mr-1 h-3.5 w-3.5" /> Year-End
