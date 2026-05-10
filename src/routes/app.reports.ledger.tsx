@@ -90,6 +90,8 @@ function LedgerStatement() {
   const [siblings, setSiblings] = useState<Map<string, SiblingRow[]>>(new Map());
   const [siblingNames, setSiblingNames] = useState<Map<string, string>>(new Map());
   const [openingBeforeFrom, setOpeningBeforeFrom] = useState(0);
+  const [showBack, setShowBack] = useState(false);
+  useEffect(() => { setShowBack(hasLedgerOrigin()); }, []);
 
   // Alt+L brought the user here — Esc returns to the originating screen.
   useEffect(() => {
