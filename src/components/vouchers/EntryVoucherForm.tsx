@@ -422,7 +422,11 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       <PeriodLockBanner lock={lock} />
 
       <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+        <CardContent className="space-y-3 p-4">
+          <div className="flex justify-end">
+            <NextVoucherNumberCard companyId={activeCompanyId} voucherType={voucherType} refreshKey={savedTick} />
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1">
             <Label>Date</Label>
             <FyDatePicker value={date} onChange={setDate} />
