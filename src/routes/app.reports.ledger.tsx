@@ -15,8 +15,12 @@ import { useCompany } from "@/lib/company-context";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
-import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { downloadPdfTable, downloadPdfMultiTable, downloadXlsx, r, type PdfSection } from "@/lib/exporters";
+import { exportHtmlAsWord } from "@/lib/word-export";
 import { fmtIndianDate } from "@/lib/format-date";
+import { Button } from "@/components/ui/button";
+import { FileText, Eye, FileType2 } from "lucide-react";
+import { toast } from "sonner";
 
 type ViewMode = "columnar" | "horizontal";
 type LedgerSearch = { ledgerId?: string; from?: string; to?: string; view?: ViewMode };
