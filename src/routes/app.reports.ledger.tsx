@@ -600,6 +600,20 @@ function LedgerStatement() {
           onPrint={() => window.print()}
           extra={
             <div className="flex flex-wrap items-end gap-3">
+              {showBack && (
+                <div className="space-y-1">
+                  <Label className="text-xs">&nbsp;</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9"
+                    onClick={() => goBackFromLedger(() => navigate({ to: "/app/reports" }))}
+                    title="Back to originating report"
+                  >
+                    <ArrowLeft className="mr-1 h-4 w-4" /> Back
+                  </Button>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label className="text-xs">Ledger</Label>
                 <Select value={ledgerId} onValueChange={setLedgerId}>
