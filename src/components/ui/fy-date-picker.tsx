@@ -7,6 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { useCompany } from "@/lib/company-context";
+import { fmtIndianDate } from "@/lib/format-date";
 
 /**
  * Returns the active financial year [start, end] for the active company.
@@ -79,10 +80,10 @@ export function FyDatePicker({
 
   const defaultMonth = selected ?? start;
 
-  const [text, setText] = React.useState<string>(selected ? format(selected, "dd/MM/yyyy") : "");
+  const [text, setText] = React.useState<string>(selected ? fmtIndianDate(value) : "");
   React.useEffect(() => {
-    setText(selected ? format(selected, "dd/MM/yyyy") : "");
-  }, [selected]);
+    setText(selected ? fmtIndianDate(value) : "");
+  }, [selected, value]);
 
   /** Parse partial input like "15", "15/5", "15/5/26", "15-05-2025" into ISO. */
   function tryParse(input: string): string | null {
@@ -116,10 +117,10 @@ export function FyDatePicker({
     const iso = tryParse(v);
     if (iso) {
       onChange(iso);
-      setText(format(parse(iso, "yyyy-MM-dd", new Date()), "dd/MM/yyyy"));
+      setText(fmtIndianDate(iso));
     } else {
       // revert
-      setText(selected ? format(selected, "dd/MM/yyyy") : "");
+      setText(selected ? fmtIndianDate(value) : "");
     }
   }
 
