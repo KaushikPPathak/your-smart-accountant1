@@ -609,13 +609,13 @@ function LedgerStatement() {
                 <div className="space-y-1">
                   <Label className="text-xs">&nbsp;</Label>
                   <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
-                    className="h-9"
+                    className="h-9 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md ring-2 ring-primary/30 font-semibold"
                     onClick={() => goBackFromLedger(() => navigate({ to: "/app/reports" }))}
-                    title="Back to originating report"
+                    title="Back to originating report (Esc)"
                   >
-                    <ArrowLeft className="mr-1 h-4 w-4" /> Back
+                    <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to Report
                   </Button>
                 </div>
               )}

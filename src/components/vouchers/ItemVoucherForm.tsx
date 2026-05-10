@@ -34,6 +34,7 @@ import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
+import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
 import { getAllLedgers, getAllItems, upsertCachedLedger, upsertCachedItem, useMastersVersion } from "@/lib/masters-cache";
 import { validateItemVoucher } from "@/lib/schemas/voucher";
@@ -452,7 +453,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       <PeriodLockBanner lock={lock} />
 
       <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-4">
+        <CardContent className="space-y-3 p-4">
+          <div className="flex justify-end">
+            <NextVoucherNumberCard companyId={activeCompanyId} voucherType={voucherType} refreshKey={savedTick} />
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
           <div className="space-y-1">
             <Label>Date</Label>
             <FyDatePicker value={date} onChange={setDate} />
@@ -499,6 +504,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
           </div>
         </CardContent>
       </Card>

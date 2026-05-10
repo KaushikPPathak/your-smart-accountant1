@@ -22,6 +22,7 @@ import { formatINR, rupeesToPaise } from "@/lib/money";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
+import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
 import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/masters-cache";
 import { enqueueSave } from "@/lib/save-queue";
@@ -422,7 +423,11 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       <PeriodLockBanner lock={lock} />
 
       <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-3">
+        <CardContent className="space-y-3 p-4">
+          <div className="flex justify-end">
+            <NextVoucherNumberCard companyId={activeCompanyId} voucherType={voucherType} refreshKey={savedTick} />
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1">
             <Label>Date</Label>
             <FyDatePicker value={date} onChange={setDate} />
@@ -449,6 +454,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           <div className={`space-y-1 ${isSimple ? "" : "md:col-span-2"}`}>
             <Label>Reference No.</Label>
             <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="Cheque/UTR/Reference" />
+          </div>
           </div>
         </CardContent>
       </Card>
