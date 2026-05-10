@@ -42,7 +42,7 @@ export function NextVoucherNumberCard({ companyId, voucherType, refreshKey = 0 }
             .from("vouchers")
             .select("voucher_number")
             .eq("company_id", companyId)
-            .eq("voucher_type", voucherType)
+            .eq("voucher_type", voucherType as never)
             .order("created_at", { ascending: false })
             .limit(500),
         ]);
