@@ -14,6 +14,7 @@ import { Check, Undo2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
+import { sortEntriesByVoucherAsc } from "@/lib/voucher-sort";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/reports/brs")({
@@ -58,7 +59,7 @@ function BrsPage() {
       .eq("ledger_id", ledgerId)
       .eq("vouchers.company_id", activeCompanyId)
       .lte("vouchers.voucher_date", asOf)
-      .then(({ data }) => setEntries((data || []) as unknown as Entry[]));
+      .then(({ data }) => setEntries(sortEntriesByVoucherAsc((data || []) as unknown as Entry[])));
   };
   useEffect(load, [ledgerId, asOf, activeCompanyId]);
 

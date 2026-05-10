@@ -6,6 +6,7 @@ import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { fmtIndianDate } from "@/lib/format-date";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
@@ -117,7 +118,7 @@ function TrialBalance() {
       title: "Trial Balance",
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
-      subtitle: `As on ${to}`,
+      subtitle: `As on ${fmtIndianDate(to)}`,
       head: [["Dr. Ledger", "Amount (₹)", "Cr. Ledger", "Amount (₹)"]],
       body: Array.from({ length: max }).map((_, i) => [
         drList[i]?.name ?? "",

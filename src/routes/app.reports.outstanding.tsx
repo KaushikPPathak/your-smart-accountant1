@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
+import { sortVouchersAsc } from "@/lib/voucher-sort";
 
 export const Route = createFileRoute("/app/reports/outstanding")({
   head: () => ({ meta: [{ title: "Bill-by-Bill Outstanding — Reports" }] }),
@@ -57,7 +58,7 @@ function OutstandingPage() {
         .select("invoice_voucher_id, amount_paise")
         .eq("company_id", activeCompanyId),
     ]).then(([v, a]) => {
-      setInvs((v.data || []) as unknown as InvRow[]);
+      setInvs(sortVouchersAsc((v.data || []) as unknown as InvRow[]));
       setAllocs((a.data || []) as AllocRow[]);
       setLoading(false);
     });

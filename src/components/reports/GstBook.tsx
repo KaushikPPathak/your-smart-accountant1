@@ -8,6 +8,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadXlsx, downloadPdfTable, r } from "@/lib/exporters";
+import { sortVouchersAsc } from "@/lib/voucher-sort";
 import type { Database } from "@/integrations/supabase/types";
 
 type VoucherType = Database["public"]["Enums"]["voucher_type"];
@@ -48,7 +49,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
       .gte("voucher_date", from)
       .lte("voucher_date", to)
       .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true })
-      .then(({ data }) => setRows((data || []) as unknown as Row[]));
+      .then(({ data }) => setRows(sortVouchersAsc((data || []) as unknown as Row[])));
   }, [activeCompanyId, from, to, kind]);
 
   const totals = useMemo(
@@ -113,7 +114,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
     downloadPdfTable({
       fileName: `${title.replace(/\s+/g, "_")}_${from}_to_${to}.pdf`,
       title,
-      subtitle: `${activeMembership?.companies.name ?? ""} · ${from} to ${to}`,
+      subtitle: `${activeMembership?.companies.name ?? ""} · ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
       head: [headers],
       body: tableRows,
     });
