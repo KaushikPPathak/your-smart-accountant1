@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
 import { PrintModeDialog, type PrintMode } from "./PrintModeDialog";
 import { exportElementAsWord } from "@/lib/word-export";
+import { fmtIndianDate } from "@/lib/format-date";
 
 /**
  * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
@@ -99,9 +100,9 @@ export function ReportViewer({
   const fyStart = activeMembership?.companies?.financial_year_start ?? null;
   const fyText = React.useMemo(() => formatFyRange(fyStart), [fyStart]);
   const periodText = asOf
-    ? `As on ${asOf}`
+    ? `As on ${fmtIndianDate(asOf)}`
     : fromDate && toDate
-      ? `For the period: ${fromDate} to ${toDate}`
+      ? `For the period: ${fmtIndianDate(fromDate)} to ${fmtIndianDate(toDate)}`
       : "";
   const addressLine = [city, gstin ? `GSTIN: ${gstin}` : null].filter(Boolean).join(" · ");
 
@@ -337,8 +338,8 @@ function formatFyRange(start: string | null | undefined): string {
   const d = m[3];
   const endY = y + 1;
   // Indian FY: 1 Apr YYYY to 31 Mar YYYY+1
-  const startStr = `${d}/${mo}/${y}`;
-  const endStr = `31/03/${endY}`;
+  const startStr = `${d}-${mo}-${y}`;
+  const endStr = `31-03-${endY}`;
   const shortEnd = String(endY).slice(-2);
   return `FY ${y}-${shortEnd} (${startStr} to ${endStr})`;
 }
