@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { openLedgerReport } from "@/lib/voucher-return";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
@@ -75,14 +76,14 @@ function TrialBalance() {
     .map((r2) => ({
       label: r2.name,
       amount: formatINR(r2.debit),
-      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: r2.id, from, to } }),
+      onClick: () => openLedgerReport(navigate, { ledgerId: r2.id, from, to }),
     }));
   const crRows: TRow[] = rows
     .filter((r2) => r2.credit)
     .map((r2) => ({
       label: r2.name,
       amount: formatINR(r2.credit),
-      onClick: () => navigate({ to: "/app/reports/ledger", search: { ledgerId: r2.id, from, to } }),
+      onClick: () => openLedgerReport(navigate, { ledgerId: r2.id, from, to }),
     }));
 
   const totals = rows.reduce(
