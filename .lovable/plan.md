@@ -1,79 +1,51 @@
 ## Goal
+When the app language is switched to ગુજરાતી, every printed/exported book of account and financial report should render its labels and headings in Gujarati. Ledger names, item names, party names, amounts and dates remain as entered (per your choice).
 
-Stop the whack-a-mole. Replace scattered, copy-pasted logic across reports, books, vouchers, and PDF exports with a small set of shared helpers, then apply them uniformly across **every** screen — not just the one currently complained about.
+## Scope of reports
+Day Book, Ledger, Group Ledger, Cash/Bank Book, Sales Register, Purchase Register, Trial Balance, Profit & Loss, Balance Sheet, Trading, Outstanding/Receivables/Payables, Ageing, Stock Summary, GST Books (GSTR1/2B/3B, GST Sales/Purchase Book).
 
-## Root causes of the recent regressions
+## Approach
 
-1. **Voucher number sorted as text** in many DB queries → "10" sorts before "2", so an edited voucher with a higher number lands "out of order".
-2. **Narration column** built independently in each report → some include `reference_no` fallback, some don't.
-3. **Date formatting** (`DD-MM-YYYY`) applied per file → easy to miss a column, easy to regress.
-4. **Back navigation** (`markVoucherOrigin` / `goBackFromVoucher`) wired in 6 screens but missing from others (Bank, Outstanding, BRS, GST books, Group Ledger, e-invoice, Recurring, Dashboard quick links).
-5. **PDF report layout rules** (totals only on last page, header on every page, page X of Y, narration column hidden when empty, Indian dates) currently live only in the ledger PDF.
+### 1. Embed a Unicode Gujarati font in jsPDF
+jsPDF's built-in Helvetica cannot render Gujarati glyphs (would print as boxes). We will:
+- Add `NotoSansGujarati-Regular.ttf` and `-Bold.ttf` as static assets.
+- Create `src/lib/pdf-fonts.ts` that lazily fetches the TTFs, base64-encodes them, and registers them on the jsPDF instance via `doc.addFileToVFS` + `doc.addFont` under family `NotoGujarati`.
+- Expose `await ensureGujaratiFont(doc)` and `applyReportFont(doc, lang)` helpers that switch the active font to NotoGujarati when `lang === "gu"` and back to helvetica otherwise.
 
-## Deliverables (central helpers)
+### 2. Centralize report-print labels
+- Extend `src/lib/i18n.tsx` with a `report.*` key namespace covering every printed label: report titles ("Day Book", "Ledger", "Trial Balance", "Profit & Loss", "Balance Sheet", "Sales Register", …), column headers ("Date", "Particulars", "Vch No.", "Vch Type", "Debit", "Credit", "Balance", "Qty", "Rate", "Amount", "GSTIN", "CGST", "SGST", "IGST", …), section/footer labels ("Opening Balance", "Closing Balance", "Total", "Grand Total", "By", "To", "As at", "For the period", "Page x of y").
+- Provide full `en` and `gu` translations; other languages fall back to English (existing behavior).
 
-| Helper | Lives in | Replaces |
-|---|---|---|
-| `vchSortKey(s)` + `sortVouchersByDateThenNumber(rows)` | `src/lib/voucher-sort.ts` (new) | Ad-hoc sort blocks in cash-bank, day-book, ledger, sales/purchase register, bank, outstanding, BRS, group-ledger, GST books, e-invoice, recurring, dashboard, RecentVouchersPanel |
-| `narrationOf(entry, voucher)` → `entry.narration ‖ voucher.narration ‖ voucher.reference_no ‖ ""` | `src/lib/voucher-text.ts` (new) | Inline `?? ""` chains in every report |
-| `fmtIndianDate` (already exists) | `src/lib/format-date.ts` | Audit every `voucher_date`, `due_date`, `cleared_date`, `vendor_invoice_date`, `invoice_date` render and export cell |
-| `openVoucherDetail(navigate, voucherId)` (wraps `markVoucherOrigin` + `navigate`) | extend `src/lib/voucher-return.ts` | Replace the 7 inline `(markVoucherOrigin(), navigate(...))` call sites and add it to the missing screens |
-| `downloadReportPdf({...})` — wraps `downloadPdfTable` and bakes in: header on every page, page X of Y centered footer, totals/closing only on last page, narration column auto-hidden if all values empty, Indian date subtitle | `src/lib/exporters.ts` (extend) | Per-report PDF setup in cash-bank, day-book, ledger, sales/purchase register, outstanding, GST books, BRS, trial balance, P&L, balance sheet |
+### 3. Wire labels + font into the export pipeline
+- Update `src/lib/exporters.ts` (PDF + Excel/CSV builders) to accept a `lang` param. Before drawing, call `await ensureGujaratiFont(doc)` and `applyReportFont(doc, lang)`; pass the localized header/footer strings through.
+- Update `src/lib/report-pdf-header.ts` to localize "As on", company address labels, "Printed on", "Page".
+- Each report route (`app.reports.*`) currently builds its rows + headers inline. Replace the hard-coded English strings used for the print/export with `t("report.<key>")` from `useI18n()`. The on-screen UI already uses i18n; this change just routes the same translated strings into the exporter.
 
-## Sweep checklist (every screen touched)
+### 4. On-screen "Print preview" panes
+Some reports (TrialBalance, ProfitLoss, BalanceSheet, Ledger printable view) render an HTML print layout. Add `lang={lang}` and a CSS class `.print-gu { font-family: "Noto Sans Gujarati", "Shrutib", system-ui, sans-serif; }` in `src/styles.css`, applied when `lang === "gu"`, so browser-print also looks correct.
 
-**Reports / books — apply all 4 helpers:**
-- `app.reports.cash-bank.tsx`
-- `app.reports.day-book.tsx`
-- `app.reports.ledger.tsx`
-- `app.reports.sales-register.tsx` + `app.reports.purchase-register.tsx`
-- `app.reports.outstanding.tsx` + `receivables.tsx` + `payables.tsx`
-- `app.reports.brs.tsx`
-- `app.reports.group-ledger.tsx`
-- `app.reports.ageing.tsx`
-- `app.reports.trial-balance.tsx`, `profit-loss.tsx`, `balance-sheet.tsx`, `trading.tsx`
-- `app.reports.stock-summary.tsx`
-- `app.reports.gstr1.tsx`, `gstr2b.tsx`, `gstr3b.tsx`, `gst-sales-book.tsx`, `gst-purchase-book.tsx`, `components/reports/GstBook.tsx`
+### 5. Trigger
+Pure "follow app language": `useI18n().lang` is read inside each report's export/print handler — no extra UI control. Switching the language switcher in the top bar instantly changes future printouts.
 
-**Voucher entry / list / dashboard — sort + open helper + dates:**
-- `app.vouchers.tsx`, `app.vouchers.$voucherId.tsx`
-- `app.vouchers.new.*` (sales, purchase, receipt, payment, journal, contra, credit_note, debit_note, delivery_note, quotation, sales_order)
-- `components/vouchers/EntryVoucherForm.tsx`, `ItemVoucherForm.tsx`, `RecentVouchersPanel.tsx`, `BillAllocationDialog.tsx`
-- `app.bank.tsx`, `app.einvoice.tsx`, `app.recurring.tsx`, `app.index.tsx`
+## Technical details
 
-**PDF printouts — adopt `downloadReportPdf` + audit `invoice-pdf.ts`:**
-- All report PDFs above
-- `src/lib/invoice-pdf.ts` (sales/purchase invoice printout — verify Indian dates, narration/reference, totals position)
+Files to add
+- `src/assets/fonts/NotoSansGujarati-Regular.ttf`, `…-Bold.ttf` (downloaded from Google Fonts, ~250 KB each, lazy-loaded so the main bundle is unaffected).
+- `src/lib/pdf-fonts.ts` — font loader/cache + `applyReportFont`.
 
-**Navigation:**
-- Add `markVoucherOrigin` to every place a voucher row is clickable (Bank, Outstanding, BRS, GST books, Group Ledger, e-invoice, Recurring, Dashboard tiles).
-- Confirm `goBackFromVoucher` covers post-save and post-delete paths in `app.vouchers.$voucherId.tsx`.
+Files to edit
+- `src/lib/i18n.tsx` — add `report.*` keys for `en` and `gu`.
+- `src/lib/exporters.ts` — accept `{ lang }`, await font, apply font, use localized headers passed in.
+- `src/lib/report-pdf-header.ts` — localized header/footer.
+- `src/lib/invoice-pdf.ts` — same font hook so voucher prints render Gujarati labels too (labels only; numbers/names unchanged).
+- All `src/routes/app.reports.*.tsx` files (Day Book, Ledger, Group Ledger, Cash/Bank, Sales/Purchase Register, Trial Balance, P&L, Balance Sheet, Trading, Outstanding, Receivables, Payables, Ageing, Stock Summary, GST books) — pass `lang` and localized headers into the exporter calls.
+- `src/styles.css` — `.print-gu` font stack + `@font-face` for screen print.
 
-## QA before I declare done
+Out of scope (per your answer)
+- Translating ledger/item/party names, transliterating numerals, or amount-in-words in Gujarati.
 
-For each of the changes above I will:
-1. Build (auto by harness).
-2. Render the cash-bank, ledger, day-book, sales-register, and outstanding PDFs to image and visually inspect: chronological order, narration column visibility, totals only on last page, header on every page, "Page X of Y", `DD-MM-YYYY` everywhere, reference_no surfacing when narration is blank.
-3. Spot-check the dashboard, vouchers list, and bank screen for sort + back-button behaviour.
-4. Report the QA result in the closing message — what I checked and what I confirmed.
-
-## What I will NOT change
-
-- Database schema, RLS, totals math, GST logic, balances, or any business rule.
-- Voucher numbering sequence behaviour.
-- Existing UI styling beyond what the helpers require.
-
-## Out of scope (postponed unless you ask)
-
-- The earlier "Phase 1" plan you postponed.
-- Any new report or feature.
-- Auth, billing, deployment.
-
-## Order of execution
-
-1. Create `voucher-sort.ts`, `voucher-text.ts`, extend `voucher-return.ts` and `exporters.ts`.
-2. Migrate cash-bank, day-book, ledger, sales/purchase register first (the screens with active complaints).
-3. Migrate the remaining reports.
-4. Migrate voucher-entry / list / dashboard / bank / e-invoice / recurring.
-5. Audit `invoice-pdf.ts`.
-6. QA pass with rendered PDFs.
+## Validation
+- Switch language to ગુજરાતી → open Day Book → Print PDF → headings ("તારીખ", "વિગત", "ઉધાર", "જમા", "બાકી") render correctly with no tofu boxes.
+- Repeat for Trial Balance, P&L, Balance Sheet, Ledger, Sales Register.
+- Switch back to English → prints revert to Helvetica/English headings.
+- Verify CSV/Excel exports also carry Gujarati column headers (UTF-8).
