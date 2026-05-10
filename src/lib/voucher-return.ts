@@ -76,3 +76,58 @@ export function openVoucherDetail(navigate: NavigateFn, voucherId: string): void
   markVoucherOrigin();
   void navigate({ to: "/app/vouchers/$voucherId", params: { voucherId } });
 }
+
+/* ---------------------------------------------------------------- */
+/* Ledger drill origin                                              */
+/* ---------------------------------------------------------------- */
+/**
+ * Tracks where the user opened the Ledger report from (P&L, Balance
+ * Sheet, Trading, Trial Balance, Group Ledger) so that a Back button
+ * on the ledger screen can return to the originating report with its
+ * scroll position restored via TanStack scrollRestoration.
+ */
+const LEDGER_KEY = "ledgerOrigin";
+
+export function markLedgerOrigin(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const href = window.location.pathname + window.location.search;
+    sessionStorage.setItem(LEDGER_KEY, href);
+  } catch { /* ignore */ }
+}
+
+export function hasLedgerOrigin(): boolean {
+  if (typeof window === "undefined") return false;
+  try { return !!sessionStorage.getItem(LEDGER_KEY); } catch { return false; }
+}
+
+export function clearLedgerOrigin(): void {
+  if (typeof window === "undefined") return;
+  try { sessionStorage.removeItem(LEDGER_KEY); } catch { /* ignore */ }
+}
+
+export function goBackFromLedger(fallback: () => void): void {
+  if (hasLedgerOrigin()) {
+    clearLedgerOrigin();
+    window.history.back();
+    return;
+  }
+  fallback();
+}
+
+type LedgerNavigateFn = (opts: {
+  to: "/app/reports/ledger";
+  search: { ledgerId: string; from?: string; to?: string };
+}) => void | Promise<unknown>;
+
+/**
+ * Open the Ledger report from a drill-down screen. Records the
+ * originating screen so the Back button on the ledger returns to it.
+ */
+export function openLedgerReport(
+  navigate: LedgerNavigateFn,
+  search: { ledgerId: string; from?: string; to?: string },
+): void {
+  markLedgerOrigin();
+  void navigate({ to: "/app/reports/ledger", search });
+}
