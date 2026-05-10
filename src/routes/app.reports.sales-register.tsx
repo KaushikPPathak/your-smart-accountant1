@@ -120,7 +120,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
             onExportPdf={() =>
               downloadPdfTable({
                 title,
-                subtitle: `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
+                subtitle: pdfHeader.dateRangeSubtitle(from, to),
                 companyName: pdfHeader.companyName,
                 companySubLine: pdfHeader.companySubLine,
                 head: [head],
