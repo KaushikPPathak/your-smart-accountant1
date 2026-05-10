@@ -691,6 +691,8 @@ function CleanupTool({ companyId, disabled }: { companyId: string | null; disabl
       setUnusedLedgers(((ledgers || []) as { id: string; name: string }[]).filter((l) => !usedLedgerIds.has(l.id)));
       setUnusedItems(((items || []) as { id: string; name: string }[]).filter((i) => !usedItemIds.has(i.id)));
       setHasRun(true);
+    } catch (err) {
+      toast.error(`Cleanup scan failed: ${describeError(err)}`);
     } finally {
       setScanning(false);
     }
@@ -811,8 +813,7 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
       }
       toast.success(`Recomputed ${updated} voucher sequences`);
     } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Recompute failed: ${e.message || "unknown"}`);
+      toast.error(`Recompute failed: ${describeError(err)}`);
     } finally {
       setBusy(false);
     }
@@ -828,8 +829,7 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
       if (error) throw error;
       toast.success(`Monthly balance snapshot rebuilt — ${data ?? 0} rows`);
     } catch (err) {
-      const e = err as { message?: string };
-      toast.error(`Snapshot rebuild failed: ${e.message || "unknown"}`);
+      toast.error(`Snapshot rebuild failed: ${describeError(err)}`);
     } finally {
       setSnapBusy(false);
     }
