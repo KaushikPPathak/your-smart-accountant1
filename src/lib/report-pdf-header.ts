@@ -23,5 +23,5 @@ function formatFyRange(start: string | null | undefined): string {
   const mo = m[2];
   const d = m[3];
   const endY = y + 1;
-  return `FY ${y}-${String(endY).slice(-2)} (${d}/${mo}/${y} to 31/03/${endY})`;
+  return `${d}/${mo}/${y} to 31/03/${endY}`;
 }
