@@ -82,6 +82,50 @@ ${inner}
   );
 }
 
+/** Same as exportElementAsWord but accepts ready-made HTML (for batch reports
+ *  built off-screen, e.g. "All Ledgers"). */
+export function exportHtmlAsWord(opts: {
+  bodyHtml: string;
+  title: string;
+  fileName: string;
+  headerHtml?: string;
+  orientation?: "portrait" | "landscape";
+  subFolder?: string;
+}): void {
+  const orientation = opts.orientation ?? "portrait";
+  const inner = (opts.headerHtml ?? "") + opts.bodyHtml;
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:w="urn:schemas-microsoft-com:office:word"
+        xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(opts.title)}</title>
+<!--[if gte mso 9]>
+<xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml>
+<![endif]-->
+<style>${PAGE_CSS(orientation)}
+.page-break { page-break-before: always; mso-special-character: line-break; }
+h2.ledger-heading { font-size: 12pt; margin: 4pt 0; text-align: center; }
+.period-line { font-size: 9pt; text-align: center; margin-bottom: 6pt; }
+</style>
+</head>
+<body>
+<div class="WordSection1">
+${inner}
+</div>
+</body>
+</html>`;
+  const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+  void blob.arrayBuffer().then((buf) =>
+    saveExport({
+      subFolder: opts.subFolder ?? "Reports",
+      fileName: opts.fileName,
+      contents: buf,
+      mime: "application/msword",
+    }),
+  );
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
