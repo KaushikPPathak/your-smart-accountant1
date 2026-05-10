@@ -116,7 +116,9 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
     downloadPdfTable({
       fileName: `${title.replace(/\s+/g, "_")}_${from}_to_${to}.pdf`,
       title,
-      subtitle: `${activeMembership?.companies.name ?? ""} · ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
+      subtitle: pdfHeader.dateRangeSubtitle(from, to),
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
       head: [headers],
       body: tableRows,
     });
