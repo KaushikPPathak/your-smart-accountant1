@@ -26,7 +26,7 @@ const ACTIONS: QuickAction[] = [
   { to: "/app/vouchers/new/receipt", label: "Receipt", icon: ArrowLeftRight, hotkey: "Alt+R", i18nKey: "ribbon.receipt" },
   { to: "/app/vouchers/new/payment", label: "Payment", icon: Banknote, hotkey: "Alt+Y", i18nKey: "ribbon.payment" },
   { to: "/app/vouchers/new/journal", label: "Journal", icon: BookOpen, hotkey: "Alt+J", i18nKey: "ribbon.journal" },
-  { to: "/app/vouchers/new/contra", label: "Contra", icon: Repeat, hotkey: "Alt+C", i18nKey: "ribbon.contra" },
+  
   { to: "/app/reports/ledger", label: "Ledger", icon: Library, hotkey: "Alt+L", i18nKey: "ribbon.ledger" },
 ];
 
