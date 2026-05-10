@@ -454,6 +454,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             <Label>Reference No.</Label>
             <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="Cheque/UTR/Reference" />
           </div>
+          </div>
         </CardContent>
       </Card>
 
