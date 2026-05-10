@@ -205,9 +205,9 @@ export function ReportViewer({
             <span className="report-print-fy-capture" aria-hidden>{fyText}</span>
           )}
           <div className="report-print-title text-sm font-semibold mt-0.5">
-            {accountHeading || title}
+            {localizedHeading || localizedTitle}
           </div>
-          {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
+          {subtitle && <div className="text-xs text-muted-foreground">{typeof subtitle === "string" ? subtitleText : subtitle}</div>}
           {periodText && <div className="text-[11px]">{periodText}</div>}
           {fyText && <div className="text-[10px] text-muted-foreground">{fyText}</div>}
           {addressLine && (
