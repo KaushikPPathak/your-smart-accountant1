@@ -65,7 +65,7 @@ function BalanceSheet() {
   );
 
   const goLedger = (id: string) =>
-    navigate({ to: "/app/reports/ledger", search: { ledgerId: id, from, to } });
+    openLedgerReport(navigate, { ledgerId: id, from, to });
 
   const labelFor = (code: string, fallback: string) => overrides[code] ?? fallback;
   const liab = groupedTRows(liabBuckets, goLedger, labelFor);
