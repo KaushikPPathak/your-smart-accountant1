@@ -8,7 +8,7 @@ import * as XLSX from "xlsx";
 import { saveExport } from "./desktop-save";
 import { getStoredLang } from "@/lib/i18n";
 import { prepareReportFont } from "@/lib/pdf-fonts";
-import { tReportLabel, tReportRows } from "@/lib/report-i18n";
+import { tReportLabel } from "@/lib/report-i18n";
 import { formatDatesInText } from "@/lib/format-date";
 
 function localizeExportText(text: string, lang = getStoredLang()): string {
