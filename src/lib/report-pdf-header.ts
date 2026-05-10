@@ -1,5 +1,6 @@
 import { useCompany } from "./company-context";
 import { getStoredLang } from "./i18n";
+import { fmtIndianDate } from "./format-date";
 
 /**
  * Returns the company / proprietor name and a financial-year sub-line
@@ -24,7 +25,7 @@ export function useReportPdfHeader(): {
   const dateRangeSubtitle = (from: string, to: string) => {
     if (fyStart && fyEnd && from === fyStart && to === fyEnd) return "";
     const sep = getStoredLang() === "gu" ? "થી" : "to";
-    return `${fmtDmy(from)} ${sep} ${fmtDmy(to)}`;
+    return `${fmtIndianDate(from)} ${sep} ${fmtIndianDate(to)}`;
   };
   return { companyName, companySubLine: sub, fyStart, fyEnd, dateRangeSubtitle };
 }
@@ -36,11 +37,6 @@ function fyEndFromStart(start: string | null | undefined): string | null {
   return `${Number(m[1]) + 1}-03-31`;
 }
 
-function fmtDmy(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
-}
-
 function formatFyRange(start: string | null | undefined): string {
   if (!start) return "";
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
@@ -49,5 +45,5 @@ function formatFyRange(start: string | null | undefined): string {
   const mo = m[2];
   const d = m[3];
   const endY = y + 1;
-  return `${d}/${mo}/${y} to 31/03/${endY}`;
+  return `${d}-${mo}-${y} to 31-03-${endY}`;
 }
