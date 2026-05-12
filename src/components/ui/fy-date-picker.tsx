@@ -85,22 +85,50 @@ export function FyDatePicker({
     setText(selected ? fmtIndianDate(value) : "");
   }, [selected, value]);
 
-  /** Parse partial input like "15", "15/5", "15/5/26", "15-05-2025" into ISO. */
+  /**
+   * Parse partial input into ISO. Accepts:
+   *  - separators: "/", "-", ".", space  (e.g. "15", "15/5", "15-05-2026")
+   *  - pure digits: "ddmm" (4), "ddmmyy" (6), "ddmmyyyy" (8)
+   * When year is omitted, picks the FY year automatically (Apr–Dec → FY start
+   * year, Jan–Mar → FY end year).
+   */
   function tryParse(input: string): string | null {
     const s = input.trim();
     if (!s) return null;
-    const parts = s.split(/[\/\-\.\s]+/).filter(Boolean);
-    if (parts.length < 2) return null;
-    const dd = parseInt(parts[0], 10);
-    const mm = parseInt(parts[1], 10);
-    if (!dd || !mm || dd < 1 || dd > 31 || mm < 1 || mm > 12) return null;
-    let yyyy: number;
-    if (parts[2]) {
-      let y = parseInt(parts[2], 10);
-      if (isNaN(y)) return null;
-      if (y < 100) y += 2000;
-      yyyy = y;
+
+    let dd: number, mm: number, yyyy: number | null = null;
+
+    // Pure-digit fast path: ddmm / ddmmyy / ddmmyyyy
+    if (/^\d+$/.test(s)) {
+      if (s.length === 4) {
+        dd = parseInt(s.slice(0, 2), 10);
+        mm = parseInt(s.slice(2, 4), 10);
+      } else if (s.length === 6) {
+        dd = parseInt(s.slice(0, 2), 10);
+        mm = parseInt(s.slice(2, 4), 10);
+        yyyy = 2000 + parseInt(s.slice(4, 6), 10);
+      } else if (s.length === 8) {
+        dd = parseInt(s.slice(0, 2), 10);
+        mm = parseInt(s.slice(2, 4), 10);
+        yyyy = parseInt(s.slice(4, 8), 10);
+      } else {
+        return null;
+      }
     } else {
+      const parts = s.split(/[\/\-\.\s]+/).filter(Boolean);
+      if (parts.length < 2) return null;
+      dd = parseInt(parts[0], 10);
+      mm = parseInt(parts[1], 10);
+      if (parts[2]) {
+        let y = parseInt(parts[2], 10);
+        if (isNaN(y)) return null;
+        if (y < 100) y += 2000;
+        yyyy = y;
+      }
+    }
+
+    if (!dd || !mm || dd < 1 || dd > 31 || mm < 1 || mm > 12) return null;
+    if (yyyy === null) {
       // Auto-pick FY year: months Apr–Dec → FY start year, Jan–Mar → FY end year
       yyyy = mm >= start.getMonth() + 1 ? start.getFullYear() : end.getFullYear();
     }
@@ -109,7 +137,28 @@ export function FyDatePicker({
     return format(d, "yyyy-MM-dd");
   }
 
-  function commitText(v: string) {
+  /** Move focus to the next focusable form control after this picker. */
+  function advanceFocus() {
+    const root = (containerRef.current?.closest<HTMLElement>(
+      '[data-enter-tab-root], form, body',
+    )) ?? document.body;
+    const focusables = Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [role="combobox"]:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => el.offsetParent !== null);
+    const me = containerRef.current?.querySelector<HTMLElement>("input");
+    const idx = me ? focusables.indexOf(me) : -1;
+    const next = idx >= 0 ? focusables[idx + 1] : undefined;
+    if (next) {
+      next.focus();
+      if (next instanceof HTMLInputElement || next instanceof HTMLTextAreaElement) {
+        try { next.select(); } catch { /* noop */ }
+      }
+    }
+  }
+
+  function commitText(v: string, opts?: { advance?: boolean }) {
     if (!v.trim()) {
       onChange("");
       return;
@@ -118,24 +167,42 @@ export function FyDatePicker({
     if (iso) {
       onChange(iso);
       setText(fmtIndianDate(iso));
+      if (opts?.advance) requestAnimationFrame(() => advanceFocus());
     } else {
       // revert
       setText(selected ? fmtIndianDate(value) : "");
     }
   }
 
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+
+  /** Auto-commit & advance when the user types a complete pure-digit date. */
+  function handleChange(v: string) {
+    setText(v);
+    const digitsOnly = /^\d+$/.test(v.trim());
+    if (digitsOnly && (v.trim().length === 4 || v.trim().length === 6 || v.trim().length === 8)) {
+      const iso = tryParse(v.trim());
+      if (iso) {
+        onChange(iso);
+        setText(fmtIndianDate(iso));
+        requestAnimationFrame(() => advanceFocus());
+      }
+    }
+  }
+
   return (
-    <div className={cn("relative flex items-center", className)}>
+    <div ref={containerRef} className={cn("relative flex items-center", className)}>
       <Input
         value={text}
         disabled={disabled}
-        placeholder={placeholder ?? "DD/MM"}
-        onChange={(e) => setText(e.target.value)}
+        placeholder={placeholder ?? "DDMM"}
+        inputMode="numeric"
+        onChange={(e) => handleChange(e.target.value)}
         onBlur={(e) => commitText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            commitText((e.target as HTMLInputElement).value);
+            commitText((e.target as HTMLInputElement).value, { advance: true });
           }
         }}
         className="h-9 pr-9"
