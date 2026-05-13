@@ -57,6 +57,11 @@ function DayBook() {
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<"t" | "grid">(() => {
+    if (typeof window === "undefined") return "t";
+    return (localStorage.getItem("daybook:view") as "t" | "grid") ?? "t";
+  });
+  useEffect(() => { try { localStorage.setItem("daybook:view", view); } catch { /* ignore */ } }, [view]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
