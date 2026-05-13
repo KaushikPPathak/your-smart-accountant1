@@ -85,6 +85,18 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
   const title = kind === "sales" ? "Sales Register" : "Purchase Register";
   const slug = kind === "sales" ? "sales-register" : "purchase-register";
 
+  const gridColumns: DGColumn<VRow>[] = useMemo(() => [
+    { id: "date", header: "Date", type: "date", width: 110, accessor: (x) => x.voucher_date, cell: (x) => fmtIndianDate(x.voucher_date) },
+    { id: "number", header: "Number", type: "text", width: 130, accessor: (x) => x.voucher_number },
+    { id: "party", header: "Party", type: "text", width: 220, accessor: (x) => x.ledgers?.name ?? "", groupable: true, cell: (x) => x.ledgers?.name ?? "—" },
+    { id: "gstin", header: "GSTIN", type: "text", width: 150, accessor: (x) => x.ledgers?.gstin ?? "" },
+    { id: "taxable", header: "Taxable", type: "number", width: 130, align: "right", accessor: (x) => x.subtotal_paise / 100, cell: (x) => formatINR(x.subtotal_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "cgst", header: "CGST", type: "number", width: 110, align: "right", accessor: (x) => x.cgst_paise / 100, cell: (x) => formatINR(x.cgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "sgst", header: "SGST", type: "number", width: 110, align: "right", accessor: (x) => x.sgst_paise / 100, cell: (x) => formatINR(x.sgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "igst", header: "IGST", type: "number", width: 110, align: "right", accessor: (x) => x.igst_paise / 100, cell: (x) => formatINR(x.igst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "total", header: "Total", type: "number", width: 140, align: "right", accessor: (x) => x.total_paise / 100, cell: (x) => formatINR(x.total_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+  ], []);
+
   const head = ["Date", "Number", "Party", "GSTIN", "Taxable", "CGST", "SGST", "IGST", "Total"];
   const body = (): (string | number)[][] => [
     head,
