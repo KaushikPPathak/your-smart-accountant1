@@ -57,8 +57,8 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [reminderTpl, setReminderTpl] = useState<string>("");
-
   const isRecv = mode === "receivables";
+  const { view, setView } = useReportView(isRecv ? "receivables" : "payables");
   const partyType = isRecv ? "sundry_debtor" : "sundry_creditor";
   const companyName = activeMembership?.companies.name || "Company";
 
