@@ -87,6 +87,25 @@ function AgeingPage() {
     }), { b0: 0, b1: 0, b2: 0, b3: 0, total: 0 });
   }, [partyRows]);
 
+  type PartyVm = (typeof partyRows)[number];
+  const ageingGridColumns: DGColumn<PartyVm>[] = useMemo(() => [
+    { id: "party", header: "Party", type: "text", width: 260, accessor: (x) => x.name, groupable: true },
+    ...BUCKETS.map((b): DGColumn<PartyVm> => ({
+      id: b.key, header: `${b.label} days`, type: "number", width: 120, align: "right",
+      accessor: (x) => (x[b.key as "b0" | "b1" | "b2" | "b3"]) / 100,
+      cell: (x) => formatINR(x[b.key as "b0" | "b1" | "b2" | "b3"]),
+      aggregator: "sum",
+      formatAggregate: (v) => formatINR(Math.round(v * 100)),
+    })),
+    {
+      id: "total", header: "Total", type: "number", width: 140, align: "right",
+      accessor: (x) => x.total / 100,
+      cell: (x) => formatINR(x.total),
+      aggregator: "sum",
+      formatAggregate: (v) => formatINR(Math.round(v * 100)),
+    },
+  ], []);
+
   return (
     <div className="space-y-4">
       <Card>
