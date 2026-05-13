@@ -158,56 +158,72 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
             }
             onPrint={() => window.print()}
           />
+          <div className="mt-2"><ViewSwitcher view={view} onChange={setView} /></div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Number</TableHead>
-                <TableHead>Party</TableHead>
-                <TableHead>GSTIN</TableHead>
-                <TableHead className="text-right">Taxable</TableHead>
-                <TableHead className="text-right">CGST</TableHead>
-                <TableHead className="text-right">SGST</TableHead>
-                <TableHead className="text-right">IGST</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((x) => (
-                <TableRow
-                  key={x.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => openVoucherDetail(navigate, x.id)}
-                  title="Click to edit"
-                >
-                  <TableCell>{fmtIndianDate(x.voucher_date)}</TableCell>
-                  <TableCell className="font-mono text-xs">{x.voucher_number}</TableCell>
-                  <TableCell>{x.ledgers?.name ?? "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{x.ledgers?.gstin ?? "—"}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(x.subtotal_paise)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(x.cgst_paise)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(x.sgst_paise)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(x.igst_paise)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(x.total_paise)}</TableCell>
+      {view === "grid" ? (
+        <Card>
+          <CardContent className="p-3">
+            <DataGrid
+              reportId={slug}
+              rows={rows}
+              columns={gridColumns}
+              globalSearch={(x) => `${x.voucher_number} ${x.ledgers?.name ?? ""} ${x.ledgers?.gstin ?? ""}`}
+              onRowClick={(x) => openVoucherDetail(navigate, x.id)}
+              height={520}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Number</TableHead>
+                  <TableHead>Party</TableHead>
+                  <TableHead>GSTIN</TableHead>
+                  <TableHead className="text-right">Taxable</TableHead>
+                  <TableHead className="text-right">CGST</TableHead>
+                  <TableHead className="text-right">SGST</TableHead>
+                  <TableHead className="text-right">IGST</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
                 </TableRow>
-              ))}
-              <TableRow>
-                <TableCell colSpan={4} className="text-right font-semibold">TOTAL</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sub)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.cgst)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sgst)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.igst)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold">{formatINR(totals.total)}</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {rows.map((x) => (
+                  <TableRow
+                    key={x.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => openVoucherDetail(navigate, x.id)}
+                    title="Click to edit"
+                  >
+                    <TableCell>{fmtIndianDate(x.voucher_date)}</TableCell>
+                    <TableCell className="font-mono text-xs">{x.voucher_number}</TableCell>
+                    <TableCell>{x.ledgers?.name ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">{x.ledgers?.gstin ?? "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(x.subtotal_paise)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(x.cgst_paise)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(x.sgst_paise)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(x.igst_paise)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">{formatINR(x.total_paise)}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow>
+                  <TableCell colSpan={4} className="text-right font-semibold">TOTAL</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sub)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.cgst)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sgst)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.igst)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.total)}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-0">
