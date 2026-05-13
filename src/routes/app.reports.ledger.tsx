@@ -32,7 +32,7 @@ export const Route = createFileRoute("/app/reports/ledger")({
     ledgerId: typeof s.ledgerId === "string" ? s.ledgerId : undefined,
     from: typeof s.from === "string" ? s.from : undefined,
     to: typeof s.to === "string" ? s.to : undefined,
-    view: s.view === "horizontal" ? "horizontal" : s.view === "columnar" ? "columnar" : undefined,
+    view: s.view === "horizontal" ? "horizontal" : s.view === "grid" ? "grid" : s.view === "columnar" ? "columnar" : undefined,
   }),
   component: LedgerStatement,
 });
