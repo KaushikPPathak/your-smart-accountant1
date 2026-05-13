@@ -39,6 +39,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
   const pdfHeader = useReportPdfHeader();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [rows, setRows] = useState<VRow[]>([]);
+  const { view, setView } = useReportView(`${kind}-register`);
 
   useEffect(() => {
     if (!activeCompanyId) return;
