@@ -146,6 +146,24 @@ function DayBook() {
       rightAlignCols: [6],
     });
 
+  const gridColumns: DGColumn<Row>[] = useMemo(() => [
+    { id: "date", header: "Date", type: "date", width: 110, accessor: (r2) => r2.voucher_date, cell: (r2) => fmtIndianDate(r2.voucher_date) },
+    { id: "type", header: "Type", type: "enum", width: 130, accessor: (r2) => TYPE_LABEL[r2.voucher_type] ?? r2.voucher_type, groupable: true },
+    { id: "number", header: "No.", type: "text", width: 110, accessor: (r2) => r2.voucher_number },
+    { id: "party", header: "Party", type: "text", width: 220, accessor: (r2) => r2.ledgers?.name ?? "", groupable: true, cell: (r2) => r2.ledgers?.name ?? "—" },
+    { id: "narration", header: "Narration", type: "text", width: 260, accessor: (r2) => narrationOf(null, r2) },
+    { id: "ref", header: "Ref", type: "text", width: 110, accessor: (r2) => r2.reference_no ?? "" },
+    { id: "side", header: "Side", type: "enum", width: 70, accessor: (r2) => DR_TYPES.has(r2.voucher_type) ? "Dr" : CR_TYPES.has(r2.voucher_type) ? "Cr" : "Dr", groupable: true },
+    {
+      id: "amount", header: "Amount", type: "number", width: 140, align: "right",
+      accessor: (r2) => r2.total_paise / 100,
+      cell: (r2) => formatINR(r2.total_paise),
+      aggregator: "sum",
+      formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      formatGroupValue: (v) => formatINR(Math.round(v * 100)),
+    },
+  ], []);
+
   return (
     <div className="space-y-3">
       <Card className="print:hidden">
@@ -160,13 +178,25 @@ function DayBook() {
             onExportPdf={onExportPdf}
             onPrint={() => window.print()}
           />
+          <div className="mt-2 flex gap-1">
+            <Button
+              size="sm"
+              variant={view === "t" ? "default" : "outline"}
+              onClick={() => setView("t")}
+            ><Columns2 className="mr-1 h-3.5 w-3.5" /> T-account</Button>
+            <Button
+              size="sm"
+              variant={view === "grid" ? "default" : "outline"}
+              onClick={() => setView("grid")}
+            ><LayoutGrid className="mr-1 h-3.5 w-3.5" /> Grid</Button>
+          </div>
         </CardContent>
       </Card>
       {loading ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
       ) : rows.length === 0 ? (
         <Card><CardContent className="p-6"><EmptyState icon={BookOpen} title="No vouchers in range" description="Adjust the date filter or post some vouchers." /></CardContent></Card>
-      ) : (
+      ) : view === "t" ? (
         <TAccount
           title="Day Book"
           subtitle={`for the period ${from} to ${to}`}
@@ -177,6 +207,19 @@ function DayBook() {
           leftTotal={formatINR(drTotal)}
           rightTotal={formatINR(crTotal)}
         />
+      ) : (
+        <Card>
+          <CardContent className="p-3">
+            <DataGrid
+              reportId="day-book"
+              rows={rows}
+              columns={gridColumns}
+              globalSearch={(r2) => `${r2.voucher_number} ${r2.ledgers?.name ?? ""} ${r2.reference_no ?? ""} ${narrationOf(null, r2)}`}
+              onRowClick={(r2) => openVoucherDetail(navigate, r2.id)}
+              height={560}
+            />
+          </CardContent>
+        </Card>
       )}
     </div>
   );
