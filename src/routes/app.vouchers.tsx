@@ -27,14 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
@@ -208,59 +201,54 @@ function VouchersHub() {
       </Card>
 
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-3">
           {loading ? (
             <div className="p-6 text-sm text-muted-foreground">Loading…</div>
           ) : filtered.length === 0 ? (
             <EmptyState icon={ListOrdered} title="No vouchers" description="Pick a voucher type above to start." />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>No.</TableHead>
-                  <TableHead>Party</TableHead>
-                  <TableHead>Ref</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="w-[120px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((r) => {
-                  const printable = ["sales", "purchase", "credit_note", "debit_note"].includes(r.voucher_type);
-                  return (
-                    <TableRow
-                      key={r.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } }))}
-                      title="Click to edit"
-                    >
-                      <TableCell>{fmtIndianDate(r.voucher_date)}</TableCell>
-                      <TableCell className="capitalize">{r.voucher_type.replace("_", " ")}</TableCell>
-                      <TableCell className="font-mono text-xs">{r.voucher_number}</TableCell>
-                      <TableCell>{r.ledgers?.name ?? "—"}</TableCell>
-                      <TableCell>{r.reference_no ?? "—"}</TableCell>
-                      <TableCell className="text-right font-mono">{formatINR(r.total_paise)}</TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-end gap-1">
-                          {printable && (
-                            <Button variant="ghost" size="icon" title="Print invoice" onClick={() => onPrint(r)}>
-                              <Printer className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button variant="ghost" size="icon" title="Delete" onClick={() => onDelete(r)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <DataGrid<VoucherRow>
+              reportId="vouchers-list"
+              rows={filtered}
+              globalSearch={(r) => `${r.voucher_number} ${r.ledgers?.name ?? ""} ${r.reference_no ?? ""}`}
+              onRowClick={(r) => { markVoucherOrigin(); navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } }); }}
+              height={560}
+              columns={[
+                { id: "date", header: "Date", type: "date", width: 110, accessor: (r) => r.voucher_date, cell: (r) => fmtIndianDate(r.voucher_date) },
+                { id: "type", header: "Type", type: "enum", width: 130, groupable: true, accessor: (r) => r.voucher_type.replace("_", " "), cell: (r) => <span className="capitalize">{r.voucher_type.replace("_", " ")}</span> },
+                { id: "number", header: "No.", type: "text", width: 110, accessor: (r) => r.voucher_number },
+                { id: "party", header: "Party", type: "text", width: 240, groupable: true, accessor: (r) => r.ledgers?.name ?? "", cell: (r) => r.ledgers?.name ?? "—" },
+                { id: "ref", header: "Ref", type: "text", width: 120, accessor: (r) => r.reference_no ?? "" },
+                {
+                  id: "amount", header: "Amount", type: "number", width: 140, align: "right",
+                  accessor: (r) => r.total_paise / 100, cell: (r) => formatINR(r.total_paise),
+                  aggregator: "sum",
+                  formatAggregate: (v) => formatINR(Math.round(v * 100)),
+                  formatGroupValue: (v) => formatINR(Math.round(v * 100)),
+                },
+                {
+                  id: "actions", header: "", width: 110, groupable: false, align: "right",
+                  accessor: () => "",
+                  cell: (r) => {
+                    const printable = ["sales", "purchase", "credit_note", "debit_note"].includes(r.voucher_type);
+                    return (
+                      <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        {printable && (
+                          <Button variant="ghost" size="icon" title="Print invoice" onClick={() => onPrint(r)}>
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button variant="ghost" size="icon" title="Delete" onClick={() => onDelete(r)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  },
+                },
+              ] as DGColumn<VoucherRow>[]}
+            />
           )}
         </CardContent>
       </Card>

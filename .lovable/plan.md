@@ -1,81 +1,162 @@
-## Why "not even halfway"
-
-The current Gujarati pipeline only translates an English→Gujarati string table inside the **PDF/Excel exporter**. Everywhere else still ships English. Concrete gaps after auditing the codebase:
-
-1. **On-screen report UI is fully English** — `ReportToolbar` (From, To, CSV, Excel, PDF, Print), `ReportViewer` print header (`As on`, `For the period`, `GSTIN:`, `FY 2025-26 (… to …)`), `EmptyState` titles, "Loading…", PrintModeDialog, Word preview window strings — none of these go through any translation.
-2. **In-page report text is hard-coded** — every report route (Day Book, Ledger, Trial Balance, P&L, BS, Cash/Bank, Trading, Outstanding, Receivables/Payables, Ageing, Stock Summary, GSTR-1/2B/3B, GST books, BRS) builds titles, subtitles (`for the period 2025-04-01 to 2026-03-31`), section labels, T-account headers (`Dr. Out / Purchases / Payments`), narration prefixes, and column heads inline as English literals that never enter the report-i18n table.
-3. **Export-only translation is leaky** — `tReportLabel` matches whole strings, so anything with interpolation (`Sales — ACME Traders`, `Subtotal — Indirect Expenses (₹12,345)`, `Page 1 of 5`, `Ageing 0–30 days`) falls through unchanged. Voucher-type values from the DB (`sales`, `purchase`, …) are mapped to English `TYPE_LABEL` before the exporter sees them.
-4. **Dictionary itself is partial** — ~200 entries covers ~40 % of the labels actually printed. Missing: Stock Summary columns (Inwards/Outwards/Balance Qty, Closing Value), GSTR-1 sections (B2B, B2CS, CDNR, HSN Summary, Documents Issued), GSTR-3B boxes (3.1, 4(A)(5), 5, 6.1), BRS (Reconciled, Unreconciled, Statement Balance, Book Balance), Ageing buckets (Not due, 0–30, 31–60…), Outstanding (Bill ref, Pending, Overdue), receivables/payables totals, every "Note" / "Remarks" / "Place of Supply" / "Reverse Charge" / "Round Off" / "Net Receivable" / "Net Payable" / "TDS" / "TCS" / "Adjustment" / "Suspense" string.
-5. **Numerals + amount-in-words** — confirmed out of scope (per your earlier choice). Plan keeps that decision.
+# Plan: Virtualized, Excel-like Reports Hub (Offline-Capable)
 
 ## Goal
+Keep the browser snappy on 50k–500k row reports and let users do filter / sort / multi-column / pivot analysis inside the app — no Excel round-trip. All grid features run client-side so they work fully offline once data is loaded.
 
-Every books-of-account & financial-report **screen, print preview, PDF, Excel, CSV and Word export** renders labels, headings, toolbars, section titles, footers and dynamic phrases in proper Gujarati when app language = ગુજરાતી. Switching language back to English instantly reverts.
+## Scope (in)
+- Virtual scrolling for every long-list report and master list
+- A reusable "DataGrid" shell with Excel-like filtering, multi-sort, column pinning/visibility, group-by + aggregations, simple pivot
+- Reports Hub gets a "Grid view" toggle alongside the existing T-account / classic view
+- Saved views per report (column order, filters, sort, pivot) persisted locally per user+company
 
-## Approach
+## Scope (out, keep as-is)
+- Auth, RLS, voucher entry forms, PDF/CSV/XLSX exporters, print mode
+- T-account visual layout for P&L / Balance Sheet / Trading (kept; grid view is additive)
+- Data layer (no Dexie migration here — that was a separate proposal)
 
-### Phase 1 — Single source-of-truth dictionary
-- Promote `src/lib/report-i18n.ts` from "label table" to a **report glossary** with three layers:
-  1. **Exact matches** (what exists today, expanded to ~600 entries: see Coverage list below).
-  2. **Token rules** — small, ordered list of regex → template that handle common interpolation patterns (`^Sales — (.*)$` → `વેચાણ — $1`, `^Subtotal — (.+) \((.+)\)$` → `પેટા કુલ — ${tReportLabel($1)} (${$2})`, `^Page (\d+) of (\d+)$` → `પાનું $1 / $2`, `^Ageing (\d+)[-–](\d+) days$` → `${1}–${2} દિવસ`, `^For the period:?\s+(.+) to (.+)$`, `^FY (\d+)-(\d+)`, `^GSTIN:\s+(.+)$`).
-  3. **Word-level fallback** — a closed set of keywords (`days`, `years`, `pcs`, `kg`, `Net`, `Gross`, `Less:`, `Add:`, `Round Off`) substituted only when the surrounding string already matched a rule (never on free text like ledger names).
-- Add `tReportText(text, lang)` (used for free-form on-screen labels) and keep `tReportLabel` (strict, for PDF/Excel cells) as a thinner wrapper.
-- Add a vetted `gu` translation review pass: each entry reviewed against Tally Gujarati glossary + your earlier feedback ("poor vocabulary"). Replace stilted translations:
-  - "Stock Summary" → સ્ટોકનો સારાંશ (current: "સ્ટોક સારાંશ" — keep but verify)
-  - "Outstanding" → બાકી લેણદેણ → **ચઢેલી રકમ** (more idiomatic for Gujarati merchants)
-  - "Bank Reconciliation" → બેંક મેળવણી → **બેંક સામેલેણ**
-  - "Net Profit" → ચોખ્ખો નફો ✓
-  - "By/To" prefixes → keep as `જમા:` / `ઉધાર:` (currently silently stripped — wrong for ledger printouts where merchants expect them).
-  - …(full diff lives in the dictionary commit; preview shown below)
+---
 
-### Phase 2 — Translate the on-screen report shell
-- `ReportToolbar`: replace literals (`From`, `To`, `CSV`, `Excel`, `PDF`, `Print`) with `t("toolbar.*")` keys added to `i18n.tsx`.
-- `ReportViewer`: pipe `title`, `accountHeading`, `subtitle`, `periodText`, `addressLine`, `fyText` through `tReportText`. `As on / For the period / GSTIN / FY` use rule-based templates so dates inside stay DD-MM-YYYY.
-- `PrintModeDialog`, `EmptyState`, "Loading…", Word `<title>` and the Print Preview popup's `<button>Print/Close</button>` and "Nothing to preview yet" message all go through `t("…")`.
-- `TAccount` header props (`leftHeader`, `rightHeader`, `leftTotal` label) are localized at the component boundary so every report inherits the fix.
+## Libraries (small, proven, offline)
+- `@tanstack/react-virtual` — windowing primitive
+- `@tanstack/react-table` v8 — headless table (sort/filter/group/column model)
+- No ag-grid / no Tabulator (heavy, license concerns). Both libs above are MIT and already align with the existing TanStack stack.
 
-### Phase 3 — Translate inline report content
-- For each `app.reports.*.tsx`, run the strings that compose **rendered text** (titles, subtitles, T-account headers, badges, group names, narration prefixes like `Sales — `, voucher-type labels) through `tReportText`. The only literals left untranslated are user data (party names, ledger names, item names, narrations, numerals).
-- Centralize voucher-type labels: replace per-route `TYPE_LABEL` maps with one helper `voucherTypeLabel(type, lang)`.
-- Centralize group-account labels (Capital Account, Sundry Debtors, …) inside `account-groups-runtime.tsx` so Trial Balance, Group Ledger, P&L and Balance Sheet share the same translated headings.
+Bundle impact: ~35 KB gz combined.
 
-### Phase 4 — Quality + verification
-- Add `src/lib/__tests__/report-i18n.test.ts` covering:
-  - Every entry in `LABELS` round-trips through `tReportLabel`.
-  - Token rules: `Sales — ACME` → `વેચાણ — ACME`; ledger names untouched; dates stay DD-MM-YYYY.
-  - English passthrough is a no-op when `lang === "en"`.
-  - Free text containing only a ledger name is not mangled.
-- Manual QA matrix (documented in `docs/i18n-qa.md`): toggle ગુજરાતી, open each of the 17 reports, capture screen + PDF, confirm headings/footers/columns are Gujarati, data unchanged.
-- Run `npm run build` + the new tests; only ship after both pass.
+---
 
-## Coverage targets (added to dictionary in this pass)
+## Architecture
 
-Day Book, Ledger, Group Ledger, Cash Book, Bank Book, Cash & Bank, Sales Register, Purchase Register, Trial Balance, Trading, Profit & Loss, Balance Sheet, Outstanding, Bill-by-Bill, Receivables, Payables, Ageing (all buckets), Stock Summary (Opening/Inwards/Outwards/Closing × Qty/Value), GSTR-1 (B2B, B2CS, B2CL, CDNR, CDNUR, EXP, NIL/Exempt/Non-GST, HSN, Docs Issued), GSTR-2B (ITC available, ITC reversed, Ineligible), GSTR-3B (3.1, 3.2, 4, 5, 6.1, 6.2 with each row label), GST Sales/Purchase Book, BRS (Statement / Book / Reconciled / Unreconciled / Difference), all toolbar verbs, all empty-state copy, all print-preview chrome.
+### 1. New primitive: `src/components/data-grid/`
+```
+data-grid/
+  DataGrid.tsx          # virtualized table shell
+  GridToolbar.tsx       # search, column chooser, density, saved views, export
+  ColumnFilter.tsx      # Excel-style per-column filter popover
+  PivotPanel.tsx        # row/col/value/agg picker
+  useGridState.ts       # state + persistence (localStorage key: grid:<reportId>:<companyId>)
+  types.ts
+```
 
-Approx new entries: **~400** added to `LABELS`, **~25** rule-based templates, **~30** new `t("toolbar.*")` keys in `i18n.tsx` for `en` + `gu` (other languages fall back to English as today).
+`DataGrid<T>` props:
+- `rows: T[]`
+- `columns: ColumnDef<T>[]` (TanStack column defs, extended with `aggregator`, `filterType`, `pinned`)
+- `reportId: string` (for saved-view persistence)
+- `getRowHref?(row)` for drill-down
+- `footer?: 'sum' | 'count' | custom`
 
-## Files to add
-- `src/lib/report-i18n-rules.ts` — ordered template rules + `tReportText`.
-- `src/lib/voucher-type-label.ts` — single voucher-type translator.
-- `src/lib/__tests__/report-i18n.test.ts` — dictionary + rules tests.
-- `docs/i18n-qa.md` — QA matrix.
+Internally:
+- `useReactTable` with `getSortedRowModel`, `getFilteredRowModel`, `getGroupedRowModel`, `getExpandedRowModel`
+- `useVirtualizer` over `rows.length` with `estimateSize: 32`
+- Sticky header + sticky footer + horizontal scroll for wide grids
+- Column resize via TanStack's column sizing
+- Keyboard: arrows move focus, `/` focuses search, `Ctrl+F` opens filter on active column
 
-## Files to edit
-- `src/lib/report-i18n.ts` — expand `LABELS` (~+400), revise stilted translations, expose `tReportText`.
-- `src/lib/i18n.tsx` — add `toolbar.*`, `report.viewer.*`, `report.empty.*` keys for `en` + `gu`.
-- `src/components/reports/ReportViewer.tsx`, `ReportToolbar.tsx`, `PrintModeDialog.tsx`, `TAccount.tsx`, `GstBook.tsx`, `PeriodLockCard.tsx`, `ValidationPanel.tsx` — wire through `useI18n()` / `tReportText`.
-- `src/components/EmptyState.tsx` — accept already-translated strings; no behaviour change.
-- All `src/routes/app.reports.*.tsx` (17 files) — translate inline literals via `tReportText`; replace per-route `TYPE_LABEL` with helper.
-- `src/lib/account-groups-runtime.tsx` — translate group display names at read.
-- `src/lib/exporters.ts` — call `tReportText` (not just `tReportLabel`) so subtitle interpolations pass through rule layer.
+### 2. Excel-like column filter
+Per column type:
+- text → contains / equals / starts-with / regex / blank
+- number → =, ≠, >, <, between, top-N, blank
+- date → on, before, after, between, this-FY, last-month, custom
+- enum (voucher_type, side, status) → multi-select checklist with search
 
-## Out of scope
-- Translating ledger / item / party names or narrations (user data).
-- Transliterating numerals or amount-in-words.
-- Other Indian languages (hi/mr/bn/ta/te/ml/kn) — they continue to fall back to English exactly as today; no regression and no new strings required.
+Active filters surface as removable chips above the grid.
 
-## Validation
-1. `bunx vitest run src/lib/__tests__/report-i18n.test.ts` — green.
-2. `bun run build` — green.
-3. Manual: switch language to ગુજરાતી → open each of the 17 reports → confirm screen, PDF, Excel and print preview all show Gujarati labels with hyphenated dates, numbers untouched, no English leaks. Switch back to English → identical to today.
-4. Spot-check three multi-page PDFs (Day Book, Ledger, Trial Balance) — every page header/footer + cell renders in Noto Sans Gujarati without tofu.
+### 3. Multi-sort + grouping
+- Shift-click header to add secondary sort
+- Drag a column header into the "Group by" strip → rows collapse with subtotal rows showing aggregator results (sum/count/avg/min/max per numeric column)
+- Up to 3 group levels
+
+### 4. Pivot
+A lightweight pivot built on the grouped row model:
+- Drag fields into Rows / Columns / Values
+- Values aggregate (sum/count/avg)
+- Pivot table renders inside the same virtualized shell
+- "Flatten" button copies the pivot result back into a normal grid for further filtering or export
+
+Limit: pivots cap at ~10k unique row×col combinations to keep render cheap; warn beyond that.
+
+### 5. Saved views
+Stored in `localStorage` (works offline). Shape:
+```
+{ name, columns, sort, filters, group, pivot, density }
+```
+Per `reportId` + `companyId` + `userId`. UI shows a dropdown with Save / Save as / Reset.
+
+### 6. Exports
+Reuse existing `downloadCsv` / `downloadXlsx` / `downloadPdfTable`. Grid exports the **currently visible, filtered, sorted, grouped** rows — not the raw dataset. Pivot exports as a 2-D matrix.
+
+---
+
+## Reports getting the grid
+
+Phase A — pure list reports (drop-in DataGrid replacement):
+- Day Book — flat row grid + existing T-account toggle
+- Ledger — entries table
+- Group Ledger
+- Sales Register, Purchase Register
+- GST Sales Book, GST Purchase Book
+- Outstanding Receivables / Payables / Ageing
+- Stock Summary
+- Cash & Bank Book
+- Day-level lists in BRS
+
+Phase B — virtualization only (no pivot needed):
+- Trial Balance (already grouped — add virtualization + column filter)
+- Vouchers list (`app.vouchers.tsx`)
+- Ledgers / Items / Account Groups masters
+
+Phase C — keep classic view, add optional grid:
+- Profit & Loss, Balance Sheet, Trading, GSTR-1/2B/3B summaries
+
+---
+
+## Day Book example after change
+- Toolbar gets a "View: T-account | Grid" switch (default T-account preserved)
+- Grid view columns: Date, Type, Number, Party, Narration, Side, Debit, Credit, Amount
+- Row click → existing `openVoucherDetail`
+- Sticky footer: filtered total Dr / Cr / Net
+- Filter chips: e.g. "Type = Sales, Purchase", "Party contains 'ABC'"
+- Group-by Type → subtotals per voucher type
+- Pivot: Rows=Party, Columns=Type, Values=Sum(amount)
+
+---
+
+## Performance budget
+- 100k rows render in <80 ms initial, scroll at 60 fps (virtualizer keeps DOM ≤ ~50 rows)
+- Filter/sort on 100k rows < 250 ms (TanStack table is in-memory; we'll memoize column accessors)
+- Group + aggregate on 100k rows < 400 ms
+- Pivot on 50k rows × ≤ 200 columns < 600 ms
+
+If a dataset exceeds budget we:
+1. Move heavy aggregation into a Web Worker (`src/workers/grid-agg.worker.ts`) with Comlink-style messaging
+2. Cap pivot output and show a "narrow your filter" hint
+
+Worker is wired in from day one for pivot; sort/filter stay on main thread until profiling says otherwise.
+
+---
+
+## Offline behaviour
+- All filter/sort/group/pivot logic is pure JS in the browser → works with no network
+- Saved views in `localStorage` → persist offline
+- The only network dependency is the initial data fetch from Supabase; once rows are in memory the user can analyse freely
+- Desktop (Electron) build inherits the same behaviour; no extra work
+
+---
+
+## Rollout (4 PR-sized steps)
+1. **Foundation** — add libs, build `DataGrid`, `GridToolbar`, `ColumnFilter`, `useGridState`. Ship behind a feature flag, demo on Vouchers list.
+2. **Phase A reports** — Day Book, Ledger, Sales/Purchase Register, GST Books, Outstanding, Ageing, Stock, Cash/Bank. Add view-switcher where a classic view exists.
+3. **Pivot + Worker** — `PivotPanel`, worker-based aggregation, saved views UI.
+4. **Phase B & C polish** — masters lists virtualized, classic-view reports get optional grid, keyboard shortcuts, density toggle, accessibility pass.
+
+---
+
+## Risks
+- TanStack Table v8 + virtualizer with grouping has a known sticky-header quirk on Safari — mitigated with a CSS `position: sticky` wrapper we already use elsewhere.
+- Pivot UX is easy to over-build; we ship the minimum (Rows/Cols/Values/Agg) and iterate.
+- Saved views in localStorage are per-device. If you later want them synced, we can mirror to a `report_views` table — out of scope here.
+
+---
+
+## Deliverable per phase
+Each phase is independently shippable; existing reports keep working unchanged until their grid view lands.
