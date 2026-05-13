@@ -41,6 +41,7 @@ function AgeingPage() {
   const { asOf, setAsOf } = useFyAsOfState();
   const [invs, setInvs] = useState<InvRow[]>([]);
   const [allocs, setAllocs] = useState<AllocRow[]>([]);
+  const { view, setView } = useReportView("ageing");
 
   useEffect(() => {
     if (!activeCompanyId) return;
