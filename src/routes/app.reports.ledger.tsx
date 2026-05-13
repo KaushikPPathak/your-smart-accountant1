@@ -648,6 +648,9 @@ function LedgerStatement() {
                   <ToggleGroupItem value="horizontal" className="px-3 text-xs">
                     Horizontal / T-Format
                   </ToggleGroupItem>
+                  <ToggleGroupItem value="grid" className="px-3 text-xs">
+                    Grid (Excel-like)
+                  </ToggleGroupItem>
                 </ToggleGroup>
               </div>
               <div className="space-y-1">
