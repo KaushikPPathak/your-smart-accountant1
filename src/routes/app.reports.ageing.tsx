@@ -105,46 +105,64 @@ function AgeingPage() {
             <Label>As of</Label>
             <FyDatePicker value={asOf} onChange={setAsOf} />
           </div>
+          <div className="space-y-1 md:col-span-3">
+            <ViewSwitcher view={view} onChange={setView} />
+          </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Party</TableHead>
-                {BUCKETS.map((b) => <TableHead key={b.key} className="text-right">{b.label} days</TableHead>)}
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {partyRows.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="p-6 text-center text-sm text-muted-foreground">No outstanding</TableCell></TableRow>
-              ) : partyRows.map((r, i) => (
-                <TableRow key={i}>
-                  <TableCell>{r.name}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(r.b0)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(r.b1)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(r.b2)}</TableCell>
-                  <TableCell className="text-right font-mono text-destructive">{formatINR(r.b3)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(r.total)}</TableCell>
+      {view === "grid" ? (
+        <Card>
+          <CardContent className="p-3">
+            <DataGrid
+              reportId="ageing"
+              rows={partyRows}
+              columns={ageingGridColumns}
+              globalSearch={(x) => x.name}
+              height={520}
+              empty="No outstanding."
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Party</TableHead>
+                  {BUCKETS.map((b) => <TableHead key={b.key} className="text-right">{b.label} days</TableHead>)}
+                  <TableHead className="text-right">Total</TableHead>
                 </TableRow>
-              ))}
-              {partyRows.length > 0 && (
-                <TableRow className="font-semibold border-t-2">
-                  <TableCell>Total</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(totals.b0)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(totals.b1)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(totals.b2)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(totals.b3)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatINR(totals.total)}</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {partyRows.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="p-6 text-center text-sm text-muted-foreground">No outstanding</TableCell></TableRow>
+                ) : partyRows.map((r, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{r.name}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(r.b0)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(r.b1)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(r.b2)}</TableCell>
+                    <TableCell className="text-right font-mono text-destructive">{formatINR(r.b3)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">{formatINR(r.total)}</TableCell>
+                  </TableRow>
+                ))}
+                {partyRows.length > 0 && (
+                  <TableRow className="font-semibold border-t-2">
+                    <TableCell>Total</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(totals.b0)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(totals.b1)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(totals.b2)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(totals.b3)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatINR(totals.total)}</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
