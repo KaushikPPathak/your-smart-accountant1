@@ -12,6 +12,9 @@ import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 import { supabase } from "@/integrations/supabase/client";
 import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { BucketedGrid } from "@/components/reports/BucketedGrid";
+import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/app/reports/trading")({
   head: () => ({ meta: [{ title: "Trading Account — Reports" }] }),
