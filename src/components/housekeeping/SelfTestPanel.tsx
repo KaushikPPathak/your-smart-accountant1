@@ -130,29 +130,29 @@ export function SelfTestPanel({ companyId }: { companyId: string | null }) {
         patch(k, { status: "warn", message: "Skipped — no company selected" }),
       );
     } else {
-      // 4. Tables readable
+      // 4. Tables readable (RLS allows the user to query → counts will be
+      // company-scoped automatically; we just verify the SELECT itself works)
       await mark("tables", async () => {
-        const tables = [
-          "ledgers",
-          "items",
-          "vouchers",
-          "voucher_entries",
-          "voucher_items",
-        ] as const;
-        const results = await Promise.all(
-          tables.map((t) =>
+        const scoped = ["ledgers", "items", "vouchers"] as const;
+        const child = ["voucher_entries", "voucher_items"] as const;
+        const results = await Promise.all([
+          ...scoped.map((t) =>
             supabase
               .from(t)
               .select("id", { count: "exact", head: true })
               .eq("company_id", companyId),
           ),
-        );
+          ...child.map((t) =>
+            supabase.from(t).select("id", { count: "exact", head: true }),
+          ),
+        ]);
+        const names = [...scoped, ...child];
         const failed = results
-          .map((r, i) => (r.error ? tables[i] : null))
+          .map((r, i) => (r.error ? names[i] : null))
           .filter(Boolean) as string[];
         if (failed.length)
           return { status: "error", message: `Cannot read: ${failed.join(", ")}` };
-        return { status: "ok", message: `All ${tables.length} core tables readable` };
+        return { status: "ok", message: `All ${names.length} core tables readable` };
       });
 
       // 5. Settings row
