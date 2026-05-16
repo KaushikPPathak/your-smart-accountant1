@@ -253,12 +253,31 @@ function GroupLedgerReport() {
         onExportXlsx={() => downloadXlsx(`${fileBase}.xlsx`, [{ name: group.label.slice(0, 31), rows: [headers, ...tableRows] }])}
         onExportPdf={() => downloadPdfTable({ title: group.label, companyName: pdfHeader.companyName, companySubLine: pdfHeader.companySubLine, subtitle: `${group.section} · ${from} → ${to}`, head: [headers], body: tableRows, fileName: `${fileBase}.pdf`, rightAlignCols: [2] })}
         onPrint={() => window.print()}
+        extra={<div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>}
       />
 
       {loading ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
       ) : rows.length === 0 ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">No ledgers in this group.</CardContent></Card>
+      ) : view === "grid" ? (
+        <Card><CardContent className="p-3">
+          <DataGrid<typeof rows[number]>
+            reportId={`group-ledger:${groupKey}`}
+            rows={rows}
+            columns={[
+              { id: "name", header: "Ledger", type: "text", width: 280, accessor: (x) => x.name, groupable: true },
+              { id: "type", header: "Type", type: "enum", width: 140, accessor: (x) => x.type.replace(/_/g, " "), groupable: true },
+              { id: "opening", header: "Opening", type: "number", width: 140, align: "right", accessor: (x) => x.opening_paise / 100, cell: (x) => formatINR(x.opening_paise, { symbol: false }), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100), { symbol: false }) },
+              { id: "debit", header: "Debit", type: "number", width: 140, align: "right", accessor: (x) => x.debit_paise / 100, cell: (x) => x.debit_paise ? formatINR(x.debit_paise, { symbol: false }) : "", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100), { symbol: false }) },
+              { id: "credit", header: "Credit", type: "number", width: 140, align: "right", accessor: (x) => x.credit_paise / 100, cell: (x) => x.credit_paise ? formatINR(x.credit_paise, { symbol: false }) : "", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100), { symbol: false }) },
+              { id: "closing", header: "Closing", type: "number", width: 160, align: "right", accessor: (x) => x.closing_paise / 100, cell: (x) => `${formatINR(Math.abs(x.closing_paise), { symbol: false })} ${x.closing_paise >= 0 ? "Dr" : "Cr"}`, aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(Math.abs(v) * 100), { symbol: false }) },
+            ] satisfies DGColumn<typeof rows[number]>[]}
+            onRowClick={(x) => openLedgerReport(navigate, { ledgerId: x.id, from, to })}
+            globalSearch={(x) => `${x.name} ${x.type}`}
+            height={520}
+          />
+        </CardContent></Card>
       ) : (
         <TAccount
           title={group.label}
