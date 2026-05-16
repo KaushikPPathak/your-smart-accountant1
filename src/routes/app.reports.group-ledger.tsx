@@ -101,6 +101,7 @@ function GroupLedgerReport() {
   const navigate = useNavigate();
   const [groupKey, setGroupKey] = useState<GroupKey>("sundry_debtors");
   const { from, to, setFrom, setTo } = useFyRangeState();
+  const { view, setView } = useReportView("group-ledger");
   const [ledgers, setLedgers] = useState<LedgerRow[]>([]);
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [loading, setLoading] = useState(true);
