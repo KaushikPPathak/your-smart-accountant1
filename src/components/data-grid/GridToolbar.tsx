@@ -38,7 +38,7 @@ interface Props<T> {
   setDefaultView: (name: string | null) => void;
   filteredCount: number;
   totalCount: number;
-  searchInputRef?: React.RefObject<HTMLInputElement>;
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 export function GridToolbar<T>({
