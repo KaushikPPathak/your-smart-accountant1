@@ -71,7 +71,7 @@ export function PivotPanel<T>({
   const exportCsv = () => {
     if (!result) return;
     const rows = pivotToCsvRows(result, label);
-    downloadCsv("pivot.csv", rows.head, rows.body);
+    downloadCsv("pivot.csv", [rows.head, ...rows.body]);
   };
 
   return (
