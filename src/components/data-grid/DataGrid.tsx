@@ -411,26 +411,31 @@ export function DataGrid<T>({
             className="grid border-t bg-muted/50 text-sm font-semibold"
             style={{ gridTemplateColumns: gridTemplate }}
           >
-            {visibleColumns.map((c, i) => (
-              <div
-                key={c.id}
-                className={cn(
-                  "border-r px-2 py-1.5 truncate",
-                  cellAlign(c) === "right" && "text-right font-mono tabular-nums",
-                  cellAlign(c) === "center" && "text-center",
-                )}
-              >
-                {i === 0 && (footerLabel ?? "Total")}
-                {c.aggregator && i !== 0 && (
-                  c.formatAggregate ? c.formatAggregate(aggregates[c.id] ?? 0) : defaultFormat(aggregates[c.id] ?? 0)
-                )}
-                {i === 0 && c.aggregator && (
-                  <span className="ml-2 font-mono tabular-nums">
-                    {c.formatAggregate ? c.formatAggregate(aggregates[c.id] ?? 0) : defaultFormat(aggregates[c.id] ?? 0)}
-                  </span>
-                )}
-              </div>
-            ))}
+            {visibleColumns.map((c, i) => {
+              const isPinned = i < pinnedCount;
+              return (
+                <div
+                  key={c.id}
+                  className={cn(
+                    "border-r px-2 py-1.5 truncate",
+                    cellAlign(c) === "right" && "text-right font-mono tabular-nums",
+                    cellAlign(c) === "center" && "text-center",
+                    isPinned && "sticky z-10 bg-muted/50 shadow-[1px_0_0_hsl(var(--border))]",
+                  )}
+                  style={isPinned ? { left: pinnedOffsets[c.id] } : undefined}
+                >
+                  {i === 0 && (footerLabel ?? "Total")}
+                  {c.aggregator && i !== 0 && (
+                    c.formatAggregate ? c.formatAggregate(aggregates[c.id] ?? 0) : defaultFormat(aggregates[c.id] ?? 0)
+                  )}
+                  {i === 0 && c.aggregator && (
+                    <span className="ml-2 font-mono tabular-nums">
+                      {c.formatAggregate ? c.formatAggregate(aggregates[c.id] ?? 0) : defaultFormat(aggregates[c.id] ?? 0)}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
