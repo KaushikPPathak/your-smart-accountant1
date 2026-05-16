@@ -70,6 +70,10 @@ export interface GridState {
   density: "comfortable" | "compact";
   search: string;
   pivot?: PivotStatePersisted;
+  /** Per-column width overrides in px */
+  colWidths?: Record<string, number>;
+  /** Columns pinned to the left, in pin order */
+  pinnedLeft?: string[];
 }
 
 export const DEFAULT_GRID_STATE: GridState = {
@@ -80,9 +84,12 @@ export const DEFAULT_GRID_STATE: GridState = {
   density: "comfortable",
   search: "",
   pivot: { enabled: false, rows: [], cols: [], values: [] },
+  colWidths: {},
+  pinnedLeft: [],
 };
 
 export interface SavedView {
   name: string;
   state: GridState;
+  isDefault?: boolean;
 }
