@@ -40,6 +40,7 @@ function BrsPage() {
   const { asOf, setAsOf } = useFyAsOfState();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [bankBal, setBankBal] = useState("");
+  const { view, setView } = useReportView("brs");
 
   useEffect(() => {
     if (!activeCompanyId) return;
