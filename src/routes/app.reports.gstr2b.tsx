@@ -247,6 +247,26 @@ function Gstr2BPage() {
       </Card>
 
       {lines.length > 0 && (
+        view === "grid" ? (
+          <GstSectionTable
+            view={view}
+            reportId="gstr2b"
+            title="2B lines vs Purchase Register"
+            headers={["Supplier GSTIN", "Supplier", "Inv No", "Inv Date", "Status", "Value", "IGST", "CGST", "SGST"]}
+            rows={lines.map((l) => [
+              l.supplier_gstin,
+              l.supplier_name ?? "",
+              l.invoice_no,
+              l.invoice_date ?? "",
+              l.match_status,
+              formatINR(l.invoice_value_paise),
+              formatINR(l.igst_paise),
+              formatINR(l.cgst_paise),
+              formatINR(l.sgst_paise),
+            ])}
+            numericFromCol={5}
+          />
+        ) : (
         <Card>
           <CardContent className="p-0">
             <div className="border-b bg-muted/30 px-3 py-2 text-xs font-semibold">2B lines vs Purchase Register</div>
@@ -282,6 +302,7 @@ function Gstr2BPage() {
             </Table>
           </CardContent>
         </Card>
+        )
       )}
 
       <Card>
