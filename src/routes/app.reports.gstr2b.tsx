@@ -144,6 +144,7 @@ function Gstr2BPage() {
   });
   const [lines, setLines] = useState<G2BLine[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const { view, setView } = useReportView("gstr2b");
   const [importId, setImportId] = useState<string | null>(null);
 
   useEffect(() => {
