@@ -565,6 +565,28 @@ function LedgersPage() {
                   : "Try a different search term."
               }
             />
+          ) : view === "grid" ? (
+            <div className="p-3">
+              <DataGrid<Ledger>
+                reportId="masters-ledgers"
+                rows={filtered}
+                columns={[
+                  { id: "name", header: "Name", type: "text", width: 240, accessor: (l) => l.name, groupable: true },
+                  { id: "group", header: "Group", type: "enum", width: 200, accessor: (l) => resolveGroupLabel(l.group_code ?? defaultGroupCodeForType(l.type), overrides), groupable: true },
+                  { id: "type", header: "Type", type: "enum", width: 160, accessor: (l) => LEDGER_TYPES.find((t) => t.value === l.type)?.label ?? l.type, groupable: true },
+                  { id: "gstin", header: "GSTIN", type: "text", width: 160, accessor: (l) => l.gstin ?? "" },
+                  { id: "state", header: "State", type: "enum", width: 160, accessor: (l) => l.state_code ? `${l.state_code} — ${l.state ?? ""}` : "", groupable: true },
+                  { id: "phone", header: "Phone", type: "text", width: 140, accessor: (l) => l.phone ?? "" },
+                  { id: "email", header: "Email", type: "text", width: 200, accessor: (l) => l.email ?? "", hidden: true },
+                  { id: "opening", header: "Opening", type: "number", width: 140, align: "right", accessor: (l) => (l.opening_balance_is_debit ? 1 : -1) * (l.opening_balance_paise / 100), cell: (l) => l.opening_balance_paise ? `${formatINR(l.opening_balance_paise)} ${l.opening_balance_is_debit ? "Dr" : "Cr"}` : "—", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+                  { id: "credit_limit", header: "Credit limit", type: "number", width: 140, align: "right", accessor: (l) => l.credit_limit_paise / 100, cell: (l) => l.credit_limit_paise ? formatINR(l.credit_limit_paise) : "—", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+                  { id: "credit_days", header: "Credit days", type: "number", width: 120, align: "right", accessor: (l) => l.credit_days, aggregator: "avg" },
+                ] satisfies DGColumn<Ledger>[]}
+                onRowClick={canWrite ? (l) => openEdit(l) : undefined}
+                globalSearch={(l) => `${l.name} ${l.gstin ?? ""} ${l.phone ?? ""} ${l.email ?? ""}`}
+                height={560}
+              />
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
