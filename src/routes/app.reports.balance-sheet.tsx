@@ -17,6 +17,9 @@ import {
 } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
 import { useAccountGroups } from "@/lib/account-groups-runtime";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { BucketedGrid } from "@/components/reports/BucketedGrid";
+import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/app/reports/balance-sheet")({
   head: () => ({ meta: [{ title: "Balance Sheet — Reports" }] }),
