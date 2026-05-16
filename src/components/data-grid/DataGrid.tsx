@@ -1,12 +1,15 @@
 import { useMemo, useRef, useState, useCallback, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronRight, ArrowUp, ArrowDown } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowUp, ArrowDown, TableProperties } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { ColumnFilterButton } from "./ColumnFilter";
 import { GridToolbar } from "./GridToolbar";
 import { useGridState } from "./useGridState";
 import { computeAggregates, deriveEnumValues, processRows, type FlatRow } from "./grid-engine";
-import type { DGColumn, GridState } from "./types";
+import { PivotPanel } from "./PivotPanel";
+import { usePivot } from "./usePivot";
+import type { DGColumn, GridState, PivotStatePersisted } from "./types";
 
 export interface DataGridProps<T> {
   rows: T[];
