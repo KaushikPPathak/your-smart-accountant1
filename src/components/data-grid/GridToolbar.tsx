@@ -152,10 +152,20 @@ export function GridToolbar<T>({
               <div className="px-2 py-1 text-xs text-muted-foreground">None saved</div>
             )}
             {views.map((v) => (
-              <div key={v.name} className="flex items-center justify-between gap-2 px-1">
+              <div key={v.name} className="flex items-center justify-between gap-1 px-1">
                 <DropdownMenuItem className="flex-1" onClick={() => applyView(v.name)}>
                   {v.name}
+                  {v.isDefault && <span className="ml-1 text-[10px] text-muted-foreground">(default)</span>}
                 </DropdownMenuItem>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDefaultView(v.isDefault ? null : v.name); }}
+                  title={v.isDefault ? "Unset default" : "Set as default"}
+                >
+                  <Star className={`h-3 w-3 ${v.isDefault ? "fill-current text-amber-500" : ""}`} />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
