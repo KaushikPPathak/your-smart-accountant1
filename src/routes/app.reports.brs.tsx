@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { useFyAsOfState } from "@/components/reports/ReportToolbar";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +40,7 @@ function BrsPage() {
   const { asOf, setAsOf } = useFyAsOfState();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [bankBal, setBankBal] = useState("");
+  const { view, setView } = useReportView("brs");
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -121,9 +124,34 @@ function BrsPage() {
 
       <Card>
         <CardContent className="p-0">
-          <div className="border-b bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            {uncleared.length} uncleared of {entries.length} entries · click ✓ to mark cleared with bank date
+          <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <span>{uncleared.length} uncleared of {entries.length} entries · click ✓ to mark cleared with bank date</span>
+            <ViewSwitcher view={view} onChange={setView} />
           </div>
+          {view === "grid" ? (
+            <div className="p-3">
+              <DataGrid<Entry>
+                reportId={`brs:${ledgerId}`}
+                rows={entries}
+                columns={[
+                  { id: "date", header: "Book Date", type: "date", width: 120, accessor: (e) => e.vouchers?.voucher_date ?? "", cell: (e) => fmtIndianDate(e.vouchers?.voucher_date ?? "") },
+                  { id: "vchNo", header: "Voucher No", type: "text", width: 130, accessor: (e) => e.vouchers?.voucher_number ?? "" },
+                  { id: "vchType", header: "Type", type: "enum", width: 110, accessor: (e) => e.vouchers?.voucher_type ?? "", groupable: true },
+                  { id: "ref", header: "Reference", type: "text", width: 150, accessor: (e) => e.vouchers?.reference_no ?? "" },
+                  { id: "debit", header: "Debit", type: "number", width: 130, align: "right", accessor: (e) => e.debit_paise / 100, cell: (e) => e.debit_paise ? formatINR(e.debit_paise, { symbol: false }) : "", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100), { symbol: false }) },
+                  { id: "credit", header: "Credit", type: "number", width: 130, align: "right", accessor: (e) => e.credit_paise / 100, cell: (e) => e.credit_paise ? formatINR(e.credit_paise, { symbol: false }) : "", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100), { symbol: false }) },
+                  { id: "status", header: "Status", type: "enum", width: 160, accessor: (e) => e.cleared_date ? `Cleared ${e.cleared_date}` : "Uncleared", groupable: true, cell: (e) => e.cleared_date ? <Badge variant="default">Cleared {fmtIndianDate(e.cleared_date)}</Badge> : <Badge variant="outline">Uncleared</Badge> },
+                  { id: "action", header: "Action", type: "text", width: 120, accessor: (e) => "", cell: (e) => (
+                    <Button size="sm" variant={e.cleared_date ? "ghost" : "outline"} onClick={(ev) => { ev.stopPropagation(); toggleClear(e); }}>
+                      {e.cleared_date ? <><Undo2 className="h-3 w-3 mr-1" />Undo</> : <><Check className="h-3 w-3 mr-1" />Clear</>}
+                    </Button>
+                  ) },
+                ] satisfies DGColumn<Entry>[]}
+                globalSearch={(e) => `${e.vouchers?.voucher_number ?? ""} ${e.vouchers?.voucher_type ?? ""} ${e.vouchers?.reference_no ?? ""}`}
+                height={520}
+              />
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -160,6 +188,7 @@ function BrsPage() {
               ))}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
     </div>
