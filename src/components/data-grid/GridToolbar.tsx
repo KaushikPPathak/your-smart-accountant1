@@ -18,8 +18,11 @@ import {
   Save,
   Search,
   SlidersHorizontal,
+  Star,
   X,
+  Keyboard,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DGColumn, GridState, SavedView } from "./types";
 
 interface Props<T> {
@@ -31,8 +34,10 @@ interface Props<T> {
   saveView: (name: string) => void;
   applyView: (name: string) => void;
   deleteView: (name: string) => void;
+  setDefaultView: (name: string | null) => void;
   filteredCount: number;
   totalCount: number;
+  searchInputRef?: React.RefObject<HTMLInputElement>;
 }
 
 export function GridToolbar<T>({
