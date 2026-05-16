@@ -71,6 +71,7 @@ function CashBankBook() {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
   const pdfHeader = useReportPdfHeader();
+  const { view, setView } = useReportView("cash-bank");
   const search = Route.useSearch();
   const { from, to, setFrom, setTo } = useFyRangeState(search.from, search.to);
   const mastersVersion = useMastersVersion();
