@@ -30,6 +30,7 @@ import { MastersProvider } from "@/lib/masters-cache";
 import { PendingSavesTray } from "@/components/fast-form/PendingSavesTray";
 import { FocusHintsProvider } from "@/components/fast-form/FocusHints";
 import { StatusBar } from "@/components/fast-form/StatusBar";
+import { BackupNudgeBanner } from "@/components/BackupNudgeBanner";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
