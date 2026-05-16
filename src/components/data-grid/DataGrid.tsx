@@ -157,11 +157,70 @@ export function DataGrid<T>({
   const cellAlign = (c: DGColumn<T>) =>
     c.align ?? (c.type === "number" ? "right" : "left");
 
+  // Column widths (with persisted overrides)
+  const colWidth = useCallback((c: DGColumn<T>) => {
+    const w = state.colWidths?.[c.id];
+    if (typeof w === "number" && w > 0) return w;
+    return c.width ?? 160;
+  }, [state.colWidths]);
+
   // Compute grid template columns
   const gridTemplate = useMemo(
-    () => visibleColumns.map((c) => `${c.width ?? 160}px`).join(" "),
-    [visibleColumns],
+    () => visibleColumns.map((c) => `${colWidth(c)}px`).join(" "),
+    [visibleColumns, colWidth],
   );
+
+  // Pinned column left offsets (px)
+  const pinnedOffsets = useMemo(() => {
+    const offsets: Record<string, number> = {};
+    let acc = 0;
+    for (let i = 0; i < pinnedCount; i++) {
+      const c = visibleColumns[i];
+      offsets[c.id] = acc;
+      acc += colWidth(c);
+    }
+    return offsets;
+  }, [visibleColumns, pinnedCount, colWidth]);
+
+  // Resize handler
+  const onResizeStart = useCallback((e: React.PointerEvent, col: DGColumn<T>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = colWidth(col);
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.max(col.minWidth ?? 60, Math.round(startW + (ev.clientX - startX)));
+      setState((s) => ({ ...s, colWidths: { ...(s.colWidths ?? {}), [col.id]: next } }));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [colWidth, setState]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const inField =
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (e.key === "/" && !inField) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === "Escape" && target === searchInputRef.current) {
+        setState((s) => ({ ...s, search: "" }));
+        searchInputRef.current?.blur();
+      } else if (e.key === "R" && e.shiftKey && !inField) {
+        e.preventDefault();
+        reset();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reset, setState]);
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
@@ -176,8 +235,10 @@ export function DataGrid<T>({
             saveView={saveView}
             applyView={applyView}
             deleteView={deleteView}
+            setDefaultView={setDefaultView}
             filteredCount={visibleCount}
             totalCount={rows.length}
+            searchInputRef={searchInputRef}
           />
         </div>
         <div className="flex shrink-0 items-center gap-1">
