@@ -1,4 +1,7 @@
-// Money helpers — store as integer paise, display as ₹
+// Money helpers — store as integer paise, display with the user's chosen symbol.
+// Books are always kept in INR (paise). The currency switcher only swaps the
+// displayed symbol — numbers and grouping are unchanged.
+import { getCurrentCurrencySymbol } from "./currency";
 
 export const rupeesToPaise = (rupees: number | string): number => {
   const n = typeof rupees === "string" ? parseFloat(rupees) : rupees;
@@ -8,7 +11,7 @@ export const rupeesToPaise = (rupees: number | string): number => {
 
 export const paiseToRupees = (paise: number): number => paise / 100;
 
-/** Indian numbering: 12,34,567.89 */
+/** Indian numbering: 12,34,567.89 — symbol comes from the global currency setting. */
 export const formatINR = (paise: number, opts: { symbol?: boolean } = {}): string => {
   const { symbol = true } = opts;
   const rupees = paise / 100;
@@ -18,7 +21,7 @@ export const formatINR = (paise: number, opts: { symbol?: boolean } = {}): strin
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return `${sign}${symbol ? "₹ " : ""}${formatted}`;
+  return `${sign}${symbol ? `${getCurrentCurrencySymbol()} ` : ""}${formatted}`;
 };
 
 const ones = [
