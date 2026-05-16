@@ -138,6 +138,26 @@ function ProfitLoss() {
           </p>
         </CardContent>
       </Card>
+      {view === "grid" ? (
+        <Card><CardContent className="p-3">
+          <BucketedGrid
+            reportId="profit-loss"
+            onLedgerClick={goLedger}
+            sides={[
+              {
+                side: dr,
+                buckets: expenseBuckets,
+                extras: profit > 0 ? [{ group: "Result", name: surplusLabel, valuePaise: profit }] : [],
+              },
+              {
+                side: cr,
+                buckets: incomeBuckets,
+                extras: profit < 0 ? [{ group: "Result", name: deficitLabel, valuePaise: -profit }] : [],
+              },
+            ]}
+          />
+        </CardContent></Card>
+      ) : (
       <TAccount
         title={reportTitle}
         subtitle={`for the period ${from} to ${to}`}
@@ -148,6 +168,7 @@ function ProfitLoss() {
         leftTotal={formatINR(grandLeft)}
         rightTotal={formatINR(grandRight)}
       />
+      )}
     </div>
   );
 }
