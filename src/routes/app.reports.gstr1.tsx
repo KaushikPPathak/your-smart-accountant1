@@ -18,6 +18,8 @@ import {
 } from "@/lib/gst-returns";
 import { ValidationPanel } from "@/components/reports/ValidationPanel";
 import { PeriodLockCard } from "@/components/reports/PeriodLockCard";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { GstSectionTable } from "@/components/reports/GstSectionTable";
 
 export const Route = createFileRoute("/app/reports/gstr1")({
   head: () => ({ meta: [{ title: "GSTR-1 — Reports" }] }),
