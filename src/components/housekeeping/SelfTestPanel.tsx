@@ -58,9 +58,10 @@ function blank(): Check[] {
   return INITIAL.map((c) => ({ ...c, status: "pending", message: "—" }));
 }
 
-function timed<T>(p: Promise<T>): Promise<{ value: T; ms: number }> {
+async function timed<T>(p: PromiseLike<T>): Promise<{ value: T; ms: number }> {
   const t0 = performance.now();
-  return p.then((value) => ({ value, ms: Math.round(performance.now() - t0) }));
+  const value = await p;
+  return { value, ms: Math.round(performance.now() - t0) };
 }
 
 export function SelfTestPanel({ companyId }: { companyId: string | null }) {
