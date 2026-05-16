@@ -164,7 +164,8 @@ function GSTR1Page() {
               </>
             )}
 
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex items-center gap-2">
+              <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
               <Button variant="outline" size="sm" onClick={onDownloadExcel} disabled={!built}>
                 <FileSpreadsheet className="mr-1 h-4 w-4" /> Offline Tool Excel
               </Button>
