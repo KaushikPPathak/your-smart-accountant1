@@ -151,12 +151,30 @@ function TrialBalance() {
             onExportXlsx={onExportXlsx}
             onExportPdf={onExportPdf}
             onPrint={() => window.print()}
+            extra={<div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             Closing balances as on <strong>{to}</strong>.
           </p>
         </CardContent>
       </Card>
+      {view === "grid" ? (
+        <Card><CardContent className="p-3">
+          <DataGrid<typeof rows[number]>
+            reportId="trial-balance"
+            rows={rows}
+            columns={[
+              { id: "name", header: "Ledger", type: "text", width: 280, accessor: (x) => x.name, groupable: true },
+              { id: "type", header: "Type", type: "enum", width: 160, accessor: (x) => x.type.replace(/_/g, " "), groupable: true },
+              { id: "debit", header: "Debit", type: "number", width: 160, align: "right", accessor: (x) => x.debit / 100, cell: (x) => x.debit ? formatINR(x.debit, { symbol: false }) : "", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100), { symbol: false }) },
+              { id: "credit", header: "Credit", type: "number", width: 160, align: "right", accessor: (x) => x.credit / 100, cell: (x) => x.credit ? formatINR(x.credit, { symbol: false }) : "", aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100), { symbol: false }) },
+            ] satisfies DGColumn<typeof rows[number]>[]}
+            onRowClick={(x) => openLedgerReport(navigate, { ledgerId: x.id, from, to })}
+            globalSearch={(x) => `${x.name} ${x.type}`}
+            height={520}
+          />
+        </CardContent></Card>
+      ) : (
       <TAccount
         title="Trial Balance"
         subtitle={`as on ${to}`}
@@ -167,6 +185,7 @@ function TrialBalance() {
         leftTotal={formatINR(totals.dr)}
         rightTotal={formatINR(totals.cr)}
       />
+      )}
       {totals.dr !== totals.cr && (
         <Card>
           <CardContent className="p-3 text-center text-sm text-destructive">
