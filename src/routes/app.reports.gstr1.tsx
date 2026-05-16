@@ -200,43 +200,43 @@ function GSTR1Page() {
             }
           />
 
-          <SectionTable title={`B2B (${built.b2b.length})`} headers={["GSTIN", "Invoice", "Date", "POS", "Value", "Taxable", "IGST", "CGST", "SGST"]}
+          <GstSectionTable view={view} reportId="gstr1" title={`B2B (${built.b2b.length})`} headers={["GSTIN", "Invoice", "Date", "POS", "Value", "Taxable", "IGST", "CGST", "SGST"]}
             rows={built.b2b.map((x) => [x.ctin, x.inum, x.idt, x.pos, money(x.val), money(sumLine(x.itms, "txval")), money(sumLine(x.itms, "iamt")), money(sumLine(x.itms, "camt")), money(sumLine(x.itms, "samt"))])} />
 
-          <SectionTable title={`B2CL (${built.b2cl.length}) — Inter-state to URP > ₹2.5L`} headers={["Invoice", "Date", "POS", "Value", "Taxable", "IGST"]}
+          <GstSectionTable view={view} reportId="gstr1" title={`B2CL (${built.b2cl.length}) — Inter-state to URP > ₹2.5L`} headers={["Invoice", "Date", "POS", "Value", "Taxable", "IGST"]}
             rows={built.b2cl.map((x) => [x.inum, x.idt, x.pos, money(x.val), money(sumLine(x.itms, "txval")), money(sumLine(x.itms, "iamt"))])} />
 
-          <SectionTable title={`B2CS (${built.b2cs.length}) — Other unregistered`} headers={["Type", "POS", "Rate", "Taxable", "IGST", "CGST", "SGST"]}
+          <GstSectionTable view={view} reportId="gstr1" title={`B2CS (${built.b2cs.length}) — Other unregistered`} headers={["Type", "POS", "Rate", "Taxable", "IGST", "CGST", "SGST"]}
             rows={built.b2cs.map((x) => [x.sply_ty, x.pos, `${x.rt}%`, money(x.txval), money(x.iamt), money(x.camt), money(x.samt)])} />
 
-          <SectionTable title={`CDNR (${built.cdnr.length}) — Credit/Debit notes (registered)`} headers={["GSTIN", "Note", "Date", "Type", "POS", "Value", "Taxable"]}
+          <GstSectionTable view={view} reportId="gstr1" title={`CDNR (${built.cdnr.length}) — Credit/Debit notes (registered)`} headers={["GSTIN", "Note", "Date", "Type", "POS", "Value", "Taxable"]}
             rows={built.cdnr.map((x) => [x.ctin, x.nt_num, x.nt_dt, x.ntty, x.pos, money(x.val), money(sumLine(x.itms, "txval"))])} />
 
-          <SectionTable title={`CDNUR (${built.cdnur.length}) — Notes to unregistered / exports`} headers={["Type", "Note", "Date", "POS", "Value"]}
+          <GstSectionTable view={view} reportId="gstr1" title={`CDNUR (${built.cdnur.length}) — Notes to unregistered / exports`} headers={["Type", "Note", "Date", "POS", "Value"]}
             rows={built.cdnur.map((x) => [x.typ, x.nt_num, x.nt_dt, x.pos, money(x.val)])} />
 
-          <SectionTable title={`EXP (${built.exp.length}) — Exports & SEZ`} headers={["Type", "Invoice", "Date", "Port", "SB No", "SB Date", "Value"]}
+          <GstSectionTable view={view} reportId="gstr1" title={`EXP (${built.exp.length}) — Exports & SEZ`} headers={["Type", "Invoice", "Date", "Port", "SB No", "SB Date", "Value"]}
             rows={built.exp.map((e) => [e.exp_typ, e.inum, e.idt, e.sbpcode || "", e.sbnum || "", e.sbdt || "", money(e.val)])} />
 
-          <SectionTable title={`NIL / Exempted / Non-GST (${built.nil.length})`} headers={["Type", "Nil-rated", "Exempted", "Non-GST"]}
+          <GstSectionTable view={view} reportId="gstr1" title={`NIL / Exempted / Non-GST (${built.nil.length})`} headers={["Type", "Nil-rated", "Exempted", "Non-GST"]}
             rows={built.nil.map((n) => [n.sply_ty, money(n.nil_amt), money(n.expt_amt), money(n.ngsup_amt)])} />
 
           {built.b2ba.length > 0 && (
-            <SectionTable title={`B2BA (${built.b2ba.length}) — B2B Amendments`} headers={["GSTIN", "Orig Inv", "Orig Date", "New Inv", "New Date", "Value"]}
+            <GstSectionTable view={view} reportId="gstr1" title={`B2BA (${built.b2ba.length}) — B2B Amendments`} headers={["GSTIN", "Orig Inv", "Orig Date", "New Inv", "New Date", "Value"]}
               rows={built.b2ba.map((x) => [x.ctin, x.oinum, x.oidt, x.inum, x.idt, money(x.val)])} />
           )}
           {built.cdnra.length > 0 && (
-            <SectionTable title={`CDNRA (${built.cdnra.length}) — Note Amendments`} headers={["GSTIN", "Orig Note", "Orig Date", "New Note", "New Date", "Value"]}
+            <GstSectionTable view={view} reportId="gstr1" title={`CDNRA (${built.cdnra.length}) — Note Amendments`} headers={["GSTIN", "Orig Note", "Orig Date", "New Note", "New Date", "Value"]}
               rows={built.cdnra.map((x) => [x.ctin, x.ont_num, x.ont_dt, x.nt_num, x.nt_dt, money(x.val)])} />
           )}
 
-          <SectionTable title={`HSN — B2B (${built.hsn_b2b.length}) — Supplies to registered persons`} headers={["HSN", "UQC", "Qty", "Rate", "Taxable", "IGST", "CGST", "SGST", "Total"]}
+          <GstSectionTable view={view} reportId="gstr1" title={`HSN — B2B (${built.hsn_b2b.length}) — Supplies to registered persons`} headers={["HSN", "UQC", "Qty", "Rate", "Taxable", "IGST", "CGST", "SGST", "Total"]}
             rows={built.hsn_b2b.map((h) => [h.hsn_sc, h.uqc, h.qty, `${h.rt}%`, money(h.txval), money(h.iamt), money(h.camt), money(h.samt), money(h.val)])} />
 
-          <SectionTable title={`HSN — B2C (${built.hsn_b2c.length}) — Supplies to unregistered persons`} headers={["HSN", "UQC", "Qty", "Rate", "Taxable", "IGST", "CGST", "SGST", "Total"]}
+          <GstSectionTable view={view} reportId="gstr1" title={`HSN — B2C (${built.hsn_b2c.length}) — Supplies to unregistered persons`} headers={["HSN", "UQC", "Qty", "Rate", "Taxable", "IGST", "CGST", "SGST", "Total"]}
             rows={built.hsn_b2c.map((h) => [h.hsn_sc, h.uqc, h.qty, `${h.rt}%`, money(h.txval), money(h.iamt), money(h.camt), money(h.samt), money(h.val)])} />
 
-          <SectionTable title={`Documents Issued (${built.docs.length})`} headers={["Type", "From", "To", "Total", "Cancelled", "Net"]}
+          <GstSectionTable view={view} reportId="gstr1" title={`Documents Issued (${built.docs.length})`} headers={["Type", "From", "To", "Total", "Cancelled", "Net"]}
             rows={built.docs.map((d) => [d.doc_typ, d.from, d.to, d.totnum, d.cancel, d.net_issue])} />
         </>
       )}
