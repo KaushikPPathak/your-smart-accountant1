@@ -19,6 +19,7 @@ import {
   markCompanyUnlocked,
 } from "@/lib/tech-user";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { CurrencySwitcher } from "@/components/CurrencySwitcher";
 import { setCompanyLang, getCompanyLang, useI18n } from "@/lib/i18n";
 import { useCompany } from "@/lib/company-context";
 
@@ -138,6 +139,7 @@ function StartScreen() {
           </div>
           <div className="flex items-center gap-3">
             <LanguageSwitcher compact />
+            <CurrencySwitcher compact />
             <Button variant="ghost" size="sm" onClick={() => window.close()} className="hidden md:inline-flex">
               <ExitIcon className="mr-2 h-4 w-4" /> {t("common.exit")}
             </Button>
