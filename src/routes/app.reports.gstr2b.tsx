@@ -305,6 +305,23 @@ function Gstr2BPage() {
         )
       )}
 
+      {view === "grid" && missing.length > 0 ? (
+        <GstSectionTable
+          view={view}
+          reportId="gstr2b"
+          title={`Missing ITC: purchases in your books not appearing in GSTR-2B (${missing.length})`}
+          headers={["Date", "Voucher #", "Supplier", "GSTIN", "Vendor Inv #", "Value"]}
+          rows={missing.map((p) => [
+            fmtIndianDate(p.voucher_date),
+            p.voucher_number,
+            p.ledgers?.name || "—",
+            p.ledgers?.gstin || "—",
+            p.vendor_invoice_no || "—",
+            formatINR(p.total_paise),
+          ])}
+          numericFromCol={5}
+        />
+      ) : (
       <Card>
         <CardContent className="p-0">
           <div className="border-b bg-muted/30 px-3 py-2 text-xs font-semibold text-destructive">
@@ -334,6 +351,7 @@ function Gstr2BPage() {
           </Table>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }
