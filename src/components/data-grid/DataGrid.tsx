@@ -338,6 +338,7 @@ export function DataGrid<T>({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
