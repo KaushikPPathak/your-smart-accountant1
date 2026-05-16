@@ -127,6 +127,7 @@ function LedgersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [gstinLooking, setGstinLooking] = useState(false);
   const lookedRef = useRef<string>("");
+  const { view, setView } = useReportView("masters-ledgers");
 
   useEffect(() => {
     if (!open) return;
