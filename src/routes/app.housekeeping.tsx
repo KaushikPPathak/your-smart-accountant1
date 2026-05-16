@@ -38,6 +38,7 @@ import {
   HardDrive,
   CalendarCheck,
   ShieldCheck,
+  Activity,
 } from "lucide-react";
 import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceImport";
 import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport";
