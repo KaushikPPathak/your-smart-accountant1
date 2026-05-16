@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { amountHeader } from "@/lib/export-format";
 import { openLedgerReport } from "@/lib/voucher-return";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -119,7 +120,7 @@ function TradingAccount() {
 
   const csvRows = (): (string | number)[][] => [
     [`Trading A/c: ${from} to ${to}`, "", "", ""],
-    ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
+    ["Dr. Particulars", amountHeader(), "Cr. Particulars", amountHeader()],
     ...exportBody(),
     ["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)],
   ];
@@ -132,7 +133,7 @@ function TradingAccount() {
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       subtitle: `${from} to ${to}`,
-      head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
+      head: [["Dr. Particulars", amountHeader(), "Cr. Particulars", amountHeader()]],
       body: exportBody(),
       foot: [["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)]],
       fileName: `trading-${from}_to_${to}.pdf`,

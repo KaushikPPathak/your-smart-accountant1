@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { amountHeader } from "@/lib/export-format";
 import { openLedgerReport } from "@/lib/voucher-return";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -101,7 +102,7 @@ function TrialBalance() {
     const crList = rows.filter((r2) => r2.credit);
     return [
       [`Trial Balance as on ${to}`, "", "", ""],
-      ["Dr. Ledger", "Amount (₹)", "Cr. Ledger", "Amount (₹)"],
+      ["Dr. Ledger", amountHeader(), "Cr. Ledger", amountHeader()],
       ...Array.from({ length: max }).map((_, i) => [
         drList[i]?.name ?? "",
         drList[i] ? (drList[i].debit / 100).toFixed(2) : "",
@@ -124,7 +125,7 @@ function TrialBalance() {
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       subtitle: `As on ${fmtIndianDate(to)}`,
-      head: [["Dr. Ledger", "Amount (₹)", "Cr. Ledger", "Amount (₹)"]],
+      head: [["Dr. Ledger", amountHeader(), "Cr. Ledger", amountHeader()]],
       body: Array.from({ length: max }).map((_, i) => [
         drList[i]?.name ?? "",
         drList[i] ? r(drList[i].debit).toFixed(2) : "",

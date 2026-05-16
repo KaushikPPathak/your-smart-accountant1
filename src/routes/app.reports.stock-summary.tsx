@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { amountHeader } from "@/lib/export-format";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -134,7 +135,7 @@ function StockSummary() {
                 companyName: pdfHeader.companyName,
                 companySubLine: pdfHeader.companySubLine,
                 subtitle: `As on ${to} (movement window: ${from} to ${to})`,
-                head: [["Item", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", "Value (₹)"]],
+                head: [["Item", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", amountHeader("Value")]],
                 body: rows.map((x) => [x.name, x.hsn_code ?? "", x.unit, String(x.opening), String(x.inWindow), String(x.outWindow), String(x.closing), r(x.stockValue).toFixed(2)]),
                 foot: [["TOTAL", "", "", "", "", "", "", r(totalValue).toFixed(2)]],
                 fileName: `stock-summary-${to}.pdf`,

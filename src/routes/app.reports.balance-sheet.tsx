@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { amountHeader } from "@/lib/export-format";
 import { openLedgerReport } from "@/lib/voucher-return";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -106,7 +107,7 @@ function BalanceSheet() {
 
   const csvRows = (): (string | number)[][] => [
     [`Balance Sheet as on ${to}`, "", "", ""],
-    [liabHeader, "Amount (₹)", assetHeader, "Amount (₹)"],
+    [liabHeader, amountHeader(), assetHeader, amountHeader()],
     ...exportBody(),
     ["Total", r(grandL).toFixed(2), "Total", r(grandA).toFixed(2)],
   ];
@@ -120,7 +121,7 @@ function BalanceSheet() {
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       subtitle: `As on ${to}`,
-      head: [[liabHeader, "Amount (₹)", assetHeader, "Amount (₹)"]],
+      head: [[liabHeader, amountHeader(), assetHeader, amountHeader()]],
       body: exportBody(),
       foot: [["Total", r(grandL).toFixed(2), "Total", r(grandA).toFixed(2)]],
       fileName: `balance-sheet-${to}.pdf`,

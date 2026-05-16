@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { amountHeader } from "@/lib/export-format";
 import { openLedgerReport } from "@/lib/voucher-return";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -201,7 +202,7 @@ function GroupLedgerReport() {
   const drTotal = drRows.reduce((s, _, i) => s + (rows.filter((x) => x.closing_paise > 0)[i]?.closing_paise ?? 0), 0);
   const crTotal = crRows.reduce((s, _, i) => s + (-(rows.filter((x) => x.closing_paise < 0)[i]?.closing_paise ?? 0)), 0);
 
-  const headers = ["Ledger", "Side", "Amount (₹)"];
+  const headers = ["Ledger", "Side", amountHeader()];
   const tableRows = rows.map((row) => [row.name, row.closing_paise >= 0 ? "Dr" : "Cr", r(Math.abs(row.closing_paise))]);
   const fileBase = `${group.label.replace(/\s+/g, "_")}_${from}_to_${to}`;
 

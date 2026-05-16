@@ -1,4 +1,5 @@
 import { openVoucherDetail, hasLedgerOrigin, goBackFromLedger } from "@/lib/voucher-return";
+import { amountHeader } from "@/lib/export-format";
 import { sortEntriesByVoucherAsc } from "@/lib/voucher-sort";
 import { narrationOf } from "@/lib/voucher-text";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -327,7 +328,7 @@ function LedgerStatement() {
   const csvRowsHorizontal = (): (string | number)[][] => [
     [`Ledger: ${ledger?.name ?? ""}`, "", "", ""],
     [`Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`, "", "", ""],
-    ["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"],
+    ["Dr. Particulars", amountHeader(), "Cr. Particulars", amountHeader()],
     ...horizontalBody(),
     ["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)],
     ["", "", "Closing", r(closing).toFixed(2)],
@@ -389,7 +390,7 @@ function LedgerStatement() {
         subtitle: pdfHeader.dateRangeSubtitle(from, to),
         companyName: pdfHeader.companyName,
         companySubLine: pdfHeader.companySubLine,
-        head: [["Dr. Particulars", "Amount (₹)", "Cr. Particulars", "Amount (₹)"]],
+        head: [["Dr. Particulars", amountHeader(), "Cr. Particulars", amountHeader()]],
         body: horizontalBody(),
         foot: [["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)]],
         fileName: `${fileBase}-horizontal.pdf`,

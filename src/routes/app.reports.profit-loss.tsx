@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { amountHeader } from "@/lib/export-format";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
@@ -93,7 +94,7 @@ function ProfitLoss() {
 
   const csvRows = (): (string | number)[][] => [
     [`${reportTitle}: ${from} to ${to}`, "", "", ""],
-    [dr, "Amount (₹)", cr, "Amount (₹)"],
+    [dr, amountHeader(), cr, amountHeader()],
     ...exportBody(),
     ["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)],
   ];
@@ -108,7 +109,7 @@ function ProfitLoss() {
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       subtitle: `${from} to ${to}`,
-      head: [[dr, "Amount (₹)", cr, "Amount (₹)"]],
+      head: [[dr, amountHeader(), cr, amountHeader()]],
       body: exportBody(),
       foot: [["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)]],
       fileName: `${fileSlug}-${from}_to_${to}.pdf`,
