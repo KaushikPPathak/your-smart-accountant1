@@ -169,9 +169,33 @@ export function DataGrid<T>({
             totalCount={rows.length}
           />
         </div>
-        {toolbarExtras && <div className="flex shrink-0 items-center gap-1">{toolbarExtras}</div>}
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            size="sm"
+            variant={pivotEnabled ? "default" : "outline"}
+            className="h-8"
+            onClick={() => setPivot({ ...pivotState, enabled: !pivotEnabled })}
+            title="Toggle pivot mode"
+          >
+            <TableProperties className="mr-1 h-3.5 w-3.5" /> Pivot
+          </Button>
+          {toolbarExtras}
+        </div>
       </div>
 
+      {pivotEnabled ? (
+        <PivotPanel
+          columns={columns}
+          config={pivotConfig}
+          setConfig={(c) => setPivot({ ...pivotState, rows: c.rows, cols: c.cols, values: c.values })}
+          result={pivot.result}
+          loading={pivot.loading}
+          error={pivot.error}
+          ms={pivot.ms}
+          sourceCount={filteredRows.length}
+          onExit={() => setPivot({ ...pivotState, enabled: false })}
+        />
+      ) : (
       <div className="rounded-md border bg-card">
         {/* Header */}
         <div
