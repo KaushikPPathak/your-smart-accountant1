@@ -1,69 +1,109 @@
-# What's left to build
+# Currency & Date Audit — PDF / XLSX Templates
 
-Shipped so far: virtualized DataGrid foundation, Phase A reports (Day Book, Ledger, Sales/Purchase Register, GST Books, Receivables/Payables, Ageing, Stock Summary, Vouchers list), pivot panel + Web Worker offload, global Currency and Date-format switchers wired into company creation.
+Goal: every report exported to PDF or Excel uses the **company's chosen currency symbol and date format** (already wired in Phase 1), and Excel cells become **real numbers and real dates** (not pre-formatted strings) so users can sum, filter, and pivot in Excel itself.
 
-Below is everything still open, grouped by priority.
+## What stays out of scope
 
----
+- Static regulatory copy in the UI (e.g. "turnover > ₹5 Cr", "B2CL > ₹2.5L", "E-way bill > ₹50,000"). These are India-specific GST thresholds and should remain `₹` literals — they describe Indian law, not the user's money.
+- "Amount in words" (lakh/crore vs million) — explicitly out per the scope you chose.
+- Email/WhatsApp share templates — out per scope.
 
-## 1. Finish Phase A (the few list reports left)
+## Audit findings (what's broken today)
 
-Drop-in DataGrid on:
-- **Cash & Bank Book** (`app.reports.cash-bank.tsx`)
-- **Group Ledger** (`app.reports.group-ledger.tsx`)
-- **BRS day-level lists** (`app.reports.brs.tsx`)
+1. **Hard-coded "Rs."** in `src/lib/invoice-pdf.ts:326` (tax amount-in-figures box).
+2. **Column header literals** like `"Amount (₹)"`, `"Purchase ₹"`, `"Sale ₹"` in ~10 report route files (trial-balance, balance-sheet, trading, group-ledger, stock-summary, items, etc.) — these pass straight into PDF heads and XLSX header rows.
+3. **XLSX exports are all strings.** `src/lib/exporters.ts` `downloadXlsx` does `aoa_to_sheet(rows)` with pre-formatted currency strings (`"₹ 1,23,456.00"`) — Excel sees them as text, breaking SUM and pivot.
+4. **XLSX date cells** are also strings (output of `fmtIndianDate`) instead of Excel date serials with a `numFmt`.
+5. **No central Excel format helpers** — every route formats its own way.
 
-Each gets the existing `ViewSwitcher` (Classic ↔ Grid) so nothing changes by default.
+## Implementation
 
-## 2. Phase B — virtualize the heavy lists
+### 1. New shared helpers — `src/lib/export-format.ts` (new file)
 
-These pages currently render unbounded rows and will stutter on large companies:
-- **Trial Balance** (`app.reports.trial-balance.tsx`) — virtualize the grouped tree, add per-column filter
-- **Masters**: `app.ledgers.tsx`, `app.items.tsx`, `app.account-groups.tsx` — wrap the existing tables in DataGrid so search/sort/group/export come for free
+```ts
+// Currency symbol for export headers/footers.
+export function exportCurrencySymbol(): string;          // reads currency.tsx
+// Tagged-template style: amountHeader("Amount") → "Amount (₹)" / "Amount ($)"
+export function amountHeader(label = "Amount"): string;
 
-## 3. Phase C — optional grid on classic-view reports
+// SheetJS numFmt strings derived from the company currency
+//   "₹ #,##,##0.00;[Red]-₹ #,##,##0.00"   (Indian grouping for INR)
+//   "$#,##0.00;[Red]-$#,##0.00"            (Western grouping otherwise)
+export function excelCurrencyFmt(): string;
+export function excelDateFmt(): string;                   // derives from date.format
 
-Add a "Grid" toggle (pivot enabled) to:
-- Profit & Loss, Balance Sheet, Trading
-- GSTR-1, GSTR-2B, GSTR-3B summaries
+// Builds an XLSX cell object {v,t,z} from a paise integer
+export function moneyCell(paise: number): XLSX.CellObject;
+// Builds an XLSX cell object {v,t,z} from an ISO date string / Date
+export function dateCell(d: string | Date | null): XLSX.CellObject;
+```
 
-Classic T-account / statutory layout stays the default; the grid view unlocks ad-hoc analysis without exporting to Excel.
+These wrap SheetJS so callers stay terse.
 
-## 4. Grid polish (small, finishes the story)
+### 2. Upgrade `src/lib/exporters.ts` — XlsxSheet type
 
-- **Density toggle** is in state but not exposed on the toolbar yet — show comfortable/compact button
-- **Keyboard shortcuts**: `/` to focus search, `Ctrl+F` to open the active column's filter, arrow keys to move row focus, `Enter` to drill-down
-- **Column pinning + resize**: pin left/right columns, drag to resize, persist width per `reportId`
-- **Saved views UX**: rename, set default, export/import the JSON definition
-- **Accessibility pass**: ARIA roles for grid/row/cell, focus ring, screen-reader headers, reduced-motion respect
+Extend the row type to accept cell objects, not just strings/numbers:
 
-## 5. Currency / date follow-ups
+```ts
+export type XlsxCell = string | number | XLSX.CellObject;
+export interface XlsxSheet { name: string; rows: XlsxCell[][] }
+```
 
-- Currency switcher already swaps the symbol everywhere `formatINR` is used. Audit the **PDF/XLSX/Word exporters** and **invoice/voucher print templates** to make sure they pick up the active symbol too (today some templates hard-code ₹).
-- Date-format switcher: same audit for PDF headers and printable vouchers (`fmtIndianDate` is wired, but a few report PDFs format dates inline).
+`downloadXlsx` already passes rows to `aoa_to_sheet`, which natively accepts cell objects with `{ v, t, z }`. Localisation logic only touches strings, so cell objects flow through untouched. Add a post-pass that sets column widths based on header length so number columns aren't clipped.
 
-## 6. Operational hardening (outside the grid plan but visible)
+### 3. Fix `invoice-pdf.ts`
 
-- **Remix safety**: the `docs/REMIX_CHECKLIST.md` flow is manual. Consider an in-app "Backend self-test" panel under Housekeeping that runs the trigger audit + smoke test automatically after a remix.
-- **Weekly backup nudge**: surface a soft reminder if the last in-app backup is >7 days old.
+- Replace `` `Rs. ${val}` `` with `` `${exportCurrencySymbol()} ${val}` ``.
+- Sweep other "amount in figures" / total lines in the same file for any `₹` literals and route through the helper.
 
----
+### 4. Refactor PDF callers (report routes)
 
-## Suggested order
+For each of these files, replace inline `"Amount (₹)"` with `amountHeader("Amount")`:
 
-1. Finish Phase A (Cash/Bank, Group Ledger, BRS) — 1 short pass
-2. Phase B virtualization (TB + 3 masters) — biggest perf win
-3. Grid polish (density, keyboard, pinning, saved-view UX, a11y)
-4. Phase C optional grid on P&L / BS / Trading / GSTR
-5. Currency + date audit across PDF/XLSX/print templates
-6. Remix self-test + backup nudge
+- `app.reports.trial-balance.tsx`
+- `app.reports.balance-sheet.tsx`
+- `app.reports.trading.tsx`
+- `app.reports.group-ledger.tsx`
+- `app.reports.stock-summary.tsx`
+- `app.reports.profit-loss.tsx`
+- `app.reports.cash-bank.tsx`
+- `app.reports.day-book.tsx`
+- `app.reports.sales-register.tsx`
+- `app.reports.receivables.tsx`
+- `app.reports.ledger.tsx`
+- `app.reports.brs.tsx`
+- `app.items.tsx` (Items master export)
 
-Each step is independently shippable; nothing here breaks existing screens.
+Same files: where they build XLSX `rows`, swap `formatINR(p)` cells → `moneyCell(p)` and `fmtIndianDate(d)` cells → `dateCell(d)`. PDF body keeps the formatted string (PDFs need pre-rendered text); only XLSX gains typed cells.
 
----
+### 5. Localised UI labels (kept as-is, documented)
 
-## Out of scope (call out, don't build unless asked)
+Leave these as `₹` literals because they describe Indian GST rules, not the user's currency:
+- `app.companies.tsx` thresholds & turnover hints
+- `app.settings.tsx` QRMP threshold text
+- `app.einvoice.tsx` e-way bill copy
+- `app.reports.gstr*.tsx` section titles citing statutory limits
 
-- Server-side saved views (sync across devices) — currently localStorage, per the original plan
-- Full multi-currency accounting (FX rates, gain/loss ledgers) — explicitly declined earlier
-- Replacing the data layer with Dexie / IndexedDB cache
+Add a one-line code comment near each so future contributors don't "fix" them by accident.
+
+### 6. Date sweep
+
+`fmtIndianDate` already routes through the global format. Verify no remaining `toLocaleDateString` / `format(d, "dd/MM/yyyy")` calls inside exporter code paths; replace any survivors with `fmtIndianDate` for PDFs and `dateCell` for XLSX.
+
+### 7. QA
+
+After edits, manually export one of each:
+- A simple report (Trial Balance) → confirm PDF header reads "Amount ($)" when company currency is USD; XLSX SUM works.
+- An invoice PDF → confirm "Rs." is gone.
+- A date-heavy report (Day Book) → switch global date format to `yyyy-mm-dd`, re-export, confirm both PDF text and Excel cell display update.
+
+Run `tsc --noEmit` to confirm the broadened `XlsxCell` type doesn't break existing call sites.
+
+## Files touched (estimate)
+
+- New: `src/lib/export-format.ts` (~120 lines)
+- Edited: `src/lib/exporters.ts`, `src/lib/invoice-pdf.ts`, plus 13 report route files (header literal + XLSX cell swaps, ~5 lines each)
+
+## Out-of-scope reminder
+
+Amount-in-words localisation, email templates, and the regulatory-threshold copy stay untouched in this pass.
