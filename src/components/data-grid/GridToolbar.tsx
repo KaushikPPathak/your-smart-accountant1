@@ -196,9 +196,28 @@ export function GridToolbar<T>({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button variant="ghost" size="sm" className="h-8" onClick={reset} title="Reset filters/sort/group">
+        <Button variant="ghost" size="sm" className="h-8" onClick={reset} title="Reset filters/sort/group (Shift+R)">
           <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reset
         </Button>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" type="button">
+                <Keyboard className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end" className="text-xs">
+              <div className="space-y-0.5">
+                <div><kbd className="font-mono">/</kbd> focus search</div>
+                <div><kbd className="font-mono">Esc</kbd> clear search</div>
+                <div><kbd className="font-mono">Shift+R</kbd> reset</div>
+                <div><kbd className="font-mono">Shift+click</kbd> header → multi-sort</div>
+                <div>Drag header edge to resize</div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         <div className="ml-auto text-xs text-muted-foreground">
           {filteredCount.toLocaleString()} of {totalCount.toLocaleString()} rows
