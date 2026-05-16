@@ -38,12 +38,14 @@ import {
   HardDrive,
   CalendarCheck,
   ShieldCheck,
+  Activity,
 } from "lucide-react";
 import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceImport";
 import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport";
 import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
 import { YearEndClosure } from "@/components/housekeeping/YearEndClosure";
 import { VerifyAndRepairTool } from "@/components/housekeeping/VerifyAndRepairTool";
+import { SelfTestPanel } from "@/components/housekeeping/SelfTestPanel";
 const TallyBusyImport = lazy(() =>
   import("@/components/housekeeping/TallyBusyImport").then((m) => ({
     default: m.TallyBusyImport,
@@ -148,6 +150,9 @@ function HousekeepingPage() {
           <TabsTrigger value="closure">
             <CalendarCheck className="mr-1 h-3.5 w-3.5" /> Year-End
           </TabsTrigger>
+          <TabsTrigger value="self_test">
+            <Activity className="mr-1 h-3.5 w-3.5" /> Self-test
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="verify_repair">
@@ -209,6 +214,9 @@ function HousekeepingPage() {
                 ?.financial_year_start ?? null
             }
           />
+        </TabsContent>
+        <TabsContent value="self_test">
+          <SelfTestPanel companyId={activeCompanyId} />
         </TabsContent>
       </Tabs>
     </div>
