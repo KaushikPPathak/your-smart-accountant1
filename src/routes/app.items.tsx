@@ -397,7 +397,8 @@ function ItemsPage() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
             <Button
               variant={showLowOnly ? "default" : "outline"}
               size="sm"
