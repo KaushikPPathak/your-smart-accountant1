@@ -30,6 +30,8 @@ import { INDIAN_STATES } from "@/lib/constants";
 import { ENTITY_STATUSES, getEntityFeatures, getEntityMeta, type EntityStatus } from "@/lib/entity-status";
 import { companyFormSchema as schema } from "@/lib/schemas/company";
 import { EntityMembersEditor } from "@/components/companies/EntityMembersEditor";
+import { CURRENCIES } from "@/lib/currency";
+import { DATE_FORMATS } from "@/lib/date-format";
 
 export const Route = createFileRoute("/app/companies")({
   head: () => ({ meta: [{ title: "Companies — Your Mehtaji" }] }),
@@ -60,6 +62,8 @@ interface FormState {
   inventory_enabled: boolean;
   annual_turnover_lakhs: string;
   trial_local: boolean;
+  currency_code: string;
+  date_format: "dd-mm-yyyy" | "dd/mm/yyyy" | "mm-dd-yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "dd-mmm-yyyy";
 }
 
 const empty: FormState = {
@@ -86,6 +90,8 @@ const empty: FormState = {
   inventory_enabled: true,
   annual_turnover_lakhs: "",
   trial_local: false,
+  currency_code: "INR",
+  date_format: "dd-mm-yyyy",
 };
 
 function CompaniesPage() {
@@ -154,6 +160,8 @@ function CompaniesPage() {
       inventory_enabled: data.inventory_enabled ?? true,
       annual_turnover_lakhs: data.annual_turnover_paise ? String(data.annual_turnover_paise / 100 / 100000) : "",
       trial_local: (data as { mode?: string }).mode === "trial_local",
+      currency_code: ((data as { currency_code?: string }).currency_code) ?? "INR",
+      date_format: (((data as { date_format?: FormState["date_format"] }).date_format) ?? "dd-mm-yyyy"),
     });
     setOpen(true);
   };
@@ -221,6 +229,8 @@ function CompaniesPage() {
       inventory_enabled: parsed.data.inventory_enabled,
       annual_turnover_paise: Math.round((parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) * 100000 * 100),
       mode: parsed.data.trial_local ? "trial_local" : "normal",
+      currency_code: parsed.data.currency_code || "INR",
+      date_format: parsed.data.date_format || "dd-mm-yyyy",
     };
 
     if (editingId) {
@@ -416,7 +426,54 @@ function CompaniesPage() {
                     <p className="text-[11px] text-muted-foreground">
                       Determines HSN digits required: <strong>4-digit</strong> if &lt; ₹5 Cr, <strong>6-digit</strong> if ≥ ₹5 Cr.
                     </p>
+                </div>
+                <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
+                  <Label className="text-sm font-semibold">Display Preferences</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Currency symbol and date layout used throughout reports, vouchers and lists for this company. Books are always kept in INR; only the display changes.
+                  </p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Currency</Label>
+                      <Select
+                        value={form.currency_code}
+                        onValueChange={(v) => setForm({ ...form, currency_code: v })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent className="max-h-[320px]">
+                          {CURRENCIES.map((c) => (
+                            <SelectItem key={c.code} value={c.code}>
+                              <span className="flex items-center gap-2">
+                                <span className="font-mono text-xs text-muted-foreground">{c.symbol}</span>
+                                <span>{c.code}</span>
+                                <span className="hidden text-xs text-muted-foreground sm:inline">— {c.name}</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Date Format</Label>
+                      <Select
+                        value={form.date_format}
+                        onValueChange={(v) => setForm({ ...form, date_format: v as FormState["date_format"] })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {DATE_FORMATS.map((f) => (
+                            <SelectItem key={f.code} value={f.code}>
+                              <span className="flex items-center gap-2">
+                                <span>{f.label}</span>
+                                <span className="text-xs text-muted-foreground">— {f.sample}</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+                </div>
                 </div>
                 <div className="space-y-1.5 md:col-span-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
                   <label className="flex cursor-pointer items-start gap-2 text-sm">

@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./auth-context";
 import { rememberActiveCompanyName } from "./desktop-save";
 import type { EntityStatus } from "./entity-status";
+import { setCurrentCurrency } from "./currency";
+import { setCurrentDateFormat, type DateFormatCode } from "./date-format";
 
 export interface CompanyMembership {
   company_id: string;
@@ -23,6 +25,8 @@ export interface CompanyMembership {
     cin: string | null;
     share_capital_paise: number;
     corpus_fund_paise: number;
+    currency_code: string | null;
+    date_format: DateFormatCode | null;
   };
 }
 
@@ -54,7 +58,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     const { data, error } = await supabase
       .from("company_members")
-      .select("company_id, role, companies(id, name, gstin, state, state_code, financial_year_start, gst_registered, gst_filing_frequency, inventory_enabled, annual_turnover_paise, mode, entity_status, cin, share_capital_paise, corpus_fund_paise)")
+      .select("company_id, role, companies(id, name, gstin, state, state_code, financial_year_start, gst_registered, gst_filing_frequency, inventory_enabled, annual_turnover_paise, mode, entity_status, cin, share_capital_paise, corpus_fund_paise, currency_code, date_format)")
       .order("created_at", { ascending: true });
 
     if (error) {
@@ -83,6 +87,11 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     rememberActiveCompanyName(activeMembership?.companies?.name ?? null);
+    const c = activeMembership?.companies;
+    if (c) {
+      if (c.currency_code) setCurrentCurrency(c.currency_code);
+      if (c.date_format) setCurrentDateFormat(c.date_format);
+    }
   }, [activeMembership]);
 
 

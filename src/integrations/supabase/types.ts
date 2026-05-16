@@ -344,6 +344,8 @@ export type Database = {
           corpus_fund_paise: number
           created_at: string
           created_by: string
+          currency_code: string
+          date_format: string
           email: string | null
           entity_status: Database["public"]["Enums"]["entity_status"]
           financial_year_start: string
@@ -375,6 +377,8 @@ export type Database = {
           corpus_fund_paise?: number
           created_at?: string
           created_by: string
+          currency_code?: string
+          date_format?: string
           email?: string | null
           entity_status?: Database["public"]["Enums"]["entity_status"]
           financial_year_start?: string
@@ -406,6 +410,8 @@ export type Database = {
           corpus_fund_paise?: number
           created_at?: string
           created_by?: string
+          currency_code?: string
+          date_format?: string
           email?: string | null
           entity_status?: Database["public"]["Enums"]["entity_status"]
           financial_year_start?: string

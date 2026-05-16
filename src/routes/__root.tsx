@@ -4,6 +4,7 @@ import { CompanyProvider } from "@/lib/company-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import { I18nProvider } from "@/lib/i18n";
 import { CurrencyProvider } from "@/lib/currency";
+import { DateFormatProvider } from "@/lib/date-format";
 import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
@@ -83,12 +84,14 @@ function RootComponent() {
     <ThemeProvider>
       <I18nProvider>
         <CurrencyProvider>
-          <AuthProvider>
-            <CompanyProvider>
-              <Outlet />
-              <Toaster richColors position="top-right" />
-            </CompanyProvider>
-          </AuthProvider>
+          <DateFormatProvider>
+            <AuthProvider>
+              <CompanyProvider>
+                <Outlet />
+                <Toaster richColors position="top-right" />
+              </CompanyProvider>
+            </AuthProvider>
+          </DateFormatProvider>
         </CurrencyProvider>
       </I18nProvider>
     </ThemeProvider>

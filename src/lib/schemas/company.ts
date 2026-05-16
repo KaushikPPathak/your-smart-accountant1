@@ -25,6 +25,15 @@ export const companyFormSchema = z
     inventory_enabled: z.boolean(),
     annual_turnover_lakhs: z.string().optional(),
     trial_local: z.boolean(),
+    currency_code: z.string().trim().min(3).max(8).default("INR"),
+    date_format: z.enum([
+      "dd-mm-yyyy",
+      "dd/mm/yyyy",
+      "mm-dd-yyyy",
+      "mm/dd/yyyy",
+      "yyyy-mm-dd",
+      "dd-mmm-yyyy",
+    ]).default("dd-mm-yyyy"),
   })
   .superRefine((val, ctx) => {
     if (val.entity_status === "pvt_ltd" && val.cin && !CIN_REGEX.test(val.cin.toUpperCase())) {

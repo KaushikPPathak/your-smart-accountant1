@@ -1,7 +1,9 @@
 /** App-wide date formatting utilities.
  * Storage/query payloads stay ISO (YYYY-MM-DD); every human-facing report,
- * print, export and picker display should use DD-MM-YYYY.
+ * print, export and picker display uses the user's globally chosen format
+ * (default DD-MM-YYYY).
  */
+import { applyDateFormat } from "./date-format";
 
 export function parseAppDate(value: string | Date | null | undefined): Date | null {
   if (!value) return null;
@@ -38,10 +40,7 @@ export function fmtIndianDate(value: string | Date | null | undefined): string {
   if (!value) return "";
   const d = parseAppDate(value);
   if (!d) return String(value);
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
-  return `${dd}-${mm}-${yyyy}`;
+  return applyDateFormat(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
 }
 
 export function formatDateRange(from: string | null | undefined, to: string | null | undefined, sep = "to"): string {
