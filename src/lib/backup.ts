@@ -106,7 +106,8 @@ export async function exportCompanyBackup(
   const payload = await buildCompanyBackup(companyId);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const fileName = `${safeName(companyName)}_backup_${stamp}.json`;
-  const contents = JSON.stringify(payload, null, 2);
+  const envelope = await wrapBackup(payload);
+  const contents = JSON.stringify(envelope, null, 2);
 
   const api = electron();
   if (api) {
