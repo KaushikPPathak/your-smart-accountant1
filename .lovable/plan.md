@@ -1,37 +1,34 @@
-## Issue
+## Root cause
 
-GitHub Actions warns that `actions/upload-artifact@v5` and `softprops/action-gh-release@v2` still ship a `node20` runtime. We already set `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'` so they execute on Node 24, but the deprecation banner still appears because the actions' own metadata declares `node20`. The fix is to swap in maintainers' implementations that target `node24` and remove the global force flag once everything is clean.
+The Electron desktop app is a thin shell that loads your published web app over the internet via `win.loadURL(APP_URL)`. It does **not** bundle the React build — so it always reflects whatever URL it points to, instantly, no rebuild needed.
+
+The problem is in `electron/main.cjs` line 6:
+
+```js
+const APP_URL = 'https://biz-account-hero.lovable.app';
+```
+
+That is **a different project's domain**, not this one. Your actual published URL is:
+
+```
+https://your-smart-accountant.lovable.app
+```
+
+So your installer has been loading a stale/unrelated site this whole time. That's why "latest builds don't show" — the installer isn't broken, it's just pointed at the wrong address. Reinstalling the .exe won't help until the URL is corrected and a new installer is built.
+
+A secondary minor issue: the GitHub Actions workflow only triggers on changes to `electron/**`, so editing `main.cjs` will correctly produce a fresh installer. Web-only changes (`src/**`) don't need to trigger a rebuild because the desktop shell loads them remotely.
 
 ## Plan
 
-Edit `.github/workflows/build-windows-installer.yml` only:
+1. **Edit `electron/main.cjs`** — change `APP_URL` to `https://your-smart-accountant.lovable.app` (your real published URL). Also update the `setWindowOpenHandler` check (already uses the same constant — no extra change needed).
 
-1. **Remove** the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env (no longer needed once actions are node24-native).
-2. **Replace `softprops/action-gh-release@v2`** with the GitHub CLI (`gh release create`), which runs natively on the runner's Node 24 / shell and has no node20 dependency. It already supports uploading multiple files and auto-generated notes via `--generate-notes`.
-3. **Keep `actions/upload-artifact@v5`** — v5 is the latest. The warning will disappear once GitHub publishes the node24 build of v5; in the meantime, pin to the current SHA and add a comment noting it's tracked upstream. (Alternative: drop the force flag and accept the single residual warning until v6 ships.)
-4. **Confirm** `actions/checkout@v5` and `actions/setup-node@v5` are already node24-compatible — no change needed.
+2. **Push to GitHub** — Lovable's GitHub sync pushes the change. Because the path matches `electron/**`, the `Build Windows Installer` workflow auto-runs.
 
-### Replacement snippet for the release step
+3. **Download the new installer** from the workflow's Releases page (the new `gh release create` step publishes `YourMehtaji-Setup-1.0.0.exe` tagged `v1.0.0-<run-number>`).
 
-```yaml
-- name: Create GitHub Release
-  if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
-  shell: bash
-  env:
-    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  run: |
-    TAG="v1.0.0-${{ github.run_number }}"
-    gh release create "$TAG" \
-      YourMehtaji-Setup-1.0.0.exe \
-      YourMehtaji-Portable-1.0.0.zip \
-      --title "Your Mehtaji Setup (build ${{ github.run_number }})" \
-      --generate-notes
-```
+4. **Uninstall the old "Your Mehtaji"** from Windows, install the new .exe, launch. It will now load your real published app, and every future publish from Lovable will show up immediately on next app launch / Reload (Ctrl+R) — no installer rebuild required for web-only changes.
 
-## Question for you
+## Notes
 
-For `actions/upload-artifact@v5`, do you want me to:
-- **(a)** Leave it as-is and accept the single remaining node20 warning until GitHub ships v6, or
-- **(b)** Also replace it with a manual upload step (e.g. `gh` CLI artifact upload via API), which is more code but kills the warning today?
-
-I'd recommend **(a)** — it's the supported version and the warning is harmless until the deprecation date.
+- Going forward, you only need to rebuild the installer when you change something inside `electron/` (the shell itself, icons, menus, IPC handlers). All UI / business-logic updates go live the moment you click **Update** in the Lovable publish dialog.
+- If you ever connect a custom domain, update `APP_URL` to that domain and rebuild the installer once.
