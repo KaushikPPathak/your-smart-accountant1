@@ -413,10 +413,14 @@ function LedgerStatement() {
         companySubLine: pdfHeader.companySubLine,
         head: [["Dr. Particulars", amountHeader(), "Cr. Particulars", amountHeader()]],
         body: horizontalBody(),
-        foot: [["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)]],
+        foot: [
+          ["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)],
+          ["", "", "Closing Balance", fmtBal(closing)],
+        ],
         fileName: `${fileBase}-horizontal.pdf`,
         orientation: "l",
         rightAlignCols: [1, 3],
+        dividerBeforeCol: 2,
       });
     }
   };
