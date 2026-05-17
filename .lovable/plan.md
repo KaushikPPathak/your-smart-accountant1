@@ -1,109 +1,37 @@
-# Currency & Date Audit — PDF / XLSX Templates
+## Issue
 
-Goal: every report exported to PDF or Excel uses the **company's chosen currency symbol and date format** (already wired in Phase 1), and Excel cells become **real numbers and real dates** (not pre-formatted strings) so users can sum, filter, and pivot in Excel itself.
+GitHub Actions warns that `actions/upload-artifact@v5` and `softprops/action-gh-release@v2` still ship a `node20` runtime. We already set `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'` so they execute on Node 24, but the deprecation banner still appears because the actions' own metadata declares `node20`. The fix is to swap in maintainers' implementations that target `node24` and remove the global force flag once everything is clean.
 
-## What stays out of scope
+## Plan
 
-- Static regulatory copy in the UI (e.g. "turnover > ₹5 Cr", "B2CL > ₹2.5L", "E-way bill > ₹50,000"). These are India-specific GST thresholds and should remain `₹` literals — they describe Indian law, not the user's money.
-- "Amount in words" (lakh/crore vs million) — explicitly out per the scope you chose.
-- Email/WhatsApp share templates — out per scope.
+Edit `.github/workflows/build-windows-installer.yml` only:
 
-## Audit findings (what's broken today)
+1. **Remove** the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env (no longer needed once actions are node24-native).
+2. **Replace `softprops/action-gh-release@v2`** with the GitHub CLI (`gh release create`), which runs natively on the runner's Node 24 / shell and has no node20 dependency. It already supports uploading multiple files and auto-generated notes via `--generate-notes`.
+3. **Keep `actions/upload-artifact@v5`** — v5 is the latest. The warning will disappear once GitHub publishes the node24 build of v5; in the meantime, pin to the current SHA and add a comment noting it's tracked upstream. (Alternative: drop the force flag and accept the single residual warning until v6 ships.)
+4. **Confirm** `actions/checkout@v5` and `actions/setup-node@v5` are already node24-compatible — no change needed.
 
-1. **Hard-coded "Rs."** in `src/lib/invoice-pdf.ts:326` (tax amount-in-figures box).
-2. **Column header literals** like `"Amount (₹)"`, `"Purchase ₹"`, `"Sale ₹"` in ~10 report route files (trial-balance, balance-sheet, trading, group-ledger, stock-summary, items, etc.) — these pass straight into PDF heads and XLSX header rows.
-3. **XLSX exports are all strings.** `src/lib/exporters.ts` `downloadXlsx` does `aoa_to_sheet(rows)` with pre-formatted currency strings (`"₹ 1,23,456.00"`) — Excel sees them as text, breaking SUM and pivot.
-4. **XLSX date cells** are also strings (output of `fmtIndianDate`) instead of Excel date serials with a `numFmt`.
-5. **No central Excel format helpers** — every route formats its own way.
+### Replacement snippet for the release step
 
-## Implementation
-
-### 1. New shared helpers — `src/lib/export-format.ts` (new file)
-
-```ts
-// Currency symbol for export headers/footers.
-export function exportCurrencySymbol(): string;          // reads currency.tsx
-// Tagged-template style: amountHeader("Amount") → "Amount (₹)" / "Amount ($)"
-export function amountHeader(label = "Amount"): string;
-
-// SheetJS numFmt strings derived from the company currency
-//   "₹ #,##,##0.00;[Red]-₹ #,##,##0.00"   (Indian grouping for INR)
-//   "$#,##0.00;[Red]-$#,##0.00"            (Western grouping otherwise)
-export function excelCurrencyFmt(): string;
-export function excelDateFmt(): string;                   // derives from date.format
-
-// Builds an XLSX cell object {v,t,z} from a paise integer
-export function moneyCell(paise: number): XLSX.CellObject;
-// Builds an XLSX cell object {v,t,z} from an ISO date string / Date
-export function dateCell(d: string | Date | null): XLSX.CellObject;
+```yaml
+- name: Create GitHub Release
+  if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+  shell: bash
+  env:
+    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  run: |
+    TAG="v1.0.0-${{ github.run_number }}"
+    gh release create "$TAG" \
+      YourMehtaji-Setup-1.0.0.exe \
+      YourMehtaji-Portable-1.0.0.zip \
+      --title "Your Mehtaji Setup (build ${{ github.run_number }})" \
+      --generate-notes
 ```
 
-These wrap SheetJS so callers stay terse.
+## Question for you
 
-### 2. Upgrade `src/lib/exporters.ts` — XlsxSheet type
+For `actions/upload-artifact@v5`, do you want me to:
+- **(a)** Leave it as-is and accept the single remaining node20 warning until GitHub ships v6, or
+- **(b)** Also replace it with a manual upload step (e.g. `gh` CLI artifact upload via API), which is more code but kills the warning today?
 
-Extend the row type to accept cell objects, not just strings/numbers:
-
-```ts
-export type XlsxCell = string | number | XLSX.CellObject;
-export interface XlsxSheet { name: string; rows: XlsxCell[][] }
-```
-
-`downloadXlsx` already passes rows to `aoa_to_sheet`, which natively accepts cell objects with `{ v, t, z }`. Localisation logic only touches strings, so cell objects flow through untouched. Add a post-pass that sets column widths based on header length so number columns aren't clipped.
-
-### 3. Fix `invoice-pdf.ts`
-
-- Replace `` `Rs. ${val}` `` with `` `${exportCurrencySymbol()} ${val}` ``.
-- Sweep other "amount in figures" / total lines in the same file for any `₹` literals and route through the helper.
-
-### 4. Refactor PDF callers (report routes)
-
-For each of these files, replace inline `"Amount (₹)"` with `amountHeader("Amount")`:
-
-- `app.reports.trial-balance.tsx`
-- `app.reports.balance-sheet.tsx`
-- `app.reports.trading.tsx`
-- `app.reports.group-ledger.tsx`
-- `app.reports.stock-summary.tsx`
-- `app.reports.profit-loss.tsx`
-- `app.reports.cash-bank.tsx`
-- `app.reports.day-book.tsx`
-- `app.reports.sales-register.tsx`
-- `app.reports.receivables.tsx`
-- `app.reports.ledger.tsx`
-- `app.reports.brs.tsx`
-- `app.items.tsx` (Items master export)
-
-Same files: where they build XLSX `rows`, swap `formatINR(p)` cells → `moneyCell(p)` and `fmtIndianDate(d)` cells → `dateCell(d)`. PDF body keeps the formatted string (PDFs need pre-rendered text); only XLSX gains typed cells.
-
-### 5. Localised UI labels (kept as-is, documented)
-
-Leave these as `₹` literals because they describe Indian GST rules, not the user's currency:
-- `app.companies.tsx` thresholds & turnover hints
-- `app.settings.tsx` QRMP threshold text
-- `app.einvoice.tsx` e-way bill copy
-- `app.reports.gstr*.tsx` section titles citing statutory limits
-
-Add a one-line code comment near each so future contributors don't "fix" them by accident.
-
-### 6. Date sweep
-
-`fmtIndianDate` already routes through the global format. Verify no remaining `toLocaleDateString` / `format(d, "dd/MM/yyyy")` calls inside exporter code paths; replace any survivors with `fmtIndianDate` for PDFs and `dateCell` for XLSX.
-
-### 7. QA
-
-After edits, manually export one of each:
-- A simple report (Trial Balance) → confirm PDF header reads "Amount ($)" when company currency is USD; XLSX SUM works.
-- An invoice PDF → confirm "Rs." is gone.
-- A date-heavy report (Day Book) → switch global date format to `yyyy-mm-dd`, re-export, confirm both PDF text and Excel cell display update.
-
-Run `tsc --noEmit` to confirm the broadened `XlsxCell` type doesn't break existing call sites.
-
-## Files touched (estimate)
-
-- New: `src/lib/export-format.ts` (~120 lines)
-- Edited: `src/lib/exporters.ts`, `src/lib/invoice-pdf.ts`, plus 13 report route files (header literal + XLSX cell swaps, ~5 lines each)
-
-## Out-of-scope reminder
-
-Amount-in-words localisation, email templates, and the regulatory-threshold copy stay untouched in this pass.
+I'd recommend **(a)** — it's the supported version and the warning is harmless until the deprecation date.
