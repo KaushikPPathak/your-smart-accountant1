@@ -98,7 +98,7 @@ export function TAccount({
   return (
     <div
       className={cn(
-        "rounded-md border-2 border-foreground bg-card text-card-foreground print:border-black",
+        "w-full max-w-full overflow-hidden rounded-md border-2 border-foreground bg-card text-card-foreground print:border-black",
         className,
       )}
     >
@@ -111,20 +111,20 @@ export function TAccount({
         </div>
       )}
       {/* Column headers */}
-      <div className="grid grid-cols-2 border-b-2 border-foreground bg-muted/40 text-xs font-semibold uppercase tracking-wide print:border-black">
-        <div className="flex items-center justify-between gap-3 border-r-2 border-foreground px-3 py-1.5 print:border-black">
-          <span>{loc(leftHeader, lang)}</span>
-          <span>{loc(amountHeader, lang)}</span>
+      <div className="grid grid-cols-2 border-b-2 border-foreground bg-muted/40 text-[11px] font-semibold uppercase tracking-wide print:border-black">
+        <div className="flex min-w-0 items-center justify-between gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black">
+          <span className="truncate">{loc(leftHeader, lang)}</span>
+          <span className="whitespace-nowrap">{loc(amountHeader, lang)}</span>
         </div>
-        <div className="flex items-center justify-between gap-3 px-3 py-1.5">
-          <span>{loc(rightHeader, lang)}</span>
-          <span>{loc(amountHeader, lang)}</span>
+        <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-1.5">
+          <span className="truncate">{loc(rightHeader, lang)}</span>
+          <span className="whitespace-nowrap">{loc(amountHeader, lang)}</span>
         </div>
       </div>
       {/* Body */}
       <div className="grid grid-cols-2">
         {/* Left column (Dr) */}
-        <div className="border-r-2 border-foreground print:border-black">
+        <div className="min-w-0 border-r-2 border-foreground print:border-black">
           {lpad.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">—</div>
           ) : (
@@ -133,13 +133,13 @@ export function TAccount({
                 key={`l-${i}`}
                 className={cn(i !== 0 && "border-t border-foreground/60 print:border-black")}
               >
-                {row ? <RowCell row={row} /> : <div className="px-3 py-2 text-sm">&nbsp;</div>}
+                {row ? <RowCell row={row} /> : <div className="px-2 py-1.5 text-[12px]">&nbsp;</div>}
               </div>
             ))
           )}
         </div>
         {/* Right column (Cr) */}
-        <div>
+        <div className="min-w-0">
           {rpad.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">—</div>
           ) : (
@@ -148,21 +148,21 @@ export function TAccount({
                 key={`r-${i}`}
                 className={cn(i !== 0 && "border-t border-foreground/60 print:border-black")}
               >
-                {row ? <RowCell row={row} /> : <div className="px-3 py-2 text-sm">&nbsp;</div>}
+                {row ? <RowCell row={row} /> : <div className="px-2 py-1.5 text-[12px]">&nbsp;</div>}
               </div>
             ))
           )}
         </div>
       </div>
       {/* Totals strip */}
-      <div className="grid grid-cols-2 border-t-2 border-foreground bg-muted/50 text-sm font-semibold print:border-black">
-        <div className="flex items-center justify-between gap-3 border-r-2 border-foreground px-3 py-2 print:border-black">
-          <span>{totalLabel}</span>
-          <span className="font-mono tabular-nums">{leftTotal}</span>
+      <div className="grid grid-cols-2 border-t-2 border-foreground bg-muted/50 text-[12px] font-semibold print:border-black">
+        <div className="flex min-w-0 items-center justify-between gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black">
+          <span className="truncate">{totalLabel}</span>
+          <span className="whitespace-nowrap font-mono tabular-nums">{leftTotal}</span>
         </div>
-        <div className="flex items-center justify-between gap-3 px-3 py-2">
-          <span>{totalLabel}</span>
-          <span className="font-mono tabular-nums">{rightTotal}</span>
+        <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-1.5">
+          <span className="truncate">{totalLabel}</span>
+          <span className="whitespace-nowrap font-mono tabular-nums">{rightTotal}</span>
         </div>
       </div>
     </div>
