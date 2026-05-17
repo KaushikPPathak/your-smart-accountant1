@@ -92,7 +92,10 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
       }
 
       const text = await pendingFile.text();
-      const parsed = parseBackupFile(text);
+      const parsed = await parseBackupFile(text);
+      if (parsed.checksumOk === false) {
+        toast.warning("Backup checksum mismatch — the file may be corrupted or edited. Proceeding anyway.");
+      }
       if (parsed.kind !== "single") {
         toast.error("Multi-company backup detected. Please use a single-company backup file.");
         return;
