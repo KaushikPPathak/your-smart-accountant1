@@ -1,6 +1,7 @@
 // Backup & Restore utilities — JSON snapshot per-company or all-companies.
 // In Electron desktop builds, files are also written to C:\YourMehtaji\<Company>\backups\.
 import { supabase } from "@/integrations/supabase/client";
+import { wrapBackup, isBackupEnvelope, verifyEnvelope } from "@/lib/backup-policy";
 
 // ---------- Types ----------
 export interface CompanyBackup {
@@ -105,7 +106,8 @@ export async function exportCompanyBackup(
   const payload = await buildCompanyBackup(companyId);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const fileName = `${safeName(companyName)}_backup_${stamp}.json`;
-  const contents = JSON.stringify(payload, null, 2);
+  const envelope = await wrapBackup(payload);
+  const contents = JSON.stringify(envelope, null, 2);
 
   const api = electron();
   if (api) {
@@ -131,7 +133,8 @@ export async function exportAllCompaniesBackup(
   };
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const fileName = `YourMehtaji_AllCompanies_${stamp}.json`;
-  const contents = JSON.stringify(payload, null, 2);
+  const envelope = await wrapBackup(payload);
+  const contents = JSON.stringify(envelope, null, 2);
 
   const api = electron();
   if (api) {
@@ -355,9 +358,12 @@ export async function restoreCompanyBackup(
   return summary;
 }
 
-export function parseBackupFile(
+export async function parseBackupFile(
   text: string,
-): { kind: "single"; data: CompanyBackup } | { kind: "multi"; data: MultiCompanyBackup } {
+): Promise<
+  | { kind: "single"; data: CompanyBackup; checksumOk?: boolean }
+  | { kind: "multi"; data: MultiCompanyBackup; checksumOk?: boolean }
+> {
   const trimmed = text.trimStart();
   if (!trimmed.startsWith("{")) {
     throw new Error(
@@ -372,6 +378,21 @@ export function parseBackupFile(
       "Backup file is not valid JSON. Please upload the .json file produced by 'Export full backup'.",
     );
   }
+
+  // New format: wrapped in a signed envelope with SHA-256 checksum.
+  if (isBackupEnvelope(j)) {
+    const checksumOk = await verifyEnvelope(j);
+    const inner = j.payload as Record<string, unknown>;
+    if (inner.kind === "all_companies" && Array.isArray(inner.companies)) {
+      return { kind: "multi", data: inner as unknown as MultiCompanyBackup, checksumOk };
+    }
+    if (typeof inner.schema_version === "number") {
+      return { kind: "single", data: inner as unknown as CompanyBackup, checksumOk };
+    }
+    throw new Error("Backup envelope contains an unknown payload.");
+  }
+
+  // Legacy format: bare CompanyBackup / MultiCompanyBackup.
   if (j.kind === "all_companies" && Array.isArray(j.companies)) {
     return { kind: "multi", data: j as unknown as MultiCompanyBackup };
   }

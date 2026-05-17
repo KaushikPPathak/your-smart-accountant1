@@ -85,19 +85,21 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
     browserDownload(opts.fileName, opts.contents, opts.mime);
     toast.success(opts.toastTitle || opts.fileName, {
       description: "Downloaded to your Downloads folder.",
+      closeButton: true,
     });
     return;
   }
   const company = activeCompanyName();
   const res = await b.saveCompanyFile(company, opts.subFolder, opts.fileName, opts.contents);
   if (!res.ok || !res.path) {
-    toast.error("Could not save file", { description: res.error || "Unknown error" });
+    toast.error("Could not save file", { description: res.error || "Unknown error", closeButton: true });
     return;
   }
   const savedPath = res.path;
   toast.success(opts.toastTitle || opts.fileName, {
     description: `Saved to ${savedPath}`,
-    duration: 6000,
+    duration: 10000,
+    closeButton: true,
     action: {
       label: "Show in folder",
       onClick: () => { void b.showInFolder(savedPath); },

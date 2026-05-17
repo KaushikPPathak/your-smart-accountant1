@@ -15,6 +15,7 @@ import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
   type RestoreSummary,
 } from "@/lib/backup";
+import { BACKUP_POLICY } from "@/lib/backup-policy";
 import { writeLocalMirror } from "@/lib/local-mirror";
 
 interface Props {
@@ -92,7 +93,10 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
       }
 
       const text = await pendingFile.text();
-      const parsed = parseBackupFile(text);
+      const parsed = await parseBackupFile(text);
+      if (parsed.checksumOk === false) {
+        toast.warning("Backup checksum mismatch — the file may be corrupted or edited. Proceeding anyway.");
+      }
       if (parsed.kind !== "single") {
         toast.error("Multi-company backup detected. Please use a single-company backup file.");
         return;
@@ -216,6 +220,37 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-blue-500/30 bg-blue-500/5">
+        <CardHeader>
+          <CardTitle className="text-base">Backup policy (industry standard)</CardTitle>
+          <CardDescription>
+            Rules applied to every backup this app produces. Aligned with the Income-tax Act §44AA / Rule 6F,
+            CGST Act §36, Companies Act §128(5) and the ISO/NIST <strong>3-2-1</strong> backup rule.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-xs">
+          <div><strong>Frequency:</strong> at least every {BACKUP_POLICY.recommendedFrequencyDays} days, and always before
+            year-end closure, bulk import, restore, mass-delete or software upgrade.</div>
+          <div><strong>Integrity:</strong> every file is wrapped in a signed envelope with a
+            <code className="mx-1">{BACKUP_POLICY.integrity.algorithm}</code> checksum that is verified on restore.</div>
+          <div><strong>Naming:</strong> <code>{BACKUP_POLICY.naming}</code> (ISO timestamp — sorts chronologically).</div>
+          <div><strong>3-2-1 rule:</strong> keep <strong>{BACKUP_POLICY.copies.count}</strong> copies on
+            {" "}<strong>{BACKUP_POLICY.copies.media}</strong> different media, with
+            {" "}<strong>{BACKUP_POLICY.copies.offsite}</strong> stored off-site
+            (cloud / external HDD in another premise).</div>
+          <div><strong>Retention (GFS rotation):</strong> last {BACKUP_POLICY.retention.daily} daily,
+            {" "}{BACKUP_POLICY.retention.weekly} weekly, {BACKUP_POLICY.retention.monthly} monthly,
+            plus every financial-year-end <strong>kept forever</strong>.
+            Minimum legal retention: <strong>{BACKUP_POLICY.retention.minimumMonths / 12} years</strong>.</div>
+          <div><strong>Test restore:</strong> verify a backup on a scratch company at least every
+            {" "}{BACKUP_POLICY.testRestoreFrequencyDays} days — an untested backup is not a backup.</div>
+          <div className="text-muted-foreground">
+            Encryption tip: when copying to USB / cloud, store inside an encrypted container
+            (BitLocker / VeraCrypt) — accounting data is sensitive.
+          </div>
         </CardContent>
       </Card>
 

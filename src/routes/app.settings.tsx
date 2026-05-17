@@ -301,7 +301,8 @@ function SettingsPage() {
     setRestoring(true);
     try {
       const text = await file.text();
-      const parsed = parseBackupFile(text);
+      const parsed = await parseBackupFile(text);
+      if (parsed.checksumOk === false) toast.warning("Backup checksum mismatch — file may be corrupted or edited.");
       const single = parsed.kind === "single" ? parsed.data : parsed.data.companies[0];
       if (!single) throw new Error("Backup file is empty");
       const summary = await restoreCompanyBackup(activeCompanyId, single, { wipeExisting: wipeBeforeRestore });
