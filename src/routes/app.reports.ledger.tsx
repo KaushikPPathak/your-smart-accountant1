@@ -255,6 +255,9 @@ function LedgerStatement() {
     `${formatINR(Math.abs(paise), { symbol: false })} ${paise >= 0 ? "Dr" : "Cr"}`;
 
   // ---------- T-format (Horizontal) data ----------
+  // Accounting-norm row shape:
+  //   Particulars : "To/By <Origin Account>" — the contra ledger (Cash/Bank/Sales/Purchase…)
+  //   Hint        : "<dd-mm-yyyy> · <Vch Type> #<Vch No>[ · Ref: <ref/bill no>][ — <narration>]"
   const drRows: TRow[] = [];
   const crRows: TRow[] = [];
   if (openingBeforeFrom > 0) {
@@ -262,13 +265,31 @@ function LedgerStatement() {
   } else if (openingBeforeFrom < 0) {
     crRows.push({ label: "By Opening Balance", hint: fmtIndianDate(from), amount: formatINR(-openingBeforeFrom), emphasis: "bold" });
   }
+  const originFor = (v: EntryRow["vouchers"]): string => {
+    if (!v) return "—";
+    const sibs = siblings.get(v.id) ?? [];
+    const names = sibs.map((s) => siblingNames.get(s.ledger_id)).filter(Boolean) as string[];
+    if (names.length > 0) return names.join(", ");
+    return (TYPE_LABEL[v.voucher_type] ?? v.voucher_type).replace(/_/g, " ");
+  };
+  const hintFor = (e: EntryRow, v: EntryRow["vouchers"]): string => {
+    if (!v) return "";
+    const parts: string[] = [fmtIndianDate(v.voucher_date)];
+    const vt = TYPE_LABEL[v.voucher_type] ?? v.voucher_type;
+    parts.push(`${vt} #${v.voucher_number}`);
+    if (v.reference_no && v.reference_no.trim()) parts.push(`Ref: ${v.reference_no.trim()}`);
+    const narr = (e.narration?.trim() || v.narration?.trim() || "");
+    let line = parts.join(" · ");
+    if (narr) line += ` — ${narr}`;
+    return line;
+  };
   for (const e of sortEntriesByVoucherAsc(entries)) {
     const v = e.vouchers;
-    const desc = narrationOf(e, v, (v?.voucher_type ?? "").replace(/_/g, " "));
-    const hint = v ? `${fmtIndianDate(v.voucher_date)} · ${v.voucher_number}` : "";
+    const origin = originFor(v);
+    const hint = hintFor(e, v);
     const goto = v ? () => openVoucherDetail(navigate, v.id) : undefined;
-    if (e.debit_paise > 0) drRows.push({ label: <>To {desc}</>, hint, amount: formatINR(e.debit_paise), onClick: goto });
-    if (e.credit_paise > 0) crRows.push({ label: <>By {desc}</>, hint, amount: formatINR(e.credit_paise), onClick: goto });
+    if (e.debit_paise > 0) drRows.push({ label: <>To {origin} A/c</>, hint, amount: formatINR(e.debit_paise), onClick: goto });
+    if (e.credit_paise > 0) crRows.push({ label: <>By {origin} A/c</>, hint, amount: formatINR(e.credit_paise), onClick: goto });
   }
   const drSubtotal = (openingBeforeFrom > 0 ? openingBeforeFrom : 0) + totals.dr;
   const crSubtotal = (openingBeforeFrom < 0 ? -openingBeforeFrom : 0) + totals.cr;
@@ -309,10 +330,10 @@ function LedgerStatement() {
     else if (openingBeforeFrom < 0) crExp.push({ label: "By Opening Balance", paise: -openingBeforeFrom });
     for (const e of sortEntriesByVoucherAsc(entries)) {
       const v = e.vouchers;
-      const desc = narrationOf(e, v, (v?.voucher_type ?? "").replace(/_/g, " "));
-      const ref = v ? ` (${fmtIndianDate(v.voucher_date)} ${v.voucher_number})` : "";
-      if (e.debit_paise > 0) drExp.push({ label: `To ${desc}${ref}`, paise: e.debit_paise });
-      if (e.credit_paise > 0) crExp.push({ label: `By ${desc}${ref}`, paise: e.credit_paise });
+      const origin = originFor(v);
+      const detail = v ? `  [${hintFor(e, v)}]` : "";
+      if (e.debit_paise > 0) drExp.push({ label: `To ${origin} A/c${detail}`, paise: e.debit_paise });
+      if (e.credit_paise > 0) crExp.push({ label: `By ${origin} A/c${detail}`, paise: e.credit_paise });
     }
     if (drSubtotal > crSubtotal) crExp.push({ label: "By Balance c/d", paise: drSubtotal - crSubtotal });
     else if (crSubtotal > drSubtotal) drExp.push({ label: "To Balance c/d", paise: crSubtotal - drSubtotal });
