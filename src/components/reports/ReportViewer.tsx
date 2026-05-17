@@ -6,6 +6,9 @@ import { exportElementAsWord } from "@/lib/word-export";
 import { fmtIndianDate } from "@/lib/format-date";
 import { useI18n } from "@/lib/i18n";
 import { tReportText } from "@/lib/report-i18n-rules";
+import { FitToWidth } from "./FitToWidth";
+import { Button } from "@/components/ui/button";
+import { Maximize2, Minimize2 } from "lucide-react";
 
 /**
  * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
@@ -185,9 +188,36 @@ export function ReportViewer({
     return () => window.removeEventListener("keydown", onKey);
   }, [pickerOpen, handlePick, disablePrintShortcut]);
 
+  const [autoFit, setAutoFit] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem("report.autoFit") !== "0";
+  });
+  React.useEffect(() => {
+    try {
+      window.localStorage.setItem("report.autoFit", autoFit ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [autoFit]);
+
   return (
     <div className={cn("report-print-root-wrap space-y-3", className)}>
-      {toolbar && <div className="print:hidden">{toolbar}</div>}
+      {(toolbar || true) && (
+        <div className="flex items-start justify-between gap-2 print:hidden">
+          <div className="min-w-0 flex-1">{toolbar}</div>
+          <Button
+            type="button"
+            size="sm"
+            variant={autoFit ? "default" : "outline"}
+            className="shrink-0 gap-1.5"
+            onClick={() => setAutoFit((v) => !v)}
+            title={autoFit ? "Auto-fit: ON — report scales to fit screen" : "Auto-fit: OFF — report uses natural width"}
+          >
+            {autoFit ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            <span className="text-xs">Fit {autoFit ? "On" : "Off"}</span>
+          </Button>
+        </div>
+      )}
       <div
         ref={rootRef}
         className={cn(
@@ -197,9 +227,6 @@ export function ReportViewer({
       >
         <div className="report-print-header mb-3 text-center">
           <div className="text-lg font-bold uppercase tracking-wide leading-tight">{company || "\u00A0"}</div>
-          {/* Hidden running-header capture spans — fed into @page margin
-             boxes via `string-set` so every printed page repeats the
-             company/proprietor name and financial year. */}
           <span className="report-print-company-capture" aria-hidden>{company || "\u00A0"}</span>
           {fyText && (
             <span className="report-print-fy-capture" aria-hidden>{fyText}</span>
@@ -215,7 +242,15 @@ export function ReportViewer({
           )}
           <div className="report-header-rule mt-2" aria-hidden />
         </div>
-        {children}
+        {autoFit ? (
+          <FitToWidth className="print:!h-auto print:!overflow-visible">
+            <div className="print:[transform:none!important] print:[width:100%!important]">
+              {children}
+            </div>
+          </FitToWidth>
+        ) : (
+          children
+        )}
       </div>
       <PrintModeDialog
         open={pickerOpen}
