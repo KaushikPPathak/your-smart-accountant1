@@ -6,6 +6,9 @@ import { exportElementAsWord } from "@/lib/word-export";
 import { fmtIndianDate } from "@/lib/format-date";
 import { useI18n } from "@/lib/i18n";
 import { tReportText } from "@/lib/report-i18n-rules";
+import { FitToWidth } from "./FitToWidth";
+import { Button } from "@/components/ui/button";
+import { Maximize2, Minimize2 } from "lucide-react";
 
 /**
  * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
