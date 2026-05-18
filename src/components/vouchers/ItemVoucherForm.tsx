@@ -275,6 +275,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       companyId: activeCompanyId,
       voucherType, voucherDate: date, partyId,
       refNo, narration, placeOfSupply, interstate,
+      itcClass: isPurchaseSide ? itcClass : "na",
+      itcEligible: isPurchaseSide ? itcEligible : true,
       totals: { ...totals, round_off_paise: roundOffPaise },
       lines: lines.map((l, i) => ({ l, c: computed[i] })).filter((x) => x.l.item_id && x.c?.total_paise > 0),
     };
@@ -312,6 +314,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           round_off_paise: snap.totals.round_off_paise,
           total_paise: snap.totals.total_paise,
           place_of_supply_code: snap.placeOfSupply || null,
+          itc_class: snap.itcClass,
+          itc_eligible: snap.itcEligible,
         })
         .select("id").single();
       if (vErr) throw vErr;
