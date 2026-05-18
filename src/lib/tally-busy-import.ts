@@ -1078,8 +1078,8 @@ export async function bulkDeleteVouchers(
   const { data, error } = await supabase.rpc("delete_vouchers_bulk", {
     _company_id: companyId,
     _voucher_type: voucherType,
-    _from_date: range?.from || null,
-    _to_date: range?.to || null,
+    _from_date: range?.from || undefined,
+    _to_date: range?.to || undefined,
   });
   if (error) throw error;
   return Number(data || 0);
