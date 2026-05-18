@@ -845,23 +845,52 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
   const unreg_details: PosRow[] = Array.from(unregMap.values()).map((p) => ({ pos: p.pos, txval: r(p.txval), iamt: r(p.iamt) }));
 
   // 4(A) ITC available — taxable purchases + RCM inward + debit notes - credit notes
+  // Vouchers flagged itc_eligible=false or itc_class='ineligible' flow to 4(D) instead.
   const itcAll = { iamt: 0, camt: 0, samt: 0, csamt: 0 };
   const itcRcm = { iamt: 0, camt: 0, samt: 0, csamt: 0 };
+  const zeroClass = () => ({ iamt: 0, camt: 0, samt: 0, csamt: 0, txval: 0 });
+  const cb = {
+    inputs: zeroClass(),
+    capital_goods: zeroClass(),
+    input_services: zeroClass(),
+    ineligible_blocked: zeroClass(),
+  };
+  const isBlocked = (v: VoucherRow) =>
+    v.itc_eligible === false || v.itc_class === "ineligible";
+  const classOf = (v: VoucherRow): keyof typeof cb => {
+    if (isBlocked(v)) return "ineligible_blocked";
+    if (v.itc_class === "capital_goods") return "capital_goods";
+    if (v.itc_class === "input_services") return "input_services";
+    // default — treat unclassified as inputs (preserves legacy behaviour)
+    return "inputs";
+  };
   for (const v of purchases) {
+    const klass = classOf(v);
+    cb[klass].iamt += v.igst_paise; cb[klass].camt += v.cgst_paise;
+    cb[klass].samt += v.sgst_paise; cb[klass].txval += v.subtotal_paise;
+    if (klass === "ineligible_blocked") continue; // routed to 4(D)
     if (v.supply_nature === "rcm_inward") {
-      itcRcm.iamt += v.igst_paise;
-      itcRcm.camt += v.cgst_paise;
-      itcRcm.samt += v.sgst_paise;
+      itcRcm.iamt += v.igst_paise; itcRcm.camt += v.cgst_paise; itcRcm.samt += v.sgst_paise;
     } else {
-      itcAll.iamt += v.igst_paise;
-      itcAll.camt += v.cgst_paise;
-      itcAll.samt += v.sgst_paise;
+      itcAll.iamt += v.igst_paise; itcAll.camt += v.cgst_paise; itcAll.samt += v.sgst_paise;
     }
   }
   for (const v of debitNotes) if (v.voucher_type === "debit_note") {
+    if (isBlocked(v)) {
+      cb.ineligible_blocked.iamt += v.igst_paise; cb.ineligible_blocked.camt += v.cgst_paise;
+      cb.ineligible_blocked.samt += v.sgst_paise; cb.ineligible_blocked.txval += v.subtotal_paise;
+      continue;
+    }
+    const klass = classOf(v);
+    cb[klass].iamt += v.igst_paise; cb[klass].camt += v.cgst_paise;
+    cb[klass].samt += v.sgst_paise; cb[klass].txval += v.subtotal_paise;
     itcAll.iamt += v.igst_paise; itcAll.camt += v.cgst_paise; itcAll.samt += v.sgst_paise;
   }
   for (const v of creditNotes) if (v.voucher_type === "credit_note") {
+    if (isBlocked(v)) continue;
+    const klass = classOf(v);
+    cb[klass].iamt -= v.igst_paise; cb[klass].camt -= v.cgst_paise;
+    cb[klass].samt -= v.sgst_paise; cb[klass].txval -= v.subtotal_paise;
     itcAll.iamt -= v.igst_paise; itcAll.camt -= v.cgst_paise; itcAll.samt -= v.sgst_paise;
   }
 
@@ -891,11 +920,27 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
     csamt: 0,
   };
 
-  // 4(D) ineligible — passed in directly via args
+  // 4(D) ineligible — merge manual rows with auto-detected blocked vouchers
   const itc_inelg = (args.itcInelig || []).map((x) => ({
     ty: x.ty === "RUL_42_43" ? "RUL" : "OTH",
     iamt: x.iamt, camt: x.camt, samt: x.samt, csamt: x.csamt,
   }));
+  if (cb.ineligible_blocked.iamt || cb.ineligible_blocked.camt || cb.ineligible_blocked.samt) {
+    itc_inelg.push({
+      ty: "OTH",
+      iamt: r(cb.ineligible_blocked.iamt),
+      camt: r(cb.ineligible_blocked.camt),
+      samt: r(cb.ineligible_blocked.samt),
+      csamt: 0,
+    });
+  }
+
+  const itc_class_breakup = {
+    inputs:         { iamt: r(cb.inputs.iamt), camt: r(cb.inputs.camt), samt: r(cb.inputs.samt), csamt: 0, txval: r(cb.inputs.txval) },
+    capital_goods:  { iamt: r(cb.capital_goods.iamt), camt: r(cb.capital_goods.camt), samt: r(cb.capital_goods.samt), csamt: 0, txval: r(cb.capital_goods.txval) },
+    input_services: { iamt: r(cb.input_services.iamt), camt: r(cb.input_services.camt), samt: r(cb.input_services.samt), csamt: 0, txval: r(cb.input_services.txval) },
+    ineligible_blocked: { iamt: r(cb.ineligible_blocked.iamt), camt: r(cb.ineligible_blocked.camt), samt: r(cb.ineligible_blocked.samt), csamt: 0, txval: r(cb.ineligible_blocked.txval) },
+  };
 
   // 5 — Inward exempt/nil/non-GST (manual entry per period; defaults zero)
   const inwardGst = inwardSummary.find((x) => x.ty === "GST") ?? { ty: "GST" as const, inter_paise: 0, intra_paise: 0 };
