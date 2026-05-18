@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { ReportViewer } from "@/components/reports/ReportViewer";
-import { TAccount, type TRow } from "@/components/reports/TAccount";
+import { TAccountColumnar, type TColRow } from "@/components/reports/TAccountColumnar";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
