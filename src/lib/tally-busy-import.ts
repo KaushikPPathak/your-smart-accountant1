@@ -416,14 +416,15 @@ export async function parseAnyFile(
   if (lname.endsWith(".csv") || lname.endsWith(".txt")) {
     const text = await decodeFileSmart(f, settings.encoding, settings.stripNuls);
     const Papa = (await import("papaparse")).default;
-    const out = Papa.parse<Record<string, unknown>>(text, {
-      header: true,
+    // Parse as a raw matrix so we can apply the same header-row auto-detection
+    // used for Excel — many ERP CSV exports also start with banner rows.
+    const out = Papa.parse<unknown[]>(text, {
+      header: false,
       skipEmptyLines: true,
       dynamicTyping: false,
     });
-    return (out.data || [])
-      .filter((r) => r && Object.keys(r).length > 0)
-      .map((r) => ({ ...r, __sheet: lname.replace(/\.[^.]+$/, "") }));
+    const aoa = (out.data || []) as unknown[][];
+    return rowsFromAoa(aoa, lname.replace(/\.[^.]+$/, ""));
   }
   // Excel
   const buf = await readBuffer(f);
@@ -438,63 +439,96 @@ export async function parseAnyFile(
       raw: false,
       blankrows: false,
     });
-    // Detect the header row by scanning the first ~30 rows for one that
-    // contains several known column keywords. Many ERP exports (Marg, Busy,
-    // Tally print reports) prefix the data with banner / title rows.
-    const HEADER_TOKENS = [
-      "date", "dt", "bill no", "bill no.", "voucher", "vch", "vchno",
-      "party", "ledger", "account", "name", "amount", "amt", "bill amt",
-      "taxable", "tax", "hsn", "qty", "rate", "debit", "credit", "narration",
-      "particulars", "gstin", "opening", "group", "under",
-    ];
-    let headerIdx = -1;
-    let bestScore = 0;
-    for (let i = 0; i < Math.min(aoa.length, 30); i++) {
-      const cells = (aoa[i] || []).map((c) => lc(c));
-      let score = 0;
-      for (const c of cells) {
-        if (!c) continue;
-        for (const t of HEADER_TOKENS) if (c === t || c.includes(t)) { score++; break; }
-      }
-      if (score >= 3 && score > bestScore) { bestScore = score; headerIdx = i; }
-    }
-    // Banner text above the header — useful as a voucher-type hint
-    // ("PURCHASE BOOK", "SALES REGISTER", etc).
-    let reportTitle = "";
-    if (headerIdx > 0) {
-      reportTitle = aoa.slice(0, headerIdx)
-        .map((r) => (r || []).map((c) => String(c ?? "").trim()).join(" "))
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
-    }
-    if (headerIdx === -1) {
-      // Fall back to the original behavior: treat row 0 as the header.
-      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
-        defval: "", raw: false,
-      });
-      for (const r of json) rows.push({ ...r, __sheet: sheet, __report_title: reportTitle });
-    } else {
-      const header = (aoa[headerIdx] || []).map((c, i) => {
-        const s = String(c ?? "").trim();
-        return s || `col_${i + 1}`;
-      });
-      for (let i = headerIdx + 1; i < aoa.length; i++) {
-        const row = aoa[i] || [];
-        // Skip rows that look like dashed separators / blank lines.
-        const nonEmpty = row.filter((c) => String(c ?? "").trim() !== "");
-        if (nonEmpty.length === 0) continue;
-        const joined = nonEmpty.map((c) => String(c)).join("");
-        if (/^[-=_*\s]+$/.test(joined)) continue;
-        const obj: Record<string, unknown> = {};
-        for (let j = 0; j < header.length; j++) obj[header[j]] = row[j] ?? "";
-        obj.__sheet = sheet;
-        obj.__report_title = reportTitle;
-        rows.push(obj);
-      }
-    }
+    rows.push(...rowsFromAoa(aoa, sheet));
   }
   return rows;
+}
+
+/**
+ * Convert a raw 2-D matrix into ParsedRow objects by auto-detecting the
+ * header row. Banner / title text above the header is captured into
+ * `__report_title` so downstream classification can use it as a hint
+ * (e.g. "PURCHASE BOOK" → voucher type = purchase).
+ *
+ * Skips: blank rows, dashed separators, repeated header rows, and obvious
+ * total / grand-total / "carried forward" footer rows.
+ */
+function rowsFromAoa(aoa: unknown[][], sheetName: string): ParsedRow[] {
+  const HEADER_TOKENS = [
+    "date", "dt", "bill no", "bill no.", "voucher", "vch", "vchno",
+    "party", "ledger", "account", "name", "amount", "amt", "bill amt",
+    "taxable", "tax", "hsn", "qty", "rate", "debit", "credit", "narration",
+    "particulars", "gstin", "opening", "group", "under", "invoice",
+  ];
+  let headerIdx = -1;
+  let bestScore = 0;
+  for (let i = 0; i < Math.min(aoa.length, 40); i++) {
+    const cells = (aoa[i] || []).map((c) => lc(c));
+    let score = 0;
+    for (const c of cells) {
+      if (!c) continue;
+      for (const t of HEADER_TOKENS) {
+        if (c === t || c.includes(t)) { score++; break; }
+      }
+    }
+    if (score >= 3 && score > bestScore) { bestScore = score; headerIdx = i; }
+  }
+
+  let reportTitle = "";
+  if (headerIdx > 0) {
+    reportTitle = aoa.slice(0, headerIdx)
+      .map((r) => (r || []).map((c) => String(c ?? "").trim()).join(" "))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  const out: ParsedRow[] = [];
+  if (headerIdx === -1) {
+    // No clear header — keep row 0 as the header and emit objects as-is.
+    if (aoa.length === 0) return out;
+    const header = (aoa[0] || []).map((c, i) => String(c ?? "").trim() || `col_${i + 1}`);
+    for (let i = 1; i < aoa.length; i++) {
+      const row = aoa[i] || [];
+      if (isJunkRow(row)) continue;
+      const obj: Record<string, unknown> = {};
+      for (let j = 0; j < header.length; j++) obj[header[j]] = row[j] ?? "";
+      obj.__sheet = sheetName;
+      obj.__report_title = reportTitle;
+      out.push(obj);
+    }
+    return out;
+  }
+
+  const header = (aoa[headerIdx] || []).map((c, i) => {
+    const s = String(c ?? "").trim();
+    return s || `col_${i + 1}`;
+  });
+  const headerKey = header.map(lc).join("|");
+  for (let i = headerIdx + 1; i < aoa.length; i++) {
+    const row = aoa[i] || [];
+    if (isJunkRow(row)) continue;
+    // Skip repeated header rows (some reports repeat headers per page).
+    const rowKey = row.map(lc).join("|");
+    if (rowKey === headerKey) continue;
+    // Skip totals / carried-forward footer lines.
+    const joined = lc(row.map((c) => String(c ?? "")).join(" "));
+    if (/^\s*(grand\s*total|sub\s*total|total|c\.?\s*f\.?|carried\s*forward|b\.?\s*f\.?|brought\s*forward)\b/.test(joined)) continue;
+    const obj: Record<string, unknown> = {};
+    for (let j = 0; j < header.length; j++) obj[header[j]] = row[j] ?? "";
+    obj.__sheet = sheetName;
+    obj.__report_title = reportTitle;
+    out.push(obj);
+  }
+  return out;
+}
+
+function isJunkRow(row: unknown[]): boolean {
+  const nonEmpty = row.filter((c) => String(c ?? "").trim() !== "");
+  if (nonEmpty.length === 0) return true;
+  const joined = nonEmpty.map((c) => String(c)).join("");
+  if (/^[-=_*\s]+$/.test(joined)) return true;
+  return false;
 }
 
 /** Top-level entry: handles ZIP archives by recursing into each inner file. */
