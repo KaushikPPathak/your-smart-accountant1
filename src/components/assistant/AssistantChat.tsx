@@ -315,7 +315,41 @@ export function AssistantChat() {
         return;
       }
 
-      // 3) Fall back to the offline KB search.
+      // 3) AI-first answer with accounting tool access; fall back to KB.
+      if (aiMode && user) {
+        setThinking(true);
+        try {
+          const history = [...messages, userMsg]
+            .filter((m) => m.id !== "welcome")
+            .slice(-12)
+            .map((m) => ({ role: m.role, content: m.text }));
+          const res = await callAssistant({
+            data: { companyId: activeCompanyId ?? null, messages: history },
+          });
+          if (res.ok && res.text) {
+            setMessages((m) => [
+              ...m,
+              {
+                id: `a-${Date.now()}`,
+                role: "assistant",
+                text: res.text,
+                toolCalls: res.toolCalls,
+              },
+            ]);
+            return;
+          }
+          if (!res.ok && res.error) {
+            toast.error(res.error);
+          }
+        } catch (err) {
+          console.error("[assistant] call failed", err);
+          toast.error("AI unavailable, falling back to offline guide.");
+        } finally {
+          setThinking(false);
+        }
+      }
+
+      // 4) Fallback: offline KB search.
       const matches = searchKb(text, { limit: 3 });
       let reply: ChatMessage;
       if (matches.length === 0) {
@@ -339,6 +373,7 @@ export function AssistantChat() {
         };
       }
       setMessages((m) => [...m, reply]);
+
     })();
   }
 
