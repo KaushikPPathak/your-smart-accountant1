@@ -22,7 +22,6 @@ export function CompanySwitcher() {
   const handleCompanyPick = async (companyId: string) => {
     if (isCompanyUnlocked(companyId)) {
       setActiveCompanyId(companyId);
-      navigate({ to: "/app" });
       return;
     }
     // Check if company has a password set
@@ -38,7 +37,6 @@ export function CompanySwitcher() {
     if (!data?.has_password) {
       markCompanyUnlocked(companyId);
       setActiveCompanyId(companyId);
-      navigate({ to: "/app" });
       return;
     }
     // Needs password — send user to picker to enter it
