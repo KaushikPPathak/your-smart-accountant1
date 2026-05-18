@@ -966,6 +966,7 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
     sup_eco: { txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0 },
     inter_sup: { unreg_details, comp_details: [], uin_details: [] },
     itc_elg: { itc_avl, itc_rev, itc_net, itc_inelg },
+    itc_class_breakup,
     inward_sup: {
       isup_details: [
         { ty: "GST", inter: r(inwardGst.inter_paise), intra: r(inwardGst.intra_paise) },
