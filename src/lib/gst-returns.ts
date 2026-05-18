@@ -223,6 +223,7 @@ reference_no, vendor_invoice_no, vendor_invoice_date, reason, original_voucher_i
 subtotal_paise, cgst_paise, sgst_paise, igst_paise, total_paise,
 supply_nature, shipping_bill_no, shipping_bill_date, port_code,
 is_amendment, orig_invoice_no, orig_invoice_date, orig_period,
+itc_class, itc_eligible,
 ledgers:party_ledger_id(name, gstin, state_code, gst_treatment, country),
 voucher_items(qty, rate_paise, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate,
 items:item_id(name, hsn_code, unit))`;
