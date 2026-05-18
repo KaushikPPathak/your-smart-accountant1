@@ -26,6 +26,7 @@ import { GROUP_BY_CODE } from "@/lib/account-groups";
 import {
   parseFileOrZip, classifyAndMap, estimateBand,
   postLedgers, postItems, postVouchers,
+  createImportBatch, finalizeImportBatch,
   type LedgerRecord, type ItemRecord, type VoucherRecord, type PostResultEx,
   type ImportSettings, DEFAULT_IMPORT_SETTINGS,
 } from "@/lib/tally-busy-import";
@@ -237,33 +238,44 @@ function CombinedImporter({ companyId, disabled }: Props) {
     if (grand === 0) { toast.error("Nothing selected"); return; }
     setPosting(true);
     setFailed([]);
+    let batchId: string | null = null;
     try {
+      batchId = await createImportBatch(companyId, {
+        source: "tally_busy",
+        label: "All-in-One import",
+        fileName: file?.name,
+      });
       const allFailed: { name: string; reason: string }[] = [];
       let summary = "";
+      let cLed = 0, cIt = 0, cVo = 0;
       if (lRows.length > 0) {
         setStage(`Posting ${lRows.length} ledgers`); setTotal(lRows.length); setDone(0);
         const r: PostResultEx = await postLedgers(companyId, lRows, (d, t, l) => {
           setDone(d); setTotal(t); if (l) setStage(l);
-        });
+        }, batchId);
         allFailed.push(...r.failed);
+        cLed = r.created;
         summary += `Ledgers: ${r.created} created, ${r.updated} updated. `;
       }
       if (iRows.length > 0) {
         setStage(`Posting ${iRows.length} items`); setTotal(iRows.length); setDone(0);
         const r = await postItems(companyId, iRows, (d, t, l) => {
           setDone(d); setTotal(t); if (l) setStage(l);
-        });
+        }, batchId);
         allFailed.push(...r.failed);
+        cIt = r.created;
         summary += `Items: ${r.created} created, ${r.updated} updated. `;
       }
       if (vRows.length > 0) {
         setStage(`Posting ${vRows.length} vouchers`); setTotal(vRows.length); setDone(0);
         const r = await postVouchers(companyId, vRows, (d, t, l) => {
           setDone(d); setTotal(t); if (l) setStage(l);
-        });
+        }, batchId);
         allFailed.push(...r.failed);
+        cVo = r.created;
         summary += `Vouchers: ${r.created} created${r.skipped ? `, ${r.skipped} skipped` : ""}.`;
       }
+      await finalizeImportBatch(batchId, { ledgers: cLed, items: cIt, vouchers: cVo });
       setFailed(allFailed);
       toast.success(summary || "Done");
       if (allFailed.length === 0) {
@@ -462,29 +474,38 @@ function SingleImporter({
 
   async function onPost() {
     setPosting(true); setFailed([]);
+    let batchId: string | null = null;
     try {
+      batchId = await createImportBatch(companyId, {
+        source: "tally_busy",
+        label: kind === "ledger" ? "Ledgers import" : kind === "item" ? "Items import" : "Vouchers import",
+        fileName: file?.name,
+      });
       let res: PostResultEx;
       if (kind === "ledger") {
         const rows = ledgers.filter((r) => selL.has(r._key));
         setStage("Posting ledgers"); setTotal(rows.length); setDone(0);
         res = await postLedgers(companyId, rows, (d, t, l) => {
           setDone(d); setTotal(t); if (l) setStage(l);
-        });
+        }, batchId);
         if (res.failed.length === 0) setLedgers([]);
+        await finalizeImportBatch(batchId, { ledgers: res.created });
       } else if (kind === "item") {
         const rows = items.filter((r) => selI.has(r._key));
         setStage("Posting items"); setTotal(rows.length); setDone(0);
         res = await postItems(companyId, rows, (d, t, l) => {
           setDone(d); setTotal(t); if (l) setStage(l);
-        });
+        }, batchId);
         if (res.failed.length === 0) setItems([]);
+        await finalizeImportBatch(batchId, { items: res.created });
       } else {
         const rows = vouchers.filter((r) => selV.has(r._key));
         setStage("Posting vouchers"); setTotal(rows.length); setDone(0);
         res = await postVouchers(companyId, rows, (d, t, l) => {
           setDone(d); setTotal(t); if (l) setStage(l);
-        });
+        }, batchId);
         if (res.failed.length === 0) setVouchers([]);
+        await finalizeImportBatch(batchId, { vouchers: res.created });
       }
       setFailed(res.failed);
       toast.success(`Imported — ${res.created} created${res.updated ? `, ${res.updated} updated` : ""}${res.skipped ? `, ${res.skipped} skipped` : ""}`);

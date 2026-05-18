@@ -1066,6 +1066,45 @@ export type Database = {
           },
         ]
       }
+      import_batches: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string
+          file_name: string | null
+          id: string
+          items_created: number
+          label: string | null
+          ledgers_created: number
+          source: string
+          vouchers_created: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by: string
+          file_name?: string | null
+          id?: string
+          items_created?: number
+          label?: string | null
+          ledgers_created?: number
+          source?: string
+          vouchers_created?: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string
+          file_name?: string | null
+          id?: string
+          items_created?: number
+          label?: string | null
+          ledgers_created?: number
+          source?: string
+          vouchers_created?: number
+        }
+        Relationships: []
+      }
       items: {
         Row: {
           company_id: string
@@ -1073,6 +1112,7 @@ export type Database = {
           gst_rate: number
           hsn_code: string | null
           id: string
+          import_batch_id: string | null
           is_active: boolean
           name: string
           opening_stock_qty: number
@@ -1089,6 +1129,7 @@ export type Database = {
           gst_rate?: number
           hsn_code?: string | null
           id?: string
+          import_batch_id?: string | null
           is_active?: boolean
           name: string
           opening_stock_qty?: number
@@ -1105,6 +1146,7 @@ export type Database = {
           gst_rate?: number
           hsn_code?: string | null
           id?: string
+          import_batch_id?: string | null
           is_active?: boolean
           name?: string
           opening_stock_qty?: number
@@ -1196,6 +1238,7 @@ export type Database = {
           gst_treatment: Database["public"]["Enums"]["gst_treatment"]
           gstin: string | null
           id: string
+          import_batch_id: string | null
           is_active: boolean
           name: string
           opening_balance_is_debit: boolean
@@ -1222,6 +1265,7 @@ export type Database = {
           gst_treatment?: Database["public"]["Enums"]["gst_treatment"]
           gstin?: string | null
           id?: string
+          import_batch_id?: string | null
           is_active?: boolean
           name: string
           opening_balance_is_debit?: boolean
@@ -1248,6 +1292,7 @@ export type Database = {
           gst_treatment?: Database["public"]["Enums"]["gst_treatment"]
           gstin?: string | null
           id?: string
+          import_batch_id?: string | null
           is_active?: boolean
           name?: string
           opening_balance_is_debit?: boolean
@@ -1747,6 +1792,7 @@ export type Database = {
           due_date: string | null
           id: string
           igst_paise: number
+          import_batch_id: string | null
           is_amendment: boolean
           is_interstate: boolean
           linked_voucher_ids: Json
@@ -1783,6 +1829,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           igst_paise?: number
+          import_batch_id?: string | null
           is_amendment?: boolean
           is_interstate?: boolean
           linked_voucher_ids?: Json
@@ -1819,6 +1866,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           igst_paise?: number
+          import_batch_id?: string | null
           is_amendment?: boolean
           is_interstate?: boolean
           linked_voucher_ids?: Json
@@ -1902,6 +1950,16 @@ export type Database = {
       can_write_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
+      }
+      delete_import_batch: { Args: { _batch_id: string }; Returns: Json }
+      delete_vouchers_bulk: {
+        Args: {
+          _company_id: string
+          _from_date?: string
+          _to_date?: string
+          _voucher_type: Database["public"]["Enums"]["voucher_type"]
+        }
+        Returns: number
       }
       has_company_role: {
         Args: {

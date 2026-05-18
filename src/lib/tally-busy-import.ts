@@ -807,6 +807,7 @@ export async function postLedgers(
   companyId: string,
   rows: LedgerRecord[],
   onProgress?: ProgressCb,
+  batchId?: string,
 ): Promise<PostResultEx> {
   const { data: existing } = await supabase
     .from("ledgers").select("id, name").eq("company_id", companyId);
@@ -829,6 +830,7 @@ export async function postLedgers(
       phone: r.phone || null,
       opening_balance_paise: Math.abs(paise(r.opening)),
       opening_balance_is_debit: r.opening >= 0,
+      import_batch_id: batchId || null,
     };
     const id = map.get(lc(r.name));
     if (id) {
@@ -856,6 +858,7 @@ export async function postItems(
   companyId: string,
   rows: ItemRecord[],
   onProgress?: ProgressCb,
+  batchId?: string,
 ): Promise<PostResultEx> {
   const { data: existing } = await supabase
     .from("items").select("id, name").eq("company_id", companyId);
@@ -875,6 +878,7 @@ export async function postItems(
       opening_stock_rate_paise: paise(r.opening_rate),
       sale_price_paise: paise(r.sale_price),
       purchase_price_paise: paise(r.purchase_price),
+      import_batch_id: batchId || null,
     };
     const id = map.get(lc(r.name));
     if (id) {
@@ -898,6 +902,7 @@ export async function postVouchers(
   companyId: string,
   rows: VoucherRecord[],
   onProgress?: ProgressCb,
+  batchId?: string,
 ): Promise<PostResultEx> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Sign in required");
@@ -956,6 +961,7 @@ export async function postVouchers(
         subtotal_paise: totalP,
         total_paise: totalP,
         created_by: user.id,
+        import_batch_id: batchId || null,
       }).select("id").single();
     if (vErr || !vch) {
       skipped++;
@@ -992,4 +998,89 @@ export async function postVouchers(
   }
   onProgress?.(rows.length, rows.length, "Posting vouchers");
   return { created, updated: 0, skipped, failed };
+}
+// ---------------- Import batch tracking (for one-click undo) ----------------
+
+export interface ImportBatchRow {
+  id: string;
+  company_id: string;
+  source: string;
+  label: string | null;
+  file_name: string | null;
+  ledgers_created: number;
+  items_created: number;
+  vouchers_created: number;
+  created_at: string;
+  created_by: string;
+}
+
+export async function createImportBatch(
+  companyId: string,
+  opts: { source?: string; label?: string; fileName?: string } = {},
+): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Sign in required");
+  const { data, error } = await supabase
+    .from("import_batches")
+    .insert({
+      company_id: companyId,
+      source: opts.source || "tally_busy",
+      label: opts.label || null,
+      file_name: opts.fileName || null,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw error || new Error("Could not create import batch");
+  return data.id;
+}
+
+export async function finalizeImportBatch(
+  batchId: string,
+  counts: { ledgers?: number; items?: number; vouchers?: number },
+): Promise<void> {
+  await supabase
+    .from("import_batches")
+    .update({
+      ledgers_created: counts.ledgers || 0,
+      items_created: counts.items || 0,
+      vouchers_created: counts.vouchers || 0,
+    })
+    .eq("id", batchId);
+}
+
+export async function deleteImportBatch(
+  batchId: string,
+): Promise<{ vouchers: number; items: number; ledgers: number }> {
+  const { data, error } = await supabase.rpc("delete_import_batch", {
+    _batch_id: batchId,
+  });
+  if (error) throw error;
+  return (data as { vouchers: number; items: number; ledgers: number }) || { vouchers: 0, items: 0, ledgers: 0 };
+}
+
+export async function listImportBatches(companyId: string): Promise<ImportBatchRow[]> {
+  const { data, error } = await supabase
+    .from("import_batches")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (data || []) as ImportBatchRow[];
+}
+
+export async function bulkDeleteVouchers(
+  companyId: string,
+  voucherType: VoucherType,
+  range?: { from?: string; to?: string },
+): Promise<number> {
+  const { data, error } = await supabase.rpc("delete_vouchers_bulk", {
+    _company_id: companyId,
+    _voucher_type: voucherType,
+    _from_date: range?.from || undefined,
+    _to_date: range?.to || undefined,
+  });
+  if (error) throw error;
+  return Number(data || 0);
 }
