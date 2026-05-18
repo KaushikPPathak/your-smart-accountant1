@@ -2,7 +2,7 @@
 // - In the Electron desktop app: writes to
 //     %USERPROFILE%/Documents/YourMehtaji/Exports/<Company>/<subFolder>/<fileName>
 //   then auto-opens the file in the OS default viewer and shows a toast with
-//   a "Show in folder" action.
+//   "Show in folder" and "Cancel" actions.
 // - In the browser: falls back to a normal "Download" (saved to the user's
 //   Downloads folder, same behaviour as before).
 import { toast } from "sonner";
@@ -83,9 +83,14 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
   const b = bridge();
   if (!b) {
     browserDownload(opts.fileName, opts.contents, opts.mime);
-    toast.success(opts.toastTitle || opts.fileName, {
+    let downloadToastId: string | number;
+    downloadToastId = toast.success(opts.toastTitle || opts.fileName, {
       description: "Downloaded to your Downloads folder.",
       closeButton: true,
+      cancel: {
+        label: "Cancel",
+        onClick: () => toast.dismiss(downloadToastId),
+      },
     });
     return;
   }
@@ -96,13 +101,18 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
     return;
   }
   const savedPath = res.path;
-  toast.success(opts.toastTitle || opts.fileName, {
+  let exportToastId: string | number;
+  exportToastId = toast.success(opts.toastTitle || opts.fileName, {
     description: `Saved to ${savedPath}`,
     duration: 10000,
     closeButton: true,
     action: {
       label: "Show in folder",
       onClick: () => { void b.showInFolder(savedPath); },
+    },
+    cancel: {
+      label: "Cancel",
+      onClick: () => toast.dismiss(exportToastId),
     },
   });
 }
