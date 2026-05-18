@@ -5,15 +5,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Upload } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { toast } from "sonner";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { GstSectionTable } from "@/components/reports/GstSectionTable";
+import {
+  parseAny,
+  reconcile,
+  DEFAULT_TOLERANCES,
+  type ReconTolerances,
+  type ReconResult,
+  normGstin,
+  normInvoiceNo,
+} from "@/lib/gstr2b-recon";
 
 export const Route = createFileRoute("/app/reports/gstr2b")({
   head: () => ({ meta: [{ title: "GSTR-2B Reconciliation — Reports" }] }),
@@ -27,6 +35,7 @@ interface G2BLine {
   invoice_no: string;
   invoice_date: string | null;
   invoice_value_paise: number;
+  taxable_paise: number;
   igst_paise: number;
   cgst_paise: number;
   sgst_paise: number;
@@ -39,102 +48,16 @@ interface Purchase {
   ledgers: { name: string; gstin: string | null } | null;
 }
 
-function splitCsvLine(line: string): string[] {
-  const out: string[] = []; let cur = ""; let q = false;
-  for (const c of line) {
-    if (c === '"') { q = !q; continue; }
-    if (c === "," && !q) { out.push(cur); cur = ""; continue; }
-    cur += c;
-  }
-  out.push(cur); return out;
-}
-
-function parseDate(s: string): string | null {
-  const t = s.trim();
-  let m = t.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
-  if (m) {
-    const y = m[3].length === 2 ? `20${m[3]}` : m[3];
-    return `${y}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-  }
-  m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-  return null;
-}
-const toPaise = (s: string | number) => Math.round((typeof s === "number" ? s : parseFloat(String(s).replace(/[, ]/g, "")) || 0) * 100);
-
-interface ParsedRow {
-  supplier_gstin: string; supplier_name: string; invoice_no: string; invoice_date: string | null;
-  invoice_value_paise: number; taxable_paise: number; igst_paise: number; cgst_paise: number; sgst_paise: number;
-}
-
-function parseGstr2bCsv(text: string): ParsedRow[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
-  if (!lines.length) return [];
-  const header = splitCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
-  const idx = (names: string[]) => header.findIndex((h) => names.some((n) => h.includes(n)));
-  const iGstin = idx(["gstin"]);
-  const iName = idx(["trade name", "supplier name", "legal name"]);
-  const iInv = idx(["invoice number", "invoice no", "doc no"]);
-  const iDate = idx(["invoice date", "doc date"]);
-  const iVal = idx(["invoice value", "doc value"]);
-  const iTax = idx(["taxable"]);
-  const iIgst = idx(["integrated", "igst"]);
-  const iCgst = idx(["central", "cgst"]);
-  const iSgst = idx(["state", "sgst"]);
-  const out: ParsedRow[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const c = splitCsvLine(lines[i]);
-    if (iGstin < 0 || !c[iGstin]) continue;
-    out.push({
-      supplier_gstin: (c[iGstin] || "").trim().toUpperCase(),
-      supplier_name: (c[iName] || "").trim(),
-      invoice_no: (c[iInv] || "").trim(),
-      invoice_date: iDate >= 0 ? parseDate(c[iDate] || "") : null,
-      invoice_value_paise: iVal >= 0 ? toPaise(c[iVal]) : 0,
-      taxable_paise: iTax >= 0 ? toPaise(c[iTax]) : 0,
-      igst_paise: iIgst >= 0 ? toPaise(c[iIgst]) : 0,
-      cgst_paise: iCgst >= 0 ? toPaise(c[iCgst]) : 0,
-      sgst_paise: iSgst >= 0 ? toPaise(c[iSgst]) : 0,
-    });
-  }
-  return out;
-}
-
-function parseGstr2bJson(text: string): ParsedRow[] {
-  try {
-    const j = JSON.parse(text);
-    const out: ParsedRow[] = [];
-    // Standard GSTN 2B JSON: data.docdata.b2b[].inv[]
-    const b2bSuppliers = j?.data?.docdata?.b2b ?? j?.docdata?.b2b ?? j?.b2b ?? [];
-    for (const s of b2bSuppliers) {
-      const gstin = (s.ctin || s.supplierGSTIN || "").toUpperCase();
-      const name = s.trdnm || s.supplierName || "";
-      for (const inv of s.inv || []) {
-        const itms = inv.itms || [];
-        const tax = itms.reduce((acc: { tax: number; ig: number; cg: number; sg: number }, it: { txval?: number; igst?: number; cgst?: number; sgst?: number }) => ({
-          tax: acc.tax + (it.txval || 0),
-          ig: acc.ig + (it.igst || 0),
-          cg: acc.cg + (it.cgst || 0),
-          sg: acc.sg + (it.sgst || 0),
-        }), { tax: 0, ig: 0, cg: 0, sg: 0 });
-        out.push({
-          supplier_gstin: gstin,
-          supplier_name: name,
-          invoice_no: inv.inum || inv.invoiceNumber || "",
-          invoice_date: parseDate(inv.idt || inv.invoiceDate || ""),
-          invoice_value_paise: toPaise(inv.val || 0),
-          taxable_paise: toPaise(tax.tax),
-          igst_paise: toPaise(tax.ig),
-          cgst_paise: toPaise(tax.cg),
-          sgst_paise: toPaise(tax.sg),
-        });
-      }
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
+const STATUS_VARIANTS: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
+  matched: { label: "Matched", variant: "default" },
+  matched_with_tolerance: { label: "Matched (±tol)", variant: "default" },
+  value_mismatch: { label: "Value Δ", variant: "secondary" },
+  tax_mismatch: { label: "Tax Δ", variant: "secondary" },
+  date_mismatch: { label: "Date Δ", variant: "secondary" },
+  invoice_no_mismatch: { label: "Inv# Δ", variant: "secondary" },
+  probable_match: { label: "Probable", variant: "secondary" },
+  unmatched: { label: "Not in books", variant: "outline" },
+};
 
 function Gstr2BPage() {
   const { activeCompanyId } = useCompany();
@@ -145,7 +68,8 @@ function Gstr2BPage() {
   const [lines, setLines] = useState<G2BLine[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const { view, setView } = useReportView("gstr2b");
-  const [importId, setImportId] = useState<string | null>(null);
+  const [tol, setTol] = useState<ReconTolerances>(DEFAULT_TOLERANCES);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -154,7 +78,7 @@ function Gstr2BPage() {
       .eq("company_id", activeCompanyId)
       .eq("voucher_type", "purchase")
       .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false })
-      .limit(2000)
+      .limit(5000)
       .then(({ data }) => setPurchases((data || []) as unknown as Purchase[]));
   }, [activeCompanyId]);
 
@@ -165,63 +89,89 @@ function Gstr2BPage() {
 
   async function onUpload(file: File) {
     if (!activeCompanyId) return;
-    const text = await file.text();
-    const isJson = file.name.toLowerCase().endsWith(".json");
-    const parsed = isJson ? parseGstr2bJson(text) : parseGstr2bCsv(text);
-    if (!parsed.length) { toast.error("No rows parsed — check file format"); return; }
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: imp, error: ie } = await supabase.from("gstr2b_imports").insert({
-      company_id: activeCompanyId, period, source: isJson ? "json" : "csv",
-      file_name: file.name, total_lines: parsed.length, imported_by: user.id,
-    }).select("id").single();
-    if (ie || !imp) { toast.error(ie?.message || "Import failed"); return; }
-    // Try matching against purchases
-    const rows = parsed.map((p) => {
-      const match = purchases.find((pu) =>
-        pu.ledgers?.gstin?.toUpperCase() === p.supplier_gstin &&
-        (pu.vendor_invoice_no || "").trim().toLowerCase() === p.invoice_no.trim().toLowerCase()
-      );
-      return {
+    setBusy(true);
+    try {
+      const ext = file.name.toLowerCase().split(".").pop() || "";
+      const parsed = await parseAny(file);
+      if (!parsed.length) { toast.error("No rows parsed — check file format"); return; }
+
+      const results = reconcile(parsed, purchases, tol);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const source = ext === "json" ? "json" : ext === "xlsx" || ext === "xls" ? "xlsx" : "csv";
+      const { data: imp, error: ie } = await supabase.from("gstr2b_imports").insert({
+        company_id: activeCompanyId, period, source,
+        file_name: file.name, total_lines: parsed.length, imported_by: user.id,
+      }).select("id").single();
+      if (ie || !imp) { toast.error(ie?.message || "Import failed"); return; }
+
+      const rows = results.map((r) => ({
         company_id: activeCompanyId,
         import_id: imp.id,
-        supplier_gstin: p.supplier_gstin,
-        supplier_name: p.supplier_name,
-        invoice_no: p.invoice_no,
-        invoice_date: p.invoice_date,
-        invoice_value_paise: p.invoice_value_paise,
-        taxable_paise: p.taxable_paise,
-        igst_paise: p.igst_paise,
-        cgst_paise: p.cgst_paise,
-        sgst_paise: p.sgst_paise,
-        match_status: match
-          ? (Math.abs(match.total_paise - p.invoice_value_paise) <= 100 ? "matched" : "mismatch")
-          : "unmatched",
-        matched_voucher_id: match?.id ?? null,
-      };
-    });
-    const { error } = await supabase.from("gstr2b_lines").insert(rows);
-    if (error) { toast.error(error.message); return; }
-    const matched = rows.filter((r) => r.match_status === "matched").length;
-    await supabase.from("gstr2b_imports").update({ matched_lines: matched }).eq("id", imp.id);
-    setImportId(imp.id);
-    loadLines(imp.id);
-    toast.success(`Imported ${parsed.length} rows · ${matched} matched`);
+        supplier_gstin: r.row.supplier_gstin,
+        supplier_name: r.row.supplier_name,
+        invoice_no: r.row.invoice_no,
+        invoice_date: r.row.invoice_date,
+        invoice_value_paise: r.row.invoice_value_paise,
+        taxable_paise: r.row.taxable_paise,
+        igst_paise: r.row.igst_paise,
+        cgst_paise: r.row.cgst_paise,
+        sgst_paise: r.row.sgst_paise,
+        cess_paise: r.row.cess_paise ?? 0,
+        match_status: r.match_status,
+        matched_voucher_id: r.matched_voucher_id,
+      }));
+      const { error } = await supabase.from("gstr2b_lines").insert(rows);
+      if (error) { toast.error(error.message); return; }
+      const matched = rows.filter((r) => r.match_status === "matched" || r.match_status === "matched_with_tolerance").length;
+      await supabase.from("gstr2b_imports").update({ matched_lines: matched }).eq("id", imp.id);
+      await loadLines(imp.id);
+      toast.success(`Imported ${parsed.length} rows · ${matched} matched`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  // Missing ITC: purchase exists in books but not in 2B
+  // Re-run reconciliation in memory when tolerances change (without re-importing)
+  function rerunInMemory() {
+    if (!lines.length) return;
+    const parsed = lines.map((l) => ({
+      supplier_gstin: l.supplier_gstin,
+      supplier_name: l.supplier_name || "",
+      invoice_no: l.invoice_no,
+      invoice_date: l.invoice_date,
+      invoice_value_paise: l.invoice_value_paise,
+      taxable_paise: l.taxable_paise,
+      igst_paise: l.igst_paise,
+      cgst_paise: l.cgst_paise,
+      sgst_paise: l.sgst_paise,
+      cess_paise: 0,
+    }));
+    const results = reconcile(parsed, purchases, tol);
+    const byKey = new Map<string, ReconResult>();
+    results.forEach((r) => byKey.set(`${r.row.supplier_gstin}|${r.row.invoice_no}`, r));
+    setLines((prev) => prev.map((l) => {
+      const r = byKey.get(`${l.supplier_gstin}|${l.invoice_no}`);
+      return r ? { ...l, match_status: r.match_status, matched_voucher_id: r.matched_voucher_id } : l;
+    }));
+    toast.success("Re-matched with current tolerances");
+  }
+
   const missing = useMemo(() => {
     if (!lines.length) return [] as Purchase[];
-    const set = new Set(lines.map((l) => `${l.supplier_gstin}|${l.invoice_no.trim().toLowerCase()}`));
+    const matchedIds = new Set(lines.map((l) => l.matched_voucher_id).filter(Boolean) as string[]);
     return purchases.filter((p) => {
       if (!p.ledgers?.gstin || !p.vendor_invoice_no) return false;
-      return !set.has(`${p.ledgers.gstin.toUpperCase()}|${p.vendor_invoice_no.trim().toLowerCase()}`);
+      return !matchedIds.has(p.id);
     });
   }, [lines, purchases]);
 
   const stats = useMemo(() => ({
-    matched: lines.filter((l) => l.match_status === "matched").length,
-    mismatch: lines.filter((l) => l.match_status === "mismatch").length,
+    matched: lines.filter((l) => l.match_status === "matched" || l.match_status === "matched_with_tolerance").length,
+    mismatch: lines.filter((l) => ["value_mismatch", "tax_mismatch", "date_mismatch", "invoice_no_mismatch", "probable_match"].includes(l.match_status)).length,
     unmatched: lines.filter((l) => l.match_status === "unmatched").length,
   }), [lines]);
 
@@ -234,14 +184,50 @@ function Gstr2BPage() {
             <Input value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="042026" />
           </div>
           <div className="space-y-1 md:col-span-2">
-            <Label>Upload GSTR-2B (CSV or JSON from GST portal)</Label>
-            <Input type="file" accept=".csv,.json" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
+            <Label>Upload GSTR-2B (JSON · Excel · CSV)</Label>
+            <Input type="file" accept=".csv,.json,.xlsx,.xls" disabled={busy} onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
           </div>
           <div className="text-xs flex items-end gap-2 flex-wrap">
             <Badge variant="default">{stats.matched} matched</Badge>
-            <Badge variant="secondary">{stats.mismatch} mismatch</Badge>
+            <Badge variant="secondary">{stats.mismatch} review</Badge>
             <Badge variant="outline">{stats.unmatched} unmatched</Badge>
             <div className="ml-auto"><ViewSwitcher view={view} onChange={setView} classicLabel="Table" /></div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-4">
+          <div className="text-xs font-semibold mb-2">Reconciliation tolerances</div>
+          <div className="grid gap-3 md:grid-cols-5 text-xs">
+            <div className="space-y-1">
+              <Label className="text-xs">Invoice value ± ₹</Label>
+              <Input type="number" min={0} value={tol.valuePaise / 100}
+                onChange={(e) => setTol((t) => ({ ...t, valuePaise: Math.round(Number(e.target.value || 0) * 100) }))} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Per tax head ± ₹</Label>
+              <Input type="number" min={0} value={tol.taxPaise / 100}
+                onChange={(e) => setTol((t) => ({ ...t, taxPaise: Math.round(Number(e.target.value || 0) * 100) }))} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Date ± days</Label>
+              <Input type="number" min={0} value={tol.dateDays}
+                onChange={(e) => setTol((t) => ({ ...t, dateDays: Math.max(0, Number(e.target.value || 0)) }))} />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={tol.ignoreDate} onCheckedChange={(v) => setTol((t) => ({ ...t, ignoreDate: v }))} />
+              <Label className="text-xs">Ignore date</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={tol.ignoreInvoiceNo} onCheckedChange={(v) => setTol((t) => ({ ...t, ignoreInvoiceNo: v }))} />
+              <Label className="text-xs">Ignore invoice no.</Label>
+            </div>
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-2">
+            Invoice numbers are normalised (case, spaces, dashes, slashes & leading zeros ignored).
+            Re-match runs purely client-side — re-upload to persist results.
+            <button className="ml-3 underline" onClick={rerunInMemory} disabled={!lines.length}>Re-match now</button>
           </div>
         </CardContent>
       </Card>
@@ -258,7 +244,7 @@ function Gstr2BPage() {
               l.supplier_name ?? "",
               l.invoice_no,
               l.invoice_date ?? "",
-              l.match_status,
+              STATUS_VARIANTS[l.match_status]?.label ?? l.match_status,
               formatINR(l.invoice_value_paise),
               formatINR(l.igst_paise),
               formatINR(l.cgst_paise),
@@ -281,7 +267,9 @@ function Gstr2BPage() {
                 <TableHead>Status</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {lines.map((l) => (
+                {lines.map((l) => {
+                  const sv = STATUS_VARIANTS[l.match_status] ?? { label: l.match_status, variant: "outline" as const };
+                  return (
                   <TableRow key={l.id}>
                     <TableCell className="font-mono text-xs">{l.supplier_gstin}</TableCell>
                     <TableCell className="text-xs">{l.supplier_name}</TableCell>
@@ -291,13 +279,10 @@ function Gstr2BPage() {
                     <TableCell className="text-right font-mono">{formatINR(l.igst_paise)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(l.cgst_paise)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(l.sgst_paise)}</TableCell>
-                    <TableCell>
-                      {l.match_status === "matched" && <Badge variant="default">Matched</Badge>}
-                      {l.match_status === "mismatch" && <Badge variant="secondary">Value Mismatch</Badge>}
-                      {l.match_status === "unmatched" && <Badge variant="outline">Not in books</Badge>}
-                    </TableCell>
+                    <TableCell><Badge variant={sv.variant}>{sv.label}</Badge></TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -355,3 +340,6 @@ function Gstr2BPage() {
     </div>
   );
 }
+
+// retained to satisfy import-side-effect-free linter if needed
+export { normGstin, normInvoiceNo };
