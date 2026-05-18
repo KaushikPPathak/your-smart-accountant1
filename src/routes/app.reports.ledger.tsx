@@ -357,8 +357,8 @@ function LedgerStatement() {
     Array.from({ length: Math.max(drRows.length, crRows.length) }).map((_, i) => {
       const l = drRows[i];
       const r2 = crRows[i];
-      const cell = (v: React.ReactNode) => (v == null ? "" : String(v));
-      const amt = (v: React.ReactNode) => {
+      const cell = (v: unknown) => (v == null ? "" : String(v));
+      const amt = (v: unknown) => {
         if (v == null) return "";
         const s = String(v).replace(/[^\d.\-]/g, "");
         return s ? Number(s).toFixed(2) : String(v);
