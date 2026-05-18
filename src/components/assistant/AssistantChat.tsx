@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import {
   type AssistantAction,
   type KbEntry,
 } from "@/lib/assistant-knowledge";
+import { assistantChat } from "@/lib/assistant.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -27,7 +29,9 @@ interface ChatMessage {
   text: string;
   matches?: KbEntry[];
   preview?: ParsedCompany;
+  toolCalls?: { name: string; input: string }[];
 }
+
 
 type ParsedCompany = {
   name?: string;
