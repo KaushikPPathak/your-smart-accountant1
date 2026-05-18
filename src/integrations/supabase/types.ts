@@ -884,8 +884,10 @@ export type Database = {
           invoice_date: string | null
           invoice_no: string
           invoice_value_paise: number
+          manual_override: boolean
           match_status: string
           matched_voucher_id: string | null
+          remarks: string | null
           sgst_paise: number
           supplier_gstin: string
           supplier_name: string | null
@@ -902,8 +904,10 @@ export type Database = {
           invoice_date?: string | null
           invoice_no: string
           invoice_value_paise?: number
+          manual_override?: boolean
           match_status?: string
           matched_voucher_id?: string | null
+          remarks?: string | null
           sgst_paise?: number
           supplier_gstin: string
           supplier_name?: string | null
@@ -920,8 +924,10 @@ export type Database = {
           invoice_date?: string | null
           invoice_no?: string
           invoice_value_paise?: number
+          manual_override?: boolean
           match_status?: string
           matched_voucher_id?: string | null
+          remarks?: string | null
           sgst_paise?: number
           supplier_gstin?: string
           supplier_name?: string | null

@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -41,6 +42,8 @@ interface G2BLine {
   sgst_paise: number;
   match_status: string;
   matched_voucher_id: string | null;
+  remarks: string | null;
+  manual_override: boolean;
 }
 interface Purchase {
   id: string; voucher_number: string; voucher_date: string; total_paise: number;
@@ -51,6 +54,8 @@ interface Purchase {
 const STATUS_VARIANTS: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   matched: { label: "Matched", variant: "default" },
   matched_with_tolerance: { label: "Matched (±tol)", variant: "default" },
+  manual_match: { label: "Matched (manual)", variant: "default" },
+  accept_as_matched: { label: "Accepted", variant: "default" },
   value_mismatch: { label: "Value Δ", variant: "secondary" },
   tax_mismatch: { label: "Tax Δ", variant: "secondary" },
   date_mismatch: { label: "Date Δ", variant: "secondary" },
@@ -58,6 +63,8 @@ const STATUS_VARIANTS: Record<string, { label: string; variant: "default" | "sec
   probable_match: { label: "Probable", variant: "secondary" },
   unmatched: { label: "Not in books", variant: "outline" },
 };
+
+const MATCHED_STATUSES = new Set(["matched", "matched_with_tolerance", "manual_match", "accept_as_matched"]);
 
 function Gstr2BPage() {
   const { activeCompanyId } = useCompany();
@@ -70,6 +77,7 @@ function Gstr2BPage() {
   const { view, setView } = useReportView("gstr2b");
   const [tol, setTol] = useState<ReconTolerances>(DEFAULT_TOLERANCES);
   const [busy, setBusy] = useState(false);
+  const [onlyMismatch, setOnlyMismatch] = useState(false);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -80,6 +88,21 @@ function Gstr2BPage() {
       .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false })
       .limit(5000)
       .then(({ data }) => setPurchases((data || []) as unknown as Purchase[]));
+  }, [activeCompanyId]);
+
+  // Load most-recent import on mount
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    supabase.from("gstr2b_imports")
+      .select("id, period")
+      .eq("company_id", activeCompanyId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        const imp = data?.[0];
+        if (imp) { setPeriod(imp.period); loadLines(imp.id); }
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompanyId]);
 
   async function loadLines(impId: string) {
@@ -124,7 +147,7 @@ function Gstr2BPage() {
       }));
       const { error } = await supabase.from("gstr2b_lines").insert(rows);
       if (error) { toast.error(error.message); return; }
-      const matched = rows.filter((r) => r.match_status === "matched" || r.match_status === "matched_with_tolerance").length;
+      const matched = rows.filter((r) => MATCHED_STATUSES.has(r.match_status)).length;
       await supabase.from("gstr2b_imports").update({ matched_lines: matched }).eq("id", imp.id);
       await loadLines(imp.id);
       toast.success(`Imported ${parsed.length} rows · ${matched} matched`);
@@ -135,7 +158,6 @@ function Gstr2BPage() {
     }
   }
 
-  // Re-run reconciliation in memory when tolerances change (without re-importing)
   function rerunInMemory() {
     if (!lines.length) return;
     const parsed = lines.map((l) => ({
@@ -154,10 +176,34 @@ function Gstr2BPage() {
     const byKey = new Map<string, ReconResult>();
     results.forEach((r) => byKey.set(`${r.row.supplier_gstin}|${r.row.invoice_no}`, r));
     setLines((prev) => prev.map((l) => {
+      if (l.manual_override) return l; // never overwrite manual decisions
       const r = byKey.get(`${l.supplier_gstin}|${l.invoice_no}`);
       return r ? { ...l, match_status: r.match_status, matched_voucher_id: r.matched_voucher_id } : l;
     }));
-    toast.success("Re-matched with current tolerances");
+    toast.success("Re-matched (manual overrides preserved)");
+  }
+
+  // Inline edit helpers — optimistic + persist
+  async function patchLine(id: string, patch: Partial<G2BLine>) {
+    setLines((prev) => prev.map((l) => l.id === id ? { ...l, ...patch } : l));
+    const { error } = await supabase.from("gstr2b_lines").update(patch).eq("id", id);
+    if (error) toast.error(error.message);
+  }
+
+  async function acceptAsMatched(l: G2BLine) {
+    await patchLine(l.id, { match_status: "accept_as_matched", manual_override: true });
+    toast.success("Marked as matched");
+  }
+  async function linkVoucher(l: G2BLine, voucherId: string) {
+    if (!voucherId) {
+      await patchLine(l.id, { matched_voucher_id: null, manual_override: false });
+      return;
+    }
+    await patchLine(l.id, { matched_voucher_id: voucherId, match_status: "manual_match", manual_override: true });
+    toast.success("Linked to voucher");
+  }
+  async function clearManual(l: G2BLine) {
+    await patchLine(l.id, { manual_override: false, match_status: "unmatched", matched_voucher_id: null });
   }
 
   const missing = useMemo(() => {
@@ -170,14 +216,35 @@ function Gstr2BPage() {
   }, [lines, purchases]);
 
   const stats = useMemo(() => ({
-    matched: lines.filter((l) => l.match_status === "matched" || l.match_status === "matched_with_tolerance").length,
+    matched: lines.filter((l) => MATCHED_STATUSES.has(l.match_status)).length,
     mismatch: lines.filter((l) => ["value_mismatch", "tax_mismatch", "date_mismatch", "invoice_no_mismatch", "probable_match"].includes(l.match_status)).length,
     unmatched: lines.filter((l) => l.match_status === "unmatched").length,
   }), [lines]);
 
+  const visibleLines = useMemo(() =>
+    onlyMismatch ? lines.filter((l) => !MATCHED_STATUSES.has(l.match_status)) : lines,
+  [lines, onlyMismatch]);
+
+  // Candidate purchases for a given 2B line — same GSTIN preferred, fallback to all
+  function candidatesFor(l: G2BLine): Purchase[] {
+    const g = normGstin(l.supplier_gstin);
+    const same = purchases.filter((p) => normGstin(p.ledgers?.gstin || "") === g);
+    return (same.length ? same : purchases).slice(0, 200);
+  }
+
   return (
     <div className="space-y-4">
-      <Card>
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          .print-area { font-size: 11px; }
+          .print-area table { width: 100%; border-collapse: collapse; }
+          .print-area th, .print-area td { border: 1px solid #999; padding: 3px 5px; }
+          @page { size: A4 landscape; margin: 10mm; }
+        }
+      `}</style>
+
+      <Card className="no-print">
         <CardContent className="grid gap-3 p-4 md:grid-cols-4">
           <div className="space-y-1">
             <Label>Period (MMYYYY)</Label>
@@ -191,12 +258,15 @@ function Gstr2BPage() {
             <Badge variant="default">{stats.matched} matched</Badge>
             <Badge variant="secondary">{stats.mismatch} review</Badge>
             <Badge variant="outline">{stats.unmatched} unmatched</Badge>
-            <div className="ml-auto"><ViewSwitcher view={view} onChange={setView} classicLabel="Table" /></div>
+            <div className="ml-auto flex gap-2">
+              <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
+              <Button size="sm" variant="outline" onClick={() => window.print()}>Print</Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="no-print">
         <CardContent className="p-4">
           <div className="text-xs font-semibold mb-2">Reconciliation tolerances</div>
           <div className="grid gap-3 md:grid-cols-5 text-xs">
@@ -224,10 +294,18 @@ function Gstr2BPage() {
               <Label className="text-xs">Ignore invoice no.</Label>
             </div>
           </div>
-          <div className="text-[11px] text-muted-foreground mt-2">
-            Invoice numbers are normalised (case, spaces, dashes, slashes & leading zeros ignored).
-            Re-match runs purely client-side — re-upload to persist results.
-            <button className="ml-3 underline" onClick={rerunInMemory} disabled={!lines.length}>Re-match now</button>
+          <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
+            <div className="text-[11px] text-muted-foreground">
+              Invoice numbers are normalised (case, spaces, dashes, slashes & leading zeros ignored).
+              Manual overrides are preserved across re-matches.
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-xs">
+                <Switch checked={onlyMismatch} onCheckedChange={setOnlyMismatch} />
+                Show only mismatched / unmatched
+              </label>
+              <Button size="sm" variant="outline" onClick={rerunInMemory} disabled={!lines.length}>Re-match now</Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -238,8 +316,8 @@ function Gstr2BPage() {
             view={view}
             reportId="gstr2b"
             title="2B lines vs Purchase Register"
-            headers={["Supplier GSTIN", "Supplier", "Inv No", "Inv Date", "Status", "Value", "IGST", "CGST", "SGST"]}
-            rows={lines.map((l) => [
+            headers={["Supplier GSTIN", "Supplier", "Inv No", "Inv Date", "Status", "Value", "IGST", "CGST", "SGST", "Remarks"]}
+            rows={visibleLines.map((l) => [
               l.supplier_gstin,
               l.supplier_name ?? "",
               l.invoice_no,
@@ -249,13 +327,19 @@ function Gstr2BPage() {
               formatINR(l.igst_paise),
               formatINR(l.cgst_paise),
               formatINR(l.sgst_paise),
+              l.remarks ?? "",
             ])}
             numericFromCol={5}
           />
         ) : (
-        <Card>
+        <Card className="print-area">
           <CardContent className="p-0">
-            <div className="border-b bg-muted/30 px-3 py-2 text-xs font-semibold">2B lines vs Purchase Register</div>
+            <div className="border-b bg-muted/30 px-3 py-2 text-xs font-semibold flex items-center justify-between">
+              <span>2B lines vs Purchase Register · Period {period}</span>
+              <span className="text-muted-foreground">
+                {stats.matched} matched · {stats.mismatch} review · {stats.unmatched} unmatched
+              </span>
+            </div>
             <Table>
               <TableHeader><TableRow>
                 <TableHead>Supplier GSTIN</TableHead><TableHead>Supplier</TableHead>
@@ -265,10 +349,13 @@ function Gstr2BPage() {
                 <TableHead className="text-right">CGST</TableHead>
                 <TableHead className="text-right">SGST</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="min-w-[180px]">Remarks</TableHead>
+                <TableHead className="no-print min-w-[220px]">Action</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {lines.map((l) => {
+                {visibleLines.map((l) => {
                   const sv = STATUS_VARIANTS[l.match_status] ?? { label: l.match_status, variant: "outline" as const };
+                  const cands = candidatesFor(l);
                   return (
                   <TableRow key={l.id}>
                     <TableCell className="font-mono text-xs">{l.supplier_gstin}</TableCell>
@@ -279,7 +366,45 @@ function Gstr2BPage() {
                     <TableCell className="text-right font-mono">{formatINR(l.igst_paise)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(l.cgst_paise)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(l.sgst_paise)}</TableCell>
-                    <TableCell><Badge variant={sv.variant}>{sv.label}</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant={sv.variant}>{sv.label}</Badge>
+                      {l.manual_override ? <span className="ml-1 text-[10px] text-muted-foreground">(manual)</span> : null}
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        defaultValue={l.remarks ?? ""}
+                        placeholder="Add note…"
+                        className="h-7 text-xs"
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          if ((l.remarks ?? "") !== v) void patchLine(l.id, { remarks: v || null });
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell className="no-print">
+                      <div className="flex items-center gap-1">
+                        <select
+                          className="h-7 text-xs border rounded px-1 bg-background max-w-[160px]"
+                          value={l.matched_voucher_id ?? ""}
+                          onChange={(e) => void linkVoucher(l, e.target.value)}
+                        >
+                          <option value="">— link voucher —</option>
+                          {cands.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.voucher_number} · {p.vendor_invoice_no || "—"} · {formatINR(p.total_paise)}
+                            </option>
+                          ))}
+                        </select>
+                        {!MATCHED_STATUSES.has(l.match_status) && (
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                            onClick={() => void acceptAsMatched(l)}>Accept</Button>
+                        )}
+                        {l.manual_override && (
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                            onClick={() => void clearManual(l)}>Reset</Button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                   );
                 })}
@@ -307,7 +432,7 @@ function Gstr2BPage() {
           numericFromCol={5}
         />
       ) : (
-      <Card>
+      <Card className="print-area">
         <CardContent className="p-0">
           <div className="border-b bg-muted/30 px-3 py-2 text-xs font-semibold text-destructive">
             Missing ITC: purchases in your books not appearing in GSTR-2B ({missing.length})
@@ -341,5 +466,4 @@ function Gstr2BPage() {
   );
 }
 
-// retained to satisfy import-side-effect-free linter if needed
 export { normGstin, normInvoiceNo };
