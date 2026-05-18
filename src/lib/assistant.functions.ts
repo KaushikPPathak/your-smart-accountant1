@@ -472,7 +472,7 @@ Guidelines:
         toolCalls: result.steps.flatMap((s) =>
           (s.toolCalls ?? []).map((c) => ({
             name: c.toolName,
-            input: c.input,
+            input: JSON.stringify(c.input ?? {}),
           })),
         ),
       };
