@@ -369,3 +369,71 @@ html[lang="gu"],
 html[lang="gu"] body {
   font-family: "Noto Sans Gujarati", "Shruti", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* ============================================================
+   Screen-only report polish — applies globally to every report
+   wrapped by ReportViewer (`.report-print-root`). Goal: dense,
+   eye-catching grid that fills width without empty gutters, with
+   refined typography, zebra rows, sticky headers, and hover.
+   These rules are NOT inside @media print so they don't affect
+   PDF/print output (which keeps its own clean A4 style above).
+   ============================================================ */
+@media screen {
+  .report-print-root table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+    line-height: 1.35;
+    font-variant-numeric: tabular-nums;
+  }
+  .report-print-root th,
+  .report-print-root td {
+    padding: 6px 8px;
+    vertical-align: top;
+  }
+  /* Tight column gutters: numeric / short-token columns shouldn't
+     waste horizontal space. */
+  .report-print-root td.num,
+  .report-print-root th.num,
+  .report-print-root .tabular-nums,
+  .report-print-root .font-mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    white-space: nowrap;
+  }
+  /* Sticky header so long ledgers keep column labels visible. */
+  .report-print-root thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: hsl(var(--muted) / 0.95);
+    backdrop-filter: saturate(180%) blur(2px);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    font-size: 11px;
+    color: hsl(var(--foreground));
+  }
+  /* Zebra striping for readability — subtle in both themes. */
+  .report-print-root tbody tr:nth-child(even) > td {
+    background: hsl(var(--muted) / 0.35);
+  }
+  .report-print-root tbody tr:hover > td {
+    background: hsl(var(--accent) / 0.45);
+  }
+  /* Totals / bold rows stand out without being heavy. */
+  .report-print-root tfoot tr > td,
+  .report-print-root .row-bold > td,
+  .report-print-root .row-bold > th {
+    background: hsl(var(--muted) / 0.7);
+    font-weight: 600;
+  }
+  /* Compact wide tables further when Fit mode is off so columns
+     still feel screen-friendly. */
+  .report-print-root .text-\[12px\],
+  .report-print-root .text-\[11px\] {
+    line-height: 1.35;
+  }
+}
+
