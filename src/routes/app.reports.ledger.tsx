@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { ReportViewer } from "@/components/reports/ReportViewer";
-import { TAccount, type TRow } from "@/components/reports/TAccount";
+import { TAccountColumnar, type TColRow } from "@/components/reports/TAccountColumnar";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
@@ -254,16 +254,25 @@ function LedgerStatement() {
   const fmtBal = (paise: number) =>
     `${formatINR(Math.abs(paise), { symbol: false })} ${paise >= 0 ? "Dr" : "Cr"}`;
 
-  // ---------- T-format (Horizontal) data ----------
-  // Accounting-norm row shape:
-  //   Particulars : "To/By <Origin Account>" — the contra ledger (Cash/Bank/Sales/Purchase…)
-  //   Hint        : "<dd-mm-yyyy> · <Vch Type> #<Vch No>[ · Ref: <ref/bill no>][ — <narration>]"
-  const drRows: TRow[] = [];
-  const crRows: TRow[] = [];
+  // ---------- T-format (Horizontal) data — columnar shape ----------
+  // Same columns as Grid view (Date | Particulars | Vch Type | Vch No | Chq/Ref | Amount),
+  // split into Dr (left) and Cr (right) halves.
+  const drRows: TColRow[] = [];
+  const crRows: TColRow[] = [];
   if (openingBeforeFrom > 0) {
-    drRows.push({ label: "To Opening Balance", hint: fmtIndianDate(from), amount: formatINR(openingBeforeFrom), emphasis: "bold" });
+    drRows.push({
+      date: fmtIndianDate(from),
+      particulars: "To Opening Balance",
+      amount: formatINR(openingBeforeFrom),
+      emphasis: "bold",
+    });
   } else if (openingBeforeFrom < 0) {
-    crRows.push({ label: "By Opening Balance", hint: fmtIndianDate(from), amount: formatINR(-openingBeforeFrom), emphasis: "bold" });
+    crRows.push({
+      date: fmtIndianDate(from),
+      particulars: "By Opening Balance",
+      amount: formatINR(-openingBeforeFrom),
+      emphasis: "bold",
+    });
   }
   const originFor = (v: EntryRow["vouchers"]): string => {
     if (!v) return "—";
@@ -272,31 +281,52 @@ function LedgerStatement() {
     if (names.length > 0) return names.join(", ");
     return (TYPE_LABEL[v.voucher_type] ?? v.voucher_type).replace(/_/g, " ");
   };
-  const hintFor = (e: EntryRow, v: EntryRow["vouchers"]): string => {
-    if (!v) return "";
-    const parts: string[] = [fmtIndianDate(v.voucher_date)];
-    const vt = TYPE_LABEL[v.voucher_type] ?? v.voucher_type;
-    parts.push(`${vt} #${v.voucher_number}`);
-    if (v.reference_no && v.reference_no.trim()) parts.push(`Ref: ${v.reference_no.trim()}`);
-    const narr = (e.narration?.trim() || v.narration?.trim() || "");
-    let line = parts.join(" · ");
-    if (narr) line += ` — ${narr}`;
-    return line;
-  };
   for (const e of sortEntriesByVoucherAsc(entries)) {
     const v = e.vouchers;
+    if (!v) continue;
     const origin = originFor(v);
-    const hint = hintFor(e, v);
-    const goto = v ? () => openVoucherDetail(navigate, v.id) : undefined;
-    if (e.debit_paise > 0) drRows.push({ label: <>To {origin} A/c</>, hint, amount: formatINR(e.debit_paise), onClick: goto });
-    if (e.credit_paise > 0) crRows.push({ label: <>By {origin} A/c</>, hint, amount: formatINR(e.credit_paise), onClick: goto });
+    const vchType = TYPE_LABEL[v.voucher_type] ?? v.voucher_type;
+    const chqRef = (v.reference_no || "").trim();
+    const goto = () => openVoucherDetail(navigate, v.id);
+    if (e.debit_paise > 0) {
+      drRows.push({
+        date: fmtIndianDate(v.voucher_date),
+        particulars: `To ${origin} A/c`,
+        vchType,
+        vchNo: v.voucher_number,
+        chqRef,
+        amount: formatINR(e.debit_paise),
+        onClick: goto,
+      });
+    }
+    if (e.credit_paise > 0) {
+      crRows.push({
+        date: fmtIndianDate(v.voucher_date),
+        particulars: `By ${origin} A/c`,
+        vchType,
+        vchNo: v.voucher_number,
+        chqRef,
+        amount: formatINR(e.credit_paise),
+        onClick: goto,
+      });
+    }
   }
   const drSubtotal = (openingBeforeFrom > 0 ? openingBeforeFrom : 0) + totals.dr;
   const crSubtotal = (openingBeforeFrom < 0 ? -openingBeforeFrom : 0) + totals.cr;
   if (drSubtotal > crSubtotal) {
-    crRows.push({ label: "By Balance c/d", hint: fmtIndianDate(to), amount: formatINR(drSubtotal - crSubtotal), emphasis: "bold" });
+    crRows.push({
+      date: fmtIndianDate(to),
+      particulars: "By Balance c/d",
+      amount: formatINR(drSubtotal - crSubtotal),
+      emphasis: "bold",
+    });
   } else if (crSubtotal > drSubtotal) {
-    drRows.push({ label: "To Balance c/d", hint: fmtIndianDate(to), amount: formatINR(crSubtotal - drSubtotal), emphasis: "bold" });
+    drRows.push({
+      date: fmtIndianDate(to),
+      particulars: "To Balance c/d",
+      amount: formatINR(crSubtotal - drSubtotal),
+      emphasis: "bold",
+    });
   }
   const grandTotal = Math.max(drSubtotal, crSubtotal);
 
@@ -322,37 +352,43 @@ function LedgerStatement() {
     ["Closing Balance", "", "", "", "", "", "", fmtBal(closing)],
   ];
 
-  const horizontalBody = (): (string | number)[][] => {
-    type ExportRow = { label: string; paise: number };
-    const drExp: ExportRow[] = [];
-    const crExp: ExportRow[] = [];
-    if (openingBeforeFrom > 0) drExp.push({ label: "To Opening Balance", paise: openingBeforeFrom });
-    else if (openingBeforeFrom < 0) crExp.push({ label: "By Opening Balance", paise: -openingBeforeFrom });
-    for (const e of sortEntriesByVoucherAsc(entries)) {
-      const v = e.vouchers;
-      const origin = originFor(v);
-      const detail = v ? `  [${hintFor(e, v)}]` : "";
-      if (e.debit_paise > 0) drExp.push({ label: `To ${origin} A/c${detail}`, paise: e.debit_paise });
-      if (e.credit_paise > 0) crExp.push({ label: `By ${origin} A/c${detail}`, paise: e.credit_paise });
-    }
-    if (drSubtotal > crSubtotal) crExp.push({ label: "By Balance c/d", paise: drSubtotal - crSubtotal });
-    else if (crSubtotal > drSubtotal) drExp.push({ label: "To Balance c/d", paise: crSubtotal - drSubtotal });
-    const max = Math.max(drExp.length, crExp.length);
-    return Array.from({ length: max }).map((_, i) => [
-      drExp[i]?.label ?? "",
-      drExp[i] ? r(drExp[i].paise).toFixed(2) : "",
-      crExp[i]?.label ?? "",
-      crExp[i] ? r(crExp[i].paise).toFixed(2) : "",
-    ]);
-  };
+  // 12-column shape mirroring the on-screen T: Dr (Date, Particulars, Vch Type, Vch No, Chq/Ref, Amount) | Cr (same)
+  const horizontalBody = (): (string | number)[][] =>
+    Array.from({ length: Math.max(drRows.length, crRows.length) }).map((_, i) => {
+      const l = drRows[i];
+      const r2 = crRows[i];
+      const cell = (v: unknown) => (v == null ? "" : String(v));
+      const amt = (v: unknown) => {
+        if (v == null) return "";
+        const s = String(v).replace(/[^\d.\-]/g, "");
+        return s ? Number(s).toFixed(2) : String(v);
+      };
+      return [
+        l ? cell(l.date) : "",
+        l ? cell(l.particulars) : "",
+        l ? cell(l.vchType) : "",
+        l ? cell(l.vchNo) : "",
+        l ? cell(l.chqRef) : "",
+        l ? amt(l.amount) : "",
+        r2 ? cell(r2.date) : "",
+        r2 ? cell(r2.particulars) : "",
+        r2 ? cell(r2.vchType) : "",
+        r2 ? cell(r2.vchNo) : "",
+        r2 ? cell(r2.chqRef) : "",
+        r2 ? amt(r2.amount) : "",
+      ];
+    });
+
+  const horizontalHead = ["Date", "Particulars", "Vch Type", "Vch No", "Chq/Ref", amountHeader()];
 
   const csvRowsHorizontal = (): (string | number)[][] => [
-    [`Ledger: ${ledger?.name ?? ""}`, "", "", ""],
-    [`Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`, "", "", ""],
-    ["Dr. Particulars", amountHeader(), "Cr. Particulars", amountHeader()],
+    [`Ledger: ${ledger?.name ?? ""}`, ...Array(11).fill("")],
+    [`Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`, ...Array(11).fill("")],
+    ["Dr.", "", "", "", "", "", "Cr.", "", "", "", "", ""],
+    [...horizontalHead, ...horizontalHead],
     ...horizontalBody(),
-    ["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)],
-    ["", "", "Closing", r(closing).toFixed(2)],
+    ["Total", "", "", "", "", r(grandTotal).toFixed(2), "Total", "", "", "", "", r(grandTotal).toFixed(2)],
+    ["", "", "", "", "", "", "Closing Balance", "", "", "", "", fmtBal(closing)],
   ];
 
   const onExportCsv = () =>
@@ -411,16 +447,22 @@ function LedgerStatement() {
         subtitle: pdfHeader.dateRangeSubtitle(from, to),
         companyName: pdfHeader.companyName,
         companySubLine: pdfHeader.companySubLine,
-        head: [["Dr. Particulars", amountHeader(), "Cr. Particulars", amountHeader()]],
+        head: [
+          [
+            { content: "Dr.", colSpan: 6, styles: { halign: "center", fontStyle: "bold" } } as never,
+            { content: "Cr.", colSpan: 6, styles: { halign: "center", fontStyle: "bold" } } as never,
+          ],
+          [...horizontalHead, ...horizontalHead],
+        ],
         body: horizontalBody(),
         foot: [
-          ["Total", r(grandTotal).toFixed(2), "Total", r(grandTotal).toFixed(2)],
-          ["", "", "Closing Balance", fmtBal(closing)],
+          ["Total", "", "", "", "", r(grandTotal).toFixed(2), "Total", "", "", "", "", r(grandTotal).toFixed(2)],
+          ["", "", "", "", "", "", "Closing Balance", "", "", "", "", fmtBal(closing)],
         ],
         fileName: `${fileBase}-horizontal.pdf`,
         orientation: "l",
-        rightAlignCols: [1, 3],
-        dividerBeforeCol: 2,
+        rightAlignCols: [5, 11],
+        dividerBeforeCol: 6,
       });
     }
   };
@@ -850,7 +892,7 @@ function LedgerStatement() {
         </Card>
       ) : view === "horizontal" ? (
         <>
-          <TAccount
+          <TAccountColumnar
             title={`${ledger.name} Account`}
             subtitle={`for the period ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`}
             leftRows={drRows}
