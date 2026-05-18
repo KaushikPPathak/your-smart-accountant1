@@ -734,6 +734,8 @@ export function mapVoucher(r: ParsedRow): VoucherRecord | null {
   const party = pickField(r, ["PARTYLEDGERNAME", "PARTYNAME", "Party", "Party Name", "Account", "Ledger"]);
   const total = num(pickField(r, ["AMOUNT", "Amount", "Total", "Grand Total", "Bill Amount", "Bill Amt", "Bill Amt.", "Net Amount", "Net Amt", "Net Amt."]));
   if (!date || !vno) return null;
+  // Reject footer / summary lines that slipped past the matrix-level filter.
+  if (/^(total|grand\s*total|sub\s*total|opening|closing|balance|c\.?\s*f\.?|b\.?\s*f\.?)$/i.test(vno.trim())) return null;
   return {
     date,
     voucher_no: vno,
