@@ -961,6 +961,7 @@ export async function postVouchers(
         subtotal_paise: totalP,
         total_paise: totalP,
         created_by: user.id,
+        import_batch_id: batchId || null,
       }).select("id").single();
     if (vErr || !vch) {
       skipped++;
