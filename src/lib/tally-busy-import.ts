@@ -902,6 +902,7 @@ export async function postVouchers(
   companyId: string,
   rows: VoucherRecord[],
   onProgress?: ProgressCb,
+  batchId?: string,
 ): Promise<PostResultEx> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Sign in required");
