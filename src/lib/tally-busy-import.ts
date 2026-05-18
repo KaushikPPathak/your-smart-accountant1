@@ -878,6 +878,7 @@ export async function postItems(
       opening_stock_rate_paise: paise(r.opening_rate),
       sale_price_paise: paise(r.sale_price),
       purchase_price_paise: paise(r.purchase_price),
+      import_batch_id: batchId || null,
     };
     const id = map.get(lc(r.name));
     if (id) {
