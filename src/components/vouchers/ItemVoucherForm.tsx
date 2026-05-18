@@ -120,6 +120,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [narration, setNarration] = useState("");
   const [placeOfSupply, setPlaceOfSupply] = useState<string>("");
   const [roundOff, setRoundOff] = useState<boolean>(true);
+  const isPurchaseSide = voucherType === "purchase" || voucherType === "debit_note";
+  const [itcClass, setItcClass] = useState<"inputs" | "capital_goods" | "input_services" | "ineligible" | "na">(
+    isPurchaseSide ? "inputs" : "na",
+  );
+  const [itcEligible, setItcEligible] = useState<boolean>(true);
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [items, setItems] = useState<ItemOpt[]>([]);
