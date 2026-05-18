@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import {
   type AssistantAction,
   type KbEntry,
 } from "@/lib/assistant-knowledge";
+import { assistantChat } from "@/lib/assistant.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -27,7 +29,9 @@ interface ChatMessage {
   text: string;
   matches?: KbEntry[];
   preview?: ParsedCompany;
+  toolCalls?: { name: string; input: string }[];
 }
+
 
 type ParsedCompany = {
   name?: string;
@@ -66,11 +70,15 @@ export function AssistantChat() {
   const { setTheme } = useTheme();
   const { setLang } = useI18n();
   const { user } = useAuth();
-  const { memberships, setActiveCompanyId, refresh } = useCompany();
+  const { memberships, activeCompanyId, setActiveCompanyId, refresh } = useCompany();
   const hasCompany = memberships.length > 0;
   const [creating, setCreating] = useState(false);
   const [pendingCompany, setPendingCompany] = useState<ParsedCompany | null>(null);
+  const [aiMode, setAiMode] = useState(true);
+  const [thinking, setThinking] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const callAssistant = useServerFn(assistantChat);
+
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -307,7 +315,41 @@ export function AssistantChat() {
         return;
       }
 
-      // 3) Fall back to the offline KB search.
+      // 3) AI-first answer with accounting tool access; fall back to KB.
+      if (aiMode && user) {
+        setThinking(true);
+        try {
+          const history = [...messages, userMsg]
+            .filter((m) => m.id !== "welcome")
+            .slice(-12)
+            .map((m) => ({ role: m.role, content: m.text }));
+          const res = await callAssistant({
+            data: { companyId: activeCompanyId ?? null, messages: history },
+          });
+          if (res.ok && res.text) {
+            setMessages((m) => [
+              ...m,
+              {
+                id: `a-${Date.now()}`,
+                role: "assistant",
+                text: res.text,
+                toolCalls: res.toolCalls,
+              },
+            ]);
+            return;
+          }
+          if (!res.ok && res.error) {
+            toast.error(res.error);
+          }
+        } catch (err) {
+          console.error("[assistant] call failed", err);
+          toast.error("AI unavailable, falling back to offline guide.");
+        } finally {
+          setThinking(false);
+        }
+      }
+
+      // 4) Fallback: offline KB search.
       const matches = searchKb(text, { limit: 3 });
       let reply: ChatMessage;
       if (matches.length === 0) {
@@ -331,6 +373,7 @@ export function AssistantChat() {
         };
       }
       setMessages((m) => [...m, reply]);
+
     })();
   }
 
@@ -362,12 +405,24 @@ export function AssistantChat() {
           <div className="flex flex-col">
             <span className="text-sm font-semibold">Mate — your in-app assistant</span>
             <span className="text-[11px] text-muted-foreground">
-              Runs fully offline · knows the app's settings, screens & options
+              {aiMode
+                ? "AI-powered · can read your ledgers, balances, vouchers & GST data"
+                : "Offline guide · settings, screens & options"}
             </span>
           </div>
-          <Badge variant="secondary" className="ml-auto gap-1">
-            <Sparkles className="h-3 w-3" /> Offline
-          </Badge>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant={aiMode ? "default" : "outline"}
+              size="sm"
+              className="h-7 gap-1 text-[11px]"
+              onClick={() => setAiMode((v) => !v)}
+              title="Toggle AI mode"
+            >
+              <Sparkles className="h-3 w-3" />
+              {aiMode ? "AI on" : "AI off"}
+            </Button>
+          </div>
+
         </div>
 
         <ScrollArea className="flex-1">
@@ -394,8 +449,14 @@ export function AssistantChat() {
                 isPending={!!pendingCompany && m.preview === pendingCompany}
               />
             ))}
+            {thinking && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Mate is thinking…
+              </div>
+            )}
           </div>
         </ScrollArea>
+
 
         {/* Suggestion chips */}
         {messages.length <= 1 && (
@@ -462,9 +523,10 @@ export function AssistantChat() {
                 : "Type: create company name: ABC Traders, GSTIN: …"
             }
             autoFocus
-            disabled={creating}
+            disabled={creating || thinking}
           />
-          <Button type="submit" size="icon" aria-label="Send" disabled={creating}>
+          <Button type="submit" size="icon" aria-label="Send" disabled={creating || thinking}>
+
             <Send className="h-4 w-4" />
           </Button>
         </form>
@@ -536,6 +598,16 @@ function MessageBubble({
         }`}
       >
         <RichText text={msg.text} />
+        {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {msg.toolCalls.map((tc, i) => (
+              <Badge key={i} variant="outline" className="gap-1 text-[10px]">
+                <Wrench className="h-2.5 w-2.5" /> {tc.name}
+              </Badge>
+            ))}
+          </div>
+        )}
+
         {!isUser && msg.preview && (
           <CompanyPreviewCard
             parsed={msg.preview}
