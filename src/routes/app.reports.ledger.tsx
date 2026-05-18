@@ -254,16 +254,25 @@ function LedgerStatement() {
   const fmtBal = (paise: number) =>
     `${formatINR(Math.abs(paise), { symbol: false })} ${paise >= 0 ? "Dr" : "Cr"}`;
 
-  // ---------- T-format (Horizontal) data ----------
-  // Accounting-norm row shape:
-  //   Particulars : "To/By <Origin Account>" — the contra ledger (Cash/Bank/Sales/Purchase…)
-  //   Hint        : "<dd-mm-yyyy> · <Vch Type> #<Vch No>[ · Ref: <ref/bill no>][ — <narration>]"
-  const drRows: TRow[] = [];
-  const crRows: TRow[] = [];
+  // ---------- T-format (Horizontal) data — columnar shape ----------
+  // Same columns as Grid view (Date | Particulars | Vch Type | Vch No | Chq/Ref | Amount),
+  // split into Dr (left) and Cr (right) halves.
+  const drRows: TColRow[] = [];
+  const crRows: TColRow[] = [];
   if (openingBeforeFrom > 0) {
-    drRows.push({ label: "To Opening Balance", hint: fmtIndianDate(from), amount: formatINR(openingBeforeFrom), emphasis: "bold" });
+    drRows.push({
+      date: fmtIndianDate(from),
+      particulars: "To Opening Balance",
+      amount: formatINR(openingBeforeFrom),
+      emphasis: "bold",
+    });
   } else if (openingBeforeFrom < 0) {
-    crRows.push({ label: "By Opening Balance", hint: fmtIndianDate(from), amount: formatINR(-openingBeforeFrom), emphasis: "bold" });
+    crRows.push({
+      date: fmtIndianDate(from),
+      particulars: "By Opening Balance",
+      amount: formatINR(-openingBeforeFrom),
+      emphasis: "bold",
+    });
   }
   const originFor = (v: EntryRow["vouchers"]): string => {
     if (!v) return "—";
@@ -272,31 +281,52 @@ function LedgerStatement() {
     if (names.length > 0) return names.join(", ");
     return (TYPE_LABEL[v.voucher_type] ?? v.voucher_type).replace(/_/g, " ");
   };
-  const hintFor = (e: EntryRow, v: EntryRow["vouchers"]): string => {
-    if (!v) return "";
-    const parts: string[] = [fmtIndianDate(v.voucher_date)];
-    const vt = TYPE_LABEL[v.voucher_type] ?? v.voucher_type;
-    parts.push(`${vt} #${v.voucher_number}`);
-    if (v.reference_no && v.reference_no.trim()) parts.push(`Ref: ${v.reference_no.trim()}`);
-    const narr = (e.narration?.trim() || v.narration?.trim() || "");
-    let line = parts.join(" · ");
-    if (narr) line += ` — ${narr}`;
-    return line;
-  };
   for (const e of sortEntriesByVoucherAsc(entries)) {
     const v = e.vouchers;
+    if (!v) continue;
     const origin = originFor(v);
-    const hint = hintFor(e, v);
-    const goto = v ? () => openVoucherDetail(navigate, v.id) : undefined;
-    if (e.debit_paise > 0) drRows.push({ label: <>To {origin} A/c</>, hint, amount: formatINR(e.debit_paise), onClick: goto });
-    if (e.credit_paise > 0) crRows.push({ label: <>By {origin} A/c</>, hint, amount: formatINR(e.credit_paise), onClick: goto });
+    const vchType = TYPE_LABEL[v.voucher_type] ?? v.voucher_type;
+    const chqRef = (v.reference_no || "").trim();
+    const goto = () => openVoucherDetail(navigate, v.id);
+    if (e.debit_paise > 0) {
+      drRows.push({
+        date: fmtIndianDate(v.voucher_date),
+        particulars: `To ${origin} A/c`,
+        vchType,
+        vchNo: v.voucher_number,
+        chqRef,
+        amount: formatINR(e.debit_paise),
+        onClick: goto,
+      });
+    }
+    if (e.credit_paise > 0) {
+      crRows.push({
+        date: fmtIndianDate(v.voucher_date),
+        particulars: `By ${origin} A/c`,
+        vchType,
+        vchNo: v.voucher_number,
+        chqRef,
+        amount: formatINR(e.credit_paise),
+        onClick: goto,
+      });
+    }
   }
   const drSubtotal = (openingBeforeFrom > 0 ? openingBeforeFrom : 0) + totals.dr;
   const crSubtotal = (openingBeforeFrom < 0 ? -openingBeforeFrom : 0) + totals.cr;
   if (drSubtotal > crSubtotal) {
-    crRows.push({ label: "By Balance c/d", hint: fmtIndianDate(to), amount: formatINR(drSubtotal - crSubtotal), emphasis: "bold" });
+    crRows.push({
+      date: fmtIndianDate(to),
+      particulars: "By Balance c/d",
+      amount: formatINR(drSubtotal - crSubtotal),
+      emphasis: "bold",
+    });
   } else if (crSubtotal > drSubtotal) {
-    drRows.push({ label: "To Balance c/d", hint: fmtIndianDate(to), amount: formatINR(crSubtotal - drSubtotal), emphasis: "bold" });
+    drRows.push({
+      date: fmtIndianDate(to),
+      particulars: "To Balance c/d",
+      amount: formatINR(crSubtotal - drSubtotal),
+      emphasis: "bold",
+    });
   }
   const grandTotal = Math.max(drSubtotal, crSubtotal);
 
