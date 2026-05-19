@@ -365,7 +365,266 @@ function buildTools(supabase: DB, companyId: string) {
         return { results: hits };
       },
     }),
+
+    // ---------- WRITE TOOLS (always confirm-first) ----------
+    create_ledger: tool({
+      description:
+        "Create a new ledger / party master. ALWAYS call with confirm=false first to show the user a preview, then only call again with confirm=true after the user explicitly says yes.",
+      inputSchema: z.object({
+        name: z.string().min(1).max(120),
+        type: z.enum([
+          "sundry_debtor",
+          "sundry_creditor",
+          "bank",
+          "cash",
+          "expense_direct",
+          "expense_indirect",
+          "income_direct",
+          "income_indirect",
+          "fixed_asset",
+          "current_asset",
+          "current_liability",
+          "loan_liability",
+          "capital",
+          "duties_taxes",
+          "stock_in_hand",
+        ]),
+        opening_balance_rupees: z.number().optional().default(0),
+        opening_is_debit: z.boolean().optional().default(true),
+        gstin: z.string().optional(),
+        state: z.string().optional(),
+        confirm: z.boolean().default(false),
+      }),
+      execute: async (input) => {
+        const { data: dup } = await supabase
+          .from("ledgers")
+          .select("id, name")
+          .eq("company_id", companyId)
+          .ilike("name", input.name)
+          .maybeSingle();
+        if (dup) return { error: `A ledger named "${dup.name}" already exists.` };
+
+        const preview = {
+          action: "create_ledger" as const,
+          name: input.name,
+          type: input.type,
+          opening_balance_rupees: input.opening_balance_rupees ?? 0,
+          opening_is_debit: input.opening_is_debit ?? true,
+          gstin: input.gstin ?? null,
+          state: input.state ?? null,
+        };
+        if (!input.confirm) return { preview, requires_confirmation: true };
+
+        const { data, error } = await supabase
+          .from("ledgers")
+          .insert({
+            company_id: companyId,
+            name: input.name,
+            type: input.type as Database["public"]["Enums"]["ledger_type"],
+            opening_balance_paise: Math.round((input.opening_balance_rupees ?? 0) * 100),
+            opening_balance_is_debit: input.opening_is_debit ?? true,
+            gstin: input.gstin ?? null,
+            state: input.state ?? null,
+          })
+          .select("id, name")
+          .single();
+        if (error) return { error: error.message };
+        return { ok: true, created: data };
+      },
+    }),
+
+    create_journal_voucher: tool({
+      description:
+        "Create a manual Journal (double-entry) voucher. Lines must balance — sum of debits = sum of credits. Each line references a ledger by name (fuzzy match). ALWAYS call with confirm=false first; only call again with confirm=true after the user explicitly says yes.",
+      inputSchema: z.object({
+        date: z.string().describe("ISO YYYY-MM-DD"),
+        narration: z.string().max(500).optional(),
+        lines: z
+          .array(
+            z.object({
+              ledger_name: z.string(),
+              debit_rupees: z.number().optional().default(0),
+              credit_rupees: z.number().optional().default(0),
+            }),
+          )
+          .min(2)
+          .max(20),
+        confirm: z.boolean().default(false),
+      }),
+      execute: async (input) => {
+        return await createGenericVoucher(supabase, companyId, {
+          voucher_type: "journal",
+          date: input.date,
+          narration: input.narration,
+          lines: input.lines,
+          confirm: input.confirm,
+        });
+      },
+    }),
+
+    create_payment_voucher: tool({
+      description:
+        "Create a Payment voucher (money paid OUT from cash/bank). The 'from_account' is your cash/bank ledger; 'paid_to' is the party or expense ledger being debited. ALWAYS confirm=false first.",
+      inputSchema: z.object({
+        date: z.string().describe("ISO YYYY-MM-DD"),
+        paid_to_ledger_name: z.string(),
+        from_account_name: z.string().describe("Cash or bank ledger name"),
+        amount_rupees: z.number().positive(),
+        narration: z.string().max(500).optional(),
+        confirm: z.boolean().default(false),
+      }),
+      execute: async (input) => {
+        return await createGenericVoucher(supabase, companyId, {
+          voucher_type: "payment",
+          date: input.date,
+          narration: input.narration,
+          lines: [
+            { ledger_name: input.paid_to_ledger_name, debit_rupees: input.amount_rupees, credit_rupees: 0 },
+            { ledger_name: input.from_account_name, debit_rupees: 0, credit_rupees: input.amount_rupees },
+          ],
+          confirm: input.confirm,
+        });
+      },
+    }),
+
+    create_receipt_voucher: tool({
+      description:
+        "Create a Receipt voucher (money received IN to cash/bank). 'to_account' is your cash/bank ledger; 'received_from' is the party or income ledger being credited. ALWAYS confirm=false first.",
+      inputSchema: z.object({
+        date: z.string().describe("ISO YYYY-MM-DD"),
+        received_from_ledger_name: z.string(),
+        to_account_name: z.string().describe("Cash or bank ledger name"),
+        amount_rupees: z.number().positive(),
+        narration: z.string().max(500).optional(),
+        confirm: z.boolean().default(false),
+      }),
+      execute: async (input) => {
+        return await createGenericVoucher(supabase, companyId, {
+          voucher_type: "receipt",
+          date: input.date,
+          narration: input.narration,
+          lines: [
+            { ledger_name: input.to_account_name, debit_rupees: input.amount_rupees, credit_rupees: 0 },
+            { ledger_name: input.received_from_ledger_name, debit_rupees: 0, credit_rupees: input.amount_rupees },
+          ],
+          confirm: input.confirm,
+        });
+      },
+    }),
   };
+}
+
+// Shared helper: resolve ledgers by fuzzy name and either preview or insert the voucher.
+async function createGenericVoucher(
+  supabase: DB,
+  companyId: string,
+  args: {
+    voucher_type: "journal" | "payment" | "receipt";
+    date: string;
+    narration?: string;
+    lines: Array<{ ledger_name: string; debit_rupees?: number; credit_rupees?: number }>;
+    confirm: boolean;
+  },
+) {
+  // Resolve ledgers
+  const resolved: Array<{
+    ledger_id: string;
+    ledger_name: string;
+    debit_paise: number;
+    credit_paise: number;
+  }> = [];
+  for (const ln of args.lines) {
+    const dr = Math.round((ln.debit_rupees ?? 0) * 100);
+    const cr = Math.round((ln.credit_rupees ?? 0) * 100);
+    if (dr <= 0 && cr <= 0) return { error: `Line for "${ln.ledger_name}" has no amount.` };
+    if (dr > 0 && cr > 0) return { error: `Line for "${ln.ledger_name}" cannot be both Dr and Cr.` };
+    const { data: matches } = await supabase
+      .from("ledgers")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .ilike("name", `%${ln.ledger_name}%`)
+      .limit(2);
+    if (!matches || matches.length === 0) {
+      return {
+        error: `No ledger matching "${ln.ledger_name}". Create it first using create_ledger.`,
+      };
+    }
+    if (matches.length > 1) {
+      const exact = matches.find((m) => m.name.toLowerCase() === ln.ledger_name.toLowerCase());
+      if (!exact) {
+        return {
+          error: `Multiple ledgers match "${ln.ledger_name}": ${matches.map((m) => m.name).join(", ")}. Use the exact name.`,
+        };
+      }
+      resolved.push({ ledger_id: exact.id, ledger_name: exact.name, debit_paise: dr, credit_paise: cr });
+    } else {
+      resolved.push({ ledger_id: matches[0].id, ledger_name: matches[0].name, debit_paise: dr, credit_paise: cr });
+    }
+  }
+
+  const totalDr = resolved.reduce((s, r) => s + r.debit_paise, 0);
+  const totalCr = resolved.reduce((s, r) => s + r.credit_paise, 0);
+  if (totalDr !== totalCr) {
+    return {
+      error: `Voucher does not balance: Dr ₹${rupees(totalDr)} vs Cr ₹${rupees(totalCr)}.`,
+    };
+  }
+
+  const preview = {
+    action: "create_voucher" as const,
+    voucher_type: args.voucher_type,
+    date: args.date,
+    narration: args.narration ?? null,
+    total_rupees: rupees(totalDr),
+    lines: resolved.map((r) => ({
+      ledger: r.ledger_name,
+      dr: r.debit_paise > 0 ? rupees(r.debit_paise) : "",
+      cr: r.credit_paise > 0 ? rupees(r.credit_paise) : "",
+    })),
+  };
+  if (!args.confirm) return { preview, requires_confirmation: true };
+
+  // Get next voucher number via RPC
+  const { data: vno, error: rpcErr } = await supabase.rpc("next_voucher_number", {
+    _company_id: companyId,
+    _type: args.voucher_type as Database["public"]["Enums"]["voucher_type"],
+  });
+  if (rpcErr || !vno) return { error: rpcErr?.message ?? "Could not generate voucher number" };
+
+  const { data: auth } = await supabase.auth.getUser();
+  const created_by = auth.user?.id;
+  if (!created_by) return { error: "Not authenticated" };
+
+  const { data: v, error: vErr } = await supabase
+    .from("vouchers")
+    .insert({
+      company_id: companyId,
+      voucher_type: args.voucher_type as Database["public"]["Enums"]["voucher_type"],
+      voucher_date: args.date,
+      voucher_number: vno as string,
+      narration: args.narration ?? null,
+      subtotal_paise: totalDr,
+      total_paise: totalDr,
+      created_by,
+    })
+    .select("id, voucher_number")
+    .single();
+  if (vErr || !v) return { error: vErr?.message ?? "Failed to create voucher" };
+
+  const { error: eErr } = await supabase.from("voucher_entries").insert(
+    resolved.map((r, i) => ({
+      voucher_id: v.id,
+      ledger_id: r.ledger_id,
+      debit_paise: r.debit_paise,
+      credit_paise: r.credit_paise,
+      line_no: i + 1,
+    })),
+  );
+  if (eErr) {
+    await supabase.from("vouchers").delete().eq("id", v.id);
+    return { error: `Posting failed: ${eErr.message}` };
+  }
+  return { ok: true, voucher_number: v.voucher_number, voucher_id: v.id };
 }
 
 const ChatInput = z.object({
@@ -395,9 +654,10 @@ export const assistantChat = createServerFn({ method: "POST" })
     }
 
     let companyName = "(no company selected)";
+    let role: "admin" | "accountant" | "viewer" = "viewer";
     if (data.companyId) {
       try {
-        await ensureMember(supabase as DB, data.companyId, userId);
+        role = await ensureMember(supabase as DB, data.companyId, userId);
         const { data: c } = await supabase
           .from("companies")
           .select("name")
@@ -411,6 +671,7 @@ export const assistantChat = createServerFn({ method: "POST" })
         };
       }
     }
+    const canWrite = role === "admin" || role === "accountant";
 
     const tools = data.companyId
       ? buildTools(supabase as DB, data.companyId)
@@ -442,16 +703,28 @@ export const assistantChat = createServerFn({ method: "POST" })
 
 Active company: ${companyName} (id: ${data.companyId ?? "none"})
 Today's date: ${today}
+Your role here: ${role}${canWrite ? " (you may PROPOSE write actions)" : " (READ-ONLY — do NOT call any create_* tool)"}
 
 Guidelines:
-- You are READ-ONLY. You can answer questions about books, balances, ledgers, parties, vouchers, GST, stock. You MUST NOT make up numbers — always call a tool to fetch real data before quoting figures.
-- Always present money in Indian rupees with the "₹" symbol and the Dr/Cr indicator where applicable.
-- If a question needs a date and none is given, use today (${today}) for "as of" balances, or the current financial year for period reports.
-- For "how do I…" / settings / navigation questions, use the search_help tool and quote its answer briefly.
-- If no company is active, politely tell the user to pick a company first for any data question.
-- Keep responses concise and use markdown (bullets, **bold**, short tables) for readability.
+- For READ questions, always call a tool — never make up numbers.
+- Present money in Indian rupees with "₹" and Dr/Cr where applicable.
+- If a date isn't given, use today (${today}) for "as of" balances, or the current FY for period reports.
+- For "how do I…" / settings questions, use search_help and quote it briefly.
+- If no company is active, ask the user to pick one before any data action.
+
+WRITE / POSTING tools (create_ledger, create_journal_voucher, create_payment_voucher, create_receipt_voucher):
+- ALWAYS call the tool first with confirm=false. The tool returns a preview.
+- Show the preview to the user in a clean markdown table (Date, Dr/Cr lines, totals, narration) and ask them to confirm with **"yes"** or **"no"**.
+- ONLY after the user replies with an unambiguous yes/confirm/go-ahead, call the SAME tool again with confirm=true and IDENTICAL arguments.
+- Never invent ledger names — if a ledger isn't found, propose creating it via create_ledger (confirm=false first).
+- A journal must balance (sum of Dr = sum of Cr). Round amounts to two decimals.
+- If a period is locked, surface the database error verbatim and suggest a Credit/Debit Note in the current period.
+- Keep narrations short (party name or one-line purpose).
+
+Other:
+- Use markdown (bullets, **bold**, short tables) for readability.
 - Never reveal raw IDs unless explicitly asked. Never expose other users' data.
-- If a tool returns an error, explain in plain language and suggest the next step.`;
+- If a tool returns an error, explain it in plain language and suggest the next step.`;
 
     const provider = createLovableAiGatewayProvider(key);
     const model = provider("google/gemini-3-flash-preview");
