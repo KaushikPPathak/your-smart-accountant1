@@ -195,6 +195,15 @@ function VoucherEditPage() {
 
   async function save() {
     if (!voucher || !canWrite) return;
+    if (hasPooledCapital) {
+      const ok = confirm(
+        "This voucher's asset value is currently posted to a single pooled 'Capital Goods A/c' ledger.\n\n" +
+          "Saving will delete those entries and re-post the asset value to per-item fixed-asset ledgers (one ledger per item, e.g. 'AC Machine'). " +
+          "The Balance Sheet will then show the actual asset names instead of the pooled account.\n\n" +
+          "Continue and rebuild?",
+      );
+      if (!ok) return;
+    }
     setSaving(true);
     try {
       if (isItemKind) {
