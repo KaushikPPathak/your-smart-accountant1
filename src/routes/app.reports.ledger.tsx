@@ -90,7 +90,7 @@ function LedgerStatement() {
   const [view, setView] = useState<ViewMode>(search.view ?? "columnar");
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [siblings, setSiblings] = useState<Map<string, SiblingRow[]>>(new Map());
-  const [siblingNames, setSiblingNames] = useState<Map<string, string>>(new Map());
+  const [siblingNames, setSiblingNames] = useState<Map<string, { name: string; type: string }>>(new Map());
   const [openingBeforeFrom, setOpeningBeforeFrom] = useState(0);
   const [showBack, setShowBack] = useState(false);
   useEffect(() => { setShowBack(hasLedgerOrigin()); }, []);
