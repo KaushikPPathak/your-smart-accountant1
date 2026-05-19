@@ -50,7 +50,7 @@ const WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
   text:
-    "Hi! I'm **Mate**, your offline in-app guide. I can explain settings, walk you through features, take you to the right screen, or apply small changes for you.\n\nTry asking: *“how do I import from Tally?”*, *“switch to dark mode”*, or *“where is GSTR-3B?”*.",
+    "Hi! I'm **Mate**, your in-app accounting assistant.\n\nI can:\n- **Read** your books — balances, P&L, trial balance, outstanding, GST data\n- **Draft entries** — ledgers, journals, payments, receipts (I always show a preview and wait for your **yes** before posting)\n- **Guide you** through any setting or screen\n\nTry: *“pay ₹5,000 rent to Sharma from HDFC bank today”*, *“create ledger Electricity Expenses”*, or *“show my receivables”*.",
 };
 
 const SUGGESTIONS = [
