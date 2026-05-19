@@ -196,7 +196,7 @@ export async function buildItemVoucherPostings(
   } else {
     // debit_note (purchase return)
     entries.push({ ledger_id: partyLedgerId, debit_paise: totals.total_paise, credit_paise: 0, line_no: line++ });
-    entries.push({ ledger_id: revenueId, debit_paise: 0, credit_paise: effectiveBase, line_no: line++ });
+    entries.push({ ledger_id: revenueId!, debit_paise: 0, credit_paise: effectiveBase, line_no: line++ });
     if (postCgst && cgstId) entries.push({ ledger_id: cgstId, debit_paise: 0, credit_paise: totals.cgst_paise, line_no: line++ });
     if (postSgst && sgstId) entries.push({ ledger_id: sgstId, debit_paise: 0, credit_paise: totals.sgst_paise, line_no: line++ });
     if (postIgst && igstId) entries.push({ ledger_id: igstId, debit_paise: 0, credit_paise: totals.igst_paise, line_no: line++ });
