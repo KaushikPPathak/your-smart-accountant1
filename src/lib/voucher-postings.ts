@@ -186,7 +186,7 @@ export async function buildItemVoucherPostings(
     if (roundOffId && roundOff > 0) entries.push({ ledger_id: roundOffId, debit_paise: roundOff, credit_paise: 0, line_no: line++ });
     if (roundOffId && roundOff < 0) entries.push({ ledger_id: roundOffId, debit_paise: 0, credit_paise: -roundOff, line_no: line++ });
   } else if (kind === "credit_note") {
-    entries.push({ ledger_id: revenueId, debit_paise: totals.subtotal_paise, credit_paise: 0, line_no: line++ });
+    entries.push({ ledger_id: revenueId!, debit_paise: totals.subtotal_paise, credit_paise: 0, line_no: line++ });
     if (cgstId) entries.push({ ledger_id: cgstId, debit_paise: totals.cgst_paise, credit_paise: 0, line_no: line++ });
     if (sgstId) entries.push({ ledger_id: sgstId, debit_paise: totals.sgst_paise, credit_paise: 0, line_no: line++ });
     if (igstId) entries.push({ ledger_id: igstId, debit_paise: totals.igst_paise, credit_paise: 0, line_no: line++ });
