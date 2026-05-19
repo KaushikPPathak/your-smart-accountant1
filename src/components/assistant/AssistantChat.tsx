@@ -406,7 +406,7 @@ export function AssistantChat() {
             <span className="text-sm font-semibold">Mate — your in-app assistant</span>
             <span className="text-[11px] text-muted-foreground">
               {aiMode
-                ? "AI-powered · can read your ledgers, balances, vouchers & GST data"
+                ? "AI-powered · reads your books AND can draft entries (always previews before posting)"
                 : "Offline guide · settings, screens & options"}
             </span>
           </div>
