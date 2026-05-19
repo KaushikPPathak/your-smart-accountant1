@@ -18,14 +18,16 @@ const SALES: SystemLedgerSpec = { name: "Sales A/c", type: "income_direct" };
 const PURCHASE: SystemLedgerSpec = { name: "Purchase A/c", type: "expense_direct" };
 const SALES_RETURN: SystemLedgerSpec = { name: "Sales Return A/c", type: "income_direct" };
 const PURCHASE_RETURN: SystemLedgerSpec = { name: "Purchase Return A/c", type: "expense_direct" };
-const CAPITAL_GOODS: SystemLedgerSpec = { name: "Capital Goods (Fixed Assets)", type: "fixed_asset" };
-const INPUT_SERVICES: SystemLedgerSpec = { name: "Input Services (Expense)", type: "expense_indirect" };
+// Short, Tally/Busy-style ledger names — keep them concise so the "Particulars"
+// column (which joins contra-ledger names) stays readable in ledger reports.
+const CAPITAL_GOODS: SystemLedgerSpec = { name: "Capital Goods A/c", type: "fixed_asset" };
+const INPUT_SERVICES: SystemLedgerSpec = { name: "Input Services A/c", type: "expense_indirect" };
 const OUT_CGST: SystemLedgerSpec = { name: "Output CGST", type: "duties_taxes" };
 const OUT_SGST: SystemLedgerSpec = { name: "Output SGST", type: "duties_taxes" };
 const OUT_IGST: SystemLedgerSpec = { name: "Output IGST", type: "duties_taxes" };
-const IN_CGST: SystemLedgerSpec = { name: "Input CGST (Electronic Credit Ledger)", type: "duties_taxes" };
-const IN_SGST: SystemLedgerSpec = { name: "Input SGST (Electronic Credit Ledger)", type: "duties_taxes" };
-const IN_IGST: SystemLedgerSpec = { name: "Input IGST (Electronic Credit Ledger)", type: "duties_taxes" };
+const IN_CGST: SystemLedgerSpec = { name: "Input CGST", type: "duties_taxes" };
+const IN_SGST: SystemLedgerSpec = { name: "Input SGST", type: "duties_taxes" };
+const IN_IGST: SystemLedgerSpec = { name: "Input IGST", type: "duties_taxes" };
 const ROUND_OFF: SystemLedgerSpec = { name: "Round Off", type: "expense_indirect" };
 
 async function getOrCreateLedger(companyId: string, spec: SystemLedgerSpec): Promise<string> {
