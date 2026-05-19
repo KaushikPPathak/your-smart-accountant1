@@ -227,12 +227,30 @@ function LedgerStatement() {
     let bal = openingBeforeFrom;
     let dr = 0;
     let cr = 0;
+    // Tally-style "Particulars": pick the contra-party only.
+    // Prefer siblings on the opposite side of this entry, and skip tax ledgers
+    // (Input/Output CGST/SGST/IGST) so a purchase shows just the supplier.
+    const pickContra = (
+      sibs: SiblingRow[],
+      entryDebit: number,
+      entryCredit: number,
+    ): string => {
+      const opposite = sibs.filter((s) =>
+        entryDebit > 0 ? s.credit_paise > 0 : s.debit_paise > 0,
+      );
+      const pool = opposite.length > 0 ? opposite : sibs;
+      const enriched = pool
+        .map((s) => siblingNames.get(s.ledger_id))
+        .filter((x): x is { name: string; type: string } => !!x);
+      const nonTax = enriched.filter((x) => x.type !== "duties_taxes");
+      const chosen = nonTax.length > 0 ? nonTax : enriched;
+      return chosen.length ? chosen.map((x) => x.name).join(", ") : "—";
+    };
     for (const e of sortedEntries) {
       const v = e.vouchers;
       if (!v) continue;
       const sibs = siblings.get(v.id) ?? [];
-      const partyNames = sibs.map((s) => siblingNames.get(s.ledger_id)).filter(Boolean) as string[];
-      const particulars = partyNames.length ? partyNames.join(", ") : "—";
+      const particulars = pickContra(sibs, e.debit_paise, e.credit_paise);
       bal = bal + e.debit_paise - e.credit_paise;
       dr += e.debit_paise;
       cr += e.credit_paise;
