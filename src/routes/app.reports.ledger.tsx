@@ -523,21 +523,23 @@ function LedgerStatement() {
     }
 
     const voucherIds = Array.from(new Set(allEntries.map((e) => e.vouchers?.id).filter(Boolean) as string[]));
-    const sibsByVoucher = new Map<string, { ledger_id: string }[]>();
-    const nameById = new Map<string, string>();
+    const sibsByVoucher = new Map<string, { ledger_id: string; debit_paise: number; credit_paise: number }[]>();
+    const infoById = new Map<string, { name: string; type: string }>();
     if (voucherIds.length > 0) {
       const { data: sibs } = await supabase
-        .from("voucher_entries").select("voucher_id, ledger_id").in("voucher_id", voucherIds);
+        .from("voucher_entries").select("voucher_id, ledger_id, debit_paise, credit_paise").in("voucher_id", voucherIds);
       const ledgerIds = new Set<string>();
-      for (const s of (sibs || []) as { voucher_id: string; ledger_id: string }[]) {
+      for (const s of (sibs || []) as { voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[]) {
         const arr = sibsByVoucher.get(s.voucher_id) ?? [];
-        arr.push({ ledger_id: s.ledger_id });
+        arr.push({ ledger_id: s.ledger_id, debit_paise: s.debit_paise, credit_paise: s.credit_paise });
         sibsByVoucher.set(s.voucher_id, arr);
         ledgerIds.add(s.ledger_id);
       }
       const { data: names } = await supabase
-        .from("ledgers").select("id, name").in("id", Array.from(ledgerIds));
-      for (const n of (names || []) as { id: string; name: string }[]) nameById.set(n.id, n.name);
+        .from("ledgers").select("id, name, type").in("id", Array.from(ledgerIds));
+      for (const n of (names || []) as { id: string; name: string; type: string }[]) {
+        infoById.set(n.id, { name: n.name, type: n.type });
+      }
     }
 
     const byLedger = new Map<string, (EntryRow & { ledger_id: string })[]>();
