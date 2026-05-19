@@ -339,12 +339,24 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if (iErr) throw iErr;
       const skipPostings = snap.voucherType === "sales_order" || snap.voucherType === "delivery_note" || snap.voucherType === "quotation";
       if (!skipPostings) {
+        const capitalItems = snap.itcClass === "capital_goods"
+          ? snap.lines.map(({ l, c }) => {
+              const it = items.find((x) => x.id === l.item_id);
+              return {
+                name: (it?.name || l.description || "Capital Asset").trim(),
+                taxable_paise: c.taxable_paise,
+                cgst_paise: c.cgst_paise,
+                sgst_paise: c.sgst_paise,
+                igst_paise: c.igst_paise,
+              };
+            })
+          : undefined;
         const postings = await buildItemVoucherPostings(
           snap.companyId,
           snap.voucherType as "sales" | "purchase" | "credit_note" | "debit_note",
           snap.partyId,
           snap.totals,
-          { itcClass: snap.itcClass as "inputs" | "capital_goods" | "input_services" | "ineligible" | "na", itcEligible: snap.itcEligible },
+          { itcClass: snap.itcClass as "inputs" | "capital_goods" | "input_services" | "ineligible" | "na", itcEligible: snap.itcEligible, capitalItems },
         );
         const entryRows = postings.map((p) => ({
           voucher_id: vData.id,

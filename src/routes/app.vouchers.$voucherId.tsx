@@ -227,14 +227,38 @@ function VoucherEditPage() {
         // Rebuild postings
         if (voucher.party_ledger_id) {
           await supabase.from("voucher_entries").delete().eq("voucher_id", voucher.id);
+          const itcClass = (voucher as { itc_class?: "inputs" | "capital_goods" | "input_services" | "ineligible" | "na" }).itc_class;
+          let capitalItems: { name: string; taxable_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number }[] | undefined;
+          if (itcClass === "capital_goods") {
+            const itemIds = itemLines.map((l) => l.item_id).filter(Boolean) as string[];
+            const nameById = new Map<string, string>();
+            if (itemIds.length) {
+              const { data: its } = await supabase.from("items").select("id, name").in("id", itemIds);
+              for (const it of (its || []) as { id: string; name: string }[]) nameById.set(it.id, it.name);
+            }
+            capitalItems = itemLines
+              .map((l, i) => {
+                const c = computed[i];
+                if (!l.item_id || c.total_paise <= 0) return null;
+                return {
+                  name: (nameById.get(l.item_id) || l.description || "Capital Asset").trim(),
+                  taxable_paise: c.taxable_paise,
+                  cgst_paise: c.cgst_paise,
+                  sgst_paise: c.sgst_paise,
+                  igst_paise: c.igst_paise,
+                };
+              })
+              .filter(Boolean) as typeof capitalItems;
+          }
           const postings = await buildItemVoucherPostings(
             voucher.company_id,
             voucher.voucher_type as ItemKind,
             voucher.party_ledger_id,
             totals,
             {
-              itcClass: (voucher as { itc_class?: "inputs" | "capital_goods" | "input_services" | "ineligible" | "na" }).itc_class,
+              itcClass,
               itcEligible: (voucher as { itc_eligible?: boolean }).itc_eligible,
+              capitalItems,
             },
           );
           const entryRows = postings.map((p) => ({

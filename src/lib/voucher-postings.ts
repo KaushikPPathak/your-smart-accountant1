@@ -66,6 +66,21 @@ export interface PostingOptions {
   itcClass?: ItcClass;
   /** When false (or itcClass = 'ineligible'), GST is capitalised into the debit ledger and no Input GST is posted. */
   itcEligible?: boolean;
+  /**
+   * Item lines for capital_goods purchases. When provided (and itcClass = 'capital_goods'),
+   * each line is posted to its own fixed-asset ledger named after the item, instead of
+   * a single pooled "Capital Goods A/c". This makes the Balance Sheet list the actual
+   * asset (e.g. "AC Machine") rather than a generic head.
+   */
+  capitalItems?: CapitalItemLine[];
+}
+
+export interface CapitalItemLine {
+  name: string;
+  taxable_paise: number;
+  cgst_paise: number;
+  sgst_paise: number;
+  igst_paise: number;
 }
 
 export interface PostingEntry {
@@ -118,26 +133,52 @@ export async function buildItemVoucherPostings(
   const postSgst = !capitaliseTax && totals.sgst_paise > 0;
   const postIgst = !capitaliseTax && totals.igst_paise > 0;
 
-  const revenueId = await getOrCreateLedger(companyId, revenueSpec);
+  // For capital_goods with item-level detail, route the asset debit to per-item
+  // ledgers named after the item (e.g. "AC Machine") instead of a pooled head.
+  const perItemCapital =
+    kind === "purchase" &&
+    options.itcClass === "capital_goods" &&
+    Array.isArray(options.capitalItems) &&
+    options.capitalItems.length > 0
+      ? options.capitalItems
+      : null;
+
+  const revenueId = perItemCapital ? null : await getOrCreateLedger(companyId, revenueSpec);
   const cgstId = postCgst || (isSalesSide && totals.cgst_paise) ? await getOrCreateLedger(companyId, cgstSpec) : null;
   const sgstId = postSgst || (isSalesSide && totals.sgst_paise) ? await getOrCreateLedger(companyId, sgstSpec) : null;
   const igstId = postIgst || (isSalesSide && totals.igst_paise) ? await getOrCreateLedger(companyId, igstSpec) : null;
   const roundOff = totals.round_off_paise ?? 0;
   const roundOffId = roundOff !== 0 ? await getOrCreateLedger(companyId, ROUND_OFF) : null;
 
+  // Resolve per-item fixed-asset ledger ids (preserves input order).
+  const itemAssetIds: { id: string; debit_paise: number }[] = [];
+  if (perItemCapital) {
+    for (const it of perItemCapital) {
+      const id = await getOrCreateLedger(companyId, { name: it.name, type: "fixed_asset" });
+      const itemTax = capitaliseTax ? it.cgst_paise + it.sgst_paise + it.igst_paise : 0;
+      itemAssetIds.push({ id, debit_paise: it.taxable_paise + itemTax });
+    }
+  }
+
   const entries: PostingEntry[] = [];
   let line = 1;
 
   if (kind === "sales") {
     entries.push({ ledger_id: partyLedgerId, debit_paise: totals.total_paise, credit_paise: 0, line_no: line++ });
-    entries.push({ ledger_id: revenueId, debit_paise: 0, credit_paise: totals.subtotal_paise, line_no: line++ });
+    entries.push({ ledger_id: revenueId!, debit_paise: 0, credit_paise: totals.subtotal_paise, line_no: line++ });
     if (cgstId) entries.push({ ledger_id: cgstId, debit_paise: 0, credit_paise: totals.cgst_paise, line_no: line++ });
     if (sgstId) entries.push({ ledger_id: sgstId, debit_paise: 0, credit_paise: totals.sgst_paise, line_no: line++ });
     if (igstId) entries.push({ ledger_id: igstId, debit_paise: 0, credit_paise: totals.igst_paise, line_no: line++ });
     if (roundOffId && roundOff > 0) entries.push({ ledger_id: roundOffId, debit_paise: 0, credit_paise: roundOff, line_no: line++ });
     if (roundOffId && roundOff < 0) entries.push({ ledger_id: roundOffId, debit_paise: -roundOff, credit_paise: 0, line_no: line++ });
   } else if (kind === "purchase") {
-    entries.push({ ledger_id: revenueId, debit_paise: effectiveBase, credit_paise: 0, line_no: line++ });
+    if (perItemCapital) {
+      for (const ia of itemAssetIds) {
+        entries.push({ ledger_id: ia.id, debit_paise: ia.debit_paise, credit_paise: 0, line_no: line++ });
+      }
+    } else {
+      entries.push({ ledger_id: revenueId!, debit_paise: effectiveBase, credit_paise: 0, line_no: line++ });
+    }
     if (postCgst && cgstId) entries.push({ ledger_id: cgstId, debit_paise: totals.cgst_paise, credit_paise: 0, line_no: line++ });
     if (postSgst && sgstId) entries.push({ ledger_id: sgstId, debit_paise: totals.sgst_paise, credit_paise: 0, line_no: line++ });
     if (postIgst && igstId) entries.push({ ledger_id: igstId, debit_paise: totals.igst_paise, credit_paise: 0, line_no: line++ });
@@ -145,7 +186,7 @@ export async function buildItemVoucherPostings(
     if (roundOffId && roundOff > 0) entries.push({ ledger_id: roundOffId, debit_paise: roundOff, credit_paise: 0, line_no: line++ });
     if (roundOffId && roundOff < 0) entries.push({ ledger_id: roundOffId, debit_paise: 0, credit_paise: -roundOff, line_no: line++ });
   } else if (kind === "credit_note") {
-    entries.push({ ledger_id: revenueId, debit_paise: totals.subtotal_paise, credit_paise: 0, line_no: line++ });
+    entries.push({ ledger_id: revenueId!, debit_paise: totals.subtotal_paise, credit_paise: 0, line_no: line++ });
     if (cgstId) entries.push({ ledger_id: cgstId, debit_paise: totals.cgst_paise, credit_paise: 0, line_no: line++ });
     if (sgstId) entries.push({ ledger_id: sgstId, debit_paise: totals.sgst_paise, credit_paise: 0, line_no: line++ });
     if (igstId) entries.push({ ledger_id: igstId, debit_paise: totals.igst_paise, credit_paise: 0, line_no: line++ });
@@ -155,7 +196,7 @@ export async function buildItemVoucherPostings(
   } else {
     // debit_note (purchase return)
     entries.push({ ledger_id: partyLedgerId, debit_paise: totals.total_paise, credit_paise: 0, line_no: line++ });
-    entries.push({ ledger_id: revenueId, debit_paise: 0, credit_paise: effectiveBase, line_no: line++ });
+    entries.push({ ledger_id: revenueId!, debit_paise: 0, credit_paise: effectiveBase, line_no: line++ });
     if (postCgst && cgstId) entries.push({ ledger_id: cgstId, debit_paise: 0, credit_paise: totals.cgst_paise, line_no: line++ });
     if (postSgst && sgstId) entries.push({ ledger_id: sgstId, debit_paise: 0, credit_paise: totals.sgst_paise, line_no: line++ });
     if (postIgst && igstId) entries.push({ ledger_id: igstId, debit_paise: 0, credit_paise: totals.igst_paise, line_no: line++ });
