@@ -294,17 +294,25 @@ function LedgerStatement() {
       emphasis: "bold",
     });
   }
-  const originFor = (v: EntryRow["vouchers"]): string => {
+  const originFor = (v: EntryRow["vouchers"], entryDebit: number, entryCredit: number): string => {
     if (!v) return "—";
     const sibs = siblings.get(v.id) ?? [];
-    const names = sibs.map((s) => siblingNames.get(s.ledger_id)).filter(Boolean) as string[];
-    if (names.length > 0) return names.join(", ");
+    const opposite = sibs.filter((s) =>
+      entryDebit > 0 ? s.credit_paise > 0 : s.debit_paise > 0,
+    );
+    const pool = opposite.length > 0 ? opposite : sibs;
+    const enriched = pool
+      .map((s) => siblingNames.get(s.ledger_id))
+      .filter((x): x is { name: string; type: string } => !!x);
+    const nonTax = enriched.filter((x) => x.type !== "duties_taxes");
+    const chosen = nonTax.length > 0 ? nonTax : enriched;
+    if (chosen.length > 0) return chosen.map((x) => x.name).join(", ");
     return (TYPE_LABEL[v.voucher_type] ?? v.voucher_type).replace(/_/g, " ");
   };
   for (const e of sortEntriesByVoucherAsc(entries)) {
     const v = e.vouchers;
     if (!v) continue;
-    const origin = originFor(v);
+    const origin = originFor(v, e.debit_paise, e.credit_paise);
     const vchType = TYPE_LABEL[v.voucher_type] ?? v.voucher_type;
     const chqRef = (v.reference_no || "").trim();
     const goto = () => openVoucherDetail(navigate, v.id);
