@@ -90,7 +90,7 @@ function LedgerStatement() {
   const [view, setView] = useState<ViewMode>(search.view ?? "columnar");
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [siblings, setSiblings] = useState<Map<string, SiblingRow[]>>(new Map());
-  const [siblingNames, setSiblingNames] = useState<Map<string, string>>(new Map());
+  const [siblingNames, setSiblingNames] = useState<Map<string, { name: string; type: string }>>(new Map());
   const [openingBeforeFrom, setOpeningBeforeFrom] = useState(0);
   const [showBack, setShowBack] = useState(false);
   useEffect(() => { setShowBack(hasLedgerOrigin()); }, []);
@@ -194,11 +194,13 @@ function LedgerStatement() {
       setSiblings(map);
       const { data: names } = await supabase
         .from("ledgers")
-        .select("id, name")
+        .select("id, name, type")
         .in("id", Array.from(ledgerIds));
       if (cancelled) return;
-      const nameMap = new Map<string, string>();
-      for (const n of (names || []) as { id: string; name: string }[]) nameMap.set(n.id, n.name);
+      const nameMap = new Map<string, { name: string; type: string }>();
+      for (const n of (names || []) as { id: string; name: string; type: string }[]) {
+        nameMap.set(n.id, { name: n.name, type: n.type });
+      }
       setSiblingNames(nameMap);
     })();
     return () => {
@@ -225,12 +227,30 @@ function LedgerStatement() {
     let bal = openingBeforeFrom;
     let dr = 0;
     let cr = 0;
+    // Tally-style "Particulars": pick the contra-party only.
+    // Prefer siblings on the opposite side of this entry, and skip tax ledgers
+    // (Input/Output CGST/SGST/IGST) so a purchase shows just the supplier.
+    const pickContra = (
+      sibs: SiblingRow[],
+      entryDebit: number,
+      entryCredit: number,
+    ): string => {
+      const opposite = sibs.filter((s) =>
+        entryDebit > 0 ? s.credit_paise > 0 : s.debit_paise > 0,
+      );
+      const pool = opposite.length > 0 ? opposite : sibs;
+      const enriched = pool
+        .map((s) => siblingNames.get(s.ledger_id))
+        .filter((x): x is { name: string; type: string } => !!x);
+      const nonTax = enriched.filter((x) => x.type !== "duties_taxes");
+      const chosen = nonTax.length > 0 ? nonTax : enriched;
+      return chosen.length ? chosen.map((x) => x.name).join(", ") : "—";
+    };
     for (const e of sortedEntries) {
       const v = e.vouchers;
       if (!v) continue;
       const sibs = siblings.get(v.id) ?? [];
-      const partyNames = sibs.map((s) => siblingNames.get(s.ledger_id)).filter(Boolean) as string[];
-      const particulars = partyNames.length ? partyNames.join(", ") : "—";
+      const particulars = pickContra(sibs, e.debit_paise, e.credit_paise);
       bal = bal + e.debit_paise - e.credit_paise;
       dr += e.debit_paise;
       cr += e.credit_paise;
@@ -274,17 +294,25 @@ function LedgerStatement() {
       emphasis: "bold",
     });
   }
-  const originFor = (v: EntryRow["vouchers"]): string => {
+  const originFor = (v: EntryRow["vouchers"], entryDebit: number, entryCredit: number): string => {
     if (!v) return "—";
     const sibs = siblings.get(v.id) ?? [];
-    const names = sibs.map((s) => siblingNames.get(s.ledger_id)).filter(Boolean) as string[];
-    if (names.length > 0) return names.join(", ");
+    const opposite = sibs.filter((s) =>
+      entryDebit > 0 ? s.credit_paise > 0 : s.debit_paise > 0,
+    );
+    const pool = opposite.length > 0 ? opposite : sibs;
+    const enriched = pool
+      .map((s) => siblingNames.get(s.ledger_id))
+      .filter((x): x is { name: string; type: string } => !!x);
+    const nonTax = enriched.filter((x) => x.type !== "duties_taxes");
+    const chosen = nonTax.length > 0 ? nonTax : enriched;
+    if (chosen.length > 0) return chosen.map((x) => x.name).join(", ");
     return (TYPE_LABEL[v.voucher_type] ?? v.voucher_type).replace(/_/g, " ");
   };
   for (const e of sortEntriesByVoucherAsc(entries)) {
     const v = e.vouchers;
     if (!v) continue;
-    const origin = originFor(v);
+    const origin = originFor(v, e.debit_paise, e.credit_paise);
     const vchType = TYPE_LABEL[v.voucher_type] ?? v.voucher_type;
     const chqRef = (v.reference_no || "").trim();
     const goto = () => openVoucherDetail(navigate, v.id);
@@ -495,21 +523,23 @@ function LedgerStatement() {
     }
 
     const voucherIds = Array.from(new Set(allEntries.map((e) => e.vouchers?.id).filter(Boolean) as string[]));
-    const sibsByVoucher = new Map<string, { ledger_id: string }[]>();
-    const nameById = new Map<string, string>();
+    const sibsByVoucher = new Map<string, { ledger_id: string; debit_paise: number; credit_paise: number }[]>();
+    const infoById = new Map<string, { name: string; type: string }>();
     if (voucherIds.length > 0) {
       const { data: sibs } = await supabase
-        .from("voucher_entries").select("voucher_id, ledger_id").in("voucher_id", voucherIds);
+        .from("voucher_entries").select("voucher_id, ledger_id, debit_paise, credit_paise").in("voucher_id", voucherIds);
       const ledgerIds = new Set<string>();
-      for (const s of (sibs || []) as { voucher_id: string; ledger_id: string }[]) {
+      for (const s of (sibs || []) as { voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[]) {
         const arr = sibsByVoucher.get(s.voucher_id) ?? [];
-        arr.push({ ledger_id: s.ledger_id });
+        arr.push({ ledger_id: s.ledger_id, debit_paise: s.debit_paise, credit_paise: s.credit_paise });
         sibsByVoucher.set(s.voucher_id, arr);
         ledgerIds.add(s.ledger_id);
       }
       const { data: names } = await supabase
-        .from("ledgers").select("id, name").in("id", Array.from(ledgerIds));
-      for (const n of (names || []) as { id: string; name: string }[]) nameById.set(n.id, n.name);
+        .from("ledgers").select("id, name, type").in("id", Array.from(ledgerIds));
+      for (const n of (names || []) as { id: string; name: string; type: string }[]) {
+        infoById.set(n.id, { name: n.name, type: n.type });
+      }
     }
 
     const byLedger = new Map<string, (EntryRow & { ledger_id: string })[]>();
@@ -530,12 +560,20 @@ function LedgerStatement() {
       for (const e of list) {
         const v = e.vouchers; if (!v) continue;
         const sibs = sibsByVoucher.get(v.id) ?? [];
-        const partyNames = sibs.map((s) => nameById.get(s.ledger_id)).filter((n): n is string => !!n && n !== l.name);
+        const opposite = sibs.filter((s) =>
+          e.debit_paise > 0 ? s.credit_paise > 0 : s.debit_paise > 0,
+        );
+        const pool = (opposite.length > 0 ? opposite : sibs).filter((s) => s.ledger_id !== l.id);
+        const enriched = pool
+          .map((s) => infoById.get(s.ledger_id))
+          .filter((x): x is { name: string; type: string } => !!x);
+        const nonTax = enriched.filter((x) => x.type !== "duties_taxes");
+        const chosen = nonTax.length > 0 ? nonTax : enriched;
         bal += e.debit_paise - e.credit_paise;
         dr += e.debit_paise; cr += e.credit_paise;
         rows.push({
           date: v.voucher_date,
-          particulars: partyNames.length ? partyNames.join(", ") : "—",
+          particulars: chosen.length ? chosen.map((x) => x.name).join(", ") : "—",
           vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
           vchNo: v.voucher_number,
           narration: narrationOf(e, v),
