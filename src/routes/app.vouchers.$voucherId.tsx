@@ -144,7 +144,22 @@ function VoucherEditPage() {
       })),
     );
     setItems((masterItems.data || []) as ItemOpt[]);
-    setLedgers((masterLedgers.data || []) as LedgerOpt[]);
+    const ledgerList = (masterLedgers.data || []) as LedgerOpt[];
+    setLedgers(ledgerList);
+    // Detect legacy pooled "Capital Goods A/c" posting on this voucher so we
+    // can warn the user that saving will rebuild entries to per-item ledgers.
+    const itcCls = (vRow as unknown as { itc_class?: string }).itc_class;
+    if (itcCls === "capital_goods") {
+      const pooledIds = new Set(
+        ledgerList
+          .filter((lg) => lg.type === "fixed_asset" && /^capital goods( a\/c)?$/i.test(lg.name.trim()))
+          .map((lg) => lg.id),
+      );
+      const entryLedgerIds = ((entriesRes.data || []) as unknown as { ledger_id: string }[]).map((r) => r.ledger_id);
+      setHasPooledCapital(entryLedgerIds.some((id) => pooledIds.has(id)));
+    } else {
+      setHasPooledCapital(false);
+    }
     setLoading(false);
   }, [voucherId, navigate]);
 
