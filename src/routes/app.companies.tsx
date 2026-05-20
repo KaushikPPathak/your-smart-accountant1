@@ -588,47 +588,216 @@ function CompaniesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {memberships.map((m) => {
-            const isActive = m.company_id === activeCompanyId;
-            return (
-              <Card key={m.company_id} className={isActive ? "border-primary ring-1 ring-primary/30" : ""}>
-                <CardHeader className="flex flex-row items-start justify-between space-y-0">
-                  <div>
-                    <CardTitle className="text-base">{m.companies.name}</CardTitle>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      <Badge variant="secondary" className="text-[10px] uppercase">{m.role}</Badge>
-                      {(() => {
-                        const meta = getEntityMeta((m.companies as { entity_status?: EntityStatus }).entity_status);
-                        const Icon = meta.icon;
-                        return (
-                          <Badge variant="outline" className="text-[10px]">
-                            <Icon className="mr-1 h-3 w-3" /> {meta.short}
-                          </Badge>
-                        );
-                      })()}
+        <div className="space-y-4">
+          {/* View toggle */}
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                viewMode === "grid"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+              title="Grid view"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Grid
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                viewMode === "list"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+              title="List view"
+            >
+              <ListIcon className="h-3.5 w-3.5" /> List
+            </button>
+          </div>
+
+          {viewMode === "grid" ? (
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {memberships.map((m) => {
+                const isActive = m.company_id === activeCompanyId;
+                const fyStart = m.companies.financial_year_start;
+                const fyYear = fyStart ? new Date(fyStart).getFullYear() : null;
+                const fyLabel = fyYear ? `FY ${fyYear}-${String(fyYear + 1).slice(-2)}` : "—";
+                const meta = getEntityMeta((m.companies as { entity_status?: EntityStatus }).entity_status);
+                const EntityIcon = meta.icon;
+                return (
+                  <div
+                    key={m.company_id}
+                    onClick={() => !isActive && openMembershipCompany(m.company_id)}
+                    className={`group relative flex flex-col rounded-xl border bg-card p-5 transition-all duration-200 cursor-pointer ${
+                      isActive
+                        ? "border-primary/60 bg-primary/[0.03] shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]"
+                        : "hover:border-primary/40 hover:bg-muted/40 hover:shadow-md"
+                    }`}
+                  >
+                    {/* Top Section: Name + Edit */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h3
+                          className="text-[15px] font-semibold leading-snug text-card-foreground break-words"
+                          title={m.companies.name}
+                        >
+                          {m.companies.name}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {m.role === "admin" && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openEdit(m.company_id); }}
+                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            title="Edit company"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Middle Section: Badges */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-secondary-foreground">
+                        {m.role}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        <EntityIcon className="h-3 w-3" /> {meta.short}
+                      </span>
+                      {!m.companies.gst_registered && (
+                        <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                          UNREG.
+                        </span>
+                      )}
+                      {m.companies.trial_local && (
+                        <span className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400">
+                          TRIAL
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Metadata rows */}
+                    <div className="mt-4 space-y-1.5 text-[12px]">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>GSTIN</span>
+                        <span className="font-mono text-foreground">{m.companies.gstin ?? "—"}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>State</span>
+                        <span className="text-foreground">
+                          {m.companies.state ?? "—"}
+                          {m.companies.state_code ? ` (${m.companies.state_code})` : ""}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Section: FY + Action */}
+                    <div className="mt-auto pt-4 flex items-center gap-2">
+                      <div className="flex flex-1 items-center justify-center rounded-lg border bg-muted/40 px-3 py-2 text-xs font-mono font-medium text-foreground">
+                        <span className="text-muted-foreground mr-1">&lt;</span>
+                        {fyLabel}
+                        <span className="text-muted-foreground ml-1">&gt;</span>
+                      </div>
+                      {isActive ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+                          <Check className="h-3.5 w-3.5" /> Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                          Open
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <Building2 className="h-5 w-5 text-muted-foreground" />
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex justify-between text-muted-foreground"><span>GSTIN</span><span className="font-mono">{m.companies.gstin ?? "—"}</span></div>
-                  <div className="flex justify-between text-muted-foreground"><span>State</span><span>{m.companies.state ?? "—"}{m.companies.state_code ? ` (${m.companies.state_code})` : ""}</span></div>
-                  <div className="flex justify-between text-muted-foreground"><span>FY Start</span><span>{m.companies.financial_year_start}</span></div>
-                  <div className="flex gap-2 pt-2">
-                    {isActive ? (
-                      <Button variant="secondary" size="sm" className="flex-1" disabled><Check className="mr-2 h-4 w-4" /> Active</Button>
-                    ) : (
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openMembershipCompany(m.company_id)}>Switch</Button>
-                    )}
-                    {m.role === "admin" && (
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(m.company_id)} title="Edit"><Pencil className="h-4 w-4" /></Button>
-                    )}
+                );
+              })}
+            </div>
+          ) : (
+            /* List View */
+            <div className="space-y-3">
+              {memberships.map((m) => {
+                const isActive = m.company_id === activeCompanyId;
+                const fyStart = m.companies.financial_year_start;
+                const fyYear = fyStart ? new Date(fyStart).getFullYear() : null;
+                const fyLabel = fyYear ? `FY ${fyYear}-${String(fyYear + 1).slice(-2)}` : "—";
+                const meta = getEntityMeta((m.companies as { entity_status?: EntityStatus }).entity_status);
+                const EntityIcon = meta.icon;
+                return (
+                  <div
+                    key={m.company_id}
+                    onClick={() => !isActive && openMembershipCompany(m.company_id)}
+                    className={`group flex flex-col gap-3 rounded-xl border bg-card p-4 transition-all duration-200 cursor-pointer sm:flex-row sm:items-center sm:gap-4 ${
+                      isActive
+                        ? "border-primary/60 bg-primary/[0.03] shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]"
+                        : "hover:border-primary/40 hover:bg-muted/40 hover:shadow-md"
+                    }`}
+                  >
+                    {/* Name + badges */}
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-[15px] font-semibold text-card-foreground break-words">
+                          {m.companies.name}
+                        </h3>
+                        {isActive && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                            <Check className="h-3 w-3" /> Active
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-secondary-foreground">
+                          {m.role}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          <EntityIcon className="h-3 w-3" /> {meta.short}
+                        </span>
+                        {!m.companies.gst_registered && (
+                          <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                            UNREG.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-muted-foreground sm:shrink-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wide">GSTIN</span>
+                        <span className="font-mono text-foreground">{m.companies.gstin ?? "—"}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wide">State</span>
+                        <span className="text-foreground">{m.companies.state ?? "—"}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wide">FY</span>
+                        <span className="font-mono font-medium text-foreground">{fyLabel}</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 sm:shrink-0">
+                      {!isActive && (
+                        <span className="inline-flex items-center rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                          Open
+                        </span>
+                      )}
+                      {m.role === "admin" && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openEdit(m.company_id); }}
+                          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          title="Edit company"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
