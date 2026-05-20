@@ -183,7 +183,7 @@ function HsnSummary() {
             columns={gridColumns}
             globalSearch={(x) => `${x.hsn} ${x.name} ${x.unit}`}
             height={560}
-            initialState={{ groupBy: ["hsn"] }}
+            
           />
         </CardContent>
       </Card>

@@ -35,6 +35,7 @@ import { Route as AppReportsProfitLossRouteImport } from './routes/app.reports.p
 import { Route as AppReportsPayablesRouteImport } from './routes/app.reports.payables'
 import { Route as AppReportsOutstandingRouteImport } from './routes/app.reports.outstanding'
 import { Route as AppReportsLedgerRouteImport } from './routes/app.reports.ledger'
+import { Route as AppReportsHsnSummaryRouteImport } from './routes/app.reports.hsn-summary'
 import { Route as AppReportsGstr3bRouteImport } from './routes/app.reports.gstr3b'
 import { Route as AppReportsGstr2bRouteImport } from './routes/app.reports.gstr2b'
 import { Route as AppReportsGstr1RouteImport } from './routes/app.reports.gstr1'
@@ -189,6 +190,11 @@ const AppReportsLedgerRoute = AppReportsLedgerRouteImport.update({
   path: '/ledger',
   getParentRoute: () => AppReportsRoute,
 } as any)
+const AppReportsHsnSummaryRoute = AppReportsHsnSummaryRouteImport.update({
+  id: '/hsn-summary',
+  path: '/hsn-summary',
+  getParentRoute: () => AppReportsRoute,
+} as any)
 const AppReportsGstr3bRoute = AppReportsGstr3bRouteImport.update({
   id: '/gstr3b',
   path: '/gstr3b',
@@ -333,6 +339,7 @@ export interface FileRoutesByFullPath {
   '/app/reports/gstr1': typeof AppReportsGstr1Route
   '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
+  '/app/reports/hsn-summary': typeof AppReportsHsnSummaryRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
   '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
@@ -382,6 +389,7 @@ export interface FileRoutesByTo {
   '/app/reports/gstr1': typeof AppReportsGstr1Route
   '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
+  '/app/reports/hsn-summary': typeof AppReportsHsnSummaryRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
   '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
@@ -433,6 +441,7 @@ export interface FileRoutesById {
   '/app/reports/gstr1': typeof AppReportsGstr1Route
   '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
+  '/app/reports/hsn-summary': typeof AppReportsHsnSummaryRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
   '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
@@ -485,6 +494,7 @@ export interface FileRouteTypes {
     | '/app/reports/gstr1'
     | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
+    | '/app/reports/hsn-summary'
     | '/app/reports/ledger'
     | '/app/reports/outstanding'
     | '/app/reports/payables'
@@ -534,6 +544,7 @@ export interface FileRouteTypes {
     | '/app/reports/gstr1'
     | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
+    | '/app/reports/hsn-summary'
     | '/app/reports/ledger'
     | '/app/reports/outstanding'
     | '/app/reports/payables'
@@ -584,6 +595,7 @@ export interface FileRouteTypes {
     | '/app/reports/gstr1'
     | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
+    | '/app/reports/hsn-summary'
     | '/app/reports/ledger'
     | '/app/reports/outstanding'
     | '/app/reports/payables'
@@ -797,6 +809,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsLedgerRouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/hsn-summary': {
+      id: '/app/reports/hsn-summary'
+      path: '/hsn-summary'
+      fullPath: '/app/reports/hsn-summary'
+      preLoaderRoute: typeof AppReportsHsnSummaryRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/reports/gstr3b': {
       id: '/app/reports/gstr3b'
       path: '/gstr3b'
@@ -966,6 +985,7 @@ interface AppReportsRouteChildren {
   AppReportsGstr1Route: typeof AppReportsGstr1Route
   AppReportsGstr2bRoute: typeof AppReportsGstr2bRoute
   AppReportsGstr3bRoute: typeof AppReportsGstr3bRoute
+  AppReportsHsnSummaryRoute: typeof AppReportsHsnSummaryRoute
   AppReportsLedgerRoute: typeof AppReportsLedgerRoute
   AppReportsOutstandingRoute: typeof AppReportsOutstandingRoute
   AppReportsPayablesRoute: typeof AppReportsPayablesRoute
@@ -990,6 +1010,7 @@ const AppReportsRouteChildren: AppReportsRouteChildren = {
   AppReportsGstr1Route: AppReportsGstr1Route,
   AppReportsGstr2bRoute: AppReportsGstr2bRoute,
   AppReportsGstr3bRoute: AppReportsGstr3bRoute,
+  AppReportsHsnSummaryRoute: AppReportsHsnSummaryRoute,
   AppReportsLedgerRoute: AppReportsLedgerRoute,
   AppReportsOutstandingRoute: AppReportsOutstandingRoute,
   AppReportsPayablesRoute: AppReportsPayablesRoute,
@@ -1081,13 +1102,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
