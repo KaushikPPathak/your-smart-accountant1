@@ -223,6 +223,16 @@ function HousekeepingPage() {
             }
           />
         </TabsContent>
+        <TabsContent value="fy_transfer">
+          <FinancialYearTransferWizard
+            companyId={activeCompanyId}
+            disabled={!isAdmin}
+            fyStartHint={
+              (activeMembership?.companies as { financial_year_start?: string | null } | undefined)
+                ?.financial_year_start ?? null
+            }
+          />
+        </TabsContent>
         <TabsContent value="self_test">
           <SelfTestPanel companyId={activeCompanyId} />
         </TabsContent>
