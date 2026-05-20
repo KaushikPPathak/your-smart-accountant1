@@ -1036,7 +1036,7 @@ async function createGenericVoucher(
   supabase: DB,
   companyId: string,
   args: {
-    voucher_type: "journal" | "payment" | "receipt";
+    voucher_type: "journal" | "payment" | "receipt" | "contra";
     date: string;
     narration?: string;
     lines: Array<{ ledger_name: string; debit_rupees?: number; credit_rupees?: number }>;
