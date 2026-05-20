@@ -212,6 +212,33 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setLines((cur) => (cur.length === 1 ? cur : cur.filter((_, i) => i !== idx)));
   }, []);
 
+  /** Focus the Item Combo trigger of the row at `idx` (after paint). */
+  const focusRowItemCombo = useCallback((idx: number) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const rows = document.querySelectorAll<HTMLTableRowElement>("tr[data-voucher-row]");
+        const tr = rows[idx];
+        if (!tr) return;
+        const trigger = tr.querySelector<HTMLElement>('[role="combobox"]');
+        trigger?.focus();
+      });
+    });
+  }, []);
+
+  /** Called when Enter is pressed on the last editable cell (GST) of a row. */
+  const onAdvanceToNextRow = useCallback((idx: number) => {
+    setLines((cur) => {
+      if (idx >= cur.length - 1) {
+        // Last row → append and focus the new row.
+        const next = [...cur, blankLine()];
+        focusRowItemCombo(next.length - 1);
+        return next;
+      }
+      focusRowItemCombo(idx + 1);
+      return cur;
+    });
+  }, [focusRowItemCombo]);
+
   const canWrite =
     activeMembership?.role === "admin" || activeMembership?.role === "accountant";
 
@@ -397,8 +424,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   // Hotkeys: Ctrl+S save (stay & start next), F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") ||
+          (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "s")) {
         e.preventDefault();
+        e.stopPropagation();
         if (!saving) save();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
@@ -598,6 +627,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onDelete={removeLine}
                   onAddItemDlg={(idx) => { setFocusedLine(idx); setItemDlg({ open: true, editId: null, lineIdx: idx }); }}
                   onEditItemDlg={(idx, itemId) => { setFocusedLine(idx); setItemDlg({ open: true, editId: itemId, lineIdx: idx }); }}
+                  onAdvanceToNextRow={onAdvanceToNextRow}
                 />
               ))}
             </TableBody>

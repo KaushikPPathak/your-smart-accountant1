@@ -43,11 +43,13 @@ interface Props {
   onDelete: (idx: number) => void;
   onAddItemDlg: (idx: number) => void;
   onEditItemDlg: (idx: number, itemId: string) => void;
+  onAdvanceToNextRow?: (idx: number) => void;
 }
 
 function ItemRowImpl({
   idx, row, amountPaise, items, canDelete,
   onPickItem, onCommit, onFocusRow, onDelete, onAddItemDlg, onEditItemDlg,
+  onAdvanceToNextRow,
 }: Props) {
   const { setHints, clearHints } = useFocusHints();
   const zone = `item-row`;
@@ -85,8 +87,20 @@ function ItemRowImpl({
     }
   };
 
+  const gstTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleGstKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== "Enter") return;
+    const expanded = e.currentTarget.getAttribute("aria-expanded") === "true";
+    if (expanded) return; // let Radix handle selection
+    if (!row.gst_rate) return; // no value yet — let Radix open
+    e.preventDefault();
+    e.stopPropagation();
+    onAdvanceToNextRow?.(idx);
+  };
+
   return (
-    <TableRow onFocusCapture={handleFocus} onBlurCapture={handleBlur} onClick={() => onFocusRow(idx)}>
+    <TableRow data-voucher-row data-row-idx={idx} onFocusCapture={handleFocus} onBlurCapture={handleBlur} onClick={() => onFocusRow(idx)}>
       <TableCell>
         <div className="flex gap-1">
           <Combo
@@ -154,9 +168,13 @@ function ItemRowImpl({
       <TableCell>
         <Select
           value={row.gst_rate}
-          onValueChange={(v) => onCommit(idx, { gst_rate: v })}
+          onValueChange={(v) => {
+            onCommit(idx, { gst_rate: v });
+            // After picking a GST rate, advance to next row (or append a new one).
+            requestAnimationFrame(() => onAdvanceToNextRow?.(idx));
+          }}
         >
-          <SelectTrigger className="h-9">
+          <SelectTrigger ref={gstTriggerRef} className="h-9" onKeyDown={handleGstKeyDown}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

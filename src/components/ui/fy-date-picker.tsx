@@ -175,16 +175,23 @@ export function FyDatePicker({
   }
 
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const prevLenRef = React.useRef<number>(0);
 
-  /** Auto-commit & advance when the user types a complete pure-digit date. */
+  /** Auto-commit & advance when the user types a complete pure-digit date.
+   *  Skipped when the length shrank (user is backspacing/correcting). */
   function handleChange(v: string) {
+    const prev = prevLenRef.current;
+    prevLenRef.current = v.length;
     setText(v);
-    const digitsOnly = /^\d+$/.test(v.trim());
-    if (digitsOnly && (v.trim().length === 4 || v.trim().length === 6 || v.trim().length === 8)) {
-      const iso = tryParse(v.trim());
+    if (v.length < prev) return; // backspace guard — don't aggressively advance
+    const t = v.trim();
+    const digitsOnly = /^\d+$/.test(t);
+    if (digitsOnly && (t.length === 4 || t.length === 6 || t.length === 8)) {
+      const iso = tryParse(t);
       if (iso) {
         onChange(iso);
         setText(fmtIndianDate(iso));
+        prevLenRef.current = fmtIndianDate(iso).length;
         requestAnimationFrame(() => advanceFocus());
       }
     }
