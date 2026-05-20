@@ -212,6 +212,33 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setLines((cur) => (cur.length === 1 ? cur : cur.filter((_, i) => i !== idx)));
   }, []);
 
+  /** Focus the Item Combo trigger of the row at `idx` (after paint). */
+  const focusRowItemCombo = useCallback((idx: number) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const rows = document.querySelectorAll<HTMLTableRowElement>("tr[data-voucher-row]");
+        const tr = rows[idx];
+        if (!tr) return;
+        const trigger = tr.querySelector<HTMLElement>('[role="combobox"]');
+        trigger?.focus();
+      });
+    });
+  }, []);
+
+  /** Called when Enter is pressed on the last editable cell (GST) of a row. */
+  const onAdvanceToNextRow = useCallback((idx: number) => {
+    setLines((cur) => {
+      if (idx >= cur.length - 1) {
+        // Last row → append and focus the new row.
+        const next = [...cur, blankLine()];
+        focusRowItemCombo(next.length - 1);
+        return next;
+      }
+      focusRowItemCombo(idx + 1);
+      return cur;
+    });
+  }, [focusRowItemCombo]);
+
   const canWrite =
     activeMembership?.role === "admin" || activeMembership?.role === "accountant";
 
