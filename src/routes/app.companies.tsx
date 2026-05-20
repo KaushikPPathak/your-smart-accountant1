@@ -103,6 +103,7 @@ function CompaniesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(empty);
   const [uploading, setUploading] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   // Auto-open the "Create company" dialog when the URL carries ?new=1
   // (used by the sidebar Company flyout's "+ New company" button).
