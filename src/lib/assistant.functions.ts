@@ -776,6 +776,14 @@ async function createItemVoucher(
     party_gstin?: string;
     reference_no?: string;
     narration?: string;
+    posting_account_name?: string;
+    posting_account_type?:
+      | "fixed_asset"
+      | "current_asset"
+      | "income_direct"
+      | "income_indirect"
+      | "expense_direct"
+      | "expense_indirect";
     items: Array<{
       item_name: string;
       qty: number;
