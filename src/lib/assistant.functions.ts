@@ -1002,7 +1002,7 @@ async function createItemVoucher(
 
   // Build double-entry postings
   const isSalesSide = input.voucher_type === "sales" || input.voucher_type === "credit_note";
-  const baseName =
+  const defaultName =
     input.voucher_type === "sales"
       ? "Sales A/c"
       : input.voucher_type === "purchase"
@@ -1010,7 +1010,9 @@ async function createItemVoucher(
         : input.voucher_type === "credit_note"
           ? "Sales Return A/c"
           : "Purchase Return A/c";
-  const baseType: Database["public"]["Enums"]["ledger_type"] = isSalesSide ? "income_direct" : "expense_direct";
+  const defaultType: Database["public"]["Enums"]["ledger_type"] = isSalesSide ? "income_direct" : "expense_direct";
+  const baseName = input.posting_account_name?.trim() || defaultName;
+  const baseType = (input.posting_account_type as Database["public"]["Enums"]["ledger_type"]) || defaultType;
   const baseId = await getOrCreateSysLedger(supabase, companyId, baseName, baseType);
   const cgstId =
     cgst_paise > 0
