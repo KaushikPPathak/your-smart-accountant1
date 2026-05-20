@@ -52,6 +52,7 @@ import { Route as AppVouchersNewReceiptRouteImport } from './routes/app.vouchers
 import { Route as AppVouchersNewQuotationRouteImport } from './routes/app.vouchers.new.quotation'
 import { Route as AppVouchersNewPurchaseRouteImport } from './routes/app.vouchers.new.purchase'
 import { Route as AppVouchersNewPaymentRouteImport } from './routes/app.vouchers.new.payment'
+import { Route as AppVouchersNewManufacturingRouteImport } from './routes/app.vouchers.new.manufacturing'
 import { Route as AppVouchersNewJournalRouteImport } from './routes/app.vouchers.new.journal'
 import { Route as AppVouchersNewDelivery_noteRouteImport } from './routes/app.vouchers.new.delivery_note'
 import { Route as AppVouchersNewDebit_noteRouteImport } from './routes/app.vouchers.new.debit_note'
@@ -275,6 +276,12 @@ const AppVouchersNewPaymentRoute = AppVouchersNewPaymentRouteImport.update({
   path: '/new/payment',
   getParentRoute: () => AppVouchersRoute,
 } as any)
+const AppVouchersNewManufacturingRoute =
+  AppVouchersNewManufacturingRouteImport.update({
+    id: '/new/manufacturing',
+    path: '/new/manufacturing',
+    getParentRoute: () => AppVouchersRoute,
+  } as any)
 const AppVouchersNewJournalRoute = AppVouchersNewJournalRouteImport.update({
   id: '/new/journal',
   path: '/new/journal',
@@ -341,6 +348,7 @@ export interface FileRoutesByFullPath {
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/delivery_note': typeof AppVouchersNewDelivery_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
+  '/app/vouchers/new/manufacturing': typeof AppVouchersNewManufacturingRoute
   '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
   '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
   '/app/vouchers/new/quotation': typeof AppVouchersNewQuotationRoute
@@ -389,6 +397,7 @@ export interface FileRoutesByTo {
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/delivery_note': typeof AppVouchersNewDelivery_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
+  '/app/vouchers/new/manufacturing': typeof AppVouchersNewManufacturingRoute
   '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
   '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
   '/app/vouchers/new/quotation': typeof AppVouchersNewQuotationRoute
@@ -439,6 +448,7 @@ export interface FileRoutesById {
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/delivery_note': typeof AppVouchersNewDelivery_noteRoute
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
+  '/app/vouchers/new/manufacturing': typeof AppVouchersNewManufacturingRoute
   '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
   '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
   '/app/vouchers/new/quotation': typeof AppVouchersNewQuotationRoute
@@ -490,6 +500,7 @@ export interface FileRouteTypes {
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/delivery_note'
     | '/app/vouchers/new/journal'
+    | '/app/vouchers/new/manufacturing'
     | '/app/vouchers/new/payment'
     | '/app/vouchers/new/purchase'
     | '/app/vouchers/new/quotation'
@@ -538,6 +549,7 @@ export interface FileRouteTypes {
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/delivery_note'
     | '/app/vouchers/new/journal'
+    | '/app/vouchers/new/manufacturing'
     | '/app/vouchers/new/payment'
     | '/app/vouchers/new/purchase'
     | '/app/vouchers/new/quotation'
@@ -587,6 +599,7 @@ export interface FileRouteTypes {
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/delivery_note'
     | '/app/vouchers/new/journal'
+    | '/app/vouchers/new/manufacturing'
     | '/app/vouchers/new/payment'
     | '/app/vouchers/new/purchase'
     | '/app/vouchers/new/quotation'
@@ -903,6 +916,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppVouchersNewPaymentRouteImport
       parentRoute: typeof AppVouchersRoute
     }
+    '/app/vouchers/new/manufacturing': {
+      id: '/app/vouchers/new/manufacturing'
+      path: '/new/manufacturing'
+      fullPath: '/app/vouchers/new/manufacturing'
+      preLoaderRoute: typeof AppVouchersNewManufacturingRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
     '/app/vouchers/new/journal': {
       id: '/app/vouchers/new/journal'
       path: '/new/journal'
@@ -992,6 +1012,7 @@ interface AppVouchersRouteChildren {
   AppVouchersNewDebit_noteRoute: typeof AppVouchersNewDebit_noteRoute
   AppVouchersNewDelivery_noteRoute: typeof AppVouchersNewDelivery_noteRoute
   AppVouchersNewJournalRoute: typeof AppVouchersNewJournalRoute
+  AppVouchersNewManufacturingRoute: typeof AppVouchersNewManufacturingRoute
   AppVouchersNewPaymentRoute: typeof AppVouchersNewPaymentRoute
   AppVouchersNewPurchaseRoute: typeof AppVouchersNewPurchaseRoute
   AppVouchersNewQuotationRoute: typeof AppVouchersNewQuotationRoute
@@ -1006,6 +1027,7 @@ const AppVouchersRouteChildren: AppVouchersRouteChildren = {
   AppVouchersNewDebit_noteRoute: AppVouchersNewDebit_noteRoute,
   AppVouchersNewDelivery_noteRoute: AppVouchersNewDelivery_noteRoute,
   AppVouchersNewJournalRoute: AppVouchersNewJournalRoute,
+  AppVouchersNewManufacturingRoute: AppVouchersNewManufacturingRoute,
   AppVouchersNewPaymentRoute: AppVouchersNewPaymentRoute,
   AppVouchersNewPurchaseRoute: AppVouchersNewPurchaseRoute,
   AppVouchersNewQuotationRoute: AppVouchersNewQuotationRoute,
