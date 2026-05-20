@@ -627,6 +627,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onDelete={removeLine}
                   onAddItemDlg={(idx) => { setFocusedLine(idx); setItemDlg({ open: true, editId: null, lineIdx: idx }); }}
                   onEditItemDlg={(idx, itemId) => { setFocusedLine(idx); setItemDlg({ open: true, editId: itemId, lineIdx: idx }); }}
+                  onAdvanceToNextRow={onAdvanceToNextRow}
                 />
               ))}
             </TableBody>
