@@ -1238,7 +1238,12 @@ async function createGenericVoucher(
     voucher_type: "journal" | "payment" | "receipt" | "contra";
     date: string;
     narration?: string;
-    lines: Array<{ ledger_name: string; debit_rupees?: number; credit_rupees?: number }>;
+    lines: Array<{
+      ledger_name: string;
+      debit_rupees?: number;
+      credit_rupees?: number;
+      ledger_type?: Database["public"]["Enums"]["ledger_type"];
+    }>;
     confirm: boolean;
   },
 ) {
@@ -1261,8 +1266,13 @@ async function createGenericVoucher(
       .ilike("name", `%${ln.ledger_name}%`)
       .limit(2);
     if (!matches || matches.length === 0) {
+      if (ln.ledger_type) {
+        const newId = await getOrCreateSysLedger(supabase, companyId, ln.ledger_name, ln.ledger_type);
+        resolved.push({ ledger_id: newId, ledger_name: ln.ledger_name, debit_paise: dr, credit_paise: cr });
+        continue;
+      }
       return {
-        error: `No ledger matching "${ln.ledger_name}". Create it first using create_ledger.`,
+        error: `No ledger matching "${ln.ledger_name}". Pass ledger_type on the line so I can auto-create it (e.g. expense_indirect for an overhead, duties_taxes for GST, bank for a bank a/c).`,
       };
     }
     if (matches.length > 1) {
