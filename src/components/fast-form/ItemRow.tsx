@@ -43,11 +43,13 @@ interface Props {
   onDelete: (idx: number) => void;
   onAddItemDlg: (idx: number) => void;
   onEditItemDlg: (idx: number, itemId: string) => void;
+  onAdvanceToNextRow?: (idx: number) => void;
 }
 
 function ItemRowImpl({
   idx, row, amountPaise, items, canDelete,
   onPickItem, onCommit, onFocusRow, onDelete, onAddItemDlg, onEditItemDlg,
+  onAdvanceToNextRow,
 }: Props) {
   const { setHints, clearHints } = useFocusHints();
   const zone = `item-row`;
