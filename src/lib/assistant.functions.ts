@@ -801,8 +801,41 @@ async function createItemVoucher(
     total_paise: number;
   }> = [];
   for (const ln of input.items) {
-    const it = await resolveItem(supabase, companyId, ln.item_name);
-    if ("error" in it) return { error: it.error };
+    let it:
+      | { id: string; name: string; unit: string; gst_rate: number; sale_price_paise: number; purchase_price_paise: number }
+      | { error: string } = await resolveItem(supabase, companyId, ln.item_name);
+    if ("error" in it) {
+      // Auto-create the item when the caller provided enough master info.
+      if (ln.unit || ln.hsn_code || ln.gst_rate != null) {
+        const { data: created, error: cErr } = await supabase
+          .from("items")
+          .insert({
+            company_id: companyId,
+            name: ln.item_name,
+            unit: ln.unit ?? "NOS",
+            gst_rate: ln.gst_rate ?? 0,
+            hsn_code: ln.hsn_code ?? null,
+            purchase_price_paise:
+              input.voucher_type === "purchase" || input.voucher_type === "debit_note"
+                ? Math.round(ln.rate_rupees * 100)
+                : 0,
+            sale_price_paise:
+              input.voucher_type === "sales" || input.voucher_type === "credit_note"
+                ? Math.round(ln.rate_rupees * 100)
+                : 0,
+          })
+          .select("id, name, unit, gst_rate, sale_price_paise, purchase_price_paise")
+          .single();
+        if (cErr || !created) return { error: `Could not auto-create item "${ln.item_name}": ${cErr?.message ?? "unknown"}` };
+        it = created;
+      } else {
+        return {
+          error:
+            it.error +
+            ` Provide unit, gst_rate and (optionally) hsn_code on the line to auto-create it.`,
+        };
+      }
+    }
     const rate_paise = Math.round(ln.rate_rupees * 100);
     const qty = ln.qty;
     const discount_paise = Math.round((ln.discount_rupees ?? 0) * 100);
