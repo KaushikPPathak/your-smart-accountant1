@@ -174,7 +174,7 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
       }
       setNegativeStock(negStock);
     } catch (e) {
-      toast.error(describeError(e, "Pre-check failed"));
+      toast.error(describeError(e) || "Pre-check failed");
     } finally {
       setChecking(false);
     }
@@ -385,7 +385,7 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
       setStep(4);
       toast.success(`Books carried forward to FY ${fy.nextLabel}`);
     } catch (e) {
-      toast.error(describeError(e, "Transfer failed"));
+      toast.error(describeError(e) || "Transfer failed");
     } finally {
       setPosting(false);
       setConfirmOpen(false);
