@@ -148,6 +148,7 @@ const GST_URLS = new Set([
 const INVENTORY_URLS = new Set([
   "/app/items",
   "/app/reports/stock-summary",
+  "/app/reports/hsn-summary",
 ]);
 
 export function AppSidebar() {
