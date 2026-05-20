@@ -122,6 +122,8 @@ const SECTIONS: NavSection[] = [
       { title: "GSTR-1 / 3B / 2B", url: "/app/reports/gstr1", icon: Receipt, i18nKey: "nav.gstReturns" },
       { title: "GST Sales Book", url: "/app/reports/gst-sales-book", icon: Receipt, i18nKey: "nav.gstSalesBook" },
       { title: "GST Purchase Book", url: "/app/reports/gst-purchase-book", icon: Receipt, i18nKey: "nav.gstPurchaseBook" },
+      { title: "ITC — Item-wise", url: "/app/reports/itc-item-wise", icon: Receipt },
+      { title: "ITC — Party-wise", url: "/app/reports/itc-party-wise", icon: Receipt },
     ],
   },
   {
