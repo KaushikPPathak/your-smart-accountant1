@@ -154,6 +154,7 @@ function HousekeepingPage() {
           </TabsTrigger>
           <TabsTrigger value="fy_transfer">
             <CalendarCheck className="mr-1 h-3.5 w-3.5" /> FY Transfer
+          </TabsTrigger>
           <TabsTrigger value="self_test">
             <Activity className="mr-1 h-3.5 w-3.5" /> Self-test
           </TabsTrigger>
