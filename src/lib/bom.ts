@@ -93,7 +93,7 @@ export async function saveBom(
       template_id: templateId,
       input_item_id: l.input_item_id,
       qty_per_output: l.qty_per_output,
-      specs: l.specs,
+      specs: (l.specs ?? null) as unknown as Record<string, string>,
       line_no: i + 1,
     }));
     const { error } = await supabase.from("bom_template_lines").insert(rows);
