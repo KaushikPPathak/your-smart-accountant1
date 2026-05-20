@@ -304,7 +304,53 @@ export function ManufacturingVoucherForm() {
         .from("voucher_items")
         .insert([...consumeRows, ...outputRows]);
       if (iErr) throw iErr;
-      // No voucher_entries — pure stock journal, GL untouched.
+
+      // GL postings: Dr Finished Goods / Cr Raw Materials (cost transfer).
+      if (snap.totalConsumePaise > 0) {
+        const ensureLedger = async (name: string) => {
+          const { data: existing } = await supabase
+            .from("ledgers")
+            .select("id")
+            .eq("company_id", snap.companyId)
+            .ilike("name", name)
+            .limit(1)
+            .maybeSingle();
+          if (existing?.id) return existing.id;
+          const { data: created, error: lErr } = await supabase
+            .from("ledgers")
+            .insert({
+              company_id: snap.companyId,
+              name,
+              type: "stock_in_hand",
+              group_code: "STOCK_IN_HAND",
+            })
+            .select("id")
+            .single();
+          if (lErr) throw lErr;
+          return created.id;
+        };
+        const fgId = await ensureLedger("Finished Goods");
+        const rmId = await ensureLedger("Raw Materials");
+        const { error: eErr } = await supabase.from("voucher_entries").insert([
+          {
+            voucher_id: vData.id,
+            ledger_id: fgId,
+            line_no: 1,
+            debit_paise: snap.totalConsumePaise,
+            credit_paise: 0,
+            narration: "Finished goods produced",
+          },
+          {
+            voucher_id: vData.id,
+            ledger_id: rmId,
+            line_no: 2,
+            debit_paise: 0,
+            credit_paise: snap.totalConsumePaise,
+            narration: "Raw materials consumed",
+          },
+        ]);
+        if (eErr) throw eErr;
+      }
     });
   }, [
     activeCompanyId,
