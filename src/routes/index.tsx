@@ -123,17 +123,54 @@ function StartScreen() {
     navigate({ to: "/app/companies" });
   };
 
+  // Deterministic, vivid gradient per company (stable across reloads).
+  const tileGradient = (name: string) => {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    const a = h % 360;
+    const b = (a + 40 + ((h >> 8) % 60)) % 360;
+    return `linear-gradient(135deg, hsl(${a} 70% 55%), hsl(${b} 75% 45%))`;
+  };
+  const initials = (name: string) =>
+    name
+      .replace(/[^\p{L}\p{N} ]+/gu, "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]!.toUpperCase())
+      .join("") || "?";
+
   return (
-    <div className="flex min-h-screen flex-col bg-muted/20">
-      <header className="border-b border-border bg-background/80 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-brand text-primary-foreground font-bold text-lg shadow-elevated">
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
+      {/* Hero backdrop */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          background:
+            "radial-gradient(1100px 520px at 15% -10%, hsl(245 90% 62% / 0.20), transparent 60%)," +
+            "radial-gradient(900px 480px at 100% 110%, hsl(330 90% 60% / 0.18), transparent 60%)," +
+            "linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background)) 100%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px"
+        style={{ background: "linear-gradient(90deg, transparent, hsl(var(--primary) / .5), transparent)" }}
+      />
+
+      <header className="border-b border-border/60 bg-background/60 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-primary-foreground text-lg font-bold shadow-elevated"
+              style={{ background: "linear-gradient(135deg, hsl(245 80% 60%), hsl(330 85% 58%))" }}
+            >
               म
             </div>
             <div className="leading-tight">
               <div className="text-base font-semibold tracking-tight">{t("app.title")}</div>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
                 {t("app.subtitle")}
               </div>
             </div>
@@ -149,23 +186,35 @@ function StartScreen() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
-        <div className="mb-6 flex items-end justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{t("company.select")}</h1>
-            <p className="text-sm text-muted-foreground">{t("company.select.desc")}</p>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/70 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+              {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+            </div>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              {t("company.select")}
+            </h1>
+            <p className="max-w-xl text-sm text-muted-foreground">{t("company.select.desc")}</p>
           </div>
-          <Button onClick={newCompany}>
+          <Button size="lg" onClick={newCompany} className="shadow-elevated">
             <Plus className="mr-2 h-4 w-4" /> {t("company.new")}
           </Button>
         </div>
 
         {loading ? (
-          <div className="rounded-xl border border-border bg-card p-12 text-center text-sm text-muted-foreground">
-            {t("common.loading")}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-[88px] animate-pulse rounded-2xl border border-border/60 bg-card/60"
+                style={{ animationDelay: `${i * 60}ms` }}
+              />
+            ))}
           </div>
         ) : companies.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-12 text-center">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/60 bg-card/70 p-14 text-center backdrop-blur">
             <Building2 className="h-10 w-10 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">{t("company.none")}</p>
             <Button onClick={newCompany}>
@@ -173,28 +222,44 @@ function StartScreen() {
             </Button>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {companies.map((c) => (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {companies.map((c, i) => (
               <button
                 key={c.id}
                 onClick={() => openCompany(c)}
-                className="group flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-left shadow-card transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-elevated"
+                className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border/60 bg-card/80 p-4 text-left backdrop-blur transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-elevated focus:outline-none focus:ring-2 focus:ring-primary/40 animate-in fade-in slide-in-from-bottom-2"
+                style={{ animationDelay: `${i * 40}ms`, animationFillMode: "both" }}
               >
-                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Building2 className="h-5 w-5" />
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 -top-px h-px opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ background: "linear-gradient(90deg, transparent, hsl(var(--primary) / .6), transparent)" }}
+                />
+                <div
+                  className="relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl text-base font-semibold text-white shadow-card transition-transform duration-300 group-hover:scale-105"
+                  style={{ background: tileGradient(c.name) }}
+                >
+                  <span className="drop-shadow">{initials(c.name)}</span>
+                  <div
+                    className="absolute inset-0 rounded-xl opacity-0 transition-opacity group-hover:opacity-100"
+                    style={{ background: "linear-gradient(135deg, rgba(255,255,255,.25), transparent 60%)" }}
+                  />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate font-medium">{c.name}</span>
+                    <span className="truncate text-[15px] font-semibold tracking-tight">{c.name}</span>
                     {c.has_password ? (
                       <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                     ) : (
                       <Unlock className="h-3.5 w-3.5 text-success" />
                     )}
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
+                  <div className="mt-0.5 text-xs text-muted-foreground">
                     {c.has_password ? t("company.passwordProtected") : t("company.opensDirectly")}
                   </div>
+                </div>
+                <div className="text-muted-foreground/60 transition-all group-hover:translate-x-0.5 group-hover:text-primary">
+                  →
                 </div>
               </button>
             ))}
@@ -231,7 +296,7 @@ function StartScreen() {
         </DialogContent>
       </Dialog>
 
-      <footer className="border-t border-border py-4 text-center text-xs text-muted-foreground">
+      <footer className="border-t border-border/60 py-4 text-center text-xs text-muted-foreground">
         © {new Date().getFullYear()} Your Mehtaji
       </footer>
     </div>

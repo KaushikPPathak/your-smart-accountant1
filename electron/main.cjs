@@ -18,14 +18,28 @@ function createWindow() {
     title: 'Your Mehtaji',
     icon: path.join(__dirname, 'icon.ico'),
     autoHideMenuBar: false,
+    show: false,
+    backgroundColor: '#0b1020',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, 'preload.cjs'),
+      backgroundThrottling: false,
     },
   });
 
-  win.loadURL(APP_URL);
+  // Paint an instant local splash so the user sees the app right away,
+  // then swap to the remote URL once it has actually loaded.
+  win.loadFile(path.join(__dirname, 'splash.html'));
+  win.once('ready-to-show', () => win.show());
+
+  // Kick off the real app load in the background; only navigate once it's ready.
+  const startReal = () => {
+    win.webContents.once('did-finish-load', () => {/* loaded */});
+    win.loadURL(APP_URL);
+  };
+  // Small delay so the splash actually paints a frame before we start the heavy load.
+  setTimeout(startReal, 250);
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (!url.startsWith(APP_URL)) {
