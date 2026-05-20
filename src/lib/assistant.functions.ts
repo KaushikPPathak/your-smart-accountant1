@@ -1230,6 +1230,112 @@ async function createManufacturingVoucher(
   return { ok: true, voucher_number: v.voucher_number, voucher_id: v.id, total_rupees: rupees(totalConsumption) };
 }
 
+// GST expense / capital-goods voucher (no inventory). Auto-creates expense or
+// asset ledger + Input CGST/SGST/IGST, and posts via createGenericVoucher.
+async function createExpenseVoucher(
+  supabase: DB,
+  companyId: string,
+  input: {
+    date: string;
+    expense_ledger_name: string;
+    ledger_type: "expense_direct" | "expense_indirect" | "fixed_asset" | "current_asset";
+    amount_rupees: number;
+    gst_rate: number;
+    payment_mode: "cash" | "bank" | "credit";
+    cash_or_bank_ledger_name?: string;
+    party_name?: string;
+    party_state_code?: string;
+    party_gstin?: string;
+    reference_no?: string;
+    narration?: string;
+    confirm: boolean;
+  },
+) {
+  if ((input.payment_mode === "cash" || input.payment_mode === "bank") && !input.cash_or_bank_ledger_name) {
+    return { error: "cash_or_bank_ledger_name is required for cash/bank payment_mode." };
+  }
+  if (input.payment_mode === "credit" && !input.party_name) {
+    return { error: "party_name is required for credit payment_mode." };
+  }
+
+  // Auto-create party ledger if missing (credit mode).
+  let creditLineName = input.cash_or_bank_ledger_name ?? "";
+  let creditLineType: Database["public"]["Enums"]["ledger_type"] =
+    input.payment_mode === "cash" ? "cash" : "bank";
+  if (input.payment_mode === "credit" && input.party_name) {
+    const existing = await resolveLedger(supabase, companyId, input.party_name);
+    if ("error" in existing) {
+      const { data: np, error: pe } = await supabase
+        .from("ledgers")
+        .insert({
+          company_id: companyId,
+          name: input.party_name,
+          type: "sundry_creditor" as Database["public"]["Enums"]["ledger_type"],
+          state_code: input.party_state_code ?? null,
+          gstin: input.party_gstin ?? null,
+        })
+        .select("id, name")
+        .single();
+      if (pe || !np) return { error: `Could not create party "${input.party_name}": ${pe?.message ?? "unknown"}` };
+      creditLineName = np.name;
+    } else {
+      creditLineName = existing.name;
+    }
+    creditLineType = "sundry_creditor";
+  }
+
+  // Interstate detection: prefer party state for credit, company state for cash/bank.
+  const { data: companyRow } = await supabase
+    .from("companies")
+    .select("state_code, gst_registered")
+    .eq("id", companyId)
+    .maybeSingle();
+  let interstate = false;
+  if (input.payment_mode === "credit") {
+    const partyState = input.party_state_code;
+    interstate = !!partyState && !!companyRow?.state_code && partyState !== companyRow.state_code;
+  }
+  const gstApplies = companyRow?.gst_registered === true && input.gst_rate > 0;
+
+  const taxable_paise = Math.round(input.amount_rupees * 100);
+  const gstTotal = gstApplies ? Math.round((taxable_paise * input.gst_rate) / 100) : 0;
+  const cgst_paise = gstApplies && !interstate ? Math.round(gstTotal / 2) : 0;
+  const sgst_paise = gstApplies && !interstate ? gstTotal - cgst_paise : 0;
+  const igst_paise = gstApplies && interstate ? gstTotal : 0;
+  const total_paise = taxable_paise + cgst_paise + sgst_paise + igst_paise;
+
+  const lines: Array<{
+    ledger_name: string;
+    debit_rupees?: number;
+    credit_rupees?: number;
+    ledger_type?: Database["public"]["Enums"]["ledger_type"];
+  }> = [
+    {
+      ledger_name: input.expense_ledger_name,
+      debit_rupees: taxable_paise / 100,
+      ledger_type: input.ledger_type as Database["public"]["Enums"]["ledger_type"],
+    },
+  ];
+  if (cgst_paise > 0) lines.push({ ledger_name: "Input CGST", debit_rupees: cgst_paise / 100, ledger_type: "duties_taxes" });
+  if (sgst_paise > 0) lines.push({ ledger_name: "Input SGST", debit_rupees: sgst_paise / 100, ledger_type: "duties_taxes" });
+  if (igst_paise > 0) lines.push({ ledger_name: "Input IGST", debit_rupees: igst_paise / 100, ledger_type: "duties_taxes" });
+  lines.push({
+    ledger_name: creditLineName,
+    credit_rupees: total_paise / 100,
+    ledger_type: creditLineType,
+  });
+
+  const vtype: "payment" | "journal" = input.payment_mode === "credit" ? "journal" : "payment";
+
+  return await createGenericVoucher(supabase, companyId, {
+    voucher_type: vtype,
+    date: input.date,
+    narration: input.narration ?? `${input.expense_ledger_name}${input.reference_no ? ` (Ref ${input.reference_no})` : ""}`,
+    lines,
+    confirm: input.confirm,
+  });
+}
+
 // Shared helper: resolve ledgers by fuzzy name and either preview or insert the voucher.
 async function createGenericVoucher(
   supabase: DB,
