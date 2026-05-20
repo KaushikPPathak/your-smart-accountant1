@@ -744,9 +744,33 @@ async function createItemVoucher(
     confirm: boolean;
   },
 ) {
-  // Resolve party + company state for interstate detection
-  const party = await resolveLedger(supabase, companyId, input.party_name);
-  if ("error" in party) return { error: party.error };
+  // Resolve party + company state for interstate detection. Auto-create the
+  // party ledger if missing and the caller provided a party_type hint.
+  let party: { id: string; name: string };
+  const partyResolved = await resolveLedger(supabase, companyId, input.party_name);
+  if ("error" in partyResolved) {
+    const defaultType: "sundry_debtor" | "sundry_creditor" =
+      input.party_type ??
+      (input.voucher_type === "sales" || input.voucher_type === "credit_note"
+        ? "sundry_debtor"
+        : "sundry_creditor");
+    const { data: newParty, error: pErr } = await supabase
+      .from("ledgers")
+      .insert({
+        company_id: companyId,
+        name: input.party_name,
+        type: defaultType as Database["public"]["Enums"]["ledger_type"],
+        state: input.party_state ?? null,
+        state_code: input.party_state_code ?? null,
+        gstin: input.party_gstin ?? null,
+      })
+      .select("id, name")
+      .single();
+    if (pErr || !newParty) return { error: `Could not create party "${input.party_name}": ${pErr?.message ?? "unknown"}` };
+    party = newParty;
+  } else {
+    party = partyResolved;
+  }
   const { data: partyRow } = await supabase
     .from("ledgers")
     .select("state_code, state")
