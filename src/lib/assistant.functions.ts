@@ -435,7 +435,7 @@ function buildTools(supabase: DB, companyId: string) {
 
     create_journal_voucher: tool({
       description:
-        "Create a manual Journal (double-entry) voucher. Lines must balance — sum of debits = sum of credits. Each line references a ledger by name (fuzzy match). ALWAYS call with confirm=false first; only call again with confirm=true after the user explicitly says yes.",
+        "Create a manual Journal (double-entry) voucher. Lines must balance — sum of debits = sum of credits. Each line references a ledger by name (fuzzy match). If a ledger doesn't exist, pass ledger_type on that line and it will be auto-created (e.g. expense_indirect for 'Rent A/c', duties_taxes for 'Input CGST'). ALWAYS call with confirm=false first; only call again with confirm=true after the user explicitly says yes.",
       inputSchema: z.object({
         date: z.string().describe("ISO YYYY-MM-DD"),
         narration: z.string().max(500).optional(),
@@ -445,6 +445,26 @@ function buildTools(supabase: DB, companyId: string) {
               ledger_name: z.string(),
               debit_rupees: z.number().optional().default(0),
               credit_rupees: z.number().optional().default(0),
+              ledger_type: z
+                .enum([
+                  "sundry_debtor",
+                  "sundry_creditor",
+                  "bank",
+                  "cash",
+                  "expense_direct",
+                  "expense_indirect",
+                  "income_direct",
+                  "income_indirect",
+                  "fixed_asset",
+                  "current_asset",
+                  "current_liability",
+                  "loan_liability",
+                  "capital",
+                  "duties_taxes",
+                  "stock_in_hand",
+                ])
+                .optional()
+                .describe("If the ledger doesn't exist, auto-create it with this group."),
             }),
           )
           .min(2)
@@ -590,7 +610,7 @@ function buildTools(supabase: DB, companyId: string) {
     // ---------- ITEM VOUCHERS (sales / purchase / credit_note / debit_note) ----------
     create_item_voucher: tool({
       description:
-        "Create a Sales, Purchase, Credit Note or Debit Note voucher with one or more items. Resolves the party ledger and items by fuzzy match. If the party doesn't exist, pass party_type so it's auto-created. If an item doesn't exist, pass unit/gst_rate/hsn_code on that line so it's auto-created in the same step. Computes CGST/SGST (intra-state) or IGST (inter-state) from each item's GST rate, posts the standard double-entry and updates inventory. ALWAYS call confirm=false first to preview; only call confirm=true after the user explicitly says yes.",
+        "Create a Sales, Purchase, Credit Note or Debit Note voucher with one or more items. Resolves the party ledger and items by fuzzy match. Auto-creates the party (pass party_type) and items (pass unit/gst_rate/hsn_code on the line). Computes CGST/SGST (intra-state) or IGST (inter-state). Use posting_account_name + posting_account_type to override the default Sales/Purchase A/c — e.g. 'Computers'/fixed_asset for capital-goods purchase, 'Sales - Exempt'/income_direct for exempt sales, 'Sales - Exports'/income_direct for zero-rated exports. ALWAYS call confirm=false first; only call confirm=true after the user explicitly says yes.",
       inputSchema: z.object({
         voucher_type: z.enum(["sales", "purchase", "credit_note", "debit_note"]),
         date: z.string().describe("ISO YYYY-MM-DD"),
@@ -604,6 +624,23 @@ function buildTools(supabase: DB, companyId: string) {
         party_gstin: z.string().optional(),
         reference_no: z.string().max(60).optional(),
         narration: z.string().max(500).optional(),
+        posting_account_name: z
+          .string()
+          .optional()
+          .describe(
+            "Override the default Sales A/c / Purchase A/c. Use for capital goods (e.g. 'Computers'), exempt or export sales.",
+          ),
+        posting_account_type: z
+          .enum([
+            "fixed_asset",
+            "current_asset",
+            "income_direct",
+            "income_indirect",
+            "expense_direct",
+            "expense_indirect",
+          ])
+          .optional()
+          .describe("Group for the override posting account."),
         items: z
           .array(
             z.object({
@@ -612,7 +649,6 @@ function buildTools(supabase: DB, companyId: string) {
               rate_rupees: z.number().nonnegative(),
               discount_rupees: z.number().nonnegative().optional().default(0),
               gst_rate_override: z.number().min(0).max(28).optional(),
-              // Auto-create fields (used only if the item doesn't already exist)
               unit: z.string().max(10).optional(),
               hsn_code: z.string().max(10).optional(),
               gst_rate: z.number().min(0).max(28).optional(),
@@ -624,6 +660,35 @@ function buildTools(supabase: DB, companyId: string) {
       }),
       execute: async (input) => {
         return await createItemVoucher(supabase, companyId, input);
+      },
+    }),
+
+    // ---------- GST EXPENSE / CAPITAL-GOODS (no inventory) ----------
+    create_expense_voucher: tool({
+      description:
+        "Create a GST expense or capital-goods voucher WITHOUT inventory (rent, telephone, professional fees, audit fees, a laptop bought from a non-stocked supplier, etc.). Auto-creates the expense/asset ledger and the Input CGST/SGST/IGST ledgers. Posts: Dr Expense/Asset (taxable) + Dr Input CGST+SGST or Input IGST, Cr Cash/Bank (cash/bank mode) OR Cr Party (credit mode). ledger_type=fixed_asset for capital goods, expense_indirect for overheads, expense_direct for direct costs. ALWAYS call confirm=false first.",
+      inputSchema: z.object({
+        date: z.string().describe("ISO YYYY-MM-DD"),
+        expense_ledger_name: z.string().describe("e.g. 'Rent A/c', 'Telephone Expenses', 'Computers'"),
+        ledger_type: z.enum([
+          "expense_direct",
+          "expense_indirect",
+          "fixed_asset",
+          "current_asset",
+        ]),
+        amount_rupees: z.number().positive().describe("Taxable amount BEFORE GST."),
+        gst_rate: z.number().min(0).max(28).default(0),
+        payment_mode: z.enum(["cash", "bank", "credit"]),
+        cash_or_bank_ledger_name: z.string().optional().describe("Required for cash/bank mode."),
+        party_name: z.string().optional().describe("Supplier ledger; required for credit mode."),
+        party_state_code: z.string().optional(),
+        party_gstin: z.string().optional(),
+        reference_no: z.string().max(60).optional(),
+        narration: z.string().max(500).optional(),
+        confirm: z.boolean().default(false),
+      }),
+      execute: async (input) => {
+        return await createExpenseVoucher(supabase, companyId, input);
       },
     }),
 
@@ -731,6 +796,14 @@ async function createItemVoucher(
     party_gstin?: string;
     reference_no?: string;
     narration?: string;
+    posting_account_name?: string;
+    posting_account_type?:
+      | "fixed_asset"
+      | "current_asset"
+      | "income_direct"
+      | "income_indirect"
+      | "expense_direct"
+      | "expense_indirect";
     items: Array<{
       item_name: string;
       qty: number;
@@ -949,7 +1022,7 @@ async function createItemVoucher(
 
   // Build double-entry postings
   const isSalesSide = input.voucher_type === "sales" || input.voucher_type === "credit_note";
-  const baseName =
+  const defaultName =
     input.voucher_type === "sales"
       ? "Sales A/c"
       : input.voucher_type === "purchase"
@@ -957,7 +1030,9 @@ async function createItemVoucher(
         : input.voucher_type === "credit_note"
           ? "Sales Return A/c"
           : "Purchase Return A/c";
-  const baseType: Database["public"]["Enums"]["ledger_type"] = isSalesSide ? "income_direct" : "expense_direct";
+  const defaultType: Database["public"]["Enums"]["ledger_type"] = isSalesSide ? "income_direct" : "expense_direct";
+  const baseName = input.posting_account_name?.trim() || defaultName;
+  const baseType = (input.posting_account_type as Database["public"]["Enums"]["ledger_type"]) || defaultType;
   const baseId = await getOrCreateSysLedger(supabase, companyId, baseName, baseType);
   const cgstId =
     cgst_paise > 0
@@ -1155,6 +1230,112 @@ async function createManufacturingVoucher(
   return { ok: true, voucher_number: v.voucher_number, voucher_id: v.id, total_rupees: rupees(totalConsumption) };
 }
 
+// GST expense / capital-goods voucher (no inventory). Auto-creates expense or
+// asset ledger + Input CGST/SGST/IGST, and posts via createGenericVoucher.
+async function createExpenseVoucher(
+  supabase: DB,
+  companyId: string,
+  input: {
+    date: string;
+    expense_ledger_name: string;
+    ledger_type: "expense_direct" | "expense_indirect" | "fixed_asset" | "current_asset";
+    amount_rupees: number;
+    gst_rate: number;
+    payment_mode: "cash" | "bank" | "credit";
+    cash_or_bank_ledger_name?: string;
+    party_name?: string;
+    party_state_code?: string;
+    party_gstin?: string;
+    reference_no?: string;
+    narration?: string;
+    confirm: boolean;
+  },
+) {
+  if ((input.payment_mode === "cash" || input.payment_mode === "bank") && !input.cash_or_bank_ledger_name) {
+    return { error: "cash_or_bank_ledger_name is required for cash/bank payment_mode." };
+  }
+  if (input.payment_mode === "credit" && !input.party_name) {
+    return { error: "party_name is required for credit payment_mode." };
+  }
+
+  // Auto-create party ledger if missing (credit mode).
+  let creditLineName = input.cash_or_bank_ledger_name ?? "";
+  let creditLineType: Database["public"]["Enums"]["ledger_type"] =
+    input.payment_mode === "cash" ? "cash" : "bank";
+  if (input.payment_mode === "credit" && input.party_name) {
+    const existing = await resolveLedger(supabase, companyId, input.party_name);
+    if ("error" in existing) {
+      const { data: np, error: pe } = await supabase
+        .from("ledgers")
+        .insert({
+          company_id: companyId,
+          name: input.party_name,
+          type: "sundry_creditor" as Database["public"]["Enums"]["ledger_type"],
+          state_code: input.party_state_code ?? null,
+          gstin: input.party_gstin ?? null,
+        })
+        .select("id, name")
+        .single();
+      if (pe || !np) return { error: `Could not create party "${input.party_name}": ${pe?.message ?? "unknown"}` };
+      creditLineName = np.name;
+    } else {
+      creditLineName = existing.name;
+    }
+    creditLineType = "sundry_creditor";
+  }
+
+  // Interstate detection: prefer party state for credit, company state for cash/bank.
+  const { data: companyRow } = await supabase
+    .from("companies")
+    .select("state_code, gst_registered")
+    .eq("id", companyId)
+    .maybeSingle();
+  let interstate = false;
+  if (input.payment_mode === "credit") {
+    const partyState = input.party_state_code;
+    interstate = !!partyState && !!companyRow?.state_code && partyState !== companyRow.state_code;
+  }
+  const gstApplies = companyRow?.gst_registered === true && input.gst_rate > 0;
+
+  const taxable_paise = Math.round(input.amount_rupees * 100);
+  const gstTotal = gstApplies ? Math.round((taxable_paise * input.gst_rate) / 100) : 0;
+  const cgst_paise = gstApplies && !interstate ? Math.round(gstTotal / 2) : 0;
+  const sgst_paise = gstApplies && !interstate ? gstTotal - cgst_paise : 0;
+  const igst_paise = gstApplies && interstate ? gstTotal : 0;
+  const total_paise = taxable_paise + cgst_paise + sgst_paise + igst_paise;
+
+  const lines: Array<{
+    ledger_name: string;
+    debit_rupees?: number;
+    credit_rupees?: number;
+    ledger_type?: Database["public"]["Enums"]["ledger_type"];
+  }> = [
+    {
+      ledger_name: input.expense_ledger_name,
+      debit_rupees: taxable_paise / 100,
+      ledger_type: input.ledger_type as Database["public"]["Enums"]["ledger_type"],
+    },
+  ];
+  if (cgst_paise > 0) lines.push({ ledger_name: "Input CGST", debit_rupees: cgst_paise / 100, ledger_type: "duties_taxes" });
+  if (sgst_paise > 0) lines.push({ ledger_name: "Input SGST", debit_rupees: sgst_paise / 100, ledger_type: "duties_taxes" });
+  if (igst_paise > 0) lines.push({ ledger_name: "Input IGST", debit_rupees: igst_paise / 100, ledger_type: "duties_taxes" });
+  lines.push({
+    ledger_name: creditLineName,
+    credit_rupees: total_paise / 100,
+    ledger_type: creditLineType,
+  });
+
+  const vtype: "payment" | "journal" = input.payment_mode === "credit" ? "journal" : "payment";
+
+  return await createGenericVoucher(supabase, companyId, {
+    voucher_type: vtype,
+    date: input.date,
+    narration: input.narration ?? `${input.expense_ledger_name}${input.reference_no ? ` (Ref ${input.reference_no})` : ""}`,
+    lines,
+    confirm: input.confirm,
+  });
+}
+
 // Shared helper: resolve ledgers by fuzzy name and either preview or insert the voucher.
 async function createGenericVoucher(
   supabase: DB,
@@ -1163,7 +1344,12 @@ async function createGenericVoucher(
     voucher_type: "journal" | "payment" | "receipt" | "contra";
     date: string;
     narration?: string;
-    lines: Array<{ ledger_name: string; debit_rupees?: number; credit_rupees?: number }>;
+    lines: Array<{
+      ledger_name: string;
+      debit_rupees?: number;
+      credit_rupees?: number;
+      ledger_type?: Database["public"]["Enums"]["ledger_type"];
+    }>;
     confirm: boolean;
   },
 ) {
@@ -1186,8 +1372,13 @@ async function createGenericVoucher(
       .ilike("name", `%${ln.ledger_name}%`)
       .limit(2);
     if (!matches || matches.length === 0) {
+      if (ln.ledger_type) {
+        const newId = await getOrCreateSysLedger(supabase, companyId, ln.ledger_name, ln.ledger_type);
+        resolved.push({ ledger_id: newId, ledger_name: ln.ledger_name, debit_paise: dr, credit_paise: cr });
+        continue;
+      }
       return {
-        error: `No ledger matching "${ln.ledger_name}". Create it first using create_ledger.`,
+        error: `No ledger matching "${ln.ledger_name}". Pass ledger_type on the line so I can auto-create it (e.g. expense_indirect for an overhead, duties_taxes for GST, bank for a bank a/c).`,
       };
     }
     if (matches.length > 1) {
@@ -1353,21 +1544,29 @@ READ rules:
 - For "how do I…" / settings questions, use search_help and quote it briefly.
 - If no company is active, ask the user to pick one before any data action.
 
-TRANSACTION TOOLKIT (use the most specific tool for what the user asked):
-- create_ledger — new party / expense / income / bank / cash ledger
-- create_item — new inventory item master
+TRANSACTION TOOLKIT (pick the most specific tool for what the user asked):
+- create_ledger — new party / expense / income / bank / cash ledger (only when the user is managing masters in isolation)
+- create_item — new inventory item master (only when isolated)
 - create_contra_voucher — money transfer between two cash/bank accounts
-- create_payment_voucher — money paid OUT (cash/bank → party or expense)
-- create_receipt_voucher — money received IN (party or income → cash/bank)
-- create_journal_voucher — any other manual double-entry adjustment
-- create_item_voucher — Sales, Purchase, Credit Note, Debit Note with items, qty, rate, GST
+- create_payment_voucher — simple money paid OUT (cash/bank → party), NO GST split
+- create_receipt_voucher — simple money received IN (party → cash/bank), NO GST split
+- create_journal_voucher — manual double-entry adjustment (each line accepts ledger_type to auto-create the ledger if missing)
+- create_item_voucher — Sales, Purchase, Credit Note, Debit Note WITH inventory items, qty, rate, GST. Use posting_account_name + posting_account_type to redirect the debit/credit: capital-goods purchase via this tool → posting_account_type=fixed_asset (e.g. 'Computers'); exempt sales → posting_account_type=income_direct with name like 'Sales - Exempt'; export sales → 'Sales - Exports' / income_direct.
+- create_expense_voucher — GST expense or capital-goods purchase WITHOUT inventory: rent + 18% GST, telephone bill, audit fees, professional fees, a laptop bought ad-hoc. Auto-creates the expense/asset ledger AND Input CGST/SGST/IGST. Pick ledger_type=fixed_asset for capital goods, expense_indirect for overheads. payment_mode=cash/bank for paid-now, credit for "to-pay" (becomes a journal with supplier as creditor).
 - create_manufacturing_voucher — raw-material consumption + finished-goods production
 
 MISSING MASTERS — auto-create in the same step, do NOT punt back to the user:
-- If the party doesn't exist, pass party_type on create_item_voucher (sundry_creditor for purchase/debit_note, sundry_debtor for sales/credit_note). Also pass party_state / party_state_code / party_gstin if the user mentioned them.
-- If an item doesn't exist, pass unit, gst_rate and hsn_code (if known) on that line of create_item_voucher — the tool will create the item master automatically. Tax-free = gst_rate 0.
-- Only fall back to a separate create_item / create_ledger call (with the confirm-first preview flow) when the user is creating masters in isolation, not as part of a voucher.
-- NEVER tell the user to "open Items" or "go to Ledgers" first — you are accountable for completing the transaction end-to-end.
+- create_item_voucher: pass party_type (sundry_creditor for purchase/debit_note, sundry_debtor for sales/credit_note); pass unit/gst_rate/hsn_code on each item line.
+- create_journal_voucher: pass ledger_type on any line whose ledger doesn't exist (e.g. expense_indirect for 'Rent A/c', duties_taxes for 'Input CGST'/'Output IGST', bank for a new bank a/c, fixed_asset for 'Computers').
+- create_expense_voucher: it auto-creates the expense/asset ledger and all needed GST ledgers — just pick the right ledger_type.
+- NEVER tell the user to "open Items", "go to Ledgers", or "create the ledger first". You are accountable for completing the transaction end-to-end.
+
+CAPITAL GOODS & GST-EXPENSE PATTERNS (must follow):
+- "Bought a laptop for ₹50,000 + 18% GST from XYZ" → create_expense_voucher with expense_ledger_name='Computers', ledger_type=fixed_asset, amount_rupees=50000, gst_rate=18, payment_mode=credit, party_name='XYZ'.
+- "Paid rent ₹20,000 + 18% GST by cheque" → create_expense_voucher with expense_ledger_name='Rent A/c', ledger_type=expense_indirect, amount_rupees=20000, gst_rate=18, payment_mode=bank, cash_or_bank_ledger_name='HDFC Bank' (or whichever the user implies).
+- "Bought 5 laptops as stock from XYZ @ 45000 + 18% GST" (inventory) → create_item_voucher (purchase) normally. Only switch to create_expense_voucher when there's no inventory tracking.
+- Exempt / export sales → create_item_voucher with posting_account_name='Sales - Exempt' or 'Sales - Exports' and posting_account_type=income_direct; gst_rate stays 0.
+
 
 MANDATORY WORKFLOW for every transaction request:
 1. Pick the single most appropriate tool. Never use a journal when a specific tool exists.
