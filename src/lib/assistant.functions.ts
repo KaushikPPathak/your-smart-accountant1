@@ -435,7 +435,7 @@ function buildTools(supabase: DB, companyId: string) {
 
     create_journal_voucher: tool({
       description:
-        "Create a manual Journal (double-entry) voucher. Lines must balance — sum of debits = sum of credits. Each line references a ledger by name (fuzzy match). ALWAYS call with confirm=false first; only call again with confirm=true after the user explicitly says yes.",
+        "Create a manual Journal (double-entry) voucher. Lines must balance — sum of debits = sum of credits. Each line references a ledger by name (fuzzy match). If a ledger doesn't exist, pass ledger_type on that line and it will be auto-created (e.g. expense_indirect for 'Rent A/c', duties_taxes for 'Input CGST'). ALWAYS call with confirm=false first; only call again with confirm=true after the user explicitly says yes.",
       inputSchema: z.object({
         date: z.string().describe("ISO YYYY-MM-DD"),
         narration: z.string().max(500).optional(),
@@ -445,6 +445,26 @@ function buildTools(supabase: DB, companyId: string) {
               ledger_name: z.string(),
               debit_rupees: z.number().optional().default(0),
               credit_rupees: z.number().optional().default(0),
+              ledger_type: z
+                .enum([
+                  "sundry_debtor",
+                  "sundry_creditor",
+                  "bank",
+                  "cash",
+                  "expense_direct",
+                  "expense_indirect",
+                  "income_direct",
+                  "income_indirect",
+                  "fixed_asset",
+                  "current_asset",
+                  "current_liability",
+                  "loan_liability",
+                  "capital",
+                  "duties_taxes",
+                  "stock_in_hand",
+                ])
+                .optional()
+                .describe("If the ledger doesn't exist, auto-create it with this group."),
             }),
           )
           .min(2)
