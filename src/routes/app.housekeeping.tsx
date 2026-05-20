@@ -44,6 +44,7 @@ import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceIm
 import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport";
 import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
 import { YearEndClosure } from "@/components/housekeeping/YearEndClosure";
+import { FinancialYearTransferWizard } from "@/components/housekeeping/FinancialYearTransferWizard";
 import { VerifyAndRepairTool } from "@/components/housekeeping/VerifyAndRepairTool";
 import { SelfTestPanel } from "@/components/housekeeping/SelfTestPanel";
 import { ImportHistoryPanel } from "@/components/housekeeping/ImportHistoryPanel";
