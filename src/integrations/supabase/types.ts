@@ -2087,6 +2087,10 @@ export type Database = {
         Args: { _company_id: string; _new_password: string }
         Returns: undefined
       }
+      sync_opening_balances_from_previous_fy: {
+        Args: { _company_id: string; _fy_start: string }
+        Returns: Json
+      }
       unlock_period: {
         Args: {
           _company_id: string
