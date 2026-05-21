@@ -137,6 +137,56 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [ewbDlg, setEwbDlg] = useState<{ open: boolean; voucher: { id: string; company_id: string; voucher_number: string; voucher_date: string; total_paise: number; subtotal_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number; is_interstate: boolean; place_of_supply_code: string | null } | null }>({ open: false, voucher: null });
   const { lock, locked } = usePeriodLock(date);
 
+  // ---------- Draft persistence (so leaving the screen doesn't lose entries) ----------
+  const draftKey = activeCompanyId ? `voucher-draft:${activeCompanyId}:${voucherType}` : null;
+  const draftRestored = useState(false);
+  useEffect(() => {
+    if (!draftKey) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const d = JSON.parse(raw) as Partial<{
+        date: string; partyId: string; refNo: string; narration: string;
+        placeOfSupply: string; roundOff: boolean; itcClass: typeof itcClass;
+        itcEligible: boolean; lines: Line[];
+      }>;
+      if (d.date) setDate(d.date);
+      if (d.partyId) setPartyId(d.partyId);
+      if (d.refNo) setRefNo(d.refNo);
+      if (d.narration) setNarration(d.narration);
+      if (d.placeOfSupply) setPlaceOfSupply(d.placeOfSupply);
+      if (typeof d.roundOff === "boolean") setRoundOff(d.roundOff);
+      if (d.itcClass) setItcClass(d.itcClass);
+      if (typeof d.itcEligible === "boolean") setItcEligible(d.itcEligible);
+      if (Array.isArray(d.lines) && d.lines.length > 0) setLines(d.lines);
+    } catch {
+      /* ignore corrupt draft */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftKey) return;
+    const hasContent =
+      partyId || refNo || narration ||
+      lines.some((l) => l.item_id || l.description || l.qty !== "1" || l.rate !== "0");
+    if (!hasContent) {
+      localStorage.removeItem(draftKey);
+      return;
+    }
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({ date, partyId, refNo, narration, placeOfSupply, roundOff, itcClass, itcEligible, lines }),
+        );
+      } catch {
+        /* quota — ignore */
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [draftKey, date, partyId, refNo, narration, placeOfSupply, roundOff, itcClass, itcEligible, lines]);
+  void draftRestored;
+
   // Load company state once; ledgers + items come from the in-memory masters cache.
   useEffect(() => {
     if (!activeCompanyId) return;
