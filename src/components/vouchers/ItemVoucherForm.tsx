@@ -140,6 +140,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   >(isPurchaseSide ? "inputs" : "na");
   const [itcEligible, setItcEligible] = useState<boolean>(true);
   const [lines, setLines] = useState<Line[]>([blankLine()]);
+  const [miscPreGst, setMiscPreGst] = useState<string>("0");
+  const [miscPostGst, setMiscPostGst] = useState<string>("0");
+  const [posOverridden, setPosOverridden] = useState<boolean>(false);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [items, setItems] = useState<ItemOpt[]>([]);
   const [companyStateCode, setCompanyStateCode] = useState<string | null>(null);
@@ -193,6 +196,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         itcClass: typeof itcClass;
         itcEligible: boolean;
         lines: Line[];
+        miscPreGst: string;
+        miscPostGst: string;
       }>;
       if (d.date) setDate(d.date);
       if (d.partyId) setPartyId(d.partyId);
@@ -203,6 +208,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if (d.itcClass) setItcClass(d.itcClass);
       if (typeof d.itcEligible === "boolean") setItcEligible(d.itcEligible);
       if (Array.isArray(d.lines) && d.lines.length > 0) setLines(d.lines);
+      if (typeof d.miscPreGst === "string") setMiscPreGst(d.miscPreGst);
+      if (typeof d.miscPostGst === "string") setMiscPostGst(d.miscPostGst);
     } catch {
       /* ignore corrupt draft */
     }
@@ -233,6 +240,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             itcClass,
             itcEligible,
             lines,
+            miscPreGst,
+            miscPostGst,
           }),
         );
       } catch {
@@ -251,6 +260,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     itcClass,
     itcEligible,
     lines,
+    miscPreGst,
+    miscPostGst,
   ]);
   void draftRestored;
 
@@ -292,10 +303,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const partyLedger = useMemo(() => ledgers.find((l) => l.id === partyId), [ledgers, partyId]);
   const interstate = isInterstate(companyStateCode, placeOfSupply || partyLedger?.state_code);
 
-  // Place of supply is always derived from the party's GSTIN/state — no manual override.
+  // Place of supply auto-derives from party state code; user may override (e.g. for an
+  // out-of-Gujarat supplier where the GSTIN isn't captured — toggle PoS to force IGST).
   useEffect(() => {
+    if (posOverridden) return;
     setPlaceOfSupply(partyLedger?.state_code ?? "");
-  }, [partyLedger]);
+  }, [partyLedger, posOverridden]);
 
   const deferredLines = useDeferredValue(lines);
   const computed: GstLineResult[] = useMemo(
@@ -314,14 +327,43 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     [deferredLines, interstate],
   );
   const rawTotals = useMemo(() => sumLines(computed), [computed]);
+  // Misc adjustments: pre-GST is added to taxable and taxed at the weighted-avg line GST rate;
+  // post-GST is added straight to the grand total (folded into round_off on save).
+  const miscPreGstPaise = useMemo(() => rupeesToPaise(parseFloat(miscPreGst) || 0), [miscPreGst]);
+  const miscPostGstPaise = useMemo(() => rupeesToPaise(parseFloat(miscPostGst) || 0), [miscPostGst]);
+  const weightedGstRate = useMemo(() => {
+    const taxable = rawTotals.subtotal_paise;
+    if (taxable <= 0) return 0;
+    const taxAmt = rawTotals.cgst_paise + rawTotals.sgst_paise + rawTotals.igst_paise;
+    return (taxAmt / taxable) * 100;
+  }, [rawTotals]);
+  const miscPreTaxPaise = useMemo(
+    () => Math.round((miscPreGstPaise * weightedGstRate) / 100),
+    [miscPreGstPaise, weightedGstRate],
+  );
+  const adjustedTotals = useMemo(() => {
+    const cgstAdd = interstate ? 0 : Math.floor(miscPreTaxPaise / 2);
+    const sgstAdd = interstate ? 0 : Math.floor(miscPreTaxPaise / 2);
+    const igstAdd = interstate ? miscPreTaxPaise : 0;
+    const taxLeftover = interstate ? 0 : miscPreTaxPaise - cgstAdd - sgstAdd;
+    return {
+      subtotal_paise: rawTotals.subtotal_paise + miscPreGstPaise,
+      cgst_paise: rawTotals.cgst_paise + cgstAdd,
+      sgst_paise: rawTotals.sgst_paise + sgstAdd,
+      igst_paise: rawTotals.igst_paise + igstAdd,
+      rounding_paise: rawTotals.rounding_paise + taxLeftover,
+      total_paise:
+        rawTotals.total_paise + miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise,
+    };
+  }, [rawTotals, miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, interstate]);
   const roundOffPaise = useMemo(() => {
     if (!roundOff) return 0;
-    const rounded = Math.round(rawTotals.total_paise / 100) * 100;
-    return rounded - rawTotals.total_paise;
-  }, [rawTotals.total_paise, roundOff]);
+    const rounded = Math.round(adjustedTotals.total_paise / 100) * 100;
+    return rounded - adjustedTotals.total_paise;
+  }, [adjustedTotals.total_paise, roundOff]);
   const totals = useMemo(
-    () => ({ ...rawTotals, total_paise: rawTotals.total_paise + roundOffPaise }),
-    [rawTotals, roundOffPaise],
+    () => ({ ...adjustedTotals, total_paise: adjustedTotals.total_paise + roundOffPaise }),
+    [adjustedTotals, roundOffPaise],
   );
 
   const updateLine = useCallback((idx: number, patch: Partial<Line>) => {
@@ -448,7 +490,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       interstate,
       itcClass: isPurchaseSide ? itcClass : "na",
       itcEligible: isPurchaseSide ? itcEligible : true,
-      totals: { ...totals, round_off_paise: roundOffPaise },
+      totals: { ...totals, round_off_paise: roundOffPaise + miscPostGstPaise },
       lines: lines
         .map((l, i) => ({ l, c: computed[i] }))
         .filter((x) => x.l.item_id && x.c?.total_paise > 0),
@@ -459,6 +501,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setRefNo("");
     setNarration("");
     setLines([blankLine()]);
+    setMiscPreGst("0");
+    setMiscPostGst("0");
     setFocusedLine(0);
     setSavedTick((n) => n + 1);
     if (draftKey) {
@@ -602,8 +646,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     interstate,
     totals,
     roundOffPaise,
+    miscPostGstPaise,
     placeOfSupply,
     cfg,
+    isPurchaseSide,
+    itcClass,
+    itcEligible,
   ]);
 
   const save = useCallback(() => {
@@ -763,12 +811,29 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onCreate={() => setLedgerDlg({ open: true, editId: null })}
                   createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
                 />
-                {partyLedger?.state_code && (
-                  <p className="text-[11px] text-muted-foreground">
-                    PoS: <span className="font-medium">{partyLedger.state_code}</span>{" "}
-                    (auto from GSTIN)
-                  </p>
-                )}
+                <div className="flex items-center gap-1.5 pt-0.5">
+                  <span className="text-[11px] text-muted-foreground">PoS</span>
+                  <Input
+                    value={placeOfSupply}
+                    onChange={(e) => {
+                      setPosOverridden(true);
+                      setPlaceOfSupply(e.target.value.replace(/\D/g, "").slice(0, 2));
+                    }}
+                    onBlur={(e) => {
+                      if (!e.target.value && partyLedger?.state_code) {
+                        setPosOverridden(false);
+                      }
+                    }}
+                    placeholder="--"
+                    maxLength={2}
+                    className="h-6 w-12 px-1.5 text-center text-xs font-mono"
+                    title="State code (2 digits). Different from company state → IGST."
+                  />
+                  <span className="text-[11px] text-muted-foreground">
+                    {interstate ? "→ IGST (interstate)" : "→ CGST+SGST"}
+                    {posOverridden && " · overridden"}
+                  </span>
+                </div>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reference No.</Label>
@@ -864,6 +929,40 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   <Row label="CGST" value={formatINR(totals.cgst_paise)} />
                   <Row label="SGST" value={formatINR(totals.sgst_paise)} />
                 </>
+              )}
+              <div className="my-2 border-t" />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-[11px] text-muted-foreground">
+                    Misc. charge (pre-GST)
+                  </Label>
+                  <Input
+                    value={miscPreGst}
+                    onChange={(e) => setMiscPreGst(e.target.value.replace(/[^0-9.\-]/g, ""))}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="h-8 text-right font-mono"
+                    inputMode="decimal"
+                    title="Added to taxable; taxed at weighted-avg GST of lines"
+                  />
+                </div>
+                <div className="space-y-0.5">
+                  <Label className="text-[11px] text-muted-foreground">
+                    Misc. charge (post-GST)
+                  </Label>
+                  <Input
+                    value={miscPostGst}
+                    onChange={(e) => setMiscPostGst(e.target.value.replace(/[^0-9.\-]/g, ""))}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="h-8 text-right font-mono"
+                    inputMode="decimal"
+                    title="Added straight to the grand total (no GST)"
+                  />
+                </div>
+              </div>
+              {(miscPreGstPaise !== 0 || miscPostGstPaise !== 0) && (
+                <div className="text-[11px] text-muted-foreground">
+                  Adj: {formatINR(miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise)} added
+                </div>
               )}
               <div className="my-2 border-t" />
               <div className="flex items-center justify-between text-xs">

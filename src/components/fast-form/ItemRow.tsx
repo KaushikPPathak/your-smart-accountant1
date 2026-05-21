@@ -12,7 +12,7 @@ import {
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Combo } from "@/components/vouchers/Combo";
 import { GST_RATES } from "@/lib/constants";
-import { formatINR } from "@/lib/money";
+
 import { useFocusHints } from "./FocusHints";
 
 export interface ItemRowData {
@@ -263,7 +263,41 @@ function ItemRowImpl({
           </Select>
         </TableCell>
       )}
-      <TableCell className="text-right font-mono text-sm">{formatINR(amountPaise)}</TableCell>
+      <TableCell className="text-right">
+        <Input
+          key={`amt-${row.id}-${amountPaise}`}
+          className="h-9 w-28 text-right font-mono text-foreground"
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          maxLength={14}
+          defaultValue={(amountPaise / 100).toFixed(2)}
+          onFocus={(e) => e.currentTarget.select()}
+          title="Type a final amount (incl. GST) to back-calculate the rate"
+          onBlur={(e) => {
+            const v = parseFloat(cleanDecimal(e.target.value));
+            if (!isFinite(v) || v < 0) return;
+            const qty = parseFloat(row.qty) || 0;
+            if (qty <= 0) return;
+            const gst = parseFloat(row.gst_rate) || 0;
+            const disc = parseFloat(row.discount) || 0;
+            const targetPaise = Math.round(v * 100);
+            if (targetPaise === amountPaise) return;
+            const taxablePaise = Math.round(targetPaise / (1 + gst / 100));
+            const discPaise = Math.round(disc * 100);
+            const ratePaisePerUnit = (taxablePaise + discPaise) / qty;
+            const rate = (ratePaisePerUnit / 100).toFixed(4).replace(/\.?0+$/, "");
+            onCommit(idx, { rate: rate || "0" });
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              (e.target as HTMLInputElement).blur();
+              onAdvanceToNextRow?.(idx);
+            }
+          }}
+        />
+      </TableCell>
       <TableCell>
         <Button
           variant="ghost"
