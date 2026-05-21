@@ -242,9 +242,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   );
 
   const updateLine = useCallback((idx: number, patch: Partial<Line>) => {
-    startTransition(() => {
-      setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
-    });
+    setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
   }, []);
   const onPickItem = useCallback((idx: number, itemId: string) => {
     startTransition(() => {
