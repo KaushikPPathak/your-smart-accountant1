@@ -112,7 +112,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
   const partyLabel = kind === "sales" ? "Customer" : "Supplier";
   const billLabel = kind === "sales" ? "Invoice No." : "Bill No.";
   const billDateLabel = kind === "sales" ? "Invoice Date" : "Bill Date";
-  const showQtyUnit = kind === "purchase";
+  const showQtyUnit = true;
   const qtyUnitText = (x: Row) => {
     const byUnit = new Map<string, number>();
     for (const line of x.voucher_items || []) {
