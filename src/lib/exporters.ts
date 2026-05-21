@@ -2,15 +2,19 @@
 // Files are routed through the desktop saver — in the .exe they land in
 // Documents/YourMehtaji/Exports/<Company>/<subFolder>/ and auto-open;
 // in the browser they fall back to a normal download.
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+//
+// IMPORTANT: jspdf / jspdf-autotable / xlsx are HEAVY (~600 KB combined).
+// They are loaded dynamically inside the export functions so the initial
+// app bundle stays small. This file is statically imported by many report
+// routes; keep the top-level imports type-only.
+import type * as XLSXType from "xlsx";
 import { saveExport } from "./desktop-save";
 import { getStoredLang } from "@/lib/i18n";
 import { prepareReportFont } from "@/lib/pdf-fonts";
 import { tReportLabel } from "@/lib/report-i18n";
 import { tReportText } from "@/lib/report-i18n-rules";
 import { promoteRows } from "@/lib/export-format";
+
 
 function localizeExportText(text: string, lang = getStoredLang()): string {
   if (!text) return text;
