@@ -2,11 +2,24 @@
 // PDFs → pdfjs-dist (text layer); falls back to Tesseract OCR per page if no text.
 // Images (PNG/JPG/etc) → Tesseract OCR.
 // Bundled assets so the desktop .exe works with zero internet.
-import * as pdfjsLib from "pdfjs-dist";
-import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { createWorker, type Worker as TWorker } from "tesseract.js";
+//
+// pdfjs-dist and tesseract.js are HEAVY (>2 MB combined including WASM/worker).
+// They are dynamically imported the first time OCR/PDF extraction is invoked
+// so the initial app bundle stays small.
+import type * as pdfjsLib from "pdfjs-dist";
+import type { Worker as TWorker } from "tesseract.js";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+let _pdfjs: typeof pdfjsLib | null = null;
+async function getPdfjs(): Promise<typeof pdfjsLib> {
+  if (_pdfjs) return _pdfjs;
+  const [mod, workerMod] = await Promise.all([
+    import("pdfjs-dist"),
+    import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
+  ]);
+  mod.GlobalWorkerOptions.workerSrc = (workerMod as { default: string }).default;
+  _pdfjs = mod;
+  return mod;
+}
 
 export interface OcrProgress {
   stage: "loading" | "pdf-text" | "ocr" | "done";
@@ -20,6 +33,7 @@ export type OcrProgressCb = (p: OcrProgress) => void;
 let _worker: TWorker | null = null;
 async function getWorker(onProgress?: OcrProgressCb): Promise<TWorker> {
   if (_worker) return _worker;
+  const { createWorker } = await import("tesseract.js");
   _worker = await createWorker("eng", 1, {
     logger: (m: { status: string; progress: number }) => {
       if (onProgress && (m.status === "recognizing text" || m.status === "loading"))
@@ -28,6 +42,7 @@ async function getWorker(onProgress?: OcrProgressCb): Promise<TWorker> {
   });
   return _worker;
 }
+
 
 /** Render a PDF page to a canvas at 2× scale and return as ImageData URL for Tesseract. */
 async function pageToImageData(page: pdfjsLib.PDFPageProxy): Promise<HTMLCanvasElement> {
