@@ -202,7 +202,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if (d.partyId) setPartyId(d.partyId);
       if (d.refNo) setRefNo(d.refNo);
       if (d.narration) setNarration(d.narration);
-      if (d.placeOfSupply) setPlaceOfSupply(d.placeOfSupply);
+      
       if (typeof d.roundOff === "boolean") setRoundOff(d.roundOff);
       if (d.itcClass) setItcClass(d.itcClass);
       if (typeof d.itcEligible === "boolean") setItcEligible(d.itcEligible);
