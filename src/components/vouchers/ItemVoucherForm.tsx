@@ -923,6 +923,40 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 </>
               )}
               <div className="my-2 border-t" />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-[11px] text-muted-foreground">
+                    Misc. charge (pre-GST)
+                  </Label>
+                  <Input
+                    value={miscPreGst}
+                    onChange={(e) => setMiscPreGst(e.target.value.replace(/[^0-9.\-]/g, ""))}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="h-8 text-right font-mono"
+                    inputMode="decimal"
+                    title="Added to taxable; taxed at weighted-avg GST of lines"
+                  />
+                </div>
+                <div className="space-y-0.5">
+                  <Label className="text-[11px] text-muted-foreground">
+                    Misc. charge (post-GST)
+                  </Label>
+                  <Input
+                    value={miscPostGst}
+                    onChange={(e) => setMiscPostGst(e.target.value.replace(/[^0-9.\-]/g, ""))}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="h-8 text-right font-mono"
+                    inputMode="decimal"
+                    title="Added straight to the grand total (no GST)"
+                  />
+                </div>
+              </div>
+              {(miscPreGstPaise !== 0 || miscPostGstPaise !== 0) && (
+                <div className="text-[11px] text-muted-foreground">
+                  Adj: {formatINR(miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise)} added
+                </div>
+              )}
+              <div className="my-2 border-t" />
               <div className="flex items-center justify-between text-xs">
                 <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer">
                   <input
