@@ -298,11 +298,11 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Opening date (posting)</Label>
-            <Input
-              type="date"
-              className="h-9 w-44"
+            <FyDatePicker
               value={openingDate}
-              onChange={(e) => setOpeningDate(e.target.value)}
+              onChange={setOpeningDate}
+              unrestricted
+              className="w-44"
             />
             {asOfDate ? (
               <div className="text-[11px] text-muted-foreground">
