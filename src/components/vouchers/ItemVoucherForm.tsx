@@ -727,7 +727,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 refreshKey={savedTick}
               />
             </div>
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
                 <Label>Date</Label>
                 <FyDatePicker value={date} onChange={setDate} />
@@ -769,6 +769,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onCreate={() => setLedgerDlg({ open: true, editId: null })}
                   createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
                 />
+                {partyLedger?.state_code && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Place of Supply: <span className="font-medium">{partyLedger.state_code}</span>{" "}
+                    (auto from party GSTIN)
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label>Reference No.</Label>
@@ -777,21 +783,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onChange={(e) => setRefNo(e.target.value)}
                   placeholder="PO / Bill no."
                 />
-              </div>
-              <div className="space-y-1">
-                <Label>Place of Supply</Label>
-                <Select value={placeOfSupply} onValueChange={setPlaceOfSupply}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select state" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {INDIAN_STATES.map((s) => (
-                      <SelectItem key={s.code} value={s.code}>
-                        {s.code} — {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
             {isPurchaseSide && (
