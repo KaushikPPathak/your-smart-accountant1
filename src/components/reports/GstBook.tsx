@@ -352,25 +352,21 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>{billLabel}</TableHead>
-                    <TableHead>{billDateLabel}</TableHead>
+                    <TableHead className="w-[90px]">Date</TableHead>
+                    <TableHead className="w-[110px]">{billLabel}</TableHead>
                     <TableHead>{partyLabel}</TableHead>
-                    <TableHead>GSTIN</TableHead>
-                    {showQtyUnit && <TableHead>Qty / Unit</TableHead>}
-                    <TableHead>POS</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Taxable</TableHead>
-                    <TableHead className="text-right">CGST</TableHead>
-                    <TableHead className="text-right">SGST</TableHead>
-                    <TableHead className="text-right">IGST</TableHead>
-                    <TableHead className="text-right">Invoice Total</TableHead>
+                    {showQtyUnit && <TableHead className="w-[110px]">Qty / Unit</TableHead>}
+                    <TableHead className="w-[110px] text-right">Taxable</TableHead>
+                    <TableHead className="w-[95px] text-right">CGST</TableHead>
+                    <TableHead className="w-[95px] text-right">SGST</TableHead>
+                    <TableHead className="w-[95px] text-right">IGST</TableHead>
+                    <TableHead className="w-[115px] text-right">Invoice Total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                         No entries in this period.
                       </TableCell>
                     </TableRow>
@@ -385,26 +381,20 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                             ? x.voucher_number
                             : x.vendor_invoice_no || x.voucher_number}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {fmtIndianDate(
-                            kind === "sales"
-                              ? x.voucher_date
-                              : x.vendor_invoice_date || x.voucher_date,
+                        <TableCell>
+                          <div className="truncate max-w-[280px]">{x.ledgers?.name || "—"}</div>
+                          {x.ledgers?.gstin && (
+                            <div className="font-mono text-[10px] text-muted-foreground">
+                              {x.ledgers.gstin}
+                              {x.is_interstate ? " · Inter" : " · Intra"}
+                            </div>
                           )}
                         </TableCell>
-                        <TableCell>{x.ledgers?.name || "—"}</TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {x.ledgers?.gstin || "—"}
-                        </TableCell>
                         {showQtyUnit && (
-                          <TableCell className="font-mono text-xs">{qtyUnitText(x)}</TableCell>
+                          <TableCell className="font-mono text-xs whitespace-nowrap">
+                            {qtyUnitText(x)}
+                          </TableCell>
                         )}
-                        <TableCell className="text-xs">
-                          {x.place_of_supply_code || x.ledgers?.state_code || "—"}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {x.is_interstate ? "Inter" : "Intra"}
-                        </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {formatINR(x.subtotal_paise)}
                         </TableCell>
@@ -427,7 +417,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                 {rows.length > 0 && (
                   <tfoot>
                     <TableRow className="font-semibold border-t-2">
-                      <TableCell colSpan={showQtyUnit ? 8 : 7} className="text-right">
+                      <TableCell colSpan={showQtyUnit ? 4 : 3} className="text-right">
                         Totals
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
