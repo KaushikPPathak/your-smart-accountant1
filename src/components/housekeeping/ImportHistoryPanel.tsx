@@ -200,11 +200,11 @@ export function ImportHistoryPanel({ companyId, disabled }: Props) {
             </div>
             <div>
               <Label className="text-xs">From</Label>
-              <Input type="date" value={bulkFrom} onChange={(e) => setBulkFrom(e.target.value)} className="w-40" />
+              <FyDatePicker value={bulkFrom} onChange={setBulkFrom} unrestricted className="w-40" />
             </div>
             <div>
               <Label className="text-xs">To</Label>
-              <Input type="date" value={bulkTo} onChange={(e) => setBulkTo(e.target.value)} className="w-40" />
+              <FyDatePicker value={bulkTo} onChange={setBulkTo} unrestricted className="w-40" />
             </div>
             <AlertDialog>
               <AlertDialogTrigger asChild>
