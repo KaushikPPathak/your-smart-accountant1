@@ -892,12 +892,42 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 )}
               </div>
               <div className="space-y-1">
-                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reference No.</Label>
-                <Input
-                  value={refNo}
-                  onChange={(e) => setRefNo(e.target.value)}
-                  placeholder="PO / Bill no."
-                />
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {isNote
+                    ? voucherType === "credit_note"
+                      ? "Against Sales Invoice"
+                      : "Against Purchase Bill"
+                    : "Reference No."}
+                </Label>
+                {isNote ? (
+                  <Combo
+                    value={originalVoucherId ?? ""}
+                    onChange={(id) => {
+                      setOriginalVoucherId(id || null);
+                      const inv = originalInvoices.find((x) => x.id === id);
+                      setRefNo(inv?.voucher_number ?? "");
+                    }}
+                    options={originalInvoices.map((v) => ({
+                      value: v.id,
+                      label: v.voucher_number,
+                      hint: `${v.voucher_date} · ₹${(v.total_paise / 100).toFixed(2)}`,
+                    }))}
+                    placeholder={
+                      partyId
+                        ? originalInvoices.length === 0
+                          ? "No invoices for this party"
+                          : "Select original bill"
+                        : "Select party first"
+                    }
+                    emptyText="No matching invoice"
+                  />
+                ) : (
+                  <Input
+                    value={refNo}
+                    onChange={(e) => setRefNo(e.target.value)}
+                    placeholder="PO / Bill no."
+                  />
+                )}
               </div>
               <div className="md:pb-0.5">
                 <NextVoucherNumberCard
