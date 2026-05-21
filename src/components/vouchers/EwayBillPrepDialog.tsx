@@ -380,7 +380,7 @@ export function EwayBillPrepDialog({
                 <Field label="Transporter Name"><Input value={transporterName} onChange={(e) => setTransporterName(e.target.value)} /></Field>
                 <Field label="Transporter ID (GSTIN/TRANSIN)"><Input value={transporterId} onChange={(e) => setTransporterId(e.target.value.toUpperCase())} /></Field>
                 <Field label="LR / Doc No."><Input value={transDocNo} onChange={(e) => setTransDocNo(e.target.value)} /></Field>
-                <Field label="LR Date"><Input type="date" value={transDocDate} onChange={(e) => setTransDocDate(e.target.value)} /></Field>
+                <Field label="LR Date"><FyDatePicker value={transDocDate} onChange={setTransDocDate} /></Field>
               </div>
             </div>
 
