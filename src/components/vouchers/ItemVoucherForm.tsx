@@ -803,12 +803,29 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onCreate={() => setLedgerDlg({ open: true, editId: null })}
                   createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
                 />
-                {partyLedger?.state_code && (
-                  <p className="text-[11px] text-muted-foreground">
-                    PoS: <span className="font-medium">{partyLedger.state_code}</span>{" "}
-                    (auto from GSTIN)
-                  </p>
-                )}
+                <div className="flex items-center gap-1.5 pt-0.5">
+                  <span className="text-[11px] text-muted-foreground">PoS</span>
+                  <Input
+                    value={placeOfSupply}
+                    onChange={(e) => {
+                      setPosOverridden(true);
+                      setPlaceOfSupply(e.target.value.replace(/\D/g, "").slice(0, 2));
+                    }}
+                    onBlur={(e) => {
+                      if (!e.target.value && partyLedger?.state_code) {
+                        setPosOverridden(false);
+                      }
+                    }}
+                    placeholder="--"
+                    maxLength={2}
+                    className="h-6 w-12 px-1.5 text-center text-xs font-mono"
+                    title="State code (2 digits). Different from company state → IGST."
+                  />
+                  <span className="text-[11px] text-muted-foreground">
+                    {interstate ? "→ IGST (interstate)" : "→ CGST+SGST"}
+                    {posOverridden && " · overridden"}
+                  </span>
+                </div>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reference No.</Label>
