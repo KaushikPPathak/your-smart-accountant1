@@ -64,7 +64,7 @@ const SUGGESTIONS = [
 
 export function AssistantChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
-  const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [activeCat, setActiveCat] = useState<KbEntry["category"] | "All">("All");
   const navigate = useNavigate();
   const { setTheme } = useTheme();
