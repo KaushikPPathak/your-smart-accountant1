@@ -62,6 +62,7 @@ function ItemRowImpl({
   onEditItemDlg,
   onAdvanceToNextRow,
   showDescription = true,
+  showGstColumn = true,
 }: Props) {
   const { setHints, clearHints } = useFocusHints();
   const zone = `item-row`;
