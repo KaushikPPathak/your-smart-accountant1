@@ -1,7 +1,14 @@
 import { fmtIndianDate } from "@/lib/format-date";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -30,7 +37,12 @@ interface Row {
   igst_paise: number;
   round_off_paise: number;
   total_paise: number;
-  ledgers: { name: string; gstin: string | null; state: string | null; state_code: string | null } | null;
+  ledgers: {
+    name: string;
+    gstin: string | null;
+    state: string | null;
+    state_code: string | null;
+  } | null;
   voucher_items?: { qty: number; items: { unit: string | null } | null }[];
 }
 
@@ -41,7 +53,8 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
   const [rows, setRows] = useState<Row[]>([]);
   const { view, setView } = useReportView(`gst-${kind}-book`);
 
-  const types: VoucherType[] = kind === "sales" ? ["sales", "credit_note"] : ["purchase", "debit_note"];
+  const types: VoucherType[] =
+    kind === "sales" ? ["sales", "credit_note"] : ["purchase", "debit_note"];
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -55,14 +68,16 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
         .in("voucher_type", types)
         .gte("voucher_date", from)
         .lte("voucher_date", to)
-        .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true });
+        .order("voucher_date", { ascending: true })
+        .order("voucher_number", { ascending: true });
       // GST Sales/Purchase Book = goods only (trading stock).
       // Per GST law & accounting principles: capital goods (fixed_asset) and
       // GST-bearing expenses (expense_indirect) are tracked separately and
       // surface only in GSTR-3B / GSTR-9 ITC tables — never in the books here.
-      const goodsTypes = kind === "sales"
-        ? new Set(["income_direct"])
-        : new Set(["expense_direct", "stock_in_hand"]);
+      const goodsTypes =
+        kind === "sales"
+          ? new Set(["income_direct"])
+          : new Set(["expense_direct", "stock_in_hand"]);
       type Row2 = Row & {
         voucher_entries?: { ledgers: { type: string } | null }[];
         voucher_items?: { id: string; qty: number; items: { unit: string | null } | null }[];
@@ -104,13 +119,17 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
       const unit = line.items?.unit || "Qty";
       byUnit.set(unit, (byUnit.get(unit) || 0) + Number(line.qty || 0));
     }
-    return Array.from(byUnit.entries()).map(([unit, qty]) => `${qty} ${unit}`).join(", ") || "—";
+    return (
+      Array.from(byUnit.entries())
+        .map(([unit, qty]) => `${qty} ${unit}`)
+        .join(", ") || "—"
+    );
   };
 
   const tableRows = rows.map((x) => [
     fmtIndianDate(x.voucher_date),
-    kind === "sales" ? x.voucher_number : (x.vendor_invoice_no || x.voucher_number),
-    fmtIndianDate(kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date)),
+    kind === "sales" ? x.voucher_number : x.vendor_invoice_no || x.voucher_number,
+    fmtIndianDate(kind === "sales" ? x.voucher_date : x.vendor_invoice_date || x.voucher_date),
     x.ledgers?.name || "—",
     x.ledgers?.gstin || "—",
     ...(showQtyUnit ? [qtyUnitText(x)] : []),
@@ -159,21 +178,137 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
     });
   };
 
-  const gridColumns: DGColumn<Row>[] = useMemo(() => [
-    { id: "date", header: "Date", type: "date", width: 110, accessor: (x) => x.voucher_date, cell: (x) => fmtIndianDate(x.voucher_date) },
-    { id: "billNo", header: billLabel, type: "text", width: 130, accessor: (x) => kind === "sales" ? x.voucher_number : (x.vendor_invoice_no || x.voucher_number) },
-    { id: "billDate", header: billDateLabel, type: "date", width: 110, accessor: (x) => kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date), cell: (x) => fmtIndianDate(kind === "sales" ? x.voucher_date : (x.vendor_invoice_date || x.voucher_date)) },
-    { id: "party", header: partyLabel, type: "text", width: 220, accessor: (x) => x.ledgers?.name ?? "", groupable: true, cell: (x) => x.ledgers?.name ?? "—" },
-    { id: "gstin", header: "GSTIN", type: "text", width: 150, accessor: (x) => x.ledgers?.gstin ?? "" },
-    ...(showQtyUnit ? [{ id: "qty", header: "Qty / Unit", type: "text" as const, width: 130, accessor: qtyUnitText }] : []),
-    { id: "pos", header: "POS", type: "text", width: 80, accessor: (x) => x.place_of_supply_code || x.ledgers?.state_code || "", groupable: true },
-    { id: "type", header: "Type", type: "enum", width: 80, accessor: (x) => x.is_interstate ? "Inter" : "Intra", groupable: true },
-    { id: "taxable", header: "Taxable", type: "number", width: 130, align: "right", accessor: (x) => x.subtotal_paise / 100, cell: (x) => formatINR(x.subtotal_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-    { id: "cgst", header: "CGST", type: "number", width: 110, align: "right", accessor: (x) => x.cgst_paise / 100, cell: (x) => formatINR(x.cgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-    { id: "sgst", header: "SGST", type: "number", width: 110, align: "right", accessor: (x) => x.sgst_paise / 100, cell: (x) => formatINR(x.sgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-    { id: "igst", header: "IGST", type: "number", width: 110, align: "right", accessor: (x) => x.igst_paise / 100, cell: (x) => formatINR(x.igst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-    { id: "total", header: "Invoice Total", type: "number", width: 140, align: "right", accessor: (x) => x.total_paise / 100, cell: (x) => formatINR(x.total_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-  ], [kind, billLabel, billDateLabel, partyLabel, showQtyUnit]);
+  const gridColumns: DGColumn<Row>[] = useMemo(
+    () => [
+      {
+        id: "date",
+        header: "Date",
+        type: "date",
+        width: 110,
+        accessor: (x) => x.voucher_date,
+        cell: (x) => fmtIndianDate(x.voucher_date),
+      },
+      {
+        id: "billNo",
+        header: billLabel,
+        type: "text",
+        width: 130,
+        accessor: (x) =>
+          kind === "sales" ? x.voucher_number : x.vendor_invoice_no || x.voucher_number,
+      },
+      {
+        id: "billDate",
+        header: billDateLabel,
+        type: "date",
+        width: 110,
+        accessor: (x) =>
+          kind === "sales" ? x.voucher_date : x.vendor_invoice_date || x.voucher_date,
+        cell: (x) =>
+          fmtIndianDate(
+            kind === "sales" ? x.voucher_date : x.vendor_invoice_date || x.voucher_date,
+          ),
+      },
+      {
+        id: "party",
+        header: partyLabel,
+        type: "text",
+        width: 220,
+        accessor: (x) => x.ledgers?.name ?? "",
+        groupable: true,
+        cell: (x) => x.ledgers?.name ?? "—",
+      },
+      {
+        id: "gstin",
+        header: "GSTIN",
+        type: "text",
+        width: 150,
+        accessor: (x) => x.ledgers?.gstin ?? "",
+      },
+      ...(showQtyUnit
+        ? [
+            {
+              id: "qty",
+              header: "Qty / Unit",
+              type: "text" as const,
+              width: 130,
+              accessor: qtyUnitText,
+            },
+          ]
+        : []),
+      {
+        id: "pos",
+        header: "POS",
+        type: "text",
+        width: 80,
+        accessor: (x) => x.place_of_supply_code || x.ledgers?.state_code || "",
+        groupable: true,
+      },
+      {
+        id: "type",
+        header: "Type",
+        type: "enum",
+        width: 80,
+        accessor: (x) => (x.is_interstate ? "Inter" : "Intra"),
+        groupable: true,
+      },
+      {
+        id: "taxable",
+        header: "Taxable",
+        type: "number",
+        width: 130,
+        align: "right",
+        accessor: (x) => x.subtotal_paise / 100,
+        cell: (x) => formatINR(x.subtotal_paise),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+      {
+        id: "cgst",
+        header: "CGST",
+        type: "number",
+        width: 110,
+        align: "right",
+        accessor: (x) => x.cgst_paise / 100,
+        cell: (x) => formatINR(x.cgst_paise),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+      {
+        id: "sgst",
+        header: "SGST",
+        type: "number",
+        width: 110,
+        align: "right",
+        accessor: (x) => x.sgst_paise / 100,
+        cell: (x) => formatINR(x.sgst_paise),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+      {
+        id: "igst",
+        header: "IGST",
+        type: "number",
+        width: 110,
+        align: "right",
+        accessor: (x) => x.igst_paise / 100,
+        cell: (x) => formatINR(x.igst_paise),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+      {
+        id: "total",
+        header: "Invoice Total",
+        type: "number",
+        width: 140,
+        align: "right",
+        accessor: (x) => x.total_paise / 100,
+        cell: (x) => formatINR(x.total_paise),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+    ],
+    [kind, billLabel, billDateLabel, partyLabel, showQtyUnit],
+  );
 
   return (
     <div className="space-y-3">
@@ -190,7 +325,9 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
             onExportPdf={onPdf}
             onPrint={() => window.print()}
           />
-          <div className="mt-2"><ViewSwitcher view={view} onChange={setView} /></div>
+          <div className="mt-2">
+            <ViewSwitcher view={view} onChange={setView} />
+          </div>
         </CardContent>
       </Card>
 
@@ -201,7 +338,9 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
               reportId={`gst-${kind}-book`}
               rows={rows}
               columns={gridColumns}
-              globalSearch={(x) => `${x.voucher_number} ${x.vendor_invoice_no ?? ""} ${x.ledgers?.name ?? ""} ${x.ledgers?.gstin ?? ""}`}
+              globalSearch={(x) =>
+                `${x.voucher_number} ${x.vendor_invoice_no ?? ""} ${x.ledgers?.name ?? ""} ${x.ledgers?.gstin ?? ""}`
+              }
               height={520}
             />
           </CardContent>
@@ -238,23 +377,49 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                   ) : (
                     rows.map((x) => (
                       <TableRow key={x.id}>
-                        <TableCell className="whitespace-nowrap">{fmtIndianDate(x.voucher_date)}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {fmtIndianDate(x.voucher_date)}
+                        </TableCell>
                         <TableCell className="font-mono text-xs">
-                          {kind === "sales" ? x.voucher_number : x.vendor_invoice_no || x.voucher_number}
+                          {kind === "sales"
+                            ? x.voucher_number
+                            : x.vendor_invoice_no || x.voucher_number}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          {fmtIndianDate(kind === "sales" ? x.voucher_date : x.vendor_invoice_date || x.voucher_date)}
+                          {fmtIndianDate(
+                            kind === "sales"
+                              ? x.voucher_date
+                              : x.vendor_invoice_date || x.voucher_date,
+                          )}
                         </TableCell>
                         <TableCell>{x.ledgers?.name || "—"}</TableCell>
-                        <TableCell className="font-mono text-xs">{x.ledgers?.gstin || "—"}</TableCell>
-                        {showQtyUnit && <TableCell className="font-mono text-xs">{qtyUnitText(x)}</TableCell>}
-                        <TableCell className="text-xs">{x.place_of_supply_code || x.ledgers?.state_code || "—"}</TableCell>
-                        <TableCell className="text-xs">{x.is_interstate ? "Inter" : "Intra"}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatINR(x.subtotal_paise)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatINR(x.cgst_paise)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatINR(x.sgst_paise)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatINR(x.igst_paise)}</TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">{formatINR(x.total_paise)}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {x.ledgers?.gstin || "—"}
+                        </TableCell>
+                        {showQtyUnit && (
+                          <TableCell className="font-mono text-xs">{qtyUnitText(x)}</TableCell>
+                        )}
+                        <TableCell className="text-xs">
+                          {x.place_of_supply_code || x.ledgers?.state_code || "—"}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {x.is_interstate ? "Inter" : "Intra"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatINR(x.subtotal_paise)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatINR(x.cgst_paise)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatINR(x.sgst_paise)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatINR(x.igst_paise)}
+                        </TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {formatINR(x.total_paise)}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -262,12 +427,24 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                 {rows.length > 0 && (
                   <tfoot>
                     <TableRow className="font-semibold border-t-2">
-                      <TableCell colSpan={showQtyUnit ? 8 : 7} className="text-right">Totals</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatINR(totals.taxable)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatINR(totals.cgst)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatINR(totals.sgst)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatINR(totals.igst)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatINR(totals.total)}</TableCell>
+                      <TableCell colSpan={showQtyUnit ? 8 : 7} className="text-right">
+                        Totals
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatINR(totals.taxable)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatINR(totals.cgst)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatINR(totals.sgst)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatINR(totals.igst)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatINR(totals.total)}
+                      </TableCell>
                     </TableRow>
                   </tfoot>
                 )}
