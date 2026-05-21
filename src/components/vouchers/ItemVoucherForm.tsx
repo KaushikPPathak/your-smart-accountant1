@@ -638,8 +638,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     interstate,
     totals,
     roundOffPaise,
+    miscPostGstPaise,
     placeOfSupply,
     cfg,
+    isPurchaseSide,
+    itcClass,
+    itcEligible,
   ]);
 
   const save = useCallback(() => {
