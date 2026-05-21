@@ -390,16 +390,15 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Number</TableHead>
+                  <TableHead className="w-[90px]">Date</TableHead>
+                  <TableHead className="w-[110px]">Number</TableHead>
                   <TableHead>Party</TableHead>
-                  <TableHead>GSTIN</TableHead>
-                  {showQtyUnit && <TableHead>Qty / Unit</TableHead>}
-                  <TableHead className="text-right">Taxable</TableHead>
-                  <TableHead className="text-right">CGST</TableHead>
-                  <TableHead className="text-right">SGST</TableHead>
-                  <TableHead className="text-right">IGST</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
+                  {showQtyUnit && <TableHead className="w-[110px]">Qty / Unit</TableHead>}
+                  <TableHead className="w-[110px] text-right">Taxable</TableHead>
+                  <TableHead className="w-[95px] text-right">CGST</TableHead>
+                  <TableHead className="w-[95px] text-right">SGST</TableHead>
+                  <TableHead className="w-[95px] text-right">IGST</TableHead>
+                  <TableHead className="w-[115px] text-right">Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -410,12 +409,22 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                     onClick={() => openVoucherDetail(navigate, x.id)}
                     title="Click to edit"
                   >
-                    <TableCell>{fmtIndianDate(x.voucher_date)}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {fmtIndianDate(x.voucher_date)}
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{x.voucher_number}</TableCell>
-                    <TableCell>{x.ledgers?.name ?? "—"}</TableCell>
-                    <TableCell className="font-mono text-xs">{x.ledgers?.gstin ?? "—"}</TableCell>
+                    <TableCell>
+                      <div className="truncate max-w-[280px]">{x.ledgers?.name ?? "—"}</div>
+                      {x.ledgers?.gstin && (
+                        <div className="font-mono text-[10px] text-muted-foreground">
+                          {x.ledgers.gstin}
+                        </div>
+                      )}
+                    </TableCell>
                     {showQtyUnit && (
-                      <TableCell className="font-mono text-xs">{qtyUnitText(x)}</TableCell>
+                      <TableCell className="font-mono text-xs whitespace-nowrap">
+                        {qtyUnitText(x)}
+                      </TableCell>
                     )}
                     <TableCell className="text-right font-mono">
                       {formatINR(x.subtotal_paise)}
@@ -435,7 +444,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                   </TableRow>
                 ))}
                 <TableRow>
-                  <TableCell colSpan={showQtyUnit ? 5 : 4} className="text-right font-semibold">
+                  <TableCell colSpan={showQtyUnit ? 4 : 3} className="text-right font-semibold">
                     TOTAL
                   </TableCell>
                   <TableCell className="text-right font-mono font-semibold">
