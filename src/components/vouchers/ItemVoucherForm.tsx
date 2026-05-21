@@ -63,6 +63,8 @@ interface LedgerOpt {
   name: string;
   type: string;
   state_code: string | null;
+  gstin: string | null;
+  gst_treatment: string | null;
 }
 interface ItemOpt {
   id: string;
