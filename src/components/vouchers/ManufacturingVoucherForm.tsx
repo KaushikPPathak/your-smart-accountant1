@@ -623,11 +623,7 @@ export function ManufacturingVoucherForm() {
             </div>
             <div className="space-y-1">
               <Label>Expiry Date</Label>
-              <Input
-                type="date"
-                value={expiryDate}
-                onChange={(e) => setExpiryDate(e.target.value)}
-              />
+              <FyDatePicker value={expiryDate} onChange={setExpiryDate} unrestricted />
             </div>
           </div>
 
