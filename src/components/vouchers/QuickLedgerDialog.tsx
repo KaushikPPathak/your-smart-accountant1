@@ -15,6 +15,8 @@ export interface QuickLedger {
   name: string;
   type: string;
   state_code: string | null;
+  gstin: string | null;
+  gst_treatment: string | null;
 }
 
 interface Props {
