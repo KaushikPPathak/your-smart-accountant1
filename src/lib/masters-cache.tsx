@@ -118,7 +118,7 @@ export function MastersProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const [lg, it] = await Promise.all([
-        fetchAll<CachedLedger>("ledgers", activeCompanyId, "id, name, type, state_code, is_active"),
+        fetchAll<CachedLedger>("ledgers", activeCompanyId, "id, name, type, state_code, gstin, gst_treatment, is_active"),
         fetchAll<CachedItem>("items", activeCompanyId, "id, name, unit, gst_rate, hsn_code, is_active"),
       ]);
       if (token !== cancelRef.current) return;
