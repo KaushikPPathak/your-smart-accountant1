@@ -222,7 +222,7 @@ function ItemRowImpl({
       <TableCell>
         <Input
           ref={discRef}
-          className="h-9 min-w-24 text-right font-mono text-foreground"
+          className="h-9 w-16 text-right font-mono text-foreground"
           type="text"
           inputMode="decimal"
           autoComplete="off"
