@@ -786,47 +786,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 />
               </div>
             </div>
-            {isPurchaseSide && (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3 mt-3">
-                <div className="space-y-1">
-                  <Label>ITC Class</Label>
-                  <Select value={itcClass} onValueChange={(v) => setItcClass(v as typeof itcClass)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="inputs">Inputs (stock / raw material)</SelectItem>
-                      <SelectItem value="capital_goods">Capital Goods (assets)</SelectItem>
-                      <SelectItem value="input_services">Input Services (expense)</SelectItem>
-                      <SelectItem value="ineligible">Ineligible / Blocked (s.17(5))</SelectItem>
-                      <SelectItem value="na">Not Applicable</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    Used in GSTR-3B 4(A) / 4(D) and GSTR-9 table 6 breakup.
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <Label>ITC Eligible</Label>
-                  <Select
-                    value={itcEligible ? "yes" : "no"}
-                    onValueChange={(v) => setItcEligible(v === "yes")}
-                    disabled={itcClass === "ineligible"}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="yes">Yes — claim credit</SelectItem>
-                      <SelectItem value="no">No — block credit (4D)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    Set "No" for personal use, motor cars, etc. Tax stays in the bill total.
-                  </p>
-                </div>
-              </div>
-            )}
+            {/* ITC class & eligibility are derived from the item ledger group (goods → inputs, capital asset → capital_goods, expenditure → input_services). */}
           </CardContent>
         </Card>
 
