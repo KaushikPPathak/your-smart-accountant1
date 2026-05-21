@@ -568,7 +568,7 @@ function CompaniesPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Financial Year Start</Label>
-                  <FyDatePicker value={form.financial_year_start} onChange={(v) => setForm({ ...form, financial_year_start: v })} unrestricted />
+                  <FyDatePicker value={form.financial_year_start} onChange={(v: string) => setForm({ ...form, financial_year_start: v })} unrestricted />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Phone</Label>
