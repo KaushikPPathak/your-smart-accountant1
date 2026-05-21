@@ -286,6 +286,7 @@ export const ItemRow = memo(ItemRowImpl, (prev, next) => {
     prev.amountPaise === next.amountPaise &&
     prev.items === next.items &&
     prev.canDelete === next.canDelete &&
-    prev.showDescription === next.showDescription
+    prev.showDescription === next.showDescription &&
+    prev.showGstColumn === next.showGstColumn
   );
 });
