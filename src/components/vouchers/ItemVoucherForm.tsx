@@ -136,6 +136,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [itemDlg, setItemDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
   const [ewbDlg, setEwbDlg] = useState<{ open: boolean; voucher: { id: string; company_id: string; voucher_number: string; voucher_date: string; total_paise: number; subtotal_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number; is_interstate: boolean; place_of_supply_code: string | null } | null }>({ open: false, voucher: null });
   const { lock, locked } = usePeriodLock(date);
+  const showLineDescription = voucherType !== "purchase";
 
   // ---------- Draft persistence (so leaving the screen doesn't lose entries) ----------
   const draftKey = activeCompanyId ? `voucher-draft:${activeCompanyId}:${voucherType}` : null;
@@ -249,11 +250,13 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     startTransition(() => {
       setLines((cur) => {
         const it = items.find((x) => x.id === itemId);
-        return cur.map((l, i) =>
+        const updated = cur.map((l, i) =>
           i === idx
             ? { ...l, item_id: itemId, gst_rate: it ? String(it.gst_rate) : l.gst_rate }
             : l,
         );
+        if (itemId && idx === cur.length - 1) return [...updated, blankLine()];
+        return updated;
       });
     });
   }, [items]);
@@ -655,9 +658,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[28%]">Item</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead className="w-20">Qty</TableHead>
+                <TableHead className={showLineDescription ? "w-[28%]" : "w-[42%]"}>Item</TableHead>
+                {showLineDescription && <TableHead>Description</TableHead>}
+                <TableHead className="w-36">Qty / Unit</TableHead>
                 <TableHead className="w-24">Rate</TableHead>
                 <TableHead className="w-20">Disc</TableHead>
                 <TableHead className="w-20">GST %</TableHead>
@@ -681,6 +684,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onAddItemDlg={(idx) => { setFocusedLine(idx); setItemDlg({ open: true, editId: null, lineIdx: idx }); }}
                   onEditItemDlg={(idx, itemId) => { setFocusedLine(idx); setItemDlg({ open: true, editId: itemId, lineIdx: idx }); }}
                   onAdvanceToNextRow={onAdvanceToNextRow}
+                  showDescription={showLineDescription}
                 />
               ))}
             </TableBody>
