@@ -7,6 +7,8 @@ export interface CachedLedger {
   name: string;
   type: string;
   state_code: string | null;
+  gstin: string | null;
+  gst_treatment: string | null;
   is_active: boolean;
 }
 
