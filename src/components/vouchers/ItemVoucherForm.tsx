@@ -319,14 +319,43 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     [deferredLines, interstate],
   );
   const rawTotals = useMemo(() => sumLines(computed), [computed]);
+  // Misc adjustments: pre-GST is added to taxable and taxed at the weighted-avg line GST rate;
+  // post-GST is added straight to the grand total (folded into round_off on save).
+  const miscPreGstPaise = useMemo(() => rupeesToPaise(parseFloat(miscPreGst) || 0), [miscPreGst]);
+  const miscPostGstPaise = useMemo(() => rupeesToPaise(parseFloat(miscPostGst) || 0), [miscPostGst]);
+  const weightedGstRate = useMemo(() => {
+    const taxable = rawTotals.subtotal_paise;
+    if (taxable <= 0) return 0;
+    const taxAmt = rawTotals.cgst_paise + rawTotals.sgst_paise + rawTotals.igst_paise;
+    return (taxAmt / taxable) * 100;
+  }, [rawTotals]);
+  const miscPreTaxPaise = useMemo(
+    () => Math.round((miscPreGstPaise * weightedGstRate) / 100),
+    [miscPreGstPaise, weightedGstRate],
+  );
+  const adjustedTotals = useMemo(() => {
+    const cgstAdd = interstate ? 0 : Math.floor(miscPreTaxPaise / 2);
+    const sgstAdd = interstate ? 0 : Math.floor(miscPreTaxPaise / 2);
+    const igstAdd = interstate ? miscPreTaxPaise : 0;
+    const taxLeftover = interstate ? 0 : miscPreTaxPaise - cgstAdd - sgstAdd;
+    return {
+      subtotal_paise: rawTotals.subtotal_paise + miscPreGstPaise,
+      cgst_paise: rawTotals.cgst_paise + cgstAdd,
+      sgst_paise: rawTotals.sgst_paise + sgstAdd,
+      igst_paise: rawTotals.igst_paise + igstAdd,
+      rounding_paise: rawTotals.rounding_paise + taxLeftover,
+      total_paise:
+        rawTotals.total_paise + miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise,
+    };
+  }, [rawTotals, miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, interstate]);
   const roundOffPaise = useMemo(() => {
     if (!roundOff) return 0;
-    const rounded = Math.round(rawTotals.total_paise / 100) * 100;
-    return rounded - rawTotals.total_paise;
-  }, [rawTotals.total_paise, roundOff]);
+    const rounded = Math.round(adjustedTotals.total_paise / 100) * 100;
+    return rounded - adjustedTotals.total_paise;
+  }, [adjustedTotals.total_paise, roundOff]);
   const totals = useMemo(
-    () => ({ ...rawTotals, total_paise: rawTotals.total_paise + roundOffPaise }),
-    [rawTotals, roundOffPaise],
+    () => ({ ...adjustedTotals, total_paise: adjustedTotals.total_paise + roundOffPaise }),
+    [adjustedTotals, roundOffPaise],
   );
 
   const updateLine = useCallback((idx: number, patch: Partial<Line>) => {
