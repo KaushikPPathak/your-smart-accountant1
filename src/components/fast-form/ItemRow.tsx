@@ -12,7 +12,7 @@ import {
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Combo } from "@/components/vouchers/Combo";
 import { GST_RATES } from "@/lib/constants";
-import { formatINR } from "@/lib/money";
+
 import { useFocusHints } from "./FocusHints";
 
 export interface ItemRowData {
