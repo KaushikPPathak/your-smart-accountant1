@@ -91,7 +91,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
       const unit = line.items?.unit || "Qty";
       byUnit.set(unit, (byUnit.get(unit) || 0) + Number(line.qty || 0));
     }
-    return Array.from(byUnit.entries()).map(([unit, qty]) => `${qty:g} ${unit}`.replace(":g", "")).join(", ") || "—";
+    return Array.from(byUnit.entries()).map(([unit, qty]) => `${qty} ${unit}`).join(", ") || "—";
   };
 
   const gridColumns: DGColumn<VRow>[] = useMemo(() => [
@@ -115,13 +115,14 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
       x.voucher_number,
       x.ledgers?.name ?? "",
       x.ledgers?.gstin ?? "",
+      ...(showQtyUnit ? [qtyUnitText(x)] : []),
       (x.subtotal_paise / 100).toFixed(2),
       (x.cgst_paise / 100).toFixed(2),
       (x.sgst_paise / 100).toFixed(2),
       (x.igst_paise / 100).toFixed(2),
       (x.total_paise / 100).toFixed(2),
     ]),
-    ["TOTAL", "", "", "", (totals.sub / 100).toFixed(2), (totals.cgst / 100).toFixed(2), (totals.sgst / 100).toFixed(2), (totals.igst / 100).toFixed(2), (totals.total / 100).toFixed(2)],
+    ["TOTAL", "", "", "", ...(showQtyUnit ? [""] : []), (totals.sub / 100).toFixed(2), (totals.cgst / 100).toFixed(2), (totals.sgst / 100).toFixed(2), (totals.igst / 100).toFixed(2), (totals.total / 100).toFixed(2)],
     [],
     ["HSN Summary"],
     ["HSN", "Rate %", "Qty", "Taxable", "CGST", "SGST", "IGST"],
@@ -154,13 +155,14 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                   x.voucher_number,
                   x.ledgers?.name ?? "",
                   x.ledgers?.gstin ?? "",
+                  ...(showQtyUnit ? [qtyUnitText(x)] : []),
                   r(x.subtotal_paise).toFixed(2),
                   r(x.cgst_paise).toFixed(2),
                   r(x.sgst_paise).toFixed(2),
                   r(x.igst_paise).toFixed(2),
                   r(x.total_paise).toFixed(2),
                 ]),
-                foot: [["TOTAL", "", "", "", r(totals.sub).toFixed(2), r(totals.cgst).toFixed(2), r(totals.sgst).toFixed(2), r(totals.igst).toFixed(2), r(totals.total).toFixed(2)]],
+                foot: [["TOTAL", "", "", "", ...(showQtyUnit ? [""] : []), r(totals.sub).toFixed(2), r(totals.cgst).toFixed(2), r(totals.sgst).toFixed(2), r(totals.igst).toFixed(2), r(totals.total).toFixed(2)]],
                 fileName: `${slug}-${from}_to_${to}.pdf`,
                 orientation: "l",
                 rightAlignCols: [4, 5, 6, 7, 8],
