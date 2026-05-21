@@ -135,10 +135,12 @@ function ItemRowImpl({
       <TableCell>
         <Input
           ref={qtyRef}
-          className="h-9"
-          type="number"
-          step="0.01"
+          className="h-9 text-right"
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
           defaultValue={row.qty}
+          onFocus={(e) => e.currentTarget.select()}
           onBlur={(e) => onCommit(idx, { qty: e.target.value })}
           onKeyDown={(e) => commitOnEnter(e, "qty")}
         />
@@ -146,10 +148,12 @@ function ItemRowImpl({
       <TableCell>
         <Input
           ref={rateRef}
-          className="h-9"
-          type="number"
-          step="0.01"
+          className="h-9 text-right"
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
           defaultValue={row.rate}
+          onFocus={(e) => e.currentTarget.select()}
           onBlur={(e) => onCommit(idx, { rate: e.target.value })}
           onKeyDown={(e) => commitOnEnter(e, "rate")}
         />
@@ -157,10 +161,12 @@ function ItemRowImpl({
       <TableCell>
         <Input
           ref={discRef}
-          className="h-9"
-          type="number"
-          step="0.01"
+          className="h-9 text-right"
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
           defaultValue={row.discount}
+          onFocus={(e) => e.currentTarget.select()}
           onBlur={(e) => onCommit(idx, { discount: e.target.value })}
           onKeyDown={(e) => commitOnEnter(e, "discount")}
         />
