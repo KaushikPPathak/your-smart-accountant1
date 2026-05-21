@@ -124,7 +124,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
 
   const title = kind === "sales" ? "Sales Register" : "Purchase Register";
   const slug = kind === "sales" ? "sales-register" : "purchase-register";
-  const showQtyUnit = kind === "purchase";
+  const showQtyUnit = true;
   const qtyUnitText = (x: VRow) => {
     const byUnit = new Map<string, number>();
     for (const line of x.voucher_items || []) {
