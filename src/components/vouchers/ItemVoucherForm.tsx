@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, useCallback, useDeferredValue, startTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useDeferredValue,
+  startTransition,
+} from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Pencil, Plus, Save, Truck, UserPlus, X } from "lucide-react";
@@ -17,13 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
@@ -36,13 +37,26 @@ import { useEnterAsTab } from "./useEnterAsTab";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
-import { getAllLedgers, getAllItems, upsertCachedLedger, upsertCachedItem, useMastersVersion } from "@/lib/masters-cache";
+import {
+  getAllLedgers,
+  getAllItems,
+  upsertCachedLedger,
+  upsertCachedItem,
+  useMastersVersion,
+} from "@/lib/masters-cache";
 import { validateItemVoucher } from "@/lib/schemas/voucher";
 import { enqueueSave } from "@/lib/save-queue";
 import { ItemRow, type ItemRowData } from "@/components/fast-form/ItemRow";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
 
-type VoucherType = "sales" | "purchase" | "credit_note" | "debit_note" | "sales_order" | "delivery_note" | "quotation";
+type VoucherType =
+  | "sales"
+  | "purchase"
+  | "credit_note"
+  | "debit_note"
+  | "sales_order"
+  | "delivery_note"
+  | "quotation";
 
 interface LedgerOpt {
   id: string;
@@ -121,9 +135,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [placeOfSupply, setPlaceOfSupply] = useState<string>("");
   const [roundOff, setRoundOff] = useState<boolean>(true);
   const isPurchaseSide = voucherType === "purchase" || voucherType === "debit_note";
-  const [itcClass, setItcClass] = useState<"inputs" | "capital_goods" | "input_services" | "ineligible" | "na">(
-    isPurchaseSide ? "inputs" : "na",
-  );
+  const [itcClass, setItcClass] = useState<
+    "inputs" | "capital_goods" | "input_services" | "ineligible" | "na"
+  >(isPurchaseSide ? "inputs" : "na");
   const [itcEligible, setItcEligible] = useState<boolean>(true);
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
@@ -132,9 +146,31 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [saving, setSaving] = useState(false);
   const [focusedLine, setFocusedLine] = useState<number>(0);
   const [savedTick, setSavedTick] = useState(0);
-  const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null }>({ open: false, editId: null });
-  const [itemDlg, setItemDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
-  const [ewbDlg, setEwbDlg] = useState<{ open: boolean; voucher: { id: string; company_id: string; voucher_number: string; voucher_date: string; total_paise: number; subtotal_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number; is_interstate: boolean; place_of_supply_code: string | null } | null }>({ open: false, voucher: null });
+  const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null }>({
+    open: false,
+    editId: null,
+  });
+  const [itemDlg, setItemDlg] = useState<{
+    open: boolean;
+    editId: string | null;
+    lineIdx: number | null;
+  }>({ open: false, editId: null, lineIdx: null });
+  const [ewbDlg, setEwbDlg] = useState<{
+    open: boolean;
+    voucher: {
+      id: string;
+      company_id: string;
+      voucher_number: string;
+      voucher_date: string;
+      total_paise: number;
+      subtotal_paise: number;
+      cgst_paise: number;
+      sgst_paise: number;
+      igst_paise: number;
+      is_interstate: boolean;
+      place_of_supply_code: string | null;
+    } | null;
+  }>({ open: false, voucher: null });
   const { lock, locked } = usePeriodLock(date);
   const showLineDescription = voucherType !== "purchase";
 
@@ -147,9 +183,15 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       const raw = localStorage.getItem(draftKey);
       if (!raw) return;
       const d = JSON.parse(raw) as Partial<{
-        date: string; partyId: string; refNo: string; narration: string;
-        placeOfSupply: string; roundOff: boolean; itcClass: typeof itcClass;
-        itcEligible: boolean; lines: Line[];
+        date: string;
+        partyId: string;
+        refNo: string;
+        narration: string;
+        placeOfSupply: string;
+        roundOff: boolean;
+        itcClass: typeof itcClass;
+        itcEligible: boolean;
+        lines: Line[];
       }>;
       if (d.date) setDate(d.date);
       if (d.partyId) setPartyId(d.partyId);
@@ -168,7 +210,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   useEffect(() => {
     if (!draftKey) return;
     const hasContent =
-      partyId || refNo || narration ||
+      partyId ||
+      refNo ||
+      narration ||
       lines.some((l) => l.item_id || l.description || l.qty !== "1" || l.rate !== "0");
     if (!hasContent) {
       localStorage.removeItem(draftKey);
@@ -178,26 +222,66 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       try {
         localStorage.setItem(
           draftKey,
-          JSON.stringify({ date, partyId, refNo, narration, placeOfSupply, roundOff, itcClass, itcEligible, lines }),
+          JSON.stringify({
+            date,
+            partyId,
+            refNo,
+            narration,
+            placeOfSupply,
+            roundOff,
+            itcClass,
+            itcEligible,
+            lines,
+          }),
         );
       } catch {
         /* quota — ignore */
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [draftKey, date, partyId, refNo, narration, placeOfSupply, roundOff, itcClass, itcEligible, lines]);
+  }, [
+    draftKey,
+    date,
+    partyId,
+    refNo,
+    narration,
+    placeOfSupply,
+    roundOff,
+    itcClass,
+    itcEligible,
+    lines,
+  ]);
   void draftRestored;
 
   // Load company state once; ledgers + items come from the in-memory masters cache.
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase.from("companies").select("state_code").eq("id", activeCompanyId).single()
+    supabase
+      .from("companies")
+      .select("state_code")
+      .eq("id", activeCompanyId)
+      .single()
       .then(({ data }) => setCompanyStateCode(data?.state_code ?? null));
   }, [activeCompanyId]);
   const mastersVersion = useMastersVersion();
   useEffect(() => {
-    setLedgers(getAllLedgers().map((l) => ({ id: l.id, name: l.name, type: l.type, state_code: l.state_code })));
-    setItems(getAllItems().map((i) => ({ id: i.id, name: i.name, unit: i.unit, gst_rate: i.gst_rate, hsn_code: i.hsn_code })));
+    setLedgers(
+      getAllLedgers().map((l) => ({
+        id: l.id,
+        name: l.name,
+        type: l.type,
+        state_code: l.state_code,
+      })),
+    );
+    setItems(
+      getAllItems().map((i) => ({
+        id: i.id,
+        name: i.name,
+        unit: i.unit,
+        gst_rate: i.gst_rate,
+        hsn_code: i.hsn_code,
+      })),
+    );
   }, [mastersVersion, activeCompanyId]);
 
   const partyOpts = useMemo(
@@ -244,20 +328,23 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const updateLine = useCallback((idx: number, patch: Partial<Line>) => {
     setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
   }, []);
-  const onPickItem = useCallback((idx: number, itemId: string) => {
-    startTransition(() => {
-      setLines((cur) => {
-        const it = items.find((x) => x.id === itemId);
-        const updated = cur.map((l, i) =>
-          i === idx
-            ? { ...l, item_id: itemId, gst_rate: it ? String(it.gst_rate) : l.gst_rate }
-            : l,
-        );
-        if (itemId && idx === cur.length - 1) return [...updated, blankLine()];
-        return updated;
+  const onPickItem = useCallback(
+    (idx: number, itemId: string) => {
+      startTransition(() => {
+        setLines((cur) => {
+          const it = items.find((x) => x.id === itemId);
+          const updated = cur.map((l, i) =>
+            i === idx
+              ? { ...l, item_id: itemId, gst_rate: it ? String(it.gst_rate) : l.gst_rate }
+              : l,
+          );
+          if (itemId && idx === cur.length - 1) return [...updated, blankLine()];
+          return updated;
+        });
       });
-    });
-  }, [items]);
+    },
+    [items],
+  );
   const addLine = useCallback(() => setLines((cur) => [...cur, blankLine()]), []);
   const removeLine = useCallback((idx: number) => {
     setLines((cur) => (cur.length === 1 ? cur : cur.filter((_, i) => i !== idx)));
@@ -277,21 +364,23 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   }, []);
 
   /** Called when Enter is pressed on the last editable cell (GST) of a row. */
-  const onAdvanceToNextRow = useCallback((idx: number) => {
-    setLines((cur) => {
-      if (idx >= cur.length - 1) {
-        // Last row → append and focus the new row.
-        const next = [...cur, blankLine()];
-        focusRowItemCombo(next.length - 1);
-        return next;
-      }
-      focusRowItemCombo(idx + 1);
-      return cur;
-    });
-  }, [focusRowItemCombo]);
+  const onAdvanceToNextRow = useCallback(
+    (idx: number) => {
+      setLines((cur) => {
+        if (idx >= cur.length - 1) {
+          // Last row → append and focus the new row.
+          const next = [...cur, blankLine()];
+          focusRowItemCombo(next.length - 1);
+          return next;
+        }
+        focusRowItemCombo(idx + 1);
+        return cur;
+      });
+    },
+    [focusRowItemCombo],
+  );
 
-  const canWrite =
-    activeMembership?.role === "admin" || activeMembership?.role === "accountant";
+  const canWrite = activeMembership?.role === "admin" || activeMembership?.role === "accountant";
 
   const performSave = useCallback(async () => {
     if (!activeCompanyId || !canWrite) return;
@@ -351,12 +440,19 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     // Snapshot for background save
     const snap = {
       companyId: activeCompanyId,
-      voucherType, voucherDate: date, partyId,
-      refNo, narration, placeOfSupply, interstate,
+      voucherType,
+      voucherDate: date,
+      partyId,
+      refNo,
+      narration,
+      placeOfSupply,
+      interstate,
       itcClass: isPurchaseSide ? itcClass : "na",
       itcEligible: isPurchaseSide ? itcEligible : true,
       totals: { ...totals, round_off_paise: roundOffPaise },
-      lines: lines.map((l, i) => ({ l, c: computed[i] })).filter((x) => x.l.item_id && x.c?.total_paise > 0),
+      lines: lines
+        .map((l, i) => ({ l, c: computed[i] }))
+        .filter((x) => x.l.item_id && x.c?.total_paise > 0),
     };
     rememberNarration(voucherType, narration);
     // Reset form INSTANTLY
@@ -367,14 +463,21 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setFocusedLine(0);
     setSavedTick((n) => n + 1);
     if (draftKey) {
-      try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {
+        /* ignore */
+      }
     }
     enqueueSave(`${cfg.title} ${snap.voucherDate}`, async () => {
       const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
-        _company_id: snap.companyId, _type: snap.voucherType,
+        _company_id: snap.companyId,
+        _type: snap.voucherType,
       });
       if (numErr) throw numErr;
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
       const { data: vData, error: vErr } = await supabase
         .from("vouchers")
@@ -398,7 +501,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           itc_class: snap.itcClass,
           itc_eligible: snap.itcEligible,
         })
-        .select("id").single();
+        .select("id")
+        .single();
       if (vErr) throw vErr;
       const itemRows = snap.lines.map(({ l, c }, i) => ({
         voucher_id: vData.id,
@@ -418,26 +522,39 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: iErr } = await supabase.from("voucher_items").insert(itemRows as any);
       if (iErr) throw iErr;
-      const skipPostings = snap.voucherType === "sales_order" || snap.voucherType === "delivery_note" || snap.voucherType === "quotation";
+      const skipPostings =
+        snap.voucherType === "sales_order" ||
+        snap.voucherType === "delivery_note" ||
+        snap.voucherType === "quotation";
       if (!skipPostings) {
-        const capitalItems = snap.itcClass === "capital_goods"
-          ? snap.lines.map(({ l, c }) => {
-              const it = items.find((x) => x.id === l.item_id);
-              return {
-                name: (it?.name || l.description || "Capital Asset").trim(),
-                taxable_paise: c.taxable_paise,
-                cgst_paise: c.cgst_paise,
-                sgst_paise: c.sgst_paise,
-                igst_paise: c.igst_paise,
-              };
-            })
-          : undefined;
+        const capitalItems =
+          snap.itcClass === "capital_goods"
+            ? snap.lines.map(({ l, c }) => {
+                const it = items.find((x) => x.id === l.item_id);
+                return {
+                  name: (it?.name || l.description || "Capital Asset").trim(),
+                  taxable_paise: c.taxable_paise,
+                  cgst_paise: c.cgst_paise,
+                  sgst_paise: c.sgst_paise,
+                  igst_paise: c.igst_paise,
+                };
+              })
+            : undefined;
         const postings = await buildItemVoucherPostings(
           snap.companyId,
           snap.voucherType as "sales" | "purchase" | "credit_note" | "debit_note",
           snap.partyId,
           snap.totals,
-          { itcClass: snap.itcClass as "inputs" | "capital_goods" | "input_services" | "ineligible" | "na", itcEligible: snap.itcEligible, capitalItems },
+          {
+            itcClass: snap.itcClass as
+              | "inputs"
+              | "capital_goods"
+              | "input_services"
+              | "ineligible"
+              | "na",
+            itcEligible: snap.itcEligible,
+            capitalItems,
+          },
         );
         const entryRows = postings.map((p) => ({
           voucher_id: vData.id,
@@ -449,7 +566,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         const { error: eErr } = await supabase.from("voucher_entries").insert(entryRows);
         if (eErr) throw eErr;
       }
-      const movesGoods = snap.voucherType === "sales" || snap.voucherType === "purchase" || snap.voucherType === "credit_note" || snap.voucherType === "debit_note";
+      const movesGoods =
+        snap.voucherType === "sales" ||
+        snap.voucherType === "purchase" ||
+        snap.voucherType === "credit_note" ||
+        snap.voucherType === "debit_note";
       if (movesGoods && snap.totals.total_paise > 5_000_000) {
         setEwbDlg({
           open: true,
@@ -469,7 +590,22 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         });
       }
     });
-  }, [activeCompanyId, canWrite, partyId, lines, computed, voucherType, date, refNo, narration, interstate, totals, roundOffPaise, placeOfSupply, cfg]);
+  }, [
+    activeCompanyId,
+    canWrite,
+    partyId,
+    lines,
+    computed,
+    voucherType,
+    date,
+    refNo,
+    narration,
+    interstate,
+    totals,
+    roundOffPaise,
+    placeOfSupply,
+    cfg,
+  ]);
 
   const save = useCallback(() => {
     void performSave();
@@ -478,15 +614,20 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   // Hotkeys: Ctrl+S save (stay & start next), F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") ||
-          (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "s")) {
+      if (
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") ||
+        (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "s")
+      ) {
         e.preventDefault();
         e.stopPropagation();
         if (!saving) save();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
         const last = recallNarration(voucherType);
-        if (last) { setNarration(last); toast.message("Narration recalled"); }
+        if (last) {
+          setNarration(last);
+          toast.message("Narration recalled");
+        }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
         e.preventDefault();
         if (lines.length > 1) removeLine(focusedLine);
@@ -514,260 +655,325 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   }, [save, navigate, saving, partyId, lines, focusedLine, voucherType, removeLine]);
 
   const onLedgerSaved = (lg: QuickLedger) => {
-    upsertCachedLedger({ id: lg.id, name: lg.name, type: lg.type, state_code: lg.state_code, is_active: true });
+    upsertCachedLedger({
+      id: lg.id,
+      name: lg.name,
+      type: lg.type,
+      state_code: lg.state_code,
+      is_active: true,
+    });
     if (cfg.partyTypes.includes(lg.type)) setPartyId(lg.id);
   };
 
   const onItemSaved = (it: QuickItem) => {
-    upsertCachedItem({ id: it.id, name: it.name, unit: it.unit, gst_rate: it.gst_rate, hsn_code: it.hsn_code, is_active: true });
+    upsertCachedItem({
+      id: it.id,
+      name: it.name,
+      unit: it.unit,
+      gst_rate: it.gst_rate,
+      hsn_code: it.hsn_code,
+      is_active: true,
+    });
     const idx = itemDlg.lineIdx;
     if (idx !== null) {
       setLines((cur) =>
-        cur.map((l, i) => (i === idx ? { ...l, item_id: it.id, gst_rate: String(it.gst_rate) } : l)),
+        cur.map((l, i) =>
+          i === idx ? { ...l, item_id: it.id, gst_rate: String(it.gst_rate) } : l,
+        ),
       );
     }
   };
 
-  const enterTab = useEnterAsTab(() => { if (!saving) save(); });
+  const enterTab = useEnterAsTab(() => {
+    if (!saving) save();
+  });
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div ref={enterTab.ref} onKeyDown={enterTab.onKeyDown} className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{cfg.title}</h1>
-          <p className="text-xs text-muted-foreground">
-            <kbd className="rounded border px-1">Enter</kbd> next field · <kbd className="rounded border px-1">Ctrl+S</kbd> save & next · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit party · <kbd className="rounded border px-1">F4</kbd> new item · <kbd className="rounded border px-1">Shift+F4</kbd> edit item
-            {interstate && (
-              <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
-                Interstate (IGST)
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
-            <X className="mr-1 h-4 w-4" /> Cancel
-          </Button>
-          <Button onClick={save} disabled={saving || !canWrite || locked}>
-            <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      </div>
-
-      <PeriodLockBanner lock={lock} />
-
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <div className="flex justify-end">
-            <NextVoucherNumberCard companyId={activeCompanyId} voucherType={voucherType} refreshKey={savedTick} />
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">{cfg.title}</h1>
+            <p className="text-xs text-muted-foreground">
+              <kbd className="rounded border px-1">Enter</kbd> next field ·{" "}
+              <kbd className="rounded border px-1">Ctrl+S</kbd> save & next ·{" "}
+              <kbd className="rounded border px-1">F3</kbd> new ledger ·{" "}
+              <kbd className="rounded border px-1">Shift+F3</kbd> edit party ·{" "}
+              <kbd className="rounded border px-1">F4</kbd> new item ·{" "}
+              <kbd className="rounded border px-1">Shift+F4</kbd> edit item
+              {interstate && (
+                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                  Interstate (IGST)
+                </span>
+              )}
+            </p>
           </div>
-          <div className="grid gap-3 md:grid-cols-4">
-          <div className="space-y-1">
-            <Label>Date</Label>
-            <FyDatePicker value={date} onChange={setDate} />
-          </div>
-          <div className="space-y-1">
-            <Label className="flex items-center justify-between">
-              <span>{cfg.partyLabel}</span>
-              <span className="flex gap-2">
-                <button type="button" className="text-primary hover:underline text-xs inline-flex items-center gap-0.5" onClick={() => setLedgerDlg({ open: true, editId: null })} title="New ledger (F3)">
-                  <UserPlus className="h-3 w-3" /> New
-                </button>
-                {partyId && (
-                  <button type="button" className="text-primary hover:underline text-xs inline-flex items-center gap-0.5" onClick={() => setLedgerDlg({ open: true, editId: partyId })} title="Edit party (Shift+F3)">
-                    <Pencil className="h-3 w-3" /> Edit
-                  </button>
-                )}
-              </span>
-            </Label>
-            <Combo
-              value={partyId}
-              onChange={setPartyId}
-              options={partyOpts.map((p) => ({ value: p.id, label: p.name, hint: p.state_code ?? undefined }))}
-              placeholder={`Select ${cfg.partyLabel.toLowerCase()}`}
-              emptyText={`No ${cfg.partyLabel.toLowerCase()}s yet — Alt+C to create`}
-              onCreate={() => setLedgerDlg({ open: true, editId: null })}
-              createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label>Reference No.</Label>
-            <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="PO / Bill no." />
-          </div>
-          <div className="space-y-1">
-            <Label>Place of Supply</Label>
-            <Select value={placeOfSupply} onValueChange={setPlaceOfSupply}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select state" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[300px]">
-                {INDIAN_STATES.map((s) => (
-                  <SelectItem key={s.code} value={s.code}>
-                    {s.code} — {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          </div>
-          {isPurchaseSide && (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3 mt-3">
-              <div className="space-y-1">
-                <Label>ITC Class</Label>
-                <Select value={itcClass} onValueChange={(v) => setItcClass(v as typeof itcClass)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="inputs">Inputs (stock / raw material)</SelectItem>
-                    <SelectItem value="capital_goods">Capital Goods (assets)</SelectItem>
-                    <SelectItem value="input_services">Input Services (expense)</SelectItem>
-                    <SelectItem value="ineligible">Ineligible / Blocked (s.17(5))</SelectItem>
-                    <SelectItem value="na">Not Applicable</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  Used in GSTR-3B 4(A) / 4(D) and GSTR-9 table 6 breakup.
-                </p>
-              </div>
-              <div className="space-y-1">
-                <Label>ITC Eligible</Label>
-                <Select
-                  value={itcEligible ? "yes" : "no"}
-                  onValueChange={(v) => setItcEligible(v === "yes")}
-                  disabled={itcClass === "ineligible"}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="yes">Yes — claim credit</SelectItem>
-                    <SelectItem value="no">No — block credit (4D)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  Set "No" for personal use, motor cars, etc. Tax stays in the bill total.
-                </p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className={showLineDescription ? "w-[28%]" : "w-[42%]"}>Item</TableHead>
-                {showLineDescription && <TableHead>Description</TableHead>}
-                <TableHead className="w-36">Qty / Unit</TableHead>
-                <TableHead className="w-24">Rate</TableHead>
-                <TableHead className="w-20">Disc</TableHead>
-                <TableHead className="w-20">GST %</TableHead>
-                <TableHead className="w-28 text-right">Amount</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lines.map((l, i) => (
-                <ItemRow
-                  key={l.id}
-                  idx={i}
-                  row={l}
-                  amountPaise={computed[i]?.total_paise ?? 0}
-                  items={items}
-                  canDelete={lines.length > 1}
-                  onPickItem={onPickItem}
-                  onCommit={updateLine}
-                  onFocusRow={setFocusedLine}
-                  onDelete={removeLine}
-                  onAddItemDlg={(idx) => { setFocusedLine(idx); setItemDlg({ open: true, editId: null, lineIdx: idx }); }}
-                  onEditItemDlg={(idx, itemId) => { setFocusedLine(idx); setItemDlg({ open: true, editId: itemId, lineIdx: idx }); }}
-                  onAdvanceToNextRow={onAdvanceToNextRow}
-                  showDescription={showLineDescription}
-                />
-              ))}
-            </TableBody>
-          </Table>
-          <div className="border-t p-3">
-            <Button variant="ghost" size="sm" onClick={addLine}>
-              <Plus className="mr-1 h-4 w-4" /> Add line
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
+              <X className="mr-1 h-4 w-4" /> Cancel
+            </Button>
+            <Button onClick={save} disabled={saving || !canWrite || locked}>
+              <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+        <PeriodLockBanner lock={lock} />
+
         <Card>
-          <CardContent className="p-4">
-            <Label>Narration</Label>
-            <Textarea
-              rows={4}
-              value={narration}
-              onChange={(e) => setNarration(e.target.value)}
-              placeholder="Optional notes"
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="space-y-1.5 p-4 text-sm">
-            <Row label="Taxable" value={formatINR(totals.subtotal_paise)} />
-            {interstate ? (
-              <Row label="IGST" value={formatINR(totals.igst_paise)} />
-            ) : (
-              <>
-                <Row label="CGST" value={formatINR(totals.cgst_paise)} />
-                <Row label="SGST" value={formatINR(totals.sgst_paise)} />
-              </>
-            )}
-            <div className="my-2 border-t" />
-            <div className="flex items-center justify-between text-xs">
-              <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={roundOff}
-                  onChange={(e) => setRoundOff(e.target.checked)}
-                  className="h-3.5 w-3.5 accent-primary"
-                />
-                Round off
-              </label>
-              <span className="font-mono">{roundOffPaise === 0 ? "—" : formatINR(roundOffPaise)}</span>
+          <CardContent className="space-y-3 p-4">
+            <div className="flex justify-end">
+              <NextVoucherNumberCard
+                companyId={activeCompanyId}
+                voucherType={voucherType}
+                refreshKey={savedTick}
+              />
             </div>
-            <Row label="Grand Total" value={formatINR(totals.total_paise)} bold />
-            <p className="pt-2 text-xs italic text-muted-foreground">
-              {amountInWords(totals.total_paise)}
-            </p>
-            {(voucherType === "sales" || voucherType === "purchase" || voucherType === "credit_note" || voucherType === "debit_note") && totals.total_paise > 5_000_000 && (
-              <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
-                <Truck className="inline h-3 w-3 mr-1" />
-                Voucher value exceeds <strong>₹50,000</strong>. An <strong>E-Way Bill</strong> is mandatory for inter-state movement, and for intra-state movement beyond city limits (typically &gt; 50&nbsp;km) per state rules. The E-Way Bill prep tool will open after save.
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="space-y-1">
+                <Label>Date</Label>
+                <FyDatePicker value={date} onChange={setDate} />
+              </div>
+              <div className="space-y-1">
+                <Label className="flex items-center justify-between">
+                  <span>{cfg.partyLabel}</span>
+                  <span className="flex gap-2">
+                    <button
+                      type="button"
+                      className="text-primary hover:underline text-xs inline-flex items-center gap-0.5"
+                      onClick={() => setLedgerDlg({ open: true, editId: null })}
+                      title="New ledger (F3)"
+                    >
+                      <UserPlus className="h-3 w-3" /> New
+                    </button>
+                    {partyId && (
+                      <button
+                        type="button"
+                        className="text-primary hover:underline text-xs inline-flex items-center gap-0.5"
+                        onClick={() => setLedgerDlg({ open: true, editId: partyId })}
+                        title="Edit party (Shift+F3)"
+                      >
+                        <Pencil className="h-3 w-3" /> Edit
+                      </button>
+                    )}
+                  </span>
+                </Label>
+                <Combo
+                  value={partyId}
+                  onChange={setPartyId}
+                  options={partyOpts.map((p) => ({
+                    value: p.id,
+                    label: p.name,
+                    hint: p.state_code ?? undefined,
+                  }))}
+                  placeholder={`Select ${cfg.partyLabel.toLowerCase()}`}
+                  emptyText={`No ${cfg.partyLabel.toLowerCase()}s yet — Alt+C to create`}
+                  onCreate={() => setLedgerDlg({ open: true, editId: null })}
+                  createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Reference No.</Label>
+                <Input
+                  value={refNo}
+                  onChange={(e) => setRefNo(e.target.value)}
+                  placeholder="PO / Bill no."
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Place of Supply</Label>
+                <Select value={placeOfSupply} onValueChange={setPlaceOfSupply}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {INDIAN_STATES.map((s) => (
+                      <SelectItem key={s.code} value={s.code}>
+                        {s.code} — {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {isPurchaseSide && (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3 mt-3">
+                <div className="space-y-1">
+                  <Label>ITC Class</Label>
+                  <Select value={itcClass} onValueChange={(v) => setItcClass(v as typeof itcClass)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="inputs">Inputs (stock / raw material)</SelectItem>
+                      <SelectItem value="capital_goods">Capital Goods (assets)</SelectItem>
+                      <SelectItem value="input_services">Input Services (expense)</SelectItem>
+                      <SelectItem value="ineligible">Ineligible / Blocked (s.17(5))</SelectItem>
+                      <SelectItem value="na">Not Applicable</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Used in GSTR-3B 4(A) / 4(D) and GSTR-9 table 6 breakup.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label>ITC Eligible</Label>
+                  <Select
+                    value={itcEligible ? "yes" : "no"}
+                    onValueChange={(v) => setItcEligible(v === "yes")}
+                    disabled={itcClass === "ineligible"}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Yes — claim credit</SelectItem>
+                      <SelectItem value="no">No — block credit (4D)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Set "No" for personal use, motor cars, etc. Tax stays in the bill total.
+                  </p>
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
-      </div>
 
-      {activeCompanyId && (
-        <>
-          <QuickLedgerDialog
-            open={ledgerDlg.open}
-            onOpenChange={(o) => setLedgerDlg((s) => ({ ...s, open: o }))}
-            companyId={activeCompanyId}
-            editId={ledgerDlg.editId}
-            onSaved={onLedgerSaved}
-          />
-          <QuickItemDialog
-            open={itemDlg.open}
-            onOpenChange={(o) => setItemDlg((s) => ({ ...s, open: o }))}
-            companyId={activeCompanyId}
-            editId={itemDlg.editId}
-            onSaved={onItemSaved}
-          />
-        </>
-      )}
-      <EwayBillPrepDialog
-        open={ewbDlg.open}
-        onOpenChange={(o) => setEwbDlg((s) => ({ ...s, open: o }))}
-        voucher={ewbDlg.voucher}
-      />
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className={showLineDescription ? "w-[28%]" : "w-[42%]"}>
+                    Item
+                  </TableHead>
+                  {showLineDescription && <TableHead>Description</TableHead>}
+                  <TableHead className="w-36">Qty / Unit</TableHead>
+                  <TableHead className="w-24">Rate</TableHead>
+                  <TableHead className="w-20">Disc</TableHead>
+                  <TableHead className="w-20">GST %</TableHead>
+                  <TableHead className="w-28 text-right">Amount</TableHead>
+                  <TableHead className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lines.map((l, i) => (
+                  <ItemRow
+                    key={l.id}
+                    idx={i}
+                    row={l}
+                    amountPaise={computed[i]?.total_paise ?? 0}
+                    items={items}
+                    canDelete={lines.length > 1}
+                    onPickItem={onPickItem}
+                    onCommit={updateLine}
+                    onFocusRow={setFocusedLine}
+                    onDelete={removeLine}
+                    onAddItemDlg={(idx) => {
+                      setFocusedLine(idx);
+                      setItemDlg({ open: true, editId: null, lineIdx: idx });
+                    }}
+                    onEditItemDlg={(idx, itemId) => {
+                      setFocusedLine(idx);
+                      setItemDlg({ open: true, editId: itemId, lineIdx: idx });
+                    }}
+                    onAdvanceToNextRow={onAdvanceToNextRow}
+                    showDescription={showLineDescription}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+            <div className="border-t p-3">
+              <Button variant="ghost" size="sm" onClick={addLine}>
+                <Plus className="mr-1 h-4 w-4" /> Add line
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardContent className="p-4">
+              <Label>Narration</Label>
+              <Textarea
+                rows={4}
+                value={narration}
+                onChange={(e) => setNarration(e.target.value)}
+                placeholder="Optional notes"
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="space-y-1.5 p-4 text-sm">
+              <Row label="Taxable" value={formatINR(totals.subtotal_paise)} />
+              {interstate ? (
+                <Row label="IGST" value={formatINR(totals.igst_paise)} />
+              ) : (
+                <>
+                  <Row label="CGST" value={formatINR(totals.cgst_paise)} />
+                  <Row label="SGST" value={formatINR(totals.sgst_paise)} />
+                </>
+              )}
+              <div className="my-2 border-t" />
+              <div className="flex items-center justify-between text-xs">
+                <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={roundOff}
+                    onChange={(e) => setRoundOff(e.target.checked)}
+                    className="h-3.5 w-3.5 accent-primary"
+                  />
+                  Round off
+                </label>
+                <span className="font-mono">
+                  {roundOffPaise === 0 ? "—" : formatINR(roundOffPaise)}
+                </span>
+              </div>
+              <Row label="Grand Total" value={formatINR(totals.total_paise)} bold />
+              <p className="pt-2 text-xs italic text-muted-foreground">
+                {amountInWords(totals.total_paise)}
+              </p>
+              {(voucherType === "sales" ||
+                voucherType === "purchase" ||
+                voucherType === "credit_note" ||
+                voucherType === "debit_note") &&
+                totals.total_paise > 5_000_000 && (
+                  <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                    <Truck className="inline h-3 w-3 mr-1" />
+                    Voucher value exceeds <strong>₹50,000</strong>. An <strong>E-Way Bill</strong>{" "}
+                    is mandatory for inter-state movement, and for intra-state movement beyond city
+                    limits (typically &gt; 50&nbsp;km) per state rules. The E-Way Bill prep tool
+                    will open after save.
+                  </div>
+                )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {activeCompanyId && (
+          <>
+            <QuickLedgerDialog
+              open={ledgerDlg.open}
+              onOpenChange={(o) => setLedgerDlg((s) => ({ ...s, open: o }))}
+              companyId={activeCompanyId}
+              editId={ledgerDlg.editId}
+              onSaved={onLedgerSaved}
+            />
+            <QuickItemDialog
+              open={itemDlg.open}
+              onOpenChange={(o) => setItemDlg((s) => ({ ...s, open: o }))}
+              companyId={activeCompanyId}
+              editId={itemDlg.editId}
+              onSaved={onItemSaved}
+            />
+          </>
+        )}
+        <EwayBillPrepDialog
+          open={ewbDlg.open}
+          onOpenChange={(o) => setEwbDlg((s) => ({ ...s, open: o }))}
+          voucher={ewbDlg.voucher}
+        />
       </div>
       <div className="space-y-3">
         <RecentVouchersPanel voucherType={voucherType} refreshKey={savedTick} />

@@ -48,8 +48,17 @@ interface Props {
 }
 
 function ItemRowImpl({
-  idx, row, amountPaise, items, canDelete,
-  onPickItem, onCommit, onFocusRow, onDelete, onAddItemDlg, onEditItemDlg,
+  idx,
+  row,
+  amountPaise,
+  items,
+  canDelete,
+  onPickItem,
+  onCommit,
+  onFocusRow,
+  onDelete,
+  onAddItemDlg,
+  onEditItemDlg,
   onAdvanceToNextRow,
   showDescription = true,
 }: Props) {
@@ -108,24 +117,47 @@ function ItemRowImpl({
   };
 
   return (
-    <TableRow data-voucher-row data-row-idx={idx} onFocusCapture={handleFocus} onBlurCapture={handleBlur} onClick={() => onFocusRow(idx)}>
+    <TableRow
+      data-voucher-row
+      data-row-idx={idx}
+      onFocusCapture={handleFocus}
+      onBlurCapture={handleBlur}
+      onClick={() => onFocusRow(idx)}
+    >
       <TableCell>
         <div className="flex gap-1">
           <Combo
             className="flex-1"
             value={row.item_id}
-            onChange={(v) => { onFocusRow(idx); onPickItem(idx, v); }}
+            onChange={(v) => {
+              onFocusRow(idx);
+              onPickItem(idx, v);
+            }}
             options={items.map((it) => ({ value: it.id, label: it.name, hint: it.unit }))}
             placeholder="Select item"
             emptyText="No items — Alt+C to create"
             onCreate={() => onAddItemDlg(idx)}
             createLabel="New item"
           />
-          <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 gap-1" title="New item (F4)" onClick={() => onAddItemDlg(idx)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 shrink-0 gap-1"
+            title="New item (F4)"
+            onClick={() => onAddItemDlg(idx)}
+          >
             <PackagePlus className="h-4 w-4" /> Add
           </Button>
           {row.item_id && (
-            <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0 gap-1" title="Edit item (Shift+F4)" onClick={() => onEditItemDlg(idx, row.item_id)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 shrink-0 gap-1"
+              title="Edit item (Shift+F4)"
+              onClick={() => onEditItemDlg(idx, row.item_id)}
+            >
               <Pencil className="h-4 w-4" /> Edit
             </Button>
           )}
@@ -156,7 +188,10 @@ function ItemRowImpl({
             onFocus={(e) => e.currentTarget.select()}
             onKeyDown={(e) => commitOnEnter(e, "qty")}
           />
-          <span className="min-w-10 truncate text-xs text-muted-foreground" title={selectedItem?.unit || undefined}>
+          <span
+            className="min-w-10 truncate text-xs text-muted-foreground"
+            title={selectedItem?.unit || undefined}
+          >
             {selectedItem?.unit || "—"}
           </span>
         </div>
@@ -208,11 +243,15 @@ function ItemRowImpl({
           </SelectContent>
         </Select>
       </TableCell>
-      <TableCell className="text-right font-mono text-sm">
-        {formatINR(amountPaise)}
-      </TableCell>
+      <TableCell className="text-right font-mono text-sm">{formatINR(amountPaise)}</TableCell>
       <TableCell>
-        <Button variant="ghost" size="icon" onClick={() => onDelete(idx)} disabled={!canDelete} title="Delete row (Ctrl+D)">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onDelete(idx)}
+          disabled={!canDelete}
+          title="Delete row (Ctrl+D)"
+        >
           <Trash2 className="h-4 w-4" />
         </Button>
       </TableCell>

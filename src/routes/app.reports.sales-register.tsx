@@ -4,7 +4,14 @@ import { sortVouchersAsc } from "@/lib/voucher-sort";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -30,7 +37,15 @@ interface VRow {
   igst_paise: number;
   total_paise: number;
   ledgers: { name: string; gstin: string | null } | null;
-  voucher_items: { qty: number; taxable_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number; gst_rate: number; items: { hsn_code: string | null; name: string; unit: string | null } | null }[];
+  voucher_items: {
+    qty: number;
+    taxable_paise: number;
+    cgst_paise: number;
+    sgst_paise: number;
+    igst_paise: number;
+    gst_rate: number;
+    items: { hsn_code: string | null; name: string; unit: string | null } | null;
+  }[];
 }
 
 export function Register({ kind }: { kind: "sales" | "purchase" }) {
@@ -45,7 +60,9 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
     if (!activeCompanyId) return;
     supabase
       .from("vouchers")
-      .select("id, voucher_date, voucher_number, subtotal_paise, cgst_paise, sgst_paise, igst_paise, total_paise, ledgers:party_ledger_id(name, gstin), voucher_items(qty, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate, items:item_id(hsn_code, name, unit))")
+      .select(
+        "id, voucher_date, voucher_number, subtotal_paise, cgst_paise, sgst_paise, igst_paise, total_paise, ledgers:party_ledger_id(name, gstin), voucher_items(qty, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate, items:item_id(hsn_code, name, unit))",
+      )
       .eq("company_id", activeCompanyId)
       .eq("voucher_type", kind)
       .gte("voucher_date", from)
@@ -53,24 +70,47 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
       .then(({ data }) => setRows(sortVouchersAsc((data || []) as unknown as VRow[])));
   }, [activeCompanyId, from, to, kind]);
 
-  const totals = useMemo(() => rows.reduce(
-    (s, x) => ({
-      sub: s.sub + x.subtotal_paise,
-      cgst: s.cgst + x.cgst_paise,
-      sgst: s.sgst + x.sgst_paise,
-      igst: s.igst + x.igst_paise,
-      total: s.total + x.total_paise,
-    }),
-    { sub: 0, cgst: 0, sgst: 0, igst: 0, total: 0 },
-  ), [rows]);
+  const totals = useMemo(
+    () =>
+      rows.reduce(
+        (s, x) => ({
+          sub: s.sub + x.subtotal_paise,
+          cgst: s.cgst + x.cgst_paise,
+          sgst: s.sgst + x.sgst_paise,
+          igst: s.igst + x.igst_paise,
+          total: s.total + x.total_paise,
+        }),
+        { sub: 0, cgst: 0, sgst: 0, igst: 0, total: 0 },
+      ),
+    [rows],
+  );
 
   // HSN summary
   const hsn = useMemo(() => {
-    const map = new Map<string, { hsn: string; qty: number; taxable: number; cgst: number; sgst: number; igst: number; rate: number }>();
+    const map = new Map<
+      string,
+      {
+        hsn: string;
+        qty: number;
+        taxable: number;
+        cgst: number;
+        sgst: number;
+        igst: number;
+        rate: number;
+      }
+    >();
     for (const v of rows) {
       for (const it of v.voucher_items || []) {
         const key = `${it.items?.hsn_code || "—"}|${it.gst_rate}`;
-        const cur = map.get(key) ?? { hsn: it.items?.hsn_code || "—", qty: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, rate: it.gst_rate };
+        const cur = map.get(key) ?? {
+          hsn: it.items?.hsn_code || "—",
+          qty: 0,
+          taxable: 0,
+          cgst: 0,
+          sgst: 0,
+          igst: 0,
+          rate: it.gst_rate,
+        };
         cur.qty += Number(it.qty);
         cur.taxable += it.taxable_paise;
         cur.cgst += it.cgst_paise;
@@ -91,23 +131,128 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
       const unit = line.items?.unit || "Qty";
       byUnit.set(unit, (byUnit.get(unit) || 0) + Number(line.qty || 0));
     }
-    return Array.from(byUnit.entries()).map(([unit, qty]) => `${qty} ${unit}`).join(", ") || "—";
+    return (
+      Array.from(byUnit.entries())
+        .map(([unit, qty]) => `${qty} ${unit}`)
+        .join(", ") || "—"
+    );
   };
 
-  const gridColumns: DGColumn<VRow>[] = useMemo(() => [
-    { id: "date", header: "Date", type: "date", width: 110, accessor: (x) => x.voucher_date, cell: (x) => fmtIndianDate(x.voucher_date) },
-    { id: "number", header: "Number", type: "text", width: 130, accessor: (x) => x.voucher_number },
-    { id: "party", header: "Party", type: "text", width: 220, accessor: (x) => x.ledgers?.name ?? "", groupable: true, cell: (x) => x.ledgers?.name ?? "—" },
-    { id: "gstin", header: "GSTIN", type: "text", width: 150, accessor: (x) => x.ledgers?.gstin ?? "" },
-    ...(showQtyUnit ? [{ id: "qty", header: "Qty / Unit", type: "text" as const, width: 130, accessor: qtyUnitText }] : []),
-    { id: "taxable", header: "Taxable", type: "number", width: 130, align: "right", accessor: (x) => x.subtotal_paise / 100, cell: (x) => formatINR(x.subtotal_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-    { id: "cgst", header: "CGST", type: "number", width: 110, align: "right", accessor: (x) => x.cgst_paise / 100, cell: (x) => formatINR(x.cgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-    { id: "sgst", header: "SGST", type: "number", width: 110, align: "right", accessor: (x) => x.sgst_paise / 100, cell: (x) => formatINR(x.sgst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-    { id: "igst", header: "IGST", type: "number", width: 110, align: "right", accessor: (x) => x.igst_paise / 100, cell: (x) => formatINR(x.igst_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-    { id: "total", header: "Total", type: "number", width: 140, align: "right", accessor: (x) => x.total_paise / 100, cell: (x) => formatINR(x.total_paise), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
-  ], [showQtyUnit]);
+  const gridColumns: DGColumn<VRow>[] = useMemo(
+    () => [
+      {
+        id: "date",
+        header: "Date",
+        type: "date",
+        width: 110,
+        accessor: (x) => x.voucher_date,
+        cell: (x) => fmtIndianDate(x.voucher_date),
+      },
+      {
+        id: "number",
+        header: "Number",
+        type: "text",
+        width: 130,
+        accessor: (x) => x.voucher_number,
+      },
+      {
+        id: "party",
+        header: "Party",
+        type: "text",
+        width: 220,
+        accessor: (x) => x.ledgers?.name ?? "",
+        groupable: true,
+        cell: (x) => x.ledgers?.name ?? "—",
+      },
+      {
+        id: "gstin",
+        header: "GSTIN",
+        type: "text",
+        width: 150,
+        accessor: (x) => x.ledgers?.gstin ?? "",
+      },
+      ...(showQtyUnit
+        ? [
+            {
+              id: "qty",
+              header: "Qty / Unit",
+              type: "text" as const,
+              width: 130,
+              accessor: qtyUnitText,
+            },
+          ]
+        : []),
+      {
+        id: "taxable",
+        header: "Taxable",
+        type: "number",
+        width: 130,
+        align: "right",
+        accessor: (x) => x.subtotal_paise / 100,
+        cell: (x) => formatINR(x.subtotal_paise),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+      {
+        id: "cgst",
+        header: "CGST",
+        type: "number",
+        width: 110,
+        align: "right",
+        accessor: (x) => x.cgst_paise / 100,
+        cell: (x) => formatINR(x.cgst_paise),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+      {
+        id: "sgst",
+        header: "SGST",
+        type: "number",
+        width: 110,
+        align: "right",
+        accessor: (x) => x.sgst_paise / 100,
+        cell: (x) => formatINR(x.sgst_paise),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+      {
+        id: "igst",
+        header: "IGST",
+        type: "number",
+        width: 110,
+        align: "right",
+        accessor: (x) => x.igst_paise / 100,
+        cell: (x) => formatINR(x.igst_paise),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+      {
+        id: "total",
+        header: "Total",
+        type: "number",
+        width: 140,
+        align: "right",
+        accessor: (x) => x.total_paise / 100,
+        cell: (x) => formatINR(x.total_paise),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+    ],
+    [showQtyUnit],
+  );
 
-  const head = ["Date", "Number", "Party", "GSTIN", ...(showQtyUnit ? ["Qty / Unit"] : []), "Taxable", "CGST", "SGST", "IGST", "Total"];
+  const head = [
+    "Date",
+    "Number",
+    "Party",
+    "GSTIN",
+    ...(showQtyUnit ? ["Qty / Unit"] : []),
+    "Taxable",
+    "CGST",
+    "SGST",
+    "IGST",
+    "Total",
+  ];
   const body = (): (string | number)[][] => [
     head,
     ...rows.map((x) => [
@@ -122,11 +267,30 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
       (x.igst_paise / 100).toFixed(2),
       (x.total_paise / 100).toFixed(2),
     ]),
-    ["TOTAL", "", "", "", ...(showQtyUnit ? [""] : []), (totals.sub / 100).toFixed(2), (totals.cgst / 100).toFixed(2), (totals.sgst / 100).toFixed(2), (totals.igst / 100).toFixed(2), (totals.total / 100).toFixed(2)],
+    [
+      "TOTAL",
+      "",
+      "",
+      "",
+      ...(showQtyUnit ? [""] : []),
+      (totals.sub / 100).toFixed(2),
+      (totals.cgst / 100).toFixed(2),
+      (totals.sgst / 100).toFixed(2),
+      (totals.igst / 100).toFixed(2),
+      (totals.total / 100).toFixed(2),
+    ],
     [],
     ["HSN Summary"],
     ["HSN", "Rate %", "Qty", "Taxable", "CGST", "SGST", "IGST"],
-    ...hsn.map((h) => [h.hsn, h.rate, h.qty, (h.taxable / 100).toFixed(2), (h.cgst / 100).toFixed(2), (h.sgst / 100).toFixed(2), (h.igst / 100).toFixed(2)]),
+    ...hsn.map((h) => [
+      h.hsn,
+      h.rate,
+      h.qty,
+      (h.taxable / 100).toFixed(2),
+      (h.cgst / 100).toFixed(2),
+      (h.sgst / 100).toFixed(2),
+      (h.igst / 100).toFixed(2),
+    ]),
   ];
 
   return (
@@ -139,10 +303,26 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
             onFrom={setFrom}
             onTo={setTo}
             onExportCsv={() => downloadCsv(`${slug}-${from}_to_${to}.csv`, body())}
-            onExportXlsx={() => downloadXlsx(`${slug}-${from}_to_${to}.xlsx`, [
-              { name: title, rows: body() },
-              { name: "HSN Summary", rows: [["HSN", "Rate %", "Qty", "Taxable", "CGST", "SGST", "IGST"], ...hsn.map((h) => [h.hsn, h.rate, h.qty, r(h.taxable), r(h.cgst), r(h.sgst), r(h.igst)])] },
-            ])}
+            onExportXlsx={() =>
+              downloadXlsx(`${slug}-${from}_to_${to}.xlsx`, [
+                { name: title, rows: body() },
+                {
+                  name: "HSN Summary",
+                  rows: [
+                    ["HSN", "Rate %", "Qty", "Taxable", "CGST", "SGST", "IGST"],
+                    ...hsn.map((h) => [
+                      h.hsn,
+                      h.rate,
+                      h.qty,
+                      r(h.taxable),
+                      r(h.cgst),
+                      r(h.sgst),
+                      r(h.igst),
+                    ]),
+                  ],
+                },
+              ])
+            }
             onExportPdf={() =>
               downloadPdfTable({
                 title,
@@ -162,7 +342,20 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                   r(x.igst_paise).toFixed(2),
                   r(x.total_paise).toFixed(2),
                 ]),
-                foot: [["TOTAL", "", "", "", ...(showQtyUnit ? [""] : []), r(totals.sub).toFixed(2), r(totals.cgst).toFixed(2), r(totals.sgst).toFixed(2), r(totals.igst).toFixed(2), r(totals.total).toFixed(2)]],
+                foot: [
+                  [
+                    "TOTAL",
+                    "",
+                    "",
+                    "",
+                    ...(showQtyUnit ? [""] : []),
+                    r(totals.sub).toFixed(2),
+                    r(totals.cgst).toFixed(2),
+                    r(totals.sgst).toFixed(2),
+                    r(totals.igst).toFixed(2),
+                    r(totals.total).toFixed(2),
+                  ],
+                ],
                 fileName: `${slug}-${from}_to_${to}.pdf`,
                 orientation: "l",
                 rightAlignCols: [4, 5, 6, 7, 8],
@@ -170,7 +363,9 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
             }
             onPrint={() => window.print()}
           />
-          <div className="mt-2"><ViewSwitcher view={view} onChange={setView} /></div>
+          <div className="mt-2">
+            <ViewSwitcher view={view} onChange={setView} />
+          </div>
         </CardContent>
       </Card>
 
@@ -181,7 +376,9 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
               reportId={slug}
               rows={rows}
               columns={gridColumns}
-              globalSearch={(x) => `${x.voucher_number} ${x.ledgers?.name ?? ""} ${x.ledgers?.gstin ?? ""}`}
+              globalSearch={(x) =>
+                `${x.voucher_number} ${x.ledgers?.name ?? ""} ${x.ledgers?.gstin ?? ""}`
+              }
               onRowClick={(x) => openVoucherDetail(navigate, x.id)}
               height={520}
             />
@@ -217,21 +414,45 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                     <TableCell className="font-mono text-xs">{x.voucher_number}</TableCell>
                     <TableCell>{x.ledgers?.name ?? "—"}</TableCell>
                     <TableCell className="font-mono text-xs">{x.ledgers?.gstin ?? "—"}</TableCell>
-                    {showQtyUnit && <TableCell className="font-mono text-xs">{qtyUnitText(x)}</TableCell>}
-                    <TableCell className="text-right font-mono">{formatINR(x.subtotal_paise)}</TableCell>
-                    <TableCell className="text-right font-mono">{formatINR(x.cgst_paise)}</TableCell>
-                    <TableCell className="text-right font-mono">{formatINR(x.sgst_paise)}</TableCell>
-                    <TableCell className="text-right font-mono">{formatINR(x.igst_paise)}</TableCell>
-                    <TableCell className="text-right font-mono font-semibold">{formatINR(x.total_paise)}</TableCell>
+                    {showQtyUnit && (
+                      <TableCell className="font-mono text-xs">{qtyUnitText(x)}</TableCell>
+                    )}
+                    <TableCell className="text-right font-mono">
+                      {formatINR(x.subtotal_paise)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatINR(x.cgst_paise)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatINR(x.sgst_paise)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatINR(x.igst_paise)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-semibold">
+                      {formatINR(x.total_paise)}
+                    </TableCell>
                   </TableRow>
                 ))}
                 <TableRow>
-                  <TableCell colSpan={showQtyUnit ? 5 : 4} className="text-right font-semibold">TOTAL</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sub)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.cgst)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.sgst)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.igst)}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">{formatINR(totals.total)}</TableCell>
+                  <TableCell colSpan={showQtyUnit ? 5 : 4} className="text-right font-semibold">
+                    TOTAL
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-semibold">
+                    {formatINR(totals.sub)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-semibold">
+                    {formatINR(totals.cgst)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-semibold">
+                    {formatINR(totals.sgst)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-semibold">
+                    {formatINR(totals.igst)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-semibold">
+                    {formatINR(totals.total)}
+                  </TableCell>
                 </TableRow>
               </TableBody>
             </Table>
@@ -267,7 +488,11 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                 </TableRow>
               ))}
               {hsn.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="p-6 text-center text-sm text-muted-foreground">No items in range.</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={7} className="p-6 text-center text-sm text-muted-foreground">
+                    No items in range.
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
