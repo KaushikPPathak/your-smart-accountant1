@@ -594,6 +594,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           place_of_supply_code: snap.placeOfSupply || null,
           itc_class: snap.itcClass,
           itc_eligible: snap.itcEligible,
+          original_voucher_id: snap.originalVoucherId,
         })
         .select("id")
         .single();
