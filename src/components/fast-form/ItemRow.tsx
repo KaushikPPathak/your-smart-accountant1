@@ -45,6 +45,7 @@ interface Props {
   onEditItemDlg: (idx: number, itemId: string) => void;
   onAdvanceToNextRow?: (idx: number) => void;
   showDescription?: boolean;
+  showGstColumn?: boolean;
 }
 
 function ItemRowImpl({
