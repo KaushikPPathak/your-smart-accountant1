@@ -45,6 +45,7 @@ interface Props {
   onEditItemDlg: (idx: number, itemId: string) => void;
   onAdvanceToNextRow?: (idx: number) => void;
   showDescription?: boolean;
+  showGstColumn?: boolean;
 }
 
 function ItemRowImpl({
@@ -61,6 +62,7 @@ function ItemRowImpl({
   onEditItemDlg,
   onAdvanceToNextRow,
   showDescription = true,
+  showGstColumn = true,
 }: Props) {
   const { setHints, clearHints } = useFocusHints();
   const zone = `item-row`;
@@ -185,10 +187,11 @@ function ItemRowImpl({
           <Input
             ref={qtyRef}
             data-voucher-qty
-            className="h-9 min-w-20 text-right font-mono text-foreground"
+            className="h-9 min-w-28 text-right font-mono text-foreground"
             type="text"
             inputMode="decimal"
             autoComplete="off"
+            maxLength={12}
             value={row.qty}
             onChange={(e) => onCommit(idx, { qty: cleanDecimal(e.target.value) })}
             onFocus={(e) => e.currentTarget.select()}
@@ -205,10 +208,11 @@ function ItemRowImpl({
       <TableCell>
         <Input
           ref={rateRef}
-          className="h-9 min-w-24 text-right font-mono text-foreground"
+          className="h-9 min-w-28 text-right font-mono text-foreground"
           type="text"
           inputMode="decimal"
           autoComplete="off"
+          maxLength={12}
           value={row.rate}
           onChange={(e) => onCommit(idx, { rate: cleanDecimal(e.target.value) })}
           onFocus={(e) => e.currentTarget.select()}
@@ -218,37 +222,47 @@ function ItemRowImpl({
       <TableCell>
         <Input
           ref={discRef}
-          className="h-9 min-w-20 text-right font-mono text-foreground"
+          className="h-9 min-w-24 text-right font-mono text-foreground"
           type="text"
           inputMode="decimal"
           autoComplete="off"
+          maxLength={10}
           value={row.discount}
           onChange={(e) => onCommit(idx, { discount: cleanDecimal(e.target.value) })}
           onFocus={(e) => e.currentTarget.select()}
-          onKeyDown={(e) => commitOnEnter(e, "discount")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !showGstColumn) {
+              e.preventDefault();
+              onCommit(idx, { discount: e.currentTarget.value });
+              onAdvanceToNextRow?.(idx);
+              return;
+            }
+            commitOnEnter(e, "discount");
+          }}
         />
       </TableCell>
-      <TableCell>
-        <Select
-          value={row.gst_rate}
-          onValueChange={(v) => {
-            onCommit(idx, { gst_rate: v });
-            // After picking a GST rate, advance to next row (or append a new one).
-            requestAnimationFrame(() => onAdvanceToNextRow?.(idx));
-          }}
-        >
-          <SelectTrigger ref={gstTriggerRef} className="h-9" onKeyDown={handleGstKeyDown}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {GST_RATES.map((r) => (
-              <SelectItem key={r} value={String(r)}>
-                {r}%
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </TableCell>
+      {showGstColumn && (
+        <TableCell>
+          <Select
+            value={row.gst_rate}
+            onValueChange={(v) => {
+              onCommit(idx, { gst_rate: v });
+              requestAnimationFrame(() => onAdvanceToNextRow?.(idx));
+            }}
+          >
+            <SelectTrigger ref={gstTriggerRef} className="h-9" onKeyDown={handleGstKeyDown}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {GST_RATES.map((r) => (
+                <SelectItem key={r} value={String(r)}>
+                  {r}%
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </TableCell>
+      )}
       <TableCell className="text-right font-mono text-sm">{formatINR(amountPaise)}</TableCell>
       <TableCell>
         <Button
@@ -272,6 +286,7 @@ export const ItemRow = memo(ItemRowImpl, (prev, next) => {
     prev.amountPaise === next.amountPaise &&
     prev.items === next.items &&
     prev.canDelete === next.canDelete &&
-    prev.showDescription === next.showDescription
+    prev.showDescription === next.showDescription &&
+    prev.showGstColumn === next.showGstColumn
   );
 });

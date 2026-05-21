@@ -172,7 +172,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     } | null;
   }>({ open: false, voucher: null });
   const { lock, locked } = usePeriodLock(date);
-  const showLineDescription = voucherType !== "purchase";
+  const showLineDescription = false;
+  const showGstColumn = false;
 
   // ---------- Draft persistence (so leaving the screen doesn't lose entries) ----------
   const draftKey = activeCompanyId ? `voucher-draft:${activeCompanyId}:${voucherType}` : null;
@@ -785,47 +786,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 />
               </div>
             </div>
-            {isPurchaseSide && (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3 mt-3">
-                <div className="space-y-1">
-                  <Label>ITC Class</Label>
-                  <Select value={itcClass} onValueChange={(v) => setItcClass(v as typeof itcClass)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="inputs">Inputs (stock / raw material)</SelectItem>
-                      <SelectItem value="capital_goods">Capital Goods (assets)</SelectItem>
-                      <SelectItem value="input_services">Input Services (expense)</SelectItem>
-                      <SelectItem value="ineligible">Ineligible / Blocked (s.17(5))</SelectItem>
-                      <SelectItem value="na">Not Applicable</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    Used in GSTR-3B 4(A) / 4(D) and GSTR-9 table 6 breakup.
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <Label>ITC Eligible</Label>
-                  <Select
-                    value={itcEligible ? "yes" : "no"}
-                    onValueChange={(v) => setItcEligible(v === "yes")}
-                    disabled={itcClass === "ineligible"}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="yes">Yes — claim credit</SelectItem>
-                      <SelectItem value="no">No — block credit (4D)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    Set "No" for personal use, motor cars, etc. Tax stays in the bill total.
-                  </p>
-                </div>
-              </div>
-            )}
+            {/* ITC class & eligibility are derived from the item ledger group (goods → inputs, capital asset → capital_goods, expenditure → input_services). */}
           </CardContent>
         </Card>
 
@@ -838,10 +799,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     Item
                   </TableHead>
                   {showLineDescription && <TableHead>Description</TableHead>}
-                  <TableHead className="w-36">Qty / Unit</TableHead>
-                  <TableHead className="w-24">Rate</TableHead>
-                  <TableHead className="w-20">Disc</TableHead>
-                  <TableHead className="w-20">GST %</TableHead>
+                  <TableHead className="w-40">Qty / Unit</TableHead>
+                  <TableHead className="w-32">Rate</TableHead>
+                  <TableHead className="w-24">Disc</TableHead>
+                  {showGstColumn && <TableHead className="w-20">GST %</TableHead>}
                   <TableHead className="w-28 text-right">Amount</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
@@ -869,6 +830,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     }}
                     onAdvanceToNextRow={onAdvanceToNextRow}
                     showDescription={showLineDescription}
+                    showGstColumn={showGstColumn}
                   />
                 ))}
               </TableBody>
