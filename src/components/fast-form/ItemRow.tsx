@@ -146,6 +146,7 @@ function ItemRowImpl({
         <div className="flex items-center gap-1">
           <Input
             ref={qtyRef}
+            data-voucher-qty
             className="h-9 min-w-20 text-right font-mono text-foreground"
             type="text"
             inputMode="decimal"
