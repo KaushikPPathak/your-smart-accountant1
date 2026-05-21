@@ -719,24 +719,17 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
 
         <PeriodLockBanner lock={lock} />
 
-        <Card>
-          <CardContent className="space-y-3 p-4">
-            <div className="flex justify-end">
-              <NextVoucherNumberCard
-                companyId={activeCompanyId}
-                voucherType={voucherType}
-                refreshKey={savedTick}
-              />
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
+        <Card className="border-primary/20 bg-gradient-to-br from-card to-muted/30 shadow-sm">
+          <CardContent className="p-3">
+            <div className="grid gap-3 md:grid-cols-[1fr_2fr_1fr_auto] md:items-end">
               <div className="space-y-1">
-                <Label>Date</Label>
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date</Label>
                 <FyDatePicker value={date} onChange={setDate} />
               </div>
               <div className="space-y-1">
-                <Label className="flex items-center justify-between">
+                <Label className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <span>{cfg.partyLabel}</span>
-                  <span className="flex gap-2">
+                  <span className="flex gap-2 normal-case">
                     <button
                       type="button"
                       className="text-primary hover:underline text-xs inline-flex items-center gap-0.5"
@@ -772,21 +765,27 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 />
                 {partyLedger?.state_code && (
                   <p className="text-[11px] text-muted-foreground">
-                    Place of Supply: <span className="font-medium">{partyLedger.state_code}</span>{" "}
-                    (auto from party GSTIN)
+                    PoS: <span className="font-medium">{partyLedger.state_code}</span>{" "}
+                    (auto from GSTIN)
                   </p>
                 )}
               </div>
               <div className="space-y-1">
-                <Label>Reference No.</Label>
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reference No.</Label>
                 <Input
                   value={refNo}
                   onChange={(e) => setRefNo(e.target.value)}
                   placeholder="PO / Bill no."
                 />
               </div>
+              <div className="md:pb-0.5">
+                <NextVoucherNumberCard
+                  companyId={activeCompanyId}
+                  voucherType={voucherType}
+                  refreshKey={savedTick}
+                />
+              </div>
             </div>
-            {/* ITC class & eligibility are derived from the item ledger group (goods → inputs, capital asset → capital_goods, expenditure → input_services). */}
           </CardContent>
         </Card>
 
