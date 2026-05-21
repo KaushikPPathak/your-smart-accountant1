@@ -889,7 +889,7 @@ function PurchaseExpenseLedger({
                   return (
                     <TableRow key={r.id} className={rowCls}>
                       <TableCell className="space-y-1">
-                        <Input type="date" className="h-7 text-xs" value={r.date} onChange={(e) => update(r.id, { date: e.target.value })} />
+                        <FyDatePicker value={r.date} onChange={(v: string) => update(r.id, { date: v })} unrestricted className="text-xs" />
                         <Input className="h-7 text-xs" placeholder="Invoice #" value={r.invoice_no} onChange={(e) => update(r.id, { invoice_no: e.target.value })} />
                       </TableCell>
                       <TableCell>
