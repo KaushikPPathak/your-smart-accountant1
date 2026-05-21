@@ -741,10 +741,25 @@ function CompaniesPage() {
 
                     {/* Bottom Section: FY + Action */}
                     <div className="mt-auto pt-4 flex items-center gap-2">
-                      <div className="flex flex-1 items-center justify-center rounded-lg border bg-muted/40 px-3 py-2 text-xs font-mono font-medium text-foreground">
-                        <span className="text-muted-foreground mr-1">&lt;</span>
+                      <div className="flex flex-1 items-center justify-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs font-mono font-medium text-foreground">
+                        <span className="text-muted-foreground">&lt;</span>
                         {fyLabel}
-                        <span className="text-muted-foreground ml-1">&gt;</span>
+                        <span className="text-muted-foreground">&gt;</span>
+                        {fyLocks[m.company_id] ? (
+                          <span
+                            className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
+                            title="Audited & Locked — no edits allowed"
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Locked
+                          </span>
+                        ) : (
+                          <span
+                            className="ml-1 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
+                            title="Provisional — year is open for edits"
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Provisional
+                          </span>
+                        )}
                       </div>
                       {isActive ? (
                         <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
