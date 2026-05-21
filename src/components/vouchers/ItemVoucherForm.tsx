@@ -365,6 +365,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setLines([blankLine()]);
     setFocusedLine(0);
     setSavedTick((n) => n + 1);
+    if (draftKey) {
+      try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+    }
     enqueueSave(`${cfg.title} ${snap.voucherDate}`, async () => {
       const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
         _company_id: snap.companyId, _type: snap.voucherType,
