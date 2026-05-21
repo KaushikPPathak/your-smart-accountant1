@@ -799,10 +799,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     Item
                   </TableHead>
                   {showLineDescription && <TableHead>Description</TableHead>}
-                  <TableHead className="w-36">Qty / Unit</TableHead>
-                  <TableHead className="w-24">Rate</TableHead>
-                  <TableHead className="w-20">Disc</TableHead>
-                  <TableHead className="w-20">GST %</TableHead>
+                  <TableHead className="w-40">Qty / Unit</TableHead>
+                  <TableHead className="w-32">Rate</TableHead>
+                  <TableHead className="w-24">Disc</TableHead>
+                  {showGstColumn && <TableHead className="w-20">GST %</TableHead>}
                   <TableHead className="w-28 text-right">Amount</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
