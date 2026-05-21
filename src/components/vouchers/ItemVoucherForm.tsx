@@ -134,7 +134,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [partyId, setPartyId] = useState("");
   const [refNo, setRefNo] = useState("");
   const [narration, setNarration] = useState("");
-  const [placeOfSupply, setPlaceOfSupply] = useState<string>("");
   const [roundOff, setRoundOff] = useState<boolean>(true);
   const isPurchaseSide = voucherType === "purchase" || voucherType === "debit_note";
   const [itcClass, setItcClass] = useState<
@@ -144,7 +143,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [miscPreGst, setMiscPreGst] = useState<string>("0");
   const [miscPostGst, setMiscPostGst] = useState<string>("0");
-  const [posOverridden, setPosOverridden] = useState<boolean>(false);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [items, setItems] = useState<ItemOpt[]>([]);
   const [companyStateCode, setCompanyStateCode] = useState<string | null>(null);
