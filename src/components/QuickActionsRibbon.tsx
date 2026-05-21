@@ -7,6 +7,8 @@ import {
   BookOpen,
   Repeat,
   Library,
+  FileMinus,
+  FilePlus,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
