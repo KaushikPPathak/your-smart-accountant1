@@ -45,6 +45,7 @@ import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport
 import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
 import { YearEndClosure } from "@/components/housekeeping/YearEndClosure";
 import { FinancialYearTransferWizard } from "@/components/housekeeping/FinancialYearTransferWizard";
+import { YearEndLockToggle } from "@/components/housekeeping/YearEndLockToggle";
 import { VerifyAndRepairTool } from "@/components/housekeeping/VerifyAndRepairTool";
 import { SelfTestPanel } from "@/components/housekeeping/SelfTestPanel";
 import { ImportHistoryPanel } from "@/components/housekeeping/ImportHistoryPanel";
@@ -223,7 +224,15 @@ function HousekeepingPage() {
             }
           />
         </TabsContent>
-        <TabsContent value="fy_transfer">
+        <TabsContent value="fy_transfer" className="space-y-4">
+          <YearEndLockToggle
+            companyId={activeCompanyId}
+            fyStart={
+              (activeMembership?.companies as { financial_year_start?: string | null } | undefined)
+                ?.financial_year_start ?? null
+            }
+            disabled={!isAdmin}
+          />
           <FinancialYearTransferWizard
             companyId={activeCompanyId}
             disabled={!isAdmin}
