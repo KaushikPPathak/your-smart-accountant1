@@ -15,6 +15,8 @@ export interface QuickLedger {
   name: string;
   type: string;
   state_code: string | null;
+  gstin: string | null;
+  gst_treatment: string | null;
 }
 
 interface Props {
@@ -109,7 +111,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
           .from("ledgers")
           .update(payload)
           .eq("id", editId)
-          .select("id, name, type, state_code")
+          .select("id, name, type, state_code, gstin, gst_treatment")
           .single();
         if (error) throw error;
         toast.success("Ledger updated");
@@ -118,7 +120,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         const { data, error } = await supabase
           .from("ledgers")
           .insert(payload)
-          .select("id, name, type, state_code")
+          .select("id, name, type, state_code, gstin, gst_treatment")
           .single();
         if (error) throw error;
         toast.success("Ledger created");

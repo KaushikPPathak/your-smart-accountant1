@@ -63,6 +63,8 @@ interface LedgerOpt {
   name: string;
   type: string;
   state_code: string | null;
+  gstin: string | null;
+  gst_treatment: string | null;
 }
 interface ItemOpt {
   id: string;
@@ -132,7 +134,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [partyId, setPartyId] = useState("");
   const [refNo, setRefNo] = useState("");
   const [narration, setNarration] = useState("");
-  const [placeOfSupply, setPlaceOfSupply] = useState<string>("");
   const [roundOff, setRoundOff] = useState<boolean>(true);
   const isPurchaseSide = voucherType === "purchase" || voucherType === "debit_note";
   const [itcClass, setItcClass] = useState<
@@ -142,7 +143,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [miscPreGst, setMiscPreGst] = useState<string>("0");
   const [miscPostGst, setMiscPostGst] = useState<string>("0");
-  const [posOverridden, setPosOverridden] = useState<boolean>(false);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [items, setItems] = useState<ItemOpt[]>([]);
   const [companyStateCode, setCompanyStateCode] = useState<string | null>(null);
@@ -191,7 +191,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         partyId: string;
         refNo: string;
         narration: string;
-        placeOfSupply: string;
         roundOff: boolean;
         itcClass: typeof itcClass;
         itcEligible: boolean;
@@ -203,7 +202,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if (d.partyId) setPartyId(d.partyId);
       if (d.refNo) setRefNo(d.refNo);
       if (d.narration) setNarration(d.narration);
-      if (d.placeOfSupply) setPlaceOfSupply(d.placeOfSupply);
+      
       if (typeof d.roundOff === "boolean") setRoundOff(d.roundOff);
       if (d.itcClass) setItcClass(d.itcClass);
       if (typeof d.itcEligible === "boolean") setItcEligible(d.itcEligible);
@@ -235,7 +234,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             partyId,
             refNo,
             narration,
-            placeOfSupply,
             roundOff,
             itcClass,
             itcEligible,
@@ -255,7 +253,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     partyId,
     refNo,
     narration,
-    placeOfSupply,
     roundOff,
     itcClass,
     itcEligible,
@@ -283,6 +280,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         name: l.name,
         type: l.type,
         state_code: l.state_code,
+        gstin: l.gstin,
+        gst_treatment: l.gst_treatment,
       })),
     );
     setItems(
@@ -301,14 +300,28 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     [ledgers, cfg.partyTypes],
   );
   const partyLedger = useMemo(() => ledgers.find((l) => l.id === partyId), [ledgers, partyId]);
-  const interstate = isInterstate(companyStateCode, placeOfSupply || partyLedger?.state_code);
+  // Place of supply is derived strictly from the party's GSTIN (first 2 digits = state code)
+  // or, if GSTIN is missing, from the party's state code. No manual override — the party
+  // ledger is the single source of truth for IGST vs CGST+SGST routing.
+  const placeOfSupply = useMemo(() => {
+    const fromGstin = partyLedger?.gstin?.slice(0, 2);
+    if (fromGstin && /^\d{2}$/.test(fromGstin)) return fromGstin;
+    return partyLedger?.state_code ?? "";
+  }, [partyLedger]);
+  const interstate = isInterstate(companyStateCode, placeOfSupply);
 
-  // Place of supply auto-derives from party state code; user may override (e.g. for an
-  // out-of-Gujarat supplier where the GSTIN isn't captured — toggle PoS to force IGST).
+  // Supplier GST treatment drives ITC eligibility for purchases:
+  //   composition / unregistered / consumer → no ITC (flows to GSTR-3B 4(D), GSTR-9 ineligible)
+  // GSTR-1 / GSTR-3B / GSTR-9 classification (B2B / B2CL / CBW / EXP) is computed in
+  // `src/lib/gst-returns.ts` from the same `ledgers.gst_treatment` value.
   useEffect(() => {
-    if (posOverridden) return;
-    setPlaceOfSupply(partyLedger?.state_code ?? "");
-  }, [partyLedger, posOverridden]);
+    if (!isPurchaseSide) return;
+    const t = partyLedger?.gst_treatment;
+    if (t === "composition" || t === "unregistered" || t === "consumer") {
+      setItcClass("ineligible");
+      setItcEligible(false);
+    }
+  }, [partyLedger, isPurchaseSide]);
 
   const deferredLines = useDeferredValue(lines);
   const computed: GstLineResult[] = useMemo(
@@ -707,6 +720,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       name: lg.name,
       type: lg.type,
       state_code: lg.state_code,
+      gstin: lg.gstin,
+      gst_treatment: lg.gst_treatment,
       is_active: true,
     });
     if (cfg.partyTypes.includes(lg.type)) setPartyId(lg.id);
@@ -811,29 +826,34 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onCreate={() => setLedgerDlg({ open: true, editId: null })}
                   createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
                 />
-                <div className="flex items-center gap-1.5 pt-0.5">
-                  <span className="text-[11px] text-muted-foreground">PoS</span>
-                  <Input
-                    value={placeOfSupply}
-                    onChange={(e) => {
-                      setPosOverridden(true);
-                      setPlaceOfSupply(e.target.value.replace(/\D/g, "").slice(0, 2));
-                    }}
-                    onBlur={(e) => {
-                      if (!e.target.value && partyLedger?.state_code) {
-                        setPosOverridden(false);
-                      }
-                    }}
-                    placeholder="--"
-                    maxLength={2}
-                    className="h-6 w-12 px-1.5 text-center text-xs font-mono"
-                    title="State code (2 digits). Different from company state → IGST."
-                  />
-                  <span className="text-[11px] text-muted-foreground">
-                    {interstate ? "→ IGST (interstate)" : "→ CGST+SGST"}
-                    {posOverridden && " · overridden"}
-                  </span>
-                </div>
+                {partyLedger && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground">
+                    {(() => {
+                      const t = partyLedger.gst_treatment ?? "regular";
+                      const labels: Record<string, string> = {
+                        regular: "Regular",
+                        composition: "Composition",
+                        unregistered: "Unregistered",
+                        consumer: "Consumer",
+                        sez: "SEZ",
+                        overseas: "Overseas",
+                      };
+                      return (
+                        <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-foreground/80">
+                          {labels[t] ?? t}
+                        </span>
+                      );
+                    })()}
+                    <span>
+                      PoS {placeOfSupply || "—"} · {interstate ? "IGST (interstate)" : "CGST + SGST"}
+                    </span>
+                    {isPurchaseSide && !itcEligible && (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                        ITC ineligible
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reference No.</Label>

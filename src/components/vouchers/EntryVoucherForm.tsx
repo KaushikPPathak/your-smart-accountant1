@@ -382,6 +382,8 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     upsertCachedLedger({
       id: lg.id, name: lg.name, type: lg.type,
       state_code: (lg as { state_code?: string | null }).state_code ?? null,
+      gstin: (lg as { gstin?: string | null }).gstin ?? null,
+      gst_treatment: (lg as { gst_treatment?: string | null }).gst_treatment ?? null,
       is_active: true,
     });
     const idx = ledgerDlg.lineIdx;
