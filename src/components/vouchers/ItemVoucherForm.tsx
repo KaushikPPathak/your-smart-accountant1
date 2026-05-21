@@ -191,7 +191,6 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         partyId: string;
         refNo: string;
         narration: string;
-        placeOfSupply: string;
         roundOff: boolean;
         itcClass: typeof itcClass;
         itcEligible: boolean;
