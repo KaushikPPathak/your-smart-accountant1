@@ -63,9 +63,11 @@ export interface PdfTableOptions {
 export function downloadPdfTable(opts: PdfTableOptions): void {
   void (async () => {
     const lang = getStoredLang();
+    const { jsPDF, autoTable } = await loadJsPdf();
     const doc = new jsPDF({ orientation: opts.orientation || "p", unit: "pt", format: "a4" });
     const FONT = await prepareReportFont(doc, lang);
     const pageW = doc.internal.pageSize.getWidth();
+
 
     const title = localizeExportText(opts.title, lang);
     const subtitle = opts.subtitle ? localizeExportText(opts.subtitle, lang) : undefined;
