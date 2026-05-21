@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { UNITS, GST_RATES } from "@/lib/constants";
+import { useEnterAsTab } from "./useEnterAsTab";
 
 export interface QuickItem {
   id: string;
