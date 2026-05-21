@@ -150,23 +150,23 @@ function ItemRowImpl({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-9 shrink-0 gap-1"
+            size="icon"
+            className="h-9 w-9 shrink-0"
             title="New item (F4)"
             onClick={() => onAddItemDlg(idx)}
           >
-            <PackagePlus className="h-4 w-4" /> Add
+            <PackagePlus className="h-4 w-4" />
           </Button>
           {row.item_id && (
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="h-9 shrink-0 gap-1"
+              size="icon"
+              className="h-9 w-9 shrink-0"
               title="Edit item (Shift+F4)"
               onClick={() => onEditItemDlg(idx, row.item_id)}
             >
-              <Pencil className="h-4 w-4" /> Edit
+              <Pencil className="h-4 w-4" />
             </Button>
           )}
         </div>
