@@ -134,7 +134,14 @@ function ProfitLoss() {
             onExportXlsx={onExportXlsx}
             onExportPdf={onExportPdf}
             onPrint={() => window.print()}
-            extra={<div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>}
+            extra={<div className="flex gap-3 items-end">
+              <div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>
+              <div className="space-y-1"><Label className="text-xs">Tax Audit</Label>
+                <Button size="sm" variant={taxView ? "default" : "outline"} onClick={() => setTaxView((v) => !v)}>
+                  <Scale className="mr-1 h-3.5 w-3.5" />{taxView ? "On" : "Off"}
+                </Button>
+              </div>
+            </div>}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             {isIE
