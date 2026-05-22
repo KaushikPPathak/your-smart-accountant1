@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -58,10 +58,16 @@ interface NavItem {
   icon: LucideIcon;
   i18nKey?: string;
 }
+interface NavSubGroup {
+  label: string;
+  i18nKey?: string;
+  items: NavItem[];
+}
 interface NavSection {
   label: string;
   icon: LucideIcon;
   items: NavItem[];
+  subGroups?: NavSubGroup[];
   requiresGst?: boolean;
   i18nKey?: string;
 }
@@ -84,7 +90,7 @@ const SECTIONS: NavSection[] = [
     icon: ShieldCheck,
     items: [
       { title: "Ledgers / Parties", url: "/app/ledgers", icon: Users, i18nKey: "nav.ledgers" },
-      { title: "Group Manager", url: "/app/account-groups", icon: Layers },
+      { title: "Group Manager", url: "/app/account-groups", icon: Layers, i18nKey: "nav.groupManager" },
       { title: "Items / Stock", url: "/app/items", icon: Package, i18nKey: "nav.items" },
       { title: "Recurring Invoices", url: "/app/recurring", icon: Repeat, i18nKey: "nav.recurring" },
     ],
@@ -111,22 +117,42 @@ const SECTIONS: NavSection[] = [
     icon: Printer,
     items: [
       { title: "Reports Hub", url: "/app/reports", icon: FileBarChart, i18nKey: "nav.reportsHub" },
-      { title: "Day Book", url: "/app/reports/day-book", icon: CalendarClock, i18nKey: "nav.dayBook" },
-      { title: "Ledger Statement", url: "/app/reports/ledger", icon: ScrollText, i18nKey: "nav.ledgerStatement" },
-      { title: "Group Ledger (B/S & P&L)", url: "/app/reports/group-ledger", icon: Layers, i18nKey: "nav.groupLedger" },
-      { title: "Trial Balance", url: "/app/reports/trial-balance", icon: Calculator, i18nKey: "nav.trialBalance" },
-      { title: "Trading Account", url: "/app/reports/trading", icon: TrendingUp, i18nKey: "nav.tradingAccount" },
-      { title: "Profit & Loss", url: "/app/reports/profit-loss", icon: TrendingUp, i18nKey: "nav.profitLoss" },
-     { title: "Balance Sheet", url: "/app/reports/balance-sheet", icon: FileSpreadsheet, i18nKey: "nav.balanceSheet" },
-     { title: "Tax Audit (3CD)", url: "/app/reports/tax-audit", icon: ShieldCheck },
-      { title: "Outstanding", url: "/app/reports/outstanding", icon: ClipboardList, i18nKey: "nav.outstanding" },
-      { title: "Stock Summary", url: "/app/reports/stock-summary", icon: Boxes, i18nKey: "nav.stockSummary" },
-      { title: "HSN Summary", url: "/app/reports/hsn-summary", icon: Boxes },
-      { title: "GSTR-1 / 3B / 2B", url: "/app/reports/gstr1", icon: Receipt, i18nKey: "nav.gstReturns" },
-      { title: "GST Sales Book", url: "/app/reports/gst-sales-book", icon: Receipt, i18nKey: "nav.gstSalesBook" },
-      { title: "GST Purchase Book", url: "/app/reports/gst-purchase-book", icon: Receipt, i18nKey: "nav.gstPurchaseBook" },
-      { title: "ITC — Item-wise", url: "/app/reports/itc-item-wise", icon: Receipt },
-      { title: "ITC — Party-wise", url: "/app/reports/itc-party-wise", icon: Receipt },
+    ],
+    subGroups: [
+      {
+        label: "Core Financials",
+        i18nKey: "nav.subgroup.coreFinancials",
+        items: [
+          { title: "Day Book", url: "/app/reports/day-book", icon: CalendarClock, i18nKey: "nav.dayBook" },
+          { title: "Ledger Statement", url: "/app/reports/ledger", icon: ScrollText, i18nKey: "nav.ledgerStatement" },
+          { title: "Group Ledger (B/S & P&L)", url: "/app/reports/group-ledger", icon: Layers, i18nKey: "nav.groupLedger" },
+          { title: "Trial Balance", url: "/app/reports/trial-balance", icon: Calculator, i18nKey: "nav.trialBalance" },
+          { title: "Trading Account", url: "/app/reports/trading", icon: TrendingUp, i18nKey: "nav.tradingAccount" },
+          { title: "Profit & Loss", url: "/app/reports/profit-loss", icon: TrendingUp, i18nKey: "nav.profitLoss" },
+          { title: "Balance Sheet", url: "/app/reports/balance-sheet", icon: FileSpreadsheet, i18nKey: "nav.balanceSheet" },
+        ],
+      },
+      {
+        label: "GST & Tax Compliance",
+        i18nKey: "nav.subgroup.gstTax",
+        items: [
+          { title: "Tax Audit (3CD)", url: "/app/reports/tax-audit", icon: ShieldCheck, i18nKey: "nav.taxAudit3CD" },
+          { title: "GSTR-1 / 3B / 2B", url: "/app/reports/gstr1", icon: Receipt, i18nKey: "nav.gstReturns" },
+          { title: "GST Sales Book", url: "/app/reports/gst-sales-book", icon: Receipt, i18nKey: "nav.gstSalesBook" },
+          { title: "GST Purchase Book", url: "/app/reports/gst-purchase-book", icon: Receipt, i18nKey: "nav.gstPurchaseBook" },
+          { title: "HSN Summary", url: "/app/reports/hsn-summary", icon: Boxes, i18nKey: "nav.hsnSummary" },
+          { title: "ITC — Item-wise", url: "/app/reports/itc-item-wise", icon: Receipt, i18nKey: "nav.itcItemWise" },
+          { title: "ITC — Party-wise", url: "/app/reports/itc-party-wise", icon: Receipt, i18nKey: "nav.itcPartyWise" },
+        ],
+      },
+      {
+        label: "Inventory & Outstandings",
+        i18nKey: "nav.subgroup.inventoryOutstandings",
+        items: [
+          { title: "Stock Summary", url: "/app/reports/stock-summary", icon: Boxes, i18nKey: "nav.stockSummary" },
+          { title: "Outstanding", url: "/app/reports/outstanding", icon: ClipboardList, i18nKey: "nav.outstanding" },
+        ],
+      },
     ],
   },
   {
@@ -138,7 +164,7 @@ const SECTIONS: NavSection[] = [
       { title: "Bank Reconciliation", url: "/app/bank", icon: Landmark, i18nKey: "nav.bankRecon" },
       { title: "BRS (Book vs Bank)", url: "/app/reports/brs", icon: Landmark, i18nKey: "nav.brs" },
       { title: "E-Invoice / EWB", url: "/app/einvoice", icon: FileCode2, i18nKey: "nav.einvoice" },
-      { title: "AI Assistant", url: "/app/assistant", icon: Sparkles },
+      { title: "AI Assistant", url: "/app/assistant", icon: Sparkles, i18nKey: "nav.aiAssistant" },
     ],
   },
 ];
@@ -148,6 +174,7 @@ const GST_URLS = new Set([
   "/app/einvoice",
   "/app/reports/gst-sales-book",
   "/app/reports/gst-purchase-book",
+  "/app/reports/tax-audit",
   "/app/reports/itc-item-wise",
   "/app/reports/itc-party-wise",
 ]);
@@ -170,28 +197,47 @@ export function AppSidebar() {
   const tt = (item: { title: string; i18nKey?: string }) =>
     item.i18nKey ? t(item.i18nKey) : item.title;
 
-  const visibleSections = SECTIONS.map((s) => ({
-    ...s,
-    items: s.items.filter(
+  const filterItems = (items: NavItem[]) =>
+    items.filter(
       (i) =>
         (gstEnabled || !GST_URLS.has(i.url)) &&
         (inventoryEnabled || !INVENTORY_URLS.has(i.url)),
-    ),
-  })).filter((s) => s.items.length > 0);
+    );
+
+  const visibleSections = useMemo(
+    () =>
+      SECTIONS.map((s) => {
+        const items = filterItems(s.items);
+        const subGroups = s.subGroups
+          ?.map((g) => ({ ...g, items: filterItems(g.items) }))
+          .filter((g) => g.items.length > 0);
+        return { ...s, items, subGroups };
+      }).filter((s) => s.items.length > 0 || (s.subGroups && s.subGroups.length > 0)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gstEnabled, inventoryEnabled],
+  );
 
   const isActive = (url: string) =>
     url === "/app" ? location.pathname === "/app" : location.pathname === url;
 
-  const sectionHasActive = (section: NavSection) =>
-    section.items.some((i) =>
+  const sectionHasActive = (section: NavSection) => {
+    const all = [...section.items, ...(section.subGroups?.flatMap((g) => g.items) ?? [])];
+    return all.some((i) =>
       i.url === "/app" ? location.pathname === "/app" : location.pathname.startsWith(i.url),
     );
+  };
 
-  // Track which sections are open. Auto-open the section containing the active route.
+  const subGroupHasActive = (group: NavSubGroup) =>
+    group.items.some((i) => location.pathname.startsWith(i.url));
+
+  // Track which sections / sub-groups are open.
   const [openMap, setOpenMap] = useState<Record<string, boolean>>(() => {
     const o: Record<string, boolean> = {};
     SECTIONS.forEach((s) => {
       o[s.label] = sectionHasActive(s) || s.label === "Company";
+      s.subGroups?.forEach((g) => {
+        o[`${s.label}::${g.label}`] = subGroupHasActive(g);
+      });
     });
     return o;
   });
@@ -206,6 +252,13 @@ export function AppSidebar() {
           next[section.label] = true;
           changed = true;
         }
+        section.subGroups?.forEach((g) => {
+          const key = `${section.label}::${g.label}`;
+          if (subGroupHasActive(g) && !next[key]) {
+            next[key] = true;
+            changed = true;
+          }
+        });
       });
 
       return changed ? next : current;
@@ -233,11 +286,15 @@ export function AppSidebar() {
         {visibleSections.map((section) => {
           // When collapsed, render flat icon list (no collapsible groups)
           if (collapsed) {
+            const flat = [
+              ...section.items,
+              ...(section.subGroups?.flatMap((g) => g.items) ?? []),
+            ];
             return (
               <SidebarGroup key={section.label}>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {section.items.map((item) => (
+                    {flat.map((item) => (
                       <SidebarMenuItem key={item.url}>
                         <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={tt(item)}>
                           <Link to={item.url}>
@@ -283,7 +340,7 @@ export function AppSidebar() {
                     />
                   </CollapsibleTrigger>
                 </SidebarGroupLabel>
-                <CollapsibleContent>
+                <CollapsibleContent className="overflow-hidden">
                   <SidebarGroupContent>
                     <SidebarMenuSub>
                       {section.items.map((item) => (
@@ -297,6 +354,39 @@ export function AppSidebar() {
                         </SidebarMenuSubItem>
                       ))}
                     </SidebarMenuSub>
+
+                    {section.subGroups?.map((group) => {
+                      const gKey = `${section.label}::${group.label}`;
+                      const gOpen = openMap[gKey] ?? false;
+                      return (
+                        <Collapsible
+                          key={gKey}
+                          open={gOpen}
+                          onOpenChange={(v) => setOpenMap((m) => ({ ...m, [gKey]: v }))}
+                        >
+                          <CollapsibleTrigger className="mt-1 flex w-full items-center justify-between rounded-md px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground">
+                            <span>{group.i18nKey ? t(group.i18nKey) : group.label}</span>
+                            <ChevronDown
+                              className={`h-3 w-3 transition-transform ${gOpen ? "rotate-0" : "-rotate-90"}`}
+                            />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="overflow-hidden">
+                            <SidebarMenuSub>
+                              {group.items.map((item) => (
+                                <SidebarMenuSubItem key={item.url}>
+                                  <SidebarMenuSubButton asChild isActive={isActive(item.url)}>
+                                    <Link to={item.url}>
+                                      <item.icon className="h-3.5 w-3.5" />
+                                      <span>{tt(item)}</span>
+                                    </Link>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              ))}
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      );
+                    })}
                   </SidebarGroupContent>
                 </CollapsibleContent>
               </SidebarGroup>
