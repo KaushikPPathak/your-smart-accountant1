@@ -1179,6 +1179,185 @@ export type Database = {
         }
         Relationships: []
       }
+      it_43b_clearances: {
+        Row: {
+          cleared_on: string | null
+          cleared_paise: number
+          company_id: string
+          created_at: string
+          fy_end: string
+          id: string
+          ledger_id: string
+          notes: string | null
+          reference: string | null
+          updated_at: string
+        }
+        Insert: {
+          cleared_on?: string | null
+          cleared_paise?: number
+          company_id: string
+          created_at?: string
+          fy_end: string
+          id?: string
+          ledger_id: string
+          notes?: string | null
+          reference?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cleared_on?: string | null
+          cleared_paise?: number
+          company_id?: string
+          created_at?: string
+          fy_end?: string
+          id?: string
+          ledger_id?: string
+          notes?: string | null
+          reference?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      it_asset_blocks: {
+        Row: {
+          code: string
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+          rate_pct: number
+        }
+        Insert: {
+          code: string
+          company_id: string
+          created_at?: string
+          id?: string
+          name: string
+          rate_pct: number
+        }
+        Update: {
+          code?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          rate_pct?: number
+        }
+        Relationships: []
+      }
+      it_asset_movements: {
+        Row: {
+          amount_paise: number
+          asset_id: string
+          company_id: string
+          created_at: string
+          fy_start: string
+          id: string
+          kind: string
+          movement_date: string
+          notes: string | null
+        }
+        Insert: {
+          amount_paise?: number
+          asset_id: string
+          company_id: string
+          created_at?: string
+          fy_start: string
+          id?: string
+          kind: string
+          movement_date: string
+          notes?: string | null
+        }
+        Update: {
+          amount_paise?: number
+          asset_id?: string
+          company_id?: string
+          created_at?: string
+          fy_start?: string
+          id?: string
+          kind?: string
+          movement_date?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "it_asset_movements_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "it_fixed_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      it_disallowances: {
+        Row: {
+          amount_paise: number
+          company_id: string
+          created_at: string
+          description: string | null
+          fy_end: string
+          id: string
+          section: string
+        }
+        Insert: {
+          amount_paise?: number
+          company_id: string
+          created_at?: string
+          description?: string | null
+          fy_end: string
+          id?: string
+          section: string
+        }
+        Update: {
+          amount_paise?: number
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          fy_end?: string
+          id?: string
+          section?: string
+        }
+        Relationships: []
+      }
+      it_fixed_assets: {
+        Row: {
+          block_code: string
+          company_id: string
+          created_at: string
+          fy_start: string
+          id: string
+          is_active: boolean
+          ledger_id: string | null
+          name: string
+          opening_wdv_paise: number
+          updated_at: string
+        }
+        Insert: {
+          block_code: string
+          company_id: string
+          created_at?: string
+          fy_start: string
+          id?: string
+          is_active?: boolean
+          ledger_id?: string | null
+          name: string
+          opening_wdv_paise?: number
+          updated_at?: string
+        }
+        Update: {
+          block_code?: string
+          company_id?: string
+          created_at?: string
+          fy_start?: string
+          id?: string
+          is_active?: boolean
+          ledger_id?: string | null
+          name?: string
+          opening_wdv_paise?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       items: {
         Row: {
           company_id: string
@@ -1765,6 +1944,7 @@ export type Database = {
           line_no: number
           qty: number
           rate_paise: number
+          role: string
           sgst_paise: number
           specs: Json | null
           taxable_paise: number
@@ -1783,6 +1963,7 @@ export type Database = {
           line_no?: number
           qty?: number
           rate_paise?: number
+          role?: string
           sgst_paise?: number
           specs?: Json | null
           taxable_paise?: number
@@ -1801,6 +1982,7 @@ export type Database = {
           line_no?: number
           qty?: number
           rate_paise?: number
+          role?: string
           sgst_paise?: number
           specs?: Json | null
           taxable_paise?: number
@@ -1883,9 +2065,12 @@ export type Database = {
           party_ledger_id: string | null
           place_of_supply_code: string | null
           port_code: string | null
+          process_yield_pct: number | null
+          processing_overhead_paise: number
           reason: string | null
           reference_no: string | null
           round_off_paise: number
+          scrap_value_paise: number
           sgst_paise: number
           shipping_bill_date: string | null
           shipping_bill_no: string | null
@@ -1922,9 +2107,12 @@ export type Database = {
           party_ledger_id?: string | null
           place_of_supply_code?: string | null
           port_code?: string | null
+          process_yield_pct?: number | null
+          processing_overhead_paise?: number
           reason?: string | null
           reference_no?: string | null
           round_off_paise?: number
+          scrap_value_paise?: number
           sgst_paise?: number
           shipping_bill_date?: string | null
           shipping_bill_no?: string | null
@@ -1961,9 +2149,12 @@ export type Database = {
           party_ledger_id?: string | null
           place_of_supply_code?: string | null
           port_code?: string | null
+          process_yield_pct?: number | null
+          processing_overhead_paise?: number
           reason?: string | null
           reference_no?: string | null
           round_off_paise?: number
+          scrap_value_paise?: number
           sgst_paise?: number
           shipping_bill_date?: string | null
           shipping_bill_no?: string | null
