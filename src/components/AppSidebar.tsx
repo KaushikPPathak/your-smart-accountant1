@@ -340,7 +340,7 @@ export function AppSidebar() {
                     />
                   </CollapsibleTrigger>
                 </SidebarGroupLabel>
-                <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+                <CollapsibleContent className="overflow-hidden">
                   <SidebarGroupContent>
                     <SidebarMenuSub>
                       {section.items.map((item) => (
@@ -370,7 +370,7 @@ export function AppSidebar() {
                               className={`h-3 w-3 transition-transform ${gOpen ? "rotate-0" : "-rotate-90"}`}
                             />
                           </CollapsibleTrigger>
-                          <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+                          <CollapsibleContent className="overflow-hidden">
                             <SidebarMenuSub>
                               {group.items.map((item) => (
                                 <SidebarMenuSubItem key={item.url}>
