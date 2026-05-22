@@ -120,8 +120,7 @@ const SECTIONS: NavSection[] = [
     ],
     subGroups: [
       {
-        label: "Core Financials",
-        i18nKey: "nav.subgroup.coreFinancials",
+        label: "Core Financial Reports",
         items: [
           { title: "Day Book", url: "/app/reports/day-book", icon: CalendarClock, i18nKey: "nav.dayBook" },
           { title: "Ledger Statement", url: "/app/reports/ledger", icon: ScrollText, i18nKey: "nav.ledgerStatement" },
@@ -130,27 +129,30 @@ const SECTIONS: NavSection[] = [
           { title: "Trading Account", url: "/app/reports/trading", icon: TrendingUp, i18nKey: "nav.tradingAccount" },
           { title: "Profit & Loss", url: "/app/reports/profit-loss", icon: TrendingUp, i18nKey: "nav.profitLoss" },
           { title: "Balance Sheet", url: "/app/reports/balance-sheet", icon: FileSpreadsheet, i18nKey: "nav.balanceSheet" },
+          { title: "Outstanding", url: "/app/reports/outstanding", icon: ClipboardList },
         ],
       },
       {
-        label: "GST & Tax Compliance",
-        i18nKey: "nav.subgroup.gstTax",
+        label: "GST Reports",
         items: [
-          { title: "Tax Audit (3CD)", url: "/app/reports/tax-audit", icon: ShieldCheck, i18nKey: "nav.taxAudit3CD" },
           { title: "GSTR-1 / 3B / 2B", url: "/app/reports/gstr1", icon: Receipt, i18nKey: "nav.gstReturns" },
           { title: "GST Sales Book", url: "/app/reports/gst-sales-book", icon: Receipt, i18nKey: "nav.gstSalesBook" },
           { title: "GST Purchase Book", url: "/app/reports/gst-purchase-book", icon: Receipt, i18nKey: "nav.gstPurchaseBook" },
-          { title: "HSN Summary", url: "/app/reports/hsn-summary", icon: Boxes, i18nKey: "nav.hsnSummary" },
-          { title: "ITC — Item-wise", url: "/app/reports/itc-item-wise", icon: Receipt, i18nKey: "nav.itcItemWise" },
-          { title: "ITC — Party-wise", url: "/app/reports/itc-party-wise", icon: Receipt, i18nKey: "nav.itcPartyWise" },
+          { title: "HSN wise Item Report", url: "/app/reports/hsn-summary", icon: Boxes },
+          { title: "Item wise Itc", url: "/app/reports/itc-item-wise", icon: Receipt },
+          { title: "Party Wice ITC", url: "/app/reports/itc-party-wise", icon: Receipt },
         ],
       },
       {
-        label: "Inventory & Outstandings",
-        i18nKey: "nav.subgroup.inventoryOutstandings",
+        label: "Audit Manager",
+        items: [
+          { title: "Tax Audit Assistant", url: "/app/reports/tax-audit", icon: ShieldCheck },
+        ],
+      },
+      {
+        label: "Inventory reports",
         items: [
           { title: "Stock Summary", url: "/app/reports/stock-summary", icon: Boxes, i18nKey: "nav.stockSummary" },
-          { title: "Outstanding", url: "/app/reports/outstanding", icon: ClipboardList, i18nKey: "nav.outstanding" },
         ],
       },
     ],
