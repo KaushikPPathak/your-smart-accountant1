@@ -85,6 +85,7 @@ export function AssistantChat() {
   const [thinking, setThinking] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const callAssistant = useServerFn(assistantChat);
+  const callDraftVoucher = useServerFn(assistantDraftVoucher);
 
 
   useEffect(() => {
