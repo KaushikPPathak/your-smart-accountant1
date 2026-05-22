@@ -1755,7 +1755,17 @@ ${itemLines ? `\nITEM CATALOG (id | name):\n${itemLines}` : ""}
       if (!call) {
         return { ok: false as const, error: "Model did not emit a draft." };
       }
-      return { ok: true as const, draft: call.input as Record<string, unknown> };
+      const input = call.input as {
+        voucherType: "payment" | "receipt" | "sales" | "purchase";
+        date: string;
+        partyLedgerId: string | null;
+        cashBankLedgerId: string | null;
+        counterLedgerId: string | null;
+        amount: number;
+        narration: string;
+        refNo?: string;
+      };
+      return { ok: true as const, draft: input };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[assistant.draft] error:", msg);
