@@ -21,6 +21,9 @@ import { useAccountGroups } from "@/lib/account-groups-runtime";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { BucketedGrid } from "@/components/reports/BucketedGrid";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Scale } from "lucide-react";
+import { TaxAuditPanel } from "@/components/reports/TaxAuditPanel";
 
 export const Route = createFileRoute("/app/reports/balance-sheet")({
   head: () => ({ meta: [{ title: "Balance Sheet — Reports" }] }),
@@ -45,6 +48,7 @@ function BalanceSheet() {
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const { view, setView } = useReportView("balance-sheet");
+  const [taxView, setTaxView] = useState(false);
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
 
   useEffect(() => {
@@ -142,7 +146,14 @@ function BalanceSheet() {
             onExportXlsx={onExportXlsx}
             onExportPdf={onExportPdf}
             onPrint={() => window.print()}
-            extra={<div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>}
+            extra={<div className="flex gap-3 items-end">
+              <div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>
+              <div className="space-y-1"><Label className="text-xs">Tax Audit</Label>
+                <Button size="sm" variant={taxView ? "default" : "outline"} onClick={() => setTaxView((v) => !v)}>
+                  <Scale className="mr-1 h-3.5 w-3.5" />{taxView ? "On" : "Off"}
+                </Button>
+              </div>
+            </div>}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             Closing position as on <strong>{to}</strong>. Heads grouped per Income-Tax / Schedule III norms
@@ -198,6 +209,7 @@ function BalanceSheet() {
         rightTotal={formatINR(grandA)}
       />
       )}
+      {taxView && <TaxAuditPanel mode="bs" fyStart={from} fyEnd={to} />}
     </div>
   );
 }
