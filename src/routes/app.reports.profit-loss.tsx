@@ -16,6 +16,9 @@ import { openLedgerReport } from "@/lib/voucher-return";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { BucketedGrid } from "@/components/reports/BucketedGrid";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Scale } from "lucide-react";
+import { TaxAuditPanel } from "@/components/reports/TaxAuditPanel";
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
   head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
