@@ -16,12 +16,19 @@ import {
   type AssistantAction,
   type KbEntry,
 } from "@/lib/assistant-knowledge";
-import { assistantChat } from "@/lib/assistant.functions";
+import { assistantChat, assistantDraftVoucher } from "@/lib/assistant.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
 import { INDIAN_STATES } from "@/lib/constants";
+import {
+  detectVoucherIntent,
+  fetchContextLedgers,
+  intentToRoute,
+  writeAssistantPrefill,
+  type VoucherIntent,
+} from "@/lib/voucher-intent";
 
 interface ChatMessage {
   id: string;
