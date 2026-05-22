@@ -625,7 +625,7 @@ function ManualDisallowanceForm({
 function AssetDialog({
   open, onClose, onSave,
 }: { open: boolean; onClose: () => void; onSave: (a: { block_code: string; name: string; opening_wdv_paise: number }) => void }) {
-  const [block, setBlock] = useState(DEFAULT_IT_BLOCKS[3].code);
+  const [block, setBlock] = useState<string>(DEFAULT_IT_BLOCKS[3].code);
   const [name, setName] = useState("");
   const [wdv, setWdv] = useState("");
   return (
