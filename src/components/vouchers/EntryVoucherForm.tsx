@@ -109,6 +109,35 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const { lock, locked } = usePeriodLock(date);
   const formRootRef = useRef<HTMLDivElement | null>(null);
 
+  // Assistant prefill: when the AI chat drafts a Payment/Receipt, it stashes
+  // the parsed JSON in sessionStorage and navigates here. Apply once on mount.
+  useEffect(() => {
+    if (!isSimple) return;
+    void import("@/lib/voucher-intent").then(({ consumeAssistantPrefill, focusSaveButton }) => {
+      const p = consumeAssistantPrefill(voucherType as "payment" | "receipt");
+      if (!p) return;
+      if (p.date) setDate(p.date);
+      if (p.narration) setNarration(p.narration);
+      if (p.refNo) setRefNo(p.refNo);
+      if (p.cashBankLedgerId) setCashBankId(p.cashBankLedgerId);
+      if (p.partyLedgerId || p.counterLedgerId || p.amount) {
+        const targetId = p.partyLedgerId ?? p.counterLedgerId ?? "";
+        setSimpleLines((prev) => {
+          const next = [...prev];
+          next[0] = {
+            ...next[0],
+            ledger_id: targetId,
+            amount: p.amount ? String(p.amount) : next[0].amount,
+            narration: p.narration ?? next[0].narration,
+          };
+          return next;
+        });
+      }
+      focusSaveButton(document);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Re-render when masters change so the ledger list stays fresh.
   const mastersVersion = useMastersVersion();
   const ledgers: LedgerOpt[] = useMemo(
