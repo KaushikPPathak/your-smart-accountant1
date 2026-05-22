@@ -219,6 +219,28 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
+
+  // Assistant prefill (from the in-app AI chat). Applied after the localStorage
+  // restore so the assistant always wins when both exist.
+  useEffect(() => {
+    if (voucherType !== "sales" && voucherType !== "purchase") return;
+    void import("@/lib/voucher-intent").then(({ consumeAssistantPrefill, focusSaveButton }) => {
+      const p = consumeAssistantPrefill(voucherType as "sales" | "purchase");
+      if (!p) return;
+      if (p.date) setDate(p.date);
+      if (p.partyLedgerId) setPartyId(p.partyLedgerId);
+      if (p.refNo) setRefNo(p.refNo);
+      if (p.narration) setNarration(p.narration);
+      if (p.amount && Number.isFinite(p.amount)) {
+        setLines((prev) => {
+          const first = prev[0] ?? blankLine();
+          return [{ ...first, rate: String(p.amount), qty: first.qty || "1" }, ...prev.slice(1)];
+        });
+      }
+      focusSaveButton(document);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (!draftKey) return;
     const hasContent =
