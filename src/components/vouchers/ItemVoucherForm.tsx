@@ -219,6 +219,28 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
+
+  // Assistant prefill (from the in-app AI chat). Applied after the localStorage
+  // restore so the assistant always wins when both exist.
+  useEffect(() => {
+    if (voucherType !== "sales" && voucherType !== "purchase") return;
+    void import("@/lib/voucher-intent").then(({ consumeAssistantPrefill, focusSaveButton }) => {
+      const p = consumeAssistantPrefill(voucherType as "sales" | "purchase");
+      if (!p) return;
+      if (p.date) setDate(p.date);
+      if (p.partyLedgerId) setPartyId(p.partyLedgerId);
+      if (p.refNo) setRefNo(p.refNo);
+      if (p.narration) setNarration(p.narration);
+      if (p.amount && Number.isFinite(p.amount)) {
+        setLines((prev) => {
+          const first = prev[0] ?? blankLine();
+          return [{ ...first, rate: String(p.amount), qty: first.qty || "1" }, ...prev.slice(1)];
+        });
+      }
+      focusSaveButton(document);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (!draftKey) return;
     const hasContent =
@@ -813,7 +835,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
               <X className="mr-1 h-4 w-4" /> Cancel
             </Button>
-            <Button onClick={save} disabled={saving || !canWrite || locked}>
+            <Button data-assistant-save onClick={save} disabled={saving || !canWrite || locked}>
               <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
             </Button>
           </div>

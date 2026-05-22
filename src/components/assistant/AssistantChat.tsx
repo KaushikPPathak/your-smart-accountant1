@@ -16,12 +16,19 @@ import {
   type AssistantAction,
   type KbEntry,
 } from "@/lib/assistant-knowledge";
-import { assistantChat } from "@/lib/assistant.functions";
+import { assistantChat, assistantDraftVoucher } from "@/lib/assistant.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
 import { INDIAN_STATES } from "@/lib/constants";
+import {
+  detectVoucherIntent,
+  fetchContextLedgers,
+  intentToRoute,
+  writeAssistantPrefill,
+  type VoucherIntent,
+} from "@/lib/voucher-intent";
 
 interface ChatMessage {
   id: string;
@@ -78,6 +85,7 @@ export function AssistantChat() {
   const [thinking, setThinking] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const callAssistant = useServerFn(assistantChat);
+  const callDraftVoucher = useServerFn(assistantDraftVoucher);
 
 
   useEffect(() => {
@@ -315,7 +323,55 @@ export function AssistantChat() {
         return;
       }
 
-      // 3) AI-first answer with accounting tool access; fall back to KB.
+      // 3) Fast-path: client-side intent detection → strict-JSON draft → prefill voucher form.
+      const intent: VoucherIntent | null = activeCompanyId
+        ? detectVoucherIntent(text)
+        : null;
+      if (intent && activeCompanyId && user) {
+        setThinking(true);
+        try {
+          const ledgers = await fetchContextLedgers(supabase, activeCompanyId, intent);
+          const res = await callDraftVoucher({
+            data: {
+              voucherType: intent,
+              text,
+              today: new Date().toISOString().slice(0, 10),
+              ledgers,
+            },
+          });
+          if (res.ok && res.draft) {
+            const d = res.draft;
+            writeAssistantPrefill({
+              voucherType: intent,
+              date: d.date,
+              partyLedgerId: d.partyLedgerId ?? undefined,
+              cashBankLedgerId: d.cashBankLedgerId ?? undefined,
+              counterLedgerId: d.counterLedgerId ?? undefined,
+              amount: d.amount,
+              narration: d.narration,
+              refNo: d.refNo,
+            });
+            setMessages((m) => [
+              ...m,
+              {
+                id: `a-${Date.now()}`,
+                role: "assistant",
+                text: `Drafted a **${intent}** voucher — opening the form. Press **Enter** to save (or Ctrl+S).`,
+              },
+            ]);
+            setThinking(false);
+            navigate({ to: intentToRoute(intent) });
+            return;
+          }
+          if (!res.ok && res.error) toast.error(res.error);
+        } catch (err) {
+          console.error("[assistant.draft] failed", err);
+        } finally {
+          setThinking(false);
+        }
+      }
+
+      // 4) AI-first answer with accounting tool access; fall back to KB.
       if (aiMode && user) {
         setThinking(true);
         try {

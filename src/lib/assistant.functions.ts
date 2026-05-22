@@ -1629,3 +1629,150 @@ Other:
       return { ok: false as const, error: `AI error: ${msg}` };
     }
   });
+
+// ============================================================================
+// FAST DRAFT — strict-JSON voucher drafting (used by the assistant's
+// client-side intent-detection fast-path).
+//
+// The client predicts the voucher type via a local regex, fetches ONLY the
+// ledgers/items relevant to that intent, and ships a minimal context to the
+// LLM. The model is forced to respond exclusively through one tool call whose
+// arguments ARE the voucher state — no conversational prose, no markdown.
+// ============================================================================
+
+const DraftInput = z.object({
+  voucherType: z.enum(["payment", "receipt", "sales", "purchase"]),
+  text: z.string().min(1).max(2000),
+  today: z.string().describe("ISO YYYY-MM-DD; client clock"),
+  ledgers: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.string(),
+      }),
+    )
+    .max(80),
+  items: z
+    .array(z.object({ id: z.string(), name: z.string() }))
+    .max(80)
+    .optional(),
+});
+
+export const assistantDraftVoucher = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => DraftInput.parse(input))
+  .handler(async ({ data }) => {
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) {
+      return { ok: false as const, error: "AI is not configured." };
+    }
+
+    const draftTool = tool({
+      description: "Emit the voucher draft as structured JSON.",
+      inputSchema: z.object({
+        voucherType: z.enum(["payment", "receipt", "sales", "purchase"]),
+        date: z
+          .string()
+          .describe("ISO YYYY-MM-DD; default = today if not stated"),
+        partyLedgerId: z
+          .string()
+          .nullable()
+          .describe("Resolved id of the party ledger, or null if unknown"),
+        cashBankLedgerId: z
+          .string()
+          .nullable()
+          .describe("Resolved id of the cash/bank ledger (payment/receipt)"),
+        counterLedgerId: z
+          .string()
+          .nullable()
+          .describe(
+            "Resolved id of an expense/income/asset ledger when the user names one",
+          ),
+        amount: z
+          .number()
+          .nonnegative()
+          .describe("Total amount in rupees (NOT paise)"),
+        narration: z.string().max(180).default(""),
+        refNo: z.string().max(60).optional(),
+      }),
+      // Just bounce the args back so generateText surfaces them in toolCalls.
+      execute: async (args) => args,
+    });
+
+    const ledgerLines = data.ledgers
+      .map((l) => `- ${l.id} | ${l.name} | ${l.type}`)
+      .join("\n");
+    const itemLines = (data.items ?? [])
+      .map((i) => `- ${i.id} | ${i.name}`)
+      .join("\n");
+
+    const system = `You are a deterministic voucher-extraction engine.
+
+ABSOLUTE RULES — violations are bugs:
+1. Reply EXCLUSIVELY by calling the "emit_voucher_draft" tool.
+2. NEVER produce conversational text, greetings, markdown, explanations,
+   apologies, or follow-up questions. No prose. Tool call only.
+3. Resolve ledger NAMES from the user's text to the EXACT ledger id from
+   the catalog below. Fuzzy match is allowed; if nothing plausibly matches,
+   set the field to null — do NOT invent an id.
+4. Use ISO YYYY-MM-DD for the date. If the user does not specify one, use
+   today: ${data.today}.
+5. Amount is in rupees (decimal). Strip "Rs", "₹", commas.
+6. voucherType is fixed for this call: "${data.voucherType}".
+
+PAYMENT  → cashBankLedgerId = the cash/bank paid FROM;
+            counterLedgerId  = the expense/asset/party paid TO (if a non-party expense).
+            partyLedgerId    = the creditor/supplier if named.
+RECEIPT  → cashBankLedgerId = the cash/bank received INTO;
+            partyLedgerId    = the debtor/customer if named;
+            counterLedgerId  = the income head if named.
+SALES    → partyLedgerId    = the customer (sundry_debtor).
+            counterLedgerId  = the sales/income account if named (else null).
+PURCHASE → partyLedgerId    = the supplier (sundry_creditor).
+            counterLedgerId  = the expense/stock account if named (else null).
+
+LEDGER CATALOG (id | name | type):
+${ledgerLines || "(none — leave id fields null)"}
+${itemLines ? `\nITEM CATALOG (id | name):\n${itemLines}` : ""}
+`;
+
+    try {
+      const provider = createLovableAiGatewayProvider(key);
+      const model = provider("google/gemini-3-flash-preview");
+      const result = await generateText({
+        model,
+        system,
+        messages: [{ role: "user", content: data.text }],
+        tools: { emit_voucher_draft: draftTool },
+        toolChoice: "required",
+        stopWhen: stepCountIs(2),
+      });
+
+      const call = result.steps
+        .flatMap((s) => s.toolCalls ?? [])
+        .find((c) => c.toolName === "emit_voucher_draft");
+      if (!call) {
+        return { ok: false as const, error: "Model did not emit a draft." };
+      }
+      const input = call.input as {
+        voucherType: "payment" | "receipt" | "sales" | "purchase";
+        date: string;
+        partyLedgerId: string | null;
+        cashBankLedgerId: string | null;
+        counterLedgerId: string | null;
+        amount: number;
+        narration: string;
+        refNo?: string;
+      };
+      return { ok: true as const, draft: input };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[assistant.draft] error:", msg);
+      if (msg.includes("429"))
+        return { ok: false as const, error: "AI is busy. Try again in a moment." };
+      if (msg.includes("402"))
+        return { ok: false as const, error: "AI credits exhausted." };
+      return { ok: false as const, error: `AI error: ${msg}` };
+    }
+  });
