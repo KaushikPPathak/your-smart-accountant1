@@ -100,8 +100,10 @@ export async function showInFolderNative(filePath: string): Promise<SaveNativeRe
   if (eb) return eb.showInFolder(filePath);
   if (hasTauri()) {
     try {
-      const { revealItemInDir } = await import("@tauri-apps/plugin-shell");
-      await revealItemInDir(filePath);
+      const { open } = await import("@tauri-apps/plugin-shell");
+      // No dedicated "reveal" API in plugin-shell — open the parent directory.
+      const parent = filePath.replace(/[\\/][^\\/]*$/, "");
+      await open(parent || filePath);
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
