@@ -36,7 +36,7 @@ function CompanyMiniCard({
     >
       <CardContent className="space-y-2 p-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold leading-tight">{m.companies.name}</div>
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
               {m.companies.gst_registered ? t("company.gst") : t("company.unreg")} • {m.role}
@@ -57,19 +57,29 @@ function CompanyMiniCard({
             )}
           </div>
         </div>
-        <div className="flex items-center justify-between rounded-md border bg-muted/40 px-1.5 py-1">
+        <div
+          className={`flex items-center justify-between rounded-md border px-1.5 py-1 ${
+            isActive
+              ? "border-primary/40 bg-primary/10 text-primary"
+              : "border-border bg-muted/40 text-foreground"
+          }`}
+        >
           <button
             type="button"
-            className="rounded p-0.5 hover:bg-background"
+            className={`rounded p-0.5 transition-colors ${
+              isActive ? "hover:bg-primary/20" : "hover:bg-background"
+            }`}
             onClick={(e) => { e.stopPropagation(); setOffset((o) => o - 1); }}
             aria-label={t("company.prevYear")}
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-          <span className="font-mono text-xs">{t("common.fy")} {fy}</span>
+          <span className="font-mono text-xs font-medium">{t("common.fy")} {fy}</span>
           <button
             type="button"
-            className="rounded p-0.5 hover:bg-background"
+            className={`rounded p-0.5 transition-colors ${
+              isActive ? "hover:bg-primary/20" : "hover:bg-background"
+            }`}
             onClick={(e) => { e.stopPropagation(); setOffset((o) => o + 1); }}
             aria-label={t("company.nextYear")}
           >
