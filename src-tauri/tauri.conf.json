@@ -4,10 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.smartaccountant.app",
   "build": {
-    "beforeDevCommand": "bun run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
-    "frontendDist": "../dist"
+    "devUrl": "https://your-smart-accountant.lovable.app",
+    "frontendDist": "https://your-smart-accountant.lovable.app"
   },
   "app": {
     "windows": [
@@ -16,7 +14,8 @@
         "width": 1280,
         "height": 800,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "url": "https://your-smart-accountant.lovable.app"
       }
     ],
     "security": {
