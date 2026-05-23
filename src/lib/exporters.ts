@@ -232,10 +232,12 @@ export interface PdfSection {
   sectionTitle: string;
   /** Optional secondary line under the section title. */
   sectionSubtitle?: string;
-  head: string[][];
+  head: (string | object)[][];
   body: (string | number)[][];
   foot?: (string | number)[][];
   rightAlignCols?: number[];
+  /** Draw a thick vertical divider before this column index (T-format split). */
+  dividerBeforeCol?: number;
 }
 
 export interface PdfMultiTableOptions {
@@ -321,6 +323,14 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
         margin: { top: y + 4 },
         didParseCell: (data) => {
           data.cell.styles.font = FONT;
+        },
+        didDrawCell: (data) => {
+          if (section.dividerBeforeCol != null && data.column.index === section.dividerBeforeCol) {
+            doc.setLineWidth(1.6);
+            doc.setDrawColor(0, 0, 0);
+            doc.line(data.cell.x, data.cell.y, data.cell.x, data.cell.y + data.cell.height);
+            doc.setLineWidth(0.5);
+          }
         },
         didDrawPage: (data) => {
           if (data.pageNumber > 1 && data.cursor && data.cursor.y < 60) {

@@ -601,10 +601,65 @@ function LedgerStatement() {
 
   const onViewAll = async () => { await ensureAllSections(); setAllMode(true); };
 
+  // Build Dr/Cr T-format rows for a single AllSection (mirrors the on-screen T-format).
+  const buildTSides = (s: AllSection) => {
+    type Side = { date: string; particulars: string; vchType: string; vchNo: string; chqRef: string; amount: number };
+    const dr: Side[] = [];
+    const cr: Side[] = [];
+    if (s.opening > 0) {
+      dr.push({ date: fmtIndianDate(from), particulars: "To Opening Balance", vchType: "", vchNo: "", chqRef: "", amount: s.opening });
+    } else if (s.opening < 0) {
+      cr.push({ date: fmtIndianDate(from), particulars: "By Opening Balance", vchType: "", vchNo: "", chqRef: "", amount: -s.opening });
+    }
+    for (const row of s.rows) {
+      if (row.debit > 0) {
+        dr.push({ date: fmtIndianDate(row.date), particulars: `To ${row.particulars} A/c`, vchType: row.vchType, vchNo: row.vchNo, chqRef: "", amount: row.debit });
+      }
+      if (row.credit > 0) {
+        cr.push({ date: fmtIndianDate(row.date), particulars: `By ${row.particulars} A/c`, vchType: row.vchType, vchNo: row.vchNo, chqRef: "", amount: row.credit });
+      }
+    }
+    const drSub = (s.opening > 0 ? s.opening : 0) + s.dr;
+    const crSub = (s.opening < 0 ? -s.opening : 0) + s.cr;
+    if (drSub > crSub) {
+      cr.push({ date: fmtIndianDate(to), particulars: "By Balance c/d", vchType: "", vchNo: "", chqRef: "", amount: drSub - crSub });
+    } else if (crSub > drSub) {
+      dr.push({ date: fmtIndianDate(to), particulars: "To Balance c/d", vchType: "", vchNo: "", chqRef: "", amount: crSub - drSub });
+    }
+    return { dr, cr, total: Math.max(drSub, crSub) };
+  };
+
   const onExportAllPdf = async () => {
     const data = await ensureAllSections();
     if (data.length === 0) { toast.info("No ledgers with activity in this period."); return; }
-    const sections: PdfSection[] = data.map((s) => {
+    const sections: PdfSection[] = view === "horizontal"
+      ? data.map((s) => {
+          const { dr, cr, total } = buildTSides(s);
+          const body = Array.from({ length: Math.max(dr.length, cr.length) }).map((_, i) => {
+            const l = dr[i]; const r2 = cr[i];
+            return [
+              l ? l.date : "", l ? l.particulars : "", l ? l.vchType : "", l ? l.vchNo : "", l ? l.chqRef : "", l ? r(l.amount).toFixed(2) : "",
+              r2 ? r2.date : "", r2 ? r2.particulars : "", r2 ? r2.vchType : "", r2 ? r2.vchNo : "", r2 ? r2.chqRef : "", r2 ? r(r2.amount).toFixed(2) : "",
+            ];
+          });
+          return {
+            sectionTitle: `Ledger A/c — ${s.ledger.name}`,
+            head: [
+              [
+                { content: "Dr.", colSpan: 6, styles: { halign: "center", fontStyle: "bold" } },
+                { content: "Cr.", colSpan: 6, styles: { halign: "center", fontStyle: "bold" } },
+              ],
+              [...horizontalHead, ...horizontalHead],
+            ],
+            body,
+            foot: [
+              ["Total", "", "", "", "", r(total).toFixed(2), "Total", "", "", "", "", r(total).toFixed(2)],
+            ],
+            rightAlignCols: [5, 11],
+            dividerBeforeCol: 6,
+          } as PdfSection;
+        })
+      : data.map((s) => {
       const showNarr = s.rows.some((row) => (row.narration || "").trim().length > 0);
       const head = showNarr
         ? ["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]
@@ -641,7 +696,7 @@ function LedgerStatement() {
       subtitle: pdfHeader.dateRangeSubtitle(from, to),
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
-      fileName: `all-ledgers-${from}_to_${to}.pdf`,
+      fileName: `all-ledgers-${view}-${from}_to_${to}.pdf`,
       orientation: "l",
       sections,
     });
@@ -661,6 +716,30 @@ function LedgerStatement() {
         <div style="font-size:10pt">${esc(periodLine)}</div>
       </div>`;
     const sectionsHtml = data.map((s, idx) => {
+      if (view === "horizontal") {
+        const { dr, cr, total } = buildTSides(s);
+        const len = Math.max(dr.length, cr.length);
+        const headCols = `<th>Date</th><th>Particulars</th><th>Vch Type</th><th>Vch No</th><th>Chq/Ref</th><th class="num">Amount</th>`;
+        const head = `<thead>
+            <tr><th colspan="6" style="text-align:center">Dr.</th><th colspan="6" style="text-align:center">Cr.</th></tr>
+            <tr>${headCols}${headCols}</tr>
+          </thead>`;
+        const body = Array.from({ length: len }).map((_, i) => {
+          const l = dr[i]; const r2 = cr[i];
+          const sideCells = (x?: { date: string; particulars: string; vchType: string; vchNo: string; chqRef: string; amount: number }) =>
+            x ? `<td>${esc(x.date)}</td><td>${esc(x.particulars)}</td><td>${esc(x.vchType)}</td><td>${esc(x.vchNo)}</td><td>${esc(x.chqRef)}</td><td class="num">${fmtMoney(x.amount)}</td>`
+              : `<td></td><td></td><td></td><td></td><td></td><td class="num"></td>`;
+          return `<tr>${sideCells(l)}${sideCells(r2)}</tr>`;
+        }).join("");
+        const foot = `<tr class="row-bold">
+            <td colspan="5">Total</td><td class="num">${r(total).toFixed(2)}</td>
+            <td colspan="5">Total</td><td class="num">${r(total).toFixed(2)}</td>
+          </tr>`;
+        return `<div class="${idx > 0 ? "page-break" : ""}">
+            <h2 class="ledger-heading">Ledger A/c — ${esc(s.ledger.name)}</h2>
+            <table>${head}<tbody>${body}</tbody><tfoot>${foot}</tfoot></table>
+          </div>`;
+      }
       const showNarr = s.rows.some((row) => (row.narration || "").trim().length > 0);
       const head = `<thead><tr>
           <th>Date</th><th>Particulars</th><th>Vch Type</th><th>Vch No</th>
