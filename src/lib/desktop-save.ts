@@ -1,32 +1,17 @@
 // Unified export saver.
-// - In the Electron desktop app: writes to
-//     %USERPROFILE%/Documents/YourMehtaji/Exports/<Company>/<subFolder>/<fileName>
-//   then auto-opens the file in the OS default viewer and shows a toast with
-//   "Show in folder" and "Cancel" actions.
-// - In the browser: falls back to a normal "Download" (saved to the user's
-//   Downloads folder, same behaviour as before).
+// - In a native desktop runtime (Electron or Tauri) the file is written into
+//   the company export folder and a toast offers "Show in folder".
+// - In the browser it falls back to a normal Download (saved to the user's
+//   Downloads folder).
 import { toast } from "sonner";
-
-interface DesktopBridge {
-  isDesktop: true;
-  saveCompanyFile: (
-    company: string,
-    subFolder: string,
-    fileName: string,
-    contents: string | ArrayBuffer | Uint8Array,
-  ) => Promise<{ ok: boolean; path?: string; error?: string }>;
-  showInFolder: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
-  openPath: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
-}
-
-function bridge(): DesktopBridge | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as { yourMehtaji?: DesktopBridge };
-  return w.yourMehtaji?.isDesktop ? w.yourMehtaji : null;
-}
+import {
+  isDesktopRuntime,
+  saveCompanyFileNative,
+  showInFolderNative,
+} from "./native-bridge";
 
 export function isDesktop(): boolean {
-  return bridge() !== null;
+  return isDesktopRuntime();
 }
 
 const COMPANY_NAME_KEY = "ym_active_company_name";
