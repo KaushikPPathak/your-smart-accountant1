@@ -224,9 +224,9 @@ export function CompanyFlyout() {
                   {t("company.noneYet")}.
                 </div>
               ) : (
-                <div className="grid max-h-[60vh] grid-cols-2 gap-2 overflow-y-auto pr-1">
+                <div className="max-h-[60vh] space-y-0.5 overflow-y-auto pr-1">
                   {memberships.map((m) => (
-                    <CompanyMiniCard
+                    <CompanyRow
                       key={m.company_id}
                       m={m}
                       isActive={m.company_id === activeCompanyId}
