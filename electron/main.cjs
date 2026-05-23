@@ -124,6 +124,11 @@ ipcMain.handle('open-path', async (_evt, target) => {
   catch (err) { return { ok: false, error: err && err.message ? err.message : String(err) }; }
 });
 
+ipcMain.handle('close-app', async () => {
+  app.quit();
+  return { ok: true };
+});
+
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
