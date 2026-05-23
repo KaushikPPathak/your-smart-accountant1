@@ -6,16 +6,38 @@
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
-// Tauri exposes the desktop build via the TAURI_ENV_* variables (Tauri v2)
-// or TAURI_PLATFORM (Tauri v1) during `tauri dev` / `tauri build`. When that
-// env is present we tighten a few defaults so the Vite dev server cooperates
-// with the Tauri watch loop:
-//   - relative asset base (Tauri loads index.html via the tauri:// scheme,
-//     absolute "/" paths break asset resolution exactly like in Electron)
-//   - fixed dev port (1420) with strictPort so Tauri's webview can attach
-//   - don't clear the terminal (Tauri prints its own status above Vite)
-//   - HMR over the same port so reloads work inside the native webview
 const isTauri = Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_PLATFORM);
+
+// Shared production build tuning. Applied to both web and Tauri builds.
+// NOTE: We intentionally do NOT manualChunk React or TanStack — they must stay
+// with the SSR runtime chunk or hydration breaks. Only split heavy *optional*
+// libs that are loaded on-demand (PDF/Excel/Word/chart exports).
+const sharedBuild = {
+  target: "es2020" as const,
+  cssMinify: true as const,
+  reportCompressedSize: false,
+  chunkSizeWarningLimit: 1500,
+  assetsInlineLimit: 4096,
+  rollupOptions: {
+    output: {
+      manualChunks(id: string) {
+        if (!id.includes("node_modules")) return;
+        if (/[\\/]node_modules[\\/](jspdf|jspdf-autotable|pdf-lib)[\\/]/.test(id)) {
+          return "exports-pdf";
+        }
+        if (/[\\/]node_modules[\\/](xlsx|exceljs)[\\/]/.test(id)) {
+          return "exports-xlsx";
+        }
+        if (/[\\/]node_modules[\\/](docx|html-docx-js)[\\/]/.test(id)) {
+          return "exports-docx";
+        }
+        if (/[\\/]node_modules[\\/](recharts|d3-[^/\\]+)[\\/]/.test(id)) {
+          return "charts";
+        }
+      },
+    },
+  },
+};
 
 export default defineConfig(
   isTauri
@@ -31,13 +53,16 @@ export default defineConfig(
               ? { protocol: "ws", host: process.env.TAURI_DEV_HOST, port: 1421 }
               : undefined,
             watch: {
-              // Tauri owns the src-tauri/ folder — avoid Vite restarting on
-              // Rust file changes.
               ignored: ["**/src-tauri/**"],
             },
           },
           envPrefix: ["VITE_", "TAURI_ENV_"],
+          build: sharedBuild,
         },
       }
-    : {},
+    : {
+        vite: {
+          build: sharedBuild,
+        },
+      },
 );
