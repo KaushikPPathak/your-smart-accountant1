@@ -66,11 +66,10 @@ export async function writeLocalMirror(
 
   const jsonStr = JSON.stringify(backup, null, 2);
 
-  const api = electron();
-  if (api) {
+  if (isDesktopRuntime()) {
     const [j1, j2] = await Promise.all([
-      api.saveCompanyFile(companyName, "backups", jsonFile, jsonStr),
-      api.saveCompanyFile(companyName, "latest", latestJson, jsonStr),
+      saveCompanyFileNative(companyName, "backups", jsonFile, jsonStr),
+      saveCompanyFileNative(companyName, "latest", latestJson, jsonStr),
     ]);
     if (!j1.ok || !j2.ok) {
       const err = j1.error || j2.error || "Unknown error";
