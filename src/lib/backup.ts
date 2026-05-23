@@ -97,9 +97,8 @@ export async function exportCompanyBackup(
   const envelope = await wrapBackup(payload);
   const contents = JSON.stringify(envelope, null, 2);
 
-  const api = electron();
-  if (api) {
-    const res = await api.saveCompanyFile(companyName, "backups", fileName, contents);
+  if (isDesktopRuntime()) {
+    const res = await saveCompanyFileNative(companyName, "backups", fileName, contents);
     if (res.ok) return { fileName, desktopPath: res.path };
   }
   browserDownload(fileName, contents);
