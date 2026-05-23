@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Building2, Plus, ChevronLeft, ChevronRight, Check, Settings, Pencil } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+
 import { useCompany, type CompanyMembership } from "@/lib/company-context";
 import { useI18n } from "@/lib/i18n";
 
