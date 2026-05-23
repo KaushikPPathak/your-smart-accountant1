@@ -179,7 +179,27 @@ function StartScreen() {
             <LanguageSwitcher compact />
             <CurrencySwitcher compact />
             <DateFormatSwitcher compact />
-            <Button variant="ghost" size="sm" onClick={() => window.close()} className="hidden md:inline-flex">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                // Tauri desktop: close the native window via Tauri API
+                try {
+                  const w = window as unknown as { __TAURI_INTERNALS__?: unknown; __TAURI__?: unknown };
+                  if (w.__TAURI_INTERNALS__ || w.__TAURI__) {
+                    const mod = await import(/* @vite-ignore */ "@tauri-apps/api/window");
+                    await mod.getCurrentWindow().close();
+                    return;
+                  }
+                } catch {
+                  /* fall through to browser close */
+                }
+                // Browser fallback
+                window.open("", "_self");
+                window.close();
+              }}
+              className="hidden md:inline-flex"
+            >
               <ExitIcon className="mr-2 h-4 w-4" /> {t("common.exit")}
             </Button>
           </div>
