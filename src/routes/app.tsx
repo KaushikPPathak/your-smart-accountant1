@@ -223,9 +223,6 @@ function AppLayout() {
               <DateFormatSwitcher compact />
               {isTrial && (
                 <>
-                  <Badge variant="outline" className="hidden border-amber-500/60 bg-amber-500/10 text-amber-700 sm:inline-flex dark:text-amber-300" title="This company is kept as a continuous local copy on this PC.">
-                    Trial / Local-only
-                  </Badge>
                   <Button
                     variant="outline"
                     size="sm"
