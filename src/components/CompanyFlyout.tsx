@@ -29,8 +29,10 @@ function CompanyMiniCard({
   const fy = useMemo(() => fyLabel(m.companies.financial_year_start, offset), [m.companies.financial_year_start, offset]);
   return (
     <Card
-      className={`group relative cursor-pointer transition-colors hover:border-primary/60 ${
-        isActive ? "border-primary ring-1 ring-primary/30" : ""
+      className={`group relative cursor-pointer transition-colors ${
+        isActive
+          ? "border-primary bg-primary/5 ring-2 ring-primary/40"
+          : "hover:border-primary/60"
       }`}
       onClick={() => onPick(m.company_id)}
     >
@@ -60,25 +62,25 @@ function CompanyMiniCard({
         <div
           className={`flex items-center justify-between rounded-md border px-1.5 py-1 ${
             isActive
-              ? "border-primary/40 bg-primary/10 text-primary"
+              ? "border-primary bg-primary text-primary-foreground"
               : "border-border bg-muted/40 text-foreground"
           }`}
         >
           <button
             type="button"
             className={`rounded p-0.5 transition-colors ${
-              isActive ? "hover:bg-primary/20" : "hover:bg-background"
+              isActive ? "hover:bg-primary-foreground/20" : "hover:bg-background"
             }`}
             onClick={(e) => { e.stopPropagation(); setOffset((o) => o - 1); }}
             aria-label={t("company.prevYear")}
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-          <span className="font-mono text-xs font-medium">{t("common.fy")} {fy}</span>
+          <span className="font-mono text-xs font-semibold">{t("common.fy")} {fy}</span>
           <button
             type="button"
             className={`rounded p-0.5 transition-colors ${
-              isActive ? "hover:bg-primary/20" : "hover:bg-background"
+              isActive ? "hover:bg-primary-foreground/20" : "hover:bg-background"
             }`}
             onClick={(e) => { e.stopPropagation(); setOffset((o) => o + 1); }}
             aria-label={t("company.nextYear")}
@@ -90,6 +92,7 @@ function CompanyMiniCard({
     </Card>
   );
 }
+
 
 /**
  * Hover-driven side panel for the Company menu.
