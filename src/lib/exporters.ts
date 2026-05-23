@@ -232,10 +232,12 @@ export interface PdfSection {
   sectionTitle: string;
   /** Optional secondary line under the section title. */
   sectionSubtitle?: string;
-  head: string[][];
+  head: (string | object)[][];
   body: (string | number)[][];
   foot?: (string | number)[][];
   rightAlignCols?: number[];
+  /** Draw a thick vertical divider before this column index (T-format split). */
+  dividerBeforeCol?: number;
 }
 
 export interface PdfMultiTableOptions {
