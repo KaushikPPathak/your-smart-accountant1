@@ -1,26 +1,16 @@
 // Silent tech-user sign-in.
 //
-// The app no longer shows a login screen. On boot we silently sign in as a
-// single shared "technical user" so that Supabase RLS (which keys off
-// auth.uid()) keeps working without the client ever seeing an auth UI.
-//
-// This is Phase A1 of the local-only migration: auth UI is gone, but Cloud
-// is still the data backend. In later phases the SQLite layer replaces
-// Supabase entirely and this whole file goes away.
+// The app no longer shows an email/password login screen. On boot we silently
+// sign in as a single shared "technical user" so that Supabase RLS (which
+// keys off auth.uid()) keeps working. The user-visible gate is the PIN lock
+// screen (see staff-session.ts and /lock route).
 
 import { supabase } from "@/integrations/supabase/client";
 import { TECH_USER_EMAIL, TECH_USER_PASSWORD } from "./tech-user-credentials";
+import { lockWorkspace as lockWorkspaceImpl } from "./staff-session";
 
 let inflight: Promise<void> | null = null;
 
-/**
- * Make sure there is a valid Supabase session on this device. If one already
- * exists (persisted in localStorage), no-op. Otherwise sign in silently using
- * the shared tech-user credentials.
- *
- * Safe to call repeatedly — concurrent callers share the same in-flight
- * promise and the result is cached by Supabase's own session storage.
- */
 export async function ensureTechSession(): Promise<void> {
   if (typeof window === "undefined") return;
   if (inflight) return inflight;
@@ -34,9 +24,6 @@ export async function ensureTechSession(): Promise<void> {
         password: TECH_USER_PASSWORD,
       });
       if (error) {
-        // Don't throw — surface in console so the UI can still render an
-        // error state via downstream queries. Hard-throwing here would blank
-        // the entire app on a transient network blip.
         console.error("[tech-user] silent sign-in failed:", error.message);
       }
     } finally {
@@ -47,22 +34,11 @@ export async function ensureTechSession(): Promise<void> {
   return inflight;
 }
 
-// Re-exported so legacy imports keep resolving.
 export { TECH_USER_EMAIL, TECH_USER_PASSWORD };
 
-/**
- * "Lock" the workspace: clear per-company unlock flags and the active company
- * id, then return the caller to the company picker. We deliberately do NOT
- * sign out of Supabase — signing out would force another silent sign-in on
- * the next page and there is no user-visible benefit.
- */
+// Re-export the lock helper so legacy callers keep working.
 export async function lockWorkspace() {
-  if (typeof window === "undefined") return;
-  for (let i = sessionStorage.length - 1; i >= 0; i--) {
-    const k = sessionStorage.key(i);
-    if (k && k.startsWith("ym_unlocked_")) sessionStorage.removeItem(k);
-  }
-  localStorage.removeItem("ym_active_company_id");
+  lockWorkspaceImpl();
 }
 
 const UNLOCK_KEY = (id: string) => `ym_unlocked_${id}`;

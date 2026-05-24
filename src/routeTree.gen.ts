@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LockRouteImport } from './routes/lock'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
@@ -62,6 +63,11 @@ import { Route as AppVouchersNewDelivery_noteRouteImport } from './routes/app.vo
 import { Route as AppVouchersNewDebit_noteRouteImport } from './routes/app.vouchers.new.debit_note'
 import { Route as AppVouchersNewCredit_noteRouteImport } from './routes/app.vouchers.new.credit_note'
 
+const LockRoute = LockRouteImport.update({
+  id: '/lock',
+  path: '/lock',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/app',
   path: '/app',
@@ -333,6 +339,7 @@ const AppVouchersNewCredit_noteRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/lock': typeof LockRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
@@ -386,6 +393,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/lock': typeof LockRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
@@ -441,6 +449,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/lock': typeof LockRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
@@ -497,6 +506,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/lock'
     | '/app/account-groups'
     | '/app/assistant'
     | '/app/bank'
@@ -550,6 +560,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/lock'
     | '/app/account-groups'
     | '/app/assistant'
     | '/app/bank'
@@ -604,6 +615,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/lock'
     | '/app/account-groups'
     | '/app/assistant'
     | '/app/bank'
@@ -659,10 +671,18 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  LockRoute: typeof LockRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/lock': {
+      id: '/lock'
+      path: '/lock'
+      fullPath: '/lock'
+      preLoaderRoute: typeof LockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app': {
       id: '/app'
       path: '/app'
@@ -1161,6 +1181,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  LockRoute: LockRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
