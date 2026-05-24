@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "user-picker",
+  "description": "Scoped FS permission for explicit, user-initiated 'Save as…' writes only. The dialog plugin returns a path the user picked; we allow writing that path under the common user-visible folders (Documents, Downloads, Desktop, Home). Silent writes still cannot escape %LOCALAPPDATA% because the default capability does not include these scopes.",
+  "windows": ["main"],
+  "permissions": [
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$HOME/**" }
+      ]
+    }
+  ]
+}

@@ -24,6 +24,8 @@ import {
   lockWorkspace,
 } from "@/lib/tech-user";
 import { writeLocalMirror, getLastLocalMirror } from "@/lib/local-mirror";
+import { runAppDataMigrationsOnce } from "@/lib/app-data-migrations";
+import { isDesktopRuntime } from "@/lib/native-bridge";
 import { AccountGroupsProvider } from "@/lib/account-groups-runtime";
 import { KeyboardCheatSheet } from "@/components/vouchers/KeyboardCheatSheet";
 import { MastersProvider } from "@/lib/masters-cache";
@@ -96,6 +98,12 @@ function AppLayout() {
     let cancelled = false;
     (async () => {
       try {
+        // Silent on-launch data migration (desktop only). Idempotent —
+        // ensures %LOCALAPPDATA% folders exist and moves any legacy
+        // Documents\YourMehtaji\Exports data forward without prompting.
+        if (isDesktopRuntime()) {
+          void runAppDataMigrationsOnce().catch(() => undefined);
+        }
         await ensureTechSession();
       } finally {
         if (!cancelled) setBootstrapping(false);
