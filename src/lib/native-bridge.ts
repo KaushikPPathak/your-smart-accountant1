@@ -134,6 +134,25 @@ export async function closeNativeApp(): Promise<SaveNativeResult> {
   if (eb?.closeApp) return eb.closeApp();
   if (hasTauri()) {
     try {
+      const w = window as unknown as {
+        __TAURI__?: {
+          window?: { getCurrentWindow?: () => { destroy?: () => Promise<void>; close?: () => Promise<void> } };
+          process?: { exit?: (code?: number) => Promise<void> };
+        };
+      };
+      // Prefer the injected global (works when the frontend is loaded from a remote URL
+      // because dynamic `import("@tauri-apps/api/window")` may not be reachable there).
+      const getCurr = w.__TAURI__?.window?.getCurrentWindow;
+      if (typeof getCurr === "function") {
+        const win = getCurr();
+        if (win?.destroy) { await win.destroy(); return { ok: true }; }
+        if (win?.close)   { await win.close();   return { ok: true }; }
+      }
+      if (w.__TAURI__?.process?.exit) {
+        await w.__TAURI__.process.exit(0);
+        return { ok: true };
+      }
+      // Fallback: dynamic import (works in bundled local builds).
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const currentWindow = getCurrentWindow();
       if (typeof currentWindow.destroy === "function") {
@@ -148,3 +167,50 @@ export async function closeNativeApp(): Promise<SaveNativeResult> {
   }
   return { ok: false, error: "No native runtime" };
 }
+
+/**
+ * Show a native "Save as…" dialog and write the given contents to the chosen path.
+ * Tauri only. Returns { ok: false } in Electron / browser so callers can fall back.
+ */
+export async function saveWithPickerNative(
+  defaultFileName: string,
+  contents: string | ArrayBuffer | Uint8Array,
+  filters?: { name: string; extensions: string[] }[],
+): Promise<SaveNativeResult> {
+  if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
+  try {
+    const w = window as unknown as {
+      __TAURI__?: {
+        dialog?: { save?: (opts: unknown) => Promise<string | null> };
+        fs?: {
+          writeTextFile?: (p: string, c: string) => Promise<void>;
+          writeFile?: (p: string, c: Uint8Array) => Promise<void>;
+        };
+      };
+    };
+    let chosen: string | null = null;
+    if (w.__TAURI__?.dialog?.save) {
+      chosen = await w.__TAURI__.dialog.save({ defaultPath: defaultFileName, filters });
+    } else {
+      const dlg = await import("@tauri-apps/plugin-dialog");
+      chosen = await dlg.save({ defaultPath: defaultFileName, filters });
+    }
+    if (!chosen) return { ok: false, error: "cancelled" };
+    if (w.__TAURI__?.fs?.writeTextFile && typeof contents === "string") {
+      await w.__TAURI__.fs.writeTextFile(chosen, contents);
+    } else {
+      const fs = await import("@tauri-apps/plugin-fs");
+      if (typeof contents === "string") {
+        await fs.writeTextFile(chosen, contents);
+      } else {
+        const bytes =
+          contents instanceof Uint8Array ? contents : new Uint8Array(contents as ArrayBuffer);
+        await fs.writeFile(chosen, bytes);
+      }
+    }
+    return { ok: true, path: chosen };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
