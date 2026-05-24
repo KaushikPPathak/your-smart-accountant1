@@ -4,8 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.smartaccountant.app",
   "build": {
-    "devUrl": "https://your-smart-accountant.lovable.app",
-    "frontendDist": "https://your-smart-accountant.lovable.app"
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
   },
   "app": {
     "withGlobalTauri": true,
@@ -16,7 +18,7 @@
         "height": 800,
         "resizable": true,
         "fullscreen": false,
-        "url": "https://your-smart-accountant.lovable.app"
+        "url": "/"
       }
     ],
     "security": {
@@ -36,7 +38,7 @@
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",
-        "installMode": "perMachine",
+        "installMode": "currentUser",
         "displayLanguageSelector": false,
         "allowDowngrades": false
       },
