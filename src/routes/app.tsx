@@ -19,7 +19,6 @@ import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
 import { useI18n } from "@/lib/i18n";
 import {
-  ensureTechSession,
   isCompanyUnlocked,
   lockWorkspace,
 } from "@/lib/tech-user";
@@ -93,18 +92,14 @@ function AppLayout() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [isTrial, activeCompanyId, activeMembership, partyCode]);
 
-  // Auto sign-in (silent) so RLS works. No user-visible login.
+  // Run one-time desktop data migrations (safe no-op on web).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        // Silent on-launch data migration (desktop only). Idempotent —
-        // ensures %LOCALAPPDATA% folders exist and moves any legacy
-        // Documents\YourMehtaji\Exports data forward without prompting.
         if (isDesktopRuntime()) {
           void runAppDataMigrationsOnce().catch(() => undefined);
         }
-        await ensureTechSession();
       } finally {
         if (!cancelled) setBootstrapping(false);
       }
@@ -113,6 +108,12 @@ function AppLayout() {
       cancelled = true;
     };
   }, []);
+
+  // Redirect unauthenticated visitors to /login.
+  useEffect(() => {
+    if (loading) return;
+    if (!user) navigate({ to: "/login" });
+  }, [loading, user, navigate]);
 
   // Global Busy-style hotkeys for new vouchers + Alt+L = jump to Ledger
   useEffect(() => {
@@ -211,9 +212,9 @@ function AppLayout() {
     );
   }
 
-  const onLock = () => {
-    lockWorkspace();
-    navigate({ to: "/" });
+  const onLock = async () => {
+    await lockWorkspace();
+    navigate({ to: "/login" });
   };
 
   return (
