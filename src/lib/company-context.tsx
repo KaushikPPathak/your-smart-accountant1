@@ -57,16 +57,22 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       return;
     }
     setLoading(true);
+    const activeStaff = getActiveStaff();
     const { data, error } = await supabase
       .from("company_members")
-      .select("company_id, role, companies(id, name, gstin, state, state_code, financial_year_start, gst_registered, gst_filing_frequency, inventory_enabled, annual_turnover_paise, mode, entity_status, cin, share_capital_paise, corpus_fund_paise, currency_code, date_format)")
+      .select("company_id, role, companies!inner(id, name, gstin, state, state_code, financial_year_start, gst_registered, gst_filing_frequency, inventory_enabled, annual_turnover_paise, mode, entity_status, cin, share_capital_paise, corpus_fund_paise, currency_code, date_format, owner_app_user_id)")
       .order("created_at", { ascending: true });
 
     if (error) {
       console.error("Failed to load companies:", error);
       setMemberships([]);
     } else {
-      const list = (data ?? []) as unknown as CompanyMembership[];
+      const raw = (data ?? []) as unknown as Array<CompanyMembership & { companies: { owner_app_user_id: string | null } }>;
+      // Per-account isolation: only show companies owned by the currently
+      // signed-in app account. If no account is active, show nothing.
+      const list = activeStaff
+        ? raw.filter((m) => m.companies?.owner_app_user_id === activeStaff.id)
+        : [];
       setMemberships(list);
       const stored = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_KEY) : null;
       const valid = stored && list.find((m) => m.company_id === stored);
