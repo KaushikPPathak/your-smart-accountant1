@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureTechSession } from "./tech-user";
 
 interface AuthContextValue {
   session: Session | null;
@@ -16,15 +17,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set listener BEFORE getSession (per Supabase best practice)
+    // Listener first (Supabase best practice).
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
     });
 
-    supabase.auth.getSession().then(({ data }) => {
+    // Silent tech-user sign-in: no login screen, RLS still scoped by auth.uid().
+    (async () => {
+      await ensureTechSession();
+      const { data } = await supabase.auth.getSession();
       setSession(data.session);
       setLoading(false);
-    });
+    })();
 
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -34,7 +38,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     loading,
     signOut: async () => {
-      await supabase.auth.signOut();
+      // No-op for the client — we never want to actually sign out, that would
+      // just trigger the silent re-sign-in path. Kept as a stable API surface.
+      return;
     },
   };
 

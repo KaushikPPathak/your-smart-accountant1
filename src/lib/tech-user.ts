@@ -1,20 +1,61 @@
-// Per-company-password unlock helpers (UI-level gating only).
-// Real authentication is now handled by Supabase Auth via the
-// /login and /signup routes — see src/lib/auth-context.tsx.
+// Silent tech-user sign-in.
+//
+// The app no longer shows a login screen. On boot we silently sign in as a
+// single shared "technical user" so that Supabase RLS (which keys off
+// auth.uid()) keeps working without the client ever seeing an auth UI.
+//
+// This is Phase A1 of the local-only migration: auth UI is gone, but Cloud
+// is still the data backend. In later phases the SQLite layer replaces
+// Supabase entirely and this whole file goes away.
 
 import { supabase } from "@/integrations/supabase/client";
+import { TECH_USER_EMAIL, TECH_USER_PASSWORD } from "./tech-user-credentials";
 
-// Backwards-compatible no-op. Some legacy callers still invoke this on launch;
-// it now does nothing because real users sign in via /login.
+let inflight: Promise<void> | null = null;
+
+/**
+ * Make sure there is a valid Supabase session on this device. If one already
+ * exists (persisted in localStorage), no-op. Otherwise sign in silently using
+ * the shared tech-user credentials.
+ *
+ * Safe to call repeatedly — concurrent callers share the same in-flight
+ * promise and the result is cached by Supabase's own session storage.
+ */
 export async function ensureTechSession(): Promise<void> {
-  return;
+  if (typeof window === "undefined") return;
+  if (inflight) return inflight;
+
+  inflight = (async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) return;
+      const { error } = await supabase.auth.signInWithPassword({
+        email: TECH_USER_EMAIL,
+        password: TECH_USER_PASSWORD,
+      });
+      if (error) {
+        // Don't throw — surface in console so the UI can still render an
+        // error state via downstream queries. Hard-throwing here would blank
+        // the entire app on a transient network blip.
+        console.error("[tech-user] silent sign-in failed:", error.message);
+      }
+    } finally {
+      inflight = null;
+    }
+  })();
+
+  return inflight;
 }
 
-// Re-exported for any leftover imports — values are placeholders.
-export const TECH_USER_EMAIL = "";
-export const TECH_USER_PASSWORD = "";
+// Re-exported so legacy imports keep resolving.
+export { TECH_USER_EMAIL, TECH_USER_PASSWORD };
 
-/** "Lock" the workspace: sign the user out and clear unlock flags. */
+/**
+ * "Lock" the workspace: clear per-company unlock flags and the active company
+ * id, then return the caller to the company picker. We deliberately do NOT
+ * sign out of Supabase — signing out would force another silent sign-in on
+ * the next page and there is no user-visible benefit.
+ */
 export async function lockWorkspace() {
   if (typeof window === "undefined") return;
   for (let i = sessionStorage.length - 1; i >= 0; i--) {
@@ -22,7 +63,6 @@ export async function lockWorkspace() {
     if (k && k.startsWith("ym_unlocked_")) sessionStorage.removeItem(k);
   }
   localStorage.removeItem("ym_active_company_id");
-  await supabase.auth.signOut();
 }
 
 const UNLOCK_KEY = (id: string) => `ym_unlocked_${id}`;
