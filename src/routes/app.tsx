@@ -109,11 +109,9 @@ function AppLayout() {
     };
   }, []);
 
-  // Redirect unauthenticated visitors to /login.
-  useEffect(() => {
-    if (loading) return;
-    if (!user) navigate({ to: "/login" });
-  }, [loading, user, navigate]);
+  // No login screen any more — AuthProvider silently signs in a shared
+  // tech user. We just wait for that to finish before rendering.
+
 
   // Global Busy-style hotkeys for new vouchers + Alt+L = jump to Ledger
   useEffect(() => {
@@ -214,7 +212,7 @@ function AppLayout() {
 
   const onLock = async () => {
     await lockWorkspace();
-    navigate({ to: "/login" });
+    navigate({ to: "/" });
   };
 
   return (
