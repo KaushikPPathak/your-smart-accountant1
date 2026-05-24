@@ -5,6 +5,7 @@ import { rememberActiveCompanyName } from "./desktop-save";
 import type { EntityStatus } from "./entity-status";
 import { setCurrentCurrency } from "./currency";
 import { setCurrentDateFormat, type DateFormatCode } from "./date-format";
+import { getActiveStaff } from "./staff-session";
 
 export interface CompanyMembership {
   company_id: string;
