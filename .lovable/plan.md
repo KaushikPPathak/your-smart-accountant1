@@ -1,84 +1,59 @@
+# Plan — Simple PIN/Passcode Login
 
-# Going Local-Only — Available Paths
+Keep the Phase A1 silent Supabase sign-in (no email login screen, RLS stays intact). Add a thin, classic-feeling **PIN gate** in front of the app. The admin manages staff PIN accounts from inside Settings — no public signup.
 
-You've ruled out the "do it all in one shot" approach (too risky, big breakage window, half-broken .exe in between). Below are the **realistic remaining options**, ordered from safest to fastest.
+## What the user sees
 
----
+1. **First launch (no admin yet)** → one-screen setup:
+   - "Create admin" → name + 4–6 digit PIN (entered twice).
+   - That admin is saved, then taken straight to the company picker.
 
-## Option A — Phased migration (Recommended)
+2. **Every launch after that** → lock screen:
+   - List of staff names (avatar initial + name).
+   - Click a name → PIN keypad → unlock.
+   - "Lock" button in the sidebar returns here without signing out of Supabase.
 
-Split the work into 6 small phases. After each phase the app still runs end-to-end. You test, approve, then move to the next.
+3. **Settings → Staff & PINs** (admin only):
+   - Add staff (name, role: `admin` / `staff`, PIN).
+   - Reset any staff PIN.
+   - Remove staff.
+   - Admin cannot delete the last admin.
 
-| Phase | Delivers | Effort | Risk |
-|---|---|---|---|
-| **A1. Strip auth + SSR + Electron** | App boots straight to company list. No login. Tauri only. Still uses Cloud as backend. | 1 session | Low |
-| **A2. Local SQLite data layer** | New `src/lib/db/` mirrors Supabase API. Feature flag `LOCAL_MODE` added. Cloud still default. | 2 sessions | Low |
-| **A3. Migrate all reads** | Reports, lists, lookups read from SQLite. Writes still go to Cloud. | 2–3 sessions | Medium |
-| **A4. Migrate all writes + RPCs** | Vouchers, masters, year-end. Rewrite 15 PL/pgSQL functions in TypeScript. | 3–4 sessions | Medium-High |
-| **A5. Online helpers + packaging** | GSTIN/IRP/OCR as direct `fetch`. First-launch backup folder prompt + daily auto-backup. Build `.exe`. | 1 session | Low |
-| **A6. Cleanup** | Delete `supabase/`, server fns, web preview, types regeneration. | ½ session | Low |
+That's the whole login surface. No email, no forgot-password email, no OAuth.
 
-**Total:** ~10–12 sessions over 2–3 weeks of part-time work.
-**Pros:** App never breaks. You can ship to a pilot client after A5 even if A6 isn't done. Easy to roll back any phase.
-**Cons:** Cloud cost continues until A6.
+## How it works under the hood
 
----
+- **Supabase auth is untouched.** `ensureTechSession()` keeps signing the shared tech user in silently on boot — RLS keeps working exactly as today.
+- A new local table `app_users` stores staff:
+  - `name`, `role` (`admin` | `staff`), `pin_hash` (bcrypt/argon2, never plain), `pin_salt`, `created_at`, `last_unlock_at`, `is_active`.
+  - RLS: readable by the tech user (so the lock screen can list names); writes only via server functions that check the caller is an admin (verified by re-checking their PIN hash server-side).
+- Active staff id is stored in `localStorage` (`ym_active_staff_id`) after a successful unlock — drives the "logged in as …" label and audit fields on vouchers.
+- `sessionStorage.ym_unlocked = "1"` is the gate flag. Cleared on Lock, on tab close, and after N minutes of inactivity (configurable, default 30 min).
+- Lock screen is a top-level route (`/lock`) that the root layout redirects to whenever the gate flag is missing — same pattern the company picker uses today.
 
-## Option B — Dual-mode forever (Cloud + Local toggle)
+## Files touched
 
-Don't remove Cloud. Add local SQLite as a parallel backend the user picks at first launch.
+- `supabase/migrations/*` — new `app_users` table + RLS + admin-check RPC.
+- `src/lib/staff.functions.ts` (new) — `listStaff`, `verifyPin`, `createStaff`, `resetStaffPin`, `deleteStaff`, `setupFirstAdmin`. All hash PINs server-side.
+- `src/lib/staff-session.ts` (new) — active staff id, unlock flag, inactivity timer, `lockWorkspace()` (replaces the one in `tech-user.ts`).
+- `src/routes/lock.tsx` (new) — staff picker + PIN keypad + first-run admin setup.
+- `src/routes/__root.tsx` — redirect to `/lock` when not unlocked (mirrors current company-picker guard).
+- `src/components/AppSidebar.tsx` — "Lock" button + "Signed in as <name>" label.
+- `src/routes/app.settings.tsx` — new "Staff & PINs" panel (admin-only).
+- `src/lib/tech-user.ts` — keep silent sign-in; remove now-duplicate `lockWorkspace` helper.
 
-- Phases A1 (skip — keep auth as optional), A2, A3, A4 only.
-- Skip A6 cleanup entirely.
-- Each install asks: "Cloud sync (multi-device) or Local-only (this PC)?"
+## Security notes
 
-**Effort:** ~8–10 sessions.
-**Pros:** Clients who later want sync can flip a switch. Web preview keeps working as a demo. You keep one codebase for both desktop and web.
-**Cons:** ~2× the code paths to maintain. Every new feature needs both implementations. Cloud cost stays.
+- PINs are 4–6 digits → low entropy on their own. Mitigations:
+  - Hashing uses argon2id with a per-row salt so the DB leak alone doesn't reveal PINs.
+  - Server function rate-limits PIN verification (5 wrong attempts → 60-second lockout for that staff id).
+  - Local-only deployment means the DB isn't reachable from the public internet.
+- This is a workstation gate, not internet-grade auth. That matches the local-only direction we already committed to.
 
----
+## Out of scope (for this plan)
 
-## Option C — Snapshot now, fork later
+- Per-staff Supabase users / per-staff RLS scoping. Everyone still acts as the shared tech user at the DB level. If true per-user audit is needed later, that's a separate phase.
+- Biometric / Windows Hello unlock. Possible later via Tauri, not now.
+- Forgot-PIN self-service. Admin resets PINs instead.
 
-Keep building the current Cloud version normally. When a paying client actually asks for a local-only build, fork the repo and strip Cloud in that fork only.
-
-- Zero work today.
-- The fork is a one-time 20–40 hour project, paid for by the first client who wants it.
-
-**Pros:** No disruption. Web product keeps improving. Local-only effort only happens when revenue justifies it.
-**Cons:** The fork eventually diverges from the main repo — bug fixes have to be backported manually.
-
----
-
-## Option D — Hybrid: Local-first, Cloud-as-backup-bucket
-
-App runs 100% on local SQLite (like Option A's end state), but **encrypted backup `.zip` files** upload to your Cloud storage on a schedule. The client's data is on their PC; the backup is offsite. They never log in — backups use a per-install device key.
-
-- Same effort as Option A (~10–12 sessions) plus 1 session for backup-upload helper.
-- Strong selling point for Indian clients: "Your data never leaves your PC, but if your PC dies you call us and we ship you back the encrypted backup."
-
-**Pros:** Best of both worlds. Disaster recovery without trust issues. You keep a small Cloud footprint.
-**Cons:** Slightly more code. You're responsible for storing encrypted blobs.
-
----
-
-## My recommendation
-
-**Option A (phased migration).** Reasons:
-
-1. You've already said clients want local-only and don't trust cloud.
-2. Phasing keeps the app working at every checkpoint — no scary "broken for two weeks" window.
-3. After A5 you can hand a working `.exe` to a pilot client while A6 cleanup happens in the background.
-4. If anything goes wrong in A3 or A4, you roll back one phase, not the whole project.
-
-**If budget/credits matter most:** Option C (do nothing until a client pays).
-**If you might want multi-device later:** Option B.
-**If clients want "local + offsite safety net":** Option D.
-
----
-
-## Questions before I write the detailed Phase A1 plan
-
-1. Which option — **A, B, C, or D**?
-2. If A or D: should Phase A1 also **delete the login/signup/forgot-password/reset-password routes I just created**, or keep them dormant in case you change your mind?
-3. If A: when A6 runs and the web preview goes down, do you want a **simple "Download the desktop app" landing page** at `your-smart-accountant.lovable.app`, or full takedown?
+Approve and I'll start with the migration, then wire the lock screen and settings panel.
