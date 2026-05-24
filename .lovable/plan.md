@@ -1,76 +1,103 @@
-# Manufacturing Journal + Income Tax Audit Suite
+## Goal
 
-Large, multi-module build. Splitting into 4 phased deliverables so each is verifiable.
+Make the Windows desktop app safe across upgrades:
+1. All local user data (backups, transaction snapshots, app state) lives **only** under the OS-standard per-user app data folder.
+2. Reinstalling/upgrading the `.exe` replaces program files **only** — it never touches the user data folder.
+3. If the local file layout or schema changes between versions, the app silently migrates on launch instead of wiping anything.
 
-## Phase 1 — Generalized Manufacturing Journal (rebuild)
+## Today's situation
 
-Replace the current `ManufacturingVoucherForm` with a multi-industry layout.
+- `src/lib/local-mirror.ts` + `saveCompanyFileNative()` (in `src/lib/native-bridge.ts`) write per-company JSON snapshots. On Tauri the base is already `appDataDir()/Exports/<Company>/{backups,latest}/` ✅
+- BUT some flows (older Electron path, `Documents\YourMehtaji\...` references) still target the user's Documents folder.
+- `src-tauri/tauri.conf.json` uses NSIS + MSI with `installMode: "perMachine"` but does not explicitly declare the data directory or upgrade behavior, so a reinstall could theoretically clobber adjacent files.
+- There is no `app_data_version` marker file and no migration runner — if we ever rename a folder or bump the JSON schema, old installs will silently break.
 
-**Schema (migration):**
-- Reuse `voucher_items` (`specs jsonb` already exists for adaptive attributes like Grade/Brix/GSM).
-- Add columns on `vouchers`: `processing_overhead_paise bigint default 0`, `scrap_value_paise bigint default 0`, `process_yield_pct numeric`.
-- Add `voucher_items.role text` (`input` | `output` | `scrap`) to distinguish lines (default `output` to stay backward compatible).
+## Plan
 
-**UI:**
-- Three stacked grids: **Raw Materials (Inputs)**, **Processing Overhead** (labor/electricity/machine — free-form expense rows posting to nominal ledgers), **Outputs & Scrap**.
-- Inputs columns: Item, Unit, Qty, Rate, Total, Attributes (JSON popover — Grade, Brix %, GSM, Moisture, free key/value).
-- Outputs columns: Item, Unit, Qty, Auto Unit Cost, Total (cost loaded).
-- Reconciliation widget (sticky right): Input Wt vs Output Wt, Yield %, Loss %, Cost/unit breakdown.
-- Auto cost = (Σ Input + Overhead − Scrap) / Σ Output Qty (allocated by qty; weight-based allocation toggle later).
-- Keyboard: Enter advances horizontally; Tab/Shift+Tab still work; Ctrl+S saves.
+### 1. Single source of truth for the data root
 
-**Posting:** Dr Finished Goods (output value), Cr Raw Materials (input value), Dr Overhead expenses → Cr Cash/Bank/Payables (only if user picks a "fund" ledger; otherwise loaded into FG as cost memo). Inventory moves via `voucher_items` (qty + role).
+Add `src/lib/app-paths.ts`:
+- `getAppDataRoot()` → `appLocalDataDir()/SmartAccountant/` on Tauri, Electron equivalent (`app.getPath('userData')`) for the legacy bridge, browser → `null`.
+- Sub-roots: `backups/`, `exports/`, `mirror/<companyId>/`, `state/`, `logs/`.
+- Export a typed `AppPaths` object so every caller goes through one place.
 
-## Phase 2 — Income Tax Block-of-Assets + Section 43B + 40A(3) data layer
+Refactor callers to use it:
+- `src/lib/native-bridge.ts` → `saveCompanyFileNative()` writes under `appLocalDataDir()` (switch from `appDataDir()` → `appLocalDataDir()`, which is the per-user, non-roaming, installer-untouched location on Windows: `%LOCALAPPDATA%\com.smartaccountant.app\`).
+- `src/lib/local-mirror.ts`, `src/lib/backup.ts`, `src/lib/desktop-save.ts`, `src/components/housekeeping/BackupRestoreTool.tsx` → use `AppPaths.*` instead of hard-coded `Exports/` strings or `Documents\YourMehtaji`.
+- Keep "Save as…" picker (user-chosen path) unchanged — that's an explicit user action.
 
-**Migration:**
-- `it_asset_blocks` (company_id, code, name, rate_pct) — seed: BUILDING_10, PM_15, COMPUTER_40, FURNITURE_10, INTANGIBLE_25, MV_15, MV_30.
-- `it_fixed_assets` (company_id, block_code, ledger_id nullable, name, opening_wdv_paise, fy_start date).
-- `it_asset_movements` (asset_id, fy_start, kind `addition|deletion`, date, amount_paise, ≥180 derived).
-- `it_43b_clearances` (company_id, ledger_id, fy_end, cleared_on date, cleared_paise, reference).
-- `it_settings` (company_id, book_depr_rate_pct jsonb-by-group, return_filing_deadline date).
+### 2. Lock Tauri's filesystem scope to the data root only
 
-RLS: standard `is_company_member` / `can_write_company` pattern.
+Edit `src-tauri/capabilities/default.json`:
+- Drop the broad `$DOCUMENT/**`, `$DOWNLOAD/**`, `$DESKTOP/**`, `$HOME/**`, `$APPDATA/**`, `$APPCONFIG/**` entries from the always-on scope.
+- Keep only `$APPLOCALDATA/**` for silent writes.
+- Add a second capability file `capabilities/user-picker.json` scoped to the dialog-chosen path pattern (`fs:allow-write-file` with `$DOWNLOAD/**`, `$DOCUMENT/**`, `$DESKTOP/**`) so the explicit "Save as…" flow keeps working but nothing else can silently write outside `%LOCALAPPDATA%`.
 
-## Phase 3 — Tax Audit Preview (Form 3CD) dashboard
+### 3. Configure the Windows installer to preserve user data
 
-Route `app/reports/tax-audit` with tabs:
-1. **40A(3) Cash Scanner** — scans `voucher_entries` joined to `vouchers` where voucher_type ∈ payment, contra Cr to cash ledger, grouped by (date, party ledger), flag aggregate > ₹10,000.
-2. **43B Dues Tracker** — opening + movement of GST Payable / TDS Payable / PF / ESI / Bonus ledgers (matched by `group_code` in DUTIES_TAXES + name heuristics, plus user-tagged), with editable `cleared_on` per ledger.
-3. **IT Depreciation Schedule** — grid by block: Opening WDV, Additions ≥180d, Additions <180d, Deletions, Depreciation (full / half rate), Closing WDV. Add/edit assets in modal.
-4. **Computation summary** — drives the Tax-View P&L.
+Edit `src-tauri/tauri.conf.json` → `bundle.windows.nsis`:
+- Add `"displayLanguageSelector": false`.
+- Add `"deleteAppDataOnUninstall": false` (NSIS default behavior we want to make explicit).
+- Add `"allowDowngrades": false` so older builds can't overwrite newer state.
+- Confirm `installMode: "perMachine"` is the right choice — switch to `"both"` (let user pick) or keep `perMachine`; either way Windows writes user data to `%LOCALAPPDATA%\com.smartaccountant.app\`, which NSIS/MSI never touches because it is outside `Program Files`.
+- Add `bundle.windows.wix.upgradeCode` (stable GUID) so MSI upgrades are recognized as upgrades (not parallel installs) and the upgrade transaction only replaces Program Files contents.
+- Add an `upgrades` block with `"allowSameVersionUpgrades": true` (so re-installing the same build is safe) and remove any `RemoveFile` / `RemoveFolder` directives targeting `%LOCALAPPDATA%`.
 
-## Phase 4 — Tax View toggle in P&L + Balance Sheet, and Audit Pack export
+Reference layout written by the installer (Program Files area — replaced on upgrade):
+```
+C:\Program Files\SmartAccountant\
+  SmartAccountant.exe
+  resources\        ← report layouts, fonts, code assets
+```
 
-- Add `<ViewSwitcher>` "Standard / Tax Audit" on `app.reports.profit-loss.tsx` and `app.reports.balance-sheet.tsx`.
-- Tax-View P&L side panel:
-  - Net Profit (books)
-  - + 40A(3) disallowance (from Phase 3 scanner)
-  - + 40(a)(ia) — manual entry table (rows the user adds; later auto from TDS module)
-  - + Book Depreciation (sum of expense ledgers in DEPRECIATION subgroup)
-  - − IT Depreciation (from block schedule)
-  - = Taxable PGBP
-- Tax-View Balance Sheet: replace Fixed Assets bucket rows with IT block closing WDV rows (group label "Fixed Assets — as per IT Act").
-- **Export Audit Pack** button on Tax Audit dashboard → single XLSX (via existing dynamic `loadXlsx` helper) with sheets: P&L (Books), P&L (Tax), Balance Sheet (Books), Balance Sheet (Tax), 40A(3), 43B, IT Depreciation, Computation.
+Reference layout owned by the app at runtime (per-user — NEVER touched by installer):
+```
+%LOCALAPPDATA%\com.smartaccountant.app\
+  app_data_version.json
+  backups\
+  mirror\<companyId>\
+  state\
+  logs\
+```
 
-## Technical notes (for the curious)
+### 4. Silent on-launch migration runner
 
-- All paise stored as bigint; rates as numeric.
-- `loadXlsx()` from `src/lib/exporters.ts` already dynamic-imports SheetJS — reuse.
-- New compute lives in `src/lib/tax-audit.ts` (pure functions, unit-testable).
-- Block-of-asset half-rate logic: `dep = rate * (opening + additions_>=180 - deletions) + 0.5 * rate * additions_<180`.
-- Keyboard handling: reuse `useEnterAsTab` from `src/components/vouchers/useEnterAsTab.tsx`.
-- No new external deps required.
+Add `src/lib/app-data-migrations.ts`:
+- Constant `CURRENT_DATA_VERSION = 1`.
+- On Tauri startup (called from `src/routes/app.tsx` once, gated by `isDesktopRuntime()`):
+  1. Read `app_data_version.json` from the data root.
+  2. If missing → assume legacy layout. Run `migrateLegacyDocumentsFolder()`:
+     - If `Documents\YourMehtaji\Exports\` exists, move (not copy) its contents under `%LOCALAPPDATA%\com.smartaccountant.app\mirror\` preserving company subfolders. Leave a `MOVED.txt` breadcrumb in the old folder.
+     - Write `app_data_version.json = { version: 1, migrated_from: "legacy_documents", at: <iso> }`.
+  3. If `version < CURRENT_DATA_VERSION` → run ordered migration steps `v1 → v2 → …`. Each step is a pure function with a try/catch; on failure log to `logs/migrations.log` and abort (don't half-migrate).
+  4. If `version > CURRENT_DATA_VERSION` → no-op (downgrade) and surface a one-time toast: "This data folder was written by a newer version".
+- All steps are idempotent and run silently (no user prompt).
 
-## Scope I am NOT doing in this pass (call out)
+### 5. Tiny diagnostics surface
 
-- Auto-detection of 40(a)(ia) TDS non-deduction (needs a TDS module — left as manual entry rows for now).
-- Weight-based cost allocation across multiple outputs (qty-based v1; toggle later).
-- 3CA/3CB PDF generation — only 3CD-style preview + Excel export.
-- ITR JSON export.
+In `src/components/housekeeping/BackupRestoreTool.tsx` add a read-only "Data folder" line showing the resolved `%LOCALAPPDATA%\com.smartaccountant.app\` path plus a "Reveal in Explorer" button (uses existing `showInFolderNative`). This makes it visible to users that backups live outside Program Files.
 
-## Suggested merge order
+## Files touched
 
-Phase 1 → migration for Phase 2 → Phase 3 dashboard → Phase 4 toggle + export. Each phase is independently shippable.
+- `src-tauri/tauri.conf.json` — NSIS/MSI upgrade-safety settings, stable WiX upgradeCode.
+- `src-tauri/capabilities/default.json` — narrow always-on FS scope to `$APPLOCALDATA/**`.
+- `src-tauri/capabilities/user-picker.json` — new, scoped to dialog-chosen writes.
+- `src/lib/app-paths.ts` — new, single source of truth.
+- `src/lib/app-data-migrations.ts` — new, version marker + migration runner.
+- `src/lib/native-bridge.ts` — switch base to `appLocalDataDir()`, use `AppPaths`.
+- `src/lib/local-mirror.ts`, `src/lib/backup.ts`, `src/lib/desktop-save.ts` — go through `AppPaths`.
+- `src/routes/app.tsx` — invoke migration runner once on desktop after login.
+- `src/components/housekeeping/BackupRestoreTool.tsx` — show data-folder path + reveal button.
 
-Confirm and I'll start with Phase 1 + the Phase 2 migration in the same turn (since migration needs your approval before code lands).
+## What does NOT change
+
+- Cloud backend, RLS, server functions, Supabase config — untouched.
+- Web version behavior — untouched (it has no filesystem).
+- The Backup & Restore JSON format and the "Save as…" picker — unchanged.
+- Voucher, ledger, report business logic — unchanged.
+
+## Caveats
+
+- The migration moves files from `Documents\YourMehtaji\Exports\` into `%LOCALAPPDATA%\com.smartaccountant.app\mirror\` exactly once. After migration, the old Documents folder will be empty (with a `MOVED.txt` note). Existing manual backups you placed there yourself are not affected because the migration only touches the `Exports/` subtree the app itself created.
+- `%LOCALAPPDATA%` is per-user. If two Windows users on the same PC use the app, each gets their own data folder — same as today, just made explicit.
+- Stable WiX `upgradeCode` GUID must be generated once and never changed across releases. I'll add it as a constant in `tauri.conf.json`.
