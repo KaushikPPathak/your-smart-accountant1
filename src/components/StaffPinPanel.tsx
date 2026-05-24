@@ -26,8 +26,8 @@ export function StaffPinPanel() {
     try {
       const { error } = await supabase.rpc("change_account_password", {
         _user_id: me.id,
-        _current: cur,
-        _new: next,
+        _old_password: cur,
+        _new_password: next,
       });
       if (error) throw error;
       toast.success("Password updated");

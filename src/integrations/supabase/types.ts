@@ -2281,7 +2281,7 @@ export type Database = {
         Returns: boolean
       }
       change_account_password: {
-        Args: { _current: string; _new: string; _user_id: string }
+        Args: { _new_password: string; _old_password: string; _user_id: string }
         Returns: undefined
       }
       create_app_user: {
