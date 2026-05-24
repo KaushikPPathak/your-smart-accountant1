@@ -77,9 +77,11 @@ export type Database = {
           last_unlock_at: string | null
           locked_until: string | null
           name: string
-          pin_hash: string
+          password_hash: string | null
+          pin_hash: string | null
           role: Database["public"]["Enums"]["app_user_role"]
           updated_at: string
+          username: string | null
         }
         Insert: {
           created_at?: string
@@ -89,9 +91,11 @@ export type Database = {
           last_unlock_at?: string | null
           locked_until?: string | null
           name: string
-          pin_hash: string
+          password_hash?: string | null
+          pin_hash?: string | null
           role?: Database["public"]["Enums"]["app_user_role"]
           updated_at?: string
+          username?: string | null
         }
         Update: {
           created_at?: string
@@ -101,9 +105,11 @@ export type Database = {
           last_unlock_at?: string | null
           locked_until?: string | null
           name?: string
-          pin_hash?: string
+          password_hash?: string | null
+          pin_hash?: string | null
           role?: Database["public"]["Enums"]["app_user_role"]
           updated_at?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -470,6 +476,7 @@ export type Database = {
           logo_url: string | null
           mode: string
           name: string
+          owner_app_user_id: string | null
           pan: string | null
           phone: string | null
           share_capital_paise: number
@@ -503,6 +510,7 @@ export type Database = {
           logo_url?: string | null
           mode?: string
           name: string
+          owner_app_user_id?: string | null
           pan?: string | null
           phone?: string | null
           share_capital_paise?: number
@@ -536,6 +544,7 @@ export type Database = {
           logo_url?: string | null
           mode?: string
           name?: string
+          owner_app_user_id?: string | null
           pan?: string | null
           phone?: string | null
           share_capital_paise?: number
@@ -2265,10 +2274,15 @@ export type Database = {
         Returns: undefined
       }
       _validate_pin: { Args: { _pin: string }; Returns: undefined }
+      accounts_exist: { Args: never; Returns: boolean }
       app_users_count: { Args: never; Returns: number }
       can_write_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
+      }
+      change_account_password: {
+        Args: { _current: string; _new: string; _user_id: string }
+        Returns: undefined
       }
       create_app_user: {
         Args: {
@@ -2346,8 +2360,16 @@ export type Database = {
         Args: { _company_id: string; _new_password: string }
         Returns: undefined
       }
+      setup_first_account: {
+        Args: { _name: string; _password: string; _username: string }
+        Returns: string
+      }
       setup_first_admin: {
         Args: { _name: string; _pin: string }
+        Returns: string
+      }
+      signup_account: {
+        Args: { _name: string; _password: string; _username: string }
         Returns: string
       }
       sync_opening_balances_from_previous_fy: {
@@ -2362,6 +2384,14 @@ export type Database = {
           _return_type: string
         }
         Returns: undefined
+      }
+      verify_account_login: {
+        Args: { _password: string; _username: string }
+        Returns: {
+          id: string
+          name: string
+          role: Database["public"]["Enums"]["app_user_role"]
+        }[]
       }
       verify_app_user_pin: {
         Args: { _pin: string; _user_id: string }
