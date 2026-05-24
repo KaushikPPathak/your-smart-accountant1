@@ -1,11 +1,13 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
-import { AuthProvider } from "@/lib/auth-context";
+import { Outlet, Link, createRootRoute, HeadContent, Scripts, useLocation, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { CompanyProvider } from "@/lib/company-context";
 import { ThemeProvider } from "@/lib/theme-context";
 import { I18nProvider } from "@/lib/i18n";
 import { CurrencyProvider } from "@/lib/currency";
 import { DateFormatProvider } from "@/lib/date-format";
 import { Toaster } from "@/components/ui/sonner";
+import { isUnlocked } from "@/lib/staff-session";
 
 import appCss from "../styles.css?url";
 
