@@ -68,6 +68,45 @@ export type Database = {
         }
         Relationships: []
       }
+      app_users: {
+        Row: {
+          created_at: string
+          failed_attempts: number
+          id: string
+          is_active: boolean
+          last_unlock_at: string | null
+          locked_until: string | null
+          name: string
+          pin_hash: string
+          role: Database["public"]["Enums"]["app_user_role"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          failed_attempts?: number
+          id?: string
+          is_active?: boolean
+          last_unlock_at?: string | null
+          locked_until?: string | null
+          name: string
+          pin_hash: string
+          role?: Database["public"]["Enums"]["app_user_role"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          failed_attempts?: number
+          id?: string
+          is_active?: boolean
+          last_unlock_at?: string | null
+          locked_until?: string | null
+          name?: string
+          pin_hash?: string
+          role?: Database["public"]["Enums"]["app_user_role"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bank_statement_lines: {
         Row: {
           balance_paise: number | null
@@ -2221,9 +2260,29 @@ export type Database = {
       }
     }
     Functions: {
+      _require_admin: {
+        Args: { _admin_id: string; _admin_pin: string }
+        Returns: undefined
+      }
+      _validate_pin: { Args: { _pin: string }; Returns: undefined }
+      app_users_count: { Args: never; Returns: number }
       can_write_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
+      }
+      create_app_user: {
+        Args: {
+          _admin_id: string
+          _admin_pin: string
+          _name: string
+          _pin: string
+          _role: Database["public"]["Enums"]["app_user_role"]
+        }
+        Returns: string
+      }
+      delete_app_user: {
+        Args: { _admin_id: string; _admin_pin: string; _target_id: string }
+        Returns: undefined
       }
       delete_import_batch: { Args: { _batch_id: string }; Returns: Json }
       delete_vouchers_bulk: {
@@ -2274,9 +2333,22 @@ export type Database = {
         Args: { _company_id: string }
         Returns: number
       }
+      reset_app_user_pin: {
+        Args: {
+          _admin_id: string
+          _admin_pin: string
+          _new_pin: string
+          _target_id: string
+        }
+        Returns: undefined
+      }
       set_company_password: {
         Args: { _company_id: string; _new_password: string }
         Returns: undefined
+      }
+      setup_first_admin: {
+        Args: { _name: string; _pin: string }
+        Returns: string
       }
       sync_opening_balances_from_previous_fy: {
         Args: { _company_id: string; _fy_start: string }
@@ -2291,6 +2363,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      verify_app_user_pin: {
+        Args: { _pin: string; _user_id: string }
+        Returns: boolean
+      }
       verify_company_password: {
         Args: { _attempt: string; _company_id: string }
         Returns: boolean
@@ -2298,6 +2374,7 @@ export type Database = {
       voucher_company_id: { Args: { _voucher_id: string }; Returns: string }
     }
     Enums: {
+      app_user_role: "admin" | "staff"
       company_role: "admin" | "accountant" | "viewer"
       entity_status:
         | "individual"
@@ -2487,6 +2564,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_user_role: ["admin", "staff"],
       company_role: ["admin", "accountant", "viewer"],
       entity_status: [
         "individual",
