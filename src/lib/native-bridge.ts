@@ -74,12 +74,16 @@ export async function saveCompanyFileNative(
   }
   if (hasTauri()) {
     try {
-      const [{ appDataDir, join }, fs] = await Promise.all([
+      // IMPORTANT: use appLocalDataDir() (= %LOCALAPPDATA%\<identifier>\ on Windows),
+      // NOT appDataDir() (= %APPDATA%\<identifier>\ Roaming). %LOCALAPPDATA% lives
+      // outside Program Files and is therefore NEVER touched by the NSIS / MSI
+      // installer when the user upgrades the .exe.
+      const [{ appLocalDataDir, join }, fs] = await Promise.all([
         import("@tauri-apps/api/path"),
         import("@tauri-apps/plugin-fs"),
       ]);
-      const base = await appDataDir();
-      const dir = await join(base, "Exports", safeSeg(company), safeSeg(subFolder));
+      const base = await appLocalDataDir();
+      const dir = await join(base, "mirror", safeSeg(company), safeSeg(subFolder));
       await fs.mkdir(dir, { recursive: true });
       const fullPath = await join(dir, fileName);
       if (typeof contents === "string") {
