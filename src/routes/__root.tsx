@@ -89,7 +89,9 @@ function RootComponent() {
           <DateFormatProvider>
             <AuthProvider>
               <CompanyProvider>
-                <Outlet />
+                <LockGate>
+                  <Outlet />
+                </LockGate>
                 <Toaster richColors position="top-right" />
               </CompanyProvider>
             </AuthProvider>
@@ -98,4 +100,18 @@ function RootComponent() {
       </I18nProvider>
     </ThemeProvider>
   );
+}
+
+function LockGate({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { loading } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+    if (location.pathname === "/lock") return;
+    if (!isUnlocked()) navigate({ to: "/lock" });
+  }, [loading, location.pathname, navigate]);
+
+  return <>{children}</>;
 }
