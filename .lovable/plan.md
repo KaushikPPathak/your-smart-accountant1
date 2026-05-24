@@ -1,103 +1,61 @@
-## Goal
+## Plan: Harden SaaS model (per-user data isolation)
 
-Make the Windows desktop app safe across upgrades:
-1. All local user data (backups, transaction snapshots, app state) lives **only** under the OS-standard per-user app data folder.
-2. Reinstalling/upgrading the `.exe` replaces program files **only** — it never touches the user data folder.
-3. If the local file layout or schema changes between versions, the app silently migrates on launch instead of wiping anything.
+You picked **option 2 — SaaS**: one shared cloud, every client signs up, RLS guarantees each client only sees their own companies and data. Here's what to lock down before selling.
 
-## Today's situation
+### 1. Force authentication on the web
 
-- `src/lib/local-mirror.ts` + `saveCompanyFileNative()` (in `src/lib/native-bridge.ts`) write per-company JSON snapshots. On Tauri the base is already `appDataDir()/Exports/<Company>/{backups,latest}/` ✅
-- BUT some flows (older Electron path, `Documents\YourMehtaji\...` references) still target the user's Documents folder.
-- `src-tauri/tauri.conf.json` uses NSIS + MSI with `installMode: "perMachine"` but does not explicitly declare the data directory or upgrade behavior, so a reinstall could theoretically clobber adjacent files.
-- There is no `app_data_version` marker file and no migration runner — if we ever rename a folder or bump the JSON schema, old installs will silently break.
+Today the published site lets anyone open `/app/companies` without signing in (that's why you saw "no companies" — you were effectively an anonymous visitor, and RLS correctly returned nothing).
 
-## Plan
+- Add a real `/login` + `/signup` route (email + password, plus Google OAuth).
+- Wrap `/app/*` in a `_authenticated` layout that redirects unauthenticated users to `/login`.
+- Remove any "tech user" / silent auto-login path on the published site.
+- Keep "auto-confirm email" **off** so users must verify their email.
 
-### 1. Single source of truth for the data root
+### 2. Audit RLS on every table
 
-Add `src/lib/app-paths.ts`:
-- `getAppDataRoot()` → `appLocalDataDir()/SmartAccountant/` on Tauri, Electron equivalent (`app.getPath('userData')`) for the legacy bridge, browser → `null`.
-- Sub-roots: `backups/`, `exports/`, `mirror/<companyId>/`, `state/`, `logs/`.
-- Export a typed `AppPaths` object so every caller goes through one place.
+Verify each tenant table (companies, ledgers, items, vouchers, voucher_items, members, etc.) has RLS enabled with policies of the shape:
 
-Refactor callers to use it:
-- `src/lib/native-bridge.ts` → `saveCompanyFileNative()` writes under `appLocalDataDir()` (switch from `appDataDir()` → `appLocalDataDir()`, which is the per-user, non-roaming, installer-untouched location on Windows: `%LOCALAPPDATA%\com.smartaccountant.app\`).
-- `src/lib/local-mirror.ts`, `src/lib/backup.ts`, `src/lib/desktop-save.ts`, `src/components/housekeeping/BackupRestoreTool.tsx` → use `AppPaths.*` instead of hard-coded `Exports/` strings or `Documents\YourMehtaji`.
-- Keep "Save as…" picker (user-chosen path) unchanged — that's an explicit user action.
-
-### 2. Lock Tauri's filesystem scope to the data root only
-
-Edit `src-tauri/capabilities/default.json`:
-- Drop the broad `$DOCUMENT/**`, `$DOWNLOAD/**`, `$DESKTOP/**`, `$HOME/**`, `$APPDATA/**`, `$APPCONFIG/**` entries from the always-on scope.
-- Keep only `$APPLOCALDATA/**` for silent writes.
-- Add a second capability file `capabilities/user-picker.json` scoped to the dialog-chosen path pattern (`fs:allow-write-file` with `$DOWNLOAD/**`, `$DOCUMENT/**`, `$DESKTOP/**`) so the explicit "Save as…" flow keeps working but nothing else can silently write outside `%LOCALAPPDATA%`.
-
-### 3. Configure the Windows installer to preserve user data
-
-Edit `src-tauri/tauri.conf.json` → `bundle.windows.nsis`:
-- Add `"displayLanguageSelector": false`.
-- Add `"deleteAppDataOnUninstall": false` (NSIS default behavior we want to make explicit).
-- Add `"allowDowngrades": false` so older builds can't overwrite newer state.
-- Confirm `installMode: "perMachine"` is the right choice — switch to `"both"` (let user pick) or keep `perMachine`; either way Windows writes user data to `%LOCALAPPDATA%\com.smartaccountant.app\`, which NSIS/MSI never touches because it is outside `Program Files`.
-- Add `bundle.windows.wix.upgradeCode` (stable GUID) so MSI upgrades are recognized as upgrades (not parallel installs) and the upgrade transaction only replaces Program Files contents.
-- Add an `upgrades` block with `"allowSameVersionUpgrades": true` (so re-installing the same build is safe) and remove any `RemoveFile` / `RemoveFolder` directives targeting `%LOCALAPPDATA%`.
-
-Reference layout written by the installer (Program Files area — replaced on upgrade):
 ```
-C:\Program Files\SmartAccountant\
-  SmartAccountant.exe
-  resources\        ← report layouts, fonts, code assets
+USING (company_id IN (SELECT company_id FROM members WHERE user_id = auth.uid()))
 ```
 
-Reference layout owned by the app at runtime (per-user — NEVER touched by installer):
-```
-%LOCALAPPDATA%\com.smartaccountant.app\
-  app_data_version.json
-  backups\
-  mirror\<companyId>\
-  state\
-  logs\
-```
+Anything missing a policy = data leak. I'll run the linter and fix gaps.
 
-### 4. Silent on-launch migration runner
+### 3. Membership model
 
-Add `src/lib/app-data-migrations.ts`:
-- Constant `CURRENT_DATA_VERSION = 1`.
-- On Tauri startup (called from `src/routes/app.tsx` once, gated by `isDesktopRuntime()`):
-  1. Read `app_data_version.json` from the data root.
-  2. If missing → assume legacy layout. Run `migrateLegacyDocumentsFolder()`:
-     - If `Documents\YourMehtaji\Exports\` exists, move (not copy) its contents under `%LOCALAPPDATA%\com.smartaccountant.app\mirror\` preserving company subfolders. Leave a `MOVED.txt` breadcrumb in the old folder.
-     - Write `app_data_version.json = { version: 1, migrated_from: "legacy_documents", at: <iso> }`.
-  3. If `version < CURRENT_DATA_VERSION` → run ordered migration steps `v1 → v2 → …`. Each step is a pure function with a try/catch; on failure log to `logs/migrations.log` and abort (don't half-migrate).
-  4. If `version > CURRENT_DATA_VERSION` → no-op (downgrade) and surface a one-time toast: "This data folder was written by a newer version".
-- All steps are idempotent and run silently (no user prompt).
+- When a user signs up, they get their own user_id but **no companies**.
+- "New Company" inserts a `companies` row owned by them + a `members` row (role = owner).
+- Invites: owner can add other emails as members of their company (optional, for multi-user firms).
 
-### 5. Tiny diagnostics surface
+### 4. Desktop app (.exe) changes
 
-In `src/components/housekeeping/BackupRestoreTool.tsx` add a read-only "Data folder" line showing the resolved `%LOCALAPPDATA%\com.smartaccountant.app\` path plus a "Reveal in Explorer" button (uses existing `showInFolderNative`). This makes it visible to users that backups live outside Program Files.
+- Same login screen — the .exe just loads the hosted site, so the same auth applies automatically.
+- First launch on a new PC → user signs in → sees only their own companies.
+- Existing local JSON mirrors stay on the user's disk; they can use Backup & Restore to push them into their own cloud account.
 
-## Files touched
+### 5. Your personal data
 
-- `src-tauri/tauri.conf.json` — NSIS/MSI upgrade-safety settings, stable WiX upgradeCode.
-- `src-tauri/capabilities/default.json` — narrow always-on FS scope to `$APPLOCALDATA/**`.
-- `src-tauri/capabilities/user-picker.json` — new, scoped to dialog-chosen writes.
-- `src/lib/app-paths.ts` — new, single source of truth.
-- `src/lib/app-data-migrations.ts` — new, version marker + migration runner.
-- `src/lib/native-bridge.ts` — switch base to `appLocalDataDir()`, use `AppPaths`.
-- `src/lib/local-mirror.ts`, `src/lib/backup.ts`, `src/lib/desktop-save.ts` — go through `AppPaths`.
-- `src/routes/app.tsx` — invoke migration runner once on desktop after login.
-- `src/components/housekeeping/BackupRestoreTool.tsx` — show data-folder path + reveal button.
+- Your Windows mirror files stay on your PC — never uploaded automatically.
+- Before going live, decide:
+  - **Keep your data**: sign up with your real email, restore your mirrors into your own account. Other clients won't see it (RLS).
+  - **Start clean**: don't restore; ship empty. Your local files remain untouched as a personal backup.
 
-## What does NOT change
+### 6. Pre-launch checklist
 
-- Cloud backend, RLS, server functions, Supabase config — untouched.
-- Web version behavior — untouched (it has no filesystem).
-- The Backup & Restore JSON format and the "Save as…" picker — unchanged.
-- Voucher, ledger, report business logic — unchanged.
+- [ ] Auth UI live (signup, login, logout, password reset, Google)
+- [ ] `_authenticated` guard on all `/app/*` routes
+- [ ] RLS linter shows zero warnings
+- [ ] Manual test: create 2 accounts in 2 browsers, confirm neither sees the other's companies
+- [ ] Remove any dev-only "tech user" bypass from production build
+- [ ] Privacy policy + terms page (basic, required by Google OAuth consent screen)
 
-## Caveats
+### Technical notes
 
-- The migration moves files from `Documents\YourMehtaji\Exports\` into `%LOCALAPPDATA%\com.smartaccountant.app\mirror\` exactly once. After migration, the old Documents folder will be empty (with a `MOVED.txt` note). Existing manual backups you placed there yourself are not affected because the migration only touches the `Exports/` subtree the app itself created.
-- `%LOCALAPPDATA%` is per-user. If two Windows users on the same PC use the app, each gets their own data folder — same as today, just made explicit.
-- Stable WiX `upgradeCode` GUID must be generated once and never changed across releases. I'll add it as a constant in `tauri.conf.json`.
+- Auth: Supabase Auth via Lovable Cloud (email/password + Google provider, both via `supabase--configure_social_auth`).
+- Route guard: TanStack Start `_authenticated.tsx` layout with `beforeLoad` redirecting unauthenticated sessions to `/login`.
+- RLS helper: `has_company_access(_company_id uuid)` SECURITY DEFINER function reading `members` to avoid recursive policy issues.
+- No schema changes expected beyond confirming/repairing RLS policies.
+
+---
+
+Want me to proceed with **all six steps** when you switch to build mode, or start with just **steps 1 + 2** (auth + RLS audit) and we test before doing the rest?

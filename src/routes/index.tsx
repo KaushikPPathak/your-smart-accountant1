@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Building2, Lock, Plus, Unlock, LogOut as ExitIcon } from "lucide-react";
@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  ensureTechSession,
   isCompanyUnlocked,
   markCompanyUnlocked,
 } from "@/lib/tech-user";
@@ -32,6 +31,10 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Pick a company to open." },
     ],
   }),
+  beforeLoad: async () => {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) throw redirect({ to: "/login" });
+  },
   component: StartScreen,
 });
 
@@ -54,7 +57,6 @@ function StartScreen() {
   useEffect(() => {
     (async () => {
       try {
-        await ensureTechSession();
         const { data, error } = await supabase
           .from("companies_picker")
           .select("id, name, has_password")
