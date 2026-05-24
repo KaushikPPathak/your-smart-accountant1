@@ -70,7 +70,7 @@ function LockScreen() {
       }
       markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole });
       toast.success(`Welcome, ${row.name}`);
-      navigate({ to: "/app" });
+      window.location.assign("/app");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Login failed");
     } finally {
@@ -105,7 +105,7 @@ function LockScreen() {
         name: suName.trim(),
         role: "admin",
       });
-      navigate({ to: "/app" });
+      window.location.assign("/app");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Signup failed");
     } finally {
