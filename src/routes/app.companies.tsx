@@ -288,9 +288,10 @@ function CompaniesPage() {
       if (error) { toast.error(error.message); return; }
       toast.success("Company updated");
     } else {
+      const activeStaffId = typeof window !== "undefined" ? localStorage.getItem("ym_active_staff_id") : null;
       const { data, error } = await supabase
         .from("companies")
-        .insert({ ...payload, created_by: currentUserId })
+        .insert({ ...payload, created_by: currentUserId, owner_app_user_id: activeStaffId })
         .select("id")
         .maybeSingle();
       setSubmitting(false);
