@@ -27,6 +27,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
+import { StaffPinPanel } from "@/components/StaffPinPanel";
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({ meta: [{ title: "Settings — Your Mehtaji" }] }),
