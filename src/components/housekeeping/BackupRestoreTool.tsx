@@ -9,12 +9,15 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload } from "lucide-react";
+import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
+  buildCompanyBackup,
   type RestoreSummary,
 } from "@/lib/backup";
+import { wrapBackup } from "@/lib/backup-policy";
+import { saveWithPickerNative, isDesktopRuntime } from "@/lib/native-bridge";
 import { BACKUP_POLICY } from "@/lib/backup-policy";
 import { writeLocalMirror } from "@/lib/local-mirror";
 
@@ -27,6 +30,7 @@ interface Props {
 
 export function BackupRestoreTool({ companyId, companyName, partyCode, disabled }: Props) {
   const [exporting, setExporting] = useState(false);
+  const [exportingAs, setExportingAs] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [mirroring, setMirroring] = useState(false);
   const [summary, setSummary] = useState<RestoreSummary | null>(null);
@@ -45,6 +49,34 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
       toast.error((e as Error).message || "Export failed");
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function doExportAs() {
+    if (!companyId) return;
+    setExportingAs(true);
+    try {
+      const payload = await buildCompanyBackup(companyId);
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const safe = companyName.replace(/[^a-zA-Z0-9_\-. ]+/g, "_").slice(0, 80) || "Company";
+      const fileName = `${safe}_backup_${stamp}.json`;
+      const envelope = await wrapBackup(payload);
+      const contents = JSON.stringify(envelope, null, 2);
+      const r = await saveWithPickerNative(fileName, contents, [
+        { name: "JSON Backup", extensions: ["json"] },
+      ]);
+      if (r.ok) {
+        toast.success(`Backup saved to: ${r.path}`);
+        try { localStorage.setItem(`lastBackup:${companyId}`, new Date().toISOString()); } catch { /* ignore */ }
+      } else if (r.error === "cancelled") {
+        // user cancelled — silent
+      } else {
+        toast.error(r.error || "Save failed");
+      }
+    } catch (e) {
+      toast.error((e as Error).message || "Export failed");
+    } finally {
+      setExportingAs(false);
     }
   }
 
@@ -149,11 +181,25 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          <Button onClick={doExport} disabled={exporting || disabled}>
-            {exporting
-              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Exporting…</>
-              : <><Download className="mr-2 h-4 w-4" />Export full backup (.json)</>}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={doExport} disabled={exporting || disabled}>
+              {exporting
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Exporting…</>
+                : <><Download className="mr-2 h-4 w-4" />Export full backup (.json)</>}
+            </Button>
+            {isDesktopRuntime() && (
+              <Button
+                variant="outline"
+                onClick={doExportAs}
+                disabled={exportingAs || disabled}
+                title="Choose where to save the backup file (USB / external drive / any folder)"
+              >
+                {exportingAs
+                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
+                  : <><FolderOpen className="mr-2 h-4 w-4" />Save as… (choose folder)</>}
+              </Button>
+            )}
+          </div>
           <div>
             <Button
               variant="outline"

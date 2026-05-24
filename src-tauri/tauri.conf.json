@@ -8,6 +8,7 @@
     "frontendDist": "https://your-smart-accountant.lovable.app"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Smart Accountant",

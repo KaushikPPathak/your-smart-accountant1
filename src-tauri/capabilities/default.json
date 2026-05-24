@@ -1,12 +1,21 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for the main window: shell, filesystem and dialog access for local storage and printing workflows.",
+  "description": "Default capabilities for the main window: shell, filesystem and dialog access for local storage and printing workflows. Includes remote URL allowlist so the hosted lovable.app frontend can invoke Tauri APIs (exit, save dialog, fs).",
   "windows": ["main"],
+  "remote": {
+    "urls": [
+      "https://your-smart-accountant.lovable.app",
+      "https://your-smart-accountant.lovable.app/*",
+      "https://*.lovable.app",
+      "https://*.lovable.app/*"
+    ]
+  },
   "permissions": [
     "core:default",
     "core:window:allow-close",
     "core:window:allow-destroy",
+    "core:window:allow-hide",
     "shell:allow-open",
     "shell:default",
     "dialog:default",
@@ -26,7 +35,8 @@
         { "path": "$APPLOCALDATA/**" },
         { "path": "$DOCUMENT/**" },
         { "path": "$DOWNLOAD/**" },
-        { "path": "$DESKTOP/**" }
+        { "path": "$DESKTOP/**" },
+        { "path": "$HOME/**" }
       ]
     }
   ]
