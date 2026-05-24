@@ -338,6 +338,10 @@ function SettingsPage() {
         </CardContent>
       </Card>
 
+      <StaffPinPanel />
+
+
+
       {isAdmin && (
         <Card>
           <CardHeader>
