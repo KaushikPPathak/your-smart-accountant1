@@ -320,10 +320,10 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
                 : <><HardDriveDownload className="mr-2 h-4 w-4" />Backup now (JSON + Excel)</>}
             </Button>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              In the desktop app, both files are written silently under your per-user
-              local data folder (subfolders <code>mirror/&lt;Company&gt;/backups/</code> and
-              <code className="ml-1">mirror/&lt;Company&gt;/latest/</code>). In a browser tab, both files
-              download to your Downloads folder.
+              In the desktop app, both files are written silently to your chosen
+              backup folder (in subfolders <code>&lt;Company&gt;/backups/</code> and
+              <code className="ml-1">&lt;Company&gt;/latest/</code>). In a browser tab, both
+              files download to your Downloads folder.
             </p>
           </div>
           {dataRoot && (
@@ -331,12 +331,12 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
               <div className="flex items-start gap-2">
                 <FolderCog className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-foreground">Local data folder</div>
+                  <div className="font-medium text-foreground">App data folder (logs, cache)</div>
                   <div className="break-all font-mono">{dataRoot}</div>
                   <div className="mt-0.5">
-                    Lives outside <code>Program Files</code>. Installing a newer version of
-                    the Windows app NEVER touches this folder, so your local backups and
-                    transaction snapshots survive every upgrade.
+                    Internal app storage — lives outside <code>Program Files</code> so a Windows
+                    installer upgrade never touches it. Your actual backups now go to the
+                    <strong> Backup folder</strong> you picked above.
                   </div>
                   <div className="mt-1 flex gap-2">
                     <Button
@@ -383,17 +383,35 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
             Only the <strong>.json</strong> file produced by <em>Export full backup</em> is supported.
             Archives like .rar / .zip / .7z must be extracted first.
           </p>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".json,application/json"
-            disabled={disabled}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) { setPendingFile(f); setConfirmOpen(true); }
-            }}
-            className="block text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground"
-          />
+          {isDesktopRuntime() && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={() => void doRestoreFromFolder()} disabled={disabled}>
+                <FolderOpen className="mr-2 h-4 w-4" />
+                Choose backup file…
+              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                {backupFolder
+                  ? <>Opens in <code className="break-all">{backupFolder}</code></>
+                  : <>Opens the file picker. Tip: set a <strong>Backup folder</strong> above so this opens straight there.</>}
+              </span>
+            </div>
+          )}
+          <div>
+            <div className="mb-1 text-[11px] text-muted-foreground">
+              …or pick a backup file from anywhere on your computer:
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json,application/json"
+              disabled={disabled}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) { setPendingFile(f); setConfirmOpen(true); }
+              }}
+              className="block text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground"
+            />
+          </div>
           {summary && (
             <div className="rounded-md border bg-emerald-500/5 p-3 text-xs">
               <div className="font-medium mb-1">Restore complete:</div>
