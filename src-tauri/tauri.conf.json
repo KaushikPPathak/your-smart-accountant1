@@ -4,10 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.smartaccountant.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
-    "devUrl": "http://localhost:5173",
-    "frontendDist": "../dist"
+    "frontendDist": "https://your-smart-accountant.lovable.app"
   },
   "app": {
     "withGlobalTauri": true,
@@ -18,7 +15,7 @@
         "height": 800,
         "resizable": true,
         "fullscreen": false,
-        "url": "/"
+        "url": "https://your-smart-accountant.lovable.app"
       }
     ],
     "security": {
