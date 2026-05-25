@@ -71,6 +71,10 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
 
   async function doExport() {
     if (!companyId) return;
+    if (isDesktopRuntime() && !backupFolder) {
+      const picked = await chooseBackupFolder();
+      if (!picked) return;
+    }
     setExporting(true);
     try {
       const r = await exportCompanyBackup(companyId, companyName);
@@ -113,6 +117,10 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
 
   async function doMirror() {
     if (!companyId) return;
+    if (isDesktopRuntime() && !backupFolder) {
+      const picked = await chooseBackupFolder();
+      if (!picked) return;
+    }
     setMirroring(true);
     try {
       const r = await writeLocalMirror(companyId, companyName, partyCode ?? null);
@@ -127,6 +135,29 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
       setMirroring(false);
     }
   }
+
+  async function doRestoreFromFolder() {
+    // Native file picker that opens inside the chosen backup folder.
+    const startDir = backupFolder
+      ? `${backupFolder.replace(/[\\/]+$/, "")}/${companyName.replace(/[^a-zA-Z0-9_\-. ]+/g, "_")}/backups`
+      : undefined;
+    const pick = await pickFileNative(startDir, [{ name: "JSON Backup", extensions: ["json"] }]);
+    if (!pick.ok || !pick.path) {
+      if (pick.error && pick.error !== "cancelled") toast.error(pick.error);
+      return;
+    }
+    const read = await readAbsoluteTextFileNative(pick.path);
+    if (!read.ok || !read.text) {
+      toast.error(read.error || "Could not read file");
+      return;
+    }
+    // Wrap as a File so the existing doRestore() pipeline can consume it.
+    const fileName = pick.path.split(/[\\/]/).pop() || "backup.json";
+    const file = new File([read.text], fileName, { type: "application/json" });
+    setPendingFile(file);
+    setConfirmOpen(true);
+  }
+
 
   async function doRestore() {
     if (!pendingFile) return;
