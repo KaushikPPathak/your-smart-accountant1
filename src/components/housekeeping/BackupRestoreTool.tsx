@@ -231,6 +231,52 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
         </Card>
       )}
 
+      {isDesktopRuntime() && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Folder className="h-4 w-4" /> Backup folder
+            </CardTitle>
+            <CardDescription>
+              All backups for <strong>{companyName}</strong> are saved here. Pick a folder you can
+              easily find — Documents, a USB / external drive, or a cloud-synced folder
+              (OneDrive / Google Drive / Dropbox).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {backupFolder ? (
+              <div className="rounded-md border bg-background p-2 text-xs">
+                <div className="break-all font-mono">{backupFolder}</div>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  Backups go to <code>{backupFolder.replace(/[\\/]+$/, "")}/{companyName}/backups/</code>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed bg-background p-2 text-xs text-muted-foreground">
+                Not set yet — click <strong>Change…</strong> to choose where backups should go.
+                Until you pick one, backups fall back to the app's hidden local data folder.
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => void chooseBackupFolder()}>
+                <FolderCog className="mr-1 h-3.5 w-3.5" />
+                {backupFolder ? "Change…" : "Choose folder…"}
+              </Button>
+              {backupFolder && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void openPathNative(backupFolder)}
+                >
+                  <FolderOpen className="mr-1 h-3.5 w-3.5" /> Open
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
