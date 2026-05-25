@@ -9,7 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen, FolderCog } from "lucide-react";
+import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen, FolderCog, Folder } from "lucide-react";
 import { toast } from "sonner";
 import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
@@ -17,10 +17,14 @@ import {
   type RestoreSummary,
 } from "@/lib/backup";
 import { wrapBackup } from "@/lib/backup-policy";
-import { saveWithPickerNative, isDesktopRuntime, showInFolderNative, openPathNative } from "@/lib/native-bridge";
+import {
+  saveWithPickerNative, isDesktopRuntime, showInFolderNative, openPathNative,
+  pickFolderNative, pickFileNative, readAbsoluteTextFileNative,
+} from "@/lib/native-bridge";
 import { getAppPaths } from "@/lib/app-paths";
 import { BACKUP_POLICY } from "@/lib/backup-policy";
 import { writeLocalMirror } from "@/lib/local-mirror";
+import { getBackupFolder, setBackupFolder } from "@/lib/backup-location";
 
 interface Props {
   companyId: string;
@@ -38,10 +42,10 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dataRoot, setDataRoot] = useState<string | null>(null);
+  const [backupFolder, setBackupFolderState] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Resolve the OS-standard local data folder so the user can see where
-  // their backups physically live (and confirm it sits outside Program Files).
+  // Resolve the OS-standard local data folder + load the user-chosen backup folder.
   useEffect(() => {
     if (!isDesktopRuntime()) return;
     let cancelled = false;
@@ -49,11 +53,28 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
       const paths = await getAppPaths();
       if (!cancelled && paths) setDataRoot(paths.root);
     })();
+    setBackupFolderState(getBackupFolder(companyId));
     return () => { cancelled = true; };
-  }, []);
+  }, [companyId]);
+
+  async function chooseBackupFolder(): Promise<string | null> {
+    const r = await pickFolderNative(backupFolder ?? undefined);
+    if (!r.ok || !r.path) {
+      if (r.error && r.error !== "cancelled") toast.error(r.error);
+      return null;
+    }
+    setBackupFolder(companyId, r.path);
+    setBackupFolderState(r.path);
+    toast.success("Backup folder set", { description: r.path });
+    return r.path;
+  }
 
   async function doExport() {
     if (!companyId) return;
+    if (isDesktopRuntime() && !backupFolder) {
+      const picked = await chooseBackupFolder();
+      if (!picked) return;
+    }
     setExporting(true);
     try {
       const r = await exportCompanyBackup(companyId, companyName);
@@ -96,6 +117,10 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
 
   async function doMirror() {
     if (!companyId) return;
+    if (isDesktopRuntime() && !backupFolder) {
+      const picked = await chooseBackupFolder();
+      if (!picked) return;
+    }
     setMirroring(true);
     try {
       const r = await writeLocalMirror(companyId, companyName, partyCode ?? null);
@@ -110,6 +135,29 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
       setMirroring(false);
     }
   }
+
+  async function doRestoreFromFolder() {
+    // Native file picker that opens inside the chosen backup folder.
+    const startDir = backupFolder
+      ? `${backupFolder.replace(/[\\/]+$/, "")}/${companyName.replace(/[^a-zA-Z0-9_\-. ]+/g, "_")}/backups`
+      : undefined;
+    const pick = await pickFileNative(startDir, [{ name: "JSON Backup", extensions: ["json"] }]);
+    if (!pick.ok || !pick.path) {
+      if (pick.error && pick.error !== "cancelled") toast.error(pick.error);
+      return;
+    }
+    const read = await readAbsoluteTextFileNative(pick.path);
+    if (!read.ok || !read.text) {
+      toast.error(read.error || "Could not read file");
+      return;
+    }
+    // Wrap as a File so the existing doRestore() pipeline can consume it.
+    const fileName = pick.path.split(/[\\/]/).pop() || "backup.json";
+    const file = new File([read.text], fileName, { type: "application/json" });
+    setPendingFile(file);
+    setConfirmOpen(true);
+  }
+
 
   async function doRestore() {
     if (!pendingFile) return;
@@ -183,6 +231,52 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
         </Card>
       )}
 
+      {isDesktopRuntime() && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Folder className="h-4 w-4" /> Backup folder
+            </CardTitle>
+            <CardDescription>
+              All backups for <strong>{companyName}</strong> are saved here. Pick a folder you can
+              easily find — Documents, a USB / external drive, or a cloud-synced folder
+              (OneDrive / Google Drive / Dropbox).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {backupFolder ? (
+              <div className="rounded-md border bg-background p-2 text-xs">
+                <div className="break-all font-mono">{backupFolder}</div>
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  Backups go to <code>{backupFolder.replace(/[\\/]+$/, "")}/{companyName}/backups/</code>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed bg-background p-2 text-xs text-muted-foreground">
+                Not set yet — click <strong>Change…</strong> to choose where backups should go.
+                Until you pick one, backups fall back to the app's hidden local data folder.
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => void chooseBackupFolder()}>
+                <FolderCog className="mr-1 h-3.5 w-3.5" />
+                {backupFolder ? "Change…" : "Choose folder…"}
+              </Button>
+              {backupFolder && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void openPathNative(backupFolder)}
+                >
+                  <FolderOpen className="mr-1 h-3.5 w-3.5" /> Open
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -226,10 +320,10 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
                 : <><HardDriveDownload className="mr-2 h-4 w-4" />Backup now (JSON + Excel)</>}
             </Button>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              In the desktop app, both files are written silently under your per-user
-              local data folder (subfolders <code>mirror/&lt;Company&gt;/backups/</code> and
-              <code className="ml-1">mirror/&lt;Company&gt;/latest/</code>). In a browser tab, both files
-              download to your Downloads folder.
+              In the desktop app, both files are written silently to your chosen
+              backup folder (in subfolders <code>&lt;Company&gt;/backups/</code> and
+              <code className="ml-1">&lt;Company&gt;/latest/</code>). In a browser tab, both
+              files download to your Downloads folder.
             </p>
           </div>
           {dataRoot && (
@@ -237,12 +331,12 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
               <div className="flex items-start gap-2">
                 <FolderCog className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-foreground">Local data folder</div>
+                  <div className="font-medium text-foreground">App data folder (logs, cache)</div>
                   <div className="break-all font-mono">{dataRoot}</div>
                   <div className="mt-0.5">
-                    Lives outside <code>Program Files</code>. Installing a newer version of
-                    the Windows app NEVER touches this folder, so your local backups and
-                    transaction snapshots survive every upgrade.
+                    Internal app storage — lives outside <code>Program Files</code> so a Windows
+                    installer upgrade never touches it. Your actual backups now go to the
+                    <strong> Backup folder</strong> you picked above.
                   </div>
                   <div className="mt-1 flex gap-2">
                     <Button
@@ -289,17 +383,35 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
             Only the <strong>.json</strong> file produced by <em>Export full backup</em> is supported.
             Archives like .rar / .zip / .7z must be extracted first.
           </p>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".json,application/json"
-            disabled={disabled}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) { setPendingFile(f); setConfirmOpen(true); }
-            }}
-            className="block text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground"
-          />
+          {isDesktopRuntime() && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={() => void doRestoreFromFolder()} disabled={disabled}>
+                <FolderOpen className="mr-2 h-4 w-4" />
+                Choose backup file…
+              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                {backupFolder
+                  ? <>Opens in <code className="break-all">{backupFolder}</code></>
+                  : <>Opens the file picker. Tip: set a <strong>Backup folder</strong> above so this opens straight there.</>}
+              </span>
+            </div>
+          )}
+          <div>
+            <div className="mb-1 text-[11px] text-muted-foreground">
+              …or pick a backup file from anywhere on your computer:
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json,application/json"
+              disabled={disabled}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) { setPendingFile(f); setConfirmOpen(true); }
+              }}
+              className="block text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground"
+            />
+          </div>
           {summary && (
             <div className="rounded-md border bg-emerald-500/5 p-3 text-xs">
               <div className="font-medium mb-1">Restore complete:</div>

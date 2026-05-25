@@ -6,7 +6,8 @@
 // In a browser tab the user gets a manual download.
 
 import { buildCompanyBackup } from "./backup";
-import { isDesktopRuntime, saveCompanyFileNative } from "./native-bridge";
+import { isDesktopRuntime, saveCompanyFileNative, writeAbsoluteFileNative } from "./native-bridge";
+import { getBackupFolder } from "./backup-location";
 
 function safeName(s: string | null | undefined): string {
   return (s ?? "company").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 60) || "company";
@@ -67,10 +68,23 @@ export async function writeLocalMirror(
   const jsonStr = JSON.stringify(backup, null, 2);
 
   if (isDesktopRuntime()) {
-    const [j1, j2] = await Promise.all([
-      saveCompanyFileNative(companyName, "backups", jsonFile, jsonStr),
-      saveCompanyFileNative(companyName, "latest", latestJson, jsonStr),
-    ]);
+    const chosen = getBackupFolder(companyId);
+    const companySeg = safeName(companyName);
+    let j1, j2;
+    if (chosen) {
+      // Write into the user-picked folder: <chosen>/<Company>/backups + /latest
+      const base = `${chosen.replace(/[\\/]+$/, "")}/${companySeg}`;
+      [j1, j2] = await Promise.all([
+        writeAbsoluteFileNative(base, "backups", jsonFile, jsonStr),
+        writeAbsoluteFileNative(base, "latest", latestJson, jsonStr),
+      ]);
+    } else {
+      // Fallback: legacy %LOCALAPPDATA%\...\mirror\<Company>\... location.
+      [j1, j2] = await Promise.all([
+        saveCompanyFileNative(companyName, "backups", jsonFile, jsonStr),
+        saveCompanyFileNative(companyName, "latest", latestJson, jsonStr),
+      ]);
+    }
     if (!j1.ok || !j2.ok) {
       const err = j1.error || j2.error || "Unknown error";
       throw new Error(`Local save failed: ${err}`);

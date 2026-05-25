@@ -219,3 +219,86 @@ export async function saveWithPickerNative(
   }
 }
 
+/**
+ * Show a native folder picker. Returns the absolute folder path the user chose,
+ * or { ok: false } if cancelled / not in a desktop runtime.
+ */
+export async function pickFolderNative(defaultPath?: string): Promise<SaveNativeResult> {
+  if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
+  try {
+    const dlg = await import("@tauri-apps/plugin-dialog");
+    const chosen = await dlg.open({ directory: true, multiple: false, defaultPath });
+    if (!chosen || Array.isArray(chosen)) return { ok: false, error: "cancelled" };
+    return { ok: true, path: chosen };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Show a native "Open file" dialog (single file). Returns the absolute path.
+ */
+export async function pickFileNative(
+  defaultPath?: string,
+  filters?: { name: string; extensions: string[] }[],
+): Promise<SaveNativeResult> {
+  if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
+  try {
+    const dlg = await import("@tauri-apps/plugin-dialog");
+    const chosen = await dlg.open({ directory: false, multiple: false, defaultPath, filters });
+    if (!chosen || Array.isArray(chosen)) return { ok: false, error: "cancelled" };
+    return { ok: true, path: chosen };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Read a text file from an absolute path (desktop runtimes only).
+ */
+export async function readAbsoluteTextFileNative(absPath: string): Promise<{ ok: boolean; text?: string; error?: string }> {
+  if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
+  try {
+    const fs = await import("@tauri-apps/plugin-fs");
+    const text = await fs.readTextFile(absPath);
+    return { ok: true, text };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Write contents to an absolute path under a user-chosen folder. Caller is
+ * responsible for ensuring the path was returned by a native picker — silent
+ * writes outside %LOCALAPPDATA% are blocked by capability scope otherwise.
+ *
+ * Creates the parent directory recursively if needed.
+ */
+export async function writeAbsoluteFileNative(
+  absDir: string,
+  subFolder: string,
+  fileName: string,
+  contents: string | ArrayBuffer | Uint8Array,
+): Promise<SaveNativeResult> {
+  if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
+  try {
+    const [{ join }, fs] = await Promise.all([
+      import("@tauri-apps/api/path"),
+      import("@tauri-apps/plugin-fs"),
+    ]);
+    const dir = subFolder ? await join(absDir, safeSeg(subFolder)) : absDir;
+    await fs.mkdir(dir, { recursive: true });
+    const fullPath = await join(dir, fileName);
+    if (typeof contents === "string") {
+      await fs.writeTextFile(fullPath, contents);
+    } else {
+      const bytes =
+        contents instanceof Uint8Array ? contents : new Uint8Array(contents as ArrayBuffer);
+      await fs.writeFile(fullPath, bytes);
+    }
+    return { ok: true, path: fullPath };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+

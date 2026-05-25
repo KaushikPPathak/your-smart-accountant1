@@ -26,7 +26,8 @@ export interface MultiCompanyBackup {
 }
 
 // ---------- Native desktop bridge (Electron or Tauri) ----------
-import { isDesktopRuntime, saveCompanyFileNative } from "./native-bridge";
+import { isDesktopRuntime, saveCompanyFileNative, writeAbsoluteFileNative } from "./native-bridge";
+import { getBackupFolder } from "./backup-location";
 
 // ---------- Helpers ----------
 function safeName(s: string | null | undefined): string {
@@ -98,8 +99,15 @@ export async function exportCompanyBackup(
   const contents = JSON.stringify(envelope, null, 2);
 
   if (isDesktopRuntime()) {
-    const res = await saveCompanyFileNative(companyName, "backups", fileName, contents);
-    if (res.ok) return { fileName, desktopPath: res.path };
+    const chosen = getBackupFolder(companyId);
+    if (chosen) {
+      const base = `${chosen.replace(/[\\/]+$/, "")}/${safeName(companyName)}`;
+      const res = await writeAbsoluteFileNative(base, "backups", fileName, contents);
+      if (res.ok) return { fileName, desktopPath: res.path };
+    } else {
+      const res = await saveCompanyFileNative(companyName, "backups", fileName, contents);
+      if (res.ok) return { fileName, desktopPath: res.path };
+    }
   }
   browserDownload(fileName, contents);
   return { fileName };

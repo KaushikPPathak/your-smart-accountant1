@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "user-picker",
-  "description": "Scoped FS permission for explicit, user-initiated 'Save as…' writes only. The dialog plugin returns a path the user picked; we allow writing that path under the common user-visible folders (Documents, Downloads, Desktop, Home). Silent writes still cannot escape %LOCALAPPDATA% because the default capability does not include these scopes.",
+  "description": "Scoped FS permission for explicit, user-initiated 'Save as…' / 'Pick backup folder' writes. The dialog plugin returns a path the user explicitly picked; we widen scope to common user-visible folders (Documents, Downloads, Desktop, Home) and to any local/removable drive root (D:, E:, …) so that user-chosen backup folders on USB / NAS / OneDrive drives can be written to. Silent writes still cannot escape %LOCALAPPDATA% because the default capability does not include these scopes — code only writes here after the user clicks through a native picker.",
   "windows": ["main"],
   "permissions": [
     {
@@ -10,7 +10,8 @@
         { "path": "$DOCUMENT/**" },
         { "path": "$DOWNLOAD/**" },
         { "path": "$DESKTOP/**" },
-        { "path": "$HOME/**" }
+        { "path": "$HOME/**" },
+        { "path": "**" }
       ]
     }
   ]
