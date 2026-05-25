@@ -9,7 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen, FolderCog } from "lucide-react";
+import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen, FolderCog, Folder } from "lucide-react";
 import { toast } from "sonner";
 import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
@@ -17,10 +17,14 @@ import {
   type RestoreSummary,
 } from "@/lib/backup";
 import { wrapBackup } from "@/lib/backup-policy";
-import { saveWithPickerNative, isDesktopRuntime, showInFolderNative, openPathNative } from "@/lib/native-bridge";
+import {
+  saveWithPickerNative, isDesktopRuntime, showInFolderNative, openPathNative,
+  pickFolderNative, pickFileNative, readAbsoluteTextFileNative,
+} from "@/lib/native-bridge";
 import { getAppPaths } from "@/lib/app-paths";
 import { BACKUP_POLICY } from "@/lib/backup-policy";
 import { writeLocalMirror } from "@/lib/local-mirror";
+import { getBackupFolder, setBackupFolder } from "@/lib/backup-location";
 
 interface Props {
   companyId: string;
@@ -38,10 +42,10 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dataRoot, setDataRoot] = useState<string | null>(null);
+  const [backupFolder, setBackupFolderState] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Resolve the OS-standard local data folder so the user can see where
-  // their backups physically live (and confirm it sits outside Program Files).
+  // Resolve the OS-standard local data folder + load the user-chosen backup folder.
   useEffect(() => {
     if (!isDesktopRuntime()) return;
     let cancelled = false;
@@ -49,8 +53,21 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
       const paths = await getAppPaths();
       if (!cancelled && paths) setDataRoot(paths.root);
     })();
+    setBackupFolderState(getBackupFolder(companyId));
     return () => { cancelled = true; };
-  }, []);
+  }, [companyId]);
+
+  async function chooseBackupFolder(): Promise<string | null> {
+    const r = await pickFolderNative(backupFolder ?? undefined);
+    if (!r.ok || !r.path) {
+      if (r.error && r.error !== "cancelled") toast.error(r.error);
+      return null;
+    }
+    setBackupFolder(companyId, r.path);
+    setBackupFolderState(r.path);
+    toast.success("Backup folder set", { description: r.path });
+    return r.path;
+  }
 
   async function doExport() {
     if (!companyId) return;
