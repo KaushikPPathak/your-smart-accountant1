@@ -46,6 +46,11 @@ import {
 } from "@/lib/masters-cache";
 import { validateItemVoucher } from "@/lib/schemas/voucher";
 import { enqueueSave } from "@/lib/save-queue";
+import {
+  ITEM_VOUCHER_KEY,
+  runItemVoucherCreate,
+  type ItemVoucherSnap,
+} from "@/lib/offline/voucher-executors";
 import { ItemRow, type ItemRowData } from "@/components/fast-form/ItemRow";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
 
@@ -585,128 +590,36 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         /* ignore */
       }
     }
-    enqueueSave(`${cfg.title} ${snap.voucherDate}`, async () => {
-      const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
-        _company_id: snap.companyId,
-        _type: snap.voucherType,
-      });
-      if (numErr) throw numErr;
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not signed in");
-      const { data: vData, error: vErr } = await supabase
-        .from("vouchers")
-        .insert({
-          company_id: snap.companyId,
-          created_by: user.id,
-          voucher_type: snap.voucherType,
-          voucher_number: numData as string,
-          voucher_date: snap.voucherDate,
-          party_ledger_id: snap.partyId,
-          reference_no: snap.refNo || null,
-          narration: snap.narration || null,
-          is_interstate: snap.interstate,
-          subtotal_paise: snap.totals.subtotal_paise,
-          cgst_paise: snap.totals.cgst_paise,
-          sgst_paise: snap.totals.sgst_paise,
-          igst_paise: snap.totals.igst_paise,
-          round_off_paise: snap.totals.round_off_paise,
-          total_paise: snap.totals.total_paise,
-          place_of_supply_code: snap.placeOfSupply || null,
-          itc_class: snap.itcClass,
-          itc_eligible: snap.itcEligible,
-          original_voucher_id: snap.originalVoucherId,
-        })
-        .select("id")
-        .single();
-      if (vErr) throw vErr;
-      const itemRows = snap.lines.map(({ l, c }, i) => ({
-        voucher_id: vData.id,
-        item_id: l.item_id,
-        line_no: i + 1,
-        description: l.description || null,
-        qty: parseFloat(l.qty) || 0,
-        rate_paise: rupeesToPaise(parseFloat(l.rate) || 0),
-        discount_paise: c.discount_paise,
-        amount_paise: c.amount_paise,
-        taxable_paise: c.taxable_paise,
-        gst_rate: c.gst_rate,
-        cgst_paise: c.cgst_paise,
-        sgst_paise: c.sgst_paise,
-        igst_paise: c.igst_paise,
-      }));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: iErr } = await supabase.from("voucher_items").insert(itemRows as any);
-      if (iErr) throw iErr;
-      const skipPostings =
-        snap.voucherType === "sales_order" ||
-        snap.voucherType === "delivery_note" ||
-        snap.voucherType === "quotation";
-      if (!skipPostings) {
-        const capitalItems =
-          snap.itcClass === "capital_goods"
-            ? snap.lines.map(({ l, c }) => {
-                const it = items.find((x) => x.id === l.item_id);
-                return {
-                  name: (it?.name || l.description || "Capital Asset").trim(),
-                  taxable_paise: c.taxable_paise,
-                  cgst_paise: c.cgst_paise,
-                  sgst_paise: c.sgst_paise,
-                  igst_paise: c.igst_paise,
-                };
-              })
-            : undefined;
-        const postings = await buildItemVoucherPostings(
-          snap.companyId,
-          snap.voucherType as "sales" | "purchase" | "credit_note" | "debit_note",
-          snap.partyId,
-          snap.totals,
-          {
-            itcClass: snap.itcClass as
-              | "inputs"
-              | "capital_goods"
-              | "input_services"
-              | "ineligible"
-              | "na",
-            itcEligible: snap.itcEligible,
-            capitalItems,
-          },
-        );
-        const entryRows = postings.map((p) => ({
-          voucher_id: vData.id,
-          ledger_id: p.ledger_id,
-          debit_paise: p.debit_paise,
-          credit_paise: p.credit_paise,
-          line_no: p.line_no,
-        }));
-        const { error: eErr } = await supabase.from("voucher_entries").insert(entryRows);
-        if (eErr) throw eErr;
-      }
-      const movesGoods =
-        snap.voucherType === "sales" ||
-        snap.voucherType === "purchase" ||
-        snap.voucherType === "credit_note" ||
-        snap.voucherType === "debit_note";
-      if (movesGoods && snap.totals.total_paise > 5_000_000) {
-        setEwbDlg({
-          open: true,
-          voucher: {
-            id: vData.id,
-            company_id: snap.companyId,
-            voucher_number: numData as string,
-            voucher_date: snap.voucherDate,
-            total_paise: snap.totals.total_paise,
-            subtotal_paise: snap.totals.subtotal_paise,
-            cgst_paise: snap.totals.cgst_paise,
-            sgst_paise: snap.totals.sgst_paise,
-            igst_paise: snap.totals.igst_paise,
-            is_interstate: snap.interstate,
-            place_of_supply_code: snap.placeOfSupply || null,
-          },
-        });
-      }
-    });
+    enqueueSave(
+      `${cfg.title} ${snap.voucherDate}`,
+      async () => {
+        const result = await runItemVoucherCreate(snap as unknown as ItemVoucherSnap);
+        const movesGoods =
+          snap.voucherType === "sales" ||
+          snap.voucherType === "purchase" ||
+          snap.voucherType === "credit_note" ||
+          snap.voucherType === "debit_note";
+        if (movesGoods && snap.totals.total_paise > 5_000_000) {
+          setEwbDlg({
+            open: true,
+            voucher: {
+              id: result.voucherId,
+              company_id: snap.companyId,
+              voucher_number: result.voucherNumber,
+              voucher_date: snap.voucherDate,
+              total_paise: snap.totals.total_paise,
+              subtotal_paise: snap.totals.subtotal_paise,
+              cgst_paise: snap.totals.cgst_paise,
+              sgst_paise: snap.totals.sgst_paise,
+              igst_paise: snap.totals.igst_paise,
+              is_interstate: snap.interstate,
+              place_of_supply_code: snap.placeOfSupply || null,
+            },
+          });
+        }
+      },
+      { executor: ITEM_VOUCHER_KEY, snap, companyId: snap.companyId },
+    );
   }, [
     activeCompanyId,
     canWrite,
