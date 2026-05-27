@@ -2,6 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useState, useSyncExt
 import { toast } from "sonner";
 import { markSaved, markFailure, clearFailures } from "./save-status";
 import { describeError } from "./error-message";
+import { isOnlineNow } from "./offline/online-status";
+import { enqueueWrite } from "./offline/outbox";
+
+export interface PersistSpec {
+  executor: string;
+  snap: unknown;
+  companyId: string | null;
+}
 
 export interface PendingJob {
   id: string;
@@ -9,6 +17,7 @@ export interface PendingJob {
   attempts: number;
   lastError?: string;
   run: () => Promise<void>;
+  persist?: PersistSpec;
 }
 
 const queue: PendingJob[] = [];
@@ -24,18 +33,49 @@ const ric: Idle = (typeof window !== "undefined" && (window as unknown as { requ
   ? ((window as unknown as { requestIdleCallback: Idle }).requestIdleCallback)
   : (cb) => setTimeout(cb, 0);
 
+async function persistAndDrop(job: PendingJob): Promise<boolean> {
+  if (!job.persist) return false;
+  try {
+    await enqueueWrite({
+      op: "custom",
+      executor: job.persist.executor,
+      payload: job.persist.snap,
+      company_id: job.persist.companyId,
+      label: job.label,
+    });
+    queue.shift();
+    markSaved(job.label);
+    bump();
+    toast.success(`${job.label} queued — will sync when online`);
+    return true;
+  } catch (err) {
+    console.error("Failed to persist to offline outbox", err);
+    return false;
+  }
+}
+
 async function flush() {
   if (inFlight) return;
   inFlight = true;
   try {
     while (queue.length > 0) {
       const job = queue[0];
+      // Offline + persistable → skip the network attempt entirely and queue
+      // straight to the durable outbox so it survives reload.
+      if (job.persist && !isOnlineNow()) {
+        if (await persistAndDrop(job)) continue;
+      }
       try {
         await job.run();
         queue.shift();
         markSaved(job.label);
         bump();
       } catch (e) {
+        // If we're offline (or went offline mid-flight) and the job is
+        // persistable, route it to the outbox instead of marking failure.
+        if (job.persist && !isOnlineNow()) {
+          if (await persistAndDrop(job)) continue;
+        }
         job.attempts += 1;
         job.lastError = describeError(e);
         console.error("Background save failed", { label: job.label, error: e });
@@ -52,8 +92,12 @@ async function flush() {
 }
 
 /** Enqueue a non-blocking save. Returns immediately. */
-export function enqueueSave(label: string, run: () => Promise<void>) {
-  const job: PendingJob = { id: crypto.randomUUID(), label, attempts: 0, run };
+export function enqueueSave(
+  label: string,
+  run: () => Promise<void>,
+  persist?: PersistSpec,
+) {
+  const job: PendingJob = { id: crypto.randomUUID(), label, attempts: 0, run, persist };
   queue.push(job);
   bump();
   startTransition(() => {
