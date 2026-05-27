@@ -11,11 +11,14 @@ import Dexie, { type Table } from "dexie";
 
 export interface OutboxRow {
   id?: number;
-  op: "insert" | "update" | "delete" | "rpc";
+  op: "insert" | "update" | "delete" | "rpc" | "custom";
   table?: string;
   rpc?: string;
+  // For op="custom": registered executor key in voucher-executors registry.
+  executor?: string;
   payload: unknown;
   company_id: string | null;
+  label?: string; // optional human-readable label for the status drawer
   created_at: number; // epoch ms
   attempts: number;
   last_error: string | null;
