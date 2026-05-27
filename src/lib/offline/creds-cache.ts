@@ -52,19 +52,20 @@ export async function refreshAllCachedCreds(): Promise<void> {
       .select("id,name,role,username,password_hash,is_active")
       .in("username", usernames);
     if (error || !data) return;
-    const fresh: AccountCredCacheRow[] = data
-      .filter((d): d is { id: string; name: string; role: string; username: string; password_hash: string; is_active: boolean } =>
-        Boolean(d.username && d.password_hash))
-      .map((d) => ({
+    const fresh: AccountCredCacheRow[] = [];
+    for (const d of data) {
+      if (!d.username || !d.password_hash) continue;
+      fresh.push({
         username: d.username.toLowerCase(),
         user_id: d.id,
         name: d.name ?? "",
-        role: d.role ?? "staff",
+        role: (d.role as string) ?? "staff",
         password_hash: d.password_hash,
         is_active: d.is_active ?? true,
         cached_at: Date.now(),
-      }));
-    await offlineDb.account_creds.bulkPut(fresh);
+      });
+    }
+    if (fresh.length) await offlineDb.account_creds.bulkPut(fresh);
   } catch {
     /* ignore */
   }
