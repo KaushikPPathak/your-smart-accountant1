@@ -26,6 +26,11 @@ import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
 import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/masters-cache";
 import { enqueueSave } from "@/lib/save-queue";
+import {
+  ENTRY_VOUCHER_KEY,
+  runEntryVoucherCreate,
+  type EntryVoucherSnap,
+} from "@/lib/offline/voucher-executors";
 import { validateEntryVoucher } from "@/lib/schemas/voucher";
 import { EntryRow } from "@/components/fast-form/EntryRow";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
@@ -353,28 +358,13 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       const first = root.querySelector<HTMLElement>('input:not([type="hidden"]):not([disabled]), [role="combobox"]:not([disabled])');
       first?.focus();
     });
-    enqueueSave(`${cfg.title} ${snap.refNo || snap.voucherDate}`, async () => {
-      const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
-        _company_id: snap.companyId, _type: snap.voucherType,
-      });
-      if (numErr) throw numErr;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not signed in");
-      const { data: vData, error: vErr } = await supabase
-        .from("vouchers")
-        .insert({
-          company_id: snap.companyId, created_by: user.id,
-          voucher_type: snap.voucherType, voucher_number: numData as string,
-          voucher_date: snap.voucherDate, party_ledger_id: snap.partyLedgerId,
-          reference_no: snap.refNo || null, narration: snap.narration || null,
-          is_interstate: false, subtotal_paise: snap.total, total_paise: snap.total,
-        })
-        .select("id").single();
-      if (vErr) throw vErr;
-      const entries = snap.entries.map((e) => ({ ...e, voucher_id: vData.id }));
-      const { error: eErr } = await supabase.from("voucher_entries").insert(entries);
-      if (eErr) throw eErr;
-    });
+    enqueueSave(
+      `${cfg.title} ${snap.refNo || snap.voucherDate}`,
+      async () => {
+        await runEntryVoucherCreate(snap as unknown as EntryVoucherSnap);
+      },
+      { executor: ENTRY_VOUCHER_KEY, snap, companyId: snap.companyId },
+    );
   }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg]);
 
   const save = useCallback(() => { void performSave(); }, [performSave]);

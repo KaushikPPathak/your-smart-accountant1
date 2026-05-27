@@ -60,6 +60,15 @@ export async function runOrQueue(
 }
 
 async function executeOutboxRow(row: OutboxRow): Promise<void> {
+  if (row.op === "custom" && row.executor) {
+    // Lazy import to avoid circular deps; registry is populated as a side
+    // effect of importing the module.
+    const { getVoucherExecutor } = await import("./voucher-executors");
+    const fn = getVoucherExecutor(row.executor);
+    if (!fn) throw new Error(`No executor registered for "${row.executor}"`);
+    await fn(row.payload);
+    return;
+  }
   if (row.op === "rpc" && row.rpc) {
     const { error } = await (supabase as unknown as {
       rpc: (name: string, args: unknown) => Promise<{ error: { message: string } | null }>;
