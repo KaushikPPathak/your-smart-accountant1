@@ -22,12 +22,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(newSession);
     });
 
-    // Silent tech-user sign-in: no login screen, RLS still scoped by auth.uid().
+    // Silent tech-user sign-in with a short timeout so an offline boot
+    // doesn't block the UI forever. The sync worker will retry in the
+    // background when the network returns.
     (async () => {
-      await ensureTechSession();
-      const { data } = await supabase.auth.getSession();
-      setSession(data.session);
-      setLoading(false);
+      try {
+        await Promise.race([
+          ensureTechSession(),
+          new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+        ]);
+        const { data } = await supabase.auth.getSession();
+        setSession(data.session);
+      } catch {
+        /* offline boot — leave session null, lock screen will fall back */
+      } finally {
+        setLoading(false);
+        // Kick off the offline sync worker once the app is mounted.
+        import("./offline/sync-worker").then((m) => m.startSyncWorker()).catch(() => undefined);
+      }
     })();
 
     return () => sub.subscription.unsubscribe();

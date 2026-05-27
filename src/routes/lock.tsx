@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { markUnlocked, type StaffRole } from "@/lib/staff-session";
 import { ensureTechSession } from "@/lib/tech-user";
+import { cacheAccountCredsFromCloud, verifyOfflineLogin } from "@/lib/offline/creds-cache";
+import { isOnlineNow } from "@/lib/offline/online-status";
 
 export const Route = createFileRoute("/lock")({
   head: () => ({ meta: [{ title: "Sign in — Smart Accountant" }] }),
@@ -36,19 +38,29 @@ function LockScreen() {
   useEffect(() => {
     (async () => {
       try {
+        if (!isOnlineNow()) {
+          // Offline boot: skip cloud probe and assume "an account exists"
+          // so the login form is shown rather than the signup form.
+          setAccountsExist(true);
+          setTab("login");
+          return;
+        }
         await ensureTechSession();
         const { data, error } = await supabase.rpc("accounts_exist");
         if (error) throw error;
         const exists = Boolean(data);
         setAccountsExist(exists);
         setTab(exists ? "login" : "signup");
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Failed to load");
+      } catch {
+        // Network/auth flakiness — default to login form using cached creds.
+        setAccountsExist(true);
+        setTab("login");
       } finally {
         setBootLoading(false);
       }
     })();
   }, []);
+
 
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,19 +70,32 @@ function LockScreen() {
     }
     setBusy(true);
     try {
-      const { data, error } = await supabase.rpc("verify_account_login", {
-        _username: loginUser.trim(),
-        _password: loginPass,
-      });
-      if (error) throw error;
-      const row = Array.isArray(data) ? data[0] : data;
-      if (!row?.id) {
-        toast.error("Invalid username or password");
-        return;
+      if (isOnlineNow()) {
+        const { data, error } = await supabase.rpc("verify_account_login", {
+          _username: loginUser.trim(),
+          _password: loginPass,
+        });
+        if (error) throw error;
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row?.id) {
+          toast.error("Invalid username or password");
+          return;
+        }
+        // Cache the bcrypt hash so future offline launches work.
+        void cacheAccountCredsFromCloud(loginUser.trim());
+        markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole });
+        toast.success(`Welcome, ${row.name}`);
+        window.location.assign("/app");
+      } else {
+        const local = await verifyOfflineLogin(loginUser.trim(), loginPass);
+        if (!local) {
+          toast.error("Invalid username or password");
+          return;
+        }
+        markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole });
+        toast.success(`Welcome, ${local.name} (offline)`);
+        window.location.assign("/app");
       }
-      markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole });
-      toast.success(`Welcome, ${row.name}`);
-      window.location.assign("/app");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Login failed");
     } finally {
