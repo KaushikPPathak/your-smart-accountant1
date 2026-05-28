@@ -25,7 +25,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Silent tech-user sign-in with a short timeout so an offline boot
     // doesn't block the UI forever. The sync worker will retry in the
     // background when the network returns.
+    const isOffline =
+      typeof navigator !== "undefined" && navigator.onLine === false;
+
     (async () => {
+      if (isOffline) {
+        // Hard offline: skip Supabase entirely and boot straight into the
+        // local Dexie-backed flow. The lock screen falls back to cached
+        // credentials and the sync worker retries when the network returns.
+        setLoading(false);
+        import("./offline/db").catch(() => undefined);
+        import("./offline/sync-worker")
+          .then((m) => m.startSyncWorker())
+          .catch(() => undefined);
+        return;
+      }
       try {
         await Promise.race([
           ensureTechSession(),
