@@ -293,12 +293,14 @@ function LedgersPage() {
 
   const onDelete = async (l: Ledger) => {
     if (!confirm(`Delete ledger "${l.name}"? This cannot be undone.`)) return;
-    const { error } = await supabase.from("ledgers").delete().eq("id", l.id);
-    if (error) {
-      toast.error(error.message);
+    if (!activeCompanyId) return;
+    try {
+      await deleteLedger(l.id, activeCompanyId, l.name);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
       return;
     }
-    toast.success("Ledger deleted");
+    toast.success(isOnlineNow() ? "Ledger deleted" : "Delete queued — will sync when online");
     load();
   };
 
