@@ -109,24 +109,22 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         address: address.trim() || null,
       };
       if (editId) {
-        const { data, error } = await supabase
-          .from("ledgers")
-          .update(payload)
-          .eq("id", editId)
-          .select("id, name, type, state_code, gstin, gst_treatment")
-          .single();
-        if (error) throw error;
-        toast.success("Ledger updated");
-        onSaved(data as QuickLedger);
+        const row = await updateLedger(editId, companyId, payload);
+        toast.success(isOnlineNow() ? "Ledger updated" : "Ledger update queued — will sync when online");
+        onSaved(
+          row ?? {
+            id: editId,
+            name: payload.name,
+            type: String(payload.type),
+            state_code: payload.state_code,
+            gstin: payload.gstin,
+            gst_treatment: "regular",
+          },
+        );
       } else {
-        const { data, error } = await supabase
-          .from("ledgers")
-          .insert(payload)
-          .select("id, name, type, state_code, gstin, gst_treatment")
-          .single();
-        if (error) throw error;
-        toast.success("Ledger created");
-        onSaved(data as QuickLedger);
+        const row = await createLedger(payload);
+        toast.success(isOnlineNow() ? "Ledger created" : "Ledger queued — will sync when online");
+        onSaved(row);
       }
       onOpenChange(false);
     } catch (e) {
