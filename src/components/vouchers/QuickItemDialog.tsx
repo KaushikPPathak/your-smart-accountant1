@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { UNITS, GST_RATES } from "@/lib/constants";
 import { useEnterAsTab } from "./useEnterAsTab";
+import { createItem, updateItem } from "@/lib/offline/masters";
+import { isOnlineNow } from "@/lib/offline/online-status";
 
 export interface QuickItem {
   id: string;
