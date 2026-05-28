@@ -52,6 +52,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { ledgerFormSchema as schema } from "@/lib/schemas/ledger";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { createLedger, updateLedger, deleteLedger } from "@/lib/offline/masters";
+import { isOnlineNow } from "@/lib/offline/online-status";
 
 export const Route = createFileRoute("/app/ledgers")({
   head: () => ({ meta: [{ title: "Ledgers — Your Mehtaji" }] }),
@@ -268,16 +270,23 @@ function LedgersPage() {
       credit_days: isFinite(cd) ? cd : 0,
     };
 
-    const { error } = editing
-      ? await supabase.from("ledgers").update(payload).eq("id", editing.id)
-      : await supabase.from("ledgers").insert(payload);
-
-    setSubmitting(false);
-    if (error) {
-      toast.error(error.message);
+    try {
+      if (editing) {
+        await updateLedger(editing.id, activeCompanyId, payload);
+      } else {
+        await createLedger(payload);
+      }
+    } catch (err) {
+      setSubmitting(false);
+      toast.error(err instanceof Error ? err.message : "Save failed");
       return;
     }
-    toast.success(editing ? "Ledger updated" : "Ledger created");
+    setSubmitting(false);
+    toast.success(
+      isOnlineNow()
+        ? (editing ? "Ledger updated" : "Ledger created")
+        : (editing ? "Ledger update queued — will sync when online" : "Ledger queued — will sync when online"),
+    );
     setOpen(false);
     setEditing(null);
     setForm(emptyForm);
@@ -286,12 +295,14 @@ function LedgersPage() {
 
   const onDelete = async (l: Ledger) => {
     if (!confirm(`Delete ledger "${l.name}"? This cannot be undone.`)) return;
-    const { error } = await supabase.from("ledgers").delete().eq("id", l.id);
-    if (error) {
-      toast.error(error.message);
+    if (!activeCompanyId) return;
+    try {
+      await deleteLedger(l.id, activeCompanyId, l.name);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
       return;
     }
-    toast.success("Ledger deleted");
+    toast.success(isOnlineNow() ? "Ledger deleted" : "Delete queued — will sync when online");
     load();
   };
 

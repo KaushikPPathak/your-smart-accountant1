@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { UNITS, GST_RATES } from "@/lib/constants";
 import { useEnterAsTab } from "./useEnterAsTab";
+import { createItem, updateItem } from "@/lib/offline/masters";
+import { isOnlineNow } from "@/lib/offline/online-status";
 
 export interface QuickItem {
   id: string;
@@ -71,24 +73,21 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
         hsn_code: hsn.trim() || null,
       };
       if (editId) {
-        const { data, error } = await supabase
-          .from("items")
-          .update(payload)
-          .eq("id", editId)
-          .select("id, name, unit, gst_rate, hsn_code")
-          .single();
-        if (error) throw error;
-        toast.success("Item updated");
-        onSaved(data as QuickItem);
+        const row = await updateItem(editId, companyId, payload);
+        toast.success(isOnlineNow() ? "Item updated" : "Item update queued — will sync when online");
+        onSaved(
+          row ?? {
+            id: editId,
+            name: payload.name,
+            unit: payload.unit,
+            gst_rate: payload.gst_rate,
+            hsn_code: payload.hsn_code,
+          },
+        );
       } else {
-        const { data, error } = await supabase
-          .from("items")
-          .insert(payload)
-          .select("id, name, unit, gst_rate, hsn_code")
-          .single();
-        if (error) throw error;
-        toast.success("Item created");
-        onSaved(data as QuickItem);
+        const row = await createItem(payload);
+        toast.success(isOnlineNow() ? "Item created" : "Item queued — will sync when online");
+        onSaved(row);
       }
       onOpenChange(false);
     } catch (e) {
