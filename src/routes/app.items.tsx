@@ -197,16 +197,23 @@ function ItemsPage() {
       reorder_level: num(parsed.data.reorder_level),
     };
 
-    const { error } = editing
-      ? await supabase.from("items").update(payload).eq("id", editing.id)
-      : await supabase.from("items").insert(payload);
-
-    setSubmitting(false);
-    if (error) {
-      toast.error(error.message);
+    try {
+      if (editing) {
+        await updateItem(editing.id, activeCompanyId, payload);
+      } else {
+        await createItem(payload);
+      }
+    } catch (err) {
+      setSubmitting(false);
+      toast.error(err instanceof Error ? err.message : "Save failed");
       return;
     }
-    toast.success(editing ? "Item updated" : "Item created");
+    setSubmitting(false);
+    toast.success(
+      isOnlineNow()
+        ? (editing ? "Item updated" : "Item created")
+        : (editing ? "Item update queued — will sync when online" : "Item queued — will sync when online"),
+    );
     setOpen(false);
     setEditing(null);
     setForm(emptyForm);
@@ -215,12 +222,14 @@ function ItemsPage() {
 
   const onDelete = async (i: Item) => {
     if (!confirm(`Delete item "${i.name}"? This cannot be undone.`)) return;
-    const { error } = await supabase.from("items").delete().eq("id", i.id);
-    if (error) {
-      toast.error(error.message);
+    if (!activeCompanyId) return;
+    try {
+      await deleteItem(i.id, activeCompanyId, i.name);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
       return;
     }
-    toast.success("Item deleted");
+    toast.success(isOnlineNow() ? "Item deleted" : "Delete queued — will sync when online");
     load();
   };
 
