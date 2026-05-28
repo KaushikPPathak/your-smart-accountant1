@@ -268,16 +268,23 @@ function LedgersPage() {
       credit_days: isFinite(cd) ? cd : 0,
     };
 
-    const { error } = editing
-      ? await supabase.from("ledgers").update(payload).eq("id", editing.id)
-      : await supabase.from("ledgers").insert(payload);
-
-    setSubmitting(false);
-    if (error) {
-      toast.error(error.message);
+    try {
+      if (editing) {
+        await updateLedger(editing.id, activeCompanyId, payload);
+      } else {
+        await createLedger(payload);
+      }
+    } catch (err) {
+      setSubmitting(false);
+      toast.error(err instanceof Error ? err.message : "Save failed");
       return;
     }
-    toast.success(editing ? "Ledger updated" : "Ledger created");
+    setSubmitting(false);
+    toast.success(
+      isOnlineNow()
+        ? (editing ? "Ledger updated" : "Ledger created")
+        : (editing ? "Ledger update queued — will sync when online" : "Ledger queued — will sync when online"),
+    );
     setOpen(false);
     setEditing(null);
     setForm(emptyForm);
