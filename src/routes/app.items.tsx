@@ -38,6 +38,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { itemFormSchema as schema } from "@/lib/schemas/item";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { createItem, updateItem, deleteItem } from "@/lib/offline/masters";
+import { isOnlineNow } from "@/lib/offline/online-status";
 
 export const Route = createFileRoute("/app/items")({
   head: () => ({ meta: [{ title: "Items — Your Mehtaji" }] }),
