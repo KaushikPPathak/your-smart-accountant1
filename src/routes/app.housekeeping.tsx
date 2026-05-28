@@ -59,6 +59,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { describeError } from "@/lib/error-message";
+import { deactivateLedger as deactivateLedgerOff, deactivateItem as deactivateItemOff } from "@/lib/offline/masters";
+import { isOnlineNow } from "@/lib/offline/online-status";
 
 export const Route = createFileRoute("/app/housekeeping")({
   head: () => ({ meta: [{ title: "Housekeeping — Accounting Tools" }] }),
