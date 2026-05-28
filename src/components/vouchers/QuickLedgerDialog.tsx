@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { LEDGER_TYPES, INDIAN_STATES, GSTIN_REGEX } from "@/lib/constants";
 import { lookupGstin } from "@/lib/gstin-lookup.functions";
+import { createLedger, updateLedger } from "@/lib/offline/masters";
+import { isOnlineNow } from "@/lib/offline/online-status";
 
 export interface QuickLedger {
   id: string;
