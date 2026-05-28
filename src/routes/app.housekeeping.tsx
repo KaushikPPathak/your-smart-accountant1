@@ -751,19 +751,23 @@ function CleanupTool({ companyId, disabled }: { companyId: string | null; disabl
   }
 
   async function deactivateLedger(id: string) {
-    const { error } = await supabase.from("ledgers").update({ is_active: false }).eq("id", id);
-    if (error) toast.error(error.message);
-    else {
+    if (!companyId) return;
+    try {
+      await deactivateLedgerOff(id, companyId);
       setUnusedLedgers((l) => l.filter((x) => x.id !== id));
-      toast.success("Ledger deactivated");
+      toast.success(isOnlineNow() ? "Ledger deactivated" : "Deactivation queued — will sync when online");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
     }
   }
   async function deactivateItem(id: string) {
-    const { error } = await supabase.from("items").update({ is_active: false }).eq("id", id);
-    if (error) toast.error(error.message);
-    else {
+    if (!companyId) return;
+    try {
+      await deactivateItemOff(id, companyId);
       setUnusedItems((l) => l.filter((x) => x.id !== id));
-      toast.success("Item deactivated");
+      toast.success(isOnlineNow() ? "Item deactivated" : "Deactivation queued — will sync when online");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
     }
   }
 
