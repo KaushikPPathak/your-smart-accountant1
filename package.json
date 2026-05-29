@@ -13,7 +13,9 @@
     "test": "vitest run",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "tauri:prerender": "node scripts/tauri-prerender.mjs",
+    "build:tauri": "vite build && node scripts/tauri-prerender.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.47",
