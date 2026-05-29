@@ -1,7 +1,9 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;500;600;700&display=swap");
 @import "tailwindcss" source(none);
-@source "../src";
 @import "tw-animate-css";
+
+@source "../src";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -374,8 +376,6 @@
 /* Gujarati script support for on-screen and browser-print views.
    When the app language is Gujarati, html[lang="gu"] applies the Noto Sans
    Gujarati family so headings, table headers and labels render correctly. */
-@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400;500;600;700&display=swap");
-
 html[lang="gu"],
 html[lang="gu"] body {
   font-family: "Noto Sans Gujarati", "Shruti", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -448,4 +448,3 @@ html[lang="gu"] body {
     line-height: 1.35;
   }
 }
-
