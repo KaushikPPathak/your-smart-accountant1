@@ -13,9 +13,10 @@
     "test": "vitest run",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:build": "cross-env TAURI_ENV_PLATFORM=windows tauri build",
     "tauri:prerender": "node scripts/tauri-prerender.mjs",
-    "build:tauri": "vite build && node scripts/tauri-prerender.mjs"
+    "tauri:verify-dist": "node scripts/verify-tauri-dist.mjs",
+    "build:tauri": "cross-env TAURI_ENV_PLATFORM=windows vite build && node scripts/tauri-prerender.mjs && node scripts/verify-tauri-dist.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.47",
@@ -99,6 +100,7 @@
     "@tauri-apps/cli": "^2",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^22.16.5",
+    "cross-env": "^7.0.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
