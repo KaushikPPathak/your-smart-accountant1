@@ -30,16 +30,19 @@ jobs:
       - name: Install frontend dependencies
         run: bun install
 
-      # No `bun run build` — Tauri loads the hosted web app
-      # (https://your-smart-accountant.lovable.app) so there is no local
-      # frontend bundle to produce.
+      - name: Build embedded offline frontend
+        run: bun run build:tauri
+
+      - name: Verify embedded frontend entry
+        shell: bash
+        run: test -s dist/client/index.html
 
       - name: Build Tauri app (Windows installer)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: --bundles nsis,msi
+          args: --bundles nsis,msi --no-before-build
 
       - name: Upload Windows installer artifacts
         uses: actions/upload-artifact@v4
