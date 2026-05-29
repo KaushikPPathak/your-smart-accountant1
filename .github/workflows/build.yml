@@ -34,8 +34,7 @@ jobs:
         run: bun run build:tauri
 
       - name: Verify embedded frontend entry
-        shell: bash
-        run: test -s dist/client/index.html
+        run: bun run tauri:verify-dist
 
       - name: Build Tauri app (Windows installer)
         uses: tauri-apps/tauri-action@v0
