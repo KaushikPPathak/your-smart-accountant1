@@ -23,6 +23,8 @@ import { DateFormatSwitcher } from "@/components/DateFormatSwitcher";
 import { setCompanyLang, getCompanyLang, useI18n } from "@/lib/i18n";
 import { useCompany } from "@/lib/company-context";
 import { closeNativeApp } from "@/lib/native-bridge";
+import { useAuth } from "@/lib/auth-context";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
