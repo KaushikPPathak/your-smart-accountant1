@@ -22,23 +22,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(newSession);
     });
 
-    // ALWAYS attempt the silent tech-user sign-in in the background.
-    // navigator.onLine is unreliable (Tauri on Windows often reports
-    // `false` even when the machine is online), so we never gate the
-    // attempt on it — we just race it against a short timeout so a hard
-    // offline boot still releases the UI quickly.
     (async () => {
       // Pre-warm the local DB regardless of network.
       import("./offline/db").catch(() => undefined);
+      
       try {
+        // FIXED: Hard offline gate check. 
+        // If navigator reports offline, bypass remote Supabase network calls instantly.
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          console.log("Offline mode detected via network interface. Booting straight to local DB.");
+          setSession(null);
+          setLoading(false);
+          return;
+        }
+
+        // Run the background sign-in attempt, but cut it off quickly at 1.5s if it hangs
         await Promise.race([
           ensureTechSession(),
-          new Promise<void>((resolve) => setTimeout(resolve, 3500)),
+          new Promise<void>((resolve) => setTimeout(resolve, 1500)),
         ]);
+        
         const { data } = await supabase.auth.getSession();
         if (data.session) setSession(data.session);
       } catch {
-        /* offline boot — leave session null, lock screen falls back to cached creds */
+        /* offline boot fallback — leave session null, lock screen falls back to cached creds */
+        setSession(null);
       } finally {
         setLoading(false);
         // Kick off the offline sync worker once the app is mounted.
@@ -50,7 +58,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => sub.subscription.unsubscribe();
   }, []);
-
 
   const value: AuthContextValue = {
     session,
