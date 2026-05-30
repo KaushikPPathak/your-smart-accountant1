@@ -10,7 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { markUnlocked, type StaffRole } from "@/lib/staff-session";
 import { ensureTechSession } from "@/lib/tech-user";
 import { cacheAccountCredsFromCloud, verifyOfflineLogin } from "@/lib/offline/creds-cache";
-import { isOnlineNow } from "@/lib/offline/online-status";
+import { isOnlineNow, pingOnline } from "@/lib/offline/online-status";
+
 
 export const Route = createFileRoute("/lock")({
   head: () => ({ meta: [{ title: "Sign in — Smart Accountant" }] }),
@@ -70,38 +71,48 @@ function LockScreen() {
     }
     setBusy(true);
     try {
-      if (isOnlineNow()) {
-        const { data, error } = await supabase.rpc("verify_account_login", {
-          _username: loginUser.trim(),
-          _password: loginPass,
-        });
-        if (error) throw error;
-        const row = Array.isArray(data) ? data[0] : data;
-        if (!row?.id) {
-          toast.error("Invalid username or password");
+      // Try the cloud first whenever the browser thinks we might be online.
+      // navigator.onLine lies on Tauri/Windows, so only fall back to the
+      // cached hash if the cloud RPC actually errors with a network failure.
+      const tryCloud = isOnlineNow();
+      if (tryCloud) {
+        try {
+          const { data, error } = await supabase.rpc("verify_account_login", {
+            _username: loginUser.trim(),
+            _password: loginPass,
+          });
+          if (error) throw error;
+          const row = Array.isArray(data) ? data[0] : data;
+          if (!row?.id) {
+            toast.error("Invalid username or password");
+            return;
+          }
+          void cacheAccountCredsFromCloud(loginUser.trim());
+          markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole });
+          toast.success(`Welcome, ${row.name}`);
+          window.location.assign("/app");
           return;
+        } catch (cloudErr) {
+          // Only fall back to offline if the network is actually unreachable.
+          const reachable = await pingOnline();
+          if (reachable) throw cloudErr;
         }
-        // Cache the bcrypt hash so future offline launches work.
-        void cacheAccountCredsFromCloud(loginUser.trim());
-        markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole });
-        toast.success(`Welcome, ${row.name}`);
-        window.location.assign("/app");
-      } else {
-        const local = await verifyOfflineLogin(loginUser.trim(), loginPass);
-        if (!local) {
-          toast.error("Invalid username or password");
-          return;
-        }
-        markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole });
-        toast.success(`Welcome, ${local.name} (offline)`);
-        window.location.assign("/app");
       }
+      const local = await verifyOfflineLogin(loginUser.trim(), loginPass);
+      if (!local) {
+        toast.error("Invalid username or password");
+        return;
+      }
+      markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole });
+      toast.success(`Welcome, ${local.name} (offline)`);
+      window.location.assign("/app");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Login failed");
     } finally {
       setBusy(false);
     }
   };
+
 
   const onSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,6 +124,11 @@ function LockScreen() {
 
     setBusy(true);
     try {
+      if (!isOnlineNow() || !(await pingOnline())) {
+        toast.error("Sign-up needs an internet connection the first time. Connect and try again.");
+        return;
+      }
+
       const rpc = accountsExist ? "signup_account" : "setup_first_account";
       const { data: newId, error } = await supabase.rpc(rpc, {
         _name: suName.trim(),
