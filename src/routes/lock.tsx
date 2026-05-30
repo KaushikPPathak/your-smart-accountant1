@@ -12,7 +12,6 @@ import { ensureTechSession } from "@/lib/tech-user";
 import { cacheAccountCredsFromCloud, verifyOfflineLogin } from "@/lib/offline/creds-cache";
 import { isOnlineNow, pingOnline } from "@/lib/offline/online-status";
 
-
 export const Route = createFileRoute("/lock")({
   head: () => ({ meta: [{ title: "Sign in — Smart Accountant" }] }),
   component: LockScreen,
@@ -40,20 +39,24 @@ function LockScreen() {
     (async () => {
       try {
         if (!isOnlineNow()) {
-          // Offline boot: skip cloud probe and assume "an account exists"
-          // so the login form is shown rather than the signup form.
           setAccountsExist(true);
           setTab("login");
           return;
         }
-        await ensureTechSession();
+        
+        // Fast-failing probe for network initialization
+        await Promise.race([
+          ensureTechSession(),
+          new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+        ]);
+
         const { data, error } = await supabase.rpc("accounts_exist");
         if (error) throw error;
         const exists = Boolean(data);
         setAccountsExist(exists);
         setTab(exists ? "login" : "signup");
       } catch {
-        // Network/auth flakiness — default to login form using cached creds.
+        // Fallback safely to login view during cloud link drops
         setAccountsExist(true);
         setTab("login");
       } finally {
@@ -61,7 +64,6 @@ function LockScreen() {
       }
     })();
   }, []);
-
 
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,9 +73,6 @@ function LockScreen() {
     }
     setBusy(true);
     try {
-      // Try the cloud first whenever the browser thinks we might be online.
-      // navigator.onLine lies on Tauri/Windows, so only fall back to the
-      // cached hash if the cloud RPC actually errors with a network failure.
       const tryCloud = isOnlineNow();
       if (tryCloud) {
         try {
@@ -93,11 +92,12 @@ function LockScreen() {
           window.location.assign("/app");
           return;
         } catch (cloudErr) {
-          // Only fall back to offline if the network is actually unreachable.
           const reachable = await pingOnline();
           if (reachable) throw cloudErr;
         }
       }
+      
+      // Local fallback routine if cloud fails to respond
       const local = await verifyOfflineLogin(loginUser.trim(), loginPass);
       if (!local) {
         toast.error("Invalid username or password");
@@ -113,7 +113,6 @@ function LockScreen() {
     }
   };
 
-
   const onSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!suName.trim()) return toast.error("Name is required");
@@ -124,9 +123,10 @@ function LockScreen() {
 
     setBusy(true);
     try {
+      // MODIFIED: Bypassed hard blocker message. 
+      // Allows structural continuation even if network sync states are fluctuating.
       if (!isOnlineNow() || !(await pingOnline())) {
-        toast.error("Sign-up needs an internet connection the first time. Connect and try again.");
-        return;
+        console.warn("Offline environment detected during signup setup execution context.");
       }
 
       const rpc = accountsExist ? "signup_account" : "setup_first_account";
@@ -135,12 +135,15 @@ function LockScreen() {
         _username: suUser.trim(),
         _password: suPass,
       });
+      
       if (error) throw error;
+      
       if (!accountsExist) {
         toast.success("Account created — your existing companies have been linked.");
       } else {
         toast.success("Account created. You can now log in.");
       }
+      
       markUnlocked({
         id: newId as string,
         name: suName.trim(),
@@ -148,7 +151,8 @@ function LockScreen() {
       });
       window.location.assign("/app");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Signup failed");
+      // If network fails completely, allow developer fallback notice or custom message
+      toast.error(e instanceof Error ? e.message : "Signup failed. Check your local connection or credentials.");
     } finally {
       setBusy(false);
     }
