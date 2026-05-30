@@ -46,6 +46,7 @@ function StartScreen() {
   const navigate = useNavigate();
   const { setActiveCompanyId } = useCompany();
   const { t, lang, setLang } = useI18n();
+  const { loading: authLoading, session } = useAuth();
   const [loading, setLoading] = useState(true);
   const [companies, setCompanies] = useState<PickerCompany[]>([]);
   const [pendingCompany, setPendingCompany] = useState<PickerCompany | null>(null);
@@ -53,22 +54,37 @@ function StartScreen() {
   const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
+    // Wait for the silent tech-user sign-in to finish before querying —
+    // companies_picker is RLS-gated and would return [] (or "Failed to load"
+    // on a network blip) if we fire it before the session lands.
+    if (authLoading) return;
+    let cancelled = false;
     (async () => {
+      setLoading(true);
       try {
         const { data, error } = await supabase
           .from("companies_picker")
           .select("id, name, has_password")
           .order("name", { ascending: true });
         if (error) throw error;
+        if (cancelled) return;
         setCompanies((data ?? []) as PickerCompany[]);
       } catch (e) {
+        if (cancelled) return;
         console.error(e);
-        toast.error(e instanceof Error ? e.message : "Failed to load companies");
+        // Quieter wording — most "failures" here are just no session yet.
+        toast.error(
+          e instanceof Error ? e.message : "Couldn't load companies — check your connection",
+        );
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, session?.user?.id]);
+
 
   const openCompany = async (c: PickerCompany) => {
     // Apply this company's preferred language (if any), else save current global as its preference
