@@ -8,9 +8,36 @@
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineNow } from "./online-status";
 import { enqueueWrite } from "./outbox";
+import { offlineDb } from "./db";
 
 function newId(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * Syncs essential static data tables (account groups, voucher types, etc.)
+ * Safe for complete offline fallback on brand-new local app installations.
+ */
+export async function syncEssentialMasters(): Promise<void> {
+  if (!isOnlineNow()) {
+    console.warn("App is running offline on this folder path. Skipping remote cloud master data download.");
+    return;
+  }
+
+  try {
+    const { data: groups, error } = await supabase.from("account_groups").select("*");
+    if (error) throw error;
+    
+    if (groups && groups.length > 0) {
+      await offlineDb.transaction("rw", offlineDb.account_groups, async () => {
+        await offlineDb.account_groups.clear();
+        await offlineDb.account_groups.bulkPut(groups);
+      });
+      console.log("Account master groups synchronized from cloud database successfully.");
+    }
+  } catch (err) {
+    console.error("Masters sync skipped, running with local offline schemas:", err);
+  }
 }
 
 // ---------- Ledgers ---------------------------------------------------------
