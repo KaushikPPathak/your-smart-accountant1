@@ -10,7 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { markUnlocked, type StaffRole } from "@/lib/staff-session";
 import { ensureTechSession } from "@/lib/tech-user";
 import { cacheAccountCredsFromCloud, verifyOfflineLogin } from "@/lib/offline/creds-cache";
-import { isOnlineNow } from "@/lib/offline/online-status";
+import { isOnlineNow, pingOnline } from "@/lib/offline/online-status";
+
 
 export const Route = createFileRoute("/lock")({
   head: () => ({ meta: [{ title: "Sign in — Smart Accountant" }] }),
