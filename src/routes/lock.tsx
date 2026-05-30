@@ -44,7 +44,7 @@ function LockScreen() {
           return;
         }
         
-        // Fast-failing probe for network initialization
+        // Fast-failing probe for network initialization (1.5s timeout fallback)
         await Promise.race([
           ensureTechSession(),
           new Promise<void>((resolve) => setTimeout(resolve, 1500)),
@@ -123,10 +123,10 @@ function LockScreen() {
 
     setBusy(true);
     try {
-      // MODIFIED: Bypassed hard blocker message. 
-      // Allows structural continuation even if network sync states are fluctuating.
+      // MODIFIED FOR LOCAL DEPLOYMENT: Hard network gate block has been removed.
+      // App warning logs locally but allows database initialization setup to proceed.
       if (!isOnlineNow() || !(await pingOnline())) {
-        console.warn("Offline environment detected during signup setup execution context.");
+        console.warn("Offline environment warning flagged during custom signup setup pipeline execution.");
       }
 
       const rpc = accountsExist ? "signup_account" : "setup_first_account";
@@ -151,7 +151,6 @@ function LockScreen() {
       });
       window.location.assign("/app");
     } catch (e) {
-      // If network fails completely, allow developer fallback notice or custom message
       toast.error(e instanceof Error ? e.message : "Signup failed. Check your local connection or credentials.");
     } finally {
       setBusy(false);
