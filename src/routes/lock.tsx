@@ -124,6 +124,11 @@ function LockScreen() {
 
     setBusy(true);
     try {
+      if (!isOnlineNow() || !(await pingOnline())) {
+        toast.error("Sign-up needs an internet connection the first time. Connect and try again.");
+        return;
+      }
+
       const rpc = accountsExist ? "signup_account" : "setup_first_account";
       const { data: newId, error } = await supabase.rpc(rpc, {
         _name: suName.trim(),
