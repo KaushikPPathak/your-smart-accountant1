@@ -22,42 +22,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(newSession);
     });
 
-    // Silent tech-user sign-in with a short timeout so an offline boot
-    // doesn't block the UI forever. The sync worker will retry in the
-    // background when the network returns.
-    const isOffline =
-      typeof navigator !== "undefined" && navigator.onLine === false;
-
+    // ALWAYS attempt the silent tech-user sign-in in the background.
+    // navigator.onLine is unreliable (Tauri on Windows often reports
+    // `false` even when the machine is online), so we never gate the
+    // attempt on it — we just race it against a short timeout so a hard
+    // offline boot still releases the UI quickly.
     (async () => {
-      if (isOffline) {
-        // Hard offline: skip Supabase entirely and boot straight into the
-        // local Dexie-backed flow. The lock screen falls back to cached
-        // credentials and the sync worker retries when the network returns.
-        setLoading(false);
-        import("./offline/db").catch(() => undefined);
-        import("./offline/sync-worker")
-          .then((m) => m.startSyncWorker())
-          .catch(() => undefined);
-        return;
-      }
+      // Pre-warm the local DB regardless of network.
+      import("./offline/db").catch(() => undefined);
       try {
         await Promise.race([
           ensureTechSession(),
-          new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+          new Promise<void>((resolve) => setTimeout(resolve, 3500)),
         ]);
         const { data } = await supabase.auth.getSession();
-        setSession(data.session);
+        if (data.session) setSession(data.session);
       } catch {
-        /* offline boot — leave session null, lock screen will fall back */
+        /* offline boot — leave session null, lock screen falls back to cached creds */
       } finally {
         setLoading(false);
         // Kick off the offline sync worker once the app is mounted.
-        import("./offline/sync-worker").then((m) => m.startSyncWorker()).catch(() => undefined);
+        import("./offline/sync-worker")
+          .then((m) => m.startSyncWorker())
+          .catch(() => undefined);
       }
     })();
 
     return () => sub.subscription.unsubscribe();
   }, []);
+
 
   const value: AuthContextValue = {
     session,
