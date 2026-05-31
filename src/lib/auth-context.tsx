@@ -27,16 +27,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       import("./offline/db").catch(() => undefined);
       
       try {
-        // FIXED: Hard offline gate check. 
-        // If navigator reports offline, bypass remote Supabase network calls instantly.
-        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-          console.log("Offline mode detected via network interface. Booting straight to local DB.");
-          setSession(null);
-          setLoading(false);
-          return;
-        }
+        // 🛠️ REMOVED THE HARD NEVIGATOR.ONLINE GATE HERE:
+        // This stops Windows boot timing delays from blocking local execution.
+        // The 1500ms race timeout below safely serves as our offline transition shield.
 
-        // Run the background sign-in attempt, but cut it off quickly at 1.5s if it hangs
+        // Run the background sign-in attempt, but cut it off quickly at 1.5s if it hangs or is offline
         await Promise.race([
           ensureTechSession(),
           new Promise<void>((resolve) => setTimeout(resolve, 1500)),
@@ -46,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.session) setSession(data.session);
       } catch {
         /* offline boot fallback — leave session null, lock screen falls back to cached creds */
+        console.log("Network timeout or offline fallback active. Booting via cached local credentials.");
         setSession(null);
       } finally {
         setLoading(false);
