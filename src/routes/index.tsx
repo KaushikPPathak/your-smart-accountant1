@@ -26,8 +26,8 @@ import { closeNativeApp } from "@/lib/native-bridge";
 import { useAuth } from "@/lib/auth-context";
 import { isOnlineNow } from "@/lib/offline/online-status";
 
-// Direct, stable database instance module import to prevent bulkPut undefined crashes
-import { db } from "@/lib/offline/db";
+// Safe Alias Import: Maps the true 'offlineDb' export to the local 'db' variable safely
+import { offlineDb as db } from "@/lib/offline/db";
 
 export const Route = createFileRoute("/")({
   head: () => ({
