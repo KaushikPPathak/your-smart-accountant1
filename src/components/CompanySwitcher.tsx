@@ -13,6 +13,7 @@ import { useCompany } from "@/lib/company-context";
 import { useI18n } from "@/lib/i18n";
 import { isCompanyUnlocked, markCompanyUnlocked } from "@/lib/tech-user";
 import { supabase } from "@/integrations/supabase/client";
+import { isOnlineNow } from "@/lib/offline/online-status";
 
 export function CompanySwitcher() {
   const { memberships, activeMembership, setActiveCompanyId } = useCompany();
@@ -24,21 +25,52 @@ export function CompanySwitcher() {
       setActiveCompanyId(companyId);
       return;
     }
-    // Check if company has a password set
+
+    // Check if the system is offline
+    if (!isOnlineNow()) {
+      console.log("Offline mode: checking local hard drive cache for password protection state...");
+      try {
+        const { offlineDb } = await import("@/lib/offline/db");
+        const localCompany = await offlineDb.companies.get(companyId);
+        
+        if (!localCompany || !localCompany.has_password) {
+          // No password or not found locally, open directly in offline bypass mode
+          markCompanyUnlocked(companyId);
+          setActiveCompanyId(companyId);
+          return;
+        }
+        
+        // Needs password — bounce to start screen to prompt for it
+        setActiveCompanyId(companyId);
+        navigate({ to: "/" });
+        return;
+      } catch (err) {
+        console.error("Failed to read local company state offline:", err);
+        // Fallback safety: try to open anyway
+        markCompanyUnlocked(companyId);
+        setActiveCompanyId(companyId);
+        return;
+      }
+    }
+
+    // 🌐 ONLINE MODE: Original Supabase check
     const { data, error } = await supabase
       .from("companies_picker")
       .select("has_password")
       .eq("id", companyId)
       .maybeSingle();
+
     if (error) {
       toast.error(error.message);
       return;
     }
+
     if (!data?.has_password) {
       markCompanyUnlocked(companyId);
       setActiveCompanyId(companyId);
       return;
     }
+
     // Needs password — send user to picker to enter it
     setActiveCompanyId(companyId);
     navigate({ to: "/" });
