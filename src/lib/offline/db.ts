@@ -56,6 +56,15 @@ export interface MetaRow {
   updated_at: number;
 }
 
+// Added Row shape interface for your companies workspace table schema mapping
+export interface CachedCompanyRow {
+  id: string;
+  name: string;
+  has_password: boolean;
+  account_id: string;
+  company_name?: string; // optional fallback safety property
+}
+
 // --- Dexie instance --------------------------------------------------------
 
 class OfflineDB extends Dexie {
@@ -64,6 +73,7 @@ class OfflineDB extends Dexie {
   pin_cache!: Table<PinCacheRow, string>;
   company_pw_cache!: Table<CompanyPasswordCacheRow, string>;
   meta!: Table<MetaRow, string>;
+  companies!: Table<CachedCompanyRow, string>; // Added explicit table declaration typed property
 
   constructor() {
     super("smart_accountant_offline");
@@ -73,11 +83,15 @@ class OfflineDB extends Dexie {
       pin_cache: "&user_id",
       company_pw_cache: "&company_id",
       meta: "&key",
+      companies: "&id, account_id", // Added unique indexing rule for structured offline workspaces mapping
     });
   }
 }
 
 export const offlineDb = new OfflineDB();
+
+// Added Named Alias Export: Satisfies both older page configurations and new updates instantly
+export { offlineDb as db };
 
 // --- Tiny meta helpers -----------------------------------------------------
 
