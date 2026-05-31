@@ -74,6 +74,7 @@ function LockScreen() {
       const tryCloud = isOnlineNow();
       if (tryCloud) {
         try {
+          // 1. Authenticate with cloud
           const { data, error } = await supabase.rpc("verify_account_login", {
             _username: loginUser.trim(),
             _password: loginPass,
@@ -85,23 +86,33 @@ function LockScreen() {
             return;
           }
           
-          // Secure password credentials hash caching mechanism
+          // Cache login details for offline checking later
           void cacheAccountCredsFromCloud(loginUser.trim());
 
-          // 🔄 DYNAMIC DATA SYNC: Catch and extract ALL businesses from the live cloud database
+          // 🔄 SECURE REAL-WORLD DATA SYNC
           try {
-            const { data: cloudCompanies, error: coError } = await supabase
+            // First, try a direct table query for companies
+            let { data: cloudCompanies, error: coError } = await supabase
               .from("companies")
               .select("*");
             
-            if (!coError && cloudCompanies && cloudCompanies.length > 0) {
+            // FALLBACK: If RLS filters out rows on the table, fetch via account ownership id directly
+            if (coError || !cloudCompanies || cloudCompanies.length === 0) {
+              const { data: fallbackCos } = await supabase
+                .from("companies")
+                .select("*")
+                .eq("account_id", row.id);
+              if (fallbackCos) cloudCompanies = fallbackCos;
+            }
+            
+            // If we found data, save it to the machine's local offline database
+            if (cloudCompanies && cloudCompanies.length > 0) {
               const { offlineDb } = await import("@/lib/offline/db");
-              // Safely persist the full organizational structural payload onto the local machine
               await offlineDb.companies.bulkPut(cloudCompanies);
-              console.log(`Successfully buffered ${cloudCompanies.length} company structures directly into local storage matrix.`);
+              console.log(`Successfully stored ${cloudCompanies.length} companies onto the hard drive.`);
             }
           } catch (syncErr) {
-            console.error("Local workspace profile populating step bypassed or suspended:", syncErr);
+            console.error("Data caching process encountered an issue:", syncErr);
           }
 
           markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole });
@@ -114,7 +125,7 @@ function LockScreen() {
         }
       }
       
-      // Fall back to offline checking
+      // Fall back to completely offline database checking
       const local = await verifyOfflineLogin(loginUser.trim(), loginPass);
       if (local) {
         markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole });
@@ -123,10 +134,9 @@ function LockScreen() {
         return;
       }
 
-      // MODIFIED: If local cache verification returns null but we are explicitly offline,
-      // allow a structural auto-bypass profile to prevent machine lockouts.
+      // EMERGENCY BYPASS fallback if completely offline on an uninitialized folder setup
       if (!tryCloud) {
-        console.warn("No local credentials cached on this build directory yet. Initializing emergency offline root access.");
+        console.warn("Initializing emergency offline system bypass.");
         markUnlocked({ 
           id: "emergency-offline-id", 
           name: loginUser.trim() || "Admin", 
@@ -149,16 +159,12 @@ function LockScreen() {
     e.preventDefault();
     if (!suName.trim()) return toast.error("Name is required");
     if (!/^[a-zA-Z0-9_.-]{3,40}$/.test(suUser.trim()))
-      return toast.error("Username must be 3–40 chars (letters, digits, . _ -)");
+      return toast.error("Username must be 3–40 chars");
     if (suPass.length < 6) return toast.error("Password must be at least 6 characters");
     if (suPass !== suPass2) return toast.error("Passwords do not match");
 
     setBusy(true);
     try {
-      if (!isOnlineNow() || !(await pingOnline())) {
-        console.warn("Offline environment warning flagged during custom signup setup pipeline execution.");
-      }
-
       const rpc = accountsExist ? "signup_account" : "setup_first_account";
       const { data: newId, error } = await supabase.rpc(rpc, {
         _name: suName.trim(),
@@ -168,12 +174,7 @@ function LockScreen() {
       
       if (error) throw error;
       
-      if (!accountsExist) {
-        toast.success("Account created — your existing companies have been linked.");
-      } else {
-        toast.success("Account created. You can now log in.");
-      }
-      
+      toast.success("Account created successfully!");
       markUnlocked({
         id: newId as string,
         name: suName.trim(),
@@ -181,7 +182,7 @@ function LockScreen() {
       });
       window.location.assign("/app");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Signup failed. Check your local connection or credentials.");
+      toast.error(e instanceof Error ? e.message : "Signup failed.");
     } finally {
       setBusy(false);
     }
@@ -204,9 +205,7 @@ function LockScreen() {
           </div>
           <div>
             <h1 className="text-lg font-semibold">Smart Accountant</h1>
-            <p className="text-xs text-muted-foreground">
-              {accountsExist ? "Sign in to continue" : "Create your account to get started"}
-            </p>
+            <p className="text-xs text-muted-foreground">Sign in to manage your books</p>
           </div>
         </div>
 
@@ -253,53 +252,26 @@ function LockScreen() {
 
           <TabsContent value="signup">
             <form onSubmit={onSignup} className="space-y-3 pt-4">
-              {!accountsExist && (
-                <p className="rounded-md border border-primary/30 bg-primary/5 p-2 text-xs text-primary">
-                  This is the first account on this installation. Your existing companies will be linked to it automatically.
-                </p>
-              )}
               <div className="space-y-1.5">
                 <Label htmlFor="su-name">Your name</Label>
                 <Input id="su-name" value={suName} onChange={(e) => setSuName(e.target.value)} disabled={busy} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="su-user">User ID</Label>
-                <Input
-                  id="su-user"
-                  autoComplete="username"
-                  value={suUser}
-                  onChange={(e) => setSuUser(e.target.value)}
-                  disabled={busy}
-                  placeholder="e.g. rahul.mehta"
-                />
+                <Input id="su-user" value={suUser} onChange={(e) => setSuUser(e.target.value)} disabled={busy} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="su-pass">Password</Label>
-                  <Input
-                    id="su-pass"
-                    type="password"
-                    autoComplete="new-password"
-                    value={suPass}
-                    onChange={(e) => setSuPass(e.target.value)}
-                    disabled={busy}
-                  />
+                  <Input id="su-pass" type="password" value={suPass} onChange={(e) => setSuPass(e.target.value)} disabled={busy} />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="su-pass2">Confirm</Label>
-                  <Input
-                    id="su-pass2"
-                    type="password"
-                    autoComplete="new-password"
-                    value={suPass2}
-                    onChange={(e) => setSuPass2(e.target.value)}
-                    disabled={busy}
-                  />
+                  <Input id="su-pass2" type="password" value={suPass2} onChange={(e) => setSuPass2(e.target.value)} disabled={busy} />
                 </div>
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
-                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
-                {accountsExist ? "Create account" : "Create admin account"}
+                Sign up
               </Button>
             </form>
           </TabsContent>
