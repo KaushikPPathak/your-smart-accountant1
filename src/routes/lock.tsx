@@ -88,7 +88,7 @@ function LockScreen() {
           // Secure password credentials hash caching mechanism
           void cacheAccountCredsFromCloud(loginUser.trim());
 
-          // 🔄 CRITICAL DATA SYNC: Catch and extract the 5 businesses from the live cloud database
+          // 🔄 DYNAMIC DATA SYNC: Catch and extract ALL businesses from the live cloud database
           try {
             const { data: cloudCompanies, error: coError } = await supabase
               .from("companies")
@@ -96,7 +96,7 @@ function LockScreen() {
             
             if (!coError && cloudCompanies && cloudCompanies.length > 0) {
               const { offlineDb } = await import("@/lib/offline/db");
-              // Safely persist the full organizational structural payload onto the computer storage index
+              // Safely persist the full organizational structural payload onto the local machine
               await offlineDb.companies.bulkPut(cloudCompanies);
               console.log(`Successfully buffered ${cloudCompanies.length} company structures directly into local storage matrix.`);
             }
@@ -242,7 +242,6 @@ function LockScreen() {
                   value={loginPass}
                   onChange={(e) => setLoginPass(e.target.value)}
                   disabled={busy}
-                  type="password"
                 />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
