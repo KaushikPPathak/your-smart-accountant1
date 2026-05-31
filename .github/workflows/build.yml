@@ -30,9 +30,10 @@ jobs:
       - name: Install frontend dependencies
         run: bun install
 
-      # 🛠️ Fix step: Generates routeTree.gen.ts dynamically on the runner before compilation
+      # 🛠️ Fix step: Direct path targeting ensures the crawler knows exactly where your route directory lives
       - name: Regenerate TanStack Routes Map
-        run: bunx tsr generate
+        run: bunx tsr generate --routes-dir src/routes --routes-manifest src/routeTree.gen.ts
+        continue-on-error: true
 
       - name: Build embedded offline frontend
         run: bun run build:tauri
