@@ -1,5 +1,22 @@
-import { createRouter, useRouter } from "@tanstack/react-router";
+import { 
+  createRouter, 
+  useRouter,
+  createHashHistory, 
+  createBrowserHistory 
+} from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
+
+// 🖥️ Safe Tauri Environment Detection
+const isTauriDesktop = 
+  typeof window !== "undefined" && 
+  (Boolean((window as any).__TAURI_INTERNALS__) || 
+   Boolean((window as any).__TAURI__) ||
+   navigator.userAgent.includes("Tauri"));
+
+// 🛣️ SPA Fail-Safe Routing Choice
+// Uses Hash History (/#/app) inside Tauri to prevent "Asset Not Found: index.html" crashes on Windows file protocol.
+// Falls back to standard Browser History on regular web setups.
+const appHistory = isTauriDesktop ? createHashHistory() : createBrowserHistory();
 
 function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
@@ -34,6 +51,7 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
         )}
         <div className="mt-6 flex items-center justify-center gap-3">
           <button
+            type="button"
             onClick={() => {
               router.invalidate();
               reset();
@@ -42,12 +60,15 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
           >
             Try again
           </button>
-          <a
-            href="/"
+          
+          {/* 🛠️ Fix: Changed from hard <a href="/"> to router state navigation to prevent asset crashes */}
+          <button
+            type="button"
+            onClick={() => router.navigate({ to: "/" })}
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
             Go home
-          </a>
+          </button>
         </div>
       </div>
     </div>
@@ -57,7 +78,11 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
 export const getRouter = () => {
   const router = createRouter({
     routeTree,
-    context: {},
+    history: appHistory, // Injects safe offline path handling
+    context: {
+      auth: undefined as any,
+      company: undefined as any,
+    },
     scrollRestoration: true,
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
@@ -66,3 +91,9 @@ export const getRouter = () => {
 
   return router;
 };
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: ReturnType<typeof getRouter>;
+  }
+}
