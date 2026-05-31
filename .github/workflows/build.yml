@@ -30,8 +30,16 @@ jobs:
       - name: Install frontend dependencies
         run: bun install
 
+      # 🛠️ Fix step: Generates routeTree.gen.ts dynamically on the runner before compilation
+      - name: Regenerate TanStack Routes Map
+        run: bunx tsr generate
+
       - name: Build embedded offline frontend
         run: bun run build:tauri
+        env:
+          TAURI_ENV_PLATFORM: windows
+          CARGO_BUILD_JOBS: 1
+          RUSTFLAGS: "-C debuginfo=0 -C codegen-units=1"
 
       - name: Verify embedded frontend entry
         run: bun run tauri:verify-dist
@@ -40,6 +48,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_BUILD_JOBS: 1
+          RUSTFLAGS: "-C debuginfo=0 -C codegen-units=1"
         with:
           args: --bundles nsis,msi
 
