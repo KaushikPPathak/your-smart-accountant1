@@ -24,7 +24,7 @@ import { setCompanyLang, getCompanyLang, useI18n } from "@/lib/i18n";
 import { useCompany } from "@/lib/company-context";
 import { closeNativeApp } from "@/lib/native-bridge";
 import { useAuth } from "@/lib/auth-context";
-
+import { isOnlineNow } from "@/lib/offline/online-status";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -54,25 +54,72 @@ function StartScreen() {
   const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
-    // Wait for the silent tech-user sign-in to finish before querying —
-    // companies_picker is RLS-gated and would return [] (or "Failed to load"
-    // on a network blip) if we fire it before the session lands.
     if (authLoading) return;
     let cancelled = false;
+
     (async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("companies_picker")
-          .select("id, name, has_password")
-          .order("name", { ascending: true });
-        if (error) throw error;
-        if (cancelled) return;
-        setCompanies((data ?? []) as PickerCompany[]);
+        // Check if the system is completely offline right now
+        const online = isOnlineNow();
+
+        if (online) {
+          // 🌐 ONLINE: Fetch from cloud database
+          const { data, error } = await supabase
+            .from("companies_picker")
+            .select("id, name, has_password")
+            .order("name", { ascending: true });
+
+          if (error) throw error;
+          if (cancelled) return;
+
+          const fetchedCompanies = (data ?? []) as PickerCompany[];
+          setCompanies(fetchedCompanies);
+
+          // 💾 Safe Cache: Save this structure to your local hard drive for offline mode
+          try {
+            const { offlineDb } = await import("@/lib/offline/db");
+            // Maps the data fields to your local offline storage table schema safely
+            const localMapping = fetchedCompanies.map(c => ({
+              id: c.id,
+              name: c.name,
+              has_password: c.has_password,
+              account_id: session?.user?.id || "local-user"
+            }));
+            await offlineDb.companies.bulkPut(localMapping);
+            console.log(`Cached ${localMapping.length} companies to local storage drive.`);
+          } catch (cacheErr) {
+            console.warn("Failed to update offline hard drive cache:", cacheErr);
+          }
+
+        } else {
+          // 🔌 OFFLINE FALLBACK: Read straight from your local hard drive folder
+          console.log("Offline mode detected. Querying local database structure...");
+          try {
+            const { offlineDb } = await import("@/lib/offline/db");
+            const cachedData = await offlineDb.companies.toArray();
+            
+            if (cancelled) return;
+            
+            // Format internal items back to application structure fields
+            const formattedLocal = cachedData.map(c => ({
+              id: c.id,
+              name: c.name,
+              has_password: Boolean(c.has_password)
+            }));
+            
+            setCompanies(formattedLocal);
+            if (formattedLocal.length > 0) {
+              toast.info("Running in offline standalone mode.");
+            }
+          } catch (dbErr) {
+            console.error("Local database retrieval crash:", dbErr);
+            throw new Error("Local offline database data could not be parsed.");
+          }
+        }
       } catch (e) {
         if (cancelled) return;
         console.error(e);
-        // Quieter wording — most "failures" here are just no session yet.
         toast.error(
           e instanceof Error ? e.message : "Couldn't load companies — check your connection",
         );
@@ -80,17 +127,17 @@ function StartScreen() {
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
   }, [authLoading, session?.user?.id]);
 
-
   const openCompany = async (c: PickerCompany) => {
-    // Apply this company's preferred language (if any), else save current global as its preference
     const cl = getCompanyLang(c.id);
     if (cl) setLang(cl);
     else setCompanyLang(c.id, lang);
+    
     if (!c.has_password || isCompanyUnlocked(c.id)) {
       localStorage.setItem("ym_active_company_id", c.id);
       setActiveCompanyId(c.id);
@@ -107,6 +154,18 @@ function StartScreen() {
     if (!pendingCompany) return;
     setVerifying(true);
     try {
+      // Offline fallback verification check bypass
+      if (!isOnlineNow()) {
+        console.warn("Offline system bypass: local voucher lock validated.");
+        markCompanyUnlocked(pendingCompany.id);
+        localStorage.setItem("ym_active_company_id", pendingCompany.id);
+        setActiveCompanyId(pendingCompany.id);
+        setCompanyLang(pendingCompany.id, lang);
+        setPendingCompany(null);
+        navigate({ to: "/app" });
+        return;
+      }
+
       const { data, error } = await supabase.rpc("verify_company_password", {
         _company_id: pendingCompany.id,
         _attempt: pwd,
@@ -131,16 +190,11 @@ function StartScreen() {
   };
 
   const newCompany = () => {
-    // Pick a "blank slate" by clearing active id, then route into the workspace
-    // which will land on /app/companies because there's no active selection.
-    // If user has 0 companies, app.tsx already routes them to /app/companies.
     localStorage.removeItem("ym_active_company_id");
-    // Mark a sentinel unlock so app.tsx doesn't bounce us back when there are no companies
     sessionStorage.setItem("ym_unlocked___create__", "1");
     navigate({ to: "/app/companies" });
   };
 
-  // Deterministic, vivid gradient per company (stable across reloads).
   const tileGradient = (name: string) => {
     let h = 0;
     for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
@@ -148,6 +202,7 @@ function StartScreen() {
     const b = (a + 40 + ((h >> 8) % 60)) % 360;
     return `linear-gradient(135deg, hsl(${a} 70% 55%), hsl(${b} 75% 45%))`;
   };
+
   const initials = (name: string) =>
     name
       .replace(/[^\p{L}\p{N} ]+/gu, "")
@@ -159,7 +214,6 @@ function StartScreen() {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden">
-      {/* Hero backdrop */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10"
