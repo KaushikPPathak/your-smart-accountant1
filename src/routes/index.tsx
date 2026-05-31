@@ -26,6 +26,9 @@ import { closeNativeApp } from "@/lib/native-bridge";
 import { useAuth } from "@/lib/auth-context";
 import { isOnlineNow } from "@/lib/offline/online-status";
 
+// Direct, stable database instance module import to prevent bulkPut undefined crashes
+import { db } from "@/lib/offline/db";
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
@@ -78,15 +81,13 @@ function StartScreen() {
 
           // 💾 Safe Cache: Save this structure to your local hard drive for offline mode
           try {
-            const { offlineDb } = await import("@/lib/offline/db");
-            // Maps the data fields to your local offline storage table schema safely
             const localMapping = fetchedCompanies.map(c => ({
               id: c.id,
               name: c.name,
               has_password: c.has_password,
               account_id: session?.user?.id || "local-user"
             }));
-            await offlineDb.companies.bulkPut(localMapping);
+            await db.companies.bulkPut(localMapping);
             console.log(`Cached ${localMapping.length} companies to local storage drive.`);
           } catch (cacheErr) {
             console.warn("Failed to update offline hard drive cache:", cacheErr);
@@ -96,25 +97,36 @@ function StartScreen() {
           // 🔌 OFFLINE FALLBACK: Read straight from your local hard drive folder
           console.log("Offline mode detected. Querying local database structure...");
           try {
-            const { offlineDb } = await import("@/lib/offline/db");
-            const cachedData = await offlineDb.companies.toArray();
+            const cachedData = await db.companies.toArray();
             
             if (cancelled) return;
             
-            // Format internal items back to application structure fields
-            const formattedLocal = cachedData.map(c => ({
-              id: c.id,
-              name: c.name,
-              has_password: Boolean(c.has_password)
+            // Safe Parsing: Handles empty records or mismatched database column properties safely
+            const formattedLocal = (cachedData || []).map(c => ({
+              id: c.id || String(Math.random()),
+              // Fallback to internal properties if schema fields vary offline
+              name: c.name || c.company_name || "Saved Company Workspace",
+              has_password: 'has_password' in c ? Boolean(c.has_password) : false
             }));
             
             setCompanies(formattedLocal);
+            
             if (formattedLocal.length > 0) {
               toast.info("Running in offline standalone mode.");
+            } else {
+              toast.error("No offline data cache found. Please log in once while connected to the internet.");
             }
           } catch (dbErr) {
-            console.error("Local database retrieval crash:", dbErr);
-            throw new Error("Local offline database data could not be parsed.");
+            console.error("Local database retrieval crash handled:", dbErr);
+            // Defensively check if localStorage holds any backup active keys
+            const backupActiveId = localStorage.getItem("ym_active_company_id");
+            if (backupActiveId && !cancelled) {
+              setCompanies([
+                { id: backupActiveId, name: "Active Company (Offline Backup)", has_password: false }
+              ]);
+            } else {
+              toast.error("Offline database initialization delayed. Connect online once to re-sync.");
+            }
           }
         }
       } catch (e) {
