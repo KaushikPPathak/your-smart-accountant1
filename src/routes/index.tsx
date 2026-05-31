@@ -320,4 +320,78 @@ function StartScreen() {
               <button
                 key={c.id}
                 onClick={() => openCompany(c)}
-                className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border/60 bg-card/80 p
+                className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border/60 bg-card/80 p-4 text-left backdrop-blur transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-elevated focus:outline-none focus:ring-2 focus:ring-primary/40 animate-in fade-in slide-in-from-bottom-2"
+                style={{ animationDelay: `${i * 40}ms`, animationFillMode: "both" }}
+              >
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 -top-px h-px opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ background: "linear-gradient(90deg, transparent, hsl(var(--primary) / .6), transparent)" }}
+                />
+                <div
+                  className="relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl text-base font-semibold text-white shadow-card transition-transform duration-300 group-hover:scale-105"
+                  style={{ background: tileGradient(c.name) }}
+                >
+                  <span className="drop-shadow">{initials(c.name)}</span>
+                  <div
+                    className="absolute inset-0 rounded-xl opacity-0 transition-opacity group-hover:opacity-100"
+                    style={{ background: "linear-gradient(135deg, rgba(255,255,255,.25), transparent 60%)" }}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[15px] font-semibold tracking-tight">{c.name}</span>
+                    {c.has_password ? (
+                      <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : (
+                      <Unlock className="h-3.5 w-3.5 text-success" />
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {c.has_password ? t("company.passwordProtected") : t("company.opensDirectly")}
+                  </div>
+                </div>
+                <div className="text-muted-foreground/60 transition-all group-hover:translate-x-0.5 group-hover:text-primary">
+                  →
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </main>
+
+      <Dialog open={!!pendingCompany} onOpenChange={(o) => !o && setPendingCompany(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("common.open")} “{pendingCompany?.name}”</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={submitPassword} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="cpwd">{t("company.password")}</Label>
+              <Input
+                id="cpwd"
+                type="password"
+                autoFocus
+                value={pwd}
+                onChange={(e) => setPwd(e.target.value)}
+                placeholder={t("company.passwordPlaceholder")}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setPendingCompany(null)}>
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" disabled={verifying || !pwd}>
+                {verifying ? t("common.checking") : t("common.open")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <footer className="border-t border-border/60 py-4 text-center text-xs text-muted-foreground">
+        © {new Date().getFullYear()} Your Mehtaji
+      </footer>
+    </div>
+  );
+}
