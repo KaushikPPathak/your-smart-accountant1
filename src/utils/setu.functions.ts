@@ -1,13 +1,13 @@
-// Client-side stubs for Setu e-invoice/e-way-bill integration. The Setu
-// credentials are server secrets; the SPA build cannot call Setu directly
-// without exposing them. These return "unavailable" until a proxy is added.
+// Client-side stubs for Setu e-invoice/e-way-bill integration.
+// Original server functions returned snake_case/camelCase fields used by
+// existing callers — we preserve those shapes here.
 
 export interface SetuStatus {
   configured: boolean;
-  einvoiceEnabled: boolean;
-  ewaybillEnabled: boolean;
+  einvoice_enabled: boolean;
+  ewaybill_enabled: boolean;
   environment: string;
-  message?: string;
+  gstn_username?: string | null;
 }
 
 export async function getSetuStatus(
@@ -15,27 +15,37 @@ export async function getSetuStatus(
 ): Promise<SetuStatus> {
   return {
     configured: false,
-    einvoiceEnabled: false,
-    ewaybillEnabled: false,
+    einvoice_enabled: false,
+    ewaybill_enabled: false,
     environment: "sandbox",
-    message: "Setu integration is currently unavailable in this build.",
+    gstn_username: null,
   };
 }
 
 export async function saveSetuCredentials(
   _args?: { data: unknown },
-): Promise<{ ok: boolean; error?: string }> {
-  return { ok: false, error: "Setu credentials cannot be saved from this build." };
+): Promise<{ success: boolean; error?: string }> {
+  return { success: false, error: "Setu integration is currently unavailable in this build." };
 }
 
-export async function generateIrn(
-  _args?: { data: unknown },
-): Promise<{ ok: boolean; error?: string }> {
-  return { ok: false, error: "IRN generation is currently unavailable in this build." };
+export interface IrnResult {
+  success: boolean;
+  error?: string;
+  irn?: string;
+  ackNo?: string;
 }
 
-export async function generateEwb(
-  _args?: { data: unknown },
-): Promise<{ ok: boolean; error?: string }> {
-  return { ok: false, error: "E-way bill generation is currently unavailable in this build." };
+export async function generateIrn(_args?: { data: unknown }): Promise<IrnResult> {
+  return { success: false, error: "IRN generation is currently unavailable in this build." };
+}
+
+export interface EwbResult {
+  success: boolean;
+  error?: string;
+  ewbNo?: string;
+  ewbValidUntil?: string;
+}
+
+export async function generateEwb(_args?: { data: unknown }): Promise<EwbResult> {
+  return { success: false, error: "E-way bill generation is currently unavailable in this build." };
 }

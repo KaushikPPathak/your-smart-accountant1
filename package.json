@@ -1,10 +1,9 @@
 {
   "name": "tanstack_start_ts",
   "private": true,
-  "sideEffects": false,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
@@ -15,13 +14,10 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "cross-env TAURI_ENV_PLATFORM=windows tauri build",
     "tauri:build:debug": "cross-env TAURI_ENV_PLATFORM=windows tauri build --debug",
-    "tauri:prerender": "node scripts/tauri-prerender.mjs",
-    "tauri:verify-dist": "node scripts/verify-tauri-dist.mjs",
-    "build:tauri": "cross-env TAURI_ENV_PLATFORM=windows vite build && node scripts/tauri-prerender.mjs && node scripts/verify-tauri-dist.mjs"
+    "build:tauri": "cross-env TAURI_ENV_PLATFORM=windows vite build"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.47",
-    "@cloudflare/vite-plugin": "^1.25.5",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -53,7 +49,6 @@
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-query": "^5.83.0",
     "@tanstack/react-router": "^1.168.0",
-    "@tanstack/react-start": "^1.167.14",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.24",
     "@tanstack/router-plugin": "^1.167.10",
@@ -97,7 +92,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-    "@lovable.dev/vite-tanstack-config": "^1.4.0",
     "@tauri-apps/cli": "^2",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^22.16.5",
