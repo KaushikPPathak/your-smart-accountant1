@@ -1,22 +1,9 @@
-import { 
-  createRouter, 
-  useRouter,
-  createHashHistory, 
-  createBrowserHistory 
-} from "@tanstack/react-router";
+import { createRouter, createHashHistory, useRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 
-// 🖥️ Safe Tauri Environment Detection
-const isTauriDesktop = 
-  typeof window !== "undefined" && 
-  (Boolean((window as any).__TAURI_INTERNALS__) || 
-   Boolean((window as any).__TAURI__) ||
-   navigator.userAgent.includes("Tauri"));
-
-// 🛣️ SPA Fail-Safe Routing Choice
-// Uses Hash History (/#/app) inside Tauri to prevent "Asset Not Found: index.html" crashes on Windows file protocol.
-// Falls back to standard Browser History on regular web setups.
-const appHistory = isTauriDesktop ? createHashHistory() : createBrowserHistory();
+// Hash history works identically on https://, file://, and tauri:// — no
+// SPA-fallback rewrite required. Used everywhere (web + Tauri desktop).
+const appHistory = createHashHistory();
 
 function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
@@ -60,8 +47,6 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
           >
             Try again
           </button>
-          
-          {/* 🛠️ Fix: Changed from hard <a href="/"> to router state navigation to prevent asset crashes */}
           <button
             type="button"
             onClick={() => router.navigate({ to: "/" })}
@@ -78,7 +63,7 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
 export const getRouter = () => {
   const router = createRouter({
     routeTree,
-    history: appHistory, // Injects safe offline path handling
+    history: appHistory,
     context: {
       auth: undefined as any,
       company: undefined as any,

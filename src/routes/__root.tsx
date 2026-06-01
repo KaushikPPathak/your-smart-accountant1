@@ -1,4 +1,4 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts, useLocation, useNavigate } from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { CompanyProvider } from "@/lib/company-context";
@@ -8,8 +8,6 @@ import { CurrencyProvider } from "@/lib/currency";
 import { DateFormatProvider } from "@/lib/date-format";
 import { Toaster } from "@/components/ui/sonner";
 import { isUnlocked } from "@/lib/staff-session";
-
-import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
   return (
@@ -34,52 +32,9 @@ function NotFoundComponent() {
 }
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Account Mate — Modern Accounting for India" },
-      {
-        name: "description",
-        content:
-          "GST-ready accounting software for Indian businesses. Multi-company, multi-user, with sales, purchase, inventory and reports. Inspired by Busy.",
-      },
-      { name: "author", content: "Your Mehtaji" },
-      { property: "og:title", content: "Account Mate — Modern Accounting for India" },
-      {
-        property: "og:description",
-        content:
-          "GST-ready accounting with sales, purchase, inventory, ledgers, P&L, balance sheet and GSTR reports.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Account Mate — Modern Accounting for India" },
-      { name: "description", content: "My Account Buddy is a Windows accounting application for Indian GST compliance." },
-      { property: "og:description", content: "My Account Buddy is a Windows accounting application for Indian GST compliance." },
-      { name: "twitter:description", content: "My Account Buddy is a Windows accounting application for Indian GST compliance." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c7be5486-6db1-443d-902b-6fc08e87090e/id-preview-c14a3a81--79fe3a99-5544-40be-ab1a-394be360a791.lovable.app-1776782467831.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c7be5486-6db1-443d-902b-6fc08e87090e/id-preview-c14a3a81--79fe3a99-5544-40be-ab1a-394be360a791.lovable.app-1776782467831.png" },
-    ],
-    links: [{ rel: "stylesheet", href: appCss }],
-  }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
 });
-
-function RootShell({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 function RootComponent() {
   return (
