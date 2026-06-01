@@ -60,6 +60,6 @@ jobs:
         with:
           name: smart-accountant-windows
           path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/debug/bundle/nsis/*.exe
+            src-tauri/target/debug/bundle/msi/*.msi
           if-no-files-found: error
