@@ -52,7 +52,8 @@ jobs:
           CARGO_BUILD_JOBS: 1
           RUSTFLAGS: "-C debuginfo=0 -C codegen-units=1"
         with:
-          args: --bundles nsis,msi
+          # Added --debug flag dynamically here to preserve F12 inspect tools on your blank screen layout
+          args: --debug --bundles nsis,msi
 
       - name: Upload Windows installer artifacts
         uses: actions/upload-artifact@v4
