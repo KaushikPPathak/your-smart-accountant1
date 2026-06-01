@@ -83,7 +83,7 @@ export function AssistantChat() {
   const [thinking, setThinking] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
-  // 🛠️ Switched to clean client invocation (TanStack Start useServerFn removed)
+  // Client-side direct function invocation
   const callAssistant = assistantChat;
   const callDraftVoucher = assistantDraftVoucher;
 
@@ -745,4 +745,90 @@ function CompanyPreviewCard({
       <dl className="grid grid-cols-[88px_1fr] gap-x-3 gap-y-1 text-xs">
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
-            <dt className="text
+            <dt className="text-muted-foreground">{k}</dt>
+            <dd className="break-words font-medium">
+              {v ? v : <span className="text-muted-foreground">—</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {disabled ? (
+        <div className="mt-3 text-[11px] text-muted-foreground">
+          {creating ? "Creating company…" : "This preview has been actioned."}
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <Button
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={onConfirm}
+            disabled={creating || !parsed.name}
+          >
+            <Check className="h-3 w-3" /> Confirm & create
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1 text-xs"
+            onClick={onCancel}
+            disabled={creating}
+          >
+            <X className="h-3 w-3" /> Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 gap-1 text-xs"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.location.href = "/app/companies?new=1";
+              }
+            }}
+            disabled={creating}
+          >
+            <Pencil className="h-3 w-3" /> Edit in full form
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function iconForAction(a: AssistantAction) {
+  if (a.kind === "set-theme")
+    return a.theme === "dark" ? <Moon className="h-3 w-3" /> : <Sun className="h-3 w-3" />;
+  if (a.kind === "set-language") return <Languages className="h-3 w-3" />;
+  return <ArrowRight className="h-3 w-3" />;
+}
+
+function RichText({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className="space-y-1">
+      {lines.map((line, i) => {
+        if (line.trim().startsWith("- ")) {
+          return (
+            <div key={i} className="ml-3 flex gap-1.5">
+              <span aria-hidden>•</span>
+              <span dangerouslySetInnerHTML={{ __html: inlineMd(line.replace(/^- /, "")) }} />
+            </div>
+          );
+        }
+        if (line.trim() === "") return <div key={i} className="h-1" />;
+        return <div key={i} dangerouslySetInnerHTML={{ __html: inlineMd(line) }} />;
+      })}
+    </div>
+  );
+}
+
+function inlineMd(s: string): string {
+  const esc = s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return esc
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/_(.+?)_/g, "<em>$1</em>")
+    .replace(/`([^`]+)`/g, '<code class="rounded bg-background/60 px-1 text-[11px]">$1</code>');
+}
