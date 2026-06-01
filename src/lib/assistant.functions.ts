@@ -4,7 +4,7 @@
 
 export interface AssistantChatResult {
   ok: boolean;
-  text?: string;
+  text: string;
   error?: string;
   toolCalls?: unknown[];
 }
@@ -14,6 +14,7 @@ export async function assistantChat(
 ): Promise<AssistantChatResult> {
   return {
     ok: false,
+    text: "",
     error: "AI assistant is temporarily unavailable in this build.",
   };
 }
