@@ -7,7 +7,8 @@
     "beforeBuildCommand": "bun run build:tauri",
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:5173",
-    "frontendDist": "../dist/client"
+    "frontendDist": "../dist/client",
+    "debug": true
   },
   "app": {
     "withGlobalTauri": true,
