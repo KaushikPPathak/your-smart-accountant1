@@ -32,7 +32,7 @@ jobs:
 
       # 🛠️ Fix step: Direct path targeting ensures the crawler knows exactly where your route directory lives
       - name: Regenerate TanStack Routes Map
-        run: bunx tsr generate --routes-dir src/routes --routes-manifest src/routeTree.gen.ts
+        run: bunx tsr generate --dir src/routes --out src/routeTree.gen.ts
         continue-on-error: true
 
       - name: Build embedded offline frontend
