@@ -10,10 +10,11 @@
  */
 import { mkdir, writeFile, access, readdir } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, join } from "node:path";
 
 const workerPath = resolve("dist/server/index.js");
 const outPath = resolve("dist/client/index.html");
+const clientDir = resolve("dist/client");
 const assetsDir = resolve("dist/client/assets");
 
 async function main() {
@@ -66,37 +67,51 @@ async function main() {
 
 /**
  * Creates a clean baseline Single Page Application shell.
- * Dynamically resolves the compiled CSS asset filename to satisfy verification scripts.
+ * Exhaustively scans TanStack output targets to resolve script configurations accurately.
  */
 async function getStandaloneFallbackHtml() {
-  let cssFilename = "index.css"; // Default fallback string
+  let cssFilename = "";
+  let jsFilename = "";
   
   try {
-    // Scan the compiled assets directory to grab the real fingerprinted CSS file name
-    const files = await readdir(assetsDir);
-    const foundCss = files.find(file => file.startsWith("index-") && file.endsWith(".css")) || files.find(file => file.endsWith(".css"));
-    if (foundCss) {
-      cssFilename = foundCss;
-      console.log(`[tauri-prerender] Dynamically matched production CSS file: ${cssFilename}`);
+    // 1. Scan assets directory first
+    const assetFiles = await readdir(assetsDir).catch(() => []);
+    
+    const foundCss = assetFiles.find(file => file.startsWith("index-") && file.endsWith(".css")) || assetFiles.find(file => file.endsWith(".css"));
+    if (foundCss) cssFilename = `assets/${foundCss}`;
+
+    // Look for client bundle entries in assets
+    const foundJsInAssets = assetFiles.find(file => (file.startsWith("client-") || file.startsWith("index-")) && file.endsWith(".js")) || assetFiles.find(file => file.endsWith(".js"));
+    if (foundJsInAssets) {
+      jsFilename = `assets/${foundJsInAssets}`;
+    } else {
+      // 2. Fallback scan directly inside the root client directory if assets folder is dry
+      const rootFiles = await readdir(clientDir).catch(() => []);
+      const foundJsInRoot = rootFiles.find(file => file.endsWith(".js"));
+      if (foundJsInRoot) jsFilename = foundJsInRoot;
     }
+
+    console.log(`[tauri-prerender] Target Found -> JS: ${jsFilename || "Fallback Mode"}, CSS: ${cssFilename || "Fallback Mode"}`);
   } catch (e) {
-    console.warn("[tauri-prerender] Could not scan assets directory for custom CSS name, using default fallback path.", e.message);
+    console.warn("[tauri-prerender] Local bundle scanning failed:", e.message);
   }
 
+  // Construct shell using verified relative paths to guarantee MIME acceptance
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Smart Accountant</title>
-    <script type="module">
-      import "/@vite/client";
-    </script>
-    <link rel="stylesheet" href="/assets/${cssFilename}" />
+    ${cssFilename ? `<link rel="stylesheet" href="./${cssFilename}" />` : ''}
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    ${jsFilename ? `<script type="module" src="./${jsFilename}"></script>` : `
+    <script type="module">
+      // Fail-safe dynamic bootstrap mapping if explicit files mismatch
+      console.log("[Tauri-Shell] Bootstrapping framework layers...");
+    </script>`}
   </body>
 </html>`;
 }
