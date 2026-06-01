@@ -89,61 +89,41 @@ function LockScreen() {
           // Cache login details for offline checking later
           void cacheAccountCredsFromCloud(loginUser.trim());
 
-          // 🔄 SECURE REAL-WORLD DATA SYNC
+          // Cache companies list for offline access using the picker view
           try {
-            // First, try a direct table query for companies
-            let { data: cloudCompanies, error: coError } = await supabase
-              .from("companies")
-              .select("*");
-            
-            // FALLBACK: If RLS filters out rows on the table, fetch via account ownership id directly
-            if (coError || !cloudCompanies || cloudCompanies.length === 0) {
-              const { data: fallbackCos } = await supabase
-                .from("companies")
-                .select("*")
-                .eq("account_id", row.id);
-              if (fallbackCos) cloudCompanies = fallbackCos;
-            }
-            
-            // If we found data, save it to the machine's local offline database
+            const { data: cloudCompanies } = await supabase
+              .from("companies_picker")
+              .select("id, name, has_password");
             if (cloudCompanies && cloudCompanies.length > 0) {
               const { offlineDb } = await import("@/lib/offline/db");
-              await offlineDb.companies.bulkPut(cloudCompanies);
-              console.log(`Successfully stored ${cloudCompanies.length} companies onto the hard drive.`);
+              const rows = cloudCompanies.map((c) => ({
+                id: c.id as string,
+                name: c.name as string,
+                has_password: Boolean(c.has_password),
+                account_id: row.id as string,
+              }));
+              await offlineDb.companies.bulkPut(rows);
             }
           } catch (syncErr) {
-            console.error("Data caching process encountered an issue:", syncErr);
+            console.error("Company cache sync skipped:", syncErr);
           }
 
           markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole });
           toast.success(`Welcome, ${row.name}`);
-          window.location.assign("/app");
+          navigate({ to: "/app" });
           return;
         } catch (cloudErr) {
           const reachable = await pingOnline();
           if (reachable) throw cloudErr;
         }
       }
-      
+
       // Fall back to completely offline database checking
       const local = await verifyOfflineLogin(loginUser.trim(), loginPass);
       if (local) {
         markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole });
         toast.success(`Welcome, ${local.name} (offline)`);
-        window.location.assign("/app");
-        return;
-      }
-
-      // EMERGENCY BYPASS fallback if completely offline on an uninitialized folder setup
-      if (!tryCloud) {
-        console.warn("Initializing emergency offline system bypass.");
-        markUnlocked({ 
-          id: "emergency-offline-id", 
-          name: loginUser.trim() || "Admin", 
-          role: "admin" as StaffRole 
-        });
-        toast.success(`Welcome, ${loginUser.trim()} (Emergency Offline Boot)`);
-        window.location.assign("/app");
+        navigate({ to: "/app" });
         return;
       }
 
@@ -165,22 +145,28 @@ function LockScreen() {
 
     setBusy(true);
     try {
+      const reachable = await pingOnline();
+      if (!reachable) {
+        toast.error("Sign-up needs an internet connection the first time.");
+        return;
+      }
+
       const rpc = accountsExist ? "signup_account" : "setup_first_account";
       const { data: newId, error } = await supabase.rpc(rpc, {
         _name: suName.trim(),
         _username: suUser.trim(),
         _password: suPass,
       });
-      
+
       if (error) throw error;
-      
+
       toast.success("Account created successfully!");
       markUnlocked({
         id: newId as string,
         name: suName.trim(),
         role: "admin",
       });
-      window.location.assign("/app");
+      navigate({ to: "/app" });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Signup failed.");
     } finally {
