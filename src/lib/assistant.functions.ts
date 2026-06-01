@@ -6,7 +6,7 @@ export interface AssistantChatResult {
   ok: boolean;
   text: string;
   error?: string;
-  toolCalls?: unknown[];
+  toolCalls?: { name: string; input: string }[];
 }
 
 export async function assistantChat(
