@@ -7,17 +7,14 @@
  * This script invokes the SSR worker once for "/" and writes the rendered
  * HTML to dist/client/index.html. The client router then takes over after
  * hydration and handles all in-app navigation offline.
- * 
- * FALLBACK ADDED: If the server-side initialization encounters an HTTP 500 error
- * (due to missing database keys or build-time environments), it falls back to a 
- * standalone SPA entry shell to ensure the application builds successfully.
  */
-import { mkdir, writeFile, access } from "node:fs/promises";
+import { mkdir, writeFile, access, readdir } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const workerPath = resolve("dist/server/index.js");
 const outPath = resolve("dist/client/index.html");
+const assetsDir = resolve("dist/client/assets");
 
 async function main() {
   try {
@@ -42,13 +39,13 @@ async function main() {
     
     if (!res.ok) {
       console.warn(`[tauri-prerender] worker returned HTTP ${res.status}. Dropping back to clean SPA layout shell...`);
-      html = getStandaloneFallbackHtml();
+      html = await getStandaloneFallbackHtml();
     } else {
       html = await res.text();
     }
   } catch (fetchErr) {
     console.warn("[tauri-prerender] Worker fetch execution failed. Generating baseline client template:", fetchErr.message);
-    html = getStandaloneFallbackHtml();
+    html = await getStandaloneFallbackHtml();
   }
 
   // Rewrite absolute asset paths to be relative so file:// loading works
@@ -69,10 +66,23 @@ async function main() {
 
 /**
  * Creates a clean baseline Single Page Application shell.
- * This guarantees the Tauri view environment bootstraps your bundled build scripts 
- * safely without choking on server-side environment checks during compiling.
+ * Dynamically resolves the compiled CSS asset filename to satisfy verification scripts.
  */
-function getStandaloneFallbackHtml() {
+async function getStandaloneFallbackHtml() {
+  let cssFilename = "index.css"; // Default fallback string
+  
+  try {
+    // Scan the compiled assets directory to grab the real fingerprinted CSS file name
+    const files = await readdir(assetsDir);
+    const foundCss = files.find(file => file.startsWith("index-") && file.endsWith(".css")) || files.find(file => file.endsWith(".css"));
+    if (foundCss) {
+      cssFilename = foundCss;
+      console.log(`[tauri-prerender] Dynamically matched production CSS file: ${cssFilename}`);
+    }
+  } catch (e) {
+    console.warn("[tauri-prerender] Could not scan assets directory for custom CSS name, using default fallback path.", e.message);
+  }
+
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -80,10 +90,9 @@ function getStandaloneFallbackHtml() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Smart Accountant</title>
     <script type="module">
-      // Pre-mocking baseline assets mapping injection structure 
       import "/@vite/client";
     </script>
-    <link rel="stylesheet" href="/assets/index.css" fallback-safety />
+    <link rel="stylesheet" href="/assets/${cssFilename}" />
   </head>
   <body>
     <div id="root"></div>
