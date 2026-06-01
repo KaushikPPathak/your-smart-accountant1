@@ -14,6 +14,7 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "cross-env TAURI_ENV_PLATFORM=windows tauri build",
+    "tauri:build:debug": "cross-env TAURI_ENV_PLATFORM=windows tauri build --debug",
     "tauri:prerender": "node scripts/tauri-prerender.mjs",
     "tauri:verify-dist": "node scripts/verify-tauri-dist.mjs",
     "build:tauri": "cross-env TAURI_ENV_PLATFORM=windows vite build && node scripts/tauri-prerender.mjs && node scripts/verify-tauri-dist.mjs"
