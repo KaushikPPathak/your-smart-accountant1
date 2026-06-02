@@ -282,23 +282,35 @@ function CompaniesPage() {
       date_format: parsed.data.date_format || "dd-mm-yyyy",
     };
 
-    if (editingId) {
-      const { error } = await supabase.from("companies").update(payload).eq("id", editingId);
+    try {
+      if (editingId) {
+        const { error } = await supabase.from("companies").update(payload).eq("id", editingId);
+        if (error) { setSubmitting(false); toast.error(error.message); return; }
+        toast.success("Company updated");
+      } else {
+        const activeStaffId = typeof window !== "undefined" ? localStorage.getItem("ym_active_staff_id") : null;
+        const newId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const { error } = await supabase
+          .from("companies")
+          .insert({ id: newId, ...payload, created_by: currentUserId, owner_app_user_id: activeStaffId });
+        if (error) { setSubmitting(false); toast.error(error.message); return; }
+        // Also create a membership row so the company appears in the offline list.
+        await supabase.from("company_members").insert({
+          company_id: newId,
+          user_id: currentUserId,
+          role: "admin",
+        });
+        setActiveCompanyId(newId);
+        toast.success("Company created");
+      }
+    } catch (err: any) {
       setSubmitting(false);
-      if (error) { toast.error(error.message); return; }
-      toast.success("Company updated");
-    } else {
-      const activeStaffId = typeof window !== "undefined" ? localStorage.getItem("ym_active_staff_id") : null;
-      const { data, error } = await supabase
-        .from("companies")
-        .insert({ ...payload, created_by: currentUserId, owner_app_user_id: activeStaffId })
-        .select("id")
-        .maybeSingle();
-      setSubmitting(false);
-      if (error || !data) { toast.error(error?.message ?? "Failed to create"); return; }
-      setActiveCompanyId(data.id);
-      toast.success("Company created");
+      toast.error(err?.message ?? "Failed to save company");
+      return;
     }
+    setSubmitting(false);
     await refresh();
     setForm(empty);
     setEditingId(null);
