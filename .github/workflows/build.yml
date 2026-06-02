@@ -14,10 +14,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      # 🚀 Fixed: Replaced fragile setup-bun action with native, fast PowerShell installation
+      - name: Setup Bun (Native PowerShell)
+        run: |
+          powershell -c "irm bun.sh/install.ps1 | iex"
+          echo "$env:USERPROFILE\.bun\bin" >> $env:GITHUB_PATH
 
       - name: Setup Rust (stable)
         uses: dtolnay/rust-toolchain@stable
