@@ -27,26 +27,51 @@ const localDb = new LocalOfflineDatabase();
 const createLocalQueryChain = (tableName: string) => {
   const chain = {
     _filters: [] as Array<(item: any) => boolean>,
+    _orderColumn: null as string | null,
+    _orderAscending: true,
+    _limitCount: null as number | null,
     
     select: () => chain,
     eq: (column: string, value: any) => {
       chain._filters.push((item) => item[column] === value);
       return chain;
     },
+    // Natively intercept .order() method calls to prevent component crashes
+    order: (column: string, options?: { ascending?: boolean }) => {
+      chain._orderColumn = column;
+      chain._orderAscending = options?.ascending !== false;
+      return chain;
+    },
+    // Natively intercept .limit() method calls
+    limit: (count: number) => {
+      chain._limitCount = count;
+      return chain;
+    },
     maybeSingle: async () => {
       try {
         const records = await localDb.table(tableName).toArray();
-        const filtered = records.filter(item => chain._filters.every(f => f(item)));
+        let filtered = records.filter(item => chain._filters.every(f => f(item)));
+        
+        if (chain._orderColumn) {
+          const col = chain._orderColumn;
+          filtered.sort((a, b) => (a[col] > b[col] ? 1 : -1) * (chain._orderAscending ? 1 : -1));
+        }
+        
         return { data: filtered[0] || null, error: null };
       } catch (e) {
-        // Fallback gracefully if table isn't registered in Dexie schema yet
         return { data: null, error: null };
       }
     },
     single: async () => {
       try {
         const records = await localDb.table(tableName).toArray();
-        const filtered = records.filter(item => chain._filters.every(f => f(item)));
+        let filtered = records.filter(item => chain._filters.every(f => f(item)));
+        
+        if (chain._orderColumn) {
+          const col = chain._orderColumn;
+          filtered.sort((a, b) => (a[col] > b[col] ? 1 : -1) * (chain._orderAscending ? 1 : -1));
+        }
+        
         if (filtered.length === 0) return { data: {} as any, error: null }; 
         return { data: filtered[0], error: null };
       } catch (e) {
@@ -92,8 +117,19 @@ const createLocalQueryChain = (tableName: string) => {
       try {
         data = await localDb.table(tableName).toArray();
         data = data.filter(item => chain._filters.every(f => f(item)));
+        
+        // Process order sorting logic
+        if (chain._orderColumn) {
+          const col = chain._orderColumn;
+          data.sort((a, b) => (a[col] > b[col] ? 1 : -1) * (chain._orderAscending ? 1 : -1));
+        }
+        
+        // Process limits
+        if (chain._limitCount !== null) {
+          data = data.slice(0, chain._limitCount);
+        }
       } catch (e) {
-        data = []; // Safe fallback prevents front-end crashes on missing tables
+        data = [];
       }
       const result = { data, error: null };
       return onfulfilled ? onfulfilled(result) : result;
@@ -117,7 +153,6 @@ function createSupabaseClient() {
 }
 
 // 3. Isolated Proxy Engine
-// Intercepts data fetching operations and processes them directly on the local hard disk
 export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>, {
   get(target, prop) {
     if (prop === 'from') {
@@ -138,7 +173,6 @@ export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>,
           error: null
         }),
         signOut: async () => ({ error: null }),
-        // Intercepts auth state observer to satisfy TanStack Router boundaries
         onAuthStateChange: (callback: any) => {
           callback('SIGNED_IN', { user: { id: 'offline-user-session', email: 'kaushik@local.accountant' } });
           return {
