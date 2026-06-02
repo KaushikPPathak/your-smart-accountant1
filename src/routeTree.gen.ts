@@ -21,6 +21,7 @@ import { Route as AppLedgersRouteImport } from './routes/app.ledgers'
 import { Route as AppItemsRouteImport } from './routes/app.items'
 import { Route as AppHousekeepingRouteImport } from './routes/app.housekeeping'
 import { Route as AppEinvoiceRouteImport } from './routes/app.einvoice'
+import { Route as AppDataSyncRouteImport } from './routes/app.data-sync'
 import { Route as AppCompaniesRouteImport } from './routes/app.companies'
 import { Route as AppBankRouteImport } from './routes/app.bank'
 import { Route as AppAssistantRouteImport } from './routes/app.assistant'
@@ -121,6 +122,11 @@ const AppHousekeepingRoute = AppHousekeepingRouteImport.update({
 const AppEinvoiceRoute = AppEinvoiceRouteImport.update({
   id: '/einvoice',
   path: '/einvoice',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDataSyncRoute = AppDataSyncRouteImport.update({
+  id: '/data-sync',
+  path: '/data-sync',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCompaniesRoute = AppCompaniesRouteImport.update({
@@ -344,6 +350,7 @@ export interface FileRoutesByFullPath {
   '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
+  '/app/data-sync': typeof AppDataSyncRoute
   '/app/einvoice': typeof AppEinvoiceRoute
   '/app/housekeeping': typeof AppHousekeepingRoute
   '/app/items': typeof AppItemsRoute
@@ -398,6 +405,7 @@ export interface FileRoutesByTo {
   '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
+  '/app/data-sync': typeof AppDataSyncRoute
   '/app/einvoice': typeof AppEinvoiceRoute
   '/app/housekeeping': typeof AppHousekeepingRoute
   '/app/items': typeof AppItemsRoute
@@ -454,6 +462,7 @@ export interface FileRoutesById {
   '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
   '/app/companies': typeof AppCompaniesRoute
+  '/app/data-sync': typeof AppDataSyncRoute
   '/app/einvoice': typeof AppEinvoiceRoute
   '/app/housekeeping': typeof AppHousekeepingRoute
   '/app/items': typeof AppItemsRoute
@@ -511,6 +520,7 @@ export interface FileRouteTypes {
     | '/app/assistant'
     | '/app/bank'
     | '/app/companies'
+    | '/app/data-sync'
     | '/app/einvoice'
     | '/app/housekeeping'
     | '/app/items'
@@ -565,6 +575,7 @@ export interface FileRouteTypes {
     | '/app/assistant'
     | '/app/bank'
     | '/app/companies'
+    | '/app/data-sync'
     | '/app/einvoice'
     | '/app/housekeeping'
     | '/app/items'
@@ -620,6 +631,7 @@ export interface FileRouteTypes {
     | '/app/assistant'
     | '/app/bank'
     | '/app/companies'
+    | '/app/data-sync'
     | '/app/einvoice'
     | '/app/housekeeping'
     | '/app/items'
@@ -758,6 +770,13 @@ declare module '@tanstack/react-router' {
       path: '/einvoice'
       fullPath: '/app/einvoice'
       preLoaderRoute: typeof AppEinvoiceRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/data-sync': {
+      id: '/app/data-sync'
+      path: '/data-sync'
+      fullPath: '/app/data-sync'
+      preLoaderRoute: typeof AppDataSyncRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/companies': {
@@ -1149,6 +1168,7 @@ interface AppRouteChildren {
   AppAssistantRoute: typeof AppAssistantRoute
   AppBankRoute: typeof AppBankRoute
   AppCompaniesRoute: typeof AppCompaniesRoute
+  AppDataSyncRoute: typeof AppDataSyncRoute
   AppEinvoiceRoute: typeof AppEinvoiceRoute
   AppHousekeepingRoute: typeof AppHousekeepingRoute
   AppItemsRoute: typeof AppItemsRoute
@@ -1165,6 +1185,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAssistantRoute: AppAssistantRoute,
   AppBankRoute: AppBankRoute,
   AppCompaniesRoute: AppCompaniesRoute,
+  AppDataSyncRoute: AppDataSyncRoute,
   AppEinvoiceRoute: AppEinvoiceRoute,
   AppHousekeepingRoute: AppHousekeepingRoute,
   AppItemsRoute: AppItemsRoute,
