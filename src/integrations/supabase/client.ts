@@ -89,6 +89,46 @@ const createLocalQueryChain = (tableName: string) => {
       try {
         for (const record of prepared) {
           await localDb.table(tableName).put(record);
+          
+          // --- AUTO-PROVISION SYSTEM RELATIONSHIPS ---
+          // When a new company is inserted, immediately seed structural dependencies
+          // to prevent dashboard route guards from bouncing user out to main menu.
+          if (tableName === 'companies') {
+            const companyId = record.id;
+            
+            // 1. Inject local structural owner relationship link
+            await localDb.table('company_members').put({
+              id: crypto.randomUUID(),
+              company_id: companyId,
+              user_id: 'offline-user-session',
+              role: 'owner',
+              created_at: new Date().toISOString()
+            });
+
+            // 2. Inject a fallback Primary Cash Account Ledger
+            await localDb.table('ledgers').put({
+              id: crypto.randomUUID(),
+              company_id: companyId,
+              name: 'Cash in Hand',
+              group_name: 'Current Assets',
+              is_system: 1,
+              opening_balance: 0,
+              created_at: new Date().toISOString()
+            });
+
+            // 3. Inject a default Bank Account Ledger baseline
+            await localDb.table('ledgers').put({
+              id: crypto.randomUUID(),
+              company_id: companyId,
+              name: 'Bank Account',
+              group_name: 'Bank Accounts',
+              is_system: 0,
+              opening_balance: 0,
+              created_at: new Date().toISOString()
+            });
+
+            console.log(`Mehtaji Engine: Automatically initialized accounting base structures for Company ID: ${companyId}`);
+          }
         }
       } catch(e) {
         console.error(`Local write error on table ${tableName}:`, e);
@@ -103,7 +143,7 @@ const createLocalQueryChain = (tableName: string) => {
       };
     },
     
-    // FIXED: Now supports lazy execution chaining to prevent ".eq is not a function"
+    // FIXED: Lazy execution chaining for edit update filtering updates
     update: (values: any) => {
       const executeUpdate = async () => {
         try {
