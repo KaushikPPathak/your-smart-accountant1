@@ -57,6 +57,7 @@
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-shell": "^2.3.5",
+    "@tauri-apps/plugin-sql": "^2.4.0",
     "@types/papaparse": "^5.5.2",
     "ai": "^6.0.184",
     "bcryptjs": "^3.0.3",
