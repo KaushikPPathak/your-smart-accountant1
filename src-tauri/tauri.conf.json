@@ -51,7 +51,7 @@
       "open": true
     },
     "fs": {
-      "scope": ["$APP_DATA/*", "$APP_CONFIG/*", "$DOCUMENT/*"]
+      "scope": ["$APPLOCALDATA/*", "$APPLOCALDATA/**"]
     }
   }
 }
