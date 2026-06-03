@@ -8,7 +8,8 @@
 
 import { getAppPaths } from "./app-paths";
 
-export const CURRENT_DATA_VERSION = 1;
+// 1. Bump version to 2 to enforce the database schema creation step
+export const CURRENT_DATA_VERSION = 2;
 
 interface VersionFile {
   version: number;
@@ -37,6 +38,95 @@ async function ensureDirs(): Promise<void> {
     fs.mkdir(paths.logs, { recursive: true }).catch(() => undefined),
   ]);
 }
+
+// ---------- Database Initializing Layer ----------
+
+/**
+ * Initializes all core relational tables if they do not exist.
+ * This fixes the "no such table: parties / stock_items" errors.
+ */
+async function initializeLocalDatabaseSchema(): Promise<void> {
+  if (!hasTauri()) return;
+  try {
+    // Dynamically loading Tauri SQL plugin. Update package string if using a different driver wrapper.
+    const Database = (await import("@tauri-apps/plugin-sql")).default;
+    const db = await Database.load("sqlite:smart_accountant.db");
+
+    // 1. Create Core Application Tables
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS companies (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1
+      );
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ledgers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        group_name TEXT,
+        gst_applicable INTEGER DEFAULT 0
+      );
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS parties (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TEXT
+      );
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS stock_items (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        unit TEXT,
+        gst_rate REAL DEFAULT 0.0,
+        selling_price REAL DEFAULT 0.0
+      );
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS vouchers (
+        id TEXT PRIMARY KEY,
+        party_id TEXT,
+        created_at TEXT,
+        FOREIGN KEY(party_id) REFERENCES parties(id)
+      );
+    `);
+
+    await appendLog("Database tables verified/created successfully.");
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    await appendLog(`DATABASE INIT CRITICAL FAILURE: ${errMsg}`);
+    throw new Error(`Database setup failed: ${errMsg}`);
+  }
+}
+
+/**
+ * Handles explicit incremental updates (e.g., adding missing columns to an existing DB)
+ */
+async function runIncrementalDbMigrations(fromVersion: number): Promise<void> {
+  if (!hasTauri()) return;
+  const Database = (await import("@tauri-apps/plugin-sql")).default;
+  const db = await Database.load("sqlite:smart_accountant.db");
+
+  // Migration step to handle updating older layouts to layout v2
+  if (fromVersion < 2) {
+    try {
+      // Fixes: "no such column: is_active" and "no such column: group_name" if schema was old
+      await db.execute("ALTER TABLE companies ADD COLUMN is_active INTEGER DEFAULT 1;").catch(() => undefined);
+      await db.execute("ALTER TABLE ledgers ADD COLUMN group_name TEXT;").catch(() => undefined);
+      await appendLog("Executed Migration Step: Upgraded DB schemas to Version 2 Layout.");
+    } catch (err) {
+      await appendLog(`Incremental migration warning: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+}
+
+// ---------- Rest of Your File Helpers ----------
 
 async function versionFilePath(): Promise<string | null> {
   if (!hasTauri()) return null;
@@ -84,13 +174,6 @@ async function appendLog(line: string): Promise<void> {
   }
 }
 
-// ---------- Step implementations ----------
-
-/**
- * Migrate legacy `Documents\YourMehtaji\Exports\<Company>\...` content into
- * `<appLocalDataDir>/mirror/<Company>/...`. Idempotent: if the legacy folder
- * is missing, no-op.
- */
 async function migrateLegacyDocumentsFolder(): Promise<{ moved: number }> {
   if (!hasTauri()) return { moved: 0 };
   const paths = await getAppPaths();
@@ -112,11 +195,10 @@ async function migrateLegacyDocumentsFolder(): Promise<{ moved: number }> {
       const src = await join(legacyRoot, ent.name);
       const dst = await join(paths.mirror, ent.name);
       const dstExists = await fs.exists(dst).catch(() => false);
-      if (dstExists) continue; // never clobber an existing target
+      if (dstExists) continue; 
       await copyDirRecursive(src, dst);
       moved += 1;
     }
-    // Breadcrumb so the user knows where their data went.
     const note = await join(legacyRoot, "MOVED.txt");
     await fs.writeTextFile(
       note,
@@ -144,7 +226,6 @@ async function copyDirRecursive(src: string, dst: string): Promise<void> {
         const data = await fs.readFile(s);
         await fs.writeFile(d, data);
       } catch {
-        // Fallback: treat as text.
         try {
           const txt = await fs.readTextFile(s);
           await fs.writeTextFile(d, txt);
@@ -156,7 +237,7 @@ async function copyDirRecursive(src: string, dst: string): Promise<void> {
   }
 }
 
-// ---------- Runner ----------
+// ---------- Runner Engine ----------
 
 export interface MigrationResult {
   ran: boolean;
@@ -186,22 +267,29 @@ export async function runAppDataMigrationsOnce(): Promise<MigrationResult> {
       }
 
       if (!existing) {
-        // First boot under the new layout: pull anything legacy in.
+        // Fresh Install Flow
         const { moved } = await migrateLegacyDocumentsFolder();
         steps.push(`legacy_documents_moved=${moved}`);
+        
+        // Execute clean structural database injection
+        await initializeLocalDatabaseSchema();
+        steps.push("initialized_local_database_tables");
+
         await writeVersion({
           version: CURRENT_DATA_VERSION,
           migrated_from: "legacy_documents",
-          history: [{ from: 0, to: CURRENT_DATA_VERSION, at: new Date().toISOString(), note: `moved ${moved} company folder(s)` }],
+          history: [{ from: 0, to: CURRENT_DATA_VERSION, at: new Date().toISOString(), note: `moved ${moved} folder(s) & seeded tables` }],
           updated_at: new Date().toISOString(),
         });
-        await appendLog(`initialized at v${CURRENT_DATA_VERSION} (moved ${moved} legacy folder(s))`);
+        
+        await appendLog(`initialized at v${CURRENT_DATA_VERSION} (moved ${moved} legacy folder(s) & built local schema)`);
         return { ran: true, fromVersion, toVersion: CURRENT_DATA_VERSION, steps };
       }
 
       if (existing.version < CURRENT_DATA_VERSION) {
-        // No incremental steps registered yet — when v2 lands, add a switch
-        // here that runs v1→v2, v2→v3, etc. each wrapped in its own try.
+        // Incremental Version Upgrades (e.g., v1 -> v2)
+        await runIncrementalDbMigrations(existing.version);
+        
         await writeVersion({
           ...existing,
           version: CURRENT_DATA_VERSION,
