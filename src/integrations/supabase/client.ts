@@ -30,10 +30,17 @@ const createLocalQueryChain = (tableName: string) => {
     _orderColumn: null as string | null,
     _orderAscending: true,
     _limitCount: null as number | null,
+    _rangeStart: null as number | null,
+    _rangeEnd: null as number | null,
     
     select: () => chain,
     eq: (column: string, value: any) => {
       chain._filters.push((item) => item[column] === value);
+      return chain;
+    },
+    // Natively intercept .in() arrays to prevent company listing component crash
+    in: (column: string, values: any[]) => {
+      chain._filters.push((item) => Array.isArray(values) && values.includes(item[column]));
       return chain;
     },
     // Natively intercept .order() method calls to prevent component crashes
@@ -45,6 +52,12 @@ const createLocalQueryChain = (tableName: string) => {
     // Natively intercept .limit() method calls
     limit: (count: number) => {
       chain._limitCount = count;
+      return chain;
+    },
+    // Natively intercept .range() pagination modifiers for cache arrays
+    range: (fromIndex: number, toIndex: number) => {
+      chain._rangeStart = fromIndex;
+      chain._rangeEnd = toIndex;
       return chain;
     },
     maybeSingle: async () => {
@@ -91,8 +104,6 @@ const createLocalQueryChain = (tableName: string) => {
           await localDb.table(tableName).put(record);
           
           // --- AUTO-PROVISION SYSTEM RELATIONSHIPS ---
-          // When a new company is inserted, immediately seed structural dependencies
-          // to prevent dashboard route guards from bouncing user out to main menu.
           if (tableName === 'companies') {
             const companyId = record.id;
             
@@ -143,7 +154,7 @@ const createLocalQueryChain = (tableName: string) => {
       };
     },
     
-    // FIXED: Lazy execution chaining for edit update filtering updates
+    // Lazy execution chaining for edit update filtering updates
     update: (values: any) => {
       const executeUpdate = async () => {
         try {
@@ -163,6 +174,10 @@ const createLocalQueryChain = (tableName: string) => {
           chain.eq(column, value);
           return updateChain;
         },
+        in: (column: string, values: any[]) => {
+          chain.in(column, values);
+          return updateChain;
+        },
         then: async (onfulfilled?: (value: any) => any) => {
           const result = await executeUpdate();
           return onfulfilled ? onfulfilled(result) : result;
@@ -172,7 +187,7 @@ const createLocalQueryChain = (tableName: string) => {
       return updateChain;
     },
 
-    // FIXED: Lazy execution chaining for delete methods to handle warning evaluations
+    // KEEPING YOUR NEW DELETE FUNCTION UNTOUCHED BELOW
     delete: () => {
       const executeDelete = async () => {
         try {
@@ -190,6 +205,10 @@ const createLocalQueryChain = (tableName: string) => {
       const deleteChain = {
         eq: (column: string, value: any) => {
           chain.eq(column, value);
+          return deleteChain;
+        },
+        in: (column: string, values: any[]) => {
+          chain.in(column, values);
           return deleteChain;
         },
         then: async (onfulfilled?: (value: any) => any) => {
@@ -216,6 +235,11 @@ const createLocalQueryChain = (tableName: string) => {
         // Process limits
         if (chain._limitCount !== null) {
           data = data.slice(0, chain._limitCount);
+        }
+
+        // Process range slicing offsets safely for master lists
+        if (chain._rangeStart !== null && chain._rangeEnd !== null) {
+          data = data.slice(chain._rangeStart, chain._rangeEnd + 1);
         }
       } catch (e) {
         data = [];
@@ -275,7 +299,6 @@ export const supabase = new Proxy({} as ReturnType<typeof getCachedSupabaseClien
         }
       };
     }
-    // FIX 2: Resolves property evaluations through a cached client singleton
     const instance = getCachedSupabaseClient();
     return Reflect.get(instance, prop);
   },
