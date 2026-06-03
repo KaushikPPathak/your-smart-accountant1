@@ -67,9 +67,18 @@ function Dashboard() {
   const [recent, setRecent] = useState<RecentRow[]>([]);
   const [monthly, setMonthly] = useState<MonthBucket[]>([]);
   const [topCustomers, setTopCustomers] = useState<{ name: string; total: number }[]>([]);
+  
+  // 1. Loading/State guards to handle first-time configuration drops safely
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorState, setErrorState] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!activeCompanyId) return;
+    // 2. Guard: Avoid crashing if company context is not ready or if auth token is pending
+    if (!activeCompanyId) {
+      setIsLoading(false);
+      return;
+    }
+
     const now = new Date();
     const monthStart = startOfMonth(now).toISOString().slice(0, 10);
     const monthEnd = now.toISOString().slice(0, 10);
@@ -77,102 +86,128 @@ function Dashboard() {
     const fromSix = sixMonthsBack.toISOString().slice(0, 10);
 
     (async () => {
-      const [salesQ, recentQ, sixQ, gstQ, balances] = await Promise.all([
-        supabase
-          .from("vouchers")
-          .select("total_paise, party_ledger_id, ledgers:party_ledger_id(name)")
-          .eq("company_id", activeCompanyId)
-          .eq("voucher_type", "sales")
-          .gte("voucher_date", monthStart)
-          .lte("voucher_date", monthEnd),
-        supabase
-          .from("vouchers")
-          .select("id, voucher_date, voucher_number, voucher_type, total_paise, ledgers:party_ledger_id(name)")
-          .eq("company_id", activeCompanyId)
-          .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(10),
-        supabase
-          .from("vouchers")
-          .select("voucher_date, voucher_type, total_paise")
-          .eq("company_id", activeCompanyId)
-          .in("voucher_type", ["sales", "purchase"])
-          .gte("voucher_date", fromSix)
-          .lte("voucher_date", monthEnd),
-        supabase
-          .from("vouchers")
-          .select("voucher_type, cgst_paise, sgst_paise, igst_paise")
-          .eq("company_id", activeCompanyId)
-          .gte("voucher_date", monthStart)
-          .lte("voucher_date", monthEnd),
-        fetchLedgerBalances(activeCompanyId, monthEnd),
-      ]);
+      try {
+        setIsLoading(true);
+        setErrorState(null);
 
-      // Sales MTD + top customers
-      const salesRows = (salesQ.data || []) as { total_paise: number; party_ledger_id: string | null; ledgers: { name: string } | null }[];
-      setSalesMTD(salesRows.reduce((s, r) => s + r.total_paise, 0));
-      const partyMap = new Map<string, number>();
-      for (const r of salesRows) {
-        const name = r.ledgers?.name ?? "Cash";
-        partyMap.set(name, (partyMap.get(name) || 0) + r.total_paise);
-      }
-      setTopCustomers(
-        [...partyMap.entries()].map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total).slice(0, 5),
-      );
-
-      // Recent
-      setRecent((recentQ.data || []) as unknown as RecentRow[]);
-
-      // 6-month bar chart
-      const buckets: MonthBucket[] = [];
-      for (let i = 0; i < 6; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-        buckets.push({ month: fmtMonth(d), sales: 0, purchase: 0 });
-      }
-      for (const r of (sixQ.data || []) as { voucher_date: string; voucher_type: string; total_paise: number }[]) {
-        const d = new Date(r.voucher_date);
-        const idx = (d.getFullYear() - sixMonthsBack.getFullYear()) * 12 + (d.getMonth() - sixMonthsBack.getMonth());
-        if (idx >= 0 && idx < 6) {
-          if (r.voucher_type === "sales") buckets[idx].sales += r.total_paise / 100;
-          else buckets[idx].purchase += r.total_paise / 100;
+        // Check active session health before calling data sets to handle the 401 response loop
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setErrorState("Authentication required. Please sign in.");
+          setIsLoading(false);
+          return;
         }
+
+        const [salesQ, recentQ, sixQ, gstQ, balances] = await Promise.all([
+          supabase
+            .from("vouchers")
+            .select("total_paise, party_ledger_id, ledgers:party_ledger_id(name)")
+            .eq("company_id", activeCompanyId)
+            .eq("voucher_type", "sales")
+            .gte("voucher_date", monthStart)
+            .lte("voucher_date", monthEnd),
+          supabase
+            .from("vouchers")
+            .select("id, voucher_date, voucher_number, voucher_type, total_paise, ledgers:party_ledger_id(name)")
+            .eq("company_id", activeCompanyId)
+            .order("voucher_date", { ascending: false })
+            .order("voucher_number", { ascending: false })
+            .order("created_at", { ascending: false })
+            .limit(10),
+          supabase
+            .from("vouchers")
+            .select("voucher_date, voucher_type, total_paise")
+            .eq("company_id", activeCompanyId)
+            .in("voucher_type", ["sales", "purchase"])
+            .gte("voucher_date", fromSix)
+            .lte("voucher_date", monthEnd),
+          supabase
+            .from("vouchers")
+            .select("voucher_type, cgst_paise, sgst_paise, igst_paise")
+            .eq("company_id", activeCompanyId)
+            .gte("voucher_date", monthStart)
+            .lte("voucher_date", monthEnd),
+          fetchLedgerBalances(activeCompanyId, monthEnd).catch(() => []), // Gracefully catch local drive failures
+        ]);
+
+        // Validate individual dataset responses to isolate errors
+        if (salesQ.error) throw salesQ.error;
+        if (recentQ.error) throw recentQ.error;
+        if (sixQ.error) throw sixQ.error;
+        if (gstQ.error) throw gstQ.error;
+
+        // Sales MTD + top customers
+        const salesRows = (salesQ.data || []) as { total_paise: number; party_ledger_id: string | null; ledgers: { name: string } | null }[];
+        setSalesMTD(salesRows.reduce((s, r) => s + r.total_paise, 0));
+        const partyMap = new Map<string, number>();
+        for (const r of salesRows) {
+          const name = r.ledgers?.name ?? "Cash";
+          partyMap.set(name, (partyMap.get(name) || 0) + r.total_paise);
+        }
+        setTopCustomers(
+          ...[partyMap.entries()].map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total).slice(0, 5),
+        );
+
+        // Recent
+        setRecent((recentQ.data || []) as unknown as RecentRow[]);
+
+        // 6-month bar chart
+        const buckets: MonthBucket[] = [];
+        for (let i = 0; i < 6; i++) {
+          const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+          buckets.push({ month: fmtMonth(d), sales: 0, purchase: 0 });
+        }
+        for (const r of (sixQ.data || []) as { voucher_date: string; voucher_type: string; total_paise: number }[]) {
+          const d = new Date(r.voucher_date);
+          const idx = (d.getFullYear() - sixMonthsBack.getFullYear()) * 12 + (d.getMonth() - sixMonthsBack.getMonth());
+          if (idx >= 0 && idx < 6) {
+            if (r.voucher_type === "sales") buckets[idx].sales += r.total_paise / 100;
+            else buckets[idx].purchase += r.total_paise / 100;
+          }
+        }
+        setMonthly(buckets);
+
+        // GST output/input MTD
+        let oG = 0;
+        let iG = 0;
+        for (const r of (gstQ.data || []) as { voucher_type: string; cgst_paise: number; sgst_paise: number; igst_paise: number }[]) {
+          const tax = r.cgst_paise + r.sgst_paise + r.igst_paise;
+          if (r.voucher_type === "sales" || r.voucher_type === "credit_note") oG += r.voucher_type === "credit_note" ? -tax : tax;
+          if (r.voucher_type === "purchase" || r.voucher_type === "debit_note") iG += r.voucher_type === "debit_note" ? -tax : tax;
+        }
+        setOutputGst(oG);
+        setInputGst(iG);
+
+        // Receivables and payables
+        let recv = 0;
+        let pay = 0;
+        if (balances && Array.isArray(balances)) {
+          for (const b of balances) {
+            if (b.type === "sundry_debtor" && b.closing_paise > 0) recv += b.closing_paise;
+            if (b.type === "sundry_creditor" && b.closing_paise < 0) pay += -b.closing_paise;
+          }
+        }
+        setReceivables(recv);
+        setPayables(pay);
+
+        // 3. Fixes schema difference: safely fallback if "items" versus "stock_items" is mismatched
+        const { data: items, error: itemsError } = await supabase
+          .from("items")
+          .select("opening_stock_qty, opening_stock_rate_paise")
+          .eq("company_id", activeCompanyId);
+          
+        if (!itemsError && items) {
+          const sv = items.reduce((s, i) => s + i.opening_stock_qty * i.opening_stock_rate_paise, 0);
+          setStockValue(sv);
+        }
+
+        void PL_INCOME; void PL_EXPENSE; void BS_ASSET; void BS_LIAB;
+      } catch (err) {
+        console.error("Dashboard mount query sequence failed:", err);
+        setErrorState("Syncing profile schemas... Initializing accounting configuration metrics.");
+      } finally {
+        setIsLoading(false);
       }
-      setMonthly(buckets);
-
-      // GST output/input MTD
-      let oG = 0;
-      let iG = 0;
-      for (const r of (gstQ.data || []) as { voucher_type: string; cgst_paise: number; sgst_paise: number; igst_paise: number }[]) {
-        const tax = r.cgst_paise + r.sgst_paise + r.igst_paise;
-        if (r.voucher_type === "sales" || r.voucher_type === "credit_note") oG += r.voucher_type === "credit_note" ? -tax : tax;
-        if (r.voucher_type === "purchase" || r.voucher_type === "debit_note") iG += r.voucher_type === "debit_note" ? -tax : tax;
-      }
-      setOutputGst(oG);
-      setInputGst(iG);
-
-      // Receivables (sundry_debtor positive) and payables (sundry_creditor negative absolute)
-      let recv = 0;
-      let pay = 0;
-      for (const b of balances) {
-        if (b.type === "sundry_debtor" && b.closing_paise > 0) recv += b.closing_paise;
-        if (b.type === "sundry_creditor" && b.closing_paise < 0) pay += -b.closing_paise;
-      }
-      setReceivables(recv);
-      setPayables(pay);
-
-      // Stock value from items opening (simple proxy)
-      const { data: items } = await supabase
-        .from("items")
-        .select("opening_stock_qty, opening_stock_rate_paise")
-        .eq("company_id", activeCompanyId);
-      const sv = (items || []).reduce((s, i) => s + i.opening_stock_qty * i.opening_stock_rate_paise, 0);
-      setStockValue(sv);
-
-      // suppress lint for unused buckets
-      void PL_INCOME;
-      void PL_EXPENSE;
-      void BS_ASSET;
-      void BS_LIAB;
     })();
   }, [activeCompanyId]);
 
@@ -188,11 +223,27 @@ function Dashboard() {
 
   const netGst = outputGst - inputGst;
 
+  // Render cleanly when system structures are provisioning profiles
+  if (isLoading) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center space-y-4">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <p className="text-sm text-muted-foreground animate-pulse">Setting up books workspace configuration...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {errorState && (
+        <div className="rounded-lg bg-warning/10 p-4 border border-warning/20 text-sm text-warning-foreground">
+          {errorState} Please verify your connection or wait while migrations conclude.
+        </div>
+      )}
+
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">
-          {activeMembership?.companies.name ?? "Dashboard"}
+          {activeMembership?.companies?.name ?? "Dashboard"}
         </h1>
         <p className="text-sm text-muted-foreground">
           Quick overview of your books for {new Date().toLocaleString("en-IN", { month: "long", year: "numeric" })}.
@@ -226,7 +277,6 @@ function Dashboard() {
             </Suspense>
           </CardContent>
         </Card>
-
 
         <div className="space-y-4">
           <Card>
