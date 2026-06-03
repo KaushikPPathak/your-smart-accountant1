@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench } from "lucide-react";
+import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,6 +35,7 @@ interface ChatMessage {
   text: string;
   matches?: KbEntry[];
   preview?: ParsedCompany;
+  voucherPreview?: ParsedVoucher;
   toolCalls?: { name: string; input: string }[];
 }
 
@@ -49,6 +50,21 @@ type ParsedCompany = {
   address?: string;
   financial_year_start?: string;
   inventory_enabled?: boolean;
+};
+
+type ParsedVoucher = {
+  intent: VoucherIntent;
+  date: string;
+  amount: number;
+  narration?: string;
+  refNo?: string;
+  partyLedgerId?: string;
+  cashBankLedgerId?: string;
+  counterLedgerId?: string;
+  displayDetails?: {
+    partyName?: string;
+    accountName?: string;
+  };
 };
 
 const WELCOME: ChatMessage = {
@@ -79,11 +95,11 @@ export function AssistantChat() {
   const hasCompany = memberships.length > 0;
   const [creating, setCreating] = useState(false);
   const [pendingCompany, setPendingCompany] = useState<ParsedCompany | null>(null);
+  const [pendingVoucher, setPendingVoucher] = useState<ParsedVoucher | null>(null);
   const [aiMode, setAiMode] = useState(true);
   const [thinking, setThinking] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
-  // Client-side direct function invocation
   const callAssistant = assistantChat;
   const callDraftVoucher = assistantDraftVoucher;
 
@@ -97,7 +113,6 @@ export function AssistantChat() {
     return ASSISTANT_KB.filter((e) => e.category === activeCat);
   }, [activeCat]);
 
-  // ---- Company creation intent ----------------------------------------------
   const COMPANY_HELP_TEXT =
     "**Create a company**\n\nI can create one for you right here. Just paste the details (any order works). The only **required** field is the company name — everything else can be added later.\n\n**You can include:**\n- **Name** (required) — e.g. *Name: ABC Traders*\n- **GSTIN** (15 chars) — auto-detects state & marks you as Registered\n- **PAN** (10 chars)\n- **State** — e.g. *State: Maharashtra* or *State code: 27*\n- **Phone**, **Email**, **Address**\n- **FY start** — e.g. *FY: 2025-04-01* (defaults to 1-Apr current year)\n- **Inventory: yes/no** (default yes)\n\n**Example — paste this and edit:**\n`Name: ABC Traders, GSTIN: 27ABCDE1234F1Z5, PAN: ABCDE1234F, Phone: 9876543210, Email: hi@abc.in, Address: 12 MG Road Pune, Inventory: yes`";
 
@@ -210,7 +225,7 @@ export function AssistantChat() {
           {
             id: `a-${Date.now()}`,
             role: "assistant",
-            text: `I couldn't create the company: **${error?.message ?? "Unknown error"}**.\n\nYou can also open the full form with the button below.`,
+            text: `I couldn't create the company: **${error?.message ?? "Unknown error"}**.\n\nYou can also open the full form with the button below Toggle Engine.`,
             matches: [
               {
                 id: "open-create",
@@ -265,6 +280,31 @@ export function AssistantChat() {
     } finally {
       setCreating(false);
     }
+  }
+
+  function confirmPostVoucher(draft: ParsedVoucher) {
+    writeAssistantPrefill({
+      voucherType: draft.intent,
+      date: draft.date,
+      partyLedgerId: draft.partyLedgerId ?? undefined,
+      cashBankLedgerId: draft.cashBankLedgerId ?? undefined,
+      counterLedgerId: draft.counterLedgerId ?? undefined,
+      amount: draft.amount,
+      narration: draft.narration,
+      refNo: draft.refNo,
+    });
+    
+    setMessages((m) => [
+      ...m,
+      {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        text: `Opening the **${draft.intent}** workspace. Press **Enter** or use keyboard shortcuts (Ctrl+S) to commit to local system files safely.`,
+      },
+    ]);
+    
+    setPendingVoucher(null);
+    navigate({ to: intentToRoute(draft.intent) });
   }
 
   function ask(rawText: string) {
@@ -332,26 +372,38 @@ export function AssistantChat() {
           });
           if (res.ok && res.draft) {
             const d = res.draft;
-            writeAssistantPrefill({
-              voucherType: intent,
+            
+            // Resolve ledger names for descriptive preview architecture 
+            const targetParty = ledgers.find(l => l.id === d.partyLedgerId)?.name || d.partyLedgerId;
+            const targetAccount = ledgers.find(l => l.id === d.cashBankLedgerId || l.id === d.counterLedgerId)?.name;
+
+            const voucherPayload: ParsedVoucher = {
+              intent,
               date: d.date,
-              partyLedgerId: d.partyLedgerId ?? undefined,
-              cashBankLedgerId: d.cashBankLedgerId ?? undefined,
-              counterLedgerId: d.counterLedgerId ?? undefined,
               amount: d.amount,
               narration: d.narration,
               refNo: d.refNo,
-            });
+              partyLedgerId: d.partyLedgerId ?? undefined,
+              cashBankLedgerId: d.cashBankLedgerId ?? undefined,
+              counterLedgerId: d.counterLedgerId ?? undefined,
+              displayDetails: {
+                partyName: targetParty,
+                accountName: targetAccount
+              }
+            };
+
+            setPendingVoucher(voucherPayload);
+
             setMessages((m) => [
               ...m,
               {
                 id: `a-${Date.now()}`,
                 role: "assistant",
-                text: `Drafted a **${intent}** voucher — opening the form. Press **Enter** to save (or Ctrl+S).`,
+                text: `I've analyzed your intent and generated an accounting voucher preview. please review the ledger distribution balances before routing into the manual journal interface:`,
+                voucherPreview: voucherPayload,
               },
             ]);
             setThinking(false);
-            navigate({ to: intentToRoute(intent) });
             return;
           }
           if (!res.ok && res.error) toast.error(res.error);
@@ -488,8 +540,21 @@ export function AssistantChat() {
                     },
                   ]);
                 }}
+                onConfirmVoucher={confirmPostVoucher}
+                onCancelVoucher={() => {
+                  setPendingVoucher(null);
+                  setMessages((mm) => [
+                    ...mm,
+                    {
+                      id: `a-${Date.now()}`,
+                      role: "assistant",
+                      text: "Voucher posting canceled. Let me know if you need to adjust parameters or structure different operational entries.",
+                    }
+                  ]);
+                }}
                 creating={creating}
-                isPending={!!pendingCompany && m.preview === pendingCompany}
+                isPendingCompany={!!pendingCompany && m.preview === pendingCompany}
+                isPendingVoucher={!!pendingVoucher && m.voucherPreview === pendingVoucher}
               />
             ))}
             {thinking && (
@@ -630,15 +695,21 @@ function MessageBubble({
   onAction,
   onConfirmCompany,
   onCancelCompany,
+  onConfirmVoucher,
+  onCancelVoucher,
   creating,
-  isPending,
+  isPendingCompany,
+  isPendingVoucher,
 }: {
   msg: ChatMessage;
   onAction: (a: AssistantAction) => void;
   onConfirmCompany: (p: ParsedCompany) => void;
   onCancelCompany: () => void;
+  onConfirmVoucher: (d: ParsedVoucher) => void;
+  onCancelVoucher: () => void;
   creating: boolean;
-  isPending: boolean;
+  isPendingCompany: boolean;
+  isPendingVoucher: boolean;
 }) {
   const isUser = msg.role === "user";
   return (
@@ -664,12 +735,22 @@ function MessageBubble({
         {!isUser && msg.preview && (
           <CompanyPreviewCard
             parsed={msg.preview}
-            disabled={!isPending || creating}
+            disabled={!isPendingCompany || creating}
             creating={creating}
             onConfirm={() => onConfirmCompany(msg.preview!)}
             onCancel={onCancelCompany}
           />
         )}
+
+        {!isUser && msg.voucherPreview && (
+          <VoucherPreviewCard
+            draft={msg.voucherPreview}
+            disabled={!isPendingVoucher}
+            onConfirm={() => onConfirmVoucher(msg.voucherPreview!)}
+            onCancel={onCancelVoucher}
+          />
+        )}
+
         {!isUser && msg.matches && msg.matches[0]?.actions && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {msg.matches[0].actions.map((a, i) => (
@@ -687,6 +768,75 @@ function MessageBubble({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function VoucherPreviewCard({
+  draft,
+  disabled,
+  onConfirm,
+  onCancel,
+}: {
+  draft: ParsedVoucher;
+  disabled: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const formattedAmount = new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+  }).format(draft.amount);
+
+  const rows: Array<[string, string | undefined]> = [
+    ["Voucher Type", draft.intent.toUpperCase()],
+    ["Date", draft.date],
+    ["Amount", formattedAmount],
+    ["Debit/Party Account", draft.displayDetails?.partyName || "Unassigned / Auto-resolve"],
+    ["Credit/Bank Account", draft.displayDetails?.accountName || "Unassigned / Auto-resolve"],
+    ["Narration", draft.narration],
+    ["Ref / Invoice No", draft.refNo],
+  ];
+
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-background/60 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Transaction Draft Preview</span>
+      </div>
+      <dl className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-1 text-xs">
+        {rows.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="text-muted-foreground">{k}</dt>
+            <dd className="break-words font-medium">
+              {v ? v : <span className="text-muted-foreground">—</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {!disabled ? (
+        <div className="mt-3 text-[11px] text-muted-foreground">
+          This transaction draft has been sent to the accounting ledger modules.
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <Button
+            size="sm"
+            className="h-7 gap-1 text-xs bg-emerald-600 text-white hover:bg-emerald-700"
+            onClick={onConfirm}
+          >
+            <Check className="h-3 w-3" /> Confirm & Open Form
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1 text-xs"
+            onClick={onCancel}
+          >
+            <X className="h-3 w-3" /> Drop Draft
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
