@@ -1,4 +1,4 @@
-// Modified for complete offline database isolation (Dexie/IndexedDB backup fallback)
+// src/integrations/supabase/client.ts
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import Dexie, { type Table } from 'dexie';
@@ -8,7 +8,7 @@ class LocalOfflineDatabase extends Dexie {
   companies!: Table<any, string>;
   ledgers!: Table<any, string>;
   vouchers!: Table<any, string>;
-  company_members!: Table<any, string>; // FIX 1: Renamed from memberships to align perfectly with app components
+  company_members!: Table<any, string>;
 
   constructor() {
     super('SmartAccountantLocalDB');
@@ -16,12 +16,12 @@ class LocalOfflineDatabase extends Dexie {
       companies: 'id, name',
       ledgers: 'id, name, company_id',
       vouchers: 'id, date, company_id, voucher_type',
-      company_members: 'id, user_id, company_id' // FIX 1: Matches schema lookups accurately
+      company_members: 'id, user_id, company_id'
     });
   }
 }
 
-const localDb = new LocalOfflineDatabase();
+export const localDb = new LocalOfflineDatabase();
 
 // Mock builder to safely mimic Supabase query structures entirely on local hardware
 const createLocalQueryChain = (tableName: string) => {
@@ -38,23 +38,19 @@ const createLocalQueryChain = (tableName: string) => {
       chain._filters.push((item) => item[column] === value);
       return chain;
     },
-    // Natively intercept .in() arrays to prevent company listing component crash
     in: (column: string, values: any[]) => {
       chain._filters.push((item) => Array.isArray(values) && values.includes(item[column]));
       return chain;
     },
-    // Natively intercept .order() method calls to prevent component crashes
     order: (column: string, options?: { ascending?: boolean }) => {
       chain._orderColumn = column;
       chain._orderAscending = options?.ascending !== false;
       return chain;
     },
-    // Natively intercept .limit() method calls
     limit: (count: number) => {
       chain._limitCount = count;
       return chain;
     },
-    // Natively intercept .range() pagination modifiers for cache arrays
     range: (fromIndex: number, toIndex: number) => {
       chain._rangeStart = fromIndex;
       chain._rangeEnd = toIndex;
@@ -72,7 +68,7 @@ const createLocalQueryChain = (tableName: string) => {
         
         return { data: filtered[0] || null, error: null };
       } catch (e) {
-        return { data: null, error: null };
+        return { data: null, error: e as any };
       }
     },
     single: async () => {
@@ -85,10 +81,10 @@ const createLocalQueryChain = (tableName: string) => {
           filtered.sort((a, b) => (a[col] > b[col] ? 1 : -1) * (chain._orderAscending ? 1 : -1));
         }
         
-        if (filtered.length === 0) return { data: {} as any, error: null }; 
+        if (filtered.length === 0) return { data: null, error: { message: "No rows found" } as any }; 
         return { data: filtered[0], error: null };
       } catch (e) {
-        return { data: {} as any, error: null };
+        return { data: null, error: e as any };
       }
     },
     insert: async (values: any) => {
@@ -103,11 +99,9 @@ const createLocalQueryChain = (tableName: string) => {
         for (const record of prepared) {
           await localDb.table(tableName).put(record);
           
-          // --- AUTO-PROVISION SYSTEM RELATIONSHIPS ---
           if (tableName === 'companies') {
             const companyId = record.id;
             
-            // 1. Inject local structural owner relationship link
             await localDb.table('company_members').put({
               id: crypto.randomUUID(),
               company_id: companyId,
@@ -116,7 +110,6 @@ const createLocalQueryChain = (tableName: string) => {
               created_at: new Date().toISOString()
             });
 
-            // 2. Inject a fallback Primary Cash Account Ledger
             await localDb.table('ledgers').put({
               id: crypto.randomUUID(),
               company_id: companyId,
@@ -127,7 +120,6 @@ const createLocalQueryChain = (tableName: string) => {
               created_at: new Date().toISOString()
             });
 
-            // 3. Inject a default Bank Account Ledger baseline
             await localDb.table('ledgers').put({
               id: crypto.randomUUID(),
               company_id: companyId,
@@ -138,7 +130,7 @@ const createLocalQueryChain = (tableName: string) => {
               created_at: new Date().toISOString()
             });
 
-            console.log(`Mehtaji Engine: Automatically initialized accounting base structures for Company ID: ${companyId}`);
+            console.log(`Mehtaji Engine: Automatically initialized fallback structures for Company ID: ${companyId}`);
           }
         }
       } catch(e) {
@@ -147,14 +139,9 @@ const createLocalQueryChain = (tableName: string) => {
       
       return {
         data: Array.isArray(values) ? prepared : prepared[0],
-        error: null,
-        select: () => ({
-          maybeSingle: async () => ({ data: prepared[0], error: null })
-        })
+        error: null
       };
     },
-    
-    // Lazy execution chaining for edit update filtering updates
     update: (values: any) => {
       const executeUpdate = async () => {
         try {
@@ -170,24 +157,15 @@ const createLocalQueryChain = (tableName: string) => {
       };
 
       const updateChain = {
-        eq: (column: string, value: any) => {
-          chain.eq(column, value);
-          return updateChain;
-        },
-        in: (column: string, values: any[]) => {
-          chain.in(column, values);
-          return updateChain;
-        },
+        eq: (column: string, value: any) => { chain.eq(column, value); return updateChain; },
+        in: (column: string, values: any[]) => { chain.in(column, values); return updateChain; },
         then: async (onfulfilled?: (value: any) => any) => {
           const result = await executeUpdate();
           return onfulfilled ? onfulfilled(result) : result;
         }
       };
-
       return updateChain;
     },
-
-    // KEEPING YOUR NEW DELETE FUNCTION UNTOUCHED BELOW
     delete: () => {
       const executeDelete = async () => {
         try {
@@ -203,41 +181,28 @@ const createLocalQueryChain = (tableName: string) => {
       };
 
       const deleteChain = {
-        eq: (column: string, value: any) => {
-          chain.eq(column, value);
-          return deleteChain;
-        },
-        in: (column: string, values: any[]) => {
-          chain.in(column, values);
-          return deleteChain;
-        },
+        eq: (column: string, value: any) => { chain.eq(column, value); return deleteChain; },
+        in: (column: string, values: any[]) => { chain.in(column, values); return deleteChain; },
         then: async (onfulfilled?: (value: any) => any) => {
           const result = await executeDelete();
           return onfulfilled ? onfulfilled(result) : result;
         }
       };
-
       return deleteChain;
     },
-    
     then: async (onfulfilled?: (value: any) => any) => {
       let data: any[] = [];
       try {
         data = await localDb.table(tableName).toArray();
         data = data.filter(item => chain._filters.every(f => f(item)));
         
-        // Process order sorting logic
         if (chain._orderColumn) {
           const col = chain._orderColumn;
           data.sort((a, b) => (a[col] > b[col] ? 1 : -1) * (chain._orderAscending ? 1 : -1));
         }
-        
-        // Process limits
         if (chain._limitCount !== null) {
           data = data.slice(0, chain._limitCount);
         }
-
-        // Process range slicing offsets safely for master lists
         if (chain._rangeStart !== null && chain._rangeEnd !== null) {
           data = data.slice(chain._rangeStart, chain._rangeEnd + 1);
         }
@@ -251,32 +216,30 @@ const createLocalQueryChain = (tableName: string) => {
   return chain;
 };
 
-// Global singleton cache reference to avoid creating infinite auth listener threads
-let memoizedRealSupabaseInstance: any = null;
+// 2. Build the Live Client using corrected Env Variable mappings
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-function getCachedSupabaseClient() {
-  if (memoizedRealSupabaseInstance) return memoizedRealSupabaseInstance;
-  
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://local-isolated-vault.internal";
-  const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "offline-token";
+export const baseClient = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false
+  }
+});
 
-  // Create base client instance
-  const baseClient = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: {
-      storage: typeof window !== 'undefined' ? localStorage : undefined,
-      persistSession: true,
-      autoRefreshToken: false,
-    }
-  });
+// 3. Intelligent Runtime Network Switch Proxy
+export const supabase = new Proxy(baseClient, {
+  get(target, prop) {
+    // Check if the system has dropped offline completely
+    const isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
 
-  // Intercept the client's internal fetch mechanism to block live background worker loops from hitting 401s
-  memoizedRealSupabaseInstance = new Proxy(baseClient, {
-    get(target, prop) {
+    if (isOffline) {
+      if (prop === 'from') {
+        return (tableName: string) => createLocalQueryChain(tableName);
+      }
       if (prop === 'auth') {
         return {
-          ...target.auth,
-          // Force a healthy status mock if workers hit auth check functions directly
-          mfa: { getAuthenticatorAssuranceLevel: async () => ({ data: { currentLevel: null }, error: null }) },
           getUser: async () => ({
             data: { user: { id: 'offline-user-session', email: 'kaushik@local.accountant' } },
             error: null
@@ -284,49 +247,23 @@ function getCachedSupabaseClient() {
           getSession: async () => ({
             data: { session: { user: { id: 'offline-user-session' } } },
             error: null
-          })
+          }),
+          signInWithPassword: async () => ({
+            data: { user: { id: 'offline-user-session' }, session: {} },
+            error: null
+          }),
+          signOut: async () => ({ error: null }),
+          onAuthStateChange: (callback: any) => {
+            if (typeof callback === 'function') {
+              callback('SIGNED_IN', { id: 'offline-user-session', email: 'kaushik@local.accountant' });
+            }
+            return { data: { subscription: { unsubscribe: () => {} } } };
+          }
         };
       }
-      return Reflect.get(target, prop);
     }
-  });
 
-  return memoizedRealSupabaseInstance;
-}
-
-// 3. Isolated Proxy Engine
-export const supabase = new Proxy({} as ReturnType<typeof getCachedSupabaseClient>, {
-  get(target, prop) {
-    if (prop === 'from') {
-      return (tableName: string) => createLocalQueryChain(tableName);
-    }
-    if (prop === 'auth') {
-      return {
-        getUser: async () => ({
-          data: { user: { id: 'offline-user-session', email: 'kaushik@local.accountant' } },
-          error: null
-        }),
-        getSession: async () => ({
-          data: { session: { user: { id: 'offline-user-session' } } },
-          error: null
-        }),
-        signInWithPassword: async () => ({
-          data: { user: { id: 'offline-user-session', session: {} }, error: null },
-          error: null
-        }),
-        signOut: async () => ({ error: null }),
-        onAuthStateChange: (callback: any) => {
-          // Instantly broadcast authentic local session to unlock synchronizers
-          if (typeof callback === 'function') {
-            callback('SIGNED_IN', { id: 'offline-user-session', email: 'kaushik@local.accountant' });
-          }
-          return {
-            data: { subscription: { unsubscribe: () => {} } },
-          };
-        }
-      };
-    }
-    const instance = getCachedSupabaseClient();
-    return Reflect.get(instance, prop);
-  },
+    // Natively return live cloud engine if online
+    return Reflect.get(target, prop);
+  }
 });
