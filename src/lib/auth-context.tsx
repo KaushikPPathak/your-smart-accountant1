@@ -17,20 +17,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 1. Dynamic trigger function to initialize background sync operations securely
+    const initSyncEngine = (currentSession: Session | null) => {
+      if (!currentSession) return; // Prevent worker from throwing 401 loops when offline/unsigned
+      
+      import("./offline/sync-worker")
+        .then((m) => m.startSyncWorker())
+        .catch(() => undefined);
+    };
+
     // Listener first (Supabase best practice).
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
+      // Catch sign-up or sign-in transitions dynamically
+      if (newSession) {
+        initSyncEngine(newSession);
+      }
     });
 
     (async () => {
       // Pre-warm the local DB regardless of network.
       import("./offline/db").catch(() => undefined);
       
+      let activeSession: Session | null = null;
+      
       try {
-        // 🛠️ REMOVED THE HARD NEVIGATOR.ONLINE GATE HERE:
-        // This stops Windows boot timing delays from blocking local execution.
-        // The 1500ms race timeout below safely serves as our offline transition shield.
-
         // Run the background sign-in attempt, but cut it off quickly at 1.5s if it hangs or is offline
         await Promise.race([
           ensureTechSession(),
@@ -38,17 +49,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ]);
         
         const { data } = await supabase.auth.getSession();
-        if (data.session) setSession(data.session);
+        if (data.session) {
+          activeSession = data.session;
+          setSession(data.session);
+        }
       } catch {
         /* offline boot fallback — leave session null, lock screen falls back to cached creds */
         console.log("Network timeout or offline fallback active. Booting via cached local credentials.");
         setSession(null);
       } finally {
         setLoading(false);
-        // Kick off the offline sync worker once the app is mounted.
-        import("./offline/sync-worker")
-          .then((m) => m.startSyncWorker())
-          .catch(() => undefined);
+        // 2. Only attempt background worker setup if an authenticated user session was successfully resolved
+        if (activeSession) {
+          initSyncEngine(activeSession);
+        }
       }
     })();
 
