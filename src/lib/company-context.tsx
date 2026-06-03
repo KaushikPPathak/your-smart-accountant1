@@ -50,46 +50,63 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    if (!user) {
-      setMemberships([]);
-      setActiveCompanyIdState(null);
-      setLoading(false);
-      return;
-    }
+    // Enable local operational context fallback even if global auth handles aren't fully configured
     setLoading(true);
     const activeStaff = getActiveStaff();
-    const { data: memberRows, error } = await supabase
-      .from("company_members")
-      .select("company_id, role")
-      .order("created_at", { ascending: true });
+    
+    try {
+      // Execute query chain using direct async unwrapping
+      const response = await supabase
+        .from("company_members")
+        .select("company_id, role")
+        .order("created_at", { ascending: true });
+        
+      const memberRows = response?.data;
+      const error = response?.error;
 
-    if (error) {
-      console.error("Failed to load company memberships:", error);
-      setMemberships([]);
-    } else {
-      const rows = (memberRows ?? []) as Array<{ company_id: string; role: CompanyMembership["role"] }>;
-      // Fetch each linked company individually — the offline proxy doesn't support
-      // nested foreign-key selects like `companies!inner(*)`.
-      const out: CompanyMembership[] = [];
-      for (const r of rows) {
-        const { data: company } = await supabase
-          .from("companies")
-          .select("*")
-          .eq("id", r.company_id)
-          .maybeSingle();
-        if (!company || !company.id) continue;
-        out.push({ company_id: r.company_id, role: r.role, companies: company as CompanyMembership["companies"] });
+      if (error) {
+        console.error("Failed to load company memberships:", error);
+        setMemberships([]);
+      } else {
+        const rows = (memberRows ?? []) as Array<{ company_id: string; role: CompanyMembership["role"] }>;
+        const out: CompanyMembership[] = [];
+        
+        for (const r of rows) {
+          const { data: company } = await supabase
+            .from("companies")
+            .select("*")
+            .eq("id", r.company_id)
+            .maybeSingle();
+            
+          if (!company || !company.id) continue;
+          out.push({ 
+            company_id: r.company_id, 
+            role: r.role, 
+            companies: company as CompanyMembership["companies"] 
+          });
+        }
+
+        // Safe fallback filtering: Include company if there is no staff limitation, 
+        // if it matches staff, or if it doesn't have an owner ID yet (created completely local/offline)
+        const list = activeStaff
+          ? out.filter((m) => {
+              const ownerId = (m.companies as any)?.owner_app_user_id;
+              return !ownerId || ownerId === activeStaff.id || ownerId === 'offline-user-session';
+            })
+          : out;
+
+        setMemberships(list);
+        
+        const stored = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_KEY) : null;
+        const valid = stored && list.find((m) => m.company_id === stored);
+        setActiveCompanyIdState(valid ? stored : list[0]?.company_id ?? null);
       }
-      // Per-account isolation: only show companies owned by the currently signed-in app account.
-      const list = activeStaff
-        ? out.filter((m) => (m.companies as any)?.owner_app_user_id === activeStaff.id)
-        : out;
-      setMemberships(list);
-      const stored = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_KEY) : null;
-      const valid = stored && list.find((m) => m.company_id === stored);
-      setActiveCompanyIdState(valid ? stored : list[0]?.company_id ?? null);
+    } catch (criticalRefreshError) {
+      console.error("Mehtaji Pipeline: Integrity check failure during context mapping:", criticalRefreshError);
+      setMemberships([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [user]);
 
   useEffect(() => {
@@ -111,7 +128,6 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       if (c.date_format) setCurrentDateFormat(c.date_format);
     }
   }, [activeMembership]);
-
 
   return (
     <CompanyContext.Provider
