@@ -10,7 +10,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { isUnlocked } from "@/lib/staff-session";
 import { BrainProvider } from "@/brain/BrainProvider";
 // 1. Import your dynamic migration function here
-import { runAppDataMigrationsOnce } from "../migrations"; 
+import { runAppDataMigrationsOnce } from "../lib/app-data-migrations"; 
 
 function NotFoundComponent() {
   return (
