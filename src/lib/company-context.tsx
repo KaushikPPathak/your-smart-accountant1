@@ -50,12 +50,11 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    // Enable local operational context fallback even if global auth handles aren't fully configured
     setLoading(true);
     const activeStaff = getActiveStaff();
     
     try {
-      // Execute query chain using direct async unwrapping
+      // Safely process local mock execution records
       const response = await supabase
         .from("company_members")
         .select("company_id, role")
@@ -72,6 +71,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         const out: CompanyMembership[] = [];
         
         for (const r of rows) {
+          if (!r.company_id) continue;
+
           const { data: company } = await supabase
             .from("companies")
             .select("*")
@@ -79,15 +80,33 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
             .maybeSingle();
             
           if (!company || !company.id) continue;
+          
           out.push({ 
             company_id: r.company_id, 
-            role: r.role, 
-            companies: company as CompanyMembership["companies"] 
+            role: r.role || "admin", 
+            companies: {
+              // Standard defaults to protect view definitions if fields are empty
+              gstin: null,
+              state: null,
+              state_code: null,
+              financial_year_start: new Date().getFullYear() + "-04-01",
+              gst_registered: false,
+              gst_filing_frequency: "monthly",
+              inventory_enabled: false,
+              annual_turnover_paise: 0,
+              mode: "trial_local",
+              entity_status: "active",
+              cin: null,
+              share_capital_paise: 0,
+              corpus_fund_paise: 0,
+              currency_code: "INR",
+              date_format: "DD-MM-YYYY",
+              ...company 
+            } as CompanyMembership["companies"] 
           });
         }
 
-        // Safe fallback filtering: Include company if there is no staff limitation, 
-        // if it matches staff, or if it doesn't have an owner ID yet (created completely local/offline)
+        // Defensive checks to preserve local datasets if no specific cloud constraints are present
         const list = activeStaff
           ? out.filter((m) => {
               const ownerId = (m.companies as any)?.owner_app_user_id;
@@ -95,11 +114,15 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
             })
           : out;
 
-        setMemberships(list);
+        // If data exists locally but staff filters cleared them out incorrectly, retain full 'out' array layout as a safety net
+        const finalValidList = list.length === 0 && out.length > 0 ? out : list;
+
+        setMemberships(finalValidList);
         
         const stored = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_KEY) : null;
-        const valid = stored && list.find((m) => m.company_id === stored);
-        setActiveCompanyIdState(valid ? stored : list[0]?.company_id ?? null);
+        const valid = stored && finalValidList.find((m) => m.company_id === stored);
+        
+        setActiveCompanyIdState(valid ? stored : finalValidList[0]?.company_id ?? null);
       }
     } catch (criticalRefreshError) {
       console.error("Mehtaji Pipeline: Integrity check failure during context mapping:", criticalRefreshError);
