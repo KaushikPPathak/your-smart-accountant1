@@ -19,16 +19,26 @@ export async function fetchLedgerBalances(
     .select("id, name, type, group_code, opening_balance_paise, opening_balance_is_debit")
     .eq("company_id", companyId);
 
-  let q = supabase
+  // Fix: Bundle the date configurations safely into a consolidated modifier object
+  let queryBuilder = supabase
     .from("voucher_entries")
     .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-    .eq("vouchers.company_id", companyId)
-    .lte("vouchers.voucher_date", asOf);
-  if (fromOpt) q = q.gte("vouchers.voucher_date", fromOpt);
-  const { data: entries } = await q;
+    .eq("vouchers.company_id", companyId);
+
+  // Apply sequential evaluation constraints without breaking structural execution paths
+  if (fromOpt) {
+    queryBuilder = queryBuilder.filter("vouchers.voucher_date", "gte", fromOpt);
+  }
+  
+  queryBuilder = queryBuilder.filter("vouchers.voucher_date", "lte", asOf);
+
+  const { data: entries, error } = await queryBuilder;
+  if (error) {
+    console.error("Failed calculating report metrics balance streams:", error);
+  }
 
   const movements = new Map<string, number>();
-  for (const e of (entries || []) as { ledger_id: string; debit_paise: number; credit_paise: number }[]) {
+  for (const e of (entries || []) as unknown as { ledger_id: string; debit_paise: number; credit_paise: number }[]) {
     movements.set(e.ledger_id, (movements.get(e.ledger_id) || 0) + e.debit_paise - e.credit_paise);
   }
 
