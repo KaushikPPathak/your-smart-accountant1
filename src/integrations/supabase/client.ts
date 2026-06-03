@@ -8,7 +8,7 @@ class LocalOfflineDatabase extends Dexie {
   companies!: Table<any, string>;
   ledgers!: Table<any, string>;
   vouchers!: Table<any, string>;
-  memberships!: Table<any, string>;
+  company_members!: Table<any, string>; // FIX 1: Renamed from memberships to align perfectly with app components
 
   constructor() {
     super('SmartAccountantLocalDB');
@@ -16,7 +16,7 @@ class LocalOfflineDatabase extends Dexie {
       companies: 'id, name',
       ledgers: 'id, name, company_id',
       vouchers: 'id, date, company_id, voucher_type',
-      memberships: 'id, user_id, company_id'
+      company_members: 'id, user_id, company_id' // FIX 1: Matches schema lookups accurately
     });
   }
 }
@@ -91,7 +91,7 @@ const createLocalQueryChain = (tableName: string) => {
           await localDb.table(tableName).put(record);
         }
       } catch(e) {
-        console.warn(`Table ${tableName} missing in schema, writing locally anyway.`);
+        console.error(`Local write error on table ${tableName}:`, e);
       }
       
       return {
@@ -138,22 +138,27 @@ const createLocalQueryChain = (tableName: string) => {
   return chain;
 };
 
-// 2. Client Fallback Definition
-function createSupabaseClient() {
+// Global singleton cache reference to avoid creating infinite auth listener threads
+let memoizedRealSupabaseInstance: any = null;
+
+function getCachedSupabaseClient() {
+  if (memoizedRealSupabaseInstance) return memoizedRealSupabaseInstance;
+  
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://local-isolated-vault.internal";
   const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "offline-token";
 
-  return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  memoizedRealSupabaseInstance = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: {
       storage: typeof window !== 'undefined' ? localStorage : undefined,
       persistSession: true,
       autoRefreshToken: false,
     }
   });
+  return memoizedRealSupabaseInstance;
 }
 
 // 3. Isolated Proxy Engine
-export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>, {
+export const supabase = new Proxy({} as ReturnType<typeof getCachedSupabaseClient>, {
   get(target, prop) {
     if (prop === 'from') {
       return (tableName: string) => createLocalQueryChain(tableName);
@@ -181,7 +186,8 @@ export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>,
         }
       };
     }
-    const instance = createSupabaseClient();
+    // FIX 2: Resolves property evaluations through a cached client singleton
+    const instance = getCachedSupabaseClient();
     return Reflect.get(instance, prop);
   },
 });
