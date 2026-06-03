@@ -102,16 +102,36 @@ const createLocalQueryChain = (tableName: string) => {
         })
       };
     },
-    update: async (values: any) => {
-      try {
-        const records = await localDb.table(tableName).toArray();
-        const targets = records.filter(item => chain._filters.every(f => f(item)));
-        for (const target of targets) {
-          await localDb.table(tableName).update(target.id, values);
+    
+    // FIXED: Now supports lazy execution chaining to prevent ".eq is not a function"
+    update: (values: any) => {
+      const executeUpdate = async () => {
+        try {
+          const records = await localDb.table(tableName).toArray();
+          const targets = records.filter(item => chain._filters.every(f => f(item)));
+          for (const target of targets) {
+            await localDb.table(tableName).update(target.id, values);
+          }
+        } catch(e) {
+          console.error(`Local update sequence broken on ${tableName}:`, e);
         }
-      } catch(e) {}
-      return { data: values, error: null };
+        return { data: values, error: null };
+      };
+
+      const updateChain = {
+        eq: (column: string, value: any) => {
+          chain.eq(column, value);
+          return updateChain;
+        },
+        then: async (onfulfilled?: (value: any) => any) => {
+          const result = await executeUpdate();
+          return onfulfilled ? onfulfilled(result) : result;
+        }
+      };
+
+      return updateChain;
     },
+    
     then: async (onfulfilled?: (value: any) => any) => {
       let data: any[] = [];
       try {
@@ -174,7 +194,7 @@ export const supabase = new Proxy({} as ReturnType<typeof getCachedSupabaseClien
           error: null
         }),
         signInWithPassword: async () => ({
-          data: { user: { id: 'offline-user-session' }, session: {} },
+          data: { user: { id: 'offline-user-session', session: {} }, error: null },
           error: null
         }),
         signOut: async () => ({ error: null }),
