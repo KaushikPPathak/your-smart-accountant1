@@ -171,6 +171,35 @@ const createLocalQueryChain = (tableName: string) => {
 
       return updateChain;
     },
+
+    // FIXED: Lazy execution chaining for delete methods to handle warning evaluations
+    delete: () => {
+      const executeDelete = async () => {
+        try {
+          const records = await localDb.table(tableName).toArray();
+          const targets = records.filter(item => chain._filters.every(f => f(item)));
+          for (const target of targets) {
+            await localDb.table(tableName).delete(target.id);
+          }
+        } catch(e) {
+          console.error(`Local delete sequence failed on ${tableName}:`, e);
+        }
+        return { data: null, error: null };
+      };
+
+      const deleteChain = {
+        eq: (column: string, value: any) => {
+          chain.eq(column, value);
+          return deleteChain;
+        },
+        then: async (onfulfilled?: (value: any) => any) => {
+          const result = await executeDelete();
+          return onfulfilled ? onfulfilled(result) : result;
+        }
+      };
+
+      return deleteChain;
+    },
     
     then: async (onfulfilled?: (value: any) => any) => {
       let data: any[] = [];
