@@ -8,6 +8,7 @@ import { CurrencyProvider } from "@/lib/currency";
 import { DateFormatProvider } from "@/lib/date-format";
 import { Toaster } from "@/components/ui/sonner";
 import { isUnlocked } from "@/lib/staff-session";
+import { BrainProvider } from "@/brain/BrainProvider";
 
 function NotFoundComponent() {
   return (
@@ -44,9 +45,11 @@ function RootComponent() {
           <DateFormatProvider>
             <AuthProvider>
               <CompanyProvider>
-                <LockGate>
-                  <Outlet />
-                </LockGate>
+                <BrainProvider>
+                  <LockGate>
+                    <Outlet />
+                  </LockGate>
+                </BrainProvider>
                 <Toaster richColors position="top-right" />
               </CompanyProvider>
             </AuthProvider>
