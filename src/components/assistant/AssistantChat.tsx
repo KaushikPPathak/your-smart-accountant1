@@ -387,8 +387,8 @@ export function AssistantChat() {
               cashBankLedgerId: d.cashBankLedgerId ?? undefined,
               counterLedgerId: d.counterLedgerId ?? undefined,
               displayDetails: {
-                partyName: targetParty,
-                accountName: targetAccount
+                partyName: targetParty ?? undefined,
+                accountName: targetAccount ?? undefined
               }
             };
 
