@@ -145,7 +145,7 @@ function Dashboard() {
           partyMap.set(name, (partyMap.get(name) || 0) + r.total_paise);
         }
         setTopCustomers(
-          ...[partyMap.entries()].map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total).slice(0, 5),
+          Array.from(partyMap.entries()).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total).slice(0, 5),
         );
 
         // Recent
