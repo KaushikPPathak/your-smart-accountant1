@@ -52,6 +52,9 @@
     },
     "fs": {
       "scope": ["$APPLOCALDATA/*", "$APPLOCALDATA/**"]
+    },
+    "sql": {
+      "preload": []
     }
   }
 }
