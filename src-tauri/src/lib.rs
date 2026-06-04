@@ -21,8 +21,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
-                // FIX: Changed from "sqlite:smart_accountant.db" to match the exact alias name assigned in tauri.conf.json
-                .add_migrations("smart_accountant", migrations)
+                // The migration key MUST match the db connection URL used by Database.load() on the JS side
+                .add_migrations("sqlite:smart_accountant.db", migrations)
                 .build()
         )
         .run(tauri::generate_context!())
