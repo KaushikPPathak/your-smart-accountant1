@@ -21,7 +21,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:smart_accountant.db", migrations)
+                // FIX: Removed "sqlite:" prefix. Tauri v2 matches the driver via dependencies automatically.
+                .add_migrations("smart_accountant.db", migrations)
                 .build()
         )
         .run(tauri::generate_context!())
