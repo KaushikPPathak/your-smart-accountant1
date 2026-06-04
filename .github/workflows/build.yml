@@ -36,7 +36,8 @@ jobs:
         run: bun install
 
       - name: Regenerate TanStack Routes Map
-        run: bunx tsr generate --dir src/routes --out src/routeTree.gen.ts
+        # FIXED: Removed the invalid custom flags and switched to the official package namespace
+        run: bunx @tanstack/router-cli generate
         continue-on-error: true
 
       - name: Build Tauri app (Windows installer)
