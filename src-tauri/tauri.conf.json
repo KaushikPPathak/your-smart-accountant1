@@ -54,7 +54,9 @@
       "scope": ["$APPLOCALDATA/*", "$APPLOCALDATA/**"]
     },
     "sql": {
-      "preload": []
+      "preload": {
+        "smart_accountant": "sqlite:smart_accountant.db"
+      }
     }
   }
 }
