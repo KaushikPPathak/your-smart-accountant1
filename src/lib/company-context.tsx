@@ -85,7 +85,6 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
             company_id: r.company_id, 
             role: r.role || "admin", 
             companies: {
-              // Standard defaults to protect view definitions if fields are empty
               gstin: null,
               state: null,
               state_code: null,
@@ -101,7 +100,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
               corpus_fund_paise: 0,
               currency_code: "INR",
               date_format: "DD-MM-YYYY",
-              ...company 
+              ...(company as any),
             } as CompanyMembership["companies"] 
           });
         }
