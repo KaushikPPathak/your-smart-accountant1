@@ -21,8 +21,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
-                // FIX: Added 'sqlite:' back BUT with the mandatory path prefix pointing to a secure local folder
-                .add_migrations("sqlite:smart_accountant.db", migrations)
+                // FIX: Changed from "sqlite:smart_accountant.db" to match the exact alias name assigned in tauri.conf.json
+                .add_migrations("smart_accountant", migrations)
                 .build()
         )
         .run(tauri::generate_context!())
