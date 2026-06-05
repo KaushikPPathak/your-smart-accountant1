@@ -51,9 +51,6 @@
     "shell": {
       "open": true
     },
-    "fs": {
-      "scope": ["$APPLOCALDATA/*", "$APPLOCALDATA/**"]
-    },
     "sql": {
       "preload": []
     }
