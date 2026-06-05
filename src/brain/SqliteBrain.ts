@@ -1,5 +1,3 @@
-import Database from "@tauri-apps/plugin-sql";
-
 let _db: any = null;
 let _initPromise: Promise<any> | null = null;
 
@@ -72,7 +70,7 @@ function createMockDbInstance() {
   };
 }
 
-export async function getBrainDb(): Promise<Database> {
+export async function getBrainDb(): Promise<any> {
   if (_db) return _db;
   if (_initPromise) return _initPromise;
 
@@ -84,6 +82,7 @@ export async function getBrainDb(): Promise<Database> {
     }
 
     try {
+      const Database = (await import("@tauri-apps/plugin-sql")).default;
       const db = await Database.load("sqlite:smart_accountant.db");
       for (const stmt of SCHEMA_STATEMENTS) {
         await db.execute(stmt);
