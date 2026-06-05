@@ -307,12 +307,12 @@ export async function runAppDataMigrationsOnce(): Promise<MigrationResult> {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await appendLog(`MIGRATION FAILED: ${msg}`);
+      console.warn("Desktop data migration skipped:", err);
       return {
         ran: false,
         fromVersion: null,
         toVersion: CURRENT_DATA_VERSION,
         steps: [],
-        error: msg,
       };
     }
   })();
