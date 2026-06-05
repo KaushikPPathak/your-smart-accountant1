@@ -16,6 +16,12 @@
     "core:window:allow-close",
     "core:window:allow-destroy",
     "core:window:allow-hide",
+    "core:path:allow-document-dir",
+    "core:path:allow-app-local-data-dir",
+    "core:path:allow-app-data-dir",
+    "core:path:allow-app-cache-dir",
+    "core:path:allow-app-log-dir",
+    "core:path:allow-app-config-dir",
     "shell:allow-open",
     "shell:default",
     "dialog:default",
@@ -39,6 +45,6 @@
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
-    "sql:allow-select"
+    "sql:allow-query"
   ]
 }
