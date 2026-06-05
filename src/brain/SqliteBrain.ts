@@ -119,7 +119,7 @@ export async function safeBrainSelect<T = unknown>(
 ): Promise<T[]> {
   try {
     const db = await getBrainDb();
-    return await db.select<T[]>(sql, bindings);
+    return (await db.select(sql, bindings)) as T[];
   } catch (err) {
     console.error(`Select operation failed for query: ${sql}`, err);
     return [];
