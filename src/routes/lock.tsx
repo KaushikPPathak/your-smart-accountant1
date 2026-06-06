@@ -86,8 +86,10 @@ function LockScreen() {
             return;
           }
           
-          // Cache login details for offline checking later
-          void cacheAccountCredsFromCloud(loginUser.trim());
+          console.log("✅ Online login success for user:", row.name, `(${loginUser.trim()})`);
+
+          // Cache login details for offline checking later (Dexie + native SQLite)
+          void cacheAccountCredsFromCloud(loginUser.trim(), loginPass);
 
           // Cache companies list for offline access using the picker view
           try {
