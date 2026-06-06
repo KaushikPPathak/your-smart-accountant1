@@ -141,16 +141,17 @@ export async function verifyOfflineLogin(
 
   const uname = username.trim().toLowerCase();
   const row = await offlineDb.account_creds.get(uname);
-  
-  // MODIFIED: Instead of hard locking out a new app build directory, 
-  // catch a blank cache scenario and auto-generate an emergency structural bypass session.
+
+  // Fallback: when Dexie has no cached row (e.g. fresh browser profile
+  // but the Tauri SQLite store does), try the native local_users table.
   if (!row) {
-    console.warn("No local credentials cached on this device directory path. Initializing structural offline bypass profile.");
-    return {
-      id: "emergency-offline-id",
-      name: username || "Admin",
-      role: "admin"
-    };
+    const nativeMatch = await tryNativeOfflineLogin(uname, password);
+    if (nativeMatch) {
+      localStorage.removeItem(LOCKOUT_KEY);
+      localStorage.removeItem(ATTEMPTS_KEY);
+      return nativeMatch;
+    }
+    return null;
   }
   
   if (!row.is_active) return null;
