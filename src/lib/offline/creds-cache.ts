@@ -171,6 +171,24 @@ export async function verifyOfflineLogin(
   return null;
 }
 
+async function tryNativeOfflineLogin(
+  username: string,
+  password: string,
+): Promise<OfflineLoginResult | null> {
+  try {
+    const { isTauri, nativeDb } = await import("@/utils/nativeDb");
+    if (!isTauri()) return null;
+    const u = await nativeDb.getLocalUserByUsername(username);
+    if (!u || u.is_active === 0) return null;
+    const ok = await bcrypt.compare(password, u.password_hash);
+    if (!ok) return null;
+    return { id: u.id, name: u.name, role: u.role };
+  } catch (err) {
+    console.warn("tryNativeOfflineLogin failed:", err);
+    return null;
+  }
+}
+
 export async function isAccountCached(username: string): Promise<boolean> {
   const row = await offlineDb.account_creds.get(username.trim().toLowerCase());
   return Boolean(row);
