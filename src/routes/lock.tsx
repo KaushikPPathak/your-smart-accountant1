@@ -131,7 +131,13 @@ function LockScreen() {
 
       toast.error("Invalid username or password");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Login failed");
+      console.error("Login failed:", e);
+      const msg =
+        (e as { message?: string; details?: string })?.message ||
+        (e as { details?: string })?.details ||
+        (typeof e === "string" ? e : null) ||
+        "Login failed";
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
