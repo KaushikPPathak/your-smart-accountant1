@@ -170,7 +170,13 @@ function LockScreen() {
       });
       navigate({ to: "/app" });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Signup failed.");
+      console.error("Signup failed:", e);
+      const msg =
+        (e as { message?: string; details?: string; hint?: string })?.message ||
+        (e as { details?: string })?.details ||
+        (typeof e === "string" ? e : null) ||
+        "Signup failed.";
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
