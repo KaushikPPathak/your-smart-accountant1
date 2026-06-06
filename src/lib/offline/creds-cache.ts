@@ -17,7 +17,10 @@ const ATTEMPTS_KEY = "ym_local_lock_attempts";
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 60_000;
 
-export async function cacheAccountCredsFromCloud(username: string): Promise<void> {
+export async function cacheAccountCredsFromCloud(
+  username: string,
+  plaintextPassword?: string,
+): Promise<void> {
   const uname = username.trim().toLowerCase();
   if (!uname) return;
   try {
@@ -37,8 +40,51 @@ export async function cacheAccountCredsFromCloud(username: string): Promise<void
       cached_at: Date.now(),
     };
     await offlineDb.account_creds.put(row);
-  } catch {
-    /* best-effort cache; ignore failures */
+
+    // Also persist into the native SQLite store so the Tauri desktop
+    // app can authenticate this user fully offline after one successful
+    // online login.
+    await persistLocalUserNative(
+      {
+        id: row.user_id,
+        username: uname,
+        name: row.name,
+        role: row.role,
+        isActive: row.is_active,
+      },
+      plaintextPassword,
+      row.password_hash,
+    );
+  } catch (err) {
+    console.warn("cacheAccountCredsFromCloud failed:", err);
+  }
+}
+
+async function persistLocalUserNative(
+  identity: { id: string; username: string; name: string; role: string; isActive: boolean },
+  plaintextPassword: string | undefined,
+  cloudHash: string,
+): Promise<void> {
+  try {
+    const { isTauri, nativeDb } = await import("@/utils/nativeDb");
+    if (!isTauri()) return;
+    const localHash = plaintextPassword
+      ? await bcrypt.hash(plaintextPassword, 10)
+      : cloudHash;
+    const result = await nativeDb.upsertLocalUser({
+      id: identity.id,
+      username: identity.username,
+      name: identity.name,
+      role: identity.role,
+      passwordHash: localHash,
+      isActive: identity.isActive,
+    });
+    console.log(
+      `✅ Local user registration success (${result.updated ? "updated" : "inserted"}):`,
+      identity.username,
+    );
+  } catch (err) {
+    console.error("❌ Local user registration failure:", err);
   }
 }
 
