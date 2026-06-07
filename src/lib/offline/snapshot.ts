@@ -72,8 +72,10 @@ async function pullTable(table: SnapshotTable, companyId: string): Promise<numbe
   const isCompaniesTable = table === "companies";
 
   while (true) {
-    let q = supabase
-      .from(table)
+    // Dynamic table name defeats Supabase's typed query helpers; cast to a
+    // loose builder so we can chain .eq with arbitrary column names.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q: any = (supabase.from(table as never) as any)
       .select("*")
       .order("updated_at", { ascending: true })
       .gt("updated_at", since)
