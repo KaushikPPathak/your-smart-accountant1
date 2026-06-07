@@ -116,6 +116,37 @@ export function OfflineStatusChip() {
           </Button>
         </div>
 
+        <div className="mt-3 rounded-md border bg-muted/40 p-3 text-xs">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-medium">Offline cache</span>
+            <span className="text-muted-foreground">
+              {lastSnap ? `Synced ${new Date(lastSnap.finishedAt).toLocaleString()}` : "Never synced"}
+            </span>
+          </div>
+          {lastSnap && Object.keys(lastSnap.pulled).length > 0 && (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+              {Object.entries(lastSnap.pulled).map(([k, v]) => (
+                <div key={k} className="flex justify-between"><span>{k}</span><span>{v}</span></div>
+              ))}
+            </div>
+          )}
+          {lastSnap && Object.keys(lastSnap.errors).length > 0 && (
+            <p className="mt-2 text-destructive">
+              Errors: {Object.keys(lastSnap.errors).join(", ")}
+            </p>
+          )}
+          <div className="mt-3 flex items-center gap-2">
+            <Button size="sm" variant="outline" disabled={!online || pulling} onClick={onPullSnapshot} className="h-7 gap-1.5">
+              {pulling ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+              Pull cloud data
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onResetCache} className="h-7 gap-1.5 text-destructive">
+              <Trash2 className="h-3 w-3" /> Reset cache
+            </Button>
+          </div>
+        </div>
+
+
         <div className="mt-4 space-y-2 overflow-y-auto" style={{ maxHeight: "70vh" }}>
           {rows.length === 0 && (
             <p className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
