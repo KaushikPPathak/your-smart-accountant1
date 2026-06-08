@@ -650,6 +650,7 @@ function CompaniesPage() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {memberships.length === 0 ? (
