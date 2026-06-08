@@ -72,6 +72,7 @@ export type Database = {
         Row: {
           created_at: string
           failed_attempts: number
+          hide_from_picker: boolean
           id: string
           is_active: boolean
           last_unlock_at: string | null
@@ -86,6 +87,7 @@ export type Database = {
         Insert: {
           created_at?: string
           failed_attempts?: number
+          hide_from_picker?: boolean
           id?: string
           is_active?: boolean
           last_unlock_at?: string | null
@@ -100,6 +102,7 @@ export type Database = {
         Update: {
           created_at?: string
           failed_attempts?: number
+          hide_from_picker?: boolean
           id?: string
           is_active?: boolean
           last_unlock_at?: string | null
@@ -2273,6 +2276,10 @@ export type Database = {
         Args: { _admin_id: string; _admin_pin: string }
         Returns: undefined
       }
+      _require_admin_password: {
+        Args: { _admin_id: string; _admin_password: string }
+        Returns: undefined
+      }
       _validate_pin: { Args: { _pin: string }; Returns: undefined }
       accounts_exist: { Args: never; Returns: boolean }
       app_users_count: { Args: never; Returns: number }
@@ -2293,6 +2300,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_user_role"]
         }
         Returns: string
+      }
+      delete_account_admin: {
+        Args: { _admin_id: string; _admin_password: string; _target_id: string }
+        Returns: undefined
       }
       delete_app_user: {
         Args: { _admin_id: string; _admin_pin: string; _target_id: string }
@@ -2323,6 +2334,27 @@ export type Database = {
       is_period_locked: {
         Args: { _company_id: string; _date: string }
         Returns: boolean
+      }
+      list_accounts_admin: {
+        Args: { _admin_id: string; _admin_password: string }
+        Returns: {
+          created_at: string
+          hide_from_picker: boolean
+          id: string
+          is_active: boolean
+          name: string
+          role: Database["public"]["Enums"]["app_user_role"]
+          username: string
+        }[]
+      }
+      list_login_users: {
+        Args: never
+        Returns: {
+          id: string
+          name: string
+          role: Database["public"]["Enums"]["app_user_role"]
+          username: string
+        }[]
       }
       lock_period: {
         Args: {
@@ -2360,18 +2392,38 @@ export type Database = {
         Args: { _company_id: string; _new_password: string }
         Returns: undefined
       }
-      setup_first_account: {
-        Args: { _name: string; _password: string; _username: string }
-        Returns: string
-      }
+      setup_first_account:
+        | {
+            Args: { _name: string; _password: string; _username: string }
+            Returns: string
+          }
+        | {
+            Args: {
+              _hide_from_picker?: boolean
+              _name: string
+              _password: string
+              _username: string
+            }
+            Returns: string
+          }
       setup_first_admin: {
         Args: { _name: string; _pin: string }
         Returns: string
       }
-      signup_account: {
-        Args: { _name: string; _password: string; _username: string }
-        Returns: string
-      }
+      signup_account:
+        | {
+            Args: { _name: string; _password: string; _username: string }
+            Returns: string
+          }
+        | {
+            Args: {
+              _hide_from_picker?: boolean
+              _name: string
+              _password: string
+              _username: string
+            }
+            Returns: string
+          }
       sync_opening_balances_from_previous_fy: {
         Args: { _company_id: string; _fy_start: string }
         Returns: Json
@@ -2382,6 +2434,19 @@ export type Database = {
           _period: string
           _reason: string
           _return_type: string
+        }
+        Returns: undefined
+      }
+      update_account_admin: {
+        Args: {
+          _admin_id: string
+          _admin_password: string
+          _hide_from_picker: boolean
+          _is_active: boolean
+          _new_name: string
+          _new_password?: string
+          _new_role: Database["public"]["Enums"]["app_user_role"]
+          _target_id: string
         }
         Returns: undefined
       }
