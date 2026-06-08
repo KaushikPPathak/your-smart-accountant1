@@ -903,6 +903,9 @@ function CompaniesPage() {
           )}
         </div>
       )}
+
+      <UserManagementDialog open={userMgmtOpen} onOpenChange={setUserMgmtOpen} />
+      <RestoreFromCloudDialog open={restoreOpen} onOpenChange={setRestoreOpen} onComplete={() => refresh()} />
     </div>
   );
 }
