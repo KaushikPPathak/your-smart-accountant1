@@ -1,11 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, LogIn, ShieldCheck, UserPlus } from "lucide-react";
+import { Loader2, LogIn, ShieldCheck, UserPlus, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { markUnlocked, type StaffRole } from "@/lib/staff-session";
 import { ensureTechSession } from "@/lib/tech-user";
@@ -17,6 +21,15 @@ export const Route = createFileRoute("/lock")({
   component: LockScreen,
 });
 
+interface LoginUserOption {
+  id: string;
+  name: string;
+  username: string;
+  role: string;
+}
+
+const TYPE_MANUALLY = "__type_manually__";
+
 function LockScreen() {
   const navigate = useNavigate();
   const [bootLoading, setBootLoading] = useState(true);
@@ -26,12 +39,15 @@ function LockScreen() {
   // Login fields
   const [loginUser, setLoginUser] = useState("");
   const [loginPass, setLoginPass] = useState("");
+  const [userOptions, setUserOptions] = useState<LoginUserOption[]>([]);
+  const [typingManually, setTypingManually] = useState(false);
 
   // Signup fields
   const [suName, setSuName] = useState("");
   const [suUser, setSuUser] = useState("");
   const [suPass, setSuPass] = useState("");
   const [suPass2, setSuPass2] = useState("");
+  const [suHide, setSuHide] = useState(false);
 
   const [busy, setBusy] = useState(false);
 
@@ -41,9 +57,10 @@ function LockScreen() {
         if (!isOnlineNow()) {
           setAccountsExist(true);
           setTab("login");
+          setTypingManually(true); // offline → no dropdown source
           return;
         }
-        
+
         await Promise.race([
           ensureTechSession(),
           new Promise<void>((resolve) => setTimeout(resolve, 1500)),
@@ -54,9 +71,20 @@ function LockScreen() {
         const exists = Boolean(data);
         setAccountsExist(exists);
         setTab(exists ? "login" : "signup");
+
+        if (exists) {
+          // Pull visible accounts for the dropdown.
+          const { data: list } = await (supabase as unknown as {
+            rpc: (fn: string) => Promise<{ data: LoginUserOption[] | null }>;
+          }).rpc("list_login_users");
+          const opts = list ?? [];
+          setUserOptions(opts);
+          if (opts.length === 0) setTypingManually(true);
+        }
       } catch {
         setAccountsExist(true);
         setTab("login");
+        setTypingManually(true);
       } finally {
         setBootLoading(false);
       }
@@ -66,7 +94,7 @@ function LockScreen() {
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginUser.trim() || !loginPass) {
-      toast.error("Enter your username and password");
+      toast.error("Pick a user and enter the password");
       return;
     }
     setBusy(true);
@@ -74,7 +102,6 @@ function LockScreen() {
       const tryCloud = isOnlineNow();
       if (tryCloud) {
         try {
-          // 1. Authenticate with cloud
           const { data, error } = await supabase.rpc("verify_account_login", {
             _username: loginUser.trim(),
             _password: loginPass,
@@ -85,13 +112,9 @@ function LockScreen() {
             toast.error("Invalid username or password");
             return;
           }
-          
           console.log("✅ Online login success for user:", row.name, `(${loginUser.trim()})`);
-
-          // Cache login details for offline checking later (Dexie + native SQLite)
           void cacheAccountCredsFromCloud(loginUser.trim(), loginPass);
 
-          // Cache companies list for offline access using the picker view
           try {
             const { data: cloudCompanies } = await supabase
               .from("companies_picker")
@@ -120,7 +143,6 @@ function LockScreen() {
         }
       }
 
-      // Fall back to completely offline database checking
       const local = await verifyOfflineLogin(loginUser.trim(), loginPass);
       if (local) {
         markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole });
@@ -160,20 +182,19 @@ function LockScreen() {
       }
 
       const rpc = accountsExist ? "signup_account" : "setup_first_account";
-      const { data: newId, error } = await supabase.rpc(rpc, {
+      const { data: newId, error } = await (supabase as unknown as {
+        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: string | null; error: { message: string } | null }>;
+      }).rpc(rpc, {
         _name: suName.trim(),
         _username: suUser.trim(),
         _password: suPass,
+        _hide_from_picker: suHide,
       });
 
       if (error) throw error;
 
       toast.success("Account created successfully!");
-      markUnlocked({
-        id: newId as string,
-        name: suName.trim(),
-        role: "admin",
-      });
+      markUnlocked({ id: newId as string, name: suName.trim(), role: "admin" });
       navigate({ to: "/app" });
     } catch (e) {
       console.error("Signup failed:", e);
@@ -195,6 +216,8 @@ function LockScreen() {
       </div>
     );
   }
+
+  const showDropdown = !typingManually && userOptions.length > 0;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -222,15 +245,60 @@ function LockScreen() {
           <TabsContent value="login">
             <form onSubmit={onLogin} className="space-y-3 pt-4">
               <div className="space-y-1.5">
-                <Label htmlFor="login-user">User ID</Label>
-                <Input
-                  id="login-user"
-                  autoComplete="username"
-                  value={loginUser}
-                  onChange={(e) => setLoginUser(e.target.value)}
-                  disabled={busy}
-                  autoFocus
-                />
+                <Label htmlFor="login-user">User</Label>
+                {showDropdown ? (
+                  <Select
+                    value={loginUser}
+                    onValueChange={(v) => {
+                      if (v === TYPE_MANUALLY) {
+                        setTypingManually(true);
+                        setLoginUser("");
+                      } else {
+                        setLoginUser(v);
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="login-user" disabled={busy}>
+                      <SelectValue placeholder="Select your account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {userOptions.map((u) => (
+                        <SelectItem key={u.id} value={u.username}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{u.name}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              @{u.username} · {u.role}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                      <SelectItem value={TYPE_MANUALLY}>
+                        <span className="italic text-muted-foreground">Type username manually…</span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="space-y-1">
+                    <Input
+                      id="login-user"
+                      autoComplete="username"
+                      value={loginUser}
+                      onChange={(e) => setLoginUser(e.target.value)}
+                      placeholder="Username"
+                      disabled={busy}
+                      autoFocus
+                    />
+                    {userOptions.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { setTypingManually(false); setLoginUser(""); }}
+                        className="text-[11px] text-primary hover:underline"
+                      >
+                        ← Back to user list
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="login-pass">Password</Label>
@@ -270,6 +338,22 @@ function LockScreen() {
                   <Input id="su-pass2" type="password" value={suPass2} onChange={(e) => setSuPass2(e.target.value)} disabled={busy} />
                 </div>
               </div>
+              <label className="flex items-start gap-2 rounded-md border bg-muted/30 p-2.5 text-xs">
+                <Checkbox
+                  checked={suHide}
+                  onCheckedChange={(v) => setSuHide(Boolean(v))}
+                  disabled={busy}
+                  className="mt-0.5"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <EyeOff className="h-3.5 w-3.5" /> Hide from login dropdown
+                  </div>
+                  <p className="text-muted-foreground mt-0.5">
+                    Other people on this device won't see your username; you'll need to type it in.
+                  </p>
+                </div>
+              </label>
               <Button type="submit" className="w-full" disabled={busy}>
                 Sign up
               </Button>

@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon, CheckCircle2 } from "lucide-react";
+import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon, CheckCircle2, Users, CloudDownload } from "lucide-react";
+import { UserManagementDialog } from "@/components/UserManagementDialog";
+import { RestoreFromCloudDialog } from "@/components/RestoreFromCloudDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
@@ -106,6 +108,8 @@ function CompaniesPage() {
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [fyLocks, setFyLocks] = useState<Record<string, boolean>>({});
+  const [userMgmtOpen, setUserMgmtOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
 
   // Pull FY lock status (return_type = 'fy_close') for every company the user
   // is a member of, in a single query, so each card can render a
@@ -336,6 +340,13 @@ function CompaniesPage() {
             Each company has its own books. Switch companies from the top bar.
           </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setUserMgmtOpen(true)}>
+            <Users className="mr-2 h-4 w-4" /> Manage users
+          </Button>
+          <Button variant="outline" onClick={() => setRestoreOpen(true)}>
+            <CloudDownload className="mr-2 h-4 w-4" /> Restore from cloud
+          </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button onClick={openNew}>
@@ -639,6 +650,7 @@ function CompaniesPage() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {memberships.length === 0 ? (
@@ -891,6 +903,9 @@ function CompaniesPage() {
           )}
         </div>
       )}
+
+      <UserManagementDialog open={userMgmtOpen} onOpenChange={setUserMgmtOpen} />
+      <RestoreFromCloudDialog open={restoreOpen} onOpenChange={setRestoreOpen} onComplete={() => refresh()} />
     </div>
   );
 }
