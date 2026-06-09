@@ -158,21 +158,28 @@ function CompaniesPage() {
   }, [memberships]);
 
   // Auto-open the "Create company" dialog when the URL carries ?new=1
-  // (used by the sidebar Company flyout's "+ New company" button).
+  // (used by the sidebar Company flyout's "+ New company" button and the
+  // home screen "New company" button). Re-runs whenever the search string
+  // changes so repeated clicks while already on this route still work.
+  const location = useLocation();
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const sp = new URLSearchParams(window.location.search);
+    const sp = new URLSearchParams(location.searchStr ?? window.location.search);
     if (sp.get("new") === "1") {
       setEditingId(null);
       setForm(empty);
       setOpen(true);
+      // Clean the query string so closing & re-opening behaves predictably.
+      navigate({ to: "/app/companies", search: {} as never, replace: true });
+      return;
     }
     const editId = sp.get("edit");
     if (editId) {
       openEdit(editId);
+      navigate({ to: "/app/companies", search: {} as never, replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.searchStr]);
 
   const openNew = () => {
     setEditingId(null);
