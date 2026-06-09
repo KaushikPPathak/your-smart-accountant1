@@ -204,7 +204,7 @@ function StartScreen() {
   const newCompany = () => {
     localStorage.removeItem("ym_active_company_id");
     sessionStorage.setItem("ym_unlocked___create__", "1");
-    navigate({ to: "/app/companies" });
+    navigate({ to: "/app/companies", search: { new: 1 } as never });
   };
 
   const tileGradient = (name: string) => {
