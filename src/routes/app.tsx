@@ -205,7 +205,7 @@ function AppLayout() {
           Create your first company to start invoicing, managing inventory and books.
         </p>
         <Button asChild>
-          <Link to="/app/companies">Create company</Link>
+          <Link to="/app/companies" search={{ new: 1 } as never}>Create company</Link>
         </Button>
       </div>
     );
