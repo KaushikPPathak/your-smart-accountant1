@@ -1,14 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { LEDGER_TYPES, INDIAN_STATES, GSTIN_REGEX } from "@/lib/constants";
-import { lookupGstin } from "@/lib/gstin-lookup.functions";
+import { LEDGER_TYPES, INDIAN_STATES } from "@/lib/constants";
 import { GstinPortalButton } from "@/components/GstinPortalButton";
 import { GstinInlineError } from "@/components/GstinInlineError";
 import { createLedger, updateLedger } from "@/lib/offline/masters";
@@ -39,8 +37,6 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   const [stateCode, setStateCode] = useState<string>("");
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
-  const [looking, setLooking] = useState(false);
-  const lookedRef = useRef<string>("");
 
   useEffect(() => {
     if (!open) return;
