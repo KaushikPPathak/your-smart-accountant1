@@ -142,9 +142,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="flex items-center gap-2">
-                GSTIN {looking && <Loader2 className="h-3 w-3 animate-spin" />}
-              </Label>
+              <Label>GSTIN</Label>
               <div className="flex items-center gap-1">
                 <Input
                   value={gstin}
@@ -155,7 +153,6 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                 <GstinPortalButton />
               </div>
               <GstinInlineError value={gstin} />
-              <p className="text-[10px] text-muted-foreground">Auto-fetches name & address</p>
             </div>
             <div className="space-y-1">
               <Label>State</Label>
