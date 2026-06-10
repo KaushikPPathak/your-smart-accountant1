@@ -173,7 +173,7 @@ function LedgersPage() {
     setOpen(true);
   };
 
-  const _openEditAnchor = () => {
+  const openEdit = (l: Ledger) => {
     setEditing(l);
     setForm({
       name: l.name,
@@ -194,7 +194,6 @@ function LedgersPage() {
       credit_limit: l.credit_limit_paise ? String(paiseToRupees(l.credit_limit_paise)) : "",
       credit_days: l.credit_days ? String(l.credit_days) : "",
     });
-    lookedRef.current = l.gstin ?? "";
     setOpen(true);
   };
 
@@ -401,9 +400,7 @@ function LedgersPage() {
                     </div>
                   )}
                   <div className="space-y-1">
-                    <Label htmlFor="gstin" className="flex items-center gap-2">
-                      GSTIN {gstinLooking && <Loader2 className="h-3 w-3 animate-spin" />}
-                    </Label>
+                    <Label htmlFor="gstin">GSTIN</Label>
                     <div className="flex items-center gap-1">
                       <Input
                         id="gstin"
