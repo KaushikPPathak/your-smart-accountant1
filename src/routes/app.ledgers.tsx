@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
-import { lookupGstin } from "@/lib/gstin-lookup.functions";
+import { Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { GstinPortalButton } from "@/components/GstinPortalButton";
 import { GstinInlineError } from "@/components/GstinInlineError";
 import { Button } from "@/components/ui/button";
@@ -38,7 +37,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/money";
 import {
-  GSTIN_REGEX,
   INDIAN_STATES,
   LEDGER_TYPES,
   type LedgerTypeValue,
@@ -129,39 +127,8 @@ function LedgersPage() {
   const [editing, setEditing] = useState<Ledger | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
-  const [gstinLooking, setGstinLooking] = useState(false);
-  const lookedRef = useRef<string>("");
   const { view, setView } = useReportView("masters-ledgers");
 
-  useEffect(() => {
-    if (!open) return;
-    const g = form.gstin.trim().toUpperCase();
-    if (g.length !== 15 || !GSTIN_REGEX.test(g) || g === lookedRef.current) return;
-    lookedRef.current = g;
-    setGstinLooking(true);
-    lookupGstin({ data: { gstin: g } })
-      .then((res) => {
-        if (!res.ok || !res.data) {
-          toast.error(res.error || "GSTIN lookup failed");
-          return;
-        }
-        const d = res.data;
-        setForm((f) => {
-          const stateMatch = INDIAN_STATES.find((s) => s.code === d.stateCode);
-          return {
-            ...f,
-            name: f.name.trim() ? f.name : d.tradeName || d.legalName,
-            address: f.address.trim() ? f.address : d.address,
-            state_code: f.state_code || d.stateCode || "",
-            state: f.state || stateMatch?.name || "",
-          };
-        });
-        toast.success("GSTIN details fetched");
-      })
-      .catch((e) => toast.error(e instanceof Error ? e.message : "Lookup failed"))
-      .finally(() => setGstinLooking(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.gstin, open]);
 
   const load = async () => {
     if (!activeCompanyId) {
@@ -203,7 +170,6 @@ function LedgersPage() {
   const openNew = () => {
     setEditing(null);
     setForm(emptyForm);
-    lookedRef.current = "";
     setOpen(true);
   };
 
@@ -228,7 +194,6 @@ function LedgersPage() {
       credit_limit: l.credit_limit_paise ? String(paiseToRupees(l.credit_limit_paise)) : "",
       credit_days: l.credit_days ? String(l.credit_days) : "",
     });
-    lookedRef.current = l.gstin ?? "";
     setOpen(true);
   };
 
@@ -435,9 +400,7 @@ function LedgersPage() {
                     </div>
                   )}
                   <div className="space-y-1">
-                    <Label htmlFor="gstin" className="flex items-center gap-2">
-                      GSTIN {gstinLooking && <Loader2 className="h-3 w-3 animate-spin" />}
-                    </Label>
+                    <Label htmlFor="gstin">GSTIN</Label>
                     <div className="flex items-center gap-1">
                       <Input
                         id="gstin"

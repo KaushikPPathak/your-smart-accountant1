@@ -1,14 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { LEDGER_TYPES, INDIAN_STATES, GSTIN_REGEX } from "@/lib/constants";
-import { lookupGstin } from "@/lib/gstin-lookup.functions";
+import { LEDGER_TYPES, INDIAN_STATES } from "@/lib/constants";
 import { GstinPortalButton } from "@/components/GstinPortalButton";
 import { GstinInlineError } from "@/components/GstinInlineError";
 import { createLedger, updateLedger } from "@/lib/offline/masters";
@@ -39,12 +37,9 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   const [stateCode, setStateCode] = useState<string>("");
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
-  const [looking, setLooking] = useState(false);
-  const lookedRef = useRef<string>("");
 
   useEffect(() => {
     if (!open) return;
-    lookedRef.current = "";
     if (editId) {
       supabase
         .from("ledgers")
@@ -58,7 +53,6 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
             setGstin(data.gstin || "");
             setStateCode(data.state_code || "");
             setAddress(data.address || "");
-            lookedRef.current = data.gstin || "";
           }
         });
     } else {
@@ -70,27 +64,6 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
     }
   }, [open, editId]);
 
-  useEffect(() => {
-    const g = gstin.trim().toUpperCase();
-    if (g.length !== 15 || !GSTIN_REGEX.test(g) || g === lookedRef.current) return;
-    lookedRef.current = g;
-    setLooking(true);
-    lookupGstin({ data: { gstin: g } })
-      .then((res) => {
-        if (!res.ok || !res.data) {
-          toast.error(res.error || "GSTIN lookup failed");
-          return;
-        }
-        const d = res.data;
-        if (!name.trim()) setName(d.tradeName || d.legalName);
-        if (!address.trim()) setAddress(d.address);
-        if (!stateCode && d.stateCode) setStateCode(d.stateCode);
-        toast.success("GSTIN details fetched");
-      })
-      .catch((e) => toast.error(e instanceof Error ? e.message : "Lookup failed"))
-      .finally(() => setLooking(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gstin]);
 
   const submit = async () => {
     if (!name.trim()) {
@@ -169,9 +142,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="flex items-center gap-2">
-                GSTIN {looking && <Loader2 className="h-3 w-3 animate-spin" />}
-              </Label>
+              <Label>GSTIN</Label>
               <div className="flex items-center gap-1">
                 <Input
                   value={gstin}
@@ -182,7 +153,6 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                 <GstinPortalButton />
               </div>
               <GstinInlineError value={gstin} />
-              <p className="text-[10px] text-muted-foreground">Auto-fetches name & address</p>
             </div>
             <div className="space-y-1">
               <Label>State</Label>
