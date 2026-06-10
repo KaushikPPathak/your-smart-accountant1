@@ -7,7 +7,7 @@ const GST_PORTAL_URL = "https://services.gst.gov.in/services/searchtp";
 async function openInSystemBrowser(url: string) {
   // Prefer Tauri opener plugin when present, then shell, finally web fallback.
   try {
-    const mod = await import(/* @vite-ignore */ "@tauri-apps/plugin-opener");
+    const mod: any = await import(/* @vite-ignore */ ("@tauri-apps/plugin-opener" as string));
     if (mod && typeof mod.open === "function") {
       await mod.open(url);
       return;
