@@ -7,7 +7,7 @@ on:
     branches: ["**"]
   workflow_dispatch:
 
-# CRITICAL FIX: Grants the workflow permission to write releases back to your repository
+# CRITICAL SECURITY ELEVATION: Grants permission to publish the installer files to your GitHub Releases page
 permissions:
   contents: write
 
@@ -36,11 +36,15 @@ jobs:
         with:
           workspaces: "src-tauri -> target"
 
-      - name: Install frontend dependencies
-        run: bun install
+      - name: Trust and Pre-install Frontend Dependencies
+        # Fixes 'Blocked 2 postinstalls' and ensures the missing opener dependency is added
+        run: |
+          bun config set trustedDependencies --global
+          bun add @tauri-apps/plugin-opener
+          bun install
 
       - name: Regenerate TanStack Routes Map
-        # FIXED: Removed the invalid custom flags and switched to the official package namespace
+        # Running the clean generate command without manual directory flags allows auto-detection
         run: bunx @tanstack/router-cli generate
         continue-on-error: true
 
