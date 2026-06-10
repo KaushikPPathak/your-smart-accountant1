@@ -40,7 +40,6 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
 
   useEffect(() => {
     if (!open) return;
-    lookedRef.current = "";
     if (editId) {
       supabase
         .from("ledgers")
@@ -54,7 +53,6 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
             setGstin(data.gstin || "");
             setStateCode(data.state_code || "");
             setAddress(data.address || "");
-            lookedRef.current = data.gstin || "";
           }
         });
     } else {
@@ -66,27 +64,6 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
     }
   }, [open, editId]);
 
-  useEffect(() => {
-    const g = gstin.trim().toUpperCase();
-    if (g.length !== 15 || !GSTIN_REGEX.test(g) || g === lookedRef.current) return;
-    lookedRef.current = g;
-    setLooking(true);
-    lookupGstin({ data: { gstin: g } })
-      .then((res) => {
-        if (!res.ok || !res.data) {
-          toast.error(res.error || "GSTIN lookup failed");
-          return;
-        }
-        const d = res.data;
-        if (!name.trim()) setName(d.tradeName || d.legalName);
-        if (!address.trim()) setAddress(d.address);
-        if (!stateCode && d.stateCode) setStateCode(d.stateCode);
-        toast.success("GSTIN details fetched");
-      })
-      .catch((e) => toast.error(e instanceof Error ? e.message : "Lookup failed"))
-      .finally(() => setLooking(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gstin]);
 
   const submit = async () => {
     if (!name.trim()) {
