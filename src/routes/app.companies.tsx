@@ -576,13 +576,17 @@ function CompaniesPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>GSTIN</Label>
-                  <Input
-                    value={form.gstin}
-                    onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
-                    maxLength={15}
-                    disabled={!form.gst_registered}
-                    placeholder={form.gst_registered ? "" : "Not applicable"}
-                  />
+                  <div className="flex items-center gap-1">
+                    <Input
+                      value={form.gstin}
+                      onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
+                      maxLength={15}
+                      disabled={!form.gst_registered}
+                      placeholder={form.gst_registered ? "" : "Not applicable"}
+                    />
+                    <GstinPortalButton disabled={!form.gst_registered} />
+                  </div>
+                  {form.gst_registered && <GstinInlineError value={form.gstin} />}
                 </div>
                 <div className="space-y-1.5">
                   <Label>PAN</Label>

@@ -436,15 +436,19 @@ function LedgersPage() {
                     <Label htmlFor="gstin" className="flex items-center gap-2">
                       GSTIN {gstinLooking && <Loader2 className="h-3 w-3 animate-spin" />}
                     </Label>
-                    <Input
-                      id="gstin"
-                      value={form.gstin}
-                      onChange={(e) =>
-                        setForm({ ...form, gstin: e.target.value.toUpperCase() })
-                      }
-                      maxLength={15}
-                      placeholder="22AAAAA0000A1Z5"
-                    />
+                    <div className="flex items-center gap-1">
+                      <Input
+                        id="gstin"
+                        value={form.gstin}
+                        onChange={(e) =>
+                          setForm({ ...form, gstin: e.target.value.toUpperCase() })
+                        }
+                        maxLength={15}
+                        placeholder="22AAAAA0000A1Z5"
+                      />
+                      <GstinPortalButton />
+                    </div>
+                    <GstinInlineError value={form.gstin} />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="state_code">State</Label>
