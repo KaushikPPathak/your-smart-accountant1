@@ -170,11 +170,10 @@ function LedgersPage() {
   const openNew = () => {
     setEditing(null);
     setForm(emptyForm);
-    lookedRef.current = "";
     setOpen(true);
   };
 
-  const openEdit = (l: Ledger) => {
+  const _openEditAnchor = () => {
     setEditing(l);
     setForm({
       name: l.name,
