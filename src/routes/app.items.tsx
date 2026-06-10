@@ -40,6 +40,7 @@ import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { createItem, updateItem, deleteItem } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
+import { HsnInlineHint } from "@/components/HsnInlineHint";
 
 export const Route = createFileRoute("/app/items")({
   head: () => ({ meta: [{ title: "Items — Your Mehtaji" }] }),
@@ -280,6 +281,17 @@ function ItemsPage() {
                       value={form.hsn_code}
                       onChange={(e) => setForm({ ...form, hsn_code: e.target.value })}
                       maxLength={10}
+                    />
+                    <HsnInlineHint
+                      code={form.hsn_code}
+                      onResolved={(rec) => {
+                        // Auto-populate GST rate from local HSN master when found.
+                        const rate = rec.is_exempt ? 0 : (rec.igst_rate || rec.cgst_rate + rec.sgst_rate);
+                        const match = (GST_RATES as readonly number[]).find((g) => Math.abs(g - rate) < 0.001);
+                        if (match !== undefined) {
+                          setForm((f) => ({ ...f, gst_rate: String(match) }));
+                        }
+                      }}
                     />
                   </div>
                   <div className="space-y-1.5">

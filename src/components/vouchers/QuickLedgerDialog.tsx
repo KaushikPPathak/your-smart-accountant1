@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { LEDGER_TYPES, INDIAN_STATES, GSTIN_REGEX } from "@/lib/constants";
 import { lookupGstin } from "@/lib/gstin-lookup.functions";
+import { GstinPortalButton } from "@/components/GstinPortalButton";
+import { GstinInlineError } from "@/components/GstinInlineError";
 import { createLedger, updateLedger } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
 
@@ -170,12 +172,16 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
               <Label className="flex items-center gap-2">
                 GSTIN {looking && <Loader2 className="h-3 w-3 animate-spin" />}
               </Label>
-              <Input
-                value={gstin}
-                onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                maxLength={15}
-                placeholder="22AAAAA0000A1Z5"
-              />
+              <div className="flex items-center gap-1">
+                <Input
+                  value={gstin}
+                  onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                  maxLength={15}
+                  placeholder="22AAAAA0000A1Z5"
+                />
+                <GstinPortalButton />
+              </div>
+              <GstinInlineError value={gstin} />
               <p className="text-[10px] text-muted-foreground">Auto-fetches name & address</p>
             </div>
             <div className="space-y-1">

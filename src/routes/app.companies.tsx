@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon, CheckCircle2, Users, CloudDownload } from "lucide-react";
 import { UserManagementDialog } from "@/components/UserManagementDialog";
+import { GstinPortalButton } from "@/components/GstinPortalButton";
+import { GstinInlineError } from "@/components/GstinInlineError";
 import { RestoreFromCloudDialog } from "@/components/RestoreFromCloudDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -576,13 +578,17 @@ function CompaniesPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>GSTIN</Label>
-                  <Input
-                    value={form.gstin}
-                    onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
-                    maxLength={15}
-                    disabled={!form.gst_registered}
-                    placeholder={form.gst_registered ? "" : "Not applicable"}
-                  />
+                  <div className="flex items-center gap-1">
+                    <Input
+                      value={form.gstin}
+                      onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
+                      maxLength={15}
+                      disabled={!form.gst_registered}
+                      placeholder={form.gst_registered ? "" : "Not applicable"}
+                    />
+                    <GstinPortalButton disabled={!form.gst_registered} />
+                  </div>
+                  {form.gst_registered && <GstinInlineError value={form.gstin} />}
                 </div>
                 <div className="space-y-1.5">
                   <Label>PAN</Label>
