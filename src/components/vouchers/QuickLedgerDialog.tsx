@@ -150,7 +150,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                   maxLength={15}
                   placeholder="22AAAAA0000A1Z5"
                 />
-                <GstinPortalButton />
+                <GstinPortalButton gstin={gstin} />
               </div>
               <GstinInlineError value={gstin} />
             </div>
