@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { LEDGER_TYPES, INDIAN_STATES } from "@/lib/constants";
-import { GstinPortalButton } from "@/components/GstinPortalButton";
+import { GstinPortalWindow } from "@/components/GstinPortalWindow";
 import { GstinInlineError } from "@/components/GstinInlineError";
 import { createLedger, updateLedger } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
@@ -38,7 +38,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // 1. Hook to track editing states and reset forms cleanly on open toggles
+  // 1. Hook to track editing states and pull master rows down dynamically from local storage
   useEffect(() => {
     if (!open) return;
     if (editId) {
@@ -65,12 +65,11 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
     }
   }, [open, editId]);
 
-  // 2. AUTO-POPULATE STATE DROPDOWN INSTANTLY FROM GSTIN PREFIX
+  // 2. AWESOME AUTO-POPULATE TRANSITION: Watches keystrokes and matches State dropdown instantly
   useEffect(() => {
     const cleanGstin = gstin.trim();
     if (cleanGstin.length >= 2) {
       const prefix = cleanGstin.substring(0, 2);
-      // Validate if the extracted 2 digits match a valid entry inside INDIAN_STATES constant list
       const matchedState = INDIAN_STATES.find((s) => s.code === prefix);
       if (matchedState) {
         setStateCode(matchedState.code);
@@ -96,6 +95,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         state: state?.name ?? null,
         address: address.trim() || null,
       };
+      
       if (editId) {
         const row = await updateLedger(editId, companyId, payload);
         toast.success(isOnlineNow() ? "Ledger updated" : "Ledger update queued — will sync when online");
@@ -125,7 +125,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-xl w-full"
+        className="max-w-xl w-full bg-white border border-slate-200 shadow-2xl rounded-xl"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onKeyDown={(e) => {
@@ -136,18 +136,28 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         }}
       >
         <DialogHeader>
-          <DialogTitle>{editId ? "Edit Ledger" : "Quick Create Ledger"}</DialogTitle>
+          <DialogTitle className="text-slate-800 font-bold tracking-tight">
+            {editId ? "Edit Ledger" : "Quick Create Ledger"}
+          </DialogTitle>
         </DialogHeader>
+        
         <div className="grid gap-4 py-2">
+          {/* Name Input */}
           <div className="space-y-1">
-            <Label>Name *</Label>
-            <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
+            <Label className="text-slate-600 text-xs font-semibold">Name *</Label>
+            <Input 
+              autoFocus 
+              value={name} 
+              onChange={(e) => setName(e.target.value)} 
+              className="border-slate-200 focus-visible:ring-indigo-500"
+            />
           </div>
           
+          {/* Type Input */}
           <div className="space-y-1">
-            <Label>Type *</Label>
+            <Label className="text-slate-600 text-xs font-semibold">Type *</Label>
             <Select value={type} onValueChange={setType}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className="border-slate-200 focus:ring-indigo-500"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {LEDGER_TYPES.map((t) => (
                   <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
@@ -156,26 +166,29 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
             </Select>
           </div>
           
-          {/* RECONCILED GRID: Restructuring space parameters to prevent squishing layout */}
+          {/* BEAUTIFUL & UN-SQUISHED GSTIN/STATE SECTION CONTAINER */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full items-start">
             
-            {/* Left Column Section: GSTIN Field Wrapper */}
+            {/* Left Box: GSTIN Code Field + Awesome Sidebar Neighborhood Popover */}
             <div className="space-y-1 w-full flex flex-col">
-              <Label>GSTIN</Label>
-              <Input
-                value={gstin}
-                onChange={(e) => setGstin(e.target.value.toUpperCase().trim())}
-                maxLength={15}
-                placeholder="22AAAAA0000A1Z5"
-                className="w-full font-mono uppercase"
-              />
-              {/* Stack the verification button at 100% block width safely right below the input field */}
-              <div className="w-full mt-1.5">
-                <GstinPortalButton 
+              <Label className="text-slate-600 text-xs font-semibold">GSTIN</Label>
+              <div className="flex items-center gap-2 w-full">
+                <Input
+                  value={gstin}
+                  onChange={(e) => setGstin(e.target.value.toUpperCase().trim())}
+                  maxLength={15}
+                  placeholder="24AAAAA0000A1Z5"
+                  className="flex-1 font-mono uppercase tracking-wider h-9 border-slate-200 focus-visible:ring-indigo-500"
+                />
+                <GstinPortalWindow 
                   gstin={gstin} 
                   onDataFetched={(parsedParty) => {
                     if (parsedParty?.gstin) {
                       setGstin(parsedParty.gstin.toUpperCase().trim());
+                      setName(parsedParty.legalName);
+                      toast.success(`Successfully Synced: ${parsedParty.legalName}`, {
+                        className: "bg-emerald-50 border-emerald-200 text-emerald-800 font-medium"
+                      });
                     }
                   }}
                 />
@@ -183,11 +196,13 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
               <GstinInlineError value={gstin} />
             </div>
             
-            {/* Right Column Section: State Dropdown Selector Wrapper */}
+            {/* Right Box: State Picker Dropdown Selector */}
             <div className="space-y-1 w-full">
-              <Label>State</Label>
+              <Label className="text-slate-600 text-xs font-semibold">State</Label>
               <Select value={stateCode} onValueChange={setStateCode}>
-                <SelectTrigger className="w-full h-10"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger className="w-full h-9 border-slate-200 focus:ring-indigo-500">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
                 <SelectContent>
                   {INDIAN_STATES.map((s) => (
                     <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>
@@ -198,14 +213,29 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
 
           </div>
           
+          {/* Address Input */}
           <div className="space-y-1">
-            <Label>Address</Label>
-            <Input value={address} onChange={(e) => setAddress(e.target.value)} />
+            <Label className="text-slate-600 text-xs font-semibold">Address</Label>
+            <Input 
+              value={address} 
+              onChange={(e) => setAddress(e.target.value)} 
+              className="border-slate-200 focus-visible:ring-indigo-500"
+            />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={submit} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+
+        {/* Footer Actions */}
+        <DialogFooter className="pt-2 border-t border-slate-100">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-slate-500 hover:bg-slate-50">
+            Cancel
+          </Button>
+          <Button 
+            onClick={submit} 
+            disabled={saving}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm"
+          >
+            {saving ? "Saving…" : "Save Ledger"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
