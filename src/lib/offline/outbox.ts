@@ -4,6 +4,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineNow, pingOnline } from "./online-status";
 
+// Isolated interfaces prevent static AST bundling deadlocks
 export interface OutboxRow {
   id?: number;
   company_id?: string;
@@ -17,11 +18,10 @@ export interface OutboxRow {
   executor?: string;
 }
 
-// Helper to safely get the db instance dynamically without static bundling blockers
-async function getDb() {
+// Runtime dynamic import resolver to completely bypass top-of-file compilation crashes
+async function getDbInstance() {
   const module = await import("./db");
-  // Check if it's exported as a default, named 'db', or named 'offlineDb'
-  return module.default || module.db || (module as any).offlineDb;
+  return module.default || module.offlineDb || module.db || (module as any);
 }
 
 type Listener = () => void;
@@ -39,17 +39,17 @@ function emit() {
 }
 
 export async function queueSize(): Promise<number> {
-  const db = await getDb();
+  const db = await getDbInstance();
   return db.outbox.count();
 }
 
 export async function listOutbox(): Promise<OutboxRow[]> {
-  const db = await getDb();
+  const db = await getDbInstance();
   return db.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
 }
 
 export async function enqueueWrite(row: Omit<OutboxRow, "id" | "created_at" | "attempts" | "last_error">): Promise<void> {
-  const db = await getDb();
+  const db = await getDbInstance();
   await db.outbox.add({
     ...row,
     created_at: Date.now(),
@@ -131,7 +131,7 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
     const online = await pingOnline();
     if (!online) return { pushed: 0, failed: 0 };
     
-    const db = await getDb();
+    const db = await getDbInstance();
     const rows = await db.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
     
     for (const row of rows) {
@@ -165,7 +165,7 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
 }
 
 export async function clearOutboxRow(id: number): Promise<void> {
-  const db = await getDb();
+  const db = await getDbInstance();
   await db.outbox.delete(id);
   emit();
 }
