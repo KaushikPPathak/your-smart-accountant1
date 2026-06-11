@@ -2,7 +2,8 @@
 // Includes strict, timestamp-aware delivery matching our Last-Write-Wins pattern.
 
 import { supabase } from "@/integrations/supabase/client";
-import { db as offlineDb, type OutboxRow } from "./db";
+import offlineDb from "./db"; // Clean default import handles Dexie instances perfectly
+import type { OutboxRow } from "./db"; 
 import { isOnlineNow, pingOnline } from "./online-status";
 
 type Listener = () => void;
@@ -78,7 +79,6 @@ async function executeOutboxRow(row: OutboxRow): Promise<void> {
   const q = supabase.from(row.table as never);
 
   if (row.op === "insert") {
-    // Standard insert includes our locally generated timestamp
     const { error } = await q.insert(row.payload as never);
     if (error) throw new Error(error.message);
   } 
@@ -86,13 +86,10 @@ async function executeOutboxRow(row: OutboxRow): Promise<void> {
   else if (row.op === "update") {
     const p = row.payload as { id: string; values: Record<string, unknown> };
     
-    // Switch master table updates (ledgers, items) to use upsert syntax where possible
-    // to preserve accurate modification paths across networks.
     if (row.table === "ledgers" || row.table === "items") {
       const { error } = await q.upsert({ id: p.id, ...p.values } as never);
       if (error) throw new Error(error.message);
     } else {
-      // Fallback fallback for complex relational tables
       const { error } = await q.update(p.values as never).eq("id", p.id);
       if (error) throw new Error(error.message);
     }
@@ -133,13 +130,10 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
             last_error: e instanceof Error ? e.message : String(e),
           });
         }
-        // Gracefully halt down the pipeline line on error to retain structural sorting integrity
         break;
       }
     }
     
-    // After outbox has run out its entries, pull down any newer modifications that occurred 
-    // upstream on the cloud while we were clearing local backlogs.
     if (rows.length > 0 && rows[0].company_id) {
       const { syncEssentialMasters } = await import("./masters");
       await syncEssentialMasters(rows[0].company_id);
