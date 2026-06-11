@@ -411,7 +411,7 @@ function LedgersPage() {
                         maxLength={15}
                         placeholder="22AAAAA0000A1Z5"
                       />
-                      <GstinPortalButton />
+                      <GstinPortalButton gstin={form.gstin} />
                     </div>
                     <GstinInlineError value={form.gstin} />
                   </div>

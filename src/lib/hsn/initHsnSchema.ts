@@ -19,6 +19,14 @@ export function ensureHsnSchema(): Promise<void> {
   if (_ready) return _ready;
   _ready = (async () => {
     await safeBrainExec(HSN_MASTER_DDL);
+    // Seed after schema is in place. Imported lazily to avoid a circular import
+    // (seedHsnData re-exports ensureHsnSchema for its own bootstrap path).
+    try {
+      const { ensureHsnSeed } = await import("./seedHsnData");
+      await ensureHsnSeed();
+    } catch {
+      // Seed failures must never block the schema bootstrap.
+    }
   })();
   return _ready;
 }

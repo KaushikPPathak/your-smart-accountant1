@@ -586,7 +586,7 @@ function CompaniesPage() {
                       disabled={!form.gst_registered}
                       placeholder={form.gst_registered ? "" : "Not applicable"}
                     />
-                    <GstinPortalButton disabled={!form.gst_registered} />
+                    <GstinPortalButton gstin={form.gstin} disabled={!form.gst_registered} />
                   </div>
                   {form.gst_registered && <GstinInlineError value={form.gstin} />}
                 </div>
