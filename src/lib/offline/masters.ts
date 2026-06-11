@@ -7,10 +7,33 @@
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineNow } from "./online-status";
 import { enqueueWrite } from "./outbox";
-import offlineDb, { type LedgerCacheRow, type ItemCacheRow } from "./db"; // Combined syntax satisfies Lovable
+
+// Explicitly declare interfaces to strip out top-level import bindings entirely
+export interface LedgerCacheRow extends LedgerInsertPayload {
+  id: string;
+  gst_treatment: string;
+  updated_at: string;
+  is_synced: boolean;
+  is_deleted: boolean;
+  is_active?: boolean;
+}
+
+export interface ItemCacheRow extends ItemInsertPayload {
+  id: string;
+  updated_at: string;
+  is_synced: boolean;
+  is_deleted: boolean;
+  is_active?: boolean;
+}
 
 function newId(): string {
   return crypto.randomUUID();
+}
+
+// Runtime dynamic import resolver to prevent Rollup compilation deadlocks
+async function getDbInstance() {
+  const module = await import("./db");
+  return module.default || module.offlineDb || (module as any).db;
 }
 
 /**
@@ -21,6 +44,7 @@ export async function syncEssentialMasters(companyId: string): Promise<void> {
   if (!isOnlineNow() || !companyId) return;
 
   const tablesToSync = ["ledgers", "items"] as const;
+  const offlineDb = await getDbInstance();
 
   for (const table of tablesToSync) {
     try {
@@ -114,6 +138,7 @@ export interface LedgerRow {
 export async function createLedger(payload: LedgerInsertPayload): Promise<LedgerRow> {
   const id = newId();
   const now = new Date().toISOString();
+  const offlineDb = await getDbInstance();
   
   const localRecord: LedgerCacheRow = {
     ...payload,
@@ -157,6 +182,7 @@ export async function updateLedger(
   values: Partial<LedgerInsertPayload>,
 ): Promise<LedgerRow | null> {
   const now = new Date().toISOString();
+  const offlineDb = await getDbInstance();
   const existing = await offlineDb.cache_ledgers.get(id);
 
   if (existing) {
@@ -186,6 +212,7 @@ export async function updateLedger(
 
 export async function deleteLedger(id: string, companyId: string, label?: string): Promise<void> {
   const now = new Date().toISOString();
+  const offlineDb = await getDbInstance();
   const existing = await offlineDb.cache_ledgers.get(id);
 
   if (existing) {
@@ -241,6 +268,7 @@ export interface ItemRow {
 export async function createItem(payload: ItemInsertPayload): Promise<ItemRow> {
   const id = newId();
   const now = new Date().toISOString();
+  const offlineDb = await getDbInstance();
 
   const localRecord: ItemCacheRow = {
     ...payload,
@@ -279,6 +307,7 @@ export async function updateItem(
   values: Partial<ItemInsertPayload>,
 ): Promise<ItemRow | null> {
   const now = new Date().toISOString();
+  const offlineDb = await getDbInstance();
   const existing = await offlineDb.cache_items.get(id);
 
   if (existing) {
@@ -308,6 +337,7 @@ export async function updateItem(
 
 export async function deleteItem(id: string, companyId: string, label?: string): Promise<void> {
   const now = new Date().toISOString();
+  const offlineDb = await getDbInstance();
   const existing = await offlineDb.cache_items.get(id);
 
   if (existing) {
