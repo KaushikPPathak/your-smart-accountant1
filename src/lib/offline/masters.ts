@@ -7,7 +7,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineNow } from "./online-status";
 import { enqueueWrite } from "./outbox";
-import offlineDb, { type LedgerCacheRow, type ItemCacheRow } from "./db"; // Combined syntax satisfies Lovable'
+import offlineDb, { type LedgerCacheRow, type ItemCacheRow } from "./db"; // Combined syntax satisfies Lovable
 
 function newId(): string {
   return crypto.randomUUID();
@@ -332,4 +332,6 @@ export async function deleteItem(id: string, companyId: string, label?: string):
   }
 }
 
-export async function deactivateItem(id: string, company
+export async function deactivateItem(id: string, companyId: string): Promise<void> {
+  await updateItem(id, companyId, { is_active: false } as any);
+}
