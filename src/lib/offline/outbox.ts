@@ -2,7 +2,7 @@
 // Includes strict, timestamp-aware delivery matching our Last-Write-Wins pattern.
 
 import { supabase } from "@/integrations/supabase/client";
-import { offlineDb, type OutboxRow } from "./db";
+import { db as offlineDb, type OutboxRow } from "./db";
 import { isOnlineNow, pingOnline } from "./online-status";
 
 type Listener = () => void;
