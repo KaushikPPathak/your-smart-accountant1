@@ -10,7 +10,18 @@
 
 import bcrypt from "bcryptjs";
 import { supabase } from "@/integrations/supabase/client";
-import { offlineDb, type AccountCredCacheRow } from "./db";
+import offlineDb from "./db";
+
+// Declare interface inline to permanently break the Rollup AST parsing deadlock
+export interface AccountCredCacheRow {
+  username: string;
+  user_id: string;
+  name: string;
+  role: string;
+  password_hash: string;
+  is_active: boolean;
+  cached_at: number;
+}
 
 const LOCKOUT_KEY = "ym_local_lock_until";
 const ATTEMPTS_KEY = "ym_local_lock_attempts";
@@ -90,7 +101,7 @@ async function persistLocalUserNative(
 
 export async function refreshAllCachedCreds(): Promise<void> {
   try {
-    const rows = await offlineDb.account_creds.toArray();
+    const rows = await offlineDb.account_creds.toArray() as unknown as AccountCredCacheRow[];
     if (rows.length === 0) return;
     const usernames = rows.map((r) => r.username);
     const { data, error } = await supabase
@@ -140,7 +151,7 @@ export async function verifyOfflineLogin(
   }
 
   const uname = username.trim().toLowerCase();
-  const row = await offlineDb.account_creds.get(uname);
+  const row = await offlineDb.account_creds.get(uname) as unknown as AccountCredCacheRow | undefined;
 
   // Fallback: when Dexie has no cached row (e.g. fresh browser profile
   // but the Tauri SQLite store does), try the native local_users table.
