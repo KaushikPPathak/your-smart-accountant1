@@ -80,7 +80,7 @@ async function executeOutboxRow(row: OutboxRow): Promise<void> {
     return;
   }
 
-  if (row.op === "rpc" && row.rpc) {
+  if (row.op === "rpc" && (row as any).rpc) {
     const { error } = await (supabase as unknown as {
       rpc: (name: string, args: unknown) => Promise<{ error: { message: string } | null }>;
     }).rpc((row as any).rpc, row.payload);
