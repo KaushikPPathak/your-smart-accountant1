@@ -38,6 +38,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // 1. Hook to track editing states and reset forms cleanly on open toggles
   useEffect(() => {
     if (!open) return;
     if (editId) {
@@ -64,6 +65,18 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
     }
   }, [open, editId]);
 
+  // 2. AUTO-POPULATE STATE DROPDOWN INSTANTLY FROM GSTIN PREFIX
+  useEffect(() => {
+    const cleanGstin = gstin.trim();
+    if (cleanGstin.length >= 2) {
+      const prefix = cleanGstin.substring(0, 2);
+      // Validate if the extracted 2 digits match a valid entry inside INDIAN_STATES constant list
+      const matchedState = INDIAN_STATES.find((s) => s.code === prefix);
+      if (matchedState) {
+        setStateCode(matchedState.code);
+      }
+    }
+  }, [gstin]);
 
   const submit = async () => {
     if (!name.trim()) {
@@ -112,6 +125,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        className="max-w-xl w-full"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onKeyDown={(e) => {
@@ -124,11 +138,12 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         <DialogHeader>
           <DialogTitle>{editId ? "Edit Ledger" : "Quick Create Ledger"}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-3">
+        <div className="grid gap-4 py-2">
           <div className="space-y-1">
             <Label>Name *</Label>
             <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
           </div>
+          
           <div className="space-y-1">
             <Label>Type *</Label>
             <Select value={type} onValueChange={setType}>
@@ -140,24 +155,39 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
+          
+          {/* RECONCILED GRID: Restructuring space parameters to prevent squishing layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full items-start">
+            
+            {/* Left Column Section: GSTIN Field Wrapper */}
+            <div className="space-y-1 w-full flex flex-col">
               <Label>GSTIN</Label>
-              <div className="flex items-center gap-1">
-                <Input
-                  value={gstin}
-                  onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                  maxLength={15}
-                  placeholder="22AAAAA0000A1Z5"
+              <Input
+                value={gstin}
+                onChange={(e) => setGstin(e.target.value.toUpperCase().trim())}
+                maxLength={15}
+                placeholder="22AAAAA0000A1Z5"
+                className="w-full font-mono uppercase"
+              />
+              {/* Stack the verification button at 100% block width safely right below the input field */}
+              <div className="w-full mt-1.5">
+                <GstinPortalButton 
+                  gstin={gstin} 
+                  onDataFetched={(parsedParty) => {
+                    if (parsedParty?.gstin) {
+                      setGstin(parsedParty.gstin.toUpperCase().trim());
+                    }
+                  }}
                 />
-                <GstinPortalButton gstin={gstin} />
               </div>
               <GstinInlineError value={gstin} />
             </div>
-            <div className="space-y-1">
+            
+            {/* Right Column Section: State Dropdown Selector Wrapper */}
+            <div className="space-y-1 w-full">
               <Label>State</Label>
               <Select value={stateCode} onValueChange={setStateCode}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger className="w-full h-10"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   {INDIAN_STATES.map((s) => (
                     <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>
@@ -165,7 +195,9 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                 </SelectContent>
               </Select>
             </div>
+
           </div>
+          
           <div className="space-y-1">
             <Label>Address</Label>
             <Input value={address} onChange={(e) => setAddress(e.target.value)} />
