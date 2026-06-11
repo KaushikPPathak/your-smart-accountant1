@@ -1,13 +1,11 @@
-// Offline-aware writes for master tables (ledgers, items).
+// Offline-aware writes for master tables (ledgers, items) with true bi-directional sync.
 //
-// When online, behaves like a direct Supabase call and returns the persisted
-// row. When offline, generates a client-side UUID, queues the mutation in
-// the durable outbox, and returns a synthesized row so the UI can proceed
-// optimistically. The sync worker replays the queue on reconnect.
+// Every operation updates the local offlineDb first to guarantee total availability,
+// stamps it with 'updated_at', and flags it with 'is_synced: false'. If a connection is 
+// available, a synchronization pass runs automatically to match data based on the latest timestamp.
 
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineNow } from "./online-status";
-import { enqueueWrite } from "./outbox";
 import { offlineDb } from "./db";
 
 function newId(): string {
@@ -15,12 +13,98 @@ function newId(): string {
 }
 
 /**
- * Placeholder for future master-data sync. Account groups currently live in
- * runtime code (account-groups-runtime.tsx), so no remote sync is required.
+ * Robust Bi-Directional Master Synchronizer
+ * Evaluates Local vs Remote state using Last-Write-Wins (LWW) timestamp logic.
  */
-export async function syncEssentialMasters(): Promise<void> {
-  if (!isOnlineNow()) return;
-  // No-op for now — master tables are local-runtime.
+export async function syncEssentialMasters(companyId: string): Promise<void> {
+  if (!isOnlineNow() || !companyId) return;
+
+  try {
+    // ------------------- Sync Items -------------------
+    const localItems = await offlineDb.table("items").where("company_id").eq(companyId).toArray();
+    const { data: remoteItems, error: itemsError } = await supabase
+      .from("items")
+      .select("*")
+      .eq("company_id", companyId);
+
+    if (itemsError) throw itemsError;
+
+    // Process items from cloud down to local storage
+    for (const remote of (remoteItems || [])) {
+      const local = localItems.find((i) => i.id === remote.id);
+      if (!local) {
+        // New record created on the cloud, download it
+        await offlineDb.table("items").put({ ...remote, is_synced: true, is_deleted: false });
+      } else {
+        const localTime = new Date(local.updated_at || 0).getTime();
+        const remoteTime = new Date(remote.updated_at || 0).getTime();
+
+        if (remoteTime > localTime) {
+          // Cloud has newer data, overwrite local copy
+          await offlineDb.table("items").put({ ...remote, is_synced: true, is_deleted: false });
+        }
+      }
+    }
+
+    // Push local edits upstream to the cloud
+    const unsyncedItems = await offlineDb.table("items")
+      .where("company_id").eq(companyId)
+      .and(item => !item.is_synced)
+      .toArray();
+
+    for (const item of unsyncedItems) {
+      if (item.is_deleted) {
+        await supabase.from("items").delete().eq("id", item.id);
+        await offlineDb.table("items").delete(item.id); // Permanently drop local tracking
+      } else {
+        const { is_synced, is_deleted, ...payload } = item;
+        await supabase.from("items").upsert(payload);
+        await offlineDb.table("items").update(item.id, { is_synced: true });
+      }
+    }
+
+    // ------------------- Sync Ledgers -------------------
+    const localLedgers = await offlineDb.table("ledgers").where("company_id").eq(companyId).toArray();
+    const { data: remoteLedgers, error: ledgersError } = await supabase
+      .from("ledgers")
+      .select("*")
+      .eq("company_id", companyId);
+
+    if (ledgersError) throw ledgersError;
+
+    for (const remote of (remoteLedgers || [])) {
+      const local = localLedgers.find((l) => l.id === remote.id);
+      if (!local) {
+        await offlineDb.table("ledgers").put({ ...remote, is_synced: true, is_deleted: false });
+      } else {
+        const localTime = new Date(local.updated_at || 0).getTime();
+        const remoteTime = new Date(remote.updated_at || 0).getTime();
+
+        if (remoteTime > localTime) {
+          await offlineDb.table("ledgers").put({ ...remote, is_synced: true, is_deleted: false });
+        }
+      }
+    }
+
+    const unsyncedLedgers = await offlineDb.table("ledgers")
+      .where("company_id").eq(companyId)
+      .and(ledger => !ledger.is_synced)
+      .toArray();
+
+    for (const ledger of unsyncedLedgers) {
+      if (ledger.is_deleted) {
+        await supabase.from("ledgers").delete().eq("id", ledger.id);
+        await offlineDb.table("ledgers").delete(ledger.id);
+      } else {
+        const { is_synced, is_deleted, ...payload } = ledger;
+        await supabase.from("ledgers").upsert(payload);
+        await offlineDb.table("ledgers").update(ledger.id, { is_synced: true });
+      }
+    }
+
+  } catch (err) {
+    console.error("Master table synchronization deferred: ", err);
+  }
 }
 
 // ---------- Ledgers ---------------------------------------------------------
@@ -28,7 +112,6 @@ export async function syncEssentialMasters(): Promise<void> {
 export interface LedgerInsertPayload {
   company_id: string;
   name: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type: any;
   group_code?: string | null;
   subgroup_id?: string | null;
@@ -55,24 +138,27 @@ export interface LedgerRow {
 }
 
 export async function createLedger(payload: LedgerInsertPayload): Promise<LedgerRow> {
-  if (isOnlineNow()) {
-    const { data, error } = await supabase
-      .from("ledgers")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert(payload as any)
-      .select("id, name, type, state_code, gstin, gst_treatment")
-      .single();
-    if (error) throw error;
-    return data as LedgerRow;
-  }
   const id = newId();
-  await enqueueWrite({
-    op: "insert",
-    table: "ledgers",
-    payload: { ...payload, id },
-    company_id: payload.company_id,
-    label: `Ledger: ${payload.name}`,
-  });
+  const now = new Date().toISOString();
+  
+  const localRecord = {
+    ...payload,
+    id,
+    gst_treatment: "regular",
+    created_at: now,
+    updated_at: now,
+    is_synced: false,
+    is_deleted: false,
+  };
+
+  // Local-First Write
+  await offlineDb.table("ledgers").put(localRecord);
+
+  // Background Trigger execution
+  if (isOnlineNow()) {
+    syncEssentialMasters(payload.company_id);
+  }
+
   return {
     id,
     name: payload.name,
@@ -88,55 +174,47 @@ export async function updateLedger(
   companyId: string,
   values: Partial<LedgerInsertPayload>,
 ): Promise<LedgerRow | null> {
-  if (isOnlineNow()) {
-    const { data, error } = await supabase
-      .from("ledgers")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update(values as any)
-      .eq("id", id)
-      .select("id, name, type, state_code, gstin, gst_treatment")
-      .single();
-    if (error) throw error;
-    return data as LedgerRow;
+  const now = new Date().toISOString();
+  const existing = await offlineDb.table("ledgers").get(id);
+
+  if (existing) {
+    const updatedRecord = {
+      ...existing,
+      ...values,
+      updated_at: now,
+      is_synced: false,
+    };
+    await offlineDb.table("ledgers").put(updatedRecord);
   }
-  await enqueueWrite({
-    op: "update",
-    table: "ledgers",
-    payload: { id, values },
-    company_id: companyId,
-    label: `Update ledger: ${values.name ?? id.slice(0, 8)}`,
-  });
-  return null;
+
+  if (isOnlineNow()) {
+    syncEssentialMasters(companyId);
+  }
+
+  return existing ? (existing as LedgerRow) : null;
 }
 
 export async function deleteLedger(id: string, companyId: string, label?: string): Promise<void> {
-  if (isOnlineNow()) {
-    const { error } = await supabase.from("ledgers").delete().eq("id", id);
-    if (error) throw error;
-    return;
+  const now = new Date().toISOString();
+  const existing = await offlineDb.table("ledgers").get(id);
+
+  if (existing) {
+    // Flag as soft delete locally so sync architecture can inform cloud database
+    await offlineDb.table("ledgers").put({
+      ...existing,
+      is_deleted: true,
+      is_synced: false,
+      updated_at: now,
+    });
   }
-  await enqueueWrite({
-    op: "delete",
-    table: "ledgers",
-    payload: { id },
-    company_id: companyId,
-    label: `Delete ledger: ${label ?? id.slice(0, 8)}`,
-  });
+
+  if (isOnlineNow()) {
+    syncEssentialMasters(companyId);
+  }
 }
 
 export async function deactivateLedger(id: string, companyId: string): Promise<void> {
-  if (isOnlineNow()) {
-    const { error } = await supabase.from("ledgers").update({ is_active: false }).eq("id", id);
-    if (error) throw error;
-    return;
-  }
-  await enqueueWrite({
-    op: "update",
-    table: "ledgers",
-    payload: { id, values: { is_active: false } },
-    company_id: companyId,
-    label: `Deactivate ledger: ${id.slice(0, 8)}`,
-  });
+  await updateLedger(id, companyId, { is_active: false } as any);
 }
 
 // ---------- Items -----------------------------------------------------------
@@ -163,24 +241,24 @@ export interface ItemRow {
 }
 
 export async function createItem(payload: ItemInsertPayload): Promise<ItemRow> {
-  if (isOnlineNow()) {
-    const { data, error } = await supabase
-      .from("items")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert(payload as any)
-      .select("id, name, unit, gst_rate, hsn_code")
-      .single();
-    if (error) throw error;
-    return data as ItemRow;
-  }
   const id = newId();
-  await enqueueWrite({
-    op: "insert",
-    table: "items",
-    payload: { ...payload, id },
-    company_id: payload.company_id,
-    label: `Item: ${payload.name}`,
-  });
+  const now = new Date().toISOString();
+
+  const localRecord = {
+    ...payload,
+    id,
+    created_at: now,
+    updated_at: now,
+    is_synced: false,
+    is_deleted: false,
+  };
+
+  await offlineDb.table("items").put(localRecord);
+
+  if (isOnlineNow()) {
+    syncEssentialMasters(payload.company_id);
+  }
+
   return {
     id,
     name: payload.name,
@@ -195,53 +273,44 @@ export async function updateItem(
   companyId: string,
   values: Partial<ItemInsertPayload>,
 ): Promise<ItemRow | null> {
-  if (isOnlineNow()) {
-    const { data, error } = await supabase
-      .from("items")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update(values as any)
-      .eq("id", id)
-      .select("id, name, unit, gst_rate, hsn_code")
-      .single();
-    if (error) throw error;
-    return data as ItemRow;
+  const now = new Date().toISOString();
+  const existing = await offlineDb.table("items").get(id);
+
+  if (existing) {
+    const updatedRecord = {
+      ...existing,
+      ...values,
+      updated_at: now,
+      is_synced: false,
+    };
+    await offlineDb.table("items").put(updatedRecord);
   }
-  await enqueueWrite({
-    op: "update",
-    table: "items",
-    payload: { id, values },
-    company_id: companyId,
-    label: `Update item: ${values.name ?? id.slice(0, 8)}`,
-  });
-  return null;
+
+  if (isOnlineNow()) {
+    syncEssentialMasters(companyId);
+  }
+
+  return existing ? (existing as ItemRow) : null;
 }
 
 export async function deleteItem(id: string, companyId: string, label?: string): Promise<void> {
-  if (isOnlineNow()) {
-    const { error } = await supabase.from("items").delete().eq("id", id);
-    if (error) throw error;
-    return;
+  const now = new Date().toISOString();
+  const existing = await offlineDb.table("items").get(id);
+
+  if (existing) {
+    await offlineDb.table("items").put({
+      ...existing,
+      is_deleted: true,
+      is_synced: false,
+      updated_at: now,
+    });
   }
-  await enqueueWrite({
-    op: "delete",
-    table: "items",
-    payload: { id },
-    company_id: companyId,
-    label: `Delete item: ${label ?? id.slice(0, 8)}`,
-  });
+
+  if (isOnlineNow()) {
+    syncEssentialMasters(companyId);
+  }
 }
 
 export async function deactivateItem(id: string, companyId: string): Promise<void> {
-  if (isOnlineNow()) {
-    const { error } = await supabase.from("items").update({ is_active: false }).eq("id", id);
-    if (error) throw error;
-    return;
-  }
-  await enqueueWrite({
-    op: "update",
-    table: "items",
-    payload: { id, values: { is_active: false } },
-    company_id: companyId,
-    label: `Deactivate item: ${id.slice(0, 8)}`,
-  });
+  await updateItem(id, companyId, { is_active: false } as any);
 }
