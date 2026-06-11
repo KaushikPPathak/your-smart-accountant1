@@ -2,7 +2,7 @@
 // Includes strict, timestamp-aware delivery matching our Last-Write-Wins pattern.
 
 import { supabase } from "@/integrations/supabase/client";
-import { db as offlineDb } from "./db"; // Explicit named import matching your db.ts export statement
+import { offlineDb } from "./db"; // Direct named import matching your real database instance
 import type { OutboxRow } from "./db"; 
 import { isOnlineNow, pingOnline } from "./online-status";
 
