@@ -2,8 +2,22 @@
 // Includes strict, timestamp-aware delivery matching our Last-Write-Wins pattern.
 
 import { supabase } from "@/integrations/supabase/client";
-import offlineDb, { type OutboxRow } from "./db";
+import offlineDb from "./db"; 
 import { isOnlineNow, pingOnline } from "./online-status";
+
+// Explicitly define the interface here to prevent Rollup parsing deadlocks on './db' types
+export interface OutboxRow {
+  id?: number;
+  company_id?: string;
+  table: string;
+  op: "insert" | "update" | "delete" | "rpc" | "custom";
+  payload: any;
+  created_at?: number;
+  attempts?: number;
+  last_error?: string | null;
+  label?: string;
+  executor?: string;
+}
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -24,7 +38,7 @@ export async function queueSize(): Promise<number> {
 }
 
 export async function listOutbox(): Promise<OutboxRow[]> {
-  return offlineDb.outbox.orderBy("created_at").toArray();
+  return offlineDb.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
 }
 
 export async function enqueueWrite(row: Omit<OutboxRow, "id" | "created_at" | "attempts" | "last_error">): Promise<void> {
@@ -69,7 +83,7 @@ async function executeOutboxRow(row: OutboxRow): Promise<void> {
   if (row.op === "rpc" && row.rpc) {
     const { error } = await (supabase as unknown as {
       rpc: (name: string, args: unknown) => Promise<{ error: { message: string } | null }>;
-    }).rpc(row.rpc, row.payload);
+    }).rpc((row as any).rpc, row.payload);
     if (error) throw new Error(error.message);
     return;
   }
@@ -113,7 +127,7 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
     const online = await pingOnline();
     if (!online) return { pushed: 0, failed: 0 };
     
-    const rows = await offlineDb.outbox.orderBy("created_at").toArray();
+    const rows = await offlineDb.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
     
     for (const row of rows) {
       try {
