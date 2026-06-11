@@ -26,9 +26,6 @@ import { closeNativeApp } from "@/lib/native-bridge";
 import { useAuth } from "@/lib/auth-context";
 import { isOnlineNow } from "@/lib/offline/online-status";
 
-// Safe Alias Import: Maps the true 'offlineDb' export to the local 'db' variable safely
-import { offlineDb as db } from "@/lib/offline/db";
-
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
@@ -63,8 +60,11 @@ function StartScreen() {
     (async () => {
       setLoading(true);
       try {
-        // Check if the system is completely offline right now
         const online = isOnlineNow();
+
+        // Dynamically import DB module engine to safely isolate bundling compilation
+        const dbModule = await import("@/lib/offline/db");
+        const db = dbModule.default || dbModule.offlineDb || (dbModule as any).db;
 
         if (online) {
           // 🌐 ONLINE: Fetch from cloud database
@@ -102,9 +102,8 @@ function StartScreen() {
             if (cancelled) return;
             
             // Safe Parsing: Handles empty records or mismatched database column properties safely
-            const formattedLocal = (cachedData || []).map(c => ({
+            const formattedLocal = (cachedData || []).map((c: any) => ({
               id: c.id || String(Math.random()),
-              // Fallback to internal properties if schema fields vary offline
               name: c.name || c.company_name || "Saved Company Workspace",
               has_password: 'has_password' in c ? Boolean(c.has_password) : false
             }));
@@ -118,7 +117,6 @@ function StartScreen() {
             }
           } catch (dbErr) {
             console.error("Local database retrieval crash handled:", dbErr);
-            // Defensively check if localStorage holds any backup active keys
             const backupActiveId = localStorage.getItem("ym_active_company_id");
             if (backupActiveId && !cancelled) {
               setCompanies([
@@ -166,7 +164,6 @@ function StartScreen() {
     if (!pendingCompany) return;
     setVerifying(true);
     try {
-      // Offline fallback verification check bypass
       if (!isOnlineNow()) {
         console.warn("Offline system bypass: local voucher lock validated.");
         markCompanyUnlocked(pendingCompany.id);
