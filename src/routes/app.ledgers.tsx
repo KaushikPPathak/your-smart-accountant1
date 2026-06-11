@@ -80,7 +80,6 @@ interface Ledger {
   is_active: boolean;
 }
 
-
 type FormState = {
   name: string;
   type: string;
@@ -129,7 +128,6 @@ function LedgersPage() {
   const [submitting, setSubmitting] = useState(false);
   const { view, setView } = useReportView("masters-ledgers");
 
-
   const load = async () => {
     if (!activeCompanyId) {
       setLedgers([]);
@@ -153,8 +151,37 @@ function LedgersPage() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompanyId]);
+
+  // AUTO-EXTRACT PAN & AUTO-POPULATE STATE CODE SYNCHRONOUSLY
+  useEffect(() => {
+    const cleanGstin = form.gstin.trim().toUpperCase();
+    if (!cleanGstin) return;
+
+    let updatedFields: Partial<FormState> = {};
+
+    // 1. Auto-match state choice prefix
+    if (cleanGstin.length >= 2) {
+      const prefix = cleanGstin.substring(0, 2);
+      const matchedState = INDIAN_STATES.find((s) => s.code === prefix);
+      if (matchedState && form.state_code !== matchedState.code) {
+        updatedFields.state_code = matchedState.code;
+        updatedFields.state = matchedState.name;
+      }
+    }
+
+    // 2. Extract 10-digit PAN format from positions 3 to 12
+    if (cleanGstin.length >= 12) {
+      const extractedPan = cleanGstin.substring(2, 12);
+      if (form.pan !== extractedPan) {
+        updatedFields.pan = extractedPan;
+      }
+    }
+
+    if (Object.keys(updatedFields).length > 0) {
+      setForm((prev) => ({ ...prev, ...updatedFields }));
+    }
+  }, [form.gstin]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -301,7 +328,8 @@ function LedgersPage() {
                 <DialogTitle className="text-base sm:text-lg">{editing ? "Edit ledger" : "Create new ledger"}</DialogTitle>
               </DialogHeader>
               <form onSubmit={onSubmit} className="flex flex-col flex-1 min-h-0">
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2 overflow-y-auto px-4 sm:px-6 py-3 flex-1 min-h-0">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 overflow-y-auto px-4 sm:px-6 py-4 flex-1 min-h-0">
+                  
                   <div className="space-y-1 col-span-2">
                     <Label htmlFor="name">Ledger name *</Label>
                     <Input
@@ -312,14 +340,13 @@ function LedgersPage() {
                       autoFocus
                     />
                   </div>
+
                   <div className="space-y-1 col-span-2">
                     <Label htmlFor="type">Type *</Label>
                     <Select
                       value={form.type}
                       onValueChange={(v) => {
                         const newType = v as LedgerTypeValue;
-                        // Auto-pick a sensible group when changing type, unless the
-                        // currently selected group is still valid for this type.
                         const cur = form.group_code ? GROUP_BY_CODE[form.group_code] : undefined;
                         const stillValid = cur?.ledgerTypes.includes(newType);
                         setForm({
@@ -329,7 +356,7 @@ function LedgersPage() {
                         });
                       }}
                     >
-                      <SelectTrigger id="type">
+                      <SelectTrigger id="type" className="bg-white">
                         <SelectValue placeholder="Select ledger type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -341,13 +368,12 @@ function LedgersPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div className="space-y-1 col-span-2">
                     <Label htmlFor="group_code">Group (Income-Tax / Schedule III) *</Label>
                     <Select
                       value={form.group_code}
                       onValueChange={(v) => {
-                        // When group changes, also normalise the underlying ledger.type
-                        // so postings & legacy reports keep working.
                         const grp = GROUP_BY_CODE[v];
                         const compatible = grp && (grp.ledgerTypes.includes(form.type as LedgerTypeValue));
                         setForm({
@@ -358,13 +384,13 @@ function LedgersPage() {
                         });
                       }}
                     >
-                      <SelectTrigger id="group_code">
+                      <SelectTrigger id="group_code" className="bg-white">
                         <SelectValue placeholder="Select group" />
                       </SelectTrigger>
                       <SelectContent>
                         {(["BS_LIAB", "BS_ASSET", "TRADING", "PL"] as const).map((sec) => (
                           <div key={sec}>
-                            <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                            <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground bg-slate-50/60 sticky top-0">
                               {sec === "BS_LIAB" ? "Sources of Funds (Liabilities)"
                                 : sec === "BS_ASSET" ? "Application of Funds (Assets)"
                                 : sec === "TRADING" ? "Trading Account"
@@ -380,6 +406,7 @@ function LedgersPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
                   {form.group_code && subgroupsFor(form.group_code, subgroups).length > 0 && (
                     <div className="space-y-1 col-span-2">
                       <Label htmlFor="subgroup_id">Sub-group (optional)</Label>
@@ -387,7 +414,7 @@ function LedgersPage() {
                         value={form.subgroup_id || "__none__"}
                         onValueChange={(v) => setForm({ ...form, subgroup_id: v === "__none__" ? "" : v })}
                       >
-                        <SelectTrigger id="subgroup_id">
+                        <SelectTrigger id="subgroup_id" className="bg-white">
                           <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent>
@@ -399,26 +426,30 @@ function LedgersPage() {
                       </Select>
                     </div>
                   )}
-                  <div className="space-y-1">
+
+                  {/* SIDE-BY-SIDE NEIGHBORHOOD CONTAINER: GSTIN AND STATE COMBINATION */}
+                  <div className="space-y-1 flex flex-col justify-end">
                     <Label htmlFor="gstin">GSTIN</Label>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2 w-full">
                       <Input
                         id="gstin"
                         value={form.gstin}
                         onChange={(e) =>
-                          setForm({ ...form, gstin: e.target.value.toUpperCase() })
+                          setForm({ ...form, gstin: e.target.value.toUpperCase().trim() })
                         }
                         maxLength={15}
-                        placeholder="22AAAAA0000A1Z5"
+                        placeholder="24AAAAA0000A1Z5"
+                        className="font-mono uppercase tracking-wider flex-1"
                       />
                       <GstinPortalButton gstin={form.gstin} />
                     </div>
                     <GstinInlineError value={form.gstin} />
                   </div>
-                  <div className="space-y-1">
+
+                  <div className="space-y-1 flex flex-col justify-end">
                     <Label htmlFor="state_code">State</Label>
                     <Select value={form.state_code} onValueChange={onStateCodeChange}>
-                      <SelectTrigger id="state_code">
+                      <SelectTrigger id="state_code" className="bg-white">
                         <SelectValue placeholder="Select state" />
                       </SelectTrigger>
                       <SelectContent>
@@ -429,7 +460,10 @@ function LedgersPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {/* Visual spacer to align cleanly with the inline error height */}
+                    <div className="h-4" />
                   </div>
+
                   <div className="space-y-1">
                     <Label htmlFor="phone">Phone</Label>
                     <Input
@@ -437,8 +471,10 @@ function LedgersPage() {
                       value={form.phone}
                       onChange={(e) => setForm({ ...form, phone: e.target.value })}
                       maxLength={20}
+                      placeholder="Contact number"
                     />
                   </div>
+
                   <div className="space-y-1">
                     <Label htmlFor="email">Email</Label>
                     <Input
@@ -447,8 +483,10 @@ function LedgersPage() {
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
                       maxLength={255}
+                      placeholder="email@domain.com"
                     />
                   </div>
+
                   <div className="space-y-1 col-span-2">
                     <Label htmlFor="address">Address</Label>
                     <Textarea
@@ -457,56 +495,67 @@ function LedgersPage() {
                       onChange={(e) => setForm({ ...form, address: e.target.value })}
                       maxLength={500}
                       rows={2}
+                      placeholder="Registered business or delivery address"
                     />
                   </div>
-                  <div className="space-y-1">
+
+                  <div className="space-y-1 col-span-2 sm:col-span-1">
                     <Label htmlFor="pan">PAN</Label>
-                    <Input id="pan" value={form.pan} onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })} maxLength={10} placeholder="ABCDE1234F" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="opening_balance">Opening balance (₹)</Label>
-                    <Input
-                      id="opening_balance"
-                      type="number"
-                      step="0.01"
-                      value={form.opening_balance}
-                      onChange={(e) =>
-                        setForm({ ...form, opening_balance: e.target.value })
-                      }
-                      placeholder="0.00"
+                    <Input 
+                      id="pan" 
+                      value={form.pan} 
+                      onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase().trim() })} 
+                      maxLength={10} 
+                      placeholder="ABCDE1234F" 
+                      className="font-mono bg-slate-50/50 text-slate-700"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="ob_type">Dr / Cr</Label>
-                    <Select
-                      value={form.opening_balance_is_debit ? "dr" : "cr"}
-                      onValueChange={(v) =>
-                        setForm({ ...form, opening_balance_is_debit: v === "dr" })
-                      }
-                    >
-                      <SelectTrigger id="ob_type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="dr">Debit (Dr)</SelectItem>
-                        <SelectItem value="cr">Credit (Cr)</SelectItem>
-                      </SelectContent>
-                    </Select>
+
+                  <div className="grid grid-cols-3 gap-2 col-span-2 sm:col-span-1">
+                    <div className="space-y-1 col-span-2">
+                      <Label htmlFor="opening_balance">Opening balance (₹)</Label>
+                      <Input
+                        id="opening_balance"
+                        type="number"
+                        step="0.01"
+                        value={form.opening_balance}
+                        onChange={(e) => setForm({ ...form, opening_balance: e.target.value })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="ob_type">Dr / Cr</Label>
+                      <Select
+                        value={form.opening_balance_is_debit ? "dr" : "cr"}
+                        onValueChange={(v) => setForm({ ...form, opening_balance_is_debit: v === "dr" })}
+                      >
+                        <SelectTrigger id="ob_type" className="bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="dr">Dr</SelectItem>
+                          <SelectItem value="cr">Cr</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+
                   <div className="space-y-1">
                     <Label htmlFor="credit_limit">Credit limit (₹)</Label>
                     <Input id="credit_limit" type="number" step="0.01" value={form.credit_limit} onChange={(e) => setForm({ ...form, credit_limit: e.target.value })} placeholder="0.00" />
                   </div>
+
                   <div className="space-y-1">
                     <Label htmlFor="credit_days">Credit days</Label>
                     <Input id="credit_days" type="number" value={form.credit_days} onChange={(e) => setForm({ ...form, credit_days: e.target.value })} placeholder="0" />
                   </div>
+
                 </div>
                 <DialogFooter className="px-4 sm:px-6 py-3 border-t shrink-0 bg-background gap-2">
                   <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={submitting}>
+                  <Button type="submit" disabled={submitting} className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm">
                     {submitting ? "Saving…" : editing ? "Save changes" : "Create ledger"}
                   </Button>
                 </DialogFooter>
