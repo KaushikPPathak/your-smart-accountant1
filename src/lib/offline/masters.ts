@@ -7,7 +7,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineNow } from "./online-status";
 import { enqueueWrite } from "./outbox";
-import { offlineDb } from "./db"; // Named import matching your db.ts export statement
+import { db as offlineDb } from "./db"; // Explicitly match your db export alias
 import type { LedgerCacheRow, ItemCacheRow } from "./db";
 
 function newId(): string {
