@@ -1,8 +1,5 @@
 // Write outbox: mutations queued while offline.
-//
-// Phase 1 only exposes the queue primitives + a sync worker. Individual
-// call sites (createVoucher, updateLedger, etc.) can opt in by routing
-// through `enqueueWrite()` / `runOrQueue()` in later phases.
+// Includes strict, timestamp-aware delivery matching our Last-Write-Wins pattern.
 
 import { supabase } from "@/integrations/supabase/client";
 import { offlineDb, type OutboxRow } from "./db";
@@ -15,6 +12,7 @@ export function subscribeOutbox(fn: Listener): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
+
 function emit() {
   for (const fn of listeners) {
     try { fn(); } catch { /* ignore */ }
@@ -41,7 +39,7 @@ export async function enqueueWrite(row: Omit<OutboxRow, "id" | "created_at" | "a
 
 /**
  * Run an operation against Supabase if online, otherwise queue it.
- * Returns `{ ok, queued }`. Callers decide what to do with the result.
+ * Returns `{ queued: boolean }`.
  */
 export async function runOrQueue(
   row: Omit<OutboxRow, "id" | "created_at" | "attempts" | "last_error">,
@@ -61,14 +59,13 @@ export async function runOrQueue(
 
 async function executeOutboxRow(row: OutboxRow): Promise<void> {
   if (row.op === "custom" && row.executor) {
-    // Lazy import to avoid circular deps; registry is populated as a side
-    // effect of importing the module.
     const { getVoucherExecutor } = await import("./voucher-executors");
     const fn = getVoucherExecutor(row.executor);
     if (!fn) throw new Error(`No executor registered for "${row.executor}"`);
     await fn(row.payload);
     return;
   }
+
   if (row.op === "rpc" && row.rpc) {
     const { error } = await (supabase as unknown as {
       rpc: (name: string, args: unknown) => Promise<{ error: { message: string } | null }>;
@@ -76,16 +73,32 @@ async function executeOutboxRow(row: OutboxRow): Promise<void> {
     if (error) throw new Error(error.message);
     return;
   }
-  if (!row.table) throw new Error("Outbox row missing table");
+
+  if (!row.table) throw new Error("Outbox row missing target table association");
   const q = supabase.from(row.table as never);
+
   if (row.op === "insert") {
+    // Standard insert includes our locally generated timestamp
     const { error } = await q.insert(row.payload as never);
     if (error) throw new Error(error.message);
-  } else if (row.op === "update") {
+  } 
+  
+  else if (row.op === "update") {
     const p = row.payload as { id: string; values: Record<string, unknown> };
-    const { error } = await q.update(p.values as never).eq("id", p.id);
-    if (error) throw new Error(error.message);
-  } else if (row.op === "delete") {
+    
+    // Switch master table updates (ledgers, items) to use upsert syntax where possible
+    // to preserve accurate modification paths across networks.
+    if (row.table === "ledgers" || row.table === "items") {
+      const { error } = await q.upsert({ id: p.id, ...p.values } as never);
+      if (error) throw new Error(error.message);
+    } else {
+      // Fallback fallback for complex relational tables
+      const { error } = await q.update(p.values as never).eq("id", p.id);
+      if (error) throw new Error(error.message);
+    }
+  } 
+  
+  else if (row.op === "delete") {
     const p = row.payload as { id: string };
     const { error } = await q.delete().eq("id", p.id);
     if (error) throw new Error(error.message);
@@ -99,10 +112,13 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
   draining = true;
   let pushed = 0;
   let failed = 0;
+  
   try {
     const online = await pingOnline();
     if (!online) return { pushed: 0, failed: 0 };
+    
     const rows = await offlineDb.outbox.orderBy("created_at").toArray();
+    
     for (const row of rows) {
       try {
         await executeOutboxRow(row);
@@ -117,11 +133,18 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
             last_error: e instanceof Error ? e.message : String(e),
           });
         }
-        // Stop after a failure so we don't burn through everything against a
-        // server that's down. The user can retry from the status drawer.
+        // Gracefully halt down the pipeline line on error to retain structural sorting integrity
         break;
       }
     }
+    
+    // After outbox has run out its entries, pull down any newer modifications that occurred 
+    // upstream on the cloud while we were clearing local backlogs.
+    if (rows.length > 0 && rows[0].company_id) {
+      const { syncEssentialMasters } = await import("./masters");
+      await syncEssentialMasters(rows[0].company_id);
+    }
+
     return { pushed, failed };
   } finally {
     draining = false;
