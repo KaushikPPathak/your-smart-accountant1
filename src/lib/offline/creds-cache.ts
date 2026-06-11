@@ -10,7 +10,6 @@
 
 import bcrypt from "bcryptjs";
 import { supabase } from "@/integrations/supabase/client";
-import offlineDb from "./db";
 
 // Declare interface inline to permanently break the Rollup AST parsing deadlock
 export interface AccountCredCacheRow {
@@ -21,6 +20,12 @@ export interface AccountCredCacheRow {
   password_hash: string;
   is_active: boolean;
   cached_at: number;
+}
+
+// Dynamically resolve the offline database instance to avoid top-level bundler collision
+async function getOfflineDb() {
+  const module = await import("./db");
+  return module.default || module.offlineDb || (module as any).db;
 }
 
 const LOCKOUT_KEY = "ym_local_lock_until";
@@ -50,6 +55,8 @@ export async function cacheAccountCredsFromCloud(
       is_active: (data.is_active as boolean) ?? true,
       cached_at: Date.now(),
     };
+    
+    const offlineDb = await getOfflineDb();
     await offlineDb.account_creds.put(row);
 
     // Also persist into the native SQLite store so the Tauri desktop
@@ -101,6 +108,7 @@ async function persistLocalUserNative(
 
 export async function refreshAllCachedCreds(): Promise<void> {
   try {
+    const offlineDb = await getOfflineDb();
     const rows = await offlineDb.account_creds.toArray() as unknown as AccountCredCacheRow[];
     if (rows.length === 0) return;
     const usernames = rows.map((r) => r.username);
@@ -137,8 +145,6 @@ export interface OfflineLoginResult {
 /**
  * Verify a username/password pair against the locally cached bcrypt hash.
  * Enforces a soft lockout (5 wrong attempts -> 60 s) mirroring the server.
- *
- * Modified to bypass the hard error block if no local database cache exists yet.
  */
 export async function verifyOfflineLogin(
   username: string,
@@ -151,6 +157,7 @@ export async function verifyOfflineLogin(
   }
 
   const uname = username.trim().toLowerCase();
+  const offlineDb = await getOfflineDb();
   const row = await offlineDb.account_creds.get(uname) as unknown as AccountCredCacheRow | undefined;
 
   // Fallback: when Dexie has no cached row (e.g. fresh browser profile
@@ -201,11 +208,13 @@ async function tryNativeOfflineLogin(
 }
 
 export async function isAccountCached(username: string): Promise<boolean> {
+  const offlineDb = await getOfflineDb();
   const row = await offlineDb.account_creds.get(username.trim().toLowerCase());
   return Boolean(row);
 }
 
 export async function clearAccountCache(): Promise<void> {
+  const offlineDb = await getOfflineDb();
   await offlineDb.account_creds.clear();
   localStorage.removeItem(LOCKOUT_KEY);
   localStorage.removeItem(ATTEMPTS_KEY);
