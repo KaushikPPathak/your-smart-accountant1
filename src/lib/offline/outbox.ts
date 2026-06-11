@@ -2,10 +2,9 @@
 // Includes strict, timestamp-aware delivery matching our Last-Write-Wins pattern.
 
 import { supabase } from "@/integrations/supabase/client";
-import offlineDb from "./db"; 
 import { isOnlineNow, pingOnline } from "./online-status";
+import { db } from "./db";
 
-// Explicitly define the interface here to prevent Rollup parsing deadlocks on './db' types
 export interface OutboxRow {
   id?: number;
   company_id?: string;
@@ -34,15 +33,15 @@ function emit() {
 }
 
 export async function queueSize(): Promise<number> {
-  return offlineDb.outbox.count();
+  return db.outbox.count();
 }
 
 export async function listOutbox(): Promise<OutboxRow[]> {
-  return offlineDb.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
+  return db.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
 }
 
 export async function enqueueWrite(row: Omit<OutboxRow, "id" | "created_at" | "attempts" | "last_error">): Promise<void> {
-  await offlineDb.outbox.add({
+  await db.outbox.add({
     ...row,
     created_at: Date.now(),
     attempts: 0,
@@ -51,10 +50,6 @@ export async function enqueueWrite(row: Omit<OutboxRow, "id" | "created_at" | "a
   emit();
 }
 
-/**
- * Run an operation against Supabase if online, otherwise queue it.
- * Returns `{ queued: boolean }`.
- */
 export async function runOrQueue(
   row: Omit<OutboxRow, "id" | "created_at" | "attempts" | "last_error">,
 ): Promise<{ queued: boolean }> {
@@ -127,18 +122,18 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
     const online = await pingOnline();
     if (!online) return { pushed: 0, failed: 0 };
     
-    const rows = await offlineDb.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
+    const rows = await db.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
     
     for (const row of rows) {
       try {
         await executeOutboxRow(row);
-        if (row.id !== undefined) await offlineDb.outbox.delete(row.id);
+        if (row.id !== undefined) await db.outbox.delete(row.id);
         pushed += 1;
         emit();
       } catch (e) {
         failed += 1;
         if (row.id !== undefined) {
-          await offlineDb.outbox.update(row.id, {
+          await db.outbox.update(row.id, {
             attempts: (row.attempts ?? 0) + 1,
             last_error: e instanceof Error ? e.message : String(e),
           });
@@ -160,6 +155,6 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
 }
 
 export async function clearOutboxRow(id: number): Promise<void> {
-  await offlineDb.outbox.delete(id);
+  await db.outbox.delete(id);
   emit();
 }
