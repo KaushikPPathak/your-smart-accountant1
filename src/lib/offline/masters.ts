@@ -7,7 +7,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineNow } from "./online-status";
 import { enqueueWrite } from "./outbox";
-import offlineDb from "./db"; // Default import matches your v2 Dexie setup
+import { db as offlineDb } from "./db"; // Explicit named import matching your db.ts export statement
 import type { LedgerCacheRow, ItemCacheRow } from "./db";
 
 function newId(): string {
