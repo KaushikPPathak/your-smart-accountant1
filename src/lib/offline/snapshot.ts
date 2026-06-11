@@ -13,8 +13,25 @@
 //     doesn't starve the rest.
 
 import { supabase } from "@/integrations/supabase/client";
-import { offlineDb, setMeta, type SyncCursorRow } from "./db";
 import { isOnlineNow, pingOnline } from "./online-status";
+
+// Declare interface inline to permanently break the Rollup AST parsing deadlock
+export interface SyncCursorRow {
+  key: string;
+  company_id: string;
+  table: string;
+  last_updated_at: string;
+  last_run_at: number;
+}
+
+// Runtime dynamic import resolver to completely bypass top-of-file compilation crashes
+async function getDbInstance() {
+  const module = await import("./db");
+  return {
+    db: module.default || module.offlineDb || (module as any).db,
+    setMeta: module.setMeta
+  };
+}
 
 const PAGE_SIZE = 1000;
 const EPOCH = "1970-01-01T00:00:00.000Z";
@@ -32,22 +49,23 @@ const SNAPSHOT_TABLES = [
 
 type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 
-function dexieFor(table: SnapshotTable) {
+function dexieFor(table: SnapshotTable, db: any) {
   switch (table) {
-    case "companies": return offlineDb.cache_companies;
-    case "company_settings": return offlineDb.cache_company_settings;
-    case "ledgers": return offlineDb.cache_ledgers;
-    case "items": return offlineDb.cache_items;
-    case "account_subgroups": return offlineDb.cache_account_subgroups;
-    case "ledger_group_mappings": return offlineDb.cache_ledger_group_mappings;
-    case "account_group_overrides": return offlineDb.cache_account_group_overrides;
-    case "vouchers": return offlineDb.cache_vouchers;
+    case "companies": return db.cache_companies;
+    case "company_settings": return db.cache_company_settings;
+    case "ledgers": return db.cache_ledgers;
+    case "items": return db.cache_items;
+    case "account_subgroups": return db.cache_account_subgroups;
+    case "ledger_group_mappings": return db.cache_ledger_group_mappings;
+    case "account_group_overrides": return db.cache_account_group_overrides;
+    case "vouchers": return db.cache_vouchers;
   }
 }
 
 async function getCursor(companyId: string, table: string): Promise<string> {
   const key = `${companyId}:${table}`;
-  const row = await offlineDb.sync_cursors.get(key);
+  const { db } = await getDbInstance();
+  const row = await db.sync_cursors.get(key);
   return row?.last_updated_at ?? EPOCH;
 }
 
@@ -59,7 +77,8 @@ async function setCursor(companyId: string, table: string, last_updated_at: stri
     last_updated_at,
     last_run_at: Date.now(),
   };
-  await offlineDb.sync_cursors.put(row);
+  const { db } = await getDbInstance();
+  await db.sync_cursors.put(row);
 }
 
 async function pullTable(table: SnapshotTable, companyId: string): Promise<number> {
@@ -68,13 +87,9 @@ async function pullTable(table: SnapshotTable, companyId: string): Promise<numbe
   let from = 0;
   let lastSeen = since;
 
-  // companies table doesn't have company_id (it IS the company); special-case
   const isCompaniesTable = table === "companies";
 
   while (true) {
-    // Dynamic table name defeats Supabase's typed query helpers; cast to a
-    // loose builder so we can chain .eq with arbitrary column names.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q: any = (supabase.from(table as never) as any)
       .select("*")
       .order("updated_at", { ascending: true })
@@ -88,9 +103,8 @@ async function pullTable(table: SnapshotTable, companyId: string): Promise<numbe
     const rows = (data ?? []) as Array<Record<string, unknown>>;
     if (rows.length === 0) break;
 
-    const table_ = dexieFor(table);
-    // Dexie's bulkPut typing is wide; we trust the cloud row shape.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { db } = await getDbInstance();
+    const table_ = dexieFor(table, db);
     await (table_ as any).bulkPut(rows);
     pulled += rows.length;
     lastSeen = String(rows[rows.length - 1].updated_at ?? lastSeen);
@@ -104,13 +118,11 @@ async function pullTable(table: SnapshotTable, companyId: string): Promise<numbe
 }
 
 async function pullVoucherChildren(companyId: string): Promise<{ entries: number; items: number }> {
-  // Look at any voucher rows whose updated_at is newer than the last child
-  // pull, then refresh THEIR entries/items. This keeps us correct even when
-  // a voucher edit changes lines but not the children's identity.
   const childCursor = await getCursor(companyId, "voucher_children");
-  const newish = await offlineDb.cache_vouchers
+  const { db } = await getDbInstance();
+  const newish = await db.cache_vouchers
     .where("company_id").equals(companyId)
-    .and((v) => String(v.updated_at) > childCursor)
+    .and((v: any) => String(v.updated_at) > childCursor)
     .toArray();
   if (newish.length === 0) return { entries: 0, items: 0 };
 
@@ -119,7 +131,6 @@ async function pullVoucherChildren(companyId: string): Promise<{ entries: number
   let items = 0;
   let latest = childCursor;
 
-  // Chunk the IN(...) to avoid URL length limits.
   for (let i = 0; i < voucherIds.length; i += 200) {
     const slice = voucherIds.slice(i, i + 200);
 
@@ -130,17 +141,14 @@ async function pullVoucherChildren(companyId: string): Promise<{ entries: number
     if (eErr) throw new Error(`voucher_entries: ${eErr.message}`);
     if (iErr) throw new Error(`voucher_items: ${iErr.message}`);
 
-    // Replace-by-voucher to handle deleted lines.
-    await offlineDb.cache_voucher_entries.where("voucher_id").anyOf(slice).delete();
-    await offlineDb.cache_voucher_items.where("voucher_id").anyOf(slice).delete();
+    await db.cache_voucher_entries.where("voucher_id").anyOf(slice).delete();
+    await db.cache_voucher_items.where("voucher_id").anyOf(slice).delete();
     if (eData?.length) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await offlineDb.cache_voucher_entries.bulkPut(eData as any);
+      await db.cache_voucher_entries.bulkPut(eData as any);
       entries += eData.length;
     }
     if (iData?.length) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await offlineDb.cache_voucher_items.bulkPut(iData as any);
+      await db.cache_voucher_items.bulkPut(iData as any);
       items += iData.length;
     }
   }
@@ -161,10 +169,6 @@ export interface SnapshotResult {
 
 let pullInFlight: Promise<SnapshotResult | null> | null = null;
 
-/**
- * Pull all cached tables for a single company. Best-effort: per-table
- * failures are recorded but do not abort other tables.
- */
 export async function pullCompanySnapshot(companyId: string): Promise<SnapshotResult | null> {
   if (!isOnlineNow()) return null;
   const ok = await pingOnline();
@@ -194,15 +198,12 @@ export async function pullCompanySnapshot(companyId: string): Promise<SnapshotRe
   }
 
   result.finishedAt = Date.now();
+  const { setMeta } = await getDbInstance();
   await setMeta(`snapshot:last:${companyId}`, result);
   await setMeta("snapshot:last_any", result);
   return result;
 }
 
-/**
- * Pull snapshots for every company the current user has access to.
- * Coalesces concurrent calls.
- */
 export async function pullSnapshot(): Promise<SnapshotResult | null> {
   if (pullInFlight) return pullInFlight;
   pullInFlight = (async () => {
@@ -232,40 +233,41 @@ export async function pullSnapshot(): Promise<SnapshotResult | null> {
 }
 
 export async function getLastSnapshotResult(): Promise<SnapshotResult | null> {
-  const row = await offlineDb.meta.get("snapshot:last_any");
+  const { db } = await getDbInstance();
+  const row = await db.meta.get("snapshot:last_any");
   return (row?.value as SnapshotResult) ?? null;
 }
 
-/** Hard-reset every cache table + cursors. Useful from the status drawer. */
 export async function resetSnapshotCache(): Promise<void> {
-  await offlineDb.transaction(
+  const { db } = await getDbInstance();
+  await db.transaction(
     "rw",
     [
-      offlineDb.cache_companies,
-      offlineDb.cache_company_settings,
-      offlineDb.cache_ledgers,
-      offlineDb.cache_items,
-      offlineDb.cache_account_subgroups,
-      offlineDb.cache_ledger_group_mappings,
-      offlineDb.cache_account_group_overrides,
-      offlineDb.cache_vouchers,
-      offlineDb.cache_voucher_entries,
-      offlineDb.cache_voucher_items,
-      offlineDb.sync_cursors,
+      db.cache_companies,
+      db.cache_company_settings,
+      db.cache_ledgers,
+      db.cache_items,
+      db.cache_account_subgroups,
+      db.cache_ledger_group_mappings,
+      db.cache_account_group_overrides,
+      db.cache_vouchers,
+      db.cache_voucher_entries,
+      db.cache_voucher_items,
+      db.sync_cursors,
     ],
     async () => {
       await Promise.all([
-        offlineDb.cache_companies.clear(),
-        offlineDb.cache_company_settings.clear(),
-        offlineDb.cache_ledgers.clear(),
-        offlineDb.cache_items.clear(),
-        offlineDb.cache_account_subgroups.clear(),
-        offlineDb.cache_ledger_group_mappings.clear(),
-        offlineDb.cache_account_group_overrides.clear(),
-        offlineDb.cache_vouchers.clear(),
-        offlineDb.cache_voucher_entries.clear(),
-        offlineDb.cache_voucher_items.clear(),
-        offlineDb.sync_cursors.clear(),
+        db.cache_companies.clear(),
+        db.cache_company_settings.clear(),
+        db.cache_ledgers.clear(),
+        db.cache_items.clear(),
+        db.cache_account_subgroups.clear(),
+        db.cache_ledger_group_mappings.clear(),
+        db.cache_account_group_overrides.clear(),
+        db.cache_vouchers.clear(),
+        db.cache_voucher_entries.clear(),
+        db.cache_voucher_items.clear(),
+        db.sync_cursors.clear(),
       ]);
     },
   );
