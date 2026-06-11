@@ -1,12 +1,14 @@
 // Offline-aware writes for master tables (ledgers, items) with true bi-directional sync.
 //
-// Every operation updates the local offlineDb first to guarantee total availability,
-// stamps it with 'updated_at', and flags it with 'is_synced: false'. If a connection is 
-// available, a synchronization pass runs automatically to match data based on the latest timestamp.
+// Every operation updates the local cache tables first to guarantee total availability,
+// stamps it with 'updated_at', and queues the mutation in the outbox. The synchronizer
+// pulls down cloud updates incrementally using cursor high-water marks.
 
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineNow } from "./online-status";
-import { offlineDb } from "./db";
+import { enqueueWrite } from "./outbox";
+import offlineDb from "./db"; // Default import matches your v2 Dexie setup
+import type { LedgerCacheRow, ItemCacheRow } from "./db";
 
 function newId(): string {
   return crypto.randomUUID();
@@ -19,91 +21,63 @@ function newId(): string {
 export async function syncEssentialMasters(companyId: string): Promise<void> {
   if (!isOnlineNow() || !companyId) return;
 
-  try {
-    // ------------------- Sync Items -------------------
-    const localItems = await offlineDb.table("items").where("company_id").eq(companyId).toArray();
-    const { data: remoteItems, error: itemsError } = await supabase
-      .from("items")
-      .select("*")
-      .eq("company_id", companyId);
+  const tablesToSync = ["ledgers", "items"] as const;
 
-    if (itemsError) throw itemsError;
+  for (const table of tablesToSync) {
+    try {
+      const cursorKey = `${companyId}:${table}`;
+      const dexieTable = table === "ledgers" ? offlineDb.cache_ledgers : offlineDb.cache_items;
 
-    // Process items from cloud down to local storage
-    for (const remote of (remoteItems || [])) {
-      const local = localItems.find((i) => i.id === remote.id);
-      if (!local) {
-        // New record created on the cloud, download it
-        await offlineDb.table("items").put({ ...remote, is_synced: true, is_deleted: false });
-      } else {
-        const localTime = new Date(local.updated_at || 0).getTime();
-        const remoteTime = new Date(remote.updated_at || 0).getTime();
+      // 1. Fetch high-water mark cursor positions
+      const currentCursor = await offlineDb.sync_cursors.get(cursorKey);
+      const lastUpdatedAt = currentCursor?.last_updated_at ?? "1970-01-01T00:00:00.000Z";
 
-        if (remoteTime > localTime) {
-          // Cloud has newer data, overwrite local copy
-          await offlineDb.table("items").put({ ...remote, is_synced: true, is_deleted: false });
+      // 2. Fetch cloud deltas modified after our local state position
+      const { data: cloudDeltas, error } = await supabase
+        .from(table)
+        .select("*")
+        .eq("company_id", companyId)
+        .gt("updated_at", lastUpdatedAt)
+        .order("updated_at", { ascending: true });
+
+      if (error) throw error;
+
+      if (cloudDeltas && cloudDeltas.length > 0) {
+        let maxUpdatedAt = lastUpdatedAt;
+
+        for (const remote of cloudDeltas) {
+          const local = await dexieTable.get(remote.id);
+
+          if (!local) {
+            // Unseen entry: Cache immediately
+            await dexieTable.put({ ...remote, is_synced: true, is_deleted: false });
+          } else {
+            const localTime = new Date(local.updated_at || 0).getTime();
+            const remoteTime = new Date(remote.updated_at || 0).getTime();
+
+            // Cloud changes overwrite local only if the remote write is newer
+            if (remoteTime > localTime) {
+              await dexieTable.put({ ...remote, is_synced: true, is_deleted: false });
+            }
+          }
+
+          if (new Date(remote.updated_at).getTime() > new Date(maxUpdatedAt).getTime()) {
+            maxUpdatedAt = remote.updated_at;
+          }
         }
+
+        // 3. Commit new high-water mark cursor position
+        await offlineDb.sync_cursors.put({
+          key: cursorKey,
+          company_id: companyId,
+          table: table,
+          last_updated_at: maxUpdatedAt,
+          last_run_at: Date.now(),
+        });
       }
+    } catch (err) {
+      console.error(`Master table synchronization deferred for ${table}: `, err);
     }
-
-    // Push local edits upstream to the cloud
-    const unsyncedItems = await offlineDb.table("items")
-      .where("company_id").eq(companyId)
-      .and(item => !item.is_synced)
-      .toArray();
-
-    for (const item of unsyncedItems) {
-      if (item.is_deleted) {
-        await supabase.from("items").delete().eq("id", item.id);
-        await offlineDb.table("items").delete(item.id); // Permanently drop local tracking
-      } else {
-        const { is_synced, is_deleted, ...payload } = item;
-        await supabase.from("items").upsert(payload);
-        await offlineDb.table("items").update(item.id, { is_synced: true });
-      }
-    }
-
-    // ------------------- Sync Ledgers -------------------
-    const localLedgers = await offlineDb.table("ledgers").where("company_id").eq(companyId).toArray();
-    const { data: remoteLedgers, error: ledgersError } = await supabase
-      .from("ledgers")
-      .select("*")
-      .eq("company_id", companyId);
-
-    if (ledgersError) throw ledgersError;
-
-    for (const remote of (remoteLedgers || [])) {
-      const local = localLedgers.find((l) => l.id === remote.id);
-      if (!local) {
-        await offlineDb.table("ledgers").put({ ...remote, is_synced: true, is_deleted: false });
-      } else {
-        const localTime = new Date(local.updated_at || 0).getTime();
-        const remoteTime = new Date(remote.updated_at || 0).getTime();
-
-        if (remoteTime > localTime) {
-          await offlineDb.table("ledgers").put({ ...remote, is_synced: true, is_deleted: false });
-        }
-      }
-    }
-
-    const unsyncedLedgers = await offlineDb.table("ledgers")
-      .where("company_id").eq(companyId)
-      .and(ledger => !ledger.is_synced)
-      .toArray();
-
-    for (const ledger of unsyncedLedgers) {
-      if (ledger.is_deleted) {
-        await supabase.from("ledgers").delete().eq("id", ledger.id);
-        await offlineDb.table("ledgers").delete(ledger.id);
-      } else {
-        const { is_synced, is_deleted, ...payload } = ledger;
-        await supabase.from("ledgers").upsert(payload);
-        await offlineDb.table("ledgers").update(ledger.id, { is_synced: true });
-      }
-    }
-
-  } catch (err) {
-    console.error("Master table synchronization deferred: ", err);
   }
 }
 
@@ -112,6 +86,7 @@ export async function syncEssentialMasters(companyId: string): Promise<void> {
 export interface LedgerInsertPayload {
   company_id: string;
   name: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type: any;
   group_code?: string | null;
   subgroup_id?: string | null;
@@ -141,21 +116,29 @@ export async function createLedger(payload: LedgerInsertPayload): Promise<Ledger
   const id = newId();
   const now = new Date().toISOString();
   
-  const localRecord = {
+  const localRecord: LedgerCacheRow = {
     ...payload,
     id,
     gst_treatment: "regular",
-    created_at: now,
     updated_at: now,
     is_synced: false,
     is_deleted: false,
   };
 
-  // Local-First Write
-  await offlineDb.table("ledgers").put(localRecord);
+  // Write directly to local v2 cache table
+  await offlineDb.cache_ledgers.put(localRecord);
 
-  // Background Trigger execution
+  // Queue write to the durable outbox to allow replay on reconnect
+  await enqueueWrite({
+    op: "insert",
+    table: "ledgers",
+    payload: { ...payload, id, updated_at: now },
+    company_id: payload.company_id,
+    label: `Ledger: ${payload.name}`,
+  });
+
   if (isOnlineNow()) {
+    // Non-blocking catch-up execution call
     syncEssentialMasters(payload.company_id);
   }
 
@@ -175,38 +158,54 @@ export async function updateLedger(
   values: Partial<LedgerInsertPayload>,
 ): Promise<LedgerRow | null> {
   const now = new Date().toISOString();
-  const existing = await offlineDb.table("ledgers").get(id);
+  const existing = await offlineDb.cache_ledgers.get(id);
 
   if (existing) {
-    const updatedRecord = {
+    const updatedRecord: LedgerCacheRow = {
       ...existing,
       ...values,
       updated_at: now,
       is_synced: false,
     };
-    await offlineDb.table("ledgers").put(updatedRecord);
+    await offlineDb.cache_ledgers.put(updatedRecord);
   }
+
+  await enqueueWrite({
+    op: "update",
+    table: "ledgers",
+    payload: { id, values: { ...values, updated_at: now } },
+    company_id: companyId,
+    label: `Update ledger: ${values.name ?? id.slice(0, 8)}`,
+  });
 
   if (isOnlineNow()) {
     syncEssentialMasters(companyId);
   }
 
-  return existing ? (existing as LedgerRow) : null;
+  return existing ? (existing as unknown as LedgerRow) : null;
 }
 
 export async function deleteLedger(id: string, companyId: string, label?: string): Promise<void> {
   const now = new Date().toISOString();
-  const existing = await offlineDb.table("ledgers").get(id);
+  const existing = await offlineDb.cache_ledgers.get(id);
 
   if (existing) {
-    // Flag as soft delete locally so sync architecture can inform cloud database
-    await offlineDb.table("ledgers").put({
+    // Soft delete tracking inside local storage
+    await offlineDb.cache_ledgers.put({
       ...existing,
       is_deleted: true,
       is_synced: false,
       updated_at: now,
     });
   }
+
+  await enqueueWrite({
+    op: "delete",
+    table: "ledgers",
+    payload: { id },
+    company_id: companyId,
+    label: `Delete ledger: ${label ?? id.slice(0, 8)}`,
+  });
 
   if (isOnlineNow()) {
     syncEssentialMasters(companyId);
@@ -244,16 +243,23 @@ export async function createItem(payload: ItemInsertPayload): Promise<ItemRow> {
   const id = newId();
   const now = new Date().toISOString();
 
-  const localRecord = {
+  const localRecord: ItemCacheRow = {
     ...payload,
     id,
-    created_at: now,
     updated_at: now,
     is_synced: false,
     is_deleted: false,
   };
 
-  await offlineDb.table("items").put(localRecord);
+  await offlineDb.cache_items.put(localRecord);
+
+  await enqueueWrite({
+    op: "insert",
+    table: "items",
+    payload: { ...payload, id, updated_at: now },
+    company_id: payload.company_id,
+    label: `Item: ${payload.name}`,
+  });
 
   if (isOnlineNow()) {
     syncEssentialMasters(payload.company_id);
@@ -274,37 +280,53 @@ export async function updateItem(
   values: Partial<ItemInsertPayload>,
 ): Promise<ItemRow | null> {
   const now = new Date().toISOString();
-  const existing = await offlineDb.table("items").get(id);
+  const existing = await offlineDb.cache_items.get(id);
 
   if (existing) {
-    const updatedRecord = {
+    const updatedRecord: ItemCacheRow = {
       ...existing,
       ...values,
       updated_at: now,
       is_synced: false,
     };
-    await offlineDb.table("items").put(updatedRecord);
+    await offlineDb.cache_items.put(updatedRecord);
   }
+
+  await enqueueWrite({
+    op: "update",
+    table: "items",
+    payload: { id, values: { ...values, updated_at: now } },
+    company_id: companyId,
+    label: `Update item: ${values.name ?? id.slice(0, 8)}`,
+  });
 
   if (isOnlineNow()) {
     syncEssentialMasters(companyId);
   }
 
-  return existing ? (existing as ItemRow) : null;
+  return existing ? (existing as unknown as ItemRow) : null;
 }
 
 export async function deleteItem(id: string, companyId: string, label?: string): Promise<void> {
   const now = new Date().toISOString();
-  const existing = await offlineDb.table("items").get(id);
+  const existing = await offlineDb.cache_items.get(id);
 
   if (existing) {
-    await offlineDb.table("items").put({
+    await offlineDb.cache_items.put({
       ...existing,
       is_deleted: true,
       is_synced: false,
       updated_at: now,
     });
   }
+
+  await enqueueWrite({
+    op: "delete",
+    table: "items",
+    payload: { id },
+    company_id: companyId,
+    label: `Delete item: ${label ?? id.slice(0, 8)}`,
+  });
 
   if (isOnlineNow()) {
     syncEssentialMasters(companyId);
