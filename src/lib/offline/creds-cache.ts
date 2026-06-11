@@ -10,7 +10,7 @@
 
 import bcrypt from "bcryptjs";
 import { supabase } from "@/integrations/supabase/client";
-import { offlineDb, type AccountCredCacheRow } from "./db"; // Combined syntax prevents compilation deadlocks
+import { offlineDb, type AccountCredCacheRow } from "./db";
 
 const LOCKOUT_KEY = "ym_local_lock_until";
 const ATTEMPTS_KEY = "ym_local_lock_attempts";
