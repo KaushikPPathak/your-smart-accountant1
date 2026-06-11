@@ -3,7 +3,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineNow, pingOnline } from "./online-status";
-import { db } from "./db";
 
 export interface OutboxRow {
   id?: number;
@@ -16,6 +15,13 @@ export interface OutboxRow {
   last_error?: string | null;
   label?: string;
   executor?: string;
+}
+
+// Helper to safely get the db instance dynamically without static bundling blockers
+async function getDb() {
+  const module = await import("./db");
+  // Check if it's exported as a default, named 'db', or named 'offlineDb'
+  return module.default || module.db || (module as any).offlineDb;
 }
 
 type Listener = () => void;
@@ -33,14 +39,17 @@ function emit() {
 }
 
 export async function queueSize(): Promise<number> {
+  const db = await getDb();
   return db.outbox.count();
 }
 
 export async function listOutbox(): Promise<OutboxRow[]> {
+  const db = await getDb();
   return db.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
 }
 
 export async function enqueueWrite(row: Omit<OutboxRow, "id" | "created_at" | "attempts" | "last_error">): Promise<void> {
+  const db = await getDb();
   await db.outbox.add({
     ...row,
     created_at: Date.now(),
@@ -122,6 +131,7 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
     const online = await pingOnline();
     if (!online) return { pushed: 0, failed: 0 };
     
+    const db = await getDb();
     const rows = await db.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
     
     for (const row of rows) {
@@ -155,6 +165,7 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
 }
 
 export async function clearOutboxRow(id: number): Promise<void> {
+  const db = await getDb();
   await db.outbox.delete(id);
   emit();
 }
