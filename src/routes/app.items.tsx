@@ -40,7 +40,7 @@ import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { createItem, updateItem, deleteItem } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
-import { HsnInlineHint } from "@/components/HsnInlineHint";
+import { HsnCodeAutocomplete } from "@/components/HsnCodeAutocomplete";
 
 export const Route = createFileRoute("/app/items")({
   head: () => ({ meta: [{ title: "Items — Your Mehtaji" }] }),
@@ -73,14 +73,6 @@ type FormState = {
   reorder_level: string;
 };
 
-interface HsnMasterRecord {
-  hsn_code: string;
-  description?: string;
-  igst_rate?: number;
-  cgst_rate?: number;
-  sgst_rate?: number;
-  is_exempt?: boolean;
-}
 
 const emptyForm: FormState = {
   name: "",
@@ -106,49 +98,8 @@ function ItemsPage() {
   const [submitting, setSubmitting] = useState(false);
   const { view, setView } = useReportView("masters-items");
 
-  // State handles for autocomplete dropdown logic
-  const [hsnSuggestions, setHsnSuggestions] = useState<HsnMasterRecord[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Instant look-up trigger on 4 or more digits
-  useEffect(() => {
-    const fetchHsnSuggestions = async () => {
-      const cleanCode = form.hsn_code.trim();
-      if (cleanCode.length >= 4) {
-        const { data, error } = await supabase
-          .from("hsn_master") // Adjusted to your public master codes schema
-          .select("hsn_code, description, igst_rate, cgst_rate, sgst_rate, is_exempt")
-          .ilike("hsn_code", `${cleanCode}%`)
-          .limit(8);
 
-        if (!error && data) {
-          setHsnSuggestions(data as HsnMasterRecord[]);
-          setShowSuggestions(data.length > 0);
-        }
-      } else {
-        setHsnSuggestions([]);
-        setShowSuggestions(false);
-      }
-    };
-
-    const timer = setTimeout(() => {
-      fetchHsnSuggestions();
-    }, 150); // Debounce typing slightly
-
-    return () => clearTimeout(timer);
-  }, [form.hsn_code]);
-
-  const handleSelectHsn = (rec: HsnMasterRecord) => {
-    const rate = rec.is_exempt ? 0 : (rec.igst_rate || (rec.cgst_rate ?? 0) + (rec.sgst_rate ?? 0));
-    const match = (GST_RATES as readonly number[]).find((g) => Math.abs(g - rate) < 0.001);
-
-    setForm((f) => ({
-      ...f,
-      hsn_code: rec.hsn_code,
-      gst_rate: match !== undefined ? String(match) : f.gst_rate,
-    }));
-    setShowSuggestions(false);
-  };
 
   const load = async () => {
     if (!activeCompanyId) {
@@ -196,15 +147,11 @@ function ItemsPage() {
   const openNew = () => {
     setEditing(null);
     setForm(emptyForm);
-    setHsnSuggestions([]);
-    setShowSuggestions(false);
     setOpen(true);
   };
 
   const openEdit = (i: Item) => {
     setEditing(i);
-    setHsnSuggestions([]);
-    setShowSuggestions(false);
     setForm({
       name: i.name,
       hsn_code: i.hsn_code ?? "",
@@ -331,52 +278,20 @@ function ItemsPage() {
                     />
                   </div>
                   
-                  {/* HSN CODE COLUMN SECTION WITH AUTO-POPUP OVERLAY */}
-                  <div className="space-y-1.5 relative">
+                  <div className="space-y-1.5">
                     <Label htmlFor="hsn_code">HSN / SAC code</Label>
-                    <Input
+                    <HsnCodeAutocomplete
                       id="hsn_code"
                       value={form.hsn_code}
-                      onChange={(e) => setForm({ ...form, hsn_code: e.target.value })}
-                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                      onFocus={() => form.hsn_code.trim().length >= 4 && setShowSuggestions(true)}
-                      maxLength={10}
-                      placeholder="Type 4 digits to match..."
-                      autoComplete="off"
-                    />
-                    
-                    {showSuggestions && hsnSuggestions.length > 0 && (
-                      <div className="absolute z-50 w-full bg-popover text-popover-foreground border rounded-md shadow-lg max-h-52 overflow-y-auto mt-1 text-xs font-sans">
-                        {hsnSuggestions.map((rec) => (
-                          <div
-                            key={rec.hsn_code}
-                            onMouseDown={() => handleSelectHsn(rec)}
-                            className="p-2 hover:bg-accent hover:text-accent-foreground cursor-pointer border-b last:border-0 flex flex-col gap-0.5"
-                          >
-                            <div className="flex justify-between font-mono font-bold text-primary">
-                              <span>{rec.hsn_code}</span>
-                              <span className="text-muted-foreground text-[10px]">
-                                GST: {rec.is_exempt ? "Exempt" : `${rec.igst_rate || (rec.cgst_rate || 0) + (rec.sgst_rate || 0)}%`}
-                              </span>
-                            </div>
-                            {rec.description && (
-                              <span className="text-muted-foreground truncate max-w-full block">
-                                {rec.description}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <HsnInlineHint
-                      code={form.hsn_code}
+                      onChange={(v) => setForm((f) => ({ ...f, hsn_code: v }))}
                       onResolved={(rec) => {
                         const rate = rec.is_exempt ? 0 : (rec.igst_rate || rec.cgst_rate + rec.sgst_rate);
                         const match = (GST_RATES as readonly number[]).find((g) => Math.abs(g - rate) < 0.001);
-                        if (match !== undefined) {
-                          setForm((f) => ({ ...f, gst_rate: String(match) }));
-                        }
+                        setForm((f) => ({
+                          ...f,
+                          hsn_code: rec.hsn_code,
+                          gst_rate: match !== undefined ? String(match) : f.gst_rate,
+                        }));
                       }}
                     />
                   </div>

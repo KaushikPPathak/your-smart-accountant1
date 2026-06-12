@@ -10,7 +10,7 @@ import { UNITS, GST_RATES } from "@/lib/constants";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { createItem, updateItem } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
-import { HsnInlineHint } from "@/components/HsnInlineHint";
+import { HsnCodeAutocomplete } from "@/components/HsnCodeAutocomplete";
 
 export interface QuickItem {
   id: string;
@@ -141,10 +141,11 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
             </div>
             <div className="space-y-1">
               <Label>HSN/SAC</Label>
-              <Input value={hsn} onChange={(e) => setHsn(e.target.value)} />
-              <HsnInlineHint
-                code={hsn}
+              <HsnCodeAutocomplete
+                value={hsn}
+                onChange={setHsn}
                 onResolved={(rec) => {
+                  setHsn(rec.hsn_code);
                   const rate = rec.is_exempt ? 0 : (rec.igst_rate || rec.cgst_rate + rec.sgst_rate);
                   const match = (GST_RATES as readonly number[]).find((g) => Math.abs(g - rate) < 0.001);
                   if (match !== undefined) setGstRate(String(match));

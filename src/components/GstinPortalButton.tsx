@@ -1,9 +1,12 @@
 import * as React from "react";
-import { Button } from "./ui/button"; // Adjust path to matching your file structure if needed
-import { ExternalLink, ClipboardCheck, Clipboard, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { Button } from "./ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { ExternalLink, ClipboardCheck, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
 interface GstinPortalButtonProps {
   gstin: string;
+  disabled?: boolean;
   onDataFetched?: (data: {
     legalName: string;
     tradeName: string;
@@ -12,180 +15,110 @@ interface GstinPortalButtonProps {
   }) => void;
 }
 
-export function GstinPortalButton({ gstin, onDataFetched }: GstinPortalButtonProps) {
+/**
+ * Compact icon-button for verifying a GSTIN on the official portal.
+ * - Single-click: copy GSTIN to clipboard and open the GST taxpayer search.
+ * - Optional popover lets users paste the portal response back to auto-fill ledger fields.
+ * Designed to sit inline next to a GSTIN input without crowding the form row.
+ */
+export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPortalButtonProps) {
   const [copied, setCopied] = React.useState(false);
-  const [isOpen, setIsOpen] = React.useState(false);
   const [pasteText, setPasteText] = React.useState("");
   const [parseError, setParseError] = React.useState("");
+  const [popoverOpen, setPopoverOpen] = React.useState(false);
 
-  // Simple regex validation for Indian GSTIN format
-  const isValidGstin = React.useMemo(() => {
-    const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    return gstinRegex.test(gstin.trim().toUpperCase());
-  }, gstin);
+  const cleanGstin = (gstin || "").trim().toUpperCase();
 
   const handlePortalRedirect = async () => {
-    if (!gstin) return;
-    
-    const cleanGstin = gstin.trim().toUpperCase();
-
+    if (!cleanGstin) {
+      toast.error("Enter a GSTIN first");
+      return;
+    }
     try {
-      // Step A: Write to system clipboard
       await navigator.clipboard.writeText(cleanGstin);
       setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-
-      // Step B: Trigger native alert/toast fallback since we are out of Lovable components context
-      // Replace with your app's custom toast trigger if you use shadcn sonner/toast!
-      alert(`GSTIN [${cleanGstin}] copied to clipboard!\n\nOpening GST Portal. Please solve the CAPTCHA and press Ctrl+V to search.`);
-
-      // Step C: Redirect to official GST taxpayer search page
-      window.open("https://services.gst.gov.in/services/searchtp", "_blank", "noopener,noreferrer");
-    } catch (err) {
-      console.error("Failed to copy text to clipboard", err);
-      // Fallback open if clipboard permission blocks it
-      window.open("https://services.gst.gov.in/services/searchtp", "_blank", "noopener,noreferrer");
+      setTimeout(() => setCopied(false), 2500);
+      toast.success(`GSTIN ${cleanGstin} copied — paste it on the portal search`);
+    } catch {
+      // ignore clipboard errors and still open portal
     }
+    window.open("https://services.gst.gov.in/services/searchtp", "_blank", "noopener,noreferrer");
   };
 
-  // Step 3: Parse copied portal data back into local app structure
   const handlePasteParsing = (text: string) => {
     setPasteText(text);
     setParseError("");
-
     if (!text.trim()) return;
 
-    // Heuristic parsing parameters for raw text copied from the portal tables
     let legalName = "";
     let tradeName = "";
     let status = "";
 
-    const lines = text.split("\n");
+    const legalMatch = text.match(/Legal Name of Business\s*[:\-\t]?\s*([^\n\r\t]+)/i);
+    if (legalMatch) legalName = legalMatch[1].trim();
+    const tradeMatch = text.match(/Trade Name\s*[:\-\t]?\s*([^\n\r\t]+)/i);
+    if (tradeMatch) tradeName = tradeMatch[1].trim();
+    const statusMatch = text.match(/(?:Taxpayer\s*)?Status\s*[:\-\t]?\s*(Active|Cancelled|Suspended|Provisional)/i);
+    if (statusMatch) status = statusMatch[1].trim();
 
-    for (let i = 0; i < lines.length; i++) {
-      const currentLine = lines[i].toLowerCase();
-      
-      // Match common layouts found on the portal output tables
-      if (currentLine.includes("legal name of business")) {
-        legalName = lines[i + 1]?.trim() || lines[i].split(/business/i)[1]?.replace(/[:\-\t]/g, "").trim();
-      }
-      if (currentLine.includes("trade name")) {
-        tradeName = lines[i + 1]?.trim() || lines[i].split(/name/i)[1]?.replace(/[:\-\t]/g, "").trim();
-      }
-      if (currentLine.includes("taxpayer type") || currentLine.includes("constitution of business")) {
-        // Just checking context structures if needed
-      }
-      if (currentLine.includes("gstr-3b") || currentLine.includes("status")) {
-        if (currentLine.includes("active")) status = "Active";
-        if (currentLine.includes("cancelled")) status = "Cancelled";
-        if (currentLine.includes("suspended")) status = "Suspended";
-      }
-    }
-
-    // Secondary inline regex extraction backup if line splitting breaks on specific browser layouts
-    if (!legalName) {
-      const legalMatch = text.match(/Legal Name of Business\s*[:\-\t]?\s*([^\n\r\t]+)/i);
-      if (legalMatch) legalName = legalMatch[1].trim();
-    }
-    if (!tradeName) {
-      const tradeMatch = text.match(/Trade Name\s*[:\-\t]?\s*([^\n\r\t]+)/i);
-      if (tradeMatch) tradeName = tradeMatch[1].trim();
-    }
-    if (!status) {
-      const statusMatch = text.match(/Taxpayer Status\s*[:\-\t]?\s*(Active|Cancelled|Suspended)/i);
-      if (statusMatch) status = statusMatch[1].trim();
-    }
-
-    // Default status backup if parsed implicitly
-    if (text.toLowerCase().includes("active") && !status) {
-      status = "Active";
-    }
-
-    // Validate result and pass upstream to local SQLite update pipeline
     if (legalName) {
-      if (onDataFetched) {
-        onDataFetched({
-          legalName: legalName.replace(/^[:\s]+/, ""),
-          tradeName: tradeName ? tradeName.replace(/^[:\s]+/, "") : legalName.replace(/^[:\s]+/, ""),
-          status: status || "Active",
-          gstin: gstin.trim().toUpperCase()
-        });
-        
-        // Success cleanup
-        setPasteText("");
-        setIsOpen(false);
-        alert("🎉 Party details parsed and synced to local SQLite brain successfully!");
-      }
+      onDataFetched?.({
+        legalName,
+        tradeName: tradeName || legalName,
+        status: status || "Active",
+        gstin: cleanGstin,
+      });
+      toast.success("Ledger fields filled from portal data");
+      setPasteText("");
+      setPopoverOpen(false);
     } else {
-      setParseError("Could not find matching GST fields. Please copy the whole summary table from the portal page and try again.");
+      setParseError("Could not detect GST fields. Copy the full summary block from the portal.");
     }
   };
 
   return (
-    <div className="w-full max-w-md p-4 border border-border rounded-lg bg-card text-card-foreground shadow-sm">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-mono font-bold tracking-wider text-muted-foreground uppercase">
-            GSTIN Verification
-          </span>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isValidGstin ? 'bg-green-500/10 text-green-500' : 'bg-amber-500/10 text-amber-500'}`}>
-            {isValidGstin ? "Valid Format" : "Invalid Format"}
-          </span>
-        </div>
+    <div className="flex items-center gap-1 shrink-0">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        disabled={disabled}
+        onClick={handlePortalRedirect}
+        title={cleanGstin ? `Verify ${cleanGstin} on GST Portal` : "Verify on GST Portal"}
+        aria-label="Verify on GST Portal"
+      >
+        {copied ? (
+          <ClipboardCheck className="h-4 w-4 text-green-500" />
+        ) : (
+          <ExternalLink className="h-4 w-4" />
+        )}
+      </Button>
 
-        {/* Action verification trigger using base Button structure */}
-        <Button
-          type="button"
-          onClick={handlePortalRedirect}
-          disabled={!isValidGstin}
-          variant={isValidGstin ? "default" : "outline"}
-          className="w-full flex items-center justify-center gap-2 font-medium"
-        >
-          {copied ? (
-            <>
-              <ClipboardCheck className="w-4 h-4 text-green-400" />
-              GSTIN Copied to Clipboard
-            </>
-          ) : (
-            <>
-              <ExternalLink className="w-4 h-4" />
-              Verify on GST Portal
-            </>
-          )}
-        </Button>
-
-        {/* Collapsible Manual Sync Panel */}
-        <div className="mt-2 border-t border-border pt-2">
-          <button
+      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+        <PopoverTrigger asChild>
+          <Button
             type="button"
-            onClick={() => setIsOpen(!isOpen)}
-            className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground py-1 focus:outline-none"
+            variant="ghost"
+            size="icon"
+            title="Paste portal response to auto-fill"
+            aria-label="Paste portal response"
           >
-            <span className="flex items-center gap-1 font-medium">
-              <Sparkles className="w-3 h-3 text-indigo-400" />
-              Sync portal layout manually back to ledger
-            </span>
-            {isOpen ? <ChevronUp className="w-3. h-3" /> : <ChevronDown className="w-3 h-3" />}
-          </button>
-
-          {isOpen && (
-            <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                After solving the portal CAPTCHA, select and copy the resulting details block from your browser window, then paste it right here:
-              </p>
-              <textarea
-                value={pasteText}
-                onChange={(e) => handlePasteParsing(e.target.value)}
-                placeholder="Paste raw text here... (e.g. Legal Name: ABC Exports Private Limited...)"
-                className="w-full min-h-[80px] text-xs p-2 rounded border border-input bg-background font-mono focus:outline-none focus:ring-1 focus:ring-ring resize-y"
-              />
-              {parseError && (
-                <p className="text-[11px] text-destructive font-medium">{parseError}</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+            <Sparkles className="h-4 w-4 text-indigo-400" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            After solving the portal CAPTCHA, copy the result block and paste here to auto-fill ledger fields.
+          </p>
+          <textarea
+            value={pasteText}
+            onChange={(e) => handlePasteParsing(e.target.value)}
+            placeholder="Paste portal text… (Legal Name, Trade Name, Status)"
+            className="w-full min-h-[100px] text-xs p-2 rounded border border-input bg-background font-mono focus:outline-none focus:ring-1 focus:ring-ring resize-y"
+          />
+          {parseError && <p className="text-[11px] text-destructive">{parseError}</p>}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
