@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 interface GstinPortalButtonProps {
   gstin: string;
+  disabled?: boolean;
   onDataFetched?: (data: {
     legalName: string;
     tradeName: string;
