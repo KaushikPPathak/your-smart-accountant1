@@ -278,52 +278,20 @@ function ItemsPage() {
                     />
                   </div>
                   
-                  {/* HSN CODE COLUMN SECTION WITH AUTO-POPUP OVERLAY */}
-                  <div className="space-y-1.5 relative">
+                  <div className="space-y-1.5">
                     <Label htmlFor="hsn_code">HSN / SAC code</Label>
-                    <Input
+                    <HsnCodeAutocomplete
                       id="hsn_code"
                       value={form.hsn_code}
-                      onChange={(e) => setForm({ ...form, hsn_code: e.target.value })}
-                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                      onFocus={() => form.hsn_code.trim().length >= 4 && setShowSuggestions(true)}
-                      maxLength={10}
-                      placeholder="Type 4 digits to match..."
-                      autoComplete="off"
-                    />
-                    
-                    {showSuggestions && hsnSuggestions.length > 0 && (
-                      <div className="absolute z-50 w-full bg-popover text-popover-foreground border rounded-md shadow-lg max-h-52 overflow-y-auto mt-1 text-xs font-sans">
-                        {hsnSuggestions.map((rec) => (
-                          <div
-                            key={rec.hsn_code}
-                            onMouseDown={() => handleSelectHsn(rec)}
-                            className="p-2 hover:bg-accent hover:text-accent-foreground cursor-pointer border-b last:border-0 flex flex-col gap-0.5"
-                          >
-                            <div className="flex justify-between font-mono font-bold text-primary">
-                              <span>{rec.hsn_code}</span>
-                              <span className="text-muted-foreground text-[10px]">
-                                GST: {rec.is_exempt ? "Exempt" : `${rec.igst_rate || (rec.cgst_rate || 0) + (rec.sgst_rate || 0)}%`}
-                              </span>
-                            </div>
-                            {rec.description && (
-                              <span className="text-muted-foreground truncate max-w-full block">
-                                {rec.description}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <HsnInlineHint
-                      code={form.hsn_code}
+                      onChange={(v) => setForm((f) => ({ ...f, hsn_code: v }))}
                       onResolved={(rec) => {
                         const rate = rec.is_exempt ? 0 : (rec.igst_rate || rec.cgst_rate + rec.sgst_rate);
                         const match = (GST_RATES as readonly number[]).find((g) => Math.abs(g - rate) < 0.001);
-                        if (match !== undefined) {
-                          setForm((f) => ({ ...f, gst_rate: String(match) }));
-                        }
+                        setForm((f) => ({
+                          ...f,
+                          hsn_code: rec.hsn_code,
+                          gst_rate: match !== undefined ? String(match) : f.gst_rate,
+                        }));
                       }}
                     />
                   </div>
