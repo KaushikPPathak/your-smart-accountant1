@@ -21,7 +21,7 @@ interface GstinPortalButtonProps {
  * - Optional popover lets users paste the portal response back to auto-fill ledger fields.
  * Designed to sit inline next to a GSTIN input without crowding the form row.
  */
-export function GstinPortalButton({ gstin, onDataFetched }: GstinPortalButtonProps) {
+export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPortalButtonProps) {
   const [copied, setCopied] = React.useState(false);
   const [pasteText, setPasteText] = React.useState("");
   const [parseError, setParseError] = React.useState("");
@@ -82,6 +82,7 @@ export function GstinPortalButton({ gstin, onDataFetched }: GstinPortalButtonPro
         type="button"
         variant="outline"
         size="icon"
+        disabled={disabled}
         onClick={handlePortalRedirect}
         title={cleanGstin ? `Verify ${cleanGstin} on GST Portal` : "Verify on GST Portal"}
         aria-label="Verify on GST Portal"
