@@ -40,7 +40,7 @@ import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { createItem, updateItem, deleteItem } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
-import { HsnInlineHint } from "@/components/HsnInlineHint";
+import { HsnCodeAutocomplete } from "@/components/HsnCodeAutocomplete";
 
 export const Route = createFileRoute("/app/items")({
   head: () => ({ meta: [{ title: "Items — Your Mehtaji" }] }),
@@ -73,14 +73,6 @@ type FormState = {
   reorder_level: string;
 };
 
-interface HsnMasterRecord {
-  hsn_code: string;
-  description?: string;
-  igst_rate?: number;
-  cgst_rate?: number;
-  sgst_rate?: number;
-  is_exempt?: boolean;
-}
 
 const emptyForm: FormState = {
   name: "",
@@ -106,49 +98,8 @@ function ItemsPage() {
   const [submitting, setSubmitting] = useState(false);
   const { view, setView } = useReportView("masters-items");
 
-  // State handles for autocomplete dropdown logic
-  const [hsnSuggestions, setHsnSuggestions] = useState<HsnMasterRecord[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Instant look-up trigger on 4 or more digits
-  useEffect(() => {
-    const fetchHsnSuggestions = async () => {
-      const cleanCode = form.hsn_code.trim();
-      if (cleanCode.length >= 4) {
-        const { data, error } = await supabase
-          .from("hsn_master") // Adjusted to your public master codes schema
-          .select("hsn_code, description, igst_rate, cgst_rate, sgst_rate, is_exempt")
-          .ilike("hsn_code", `${cleanCode}%`)
-          .limit(8);
 
-        if (!error && data) {
-          setHsnSuggestions(data as HsnMasterRecord[]);
-          setShowSuggestions(data.length > 0);
-        }
-      } else {
-        setHsnSuggestions([]);
-        setShowSuggestions(false);
-      }
-    };
-
-    const timer = setTimeout(() => {
-      fetchHsnSuggestions();
-    }, 150); // Debounce typing slightly
-
-    return () => clearTimeout(timer);
-  }, [form.hsn_code]);
-
-  const handleSelectHsn = (rec: HsnMasterRecord) => {
-    const rate = rec.is_exempt ? 0 : (rec.igst_rate || (rec.cgst_rate ?? 0) + (rec.sgst_rate ?? 0));
-    const match = (GST_RATES as readonly number[]).find((g) => Math.abs(g - rate) < 0.001);
-
-    setForm((f) => ({
-      ...f,
-      hsn_code: rec.hsn_code,
-      gst_rate: match !== undefined ? String(match) : f.gst_rate,
-    }));
-    setShowSuggestions(false);
-  };
 
   const load = async () => {
     if (!activeCompanyId) {
