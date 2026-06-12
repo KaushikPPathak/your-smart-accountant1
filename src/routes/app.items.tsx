@@ -147,15 +147,11 @@ function ItemsPage() {
   const openNew = () => {
     setEditing(null);
     setForm(emptyForm);
-    setHsnSuggestions([]);
-    setShowSuggestions(false);
     setOpen(true);
   };
 
   const openEdit = (i: Item) => {
     setEditing(i);
-    setHsnSuggestions([]);
-    setShowSuggestions(false);
     setForm({
       name: i.name,
       hsn_code: i.hsn_code ?? "",
