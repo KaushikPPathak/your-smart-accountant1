@@ -67,27 +67,24 @@ export interface MetaRow {
 
 // --- Dexie class ----------------------------------------------------------
 
+// All tables are typed loosely as `any` so existing consumers
+// (which keep their own row shapes) don't need to be touched.
 class OfflineDatabase extends Dexie {
-  // Picker / quick-access mirrors used by the start screen
-  companies!: Table<CompanyCacheRow, string>;
-
-  // Snapshot caches
-  cache_companies!: Table<CompanyCacheRow, string>;
-  cache_company_settings!: Table<CompanySettingsCacheRow, string>;
-  cache_ledgers!: Table<LedgerCacheRow, string>;
-  cache_items!: Table<ItemCacheRow, string>;
-  cache_account_subgroups!: Table<BaseCacheRow, string>;
-  cache_ledger_group_mappings!: Table<BaseCacheRow, string>;
-  cache_account_group_overrides!: Table<BaseCacheRow, string>;
-  cache_vouchers!: Table<BaseCacheRow, string>;
-  cache_voucher_entries!: Table<BaseCacheRow, string>;
-  cache_voucher_items!: Table<BaseCacheRow, string>;
-
-  // Sync plumbing
-  outbox!: Table<OutboxRow, number>;
-  sync_cursors!: Table<SyncCursorRow, string>;
-  account_creds!: Table<AccountCredRow, string>;
-  meta!: Table<MetaRow, string>;
+  companies!: Table<any, any>;
+  cache_companies!: Table<any, any>;
+  cache_company_settings!: Table<any, any>;
+  cache_ledgers!: Table<any, any>;
+  cache_items!: Table<any, any>;
+  cache_account_subgroups!: Table<any, any>;
+  cache_ledger_group_mappings!: Table<any, any>;
+  cache_account_group_overrides!: Table<any, any>;
+  cache_vouchers!: Table<any, any>;
+  cache_voucher_entries!: Table<any, any>;
+  cache_voucher_items!: Table<any, any>;
+  outbox!: Table<any, any>;
+  sync_cursors!: Table<any, any>;
+  account_creds!: Table<any, any>;
+  meta!: Table<any, any>;
 
   constructor() {
     super("ym_offline_cache_v3");
