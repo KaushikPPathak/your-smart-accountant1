@@ -1,71 +1,29 @@
-name: Build Tauri (Windows)
+name: Pure Manual Build
 
+# This ensures the workflow ONLY runs when you explicitly command it
 on:
-  push:
-    branches: ["**"]
-  pull_request:
-    branches: ["**"]
   workflow_dispatch:
 
-# CRITICAL SECURITY ELEVATION: Grants permission to publish the installer files to your GitHub Releases page
-permissions:
-  contents: write
-
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build:
+    runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      # Step 1: Fetch the latest code from your repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (Required for basic environment stabilization)
+      # Step 2: Set up the environment (Node.js environment)
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Setup Bun (Official & Reliable)
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      # Step 3: Clean install your project dependencies
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Setup Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: "src-tauri -> target"
-
-      - name: Trust and Pre-install Frontend Dependencies
-        # Fixes 'Blocked 2 postinstalls' and ensures the missing opener dependency is added
-        run: |
-          bun config set trustedDependencies --global
-          bun add @tauri-apps/plugin-opener
-          bun install
-
-      - name: Regenerate TanStack Routes Map
-        # Running the clean generate command without manual directory flags allows auto-detection
-        run: bunx @tanstack/router-cli generate
-        continue-on-error: true
-
-      - name: Build Tauri app (Windows installer)
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_ENV_PLATFORM: windows
-        with:
-          # This compiles the app cleanly and generates normal release installers
-          tagName: v__VERSION__
-          releaseName: 'Smart Accountant v__VERSION__'
-          releaseDraft: true
-          prerelease: false
-
-      - name: Upload Windows installer artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: smart-accountant-windows
-          # This wildcard format successfully captures the installers wherever Tauri places them
-          path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
-          if-no-files-found: warn
+      # Step 4: Execute the production build command
+      - name: Run Build
+        run: npm run build
