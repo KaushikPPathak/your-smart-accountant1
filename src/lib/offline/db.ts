@@ -31,7 +31,7 @@ export type ItemCacheRow = BaseCacheRow & { name: string; is_active?: boolean };
 
 export interface OutboxRow {
   id?: number;
-  company_id?: string;
+  company_id?: string | null;
   table: string;
   op: "insert" | "update" | "delete" | "rpc" | "custom";
   payload: unknown;
@@ -40,6 +40,7 @@ export interface OutboxRow {
   last_error?: string | null;
   label?: string;
   executor?: string;
+  rpc?: string;
 }
 
 export interface AccountCredRow {

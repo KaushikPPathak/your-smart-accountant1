@@ -38,6 +38,7 @@ async function persistAndDrop(job: PendingJob): Promise<boolean> {
   try {
     await enqueueWrite({
       op: "custom",
+      table: "_custom",
       executor: job.persist.executor,
       payload: job.persist.snap,
       company_id: job.persist.companyId,
