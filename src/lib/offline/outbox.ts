@@ -7,7 +7,7 @@ import { isOnlineNow, pingOnline } from "./online-status";
 // Isolated interfaces prevent static AST bundling deadlocks
 export interface OutboxRow {
   id?: number;
-  company_id?: string;
+  company_id?: string | null;
   table: string;
   op: "insert" | "update" | "delete" | "rpc" | "custom";
   payload: any;
@@ -16,6 +16,7 @@ export interface OutboxRow {
   last_error?: string | null;
   label?: string;
   executor?: string;
+  rpc?: string;
 }
 
 // Runtime dynamic import resolver to completely bypass top-of-file compilation crashes
