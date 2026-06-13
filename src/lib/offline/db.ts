@@ -1,21 +1,182 @@
-// --- Read-through cache (v2) ----------------------------------------------
+// Dexie-backed offline cache database.
 //
-// All cache rows keep the cloud `id` as the primary key and include
-// `company_id` + `updated_at` to enable incremental pull and per-company
-// filters. Extra columns are kept loose (Record<string, unknown>) so we
-// don't need to keep this file in lock-step with the cloud schema.
+// This module is the single source of truth for IndexedDB tables used by
+// the offline subsystem: outbox, credential cache, snapshot cache and
+// sync cursors. All consumers import `offlineDb` (named, default, and
+// legacy `db` exports kept for backwards-compatibility with dynamic
+// importers).
+//
+// IMPORTANT: When the browser does not support IndexedDB (e.g. private
+// mode on some browsers, or a server-rendered context), every operation
+// falls back to a safe no-op so the app degrades gracefully instead of
+// throwing "Cannot read properties of undefined" runtime errors.
+
+import Dexie, { type Table } from "dexie";
+
+// --- Row types ------------------------------------------------------------
 
 interface BaseCacheRow {
   id: string;
   company_id: string;
-  updated_at: string; // ISO from Postgres
-  is_synced?: boolean;  // Added to track if local edit matches the cloud
-  is_deleted?: boolean; // Added to track soft-deletes while offline
+  updated_at: string;
+  is_synced?: boolean;
+  is_deleted?: boolean;
   [k: string]: unknown;
 }
 
-// Leave everything below this line exactly as it was in your file...
-export type CompanyCacheRow = BaseCacheRow & { name: string };
+export type CompanyCacheRow = BaseCacheRow & { name: string; has_password?: boolean };
 export type CompanySettingsCacheRow = BaseCacheRow;
 export type LedgerCacheRow = BaseCacheRow & { name: string; is_active?: boolean };
 export type ItemCacheRow = BaseCacheRow & { name: string; is_active?: boolean };
+
+export interface OutboxRow {
+  id?: number;
+  company_id?: string | null;
+  table: string;
+  op: "insert" | "update" | "delete" | "rpc" | "custom";
+  payload: unknown;
+  created_at?: number;
+  attempts?: number;
+  last_error?: string | null;
+  label?: string;
+  executor?: string;
+  rpc?: string;
+}
+
+export interface AccountCredRow {
+  username: string;
+  user_id: string;
+  name: string;
+  role: string;
+  password_hash: string;
+  is_active: boolean;
+  cached_at: number;
+}
+
+export interface SyncCursorRow {
+  key: string;
+  company_id: string;
+  table: string;
+  last_updated_at: string;
+  last_run_at: number;
+}
+
+export interface MetaRow {
+  key: string;
+  value: unknown;
+}
+
+// --- Dexie class ----------------------------------------------------------
+
+// All tables are typed loosely as `any` so existing consumers
+// (which keep their own row shapes) don't need to be touched.
+class OfflineDatabase extends Dexie {
+  companies!: Table<any, any>;
+  cache_companies!: Table<any, any>;
+  cache_company_settings!: Table<any, any>;
+  cache_ledgers!: Table<any, any>;
+  cache_items!: Table<any, any>;
+  cache_account_subgroups!: Table<any, any>;
+  cache_ledger_group_mappings!: Table<any, any>;
+  cache_account_group_overrides!: Table<any, any>;
+  cache_vouchers!: Table<any, any>;
+  cache_voucher_entries!: Table<any, any>;
+  cache_voucher_items!: Table<any, any>;
+  outbox!: Table<any, any>;
+  sync_cursors!: Table<any, any>;
+  account_creds!: Table<any, any>;
+  meta!: Table<any, any>;
+
+  constructor() {
+    super("ym_offline_cache_v3");
+    this.version(1).stores({
+      companies: "id, name",
+      cache_companies: "id, name, updated_at",
+      cache_company_settings: "id, company_id, updated_at",
+      cache_ledgers: "id, company_id, name, updated_at",
+      cache_items: "id, company_id, name, updated_at",
+      cache_account_subgroups: "id, company_id, updated_at",
+      cache_ledger_group_mappings: "id, company_id, updated_at",
+      cache_account_group_overrides: "id, company_id, updated_at",
+      cache_vouchers: "id, company_id, updated_at",
+      cache_voucher_entries: "id, voucher_id",
+      cache_voucher_items: "id, voucher_id",
+      outbox: "++id, created_at, company_id, table",
+      sync_cursors: "key, company_id, table",
+      account_creds: "username, user_id",
+      meta: "key",
+    });
+  }
+}
+
+// --- Safe stub for environments without IndexedDB -------------------------
+
+function makeStubTable() {
+  const arr: unknown[] = [];
+  return {
+    async get() { return undefined; },
+    async toArray() { return arr; },
+    async add() { return 0; },
+    async put() { return undefined; },
+    async bulkPut() { return undefined; },
+    async delete() { return undefined; },
+    async clear() { return undefined; },
+    async count() { return 0; },
+    where() { return this; },
+    equals() { return this; },
+    anyOf() { return this; },
+    and() { return this; },
+    orderBy() { return this; },
+    sortBy() { return []; },
+    first() { return undefined; },
+  } as unknown as Table<unknown, unknown>;
+}
+
+function makeStubDb(): OfflineDatabase {
+  const tableNames = [
+    "companies", "cache_companies", "cache_company_settings",
+    "cache_ledgers", "cache_items", "cache_account_subgroups",
+    "cache_ledger_group_mappings", "cache_account_group_overrides",
+    "cache_vouchers", "cache_voucher_entries", "cache_voucher_items",
+    "outbox", "sync_cursors", "account_creds", "meta",
+  ];
+  const stub: Record<string, unknown> = {
+    async transaction(_mode: string, _tables: unknown, fn: () => Promise<unknown>) { return fn(); },
+  };
+  for (const n of tableNames) stub[n] = makeStubTable();
+  return stub as unknown as OfflineDatabase;
+}
+
+const hasIndexedDb =
+  typeof window !== "undefined" && typeof window.indexedDB !== "undefined";
+
+let _db: OfflineDatabase;
+try {
+  _db = hasIndexedDb ? new OfflineDatabase() : makeStubDb();
+} catch (err) {
+  console.warn("Offline DB unavailable, using in-memory stub:", err);
+  _db = makeStubDb();
+}
+
+export const offlineDb = _db;
+export const db = _db;
+export default _db;
+
+// --- Helpers --------------------------------------------------------------
+
+export async function setMeta(key: string, value: unknown): Promise<void> {
+  try {
+    await offlineDb.meta.put({ key, value });
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function getMeta<T = unknown>(key: string): Promise<T | undefined> {
+  try {
+    const row = await offlineDb.meta.get(key);
+    return row?.value as T | undefined;
+  } catch {
+    return undefined;
+  }
+}

@@ -157,7 +157,7 @@ export function OfflineStatusChip() {
             <div key={r.id} className="rounded-md border p-2 text-xs">
               <div className="flex items-center justify-between">
                 <span className="font-medium uppercase">{r.op}{r.table ? ` · ${r.table}` : r.rpc ? ` · ${r.rpc}` : ""}</span>
-                <span className="text-muted-foreground">{new Date(r.created_at).toLocaleTimeString()}</span>
+                <span className="text-muted-foreground">{r.created_at ? new Date(r.created_at).toLocaleTimeString() : ""}</span>
               </div>
               {r.last_error && (
                 <p className="mt-1 text-destructive">Last error: {r.last_error}</p>

@@ -11,7 +11,7 @@ export interface HsnSeedItem {
 // Comprehensive HSN/SAC master dataset — common Indian trade & service codes.
 // Covers Chapters 04, 07, 08, 10, 15, 17, 19, 20, 22, 30, 33, 39, 40, 44, 48, 49,
 // 52, 54, 61, 62, 63, 64, 69, 72, 73, 84, 85, 87, 90, 94, 95 and key SAC ranges.
-const HSN_MASTER_DATASET: HsnSeedItem[] = [
+export const HSN_MASTER_DATASET: HsnSeedItem[] = [
   // === Chapter 04 — Dairy ===
   { code: "0401", desc: "Fresh milk and cream, not concentrated", cgst: 0, sgst: 0, igst: 0 },
   { code: "0406", desc: "Cheese and curd", cgst: 6, sgst: 6, igst: 12 },
