@@ -181,6 +181,9 @@ function AppLayout() {
     if (memberships.length === 0) return; // empty-state handled below
     if (onCompaniesPage || onAssistantPage) return;
     if (!activeCompanyId || !isCompanyUnlocked(activeCompanyId)) {
+      import("@/lib/return-to").then(({ rememberReturnTo }) => {
+        rememberReturnTo(location.pathname + (location.search ?? ""));
+      });
       navigate({ to: "/" });
     }
   }, [bootstrapping, loading, companyLoading, user, memberships.length, activeCompanyId, onCompaniesPage, onAssistantPage, navigate]);
