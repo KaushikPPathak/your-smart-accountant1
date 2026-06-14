@@ -187,6 +187,21 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const { lock, locked } = usePeriodLock(date);
   const showLineDescription = false;
   const showGstColumn = false;
+  const [showHsnColumn, setShowHsnColumn] = useState<boolean>(() => {
+    try { return localStorage.getItem("voucher.showHsnColumn") === "1"; } catch { return false; }
+  });
+  const toggleHsnColumn = useCallback(() => {
+    setShowHsnColumn((v) => {
+      const next = !v;
+      try { localStorage.setItem("voucher.showHsnColumn", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+  const hsnDescriptionFor = useCallback((code: string) => {
+    const hit = HSN_MASTER_DATASET.find((s) => s.code === code)
+      ?? HSN_MASTER_DATASET.find((s) => s.code.startsWith(code) || code.startsWith(s.code));
+    return hit?.desc;
+  }, []);
 
   // ---------- Draft persistence (so leaving the screen doesn't lose entries) ----------
   const draftKey = activeCompanyId ? `voucher-draft:${activeCompanyId}:${voucherType}` : null;
