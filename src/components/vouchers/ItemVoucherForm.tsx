@@ -53,6 +53,7 @@ import {
 } from "@/lib/offline/voucher-executors";
 import { ItemRow, type ItemRowData } from "@/components/fast-form/ItemRow";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
+import { HSN_MASTER_DATASET } from "@/lib/hsn/seedHsnData";
 
 type VoucherType =
   | "sales"
