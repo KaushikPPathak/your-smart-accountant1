@@ -158,7 +158,7 @@ function StartScreen() {
       localStorage.setItem("ym_active_company_id", c.id);
       setActiveCompanyId(c.id);
       markCompanyUnlocked(c.id);
-      navigate({ to: "/app" });
+      gotoAfterUnlock(navigate);
       return;
     }
     setPendingCompany(c);
@@ -177,7 +177,7 @@ function StartScreen() {
         setActiveCompanyId(pendingCompany.id);
         setCompanyLang(pendingCompany.id, lang);
         setPendingCompany(null);
-        navigate({ to: "/app" });
+        gotoAfterUnlock(navigate);
         return;
       }
 
@@ -196,7 +196,7 @@ function StartScreen() {
       setActiveCompanyId(pendingCompany.id);
       setCompanyLang(pendingCompany.id, lang);
       setPendingCompany(null);
-      navigate({ to: "/app" });
+      gotoAfterUnlock(navigate);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Verification failed");
     } finally {
