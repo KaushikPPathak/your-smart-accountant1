@@ -176,6 +176,24 @@ function ItemRowImpl({
           )}
         </div>
       </TableCell>
+      {showHsnColumn && (
+        <TableCell className="align-middle">
+          {(() => {
+            const code = (selectedItem as ItemOpt | undefined)?.hsn_code || "";
+            const desc = code ? hsnDescriptionFor?.(code) : undefined;
+            return (
+              <div className="flex flex-col leading-tight" title={desc || code || "No HSN"}>
+                <span className="font-mono text-xs">{code || "—"}</span>
+                {desc && (
+                  <span className="truncate text-[10px] text-muted-foreground max-w-[14rem]">
+                    {desc}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+        </TableCell>
+      )}
       {showDescription && (
         <TableCell>
           <Input
