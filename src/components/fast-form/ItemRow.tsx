@@ -29,6 +29,7 @@ interface ItemOpt {
   id: string;
   name: string;
   unit: string;
+  hsn_code?: string | null;
 }
 
 interface Props {
@@ -46,6 +47,8 @@ interface Props {
   onAdvanceToNextRow?: (idx: number) => void;
   showDescription?: boolean;
   showGstColumn?: boolean;
+  showHsnColumn?: boolean;
+  hsnDescriptionFor?: (code: string) => string | undefined;
 }
 
 function ItemRowImpl({
