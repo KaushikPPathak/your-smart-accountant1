@@ -29,6 +29,7 @@ interface ItemOpt {
   id: string;
   name: string;
   unit: string;
+  hsn_code?: string | null;
 }
 
 interface Props {
@@ -46,6 +47,8 @@ interface Props {
   onAdvanceToNextRow?: (idx: number) => void;
   showDescription?: boolean;
   showGstColumn?: boolean;
+  showHsnColumn?: boolean;
+  hsnDescriptionFor?: (code: string) => string | undefined;
 }
 
 function ItemRowImpl({
@@ -63,6 +66,8 @@ function ItemRowImpl({
   onAdvanceToNextRow,
   showDescription = true,
   showGstColumn = true,
+  showHsnColumn = false,
+  hsnDescriptionFor,
 }: Props) {
   const { setHints, clearHints } = useFocusHints();
   const zone = `item-row`;
@@ -171,6 +176,24 @@ function ItemRowImpl({
           )}
         </div>
       </TableCell>
+      {showHsnColumn && (
+        <TableCell className="align-middle">
+          {(() => {
+            const code = (selectedItem as ItemOpt | undefined)?.hsn_code || "";
+            const desc = code ? hsnDescriptionFor?.(code) : undefined;
+            return (
+              <div className="flex flex-col leading-tight" title={desc || code || "No HSN"}>
+                <span className="font-mono text-xs">{code || "—"}</span>
+                {desc && (
+                  <span className="truncate text-[10px] text-muted-foreground max-w-[14rem]">
+                    {desc}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+        </TableCell>
+      )}
       {showDescription && (
         <TableCell>
           <Input
@@ -321,6 +344,7 @@ export const ItemRow = memo(ItemRowImpl, (prev, next) => {
     prev.items === next.items &&
     prev.canDelete === next.canDelete &&
     prev.showDescription === next.showDescription &&
-    prev.showGstColumn === next.showGstColumn
+    prev.showGstColumn === next.showGstColumn &&
+    prev.showHsnColumn === next.showHsnColumn
   );
 });
