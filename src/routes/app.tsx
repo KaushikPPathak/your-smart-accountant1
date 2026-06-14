@@ -182,7 +182,7 @@ function AppLayout() {
     if (onCompaniesPage || onAssistantPage) return;
     if (!activeCompanyId || !isCompanyUnlocked(activeCompanyId)) {
       import("@/lib/return-to").then(({ rememberReturnTo }) => {
-        rememberReturnTo(location.pathname + (location.search ?? ""));
+        rememberReturnTo(location.pathname + (typeof window !== "undefined" ? window.location.search : ""));
       });
       navigate({ to: "/" });
     }
