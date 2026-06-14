@@ -344,6 +344,7 @@ export const ItemRow = memo(ItemRowImpl, (prev, next) => {
     prev.items === next.items &&
     prev.canDelete === next.canDelete &&
     prev.showDescription === next.showDescription &&
-    prev.showGstColumn === next.showGstColumn
+    prev.showGstColumn === next.showGstColumn &&
+    prev.showHsnColumn === next.showHsnColumn
   );
 });
