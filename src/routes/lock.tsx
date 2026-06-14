@@ -136,7 +136,7 @@ function LockScreen() {
 
           markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole });
           toast.success(`Welcome, ${row.name}`);
-          navigate({ to: "/app" });
+          navigate({ to: (consumeReturnTo() ?? "/app") as never });
           return;
         } catch (cloudErr) {
           const reachable = await pingOnline();
@@ -148,7 +148,7 @@ function LockScreen() {
       if (local) {
         markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole });
         toast.success(`Welcome, ${local.name} (offline)`);
-        navigate({ to: "/app" });
+        navigate({ to: (consumeReturnTo() ?? "/app") as never });
         return;
       }
 
@@ -196,7 +196,7 @@ function LockScreen() {
 
       toast.success("Account created successfully!");
       markUnlocked({ id: newId as string, name: suName.trim(), role: "admin" });
-      navigate({ to: "/app" });
+      navigate({ to: (consumeReturnTo() ?? "/app") as never });
     } catch (e) {
       console.error("Signup failed:", e);
       const msg =
