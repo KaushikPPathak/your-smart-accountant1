@@ -896,12 +896,25 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
 
         <Card>
           <CardContent className="p-0">
+            <div className="flex items-center justify-end gap-2 border-b px-3 py-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={toggleHsnColumn}
+                title="Toggle HSN/SAC column (display only)"
+              >
+                {showHsnColumn ? "Hide HSN" : "Show HSN"}
+              </Button>
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className={showLineDescription ? "w-[32%]" : "w-[46%]"}>
+                  <TableHead className={showLineDescription ? "w-[32%]" : "w-[40%]"}>
                     Item
                   </TableHead>
+                  {showHsnColumn && <TableHead className="w-44">HSN / SAC</TableHead>}
                   {showLineDescription && <TableHead>Description</TableHead>}
                   <TableHead className="w-32">Qty / Unit</TableHead>
                   <TableHead className="w-24">Rate</TableHead>
@@ -935,6 +948,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     onAdvanceToNextRow={onAdvanceToNextRow}
                     showDescription={showLineDescription}
                     showGstColumn={showGstColumn}
+                    showHsnColumn={showHsnColumn}
+                    hsnDescriptionFor={hsnDescriptionFor}
                   />
                 ))}
               </TableBody>
