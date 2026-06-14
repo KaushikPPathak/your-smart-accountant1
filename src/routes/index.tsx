@@ -25,6 +25,12 @@ import { useCompany } from "@/lib/company-context";
 import { closeNativeApp } from "@/lib/native-bridge";
 import { useAuth } from "@/lib/auth-context";
 import { isOnlineNow } from "@/lib/offline/online-status";
+import { consumeReturnTo } from "@/lib/return-to";
+
+function gotoAfterUnlock(navigate: ReturnType<typeof useNavigate>) {
+  const back = consumeReturnTo();
+  navigate({ to: (back ?? "/app") as never });
+}
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -152,7 +158,7 @@ function StartScreen() {
       localStorage.setItem("ym_active_company_id", c.id);
       setActiveCompanyId(c.id);
       markCompanyUnlocked(c.id);
-      navigate({ to: "/app" });
+      gotoAfterUnlock(navigate);
       return;
     }
     setPendingCompany(c);
@@ -171,7 +177,7 @@ function StartScreen() {
         setActiveCompanyId(pendingCompany.id);
         setCompanyLang(pendingCompany.id, lang);
         setPendingCompany(null);
-        navigate({ to: "/app" });
+        gotoAfterUnlock(navigate);
         return;
       }
 
@@ -190,7 +196,7 @@ function StartScreen() {
       setActiveCompanyId(pendingCompany.id);
       setCompanyLang(pendingCompany.id, lang);
       setPendingCompany(null);
-      navigate({ to: "/app" });
+      gotoAfterUnlock(navigate);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Verification failed");
     } finally {
