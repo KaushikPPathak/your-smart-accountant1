@@ -66,6 +66,8 @@ function ItemRowImpl({
   onAdvanceToNextRow,
   showDescription = true,
   showGstColumn = true,
+  showHsnColumn = false,
+  hsnDescriptionFor,
 }: Props) {
   const { setHints, clearHints } = useFocusHints();
   const zone = `item-row`;
