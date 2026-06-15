@@ -586,7 +586,25 @@ function CompaniesPage() {
                       disabled={!form.gst_registered}
                       placeholder={form.gst_registered ? "" : "Not applicable"}
                     />
-                    <GstinPortalButton gstin={form.gstin} disabled={!form.gst_registered} />
+                    <GstinPortalButton
+                      gstin={form.gstin}
+                      disabled={!form.gst_registered}
+                      onDataFetched={(d) => {
+                        const g = (d.gstin || "").toUpperCase();
+                        const pan = g.length >= 12 ? g.slice(2, 12) : "";
+                        const code = g.slice(0, 2);
+                        const stateMatch = INDIAN_STATES.find((s) => s.code === code);
+                        setForm((f) => ({
+                          ...f,
+                          name: f.name || d.legalName || d.tradeName || f.name,
+                          gstin: g,
+                          pan: f.pan || pan,
+                          state_code: f.state_code || code,
+                          state: f.state || stateMatch?.name || f.state,
+                          address: f.address || d.address || f.address,
+                        }));
+                      }}
+                    />
                   </div>
                   {form.gst_registered && <GstinInlineError value={form.gstin} />}
                 </div>
