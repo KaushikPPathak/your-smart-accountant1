@@ -64,6 +64,26 @@ export interface SetuGstinResult {
   raw?: unknown;
 }
 
+function compactAddress(value: unknown): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === "string") return value.replace(/\s+/g, " ").trim() || undefined;
+  if (typeof value !== "object") return undefined;
+  const obj = value as Record<string, unknown>;
+  const nested = compactAddress(obj.address || obj.addr || obj.adr);
+  if (nested) return nested;
+  const parts = [
+    obj.bno || obj.buildingNumber,
+    obj.flno || obj.floorNumber,
+    obj.bnm || obj.buildingName,
+    obj.st || obj.street,
+    obj.loc || obj.location,
+    obj.dst || obj.district,
+    obj.stcd || obj.state,
+    obj.pncd || obj.pincode,
+  ];
+  return parts.map((p) => (p == null ? "" : String(p).trim())).filter(Boolean).join(", ") || undefined;
+}
+
 /**
  * Verify a GSTIN via API Setu's GSTN Tax Payer API V2.
  */
@@ -149,10 +169,14 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
   const taxpayerType = d.taxpayerType || d.dty || undefined;
   const constitutionOfBusiness = d.constitutionOfBusiness || d.ctb || undefined;
   const natureOfBusinessActivities = d.natureOfBusinessActivity || d.nba || undefined;
-  const principalPlaceOfBusiness =
-    (d.principalPlaceOfBusiness && (d.principalPlaceOfBusiness.address || d.principalPlaceOfBusiness)) ||
+  const principalPlaceOfBusiness = compactAddress(
+    d.principalPlaceOfBusiness ||
+    d.principalPlaceOfBusinessAddress ||
+    d.pradr?.addr ||
     d.pradr?.adr ||
-    undefined;
+    d.pradr ||
+    d.address,
+  );
 
   return {
     success: Boolean(legalName || tradeName),
@@ -166,7 +190,7 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
     natureOfBusinessActivities: Array.isArray(natureOfBusinessActivities)
       ? natureOfBusinessActivities.map(String)
       : undefined,
-    principalPlaceOfBusiness: principalPlaceOfBusiness ? String(principalPlaceOfBusiness) : undefined,
+    principalPlaceOfBusiness,
     raw: json,
     error: undefined,
   };
