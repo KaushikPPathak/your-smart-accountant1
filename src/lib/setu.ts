@@ -135,9 +135,6 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
       const { data, error } = await supabase.functions.invoke("setu-gstin-proxy", {
         body: {
           gstin: cleanGstin,
-          // Forward locally-saved creds as overrides (proxy falls back to env if blank).
-          clientId: creds.clientId || undefined,
-          apiKey: creds.clientSecret || undefined,
         },
       });
       if (error) return { ...empty, error: `Proxy error: ${error.message}` };
