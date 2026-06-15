@@ -14,6 +14,7 @@ interface GstinPortalButtonProps {
     tradeName: string;
     status: string;
     gstin: string;
+    address?: string;
   }) => void;
 }
 
