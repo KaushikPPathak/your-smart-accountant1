@@ -12,8 +12,9 @@ function applyGlobalWorkerSecurityInterceptor() {
   if (typeof window === "undefined") return;
 
   const SUPABASE_ANON_KEY =
+    import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
     import.meta.env?.VITE_SUPABASE_ANON_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1a3d6Y2RkaGtocXRicm5ubmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyMzgwOTUsImV4cCI6MjA5MzgxNDA5NX0.Pn2-TWfiyYXVZqfFdCVKTD27Z95RWjRSgrXvZgqQ76A";
+    "";
   const originalFetch = window.fetch;
 
   window.fetch = async function (input, init) {
@@ -25,7 +26,7 @@ function applyGlobalWorkerSecurityInterceptor() {
           : input.url;
 
     if (
-      url.includes("supabase.co/auth/v1/health") ||
+      SUPABASE_ANON_KEY &&
       url.includes("supabase.co/rest/v1")
     ) {
       const modifiedInit = { ...(init || {}) };

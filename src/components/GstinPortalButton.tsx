@@ -41,7 +41,7 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
   const autoFetchedRef = React.useRef<string>("");
   React.useEffect(() => {
     if (!isValid || autoFetchedRef.current === cleanGstin) return;
-    if (!creds.clientId || !creds.clientSecret) return;
+    if (!creds.clientId) return;
     autoFetchedRef.current = cleanGstin;
     void handleSetuFetch(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,12 +104,15 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
     let legalName = "";
     let tradeName = "";
     let status = "";
+    let address = "";
     const legalMatch = text.match(/Legal Name of Business\s*[:\-\t]?\s*([^\n\r\t]+)/i);
     if (legalMatch) legalName = legalMatch[1].trim();
     const tradeMatch = text.match(/Trade Name\s*[:\-\t]?\s*([^\n\r\t]+)/i);
     if (tradeMatch) tradeName = tradeMatch[1].trim();
     const statusMatch = text.match(/(?:Taxpayer\s*)?Status\s*[:\-\t]?\s*(Active|Cancelled|Suspended|Provisional)/i);
     if (statusMatch) status = statusMatch[1].trim();
+    const addressMatch = text.match(/(?:Principal Place of Business|Address)\s*[:\-\t]?\s*([^\n\r]+(?:\n(?!\s*(?:Legal Name|Trade Name|Status|GSTIN)\b)[^\n\r]+)*)/i);
+    if (addressMatch) address = addressMatch[1].replace(/\s+/g, " ").trim();
 
     if (legalName) {
       onDataFetched?.({
@@ -117,6 +120,7 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
         tradeName: tradeName || legalName,
         status: status || "Active",
         gstin: cleanGstin,
+        address,
       });
       toast.success("Ledger fields filled from portal data");
       setPasteText("");
