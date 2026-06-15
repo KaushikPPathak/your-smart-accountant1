@@ -25,9 +25,10 @@ function applyGlobalWorkerSecurityInterceptor() {
           ? input.toString()
           : input.url;
 
-    if (SUPABASE_ANON_KEY &&
-      url.includes("supabase.co/auth/v1/health") ||
-      url.includes("supabase.co/rest/v1")
+    if (
+      SUPABASE_ANON_KEY &&
+      (url.includes("supabase.co/auth/v1/health") ||
+        url.includes("supabase.co/rest/v1"))
     ) {
       const modifiedInit = { ...(init || {}) };
       const headers = new Headers(modifiedInit.headers || {});
