@@ -5,8 +5,8 @@
   "windows": ["main"],
   "remote": {
     "urls": [
-      "https://your-smart-accountant.lovable.app",
-      "https://your-smart-accountant.lovable.app/*",
+      "https://your-smart-accountant1.lovable.app",
+      "https://your-smart-accountant1.lovable.app/*",
       "https://*.lovable.app",
       "https://*.lovable.app/*"
     ]
