@@ -27,10 +27,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     // Listener first (Supabase best practice).
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      // Catch sign-up or sign-in transitions dynamically
-      if (newSession) {
+    // IMPORTANT: ignore TOKEN_REFRESHED and INITIAL_SESSION events. Those fire
+    // every time the tab regains focus (and roughly hourly when the access
+    // token is refreshed). Calling setSession on them swaps the context value
+    // by reference, re-rendering every consumer and blowing away half-filled
+    // forms ("page reload on tab switch" bug). Only react to true identity
+    // transitions.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") {
+        return;
+      }
+      setSession((prev) => {
+        if (prev?.user?.id === newSession?.user?.id && prev?.access_token === newSession?.access_token) {
+          return prev;
+        }
+        return newSession;
+      });
+      if (newSession && event === "SIGNED_IN") {
         initSyncEngine(newSession);
       }
     });
