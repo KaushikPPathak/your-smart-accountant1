@@ -1,8 +1,10 @@
 import * as React from "react";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { ExternalLink, ClipboardCheck, Sparkles } from "lucide-react";
+import { ExternalLink, ClipboardCheck, Sparkles, Zap, Settings2 } from "lucide-react";
 import { toast } from "sonner";
+import { lookupGstinViaSetu, loadSetuCreds, saveSetuCreds, type SetuCreds } from "@/lib/setu";
+import { validateGSTIN } from "@/utils/gstinValidator";
 
 interface GstinPortalButtonProps {
   gstin: string;
@@ -16,18 +18,65 @@ interface GstinPortalButtonProps {
 }
 
 /**
- * Compact icon-button for verifying a GSTIN on the official portal.
- * - Single-click: copy GSTIN to clipboard and open the GST taxpayer search.
- * - Optional popover lets users paste the portal response back to auto-fill ledger fields.
- * Designed to sit inline next to a GSTIN input without crowding the form row.
+ * Compact GSTIN action cluster:
+ * - Zap: auto-fetch via Setu (if creds present + GSTIN valid).
+ * - ExternalLink: copy GSTIN + open the official portal as fallback.
+ * - Sparkles: paste portal response to auto-fill.
+ * - Settings: edit Setu credentials.
  */
 export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPortalButtonProps) {
   const [copied, setCopied] = React.useState(false);
+  const [fetching, setFetching] = React.useState(false);
   const [pasteText, setPasteText] = React.useState("");
   const [parseError, setParseError] = React.useState("");
   const [popoverOpen, setPopoverOpen] = React.useState(false);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [creds, setCreds] = React.useState<SetuCreds>(() => loadSetuCreds());
 
   const cleanGstin = (gstin || "").trim().toUpperCase();
+  const isValid = validateGSTIN(cleanGstin).valid;
+
+  // Auto-fetch the first time a complete, valid GSTIN is typed.
+  const autoFetchedRef = React.useRef<string>("");
+  React.useEffect(() => {
+    if (!isValid || autoFetchedRef.current === cleanGstin) return;
+    if (!creds.clientId || !creds.clientSecret) return;
+    autoFetchedRef.current = cleanGstin;
+    void handleSetuFetch(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleanGstin, isValid]);
+
+  const handleSetuFetch = async (silent = false) => {
+    if (!cleanGstin) {
+      if (!silent) toast.error("Enter a GSTIN first");
+      return;
+    }
+    if (!isValid) {
+      if (!silent) toast.error("Invalid GSTIN — fix format before fetching");
+      return;
+    }
+    setFetching(true);
+    try {
+      const res = await lookupGstinViaSetu(cleanGstin);
+      if (res.success) {
+        onDataFetched?.({
+          legalName: res.legalName,
+          tradeName: res.tradeName,
+          status: res.status,
+          gstin: res.gstin,
+        });
+        toast.success(`Fetched: ${res.legalName || res.tradeName}`);
+      } else {
+        if (!silent) {
+          toast.error(res.error || "Setu lookup failed", {
+            description: "You can still open the GST portal manually.",
+          });
+        }
+      }
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const handlePortalRedirect = async () => {
     if (!cleanGstin) {
@@ -40,7 +89,7 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
       setTimeout(() => setCopied(false), 2500);
       toast.success(`GSTIN ${cleanGstin} copied — paste it on the portal search`);
     } catch {
-      // ignore clipboard errors and still open portal
+      /* ignore */
     }
     window.open("https://services.gst.gov.in/services/searchtp", "_blank", "noopener,noreferrer");
   };
@@ -53,7 +102,6 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
     let legalName = "";
     let tradeName = "";
     let status = "";
-
     const legalMatch = text.match(/Legal Name of Business\s*[:\-\t]?\s*([^\n\r\t]+)/i);
     if (legalMatch) legalName = legalMatch[1].trim();
     const tradeMatch = text.match(/Trade Name\s*[:\-\t]?\s*([^\n\r\t]+)/i);
@@ -76,8 +124,27 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
     }
   };
 
+  const persistCreds = () => {
+    saveSetuCreds(creds);
+    toast.success("Setu credentials saved");
+    setSettingsOpen(false);
+    autoFetchedRef.current = ""; // allow re-fetch with new creds
+  };
+
   return (
     <div className="flex items-center gap-1 shrink-0">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        disabled={disabled || fetching}
+        onClick={() => handleSetuFetch(false)}
+        title={isValid ? `Fetch ${cleanGstin} via Setu` : "Enter a valid GSTIN to fetch"}
+        aria-label="Fetch via Setu"
+      >
+        <Zap className={`h-4 w-4 ${fetching ? "animate-pulse text-amber-500" : "text-amber-500"}`} />
+      </Button>
+
       <Button
         type="button"
         variant="outline"
@@ -117,6 +184,56 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
             className="w-full min-h-[100px] text-xs p-2 rounded border border-input bg-background font-mono focus:outline-none focus:ring-1 focus:ring-ring resize-y"
           />
           {parseError && <p className="text-[11px] text-destructive">{parseError}</p>}
+        </PopoverContent>
+      </Popover>
+
+      <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            title="Setu API credentials"
+            aria-label="Setu API credentials"
+          >
+            <Settings2 className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80 space-y-2">
+          <p className="text-xs font-medium">Setu GST Verification credentials</p>
+          <label className="text-[11px] text-muted-foreground">Client ID (User ID)</label>
+          <input
+            value={creds.clientId}
+            onChange={(e) => setCreds({ ...creds, clientId: e.target.value })}
+            className="w-full text-xs p-2 rounded border border-input bg-background font-mono"
+          />
+          <label className="text-[11px] text-muted-foreground">Client Secret (API Key)</label>
+          <input
+            type="password"
+            value={creds.clientSecret}
+            onChange={(e) => setCreds({ ...creds, clientSecret: e.target.value })}
+            className="w-full text-xs p-2 rounded border border-input bg-background font-mono"
+          />
+          <label className="text-[11px] text-muted-foreground">Product Instance ID (optional)</label>
+          <input
+            value={creds.productInstanceId || ""}
+            onChange={(e) => setCreds({ ...creds, productInstanceId: e.target.value })}
+            className="w-full text-xs p-2 rounded border border-input bg-background font-mono"
+          />
+          <label className="text-[11px] text-muted-foreground">Environment</label>
+          <select
+            value={creds.environment}
+            onChange={(e) =>
+              setCreds({ ...creds, environment: e.target.value === "sandbox" ? "sandbox" : "production" })
+            }
+            className="w-full text-xs p-2 rounded border border-input bg-background"
+          >
+            <option value="production">Production (dg.setu.co)</option>
+            <option value="sandbox">Sandbox (dg-sandbox.setu.co)</option>
+          </select>
+          <div className="flex justify-end pt-1">
+            <Button size="sm" type="button" onClick={persistCreds}>Save</Button>
+          </div>
         </PopoverContent>
       </Popover>
     </div>
