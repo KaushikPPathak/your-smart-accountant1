@@ -98,8 +98,8 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
   const isTauri = typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
 
   let json: any = null;
-  let ok = false;
-  let status = 0;
+  let httpOk = false;
+  let httpStatus = 0;
 
   if (isTauri) {
     // Desktop build can call Setu directly — no browser CORS.
@@ -114,8 +114,8 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
       const msg = e instanceof Error ? e.message : String(e);
       return { ...empty, error: `Network/CORS error: ${msg}` };
     }
-    ok = res.ok;
-    status = res.status;
+    httpOk = res.ok;
+    httpStatus = res.status;
     try { json = await res.json(); } catch { /* ignore */ }
   } else {
     // Web build → proxy through Supabase Edge Function to bypass CORS.
@@ -133,8 +133,8 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
       if (error) return { ...empty, error: `Proxy error: ${error.message}` };
       const resp = data as { ok: boolean; status: number; json: unknown; error?: string };
       if (resp?.error) return { ...empty, error: resp.error };
-      ok = Boolean(resp?.ok);
-      status = Number(resp?.status ?? 0);
+      httpOk = Boolean(resp?.ok);
+      httpStatus = Number(resp?.status ?? 0);
       json = resp?.json ?? null;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -142,10 +142,10 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
     }
   }
 
-  if (!ok) {
+  if (!httpOk) {
     const errMsg =
       (json && (json.error?.message || json.message || json.error)) ||
-      `Setu API error ${status}`;
+      `Setu API error ${httpStatus}`;
     return { ...empty, error: String(errMsg), raw: json };
   }
 
