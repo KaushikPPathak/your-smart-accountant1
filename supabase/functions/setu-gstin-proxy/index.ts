@@ -1,6 +1,6 @@
-// Setu GSTIN verification proxy. The browser cannot call dg.setu.co directly
-// because the upstream blocks CORS, so the SPA build proxies through here.
-// Tauri/desktop builds may still call Setu directly.
+// GSTIN verification proxy — API Setu (apisetu.gov.in) GSTN Tax Payer API V2.
+// Browser cannot call apisetu.gov.in directly (CORS), so the SPA proxies
+// through this edge function. Auth uses X-APISETU-CLIENTID / X-APISETU-APIKEY.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,10 +11,10 @@ const corsHeaders = {
 
 interface ProxyBody {
   gstin?: string;
+  // Optional overrides; normally we read from env.
   clientId?: string;
-  clientSecret?: string;
-  productInstanceId?: string;
-  environment?: "production" | "sandbox";
+  clientSecret?: string; // treated as API key for back-compat with older callers
+  apiKey?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -38,34 +38,34 @@ Deno.serve(async (req: Request) => {
   }
 
   const clientId =
-    body.clientId || Deno.env.get("SETU_CLIENT_ID") || "com.shcglobaltrade";
-  const clientSecret = body.clientSecret || Deno.env.get("SETU_API_KEY") || "";
-  const productInstanceId =
-    body.productInstanceId || Deno.env.get("SETU_PRODUCT_INSTANCE_ID") || "";
-  const env = body.environment === "sandbox" ? "sandbox" : "production";
+    body.clientId ||
+    Deno.env.get("APISETU_CLIENT_ID") ||
+    "com.shcglobaltrade";
+  const apiKey =
+    body.apiKey ||
+    body.clientSecret ||
+    Deno.env.get("APISETU_API_KEY") ||
+    Deno.env.get("SETU_API_KEY") ||
+    "";
 
-  if (!clientId || !clientSecret) {
-    return json({ ok: false, status: 400, error: "Setu credentials not configured" }, 200);
+  if (!clientId || !apiKey) {
+    return json(
+      { ok: false, status: 400, error: "API Setu credentials not configured" },
+      200,
+    );
   }
 
-  const url =
-    env === "sandbox"
-      ? "https://dg-sandbox.setu.co/api/verify/gstin"
-      : "https://dg.setu.co/api/verify/gstin";
+  // API Setu GSTN Tax Payer API V2 — GET with GSTIN in path.
+  const url = `https://apisetu.gov.in/gstn/v2/taxpayers/${encodeURIComponent(gstin)}`;
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "x-client-id": clientId,
-    "x-client-secret": clientSecret,
+    "X-APISETU-CLIENTID": clientId,
+    "X-APISETU-APIKEY": apiKey,
+    Accept: "application/json",
   };
-  if (productInstanceId) headers["x-product-instance-id"] = productInstanceId;
 
   try {
-    const upstream = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ gstin }),
-    });
+    const upstream = await fetch(url, { method: "GET", headers });
     let payload: unknown = null;
     try {
       payload = await upstream.json();
