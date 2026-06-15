@@ -95,29 +95,57 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
     headers["x-product-instance-id"] = creds.productInstanceId;
   }
 
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ gstin: cleanGstin }),
-    });
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ...empty, error: `Network/CORS error: ${msg}` };
-  }
+  const isTauri = typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
 
   let json: any = null;
-  try {
-    json = await res.json();
-  } catch {
-    /* ignore */
+  let ok = false;
+  let status = 0;
+
+  if (isTauri) {
+    // Desktop build can call Setu directly — no browser CORS.
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ gstin: cleanGstin }),
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ...empty, error: `Network/CORS error: ${msg}` };
+    }
+    ok = res.ok;
+    status = res.status;
+    try { json = await res.json(); } catch { /* ignore */ }
+  } else {
+    // Web build → proxy through Supabase Edge Function to bypass CORS.
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke("setu-gstin-proxy", {
+        body: {
+          gstin: cleanGstin,
+          clientId: creds.clientId,
+          clientSecret: creds.clientSecret,
+          productInstanceId: creds.productInstanceId,
+          environment: creds.environment,
+        },
+      });
+      if (error) return { ...empty, error: `Proxy error: ${error.message}` };
+      const resp = data as { ok: boolean; status: number; json: unknown; error?: string };
+      if (resp?.error) return { ...empty, error: resp.error };
+      ok = Boolean(resp?.ok);
+      status = Number(resp?.status ?? 0);
+      json = resp?.json ?? null;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ...empty, error: `Network error: ${msg}` };
+    }
   }
 
-  if (!res.ok) {
+  if (!ok) {
     const errMsg =
       (json && (json.error?.message || json.message || json.error)) ||
-      `Setu API error ${res.status}`;
+      `Setu API error ${status}`;
     return { ...empty, error: String(errMsg), raw: json };
   }
 
