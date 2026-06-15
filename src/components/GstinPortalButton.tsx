@@ -65,6 +65,7 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
           tradeName: res.tradeName,
           status: res.status,
           gstin: res.gstin,
+          address: res.principalPlaceOfBusiness,
         });
         toast.success(`Fetched: ${res.legalName || res.tradeName}`);
       } else {
