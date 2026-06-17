@@ -339,6 +339,24 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
               </Button>
             )}
           </div>
+          {memberships.length > 1 && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-2">
+              <Button
+                variant="default"
+                onClick={doExportAll}
+                disabled={exportingAll || disabled}
+                title="One-click backup of every company you have access to — recommended before transferring or upgrading"
+              >
+                {exportingAll
+                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Backing up {memberships.length} companies…</>
+                  : <><Layers className="mr-2 h-4 w-4" />Backup ALL {memberships.length} companies (.json)</>}
+              </Button>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Recommended before workspace transfers or major upgrades. Produces a single
+                multi-company JSON file you can restore from later.
+              </p>
+            </div>
+          )}
           <div>
             <Button
               variant="outline"
