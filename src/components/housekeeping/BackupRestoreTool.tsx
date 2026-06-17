@@ -13,9 +13,11 @@ import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen, 
 import { toast } from "sonner";
 import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
-  buildCompanyBackup,
+  buildCompanyBackup, exportAllCompaniesBackup,
   type RestoreSummary,
 } from "@/lib/backup";
+import { useCompany } from "@/lib/company-context";
+import { Layers } from "lucide-react";
 import { wrapBackup } from "@/lib/backup-policy";
 import {
   saveWithPickerNative, isDesktopRuntime, showInFolderNative, openPathNative,
