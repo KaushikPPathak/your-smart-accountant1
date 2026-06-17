@@ -119,6 +119,33 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     }
   }
 
+  async function doExportAll() {
+    const list = memberships
+      .map((m) => ({ id: m.company_id, name: m.companies?.name ?? "company" }))
+      .filter((c) => c.id);
+    if (list.length === 0) {
+      toast.error("No companies to back up");
+      return;
+    }
+    setExportingAll(true);
+    try {
+      const r = await exportAllCompaniesBackup(list);
+      toast.success(
+        `Backed up ${list.length} compan${list.length === 1 ? "y" : "ies"}: ${r.fileName}`,
+        { description: r.desktopPath ?? undefined, duration: 8000 },
+      );
+      try {
+        const now = new Date().toISOString();
+        for (const c of list) localStorage.setItem(`lastBackup:${c.id}`, now);
+      } catch { /* ignore */ }
+    } catch (e) {
+      toast.error((e as Error).message || "Backup ALL failed");
+    } finally {
+      setExportingAll(false);
+    }
+  }
+
+
   async function doMirror() {
     if (!companyId) return;
     if (isDesktopRuntime() && !backupFolder) {
