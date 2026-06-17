@@ -590,20 +590,28 @@ function CompaniesPage() {
                       gstin={form.gstin}
                       disabled={!form.gst_registered}
                       onDataFetched={(d) => {
-                        const g = (d.gstin || "").toUpperCase();
+                        // Prefer the GSTIN the user typed if the API echoes back blank.
+                        const g = ((d.gstin || form.gstin) || "").toUpperCase();
                         const pan = g.length >= 12 ? g.slice(2, 12) : "";
                         const code = g.slice(0, 2);
                         const stateMatch = INDIAN_STATES.find((s) => s.code === code);
                         const address = (d.address || "").replace(/\s+/g, " ").trim();
+                        const nameFromGstin = (d.legalName || d.tradeName || "").trim();
                         setForm((f) => ({
                           ...f,
-                          name: f.name || d.legalName || d.tradeName || f.name,
-                          gstin: g,
+                          // Always fill name when fetching a fresh entity (no editing) or when blank
+                          name: nameFromGstin && (!editingId || !f.name) ? nameFromGstin : (f.name || nameFromGstin),
+                          gstin: g || f.gstin,
+                          // GSTIN encodes PAN + state — always derive and overwrite.
                           pan: pan || f.pan,
                           state_code: code || f.state_code,
                           state: stateMatch?.name || f.state,
                           address: address || f.address,
+                          gst_registered: true,
                         }));
+                        if (nameFromGstin) {
+                          toast.success(`Auto-filled: ${nameFromGstin}${pan ? ` · PAN ${pan}` : ""}${stateMatch ? ` · ${stateMatch.name}` : ""}`);
+                        }
                       }}
                     />
                   </div>

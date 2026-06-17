@@ -13,9 +13,11 @@ import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen, 
 import { toast } from "sonner";
 import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
-  buildCompanyBackup,
+  buildCompanyBackup, exportAllCompaniesBackup,
   type RestoreSummary,
 } from "@/lib/backup";
+import { useCompany } from "@/lib/company-context";
+import { Layers } from "lucide-react";
 import { wrapBackup } from "@/lib/backup-policy";
 import {
   saveWithPickerNative, isDesktopRuntime, showInFolderNative, openPathNative,
@@ -34,8 +36,10 @@ interface Props {
 }
 
 export function BackupRestoreTool({ companyId, companyName, partyCode, disabled }: Props) {
+  const { memberships } = useCompany();
   const [exporting, setExporting] = useState(false);
   const [exportingAs, setExportingAs] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [mirroring, setMirroring] = useState(false);
   const [summary, setSummary] = useState<RestoreSummary | null>(null);
@@ -114,6 +118,33 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
       setExportingAs(false);
     }
   }
+
+  async function doExportAll() {
+    const list = memberships
+      .map((m) => ({ id: m.company_id, name: m.companies?.name ?? "company" }))
+      .filter((c) => c.id);
+    if (list.length === 0) {
+      toast.error("No companies to back up");
+      return;
+    }
+    setExportingAll(true);
+    try {
+      const r = await exportAllCompaniesBackup(list);
+      toast.success(
+        `Backed up ${list.length} compan${list.length === 1 ? "y" : "ies"}: ${r.fileName}`,
+        { description: r.desktopPath ?? undefined, duration: 8000 },
+      );
+      try {
+        const now = new Date().toISOString();
+        for (const c of list) localStorage.setItem(`lastBackup:${c.id}`, now);
+      } catch { /* ignore */ }
+    } catch (e) {
+      toast.error((e as Error).message || "Backup ALL failed");
+    } finally {
+      setExportingAll(false);
+    }
+  }
+
 
   async function doMirror() {
     if (!companyId) return;
@@ -308,6 +339,24 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
               </Button>
             )}
           </div>
+          {memberships.length > 1 && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-2">
+              <Button
+                variant="default"
+                onClick={doExportAll}
+                disabled={exportingAll || disabled}
+                title="One-click backup of every company you have access to — recommended before transferring or upgrading"
+              >
+                {exportingAll
+                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Backing up {memberships.length} companies…</>
+                  : <><Layers className="mr-2 h-4 w-4" />Backup ALL {memberships.length} companies (.json)</>}
+              </Button>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Recommended before workspace transfers or major upgrades. Produces a single
+                multi-company JSON file you can restore from later.
+              </p>
+            </div>
+          )}
           <div>
             <Button
               variant="outline"

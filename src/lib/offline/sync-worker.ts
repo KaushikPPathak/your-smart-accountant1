@@ -25,9 +25,16 @@ function applyGlobalWorkerSecurityInterceptor() {
           ? input.toString()
           : input.url;
 
+    // Silently short-circuit health-probe calls made by browser extensions /
+    // injected scripts (frame_ant.js etc.) — they hit /auth/v1/health WITHOUT
+    // an apikey and spam the console with 401s. We don't need the result.
+    if (url.includes("supabase.co/auth/v1/health")) {
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }
+
     if (
       SUPABASE_ANON_KEY &&
-      url.includes("supabase.co/rest/v1")
+      (url.includes("supabase.co/rest/v1") || url.includes("supabase.co/auth/v1"))
     ) {
       const modifiedInit = { ...(init || {}) };
       const headers = new Headers(modifiedInit.headers || {});
