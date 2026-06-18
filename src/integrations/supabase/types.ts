@@ -2319,6 +2319,10 @@ export type Database = {
         }
         Returns: number
       }
+      enforce_item_header_totals: {
+        Args: { _vids: string[] }
+        Returns: undefined
+      }
       has_company_role: {
         Args: {
           _company_id: string
@@ -2387,6 +2391,10 @@ export type Database = {
           _target_id: string
         }
         Returns: undefined
+      }
+      save_voucher_atomic: {
+        Args: { _entries?: Json; _header: Json; _items?: Json }
+        Returns: string
       }
       set_company_password: {
         Args: { _company_id: string; _new_password: string }
