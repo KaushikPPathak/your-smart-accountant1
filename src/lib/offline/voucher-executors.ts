@@ -99,39 +99,9 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
     _type: snap.voucherType,
   });
   if (numErr) throw numErr;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
-  const { data: vData, error: vErr } = await supabase
-    .from("vouchers")
-    .insert({
-      company_id: snap.companyId,
-      created_by: user.id,
-      voucher_type: snap.voucherType,
-      voucher_number: numData as string,
-      voucher_date: snap.voucherDate,
-      party_ledger_id: snap.partyId,
-      reference_no: snap.refNo || null,
-      narration: snap.narration || null,
-      is_interstate: snap.interstate,
-      subtotal_paise: snap.totals.subtotal_paise,
-      cgst_paise: snap.totals.cgst_paise,
-      sgst_paise: snap.totals.sgst_paise,
-      igst_paise: snap.totals.igst_paise,
-      round_off_paise: snap.totals.round_off_paise,
-      total_paise: snap.totals.total_paise,
-      place_of_supply_code: snap.placeOfSupply || null,
-      itc_class: snap.itcClass,
-      itc_eligible: snap.itcEligible,
-      original_voucher_id: snap.originalVoucherId,
-    })
-    .select("id")
-    .single();
-  if (vErr) throw vErr;
+  const voucherNumber = numData as string;
 
   const itemRows = snap.lines.map(({ l, c }, i) => ({
-    voucher_id: vData.id,
     item_id: l.item_id,
     line_no: i + 1,
     description: l.description || null,
@@ -145,14 +115,18 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
     sgst_paise: c.sgst_paise,
     igst_paise: c.igst_paise,
   }));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: iErr } = await supabase.from("voucher_items").insert(itemRows as any);
-  if (iErr) throw iErr;
 
   const skipPostings =
     snap.voucherType === "sales_order" ||
     snap.voucherType === "delivery_note" ||
     snap.voucherType === "quotation";
+
+  let entryRows: Array<{
+    ledger_id: string;
+    debit_paise: number;
+    credit_paise: number;
+    line_no: number;
+  }> = [];
   if (!skipPostings) {
     let capitalItems: Array<{
       name: string;
@@ -187,17 +161,43 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
         capitalItems,
       },
     );
-    const entryRows = postings.map((p) => ({
-      voucher_id: vData.id,
+    entryRows = postings.map((p) => ({
       ledger_id: p.ledger_id,
       debit_paise: p.debit_paise,
       credit_paise: p.credit_paise,
       line_no: p.line_no,
     }));
-    const { error: eErr } = await supabase.from("voucher_entries").insert(entryRows);
-    if (eErr) throw eErr;
   }
-  return { voucherId: vData.id as string, voucherNumber: numData as string };
+
+  const header = {
+    company_id: snap.companyId,
+    voucher_type: snap.voucherType,
+    voucher_number: voucherNumber,
+    voucher_date: snap.voucherDate,
+    party_ledger_id: snap.partyId,
+    reference_no: snap.refNo || null,
+    narration: snap.narration || null,
+    is_interstate: snap.interstate,
+    subtotal_paise: snap.totals.subtotal_paise,
+    cgst_paise: snap.totals.cgst_paise,
+    sgst_paise: snap.totals.sgst_paise,
+    igst_paise: snap.totals.igst_paise,
+    round_off_paise: snap.totals.round_off_paise,
+    total_paise: snap.totals.total_paise,
+    place_of_supply_code: snap.placeOfSupply || null,
+    itc_class: snap.itcClass,
+    itc_eligible: snap.itcEligible,
+    original_voucher_id: snap.originalVoucherId,
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: vid, error: saveErr } = await supabase.rpc("save_voucher_atomic", {
+    _header: header as any,
+    _items: itemRows as any,
+    _entries: entryRows as any,
+  });
+  if (saveErr) throw saveErr;
+  return { voucherId: vid as string, voucherNumber };
 }
 
 // ---------- Entry voucher executor ------------------------------------------
@@ -208,38 +208,32 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
     _type: snap.voucherType,
   });
   if (numErr) throw numErr;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
-  const { data: vData, error: vErr } = await supabase
-    .from("vouchers")
-    .insert({
-      company_id: snap.companyId,
-      created_by: user.id,
-      voucher_type: snap.voucherType,
-      voucher_number: numData as string,
-      voucher_date: snap.voucherDate,
-      party_ledger_id: snap.partyLedgerId,
-      reference_no: snap.refNo || null,
-      narration: snap.narration || null,
-      is_interstate: false,
-      subtotal_paise: snap.total,
-      total_paise: snap.total,
-    })
-    .select("id")
-    .single();
-  if (vErr) throw vErr;
+  const header = {
+    company_id: snap.companyId,
+    voucher_type: snap.voucherType,
+    voucher_number: numData as string,
+    voucher_date: snap.voucherDate,
+    party_ledger_id: snap.partyLedgerId,
+    reference_no: snap.refNo || null,
+    narration: snap.narration || null,
+    is_interstate: false,
+    subtotal_paise: snap.total,
+    total_paise: snap.total,
+  };
   const entries = snap.entries.map((e) => ({
-    voucher_id: vData.id,
     ledger_id: e.ledger_id,
     debit_paise: e.debit_paise,
     credit_paise: e.credit_paise,
     narration: e.narration,
     line_no: e.line_no,
   }));
-  const { error: eErr } = await supabase.from("voucher_entries").insert(entries);
-  if (eErr) throw eErr;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: saveErr } = await supabase.rpc("save_voucher_atomic", {
+    _header: header as any,
+    _entries: entries as any,
+    _items: [] as any,
+  });
+  if (saveErr) throw saveErr;
 }
 
 // ---------- Registration -----------------------------------------------------
