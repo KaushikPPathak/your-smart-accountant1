@@ -34,6 +34,11 @@ function classifyError(message: string): string {
   return "COMPONENT_CRASH";
 }
 
+function classifyGlobalError(message: string): string | null {
+  const code = classifyError(message);
+  return code === "COMPONENT_CRASH" ? null : code;
+}
+
 interface ErrorToast {
   id: number;
   code: string;
@@ -113,8 +118,13 @@ export function ErrorBrainProvider({ children }: { children: React.ReactNode }) 
       return (
         hay.includes("chrome-extension://") ||
         hay.includes("moz-extension://") ||
+        hay.includes("safari-extension://") ||
+        hay.includes("extension://") ||
         hay.includes("frame_ant") ||
-        hay.includes("injected.js")
+        hay.includes("injected.js") ||
+        hay.includes("content_script") ||
+        hay.includes("ResizeObserver loop completed") ||
+        hay.includes("ResizeObserver loop limit exceeded")
       );
     };
 
@@ -122,15 +132,23 @@ export function ErrorBrainProvider({ children }: { children: React.ReactNode }) 
       const message = event.message || (event.error ? String(event.error) : "Unknown error");
       const stack = event.error instanceof Error ? event.error.stack : undefined;
       if (isExtensionNoise(message, stack, event.filename)) return;
-      void logBrainError(classifyError(message), message, "window.onerror");
+      const code = classifyGlobalError(message);
+      if (!code) return;
+      void logBrainError(code, message, "window.onerror");
     };
     const onRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason;
       const message =
-        reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "Unhandled rejection";
+        reason instanceof Error
+          ? reason.message
+          : typeof reason === "string"
+            ? reason
+            : "Unhandled rejection";
       const stack = reason instanceof Error ? reason.stack : undefined;
       if (isExtensionNoise(message, stack)) return;
-      void logBrainError(classifyError(message), message, "window.onunhandledrejection");
+      const code = classifyGlobalError(message);
+      if (!code) return;
+      void logBrainError(code, message, "window.onunhandledrejection");
     };
 
     window.addEventListener("error", onError);
