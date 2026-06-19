@@ -139,7 +139,11 @@ export function ErrorBrainProvider({ children }: { children: React.ReactNode }) 
     const onRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason;
       const message =
-        reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "Unhandled rejection";
+        reason instanceof Error
+          ? reason.message
+          : typeof reason === "string"
+            ? reason
+            : "Unhandled rejection";
       const stack = reason instanceof Error ? reason.stack : undefined;
       if (isExtensionNoise(message, stack)) return;
       const code = classifyGlobalError(message);
