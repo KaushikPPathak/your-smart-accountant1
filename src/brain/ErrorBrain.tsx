@@ -108,14 +108,28 @@ export function ErrorBrainProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const isExtensionNoise = (text: string, stack?: string, filename?: string) => {
+      const hay = `${text}\n${stack ?? ""}\n${filename ?? ""}`;
+      return (
+        hay.includes("chrome-extension://") ||
+        hay.includes("moz-extension://") ||
+        hay.includes("frame_ant") ||
+        hay.includes("injected.js")
+      );
+    };
+
     const onError = (event: ErrorEvent) => {
       const message = event.message || (event.error ? String(event.error) : "Unknown error");
+      const stack = event.error instanceof Error ? event.error.stack : undefined;
+      if (isExtensionNoise(message, stack, event.filename)) return;
       void logBrainError(classifyError(message), message, "window.onerror");
     };
     const onRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason;
       const message =
         reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "Unhandled rejection";
+      const stack = reason instanceof Error ? reason.stack : undefined;
+      if (isExtensionNoise(message, stack)) return;
       void logBrainError(classifyError(message), message, "window.onunhandledrejection");
     };
 
