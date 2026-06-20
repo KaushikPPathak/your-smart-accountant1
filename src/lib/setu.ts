@@ -176,12 +176,15 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
   const constitutionOfBusiness = d.constitutionOfBusiness || d.ctb || undefined;
   const natureOfBusinessActivities = d.natureOfBusinessActivity || d.nba || undefined;
   const principalPlaceOfBusiness = compactAddress(
+    d.principalPlaceOfBusinessFields?.principalPlaceOfBusinessAddress ||
+    d.principalPlaceOfBusinessFields ||
     d.principalPlaceOfBusiness ||
     d.principalPlaceOfBusinessAddress ||
     d.pradr?.addr ||
     d.pradr?.adr ||
     d.pradr ||
-    d.address,
+    d.address ||
+    d.additionalPlaceOfBusinessFields?.[0]?.additionalPlaceOfBusinessAddress,
   );
 
   return {
