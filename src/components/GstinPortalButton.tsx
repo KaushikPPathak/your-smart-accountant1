@@ -127,12 +127,6 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
     }
   };
 
-  const persistCreds = () => {
-    saveSetuCreds(creds);
-    toast.success("Setu credentials saved");
-    setSettingsOpen(false);
-    autoFetchedRef.current = ""; // allow re-fetch with new creds
-  };
 
   return (
     <div className="flex items-center gap-1 shrink-0">
