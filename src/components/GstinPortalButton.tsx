@@ -1,9 +1,9 @@
 import * as React from "react";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { ExternalLink, ClipboardCheck, Sparkles, Zap, Settings2 } from "lucide-react";
+import { ExternalLink, ClipboardCheck, Sparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
-import { lookupGstinViaSetu, loadSetuCreds, saveSetuCreds, type SetuCreds } from "@/lib/setu";
+import { lookupGstinViaSetu } from "@/lib/setu";
 import { validateGSTIN } from "@/utils/gstinValidator";
 
 interface GstinPortalButtonProps {
@@ -31,8 +31,6 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
   const [pasteText, setPasteText] = React.useState("");
   const [parseError, setParseError] = React.useState("");
   const [popoverOpen, setPopoverOpen] = React.useState(false);
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
-  const [creds, setCreds] = React.useState<SetuCreds>(() => loadSetuCreds());
 
   const cleanGstin = (gstin || "").trim().toUpperCase();
   const isValid = validateGSTIN(cleanGstin).valid;
@@ -41,7 +39,6 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
   const autoFetchedRef = React.useRef<string>("");
   React.useEffect(() => {
     if (!isValid || autoFetchedRef.current === cleanGstin) return;
-    if (!creds.clientId) return;
     autoFetchedRef.current = cleanGstin;
     void handleSetuFetch(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,12 +127,6 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
     }
   };
 
-  const persistCreds = () => {
-    saveSetuCreds(creds);
-    toast.success("Setu credentials saved");
-    setSettingsOpen(false);
-    autoFetchedRef.current = ""; // allow re-fetch with new creds
-  };
 
   return (
     <div className="flex items-center gap-1 shrink-0">
@@ -193,55 +184,7 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
         </PopoverContent>
       </Popover>
 
-      <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            title="Setu API credentials"
-            aria-label="Setu API credentials"
-          >
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 space-y-2">
-          <p className="text-xs font-medium">Setu GST Verification credentials</p>
-          <label className="text-[11px] text-muted-foreground">Client ID (User ID)</label>
-          <input
-            value={creds.clientId}
-            onChange={(e) => setCreds({ ...creds, clientId: e.target.value })}
-            className="w-full text-xs p-2 rounded border border-input bg-background font-mono"
-          />
-          <label className="text-[11px] text-muted-foreground">Client Secret (API Key)</label>
-          <input
-            type="password"
-            value={creds.clientSecret}
-            onChange={(e) => setCreds({ ...creds, clientSecret: e.target.value })}
-            className="w-full text-xs p-2 rounded border border-input bg-background font-mono"
-          />
-          <label className="text-[11px] text-muted-foreground">Product Instance ID (optional)</label>
-          <input
-            value={creds.productInstanceId || ""}
-            onChange={(e) => setCreds({ ...creds, productInstanceId: e.target.value })}
-            className="w-full text-xs p-2 rounded border border-input bg-background font-mono"
-          />
-          <label className="text-[11px] text-muted-foreground">Environment</label>
-          <select
-            value={creds.environment}
-            onChange={(e) =>
-              setCreds({ ...creds, environment: e.target.value === "sandbox" ? "sandbox" : "production" })
-            }
-            className="w-full text-xs p-2 rounded border border-input bg-background"
-          >
-            <option value="production">Production (dg.setu.co)</option>
-            <option value="sandbox">Sandbox (dg-sandbox.setu.co)</option>
-          </select>
-          <div className="flex justify-end pt-1">
-            <Button size="sm" type="button" onClick={persistCreds}>Save</Button>
-          </div>
-        </PopoverContent>
-      </Popover>
+      {/* Setu credentials settings hidden from inline ledger form — managed centrally. */}
     </div>
   );
 }
