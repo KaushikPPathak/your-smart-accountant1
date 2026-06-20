@@ -441,7 +441,20 @@ function LedgersPage() {
                         placeholder="24AAAAA0000A1Z5"
                         className="font-mono uppercase tracking-wider flex-1"
                       />
-                      <GstinPortalButton gstin={form.gstin} />
+                      <GstinPortalButton
+                        gstin={form.gstin}
+                        onDataFetched={(d) => {
+                          setForm((prev) => ({
+                            ...prev,
+                            name: prev.name?.trim() ? prev.name : (d.legalName || d.tradeName || prev.name),
+                            gstin: d.gstin || prev.gstin,
+                            address: d.address && !prev.address?.trim() ? d.address : prev.address,
+                            state_code:
+                              prev.state_code ||
+                              (d.gstin ? (INDIAN_STATES.find((s) => s.code === d.gstin.substring(0, 2))?.code ?? prev.state_code) : prev.state_code),
+                          }));
+                        }}
+                      />
                     </div>
                     <GstinInlineError value={form.gstin} />
                   </div>
