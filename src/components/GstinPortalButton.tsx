@@ -31,8 +31,6 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
   const [pasteText, setPasteText] = React.useState("");
   const [parseError, setParseError] = React.useState("");
   const [popoverOpen, setPopoverOpen] = React.useState(false);
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
-  const [creds, setCreds] = React.useState<SetuCreds>(() => loadSetuCreds());
 
   const cleanGstin = (gstin || "").trim().toUpperCase();
   const isValid = validateGSTIN(cleanGstin).valid;
@@ -41,7 +39,6 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
   const autoFetchedRef = React.useRef<string>("");
   React.useEffect(() => {
     if (!isValid || autoFetchedRef.current === cleanGstin) return;
-    if (!creds.clientId) return;
     autoFetchedRef.current = cleanGstin;
     void handleSetuFetch(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
