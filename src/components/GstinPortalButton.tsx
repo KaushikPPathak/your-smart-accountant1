@@ -1,9 +1,9 @@
 import * as React from "react";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { ExternalLink, ClipboardCheck, Sparkles, Zap, Settings2 } from "lucide-react";
+import { ExternalLink, ClipboardCheck, Sparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
-import { lookupGstinViaSetu, loadSetuCreds, saveSetuCreds, type SetuCreds } from "@/lib/setu";
+import { lookupGstinViaSetu } from "@/lib/setu";
 import { validateGSTIN } from "@/utils/gstinValidator";
 
 interface GstinPortalButtonProps {
