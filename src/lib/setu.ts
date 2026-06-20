@@ -69,18 +69,24 @@ function compactAddress(value: unknown): string | undefined {
   if (typeof value === "string") return value.replace(/\s+/g, " ").trim() || undefined;
   if (typeof value !== "object") return undefined;
   const obj = value as Record<string, unknown>;
-  // Try nested wrappers first (GSTN typically nests under `addr` or `adr`).
-  const nested = compactAddress(obj.address || obj.addr || obj.adr);
+  // Try nested wrappers first (API Setu nests under various keys depending on version).
+  const nested = compactAddress(
+    obj.principalPlaceOfBusinessAddress ||
+    obj.additionalPlaceOfBusinessAddress ||
+    obj.address ||
+    obj.addr ||
+    obj.adr,
+  );
   if (nested) return nested;
   const parts = [
     obj.bno || obj.buildingNumber || obj.bnumber,
     obj.flno || obj.floorNumber,
     obj.bnm || obj.buildingName,
-    obj.st || obj.street,
+    obj.st || obj.street || obj.streetName,
     obj.loc || obj.location || obj.locality,
     obj.landMark || obj.landmark || obj.lm,
-    obj.city || obj.dst || obj.district,
-    obj.stcd || obj.state,
+    obj.city || obj.dst || obj.district || obj.districtName,
+    obj.stcd || obj.state || obj.stateName,
     obj.pncd || obj.pincode || obj.pin,
   ];
   const joined = parts.map((p) => (p == null ? "" : String(p).trim())).filter(Boolean).join(", ");
