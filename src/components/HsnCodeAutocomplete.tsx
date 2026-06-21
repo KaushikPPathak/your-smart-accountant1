@@ -44,7 +44,7 @@ export function HsnCodeAutocomplete({
           setNotFound(true);
         }
       }
-    }, 150);
+    }, 80);
     return () => { cancelled = true; window.clearTimeout(t); };
   }, [value]);
 

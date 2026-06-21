@@ -30,11 +30,13 @@ function memoryFindByCode(code: string): HsnRecord | null {
 
 function memorySearch(prefix: string, limit: number): HsnRecord[] {
   const p = prefix.trim();
-  const isNumeric = /^[0-9]+$/.test(p);
-  const matches = isNumeric
-    ? HSN_MASTER_DATASET.filter((s) => s.code.startsWith(p))
-    : HSN_MASTER_DATASET.filter((s) => s.desc.toLowerCase().includes(p.toLowerCase()));
-  return matches.slice(0, limit).map(seedToRecord);
+  if (!p) return [];
+  const lower = p.toLowerCase();
+  const codeHits = HSN_MASTER_DATASET.filter((s) => s.code.toLowerCase().startsWith(lower));
+  const descHits = HSN_MASTER_DATASET.filter(
+    (s) => !s.code.toLowerCase().startsWith(lower) && s.desc.toLowerCase().includes(lower),
+  );
+  return [...codeHits, ...descHits].slice(0, limit).map(seedToRecord);
 }
 
 export interface HsnLookup {

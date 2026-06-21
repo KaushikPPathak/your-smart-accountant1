@@ -47,22 +47,22 @@ export async function findHsnByCode(code: string): Promise<HsnRecord | null> {
 export async function searchHsn(prefix: string, limit = 20): Promise<HsnRecord[]> {
   await ensureHsnSchema();
   const q = prefix.trim();
-  const isNumeric = /^[0-9]+$/.test(q);
-  // Numeric → code prefix match; alpha → fuzzy description search (e.g. "rice").
-  const rows = isNumeric
-    ? await safeBrainSelect<RawHsnRow>(
-        `SELECT hsn_code, description, cgst_rate, sgst_rate, igst_rate, is_exempt
-         FROM hsn_master WHERE hsn_code LIKE ? ORDER BY hsn_code LIMIT ?`,
-        [`${q}%`, limit],
-      )
-    : await safeBrainSelect<RawHsnRow>(
-        `SELECT hsn_code, description, cgst_rate, sgst_rate, igst_rate, is_exempt
-         FROM hsn_master
-         WHERE LOWER(description) LIKE ?
-         ORDER BY LENGTH(description) ASC, hsn_code ASC
-         LIMIT ?`,
-        [`%${q.toLowerCase()}%`, limit],
-      );
+  if (!q) return [];
+  const like = `%${q.toLowerCase()}%`;
+  // Union: prefix match on code (ranked first) + substring match on description.
+  const rows = await safeBrainSelect<RawHsnRow & { rank: number }>(
+    `SELECT hsn_code, description, cgst_rate, sgst_rate, igst_rate, is_exempt,
+            CASE
+              WHEN hsn_code LIKE ? THEN 0
+              WHEN LOWER(description) LIKE ? THEN 1
+              ELSE 2
+            END AS rank
+     FROM hsn_master
+     WHERE hsn_code LIKE ? OR LOWER(description) LIKE ?
+     ORDER BY rank ASC, LENGTH(hsn_code) ASC, hsn_code ASC
+     LIMIT ?`,
+    [`${q}%`, like, `${q}%`, like, limit],
+  );
   return rows.map(toRecord);
 }
 
