@@ -17,7 +17,7 @@ interface Props {
  * chapter heads (e.g. "48" → all paper codes including 4802).
  */
 export function HsnCodeAutocomplete({
-  value, onChange, onResolved, id, placeholder = "Type 2+ digits…", className,
+  value, onChange, onResolved, id, placeholder = "Type code or name (e.g. 'rice')…", className,
 }: Props) {
   const [suggestions, setSuggestions] = useState<HsnRecord[]>([]);
   const [open, setOpen] = useState(false);
