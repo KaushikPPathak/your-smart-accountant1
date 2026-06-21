@@ -46,11 +46,23 @@ export async function findHsnByCode(code: string): Promise<HsnRecord | null> {
 
 export async function searchHsn(prefix: string, limit = 20): Promise<HsnRecord[]> {
   await ensureHsnSchema();
-  const rows = await safeBrainSelect<RawHsnRow>(
-    `SELECT hsn_code, description, cgst_rate, sgst_rate, igst_rate, is_exempt
-     FROM hsn_master WHERE hsn_code LIKE ? ORDER BY hsn_code LIMIT ?`,
-    [`${prefix}%`, limit],
-  );
+  const q = prefix.trim();
+  const isNumeric = /^[0-9]+$/.test(q);
+  // Numeric → code prefix match; alpha → fuzzy description search (e.g. "rice").
+  const rows = isNumeric
+    ? await safeBrainSelect<RawHsnRow>(
+        `SELECT hsn_code, description, cgst_rate, sgst_rate, igst_rate, is_exempt
+         FROM hsn_master WHERE hsn_code LIKE ? ORDER BY hsn_code LIMIT ?`,
+        [`${q}%`, limit],
+      )
+    : await safeBrainSelect<RawHsnRow>(
+        `SELECT hsn_code, description, cgst_rate, sgst_rate, igst_rate, is_exempt
+         FROM hsn_master
+         WHERE LOWER(description) LIKE ?
+         ORDER BY LENGTH(description) ASC, hsn_code ASC
+         LIMIT ?`,
+        [`%${q.toLowerCase()}%`, limit],
+      );
   return rows.map(toRecord);
 }
 
