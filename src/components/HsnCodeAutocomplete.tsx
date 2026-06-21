@@ -91,9 +91,9 @@ export function HsnCodeAutocomplete({
                 className="w-full text-left p-2 text-xs hover:bg-accent hover:text-accent-foreground border-b last:border-0 flex flex-col gap-0.5"
               >
                 <div className="flex justify-between font-mono font-semibold">
-                  <span>{rec.hsn_code}</span>
+                  <span>{rec.hsn_code.replace(/_PP$/i, "")}</span>
                   <span className="text-muted-foreground text-[10px]">
-                    {rec.is_exempt ? "Exempt" : `GST ${rate}%`}
+                    {rec.is_exempt ? "NIL / Exempt" : `GST ${rate}%`}
                   </span>
                 </div>
                 <span className="text-muted-foreground truncate">{rec.description}</span>
