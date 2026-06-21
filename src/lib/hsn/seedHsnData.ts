@@ -25,9 +25,19 @@ export const HSN_MASTER_DATASET: HsnSeedItem[] = [
   { code: "0805", desc: "Citrus fruit, fresh or dried", cgst: 0, sgst: 0, igst: 0 },
 
   // === Chapter 10 — Cereals ===
-  { code: "1006", desc: "Rice", cgst: 0, sgst: 0, igst: 0 },
-  { code: "10063020", desc: "Basmati rice (premium long grain)", cgst: 0, sgst: 0, igst: 0 },
-  { code: "1001", desc: "Wheat and meslin", cgst: 0, sgst: 0, igst: 0 },
+  // Loose / unbranded grain = NIL. Pre-packaged & labelled retail packs ≤ 25 kg = 5%.
+  { code: "1006", desc: "Rice — loose / unbranded (not pre-packaged)", cgst: 0, sgst: 0, igst: 0 },
+  { code: "1006_PP", desc: "Rice — pre-packaged & labelled, pack ≤ 25 kg (branded retail)", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "10063020", desc: "Basmati rice — loose / unbranded, premium long grain", cgst: 0, sgst: 0, igst: 0 },
+  { code: "10063020_PP", desc: "Basmati rice — pre-packaged & labelled ≤ 25 kg (branded)", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "1001", desc: "Wheat & meslin — loose / unbranded", cgst: 0, sgst: 0, igst: 0 },
+  { code: "1001_PP", desc: "Wheat & meslin — pre-packaged & labelled ≤ 25 kg (branded)", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "1101", desc: "Wheat flour / atta — loose / unbranded", cgst: 0, sgst: 0, igst: 0 },
+  { code: "1101_PP", desc: "Wheat flour / atta — pre-packaged & labelled ≤ 25 kg (branded)", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "1102", desc: "Cereal flours (maize, jowar, bajra) — loose / unbranded", cgst: 0, sgst: 0, igst: 0 },
+  { code: "1102_PP", desc: "Cereal flours — pre-packaged & labelled ≤ 25 kg (branded)", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "0713", desc: "Pulses (dal, chana, moong, tur) — loose / unbranded", cgst: 0, sgst: 0, igst: 0 },
+  { code: "0713_PP", desc: "Pulses — pre-packaged & labelled ≤ 25 kg (branded)", cgst: 2.5, sgst: 2.5, igst: 5 },
 
   // === Chapter 15 — Oils & Fats ===
   { code: "1507", desc: "Soya-bean oil and its fractions", cgst: 2.5, sgst: 2.5, igst: 5 },

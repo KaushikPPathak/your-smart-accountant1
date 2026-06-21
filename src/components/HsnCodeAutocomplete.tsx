@@ -17,7 +17,7 @@ interface Props {
  * chapter heads (e.g. "48" → all paper codes including 4802).
  */
 export function HsnCodeAutocomplete({
-  value, onChange, onResolved, id, placeholder = "Type 2+ digits…", className,
+  value, onChange, onResolved, id, placeholder = "Type code or name (e.g. 'rice')…", className,
 }: Props) {
   const [suggestions, setSuggestions] = useState<HsnRecord[]>([]);
   const [open, setOpen] = useState(false);
@@ -60,8 +60,11 @@ export function HsnCodeAutocomplete({
   }, []);
 
   const pick = (rec: HsnRecord) => {
-    onChange(rec.hsn_code);
-    onResolved?.(rec);
+    // Strip the internal "_PP" variant marker used to distinguish
+    // pre-packaged & labelled rows that share a base HSN with the loose form.
+    const cleanCode = rec.hsn_code.replace(/_PP$/i, "");
+    onChange(cleanCode);
+    onResolved?.({ ...rec, hsn_code: cleanCode });
     setOpen(false);
   };
 
@@ -72,7 +75,7 @@ export function HsnCodeAutocomplete({
         value={value}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
-        maxLength={10}
+        maxLength={40}
         placeholder={placeholder}
         autoComplete="off"
       />
@@ -88,9 +91,9 @@ export function HsnCodeAutocomplete({
                 className="w-full text-left p-2 text-xs hover:bg-accent hover:text-accent-foreground border-b last:border-0 flex flex-col gap-0.5"
               >
                 <div className="flex justify-between font-mono font-semibold">
-                  <span>{rec.hsn_code}</span>
+                  <span>{rec.hsn_code.replace(/_PP$/i, "")}</span>
                   <span className="text-muted-foreground text-[10px]">
-                    {rec.is_exempt ? "Exempt" : `GST ${rate}%`}
+                    {rec.is_exempt ? "NIL / Exempt" : `GST ${rate}%`}
                   </span>
                 </div>
                 <span className="text-muted-foreground truncate">{rec.description}</span>
