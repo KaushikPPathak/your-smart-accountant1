@@ -281,6 +281,7 @@ function ItemsPage() {
                   <div className="space-y-1.5">
                     <Label htmlFor="hsn_code">HSN / SAC code</Label>
                     <HsnCodeAutocomplete
+                      nameHint={form.name}
                       id="hsn_code"
                       value={form.hsn_code}
                       onChange={(v) => setForm((f) => ({ ...f, hsn_code: v }))}

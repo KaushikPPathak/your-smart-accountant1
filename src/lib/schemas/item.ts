@@ -3,7 +3,7 @@ import { optionalString } from "./common";
 
 export const itemFormSchema = z.object({
   name: z.string().trim().min(2, "Name is required").max(120),
-  hsn_code: optionalString(10),
+  hsn_code: optionalString(20),
   unit: z.string().min(1, "Select a unit").max(10),
   gst_rate: z.string(),
   purchase_price: z.string().optional(),

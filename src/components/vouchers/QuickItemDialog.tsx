@@ -142,6 +142,7 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
             <div className="space-y-1">
               <Label>HSN/SAC</Label>
               <HsnCodeAutocomplete
+                nameHint={name}
                 value={hsn}
                 onChange={setHsn}
                 onResolved={(rec) => {

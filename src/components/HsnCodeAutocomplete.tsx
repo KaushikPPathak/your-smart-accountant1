@@ -9,15 +9,19 @@ interface Props {
   id?: string;
   placeholder?: string;
   className?: string;
+  /** When the HSN field is empty, suggest by this hint (e.g. the item name). */
+  nameHint?: string;
 }
 
 /**
  * Reusable HSN/SAC autocomplete bound to the local SQLite hsn_master table.
  * Shows a prefix-match dropdown after 2 characters so users can browse common
  * chapter heads (e.g. "48" → all paper codes including 4802).
+ * When `nameHint` is provided and the field is empty, suggestions come from
+ * the hint — so typing "rice" in Item Name surfaces matching HSN codes.
  */
 export function HsnCodeAutocomplete({
-  value, onChange, onResolved, id, placeholder = "Type code or name (e.g. 'rice')…", className,
+  value, onChange, onResolved, id, placeholder = "Type code or name (e.g. 'rice')…", className, nameHint,
 }: Props) {
   const [suggestions, setSuggestions] = useState<HsnRecord[]>([]);
   const [open, setOpen] = useState(false);
@@ -25,8 +29,10 @@ export function HsnCodeAutocomplete({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const q = (value || "").trim();
-    if (q.length < 2) {
+    const typed = (value || "").trim();
+    const hint = (nameHint || "").trim();
+    const q = typed.length >= 2 ? typed : (hint.length >= 2 ? hint : "");
+    if (!q) {
       setSuggestions([]);
       setNotFound(false);
       return;
@@ -37,7 +43,7 @@ export function HsnCodeAutocomplete({
         const rows = await suggestHsn(q, 15);
         if (cancelled) return;
         setSuggestions(rows);
-        setNotFound(rows.length === 0 && q.length >= 4);
+        setNotFound(rows.length === 0 && typed.length >= 4);
       } catch {
         if (!cancelled) {
           setSuggestions([]);
@@ -46,7 +52,7 @@ export function HsnCodeAutocomplete({
       }
     }, 80);
     return () => { cancelled = true; window.clearTimeout(t); };
-  }, [value]);
+  }, [value, nameHint]);
 
   // Close on outside click
   useEffect(() => {
