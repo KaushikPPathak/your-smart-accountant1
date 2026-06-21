@@ -75,7 +75,7 @@ export function HsnCodeAutocomplete({
         value={value}
         onChange={(e) => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
-        maxLength={10}
+        maxLength={40}
         placeholder={placeholder}
         autoComplete="off"
       />
