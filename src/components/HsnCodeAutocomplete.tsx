@@ -60,8 +60,11 @@ export function HsnCodeAutocomplete({
   }, []);
 
   const pick = (rec: HsnRecord) => {
-    onChange(rec.hsn_code);
-    onResolved?.(rec);
+    // Strip the internal "_PP" variant marker used to distinguish
+    // pre-packaged & labelled rows that share a base HSN with the loose form.
+    const cleanCode = rec.hsn_code.replace(/_PP$/i, "");
+    onChange(cleanCode);
+    onResolved?.({ ...rec, hsn_code: cleanCode });
     setOpen(false);
   };
 
