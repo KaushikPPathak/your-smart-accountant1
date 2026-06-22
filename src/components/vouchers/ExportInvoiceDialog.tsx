@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadExportInvoicePdf } from "@/lib/export-invoice-pdf";
+import { GstinPortalButton } from "@/components/GstinPortalButton";
 
 interface Props {
   open: boolean;
@@ -133,11 +134,59 @@ export function ExportInvoiceDialog({ open, onOpenChange, voucherId, companyId }
           </TabsContent>
 
           <TabsContent value="parties" className="grid gap-3 md:grid-cols-2 pt-3">
+            <div className="md:col-span-2 grid gap-1">
+              <Label className="text-xs">Consignee GSTIN (only for SEZ / Deemed Export — leave blank for foreign buyer)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={(row.consignee_gstin as string) ?? ""}
+                  onChange={(e) => set("consignee_gstin", e.target.value.toUpperCase())}
+                  placeholder="15-char GSTIN"
+                  maxLength={15}
+                  className="font-mono"
+                />
+                <GstinPortalButton
+                  gstin={(row.consignee_gstin as string) ?? ""}
+                  onDataFetched={(d) => {
+                    setRow((p) => ({
+                      ...p,
+                      consignee_gstin: d.gstin,
+                      consignee_name: p.consignee_name || d.tradeName || d.legalName,
+                      consignee_address: p.consignee_address || d.address || (p.consignee_address as string) || "",
+                    }));
+                    toast.success("Consignee filled from GST portal");
+                  }}
+                />
+              </div>
+            </div>
             {f("consignee_name", "Consignee Name")}
             {f("consignee_country", "Consignee Country")}
             <div className="md:col-span-2">
               <Label className="text-xs">Consignee Address</Label>
               <Textarea rows={2} value={(row.consignee_address as string) ?? ""} onChange={(e) => set("consignee_address", e.target.value)} />
+            </div>
+            <div className="md:col-span-2 grid gap-1">
+              <Label className="text-xs">Buyer GSTIN (if Indian buyer)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={(row.buyer_gstin as string) ?? ""}
+                  onChange={(e) => set("buyer_gstin", e.target.value.toUpperCase())}
+                  placeholder="15-char GSTIN"
+                  maxLength={15}
+                  className="font-mono"
+                />
+                <GstinPortalButton
+                  gstin={(row.buyer_gstin as string) ?? ""}
+                  onDataFetched={(d) => {
+                    setRow((p) => ({
+                      ...p,
+                      buyer_gstin: d.gstin,
+                      buyer_name: p.buyer_name || d.tradeName || d.legalName,
+                      buyer_address: p.buyer_address || d.address || (p.buyer_address as string) || "",
+                    }));
+                    toast.success("Buyer filled from GST portal");
+                  }}
+                />
+              </div>
             </div>
             {f("buyer_name", "Buyer Name (if different)")}
             {f("buyer_country", "Buyer Country")}
