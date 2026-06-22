@@ -1986,10 +1986,12 @@ export type Database = {
           apeda_rcmc_no: string | null
           buyer_address: string | null
           buyer_country: string | null
+          buyer_gstin: string | null
           buyer_name: string | null
           company_id: string
           consignee_address: string | null
           consignee_country: string | null
+          consignee_gstin: string | null
           consignee_name: string | null
           container_no: string | null
           country_of_destination: string | null
@@ -2032,10 +2034,12 @@ export type Database = {
           apeda_rcmc_no?: string | null
           buyer_address?: string | null
           buyer_country?: string | null
+          buyer_gstin?: string | null
           buyer_name?: string | null
           company_id: string
           consignee_address?: string | null
           consignee_country?: string | null
+          consignee_gstin?: string | null
           consignee_name?: string | null
           container_no?: string | null
           country_of_destination?: string | null
@@ -2078,10 +2082,12 @@ export type Database = {
           apeda_rcmc_no?: string | null
           buyer_address?: string | null
           buyer_country?: string | null
+          buyer_gstin?: string | null
           buyer_name?: string | null
           company_id?: string
           consignee_address?: string | null
           consignee_country?: string | null
+          consignee_gstin?: string | null
           consignee_name?: string | null
           container_no?: string | null
           country_of_destination?: string | null
