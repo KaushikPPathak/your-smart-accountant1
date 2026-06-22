@@ -91,6 +91,7 @@ function VoucherEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [ewbOpen, setEwbOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [hasPooledCapital, setHasPooledCapital] = useState(false);
 
   const isItemKind = useMemo(
