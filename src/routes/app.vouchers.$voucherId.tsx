@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, AlertTriangle, Printer, Save, Trash2, Truck } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Printer, Save, Trash2, Truck, Ship } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -24,6 +24,7 @@ import { GST_RATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { EwayBillPrepDialog } from "@/components/vouchers/EwayBillPrepDialog";
+import { ExportInvoiceDialog } from "@/components/vouchers/ExportInvoiceDialog";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { toast } from "sonner";
 import { goBackFromVoucher } from "@/lib/voucher-return";
@@ -90,6 +91,7 @@ function VoucherEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [ewbOpen, setEwbOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [hasPooledCapital, setHasPooledCapital] = useState(false);
 
   const isItemKind = useMemo(
@@ -388,6 +390,11 @@ function VoucherEditPage() {
             </Button>
           )}
           {voucher.voucher_type === "sales" && (
+            <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+              <Ship className="h-4 w-4 mr-1" /> Export Invoice
+            </Button>
+          )}
+          {voucher.voucher_type === "sales" && (
             <Button variant="outline" size="sm" onClick={() => setEwbOpen(true)}>
               <Truck className="h-4 w-4 mr-1" /> EWB / E-Invoice
             </Button>
@@ -553,6 +560,12 @@ function VoucherEditPage() {
           is_interstate: voucher.is_interstate,
           place_of_supply_code: voucher.place_of_supply_code,
         }}
+      />
+      <ExportInvoiceDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        voucherId={voucher.id}
+        companyId={voucher.company_id}
       />
     </div>
   );

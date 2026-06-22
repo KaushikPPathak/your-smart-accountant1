@@ -1981,6 +1981,169 @@ export type Database = {
           },
         ]
       }
+      voucher_export_details: {
+        Row: {
+          apeda_rcmc_no: string | null
+          buyer_address: string | null
+          buyer_country: string | null
+          buyer_name: string | null
+          company_id: string
+          consignee_address: string | null
+          consignee_country: string | null
+          consignee_name: string | null
+          container_no: string | null
+          country_of_destination: string | null
+          country_of_origin: string | null
+          created_at: string
+          crop_year: string | null
+          currency_code: string
+          declaration: string | null
+          export_type: string
+          final_destination: string | null
+          fssai_no: string | null
+          fx_rate: number
+          fx_rate_source: string | null
+          gross_weight_kg: number | null
+          iec_no: string | null
+          igst_refund_claim: boolean
+          incoterms: string | null
+          kind_of_packages: string | null
+          lot_batch_no: string | null
+          lut_date: string | null
+          lut_no: string | null
+          marks_nos: string | null
+          moisture_pct: number | null
+          net_weight_kg: number | null
+          no_of_packages: string | null
+          packing_spec: string | null
+          payment_terms: string | null
+          phyto_cert_no: string | null
+          place_of_receipt: string | null
+          port_of_discharge: string | null
+          port_of_loading: string | null
+          pre_carriage_by: string | null
+          remarks: string | null
+          updated_at: string
+          variety_grade: string | null
+          vessel_flight_no: string | null
+          voucher_id: string
+        }
+        Insert: {
+          apeda_rcmc_no?: string | null
+          buyer_address?: string | null
+          buyer_country?: string | null
+          buyer_name?: string | null
+          company_id: string
+          consignee_address?: string | null
+          consignee_country?: string | null
+          consignee_name?: string | null
+          container_no?: string | null
+          country_of_destination?: string | null
+          country_of_origin?: string | null
+          created_at?: string
+          crop_year?: string | null
+          currency_code?: string
+          declaration?: string | null
+          export_type?: string
+          final_destination?: string | null
+          fssai_no?: string | null
+          fx_rate?: number
+          fx_rate_source?: string | null
+          gross_weight_kg?: number | null
+          iec_no?: string | null
+          igst_refund_claim?: boolean
+          incoterms?: string | null
+          kind_of_packages?: string | null
+          lot_batch_no?: string | null
+          lut_date?: string | null
+          lut_no?: string | null
+          marks_nos?: string | null
+          moisture_pct?: number | null
+          net_weight_kg?: number | null
+          no_of_packages?: string | null
+          packing_spec?: string | null
+          payment_terms?: string | null
+          phyto_cert_no?: string | null
+          place_of_receipt?: string | null
+          port_of_discharge?: string | null
+          port_of_loading?: string | null
+          pre_carriage_by?: string | null
+          remarks?: string | null
+          updated_at?: string
+          variety_grade?: string | null
+          vessel_flight_no?: string | null
+          voucher_id: string
+        }
+        Update: {
+          apeda_rcmc_no?: string | null
+          buyer_address?: string | null
+          buyer_country?: string | null
+          buyer_name?: string | null
+          company_id?: string
+          consignee_address?: string | null
+          consignee_country?: string | null
+          consignee_name?: string | null
+          container_no?: string | null
+          country_of_destination?: string | null
+          country_of_origin?: string | null
+          created_at?: string
+          crop_year?: string | null
+          currency_code?: string
+          declaration?: string | null
+          export_type?: string
+          final_destination?: string | null
+          fssai_no?: string | null
+          fx_rate?: number
+          fx_rate_source?: string | null
+          gross_weight_kg?: number | null
+          iec_no?: string | null
+          igst_refund_claim?: boolean
+          incoterms?: string | null
+          kind_of_packages?: string | null
+          lot_batch_no?: string | null
+          lut_date?: string | null
+          lut_no?: string | null
+          marks_nos?: string | null
+          moisture_pct?: number | null
+          net_weight_kg?: number | null
+          no_of_packages?: string | null
+          packing_spec?: string | null
+          payment_terms?: string | null
+          phyto_cert_no?: string | null
+          place_of_receipt?: string | null
+          port_of_discharge?: string | null
+          port_of_loading?: string | null
+          pre_carriage_by?: string | null
+          remarks?: string | null
+          updated_at?: string
+          variety_grade?: string | null
+          vessel_flight_no?: string | null
+          voucher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voucher_export_details_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voucher_export_details_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voucher_export_details_voucher_id_fkey"
+            columns: ["voucher_id"]
+            isOneToOne: true
+            referencedRelation: "vouchers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       voucher_items: {
         Row: {
           amount_paise: number
