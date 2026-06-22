@@ -561,6 +561,12 @@ function VoucherEditPage() {
           place_of_supply_code: voucher.place_of_supply_code,
         }}
       />
+      <ExportInvoiceDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        voucherId={voucher.id}
+        companyId={voucher.company_id}
+      />
     </div>
   );
 }
