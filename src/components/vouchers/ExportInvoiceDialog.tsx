@@ -64,7 +64,8 @@ export function ExportInvoiceDialog({ open, onOpenChange, voucherId, companyId }
       };
       const { error } = await supabase
         .from("voucher_export_details")
-        .upsert(payload, { onConflict: "voucher_id" });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .upsert(payload as any, { onConflict: "voucher_id" });
       if (error) throw error;
       toast.success("Export details saved");
       if (thenPrint) await downloadExportInvoicePdf(voucherId, companyId);
