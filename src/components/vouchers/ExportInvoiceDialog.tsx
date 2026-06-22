@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadExportInvoicePdf } from "@/lib/export-invoice-pdf";
+import { GstinPortalButton } from "@/components/GstinPortalButton";
 
 interface Props {
   open: boolean;
