@@ -390,6 +390,11 @@ function VoucherEditPage() {
             </Button>
           )}
           {voucher.voucher_type === "sales" && (
+            <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+              <Ship className="h-4 w-4 mr-1" /> Export Invoice
+            </Button>
+          )}
+          {voucher.voucher_type === "sales" && (
             <Button variant="outline" size="sm" onClick={() => setEwbOpen(true)}>
               <Truck className="h-4 w-4 mr-1" /> EWB / E-Invoice
             </Button>
