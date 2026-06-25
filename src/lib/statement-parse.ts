@@ -357,8 +357,11 @@ function parseDateLoose(s: string): string | null {
 }
 
 function addOneDayIso(iso: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
   const d = new Date(iso + "T00:00:00Z");
+  if (isNaN(d.getTime())) return iso;
   d.setUTCDate(d.getUTCDate() + 1);
+  if (isNaN(d.getTime())) return iso;
   return d.toISOString().slice(0, 10);
 }
 
