@@ -80,7 +80,7 @@ export const ACCOUNT_GROUPS: AccountGroup[] = [
     code: "FIXED_ASSETS", label: "Fixed Assets",
     section: "BS_ASSET", side: "Dr", order: 110,
     ledgerTypes: ["fixed_asset"],
-    hints: [/\bfixed\s+asset/i, /\bbuilding/i, /\bmachinery\b/i, /\bplant\b/i, /\bfurniture\b/i, /\bvehicle/i, /\bequipment\b/i, /\bcomputer\b/i, /\bmobile\s+phone\b/i, /\bland\b/i],
+    hints: [/\bfixed\s+asset/i, /\bbuilding/i, /\bmachinery\b/i, /\bplant\b/i, /\bfurniture\b/i, /\bvehicle/i, /\bequipment\b/i, /\bcomputer\b/i, /\bmobile\s+phone\b/i, /\bland\b/i, /\bpremises\b/i, /\bresidential\s+premises\b/i, /\boffice\s+premises\b/i, /\bfactory\s+premises\b/i, /\bgodown\b/i, /\bshop\b/i, /\btools?\b/i, /\bfittings?\b/i],
   },
   {
     code: "INVESTMENTS", label: "Investments",
