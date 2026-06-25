@@ -204,22 +204,6 @@ export function defaultGroupCodeForType(type: LedgerTypeValue): string {
   return map[type];
 }
 
-/** Patterns that are strong enough to override an explicit section heading.
- *  Used when an OCR'd PDF mistakenly lists, e.g., "HDFC Bank Loan A/c" under
- *  "Capital Account" — a name with a strong identifier (HDFC) takes priority.
- *  Anything not in this list defers to the section heading. */
-const STRONG_OVERRIDE_HINTS: { rx: RegExp; code: string }[] = [
-  { rx: /\b(hdfc|icici|sbi|axis|kotak|yes\s*bank|idfc|canara|bob|bank\s+of\s+baroda|sutex)\b/i, code: "BANK_ACCOUNTS" },
-  { rx: /\b(cgst|sgst|igst|tds|tcs|gst\s+payable)\b/i, code: "DUTIES_AND_TAXES" },
-  { rx: /\b(petty\s+cash|cash\s+a\/c|cash\s+in\s+hand)\b/i, code: "CASH_IN_HAND" },
-];
-/** Generic catch-all section codes that LOSE to a strong override. */
-const GENERIC_HINT_CODES = new Set([
-  "CURRENT_ASSETS",
-  "CURRENT_LIABILITIES",
-  "MISC_EXPENSES_ASSET",
-]);
-
 /** Best-guess group code for an account name + Dr/Cr side, using regex hints. */
 export function guessGroupCode(name: string, side: AccountSide, sectionHint?: string): string {
   const n = name.trim();

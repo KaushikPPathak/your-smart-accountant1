@@ -32,7 +32,6 @@ import {
   ACCOUNT_GROUPS,
   GROUP_BY_CODE,
   defaultLedgerTypeForGroup,
-  defaultGroupCodeForType,
   guessGroupCode,
 } from "@/lib/account-groups";
 
