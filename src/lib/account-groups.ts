@@ -204,22 +204,6 @@ export function defaultGroupCodeForType(type: LedgerTypeValue): string {
   return map[type];
 }
 
-/** Patterns that are strong enough to override an explicit section heading.
- *  Used when an OCR'd PDF mistakenly lists, e.g., "HDFC Bank Loan A/c" under
- *  "Capital Account" — a name with a strong identifier (HDFC) takes priority.
- *  Anything not in this list defers to the section heading. */
-const STRONG_OVERRIDE_HINTS: { rx: RegExp; code: string }[] = [
-  { rx: /\b(hdfc|icici|sbi|axis|kotak|yes\s*bank|idfc|canara|bob|bank\s+of\s+baroda|sutex)\b/i, code: "BANK_ACCOUNTS" },
-  { rx: /\b(cgst|sgst|igst|tds|tcs|gst\s+payable)\b/i, code: "DUTIES_AND_TAXES" },
-  { rx: /\b(petty\s+cash|cash\s+a\/c|cash\s+in\s+hand)\b/i, code: "CASH_IN_HAND" },
-];
-/** Generic catch-all section codes that LOSE to a strong override. */
-const GENERIC_HINT_CODES = new Set([
-  "CURRENT_ASSETS",
-  "CURRENT_LIABILITIES",
-  "MISC_EXPENSES_ASSET",
-]);
-
 /** Best-guess group code for an account name + Dr/Cr side, using regex hints. */
 export function guessGroupCode(name: string, side: AccountSide, sectionHint?: string): string {
   const n = name.trim();
@@ -228,26 +212,13 @@ export function guessGroupCode(name: string, side: AccountSide, sectionHint?: st
     return side === "Dr" ? "CURRENT_ASSETS" : "CURRENT_LIABILITIES";
   }
 
-  // Section heading is normally the source of truth. We only override it when:
-  //   (a) the section is a generic catch-all (CURRENT_ASSETS / CURRENT_LIABILITIES), AND
-  //   (b) the row name contains a STRONG identifier (HDFC, CGST, etc.).
-  // This prevents the previous bug where any same-side regex hit (e.g. the
-  // word "bank" in a person's name) silently overrode an explicit section
-  // heading like "Capital Account".
+  // Balance-sheet opening import must respect the printed head. If the parser
+  // captured an explicit section heading (Capital Account, Current Liabilities,
+  // Fixed Assets, etc.), that heading is authoritative. Do not move a ledger to
+  // another group from its name or from a Dr/Cr sign flip; accounting heads in
+  // the source document are strict.
   if (sectionHint && GROUP_BY_CODE[sectionHint]) {
-    const hintGroup = GROUP_BY_CODE[sectionHint];
-    // If the row's actual side disagrees with the section's natural side
-    // (typically because the source had a negative amount that flipped the
-    // side), the section heading is the wrong roll-up — fall through to
-    // name-based matching so e.g. "Machinery" listed under "Unsecured Loans"
-    // lands in Fixed Assets, not as a negative loan.
-    if (hintGroup.side === side) {
-      if (GENERIC_HINT_CODES.has(sectionHint)) {
-        const strong = STRONG_OVERRIDE_HINTS.find((h) => h.rx.test(n));
-        if (strong && GROUP_BY_CODE[strong.code]?.side === side) return strong.code;
-      }
-      return sectionHint;
-    }
+    return sectionHint;
   }
 
   // Try to match hints, preferring groups whose natural side matches the row's side.
