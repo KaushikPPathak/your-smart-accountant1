@@ -203,6 +203,37 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
 // ---------- Entry voucher executor ------------------------------------------
 
 export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void> {
+  // Pre-flight: every ledger referenced by an entry (and the party ledger, if
+  // any) must already exist in the cloud `ledgers` table belonging to this
+  // company. Otherwise the FK on voucher_entries.ledger_id throws an opaque
+  // 23503 and the user has no idea which row is wrong. This usually happens
+  // when a ledger was created offline and hasn't been synced/refreshed yet,
+  // or when the form holds a stale UUID from a deleted ledger.
+  const ledgerIds = Array.from(
+    new Set(
+      [
+        snap.partyLedgerId ?? "",
+        ...snap.entries.map((e) => e.ledger_id),
+      ].filter(Boolean),
+    ),
+  );
+  if (ledgerIds.length > 0) {
+    const { data: existing, error: lookupErr } = await supabase
+      .from("ledgers")
+      .select("id, name")
+      .eq("company_id", snap.companyId)
+      .in("id", ledgerIds);
+    if (lookupErr) throw lookupErr;
+    const found = new Set((existing ?? []).map((r) => r.id as string));
+    const missing = ledgerIds.filter((id) => !found.has(id));
+    if (missing.length > 0) {
+      throw new Error(
+        `One or more ledgers are not synced to the cloud yet (${missing.length} missing). ` +
+          "Open the Ledgers screen so the list refreshes, then re-pick the ledger and save again.",
+      );
+    }
+  }
+
   const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
     _company_id: snap.companyId,
     _type: snap.voucherType,
