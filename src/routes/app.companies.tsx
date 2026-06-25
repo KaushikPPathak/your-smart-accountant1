@@ -310,11 +310,13 @@ function CompaniesPage() {
           .insert({ id: newId, ...payload, created_by: currentUserId, owner_app_user_id: activeStaffId });
         if (error) { setSubmitting(false); toast.error(error.message); return; }
         // Also create a membership row so the company appears in the offline list.
-        await supabase.from("company_members").insert({
-          company_id: newId,
-          user_id: currentUserId,
-          role: "admin",
-        });
+        // A DB trigger (on_company_created_add_admin) may have already inserted this row;
+        // use upsert with ignoreDuplicates so we don't fail on the unique (company_id, user_id) constraint.
+        await supabase.from("company_members").upsert(
+          { company_id: newId, user_id: currentUserId, role: "admin" },
+          { onConflict: "company_id,user_id", ignoreDuplicates: true },
+        );
+
         setActiveCompanyId(newId);
         toast.success("Company created");
       }
