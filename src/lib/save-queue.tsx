@@ -46,9 +46,11 @@ async function persistAndDrop(job: PendingJob): Promise<boolean> {
     });
     queue.shift();
     markSaved(job.label);
+    if (queue.length === 0) clearFailures();
     bump();
     toast.success(`${job.label} queued — will sync when online`);
     return true;
+
   } catch (err) {
     console.error("Failed to persist to offline outbox", err);
     return false;
@@ -70,7 +72,12 @@ async function flush() {
         await job.run();
         queue.shift();
         markSaved(job.label);
+        if (job.attempts > 0) {
+          toast.success(`${job.label} saved`);
+        }
+        if (queue.length === 0) clearFailures();
         bump();
+
       } catch (e) {
         // If we're offline (or went offline mid-flight) and the job is
         // persistable, route it to the outbox instead of marking failure.
