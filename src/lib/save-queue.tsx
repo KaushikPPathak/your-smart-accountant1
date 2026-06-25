@@ -46,9 +46,11 @@ async function persistAndDrop(job: PendingJob): Promise<boolean> {
     });
     queue.shift();
     markSaved(job.label);
+    if (queue.length === 0) clearFailures();
     bump();
     toast.success(`${job.label} queued — will sync when online`);
     return true;
+
   } catch (err) {
     console.error("Failed to persist to offline outbox", err);
     return false;
