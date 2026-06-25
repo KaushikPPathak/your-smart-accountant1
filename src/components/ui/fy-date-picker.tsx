@@ -207,6 +207,7 @@ export function FyDatePicker({
         disabled={disabled}
         placeholder={placeholder ?? "DDMM"}
         inputMode="numeric"
+        autoFocus={autoFocus}
         onChange={(e) => handleChange(e.target.value)}
         onBlur={(e) => commitText(e.target.value)}
         onKeyDown={(e) => {
@@ -217,6 +218,7 @@ export function FyDatePicker({
         }}
         className="h-9 pr-9"
       />
+
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
