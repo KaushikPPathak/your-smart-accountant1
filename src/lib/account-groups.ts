@@ -80,7 +80,7 @@ export const ACCOUNT_GROUPS: AccountGroup[] = [
     code: "FIXED_ASSETS", label: "Fixed Assets",
     section: "BS_ASSET", side: "Dr", order: 110,
     ledgerTypes: ["fixed_asset"],
-    hints: [/\bfixed\s+asset/i, /\bbuilding/i, /\bmachinery\b/i, /\bplant\b/i, /\bfurniture\b/i, /\bvehicle/i, /\bequipment\b/i, /\bcomputer\b/i, /\bmobile\s+phone\b/i, /\bland\b/i],
+    hints: [/\bfixed\s+asset/i, /\bbuilding/i, /\bmachinery\b/i, /\bplant\b/i, /\bfurniture\b/i, /\bvehicle/i, /\bequipment\b/i, /\bcomputer\b/i, /\bmobile\s+phone\b/i, /\bland\b/i, /\bpremises\b/i, /\bresidential\s+premises\b/i, /\boffice\s+premises\b/i, /\bfactory\s+premises\b/i, /\bgodown\b/i, /\bshop\b/i, /\btools?\b/i, /\bfittings?\b/i],
   },
   {
     code: "INVESTMENTS", label: "Investments",
@@ -235,11 +235,19 @@ export function guessGroupCode(name: string, side: AccountSide, sectionHint?: st
   // word "bank" in a person's name) silently overrode an explicit section
   // heading like "Capital Account".
   if (sectionHint && GROUP_BY_CODE[sectionHint]) {
-    if (GENERIC_HINT_CODES.has(sectionHint)) {
-      const strong = STRONG_OVERRIDE_HINTS.find((h) => h.rx.test(n));
-      if (strong && GROUP_BY_CODE[strong.code]?.side === side) return strong.code;
+    const hintGroup = GROUP_BY_CODE[sectionHint];
+    // If the row's actual side disagrees with the section's natural side
+    // (typically because the source had a negative amount that flipped the
+    // side), the section heading is the wrong roll-up — fall through to
+    // name-based matching so e.g. "Machinery" listed under "Unsecured Loans"
+    // lands in Fixed Assets, not as a negative loan.
+    if (hintGroup.side === side) {
+      if (GENERIC_HINT_CODES.has(sectionHint)) {
+        const strong = STRONG_OVERRIDE_HINTS.find((h) => h.rx.test(n));
+        if (strong && GROUP_BY_CODE[strong.code]?.side === side) return strong.code;
+      }
+      return sectionHint;
     }
-    return sectionHint;
   }
 
   // Try to match hints, preferring groups whose natural side matches the row's side.
