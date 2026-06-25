@@ -59,6 +59,7 @@ interface Props {
   placeholder?: string;
   /** If true, do not constrain to FY range. */
   unrestricted?: boolean;
+  autoFocus?: boolean;
 }
 
 export function FyDatePicker({
@@ -68,7 +69,9 @@ export function FyDatePicker({
   className,
   placeholder = "Pick a date",
   unrestricted,
+  autoFocus,
 }: Props) {
+
   const { start, end } = useFyRange();
   const [open, setOpen] = React.useState(false);
 
