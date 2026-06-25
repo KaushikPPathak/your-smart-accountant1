@@ -4,15 +4,14 @@
 //   1. Pull raw accounting rows from local SQLite.
 //   2. Pass them through Headroom `compress()` (with CCR fallback) so the
 //      payload sent to the model is small.
-//   3. Run the prompt against the local LLM (WebLLM / WebGPU). If WebGPU is
-//      unavailable we degrade to the offline KB result handled by the
-//      caller.
+//   3. Try the local WebLLM (WebGPU). If WebGPU isn't available or the
+//      engine fails to initialise, transparently fall back to the
+//      Lovable AI Gateway via the `ai-assistant` edge function so the
+//      assistant still answers.
 //   4. If the model asks for a specific raw row by CCR hash, fetch it
 //      transparently and re-run.
-//
-// All of this is invisible to the user: they ask a question, they get an
-// answer.
 
+import { supabase } from "@/integrations/supabase/client";
 import { buildCompressedContext } from "./ai/sqliteContext";
 import { retrieveOriginal } from "./ai/headroom";
 import { isWebGpuAvailable, webLlmChat } from "./ai/webllm";
@@ -33,6 +32,32 @@ interface AssistantArgs {
 
 const RETRIEVAL_RE = /retrieveOriginal\(["']([a-zA-Z0-9_:.-]+)["']\)/g;
 
+type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
+
+async function cloudChat(messages: ChatMsg[], temperature = 0.3): Promise<string> {
+  const { data, error } = await supabase.functions.invoke("ai-assistant", {
+    body: { messages, temperature },
+  });
+  if (error) throw new Error(error.message || "Cloud AI request failed");
+  const payload = data as { ok?: boolean; text?: string; error?: string } | null;
+  if (!payload || payload.ok === false) {
+    throw new Error(payload?.error || "Cloud AI returned no answer");
+  }
+  return payload.text ?? "";
+}
+
+async function smartChat(messages: ChatMsg[], temperature = 0.3): Promise<string> {
+  if (isWebGpuAvailable()) {
+    try {
+      return await webLlmChat(messages as never, { temperature });
+    } catch (err) {
+      // WebGPU adapter missing / engine init failed — fall through to cloud.
+      console.warn("[assistant] WebGPU local LLM failed, falling back to cloud:", err);
+    }
+  }
+  return cloudChat(messages, temperature);
+}
+
 export async function assistantChat(args?: AssistantArgs): Promise<AssistantChatResult> {
   const history = args?.data?.messages ?? [];
   const lastUser = [...history].reverse().find((m) => m.role === "user");
@@ -41,28 +66,19 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
     return { ok: false, text: "", error: "Empty question." };
   }
 
-  if (!isWebGpuAvailable()) {
-    return {
-      ok: false,
-      text: "",
-      error:
-        "Local AI engine needs WebGPU, which isn't available in this environment. The offline knowledge base will be used instead.",
-    };
-  }
-
   try {
     const ctx = await buildCompressedContext(question);
 
-    const baseMessages = [
-      ctx.systemMessage,
+    const baseMessages: ChatMsg[] = [
+      ctx.systemMessage as ChatMsg,
       ...history
         .slice(-6)
         .filter((m) => m.role !== "system")
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-      ctx.userMessage,
+      ctx.userMessage as ChatMsg,
     ];
 
-    let answer = await webLlmChat(baseMessages as any);
+    let answer = await smartChat(baseMessages);
 
     // CCR fallback: if the model references a hash, fetch the raw rows
     // and let it answer again with the expanded context.
@@ -74,22 +90,19 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
         if (r) retrieved[h] = r.rows;
       }
       if (Object.keys(retrieved).length > 0) {
-        const followUp = [
-          ctx.systemMessage,
-          ctx.userMessage,
+        const followUp: ChatMsg[] = [
+          ctx.systemMessage as ChatMsg,
+          ctx.userMessage as ChatMsg,
+          { role: "assistant", content: answer },
           {
-            role: "assistant" as const,
-            content: answer,
-          },
-          {
-            role: "user" as const,
+            role: "user",
             content:
               "Here are the original rows you requested via retrieveOriginal. " +
               "Use them to give the final answer:\n" +
               JSON.stringify(retrieved),
           },
         ];
-        answer = await webLlmChat(followUp as any);
+        answer = await smartChat(followUp);
       }
     }
 
@@ -101,9 +114,6 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
 }
 
 // --- Voucher drafting -----------------------------------------------------
-// The previous server stub returned a deterministic null. The voucher form
-// pipeline only needs a structured draft, which we can produce locally by
-// asking the model for JSON. Falls back to a heuristic if WebGPU is absent.
 
 export interface AssistantDraft {
   date: string;
@@ -136,31 +146,24 @@ export async function assistantDraftVoucher(args?: DraftArgs): Promise<Assistant
   const ledgers = args?.data?.ledgers ?? [];
 
   // Heuristic: pull an amount if present so the form is at least pre-filled
-  // even when the local LLM can't run.
+  // even when the model can't run.
   const amtMatch = text.replace(/[,]/g, "").match(/(?:rs\.?|₹|inr)?\s*([0-9]+(?:\.[0-9]+)?)/i);
   const amount = amtMatch ? Number(amtMatch[1]) : 0;
 
-  if (!isWebGpuAvailable()) {
-    return {
-      ok: true,
-      draft: { date: today, amount, narration: text },
-    };
-  }
-
   try {
-    const sys = {
-      role: "system" as const,
+    const sys: ChatMsg = {
+      role: "system",
       content:
         "Return ONLY a JSON object with keys: date (YYYY-MM-DD), amount (number), " +
         "narration (string), refNo (string|null), partyLedgerId (string|null), " +
         "cashBankLedgerId (string|null), counterLedgerId (string|null). " +
         "Pick ledger ids from the provided list when the user names them.",
     };
-    const user = {
-      role: "user" as const,
+    const user: ChatMsg = {
+      role: "user",
       content: JSON.stringify({ text, today, ledgers }),
     };
-    const raw = await webLlmChat([sys, user] as any, { temperature: 0.1 });
+    const raw = await smartChat([sys, user], 0.1);
     const json = raw.match(/\{[\s\S]*\}/)?.[0];
     if (!json) throw new Error("model did not return JSON");
     const draft = JSON.parse(json) as AssistantDraft;
