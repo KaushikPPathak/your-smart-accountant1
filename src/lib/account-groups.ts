@@ -228,26 +228,13 @@ export function guessGroupCode(name: string, side: AccountSide, sectionHint?: st
     return side === "Dr" ? "CURRENT_ASSETS" : "CURRENT_LIABILITIES";
   }
 
-  // Section heading is normally the source of truth. We only override it when:
-  //   (a) the section is a generic catch-all (CURRENT_ASSETS / CURRENT_LIABILITIES), AND
-  //   (b) the row name contains a STRONG identifier (HDFC, CGST, etc.).
-  // This prevents the previous bug where any same-side regex hit (e.g. the
-  // word "bank" in a person's name) silently overrode an explicit section
-  // heading like "Capital Account".
+  // Balance-sheet opening import must respect the printed head. If the parser
+  // captured an explicit section heading (Capital Account, Current Liabilities,
+  // Fixed Assets, etc.), that heading is authoritative. Do not move a ledger to
+  // another group from its name or from a Dr/Cr sign flip; accounting heads in
+  // the source document are strict.
   if (sectionHint && GROUP_BY_CODE[sectionHint]) {
-    const hintGroup = GROUP_BY_CODE[sectionHint];
-    // If the row's actual side disagrees with the section's natural side
-    // (typically because the source had a negative amount that flipped the
-    // side), the section heading is the wrong roll-up — fall through to
-    // name-based matching so e.g. "Machinery" listed under "Unsecured Loans"
-    // lands in Fixed Assets, not as a negative loan.
-    if (hintGroup.side === side) {
-      if (GENERIC_HINT_CODES.has(sectionHint)) {
-        const strong = STRONG_OVERRIDE_HINTS.find((h) => h.rx.test(n));
-        if (strong && GROUP_BY_CODE[strong.code]?.side === side) return strong.code;
-      }
-      return sectionHint;
-    }
+    return sectionHint;
   }
 
   // Try to match hints, preferring groups whose natural side matches the row's side.
