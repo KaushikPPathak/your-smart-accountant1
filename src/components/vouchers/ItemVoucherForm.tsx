@@ -777,7 +777,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <div className="grid gap-3 md:grid-cols-[1fr_2fr_1fr_auto] md:items-end">
               <div className="space-y-1">
                 <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date</Label>
-                <FyDatePicker value={date} onChange={setDate} />
+                <FyDatePicker value={date} onChange={setDate} autoFocus />
               </div>
               <div className="space-y-1">
                 <Label className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
