@@ -771,7 +771,7 @@ function LedgerStatement() {
     exportHtmlAsWord({
       bodyHtml: sectionsHtml,
       title: "All Ledgers",
-      fileName: `all-ledgers-${from}_to_${to}.doc`,
+      fileName: `all-ledgers-${view === "horizontal" ? "t-format" : "columnar"}-${from}_to_${to}.doc`,
       headerHtml,
       orientation: "landscape",
     });
