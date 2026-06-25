@@ -587,7 +587,7 @@ export function ManufacturingVoucherForm() {
           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
             <div className="space-y-1">
               <Label>Date</Label>
-              <FyDatePicker value={date} onChange={setDate} />
+              <FyDatePicker value={date} onChange={setDate} autoFocus />
             </div>
             <div className="space-y-1">
               <Label>Production Order No</Label>

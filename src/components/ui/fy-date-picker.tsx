@@ -59,6 +59,7 @@ interface Props {
   placeholder?: string;
   /** If true, do not constrain to FY range. */
   unrestricted?: boolean;
+  autoFocus?: boolean;
 }
 
 export function FyDatePicker({
@@ -68,7 +69,9 @@ export function FyDatePicker({
   className,
   placeholder = "Pick a date",
   unrestricted,
+  autoFocus,
 }: Props) {
+
   const { start, end } = useFyRange();
   const [open, setOpen] = React.useState(false);
 
@@ -204,6 +207,7 @@ export function FyDatePicker({
         disabled={disabled}
         placeholder={placeholder ?? "DDMM"}
         inputMode="numeric"
+        autoFocus={autoFocus}
         onChange={(e) => handleChange(e.target.value)}
         onBlur={(e) => commitText(e.target.value)}
         onKeyDown={(e) => {
@@ -214,6 +218,7 @@ export function FyDatePicker({
         }}
         className="h-9 pr-9"
       />
+
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
