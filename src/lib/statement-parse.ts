@@ -21,13 +21,22 @@ const MONTHS: Record<string, string> = {
 };
 
 function isoFromMatch(m: RegExpMatchArray): string | null {
+  if (!m[1] || !m[2] || !m[3]) return null;
+  if (!/^\d{1,2}$/.test(m[1])) return null;
   const d = m[1].padStart(2, "0");
   let mo = m[2].toLowerCase();
   if (MONTHS[mo.slice(0, 3)]) mo = MONTHS[mo.slice(0, 3)];
-  else mo = mo.padStart(2, "0");
+  else if (/^\d{1,2}$/.test(mo)) mo = mo.padStart(2, "0");
+  else return null;
   let y = m[3];
+  if (!/^\d{2,4}$/.test(y)) return null;
   if (y.length === 2) y = (parseInt(y) > 50 ? "19" : "20") + y;
-  if (parseInt(mo) > 12 || parseInt(d) > 31) return null;
+  if (y.length !== 4) return null;
+  const dN = parseInt(d, 10);
+  const moN = parseInt(mo, 10);
+  const yN = parseInt(y, 10);
+  if (!dN || !moN || moN > 12 || dN > 31) return null;
+  if (yN < 1900 || yN > 2999) return null;
   return `${y}-${mo}-${d}`;
 }
 
@@ -348,8 +357,11 @@ function parseDateLoose(s: string): string | null {
 }
 
 function addOneDayIso(iso: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
   const d = new Date(iso + "T00:00:00Z");
+  if (isNaN(d.getTime())) return iso;
   d.setUTCDate(d.getUTCDate() + 1);
+  if (isNaN(d.getTime())) return iso;
   return d.toISOString().slice(0, 10);
 }
 
