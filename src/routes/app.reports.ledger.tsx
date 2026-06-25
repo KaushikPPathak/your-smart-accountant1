@@ -893,7 +893,41 @@ function LedgerStatement() {
           {(allSections ?? []).length === 0 ? (
             <Card><CardContent className="p-6 text-sm text-muted-foreground">{allLoading ? "Loading all ledgers…" : "No ledgers with activity in this period."}</CardContent></Card>
           ) : (
-            (allSections ?? []).map((s) => (
+            (allSections ?? []).map((s) => {
+              if (view === "horizontal") {
+                const { dr, cr, total } = buildTSides(s);
+                const leftRows: TColRow[] = dr.map((x) => ({
+                  date: x.date,
+                  particulars: x.particulars,
+                  vchType: x.vchType,
+                  vchNo: x.vchNo,
+                  chqRef: x.chqRef,
+                  amount: formatINR(x.amount, { symbol: false }),
+                  emphasis: x.particulars.includes("Balance") ? "bold" : "normal",
+                }));
+                const rightRows: TColRow[] = cr.map((x) => ({
+                  date: x.date,
+                  particulars: x.particulars,
+                  vchType: x.vchType,
+                  vchNo: x.vchNo,
+                  chqRef: x.chqRef,
+                  amount: formatINR(x.amount, { symbol: false }),
+                  emphasis: x.particulars.includes("Balance") ? "bold" : "normal",
+                }));
+                return (
+                  <TAccountColumnar
+                    key={s.ledger.id}
+                    title={`${s.ledger.name} Account`}
+                    subtitle={`for the period ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`}
+                    leftRows={leftRows}
+                    rightRows={rightRows}
+                    leftTotal={formatINR(total, { symbol: false })}
+                    rightTotal={formatINR(total, { symbol: false })}
+                    closingLine={`Closing balance: ${fmtBal(s.closing)}`}
+                  />
+                );
+              }
+              return (
               <Card key={s.ledger.id} className="overflow-hidden">
                 <CardContent className="p-0">
                   <div className="bg-muted/40 px-3 py-2 text-sm font-semibold">Ledger A/c — {s.ledger.name}</div>
@@ -943,7 +977,8 @@ function LedgerStatement() {
                   </table>
                 </CardContent>
               </Card>
-            ))
+              );
+            })
           )}
         </div>
       ) : !ledger ? (
