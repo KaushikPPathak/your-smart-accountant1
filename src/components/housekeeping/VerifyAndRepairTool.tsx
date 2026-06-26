@@ -62,6 +62,7 @@ const INITIAL_STEPS: Omit<StepResult, "status" | "message">[] = [
   { key: "xco_ledger",   label: "Cross-company ledger references" },
   { key: "seq_repair",   label: "Recompute next-voucher-number sequences" },
   { key: "snapshot",     label: "Rebuild monthly balance snapshot" },
+  { key: "semantic",     label: "Report-level sanity checks (TB tally, BS tally, blank-P&L, partial restore)" },
 ];
 
 function blankSteps(): StepResult[] {
