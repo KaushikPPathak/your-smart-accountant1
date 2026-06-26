@@ -1,50 +1,46 @@
-## Short answer
-Yes — you don't need GitHub Actions to get a runnable app. There are three ways, depending on what "app" means to you.
+# Fix `npm ci` lock-file-out-of-sync error
 
----
+## Problem
 
-### Option A — Just use the web app (no download, no build)
-Your published web app already works on any device with a browser:
-- https://your-smart-accountant1.lovable.app
-- Open it on desktop, laptop, tablet or phone. On mobile/desktop browsers you can also "Install" it to the home screen / desktop (Chrome/Edge → menu → Install). It runs in a window like a native app, with offline cache where wired.
+On your Windows PC, `npm ci` aborts with `EUSAGE … package.json and package-lock.json … not in sync`, listing dozens of missing optional native packages (`@napi-rs/canvas-*`, `@tailwindcss/oxide-*`, `@tauri-apps/cli-*`, `@esbuild/*`, `lightningcss-*`, `@rollup/rollup-*`, `fsevents`).
 
-**Best for:** day-to-day use, instant access, no setup.
+These are all **platform-specific optional dependencies**. The current `package-lock.json` in the repo was generated in an environment where npm pruned them out, so npm on your Windows machine sees them as missing. `npm ci` refuses to "fix" the lock — it only installs exactly what the lock says. That is why `tauri build` then fails: `node_modules` was never populated, so the `tauri` CLI binary isn't on PATH.
 
----
+The previous regeneration was done with `bun`, which doesn't write npm's `optionalDependencies` cross-platform entries the same way npm 10 expects them.
 
-### Option B — Build the Windows / desktop installer locally (no GitHub needed)
-The repo already has a Tauri desktop config (`src-tauri/`). You can build the `.exe`/`.msi` directly on your own PC instead of through the GitHub Actions workflow.
+## Fix
 
-What you need on the PC (one-time):
-- Node.js 20+
-- Rust (via `rustup`)
-- On Windows: "Desktop development with C++" from Visual Studio Build Tools + WebView2 (already on Win10/11)
+Regenerate `package-lock.json` using npm itself (not bun) with full cross-platform optional metadata, then commit it. After that `npm ci` works on Windows, Linux and macOS.
 
-Then in the project folder:
-```
+Steps I will run in the sandbox:
+
+1. Delete the current `package-lock.json` and `node_modules`.
+2. Run `npm install --package-lock-only --ignore-scripts` to produce a fresh lock-only file (no install side effects, no Rust/Tauri postinstall hooks).
+3. Verify with `npm ci --ignore-scripts --dry-run` that the lock now resolves cleanly with zero "Missing:" entries.
+4. Commit the updated `package-lock.json`.
+
+No `package.json` changes, no `--force`, no `--legacy-peer-deps`. Only the lock file is rewritten.
+
+## What you do on Windows after the fix
+
+In your project folder (fresh download or `git pull`):
+
+```powershell
+rmdir /s /q node_modules
+del package-lock.json   # only if you had a stale one locally
+git pull                 # or re-download the zip
 npm ci
 npm run tauri build
 ```
-The installer lands in `src-tauri/target/release/bundle/` (`nsis/*.exe` and `msi/*.msi`). Double-click to install. After that the app runs without Node, without GitHub, without a build step.
 
-**Best for:** a real installed desktop app with the offline SQLite engine.
+`tauri` will now exist at `node_modules\.bin\tauri.cmd` and the build will proceed.
 
----
+## Why this is the right fix (not "install tauri globally")
 
-### Option C — I build it for you here and you just download
-I can run the production build inside this sandbox and hand you the bundled artifact you can run directly:
-- **Web bundle (`dist/` zipped)** — unzip, double-click `index.html` or serve with any static server. Runs fully offline against your Lovable Cloud backend. No build tools needed on your side.
-- **Linux desktop binary** — I can package an Electron/Tauri Linux build here.
-- **Windows `.exe`** — cannot be produced inside this sandbox (Tauri's Windows installer needs a Windows host or a Windows GitHub runner). For a Windows installer the only realistic paths are Option B (build on your Windows PC) or re-enabling the GitHub workflow.
+`@tauri-apps/cli` is already a devDependency in `package.json`. The reason `tauri` wasn't recognized is purely that `npm ci` aborted before installing anything. Fixing the lock file fixes both errors at once — you do not need to `npm i -g @tauri-apps/cli`.
 
----
+## Risk / scope
 
-## What I need you to pick
-Which one do you want me to set up?
-
-1. Nothing to do — you'll just use the published web URL (Option A).
-2. Walk you through building the Windows installer on your own PC (Option B) — I'll add a one-page `BUILD_WINDOWS.md` with exact commands and prerequisites.
-3. I produce a downloadable web bundle (zipped `dist/`) right now so you can run it offline without any build tools (Option C, web).
-4. I produce a Linux desktop build here (Option C, Linux).
-
-Tell me 1 / 2 / 3 / 4 (or a combo) and I'll proceed.
+- Touches one file: `package-lock.json`.
+- No runtime code changes, no dependency version bumps.
+- TanStack 1.170.x alignment from the previous regen is preserved (npm will reuse the same resolved versions from `package.json` ranges).
