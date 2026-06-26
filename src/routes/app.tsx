@@ -93,13 +93,22 @@ function AppLayout() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [isTrial, activeCompanyId, activeMembership, partyCode]);
 
-  // Run one-time desktop data migrations (safe no-op on web).
+  // Run one-time desktop data migrations + daily safety snapshot (safe no-op on web).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         if (isDesktopRuntime()) {
           void runAppDataMigrationsOnce().catch(() => undefined);
+          // Auto-snapshot every company once per day to APPLOCALDATA so a
+          // Windows installer upgrade can never lose all data.
+          if (memberships.length > 0) {
+            const list = memberships
+              .map((m) => ({ id: m.company_id, name: m.companies?.name ?? "company" }))
+              .filter((c) => c.id);
+            const { runAutoSnapshotOnce } = await import("@/lib/auto-snapshot");
+            void runAutoSnapshotOnce(list).catch(() => undefined);
+          }
         }
       } finally {
         if (!cancelled) setBootstrapping(false);
@@ -108,7 +117,7 @@ function AppLayout() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [memberships]);
 
   // No login screen any more — AuthProvider silently signs in a shared
   // tech user. We just wait for that to finish before rendering.
