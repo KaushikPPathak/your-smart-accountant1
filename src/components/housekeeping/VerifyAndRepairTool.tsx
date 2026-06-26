@@ -432,7 +432,7 @@ export function VerifyAndRepairTool({
                     </Badge>
                   )}
                 </div>
-                <div className="mt-0.5 text-xs text-muted-foreground">{s.message}</div>
+                <div className="mt-0.5 whitespace-pre-line text-xs text-muted-foreground">{s.message}</div>
               </div>
             </div>
           ))}
