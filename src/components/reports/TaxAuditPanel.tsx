@@ -46,7 +46,9 @@ export function TaxAuditPanel({ mode, fyStart, fyEnd }: Props) {
     (async () => {
       setLoading(true);
       const [bals, hits, customBlocksRes, assetsRes, movementsRes, disallowRes] = await Promise.all([
-        fetchLedgerBalances(activeCompanyId, fyEnd, fyStart),
+        fetchLedgerBalances(activeCompanyId, fyEnd, fyStart, {
+          excludeProfitLossClosingTransfers: true,
+        }),
         scan40A3(activeCompanyId, fyStart, fyEnd),
         supabase.from("it_asset_blocks").select("code, name, rate_pct").eq("company_id", activeCompanyId),
         supabase.from("it_fixed_assets").select("*").eq("company_id", activeCompanyId).eq("fy_start", fyStart),
