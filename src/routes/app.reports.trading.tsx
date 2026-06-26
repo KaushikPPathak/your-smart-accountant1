@@ -34,7 +34,9 @@ function TradingAccount() {
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    fetchLedgerBalances(activeCompanyId, to, from).then(setBalances);
+    fetchLedgerBalances(activeCompanyId, to, from, {
+      excludeProfitLossClosingTransfers: true,
+    }).then(setBalances);
   }, [activeCompanyId, from, to]);
 
   useEffect(() => {

@@ -9,11 +9,57 @@ export interface LedgerBalance {
   closing_paise: number; // signed: +Dr, -Cr
 }
 
+export interface LedgerBalanceOptions {
+  excludeProfitLossClosingTransfers?: boolean;
+}
+
+export interface LedgerBalanceResult {
+  balances: LedgerBalance[];
+  excludedClosingTransferEntries: number;
+}
+
+type VoucherEntryForBalance = {
+  ledger_id: string;
+  debit_paise: number;
+  credit_paise: number;
+  vouchers: {
+    voucher_type: string | null;
+    narration: string | null;
+  } | null;
+};
+
+export function isProfitLossClosingTransfer(voucher: {
+  voucher_type?: string | null;
+  narration?: string | null;
+} | null): boolean {
+  if (!voucher || voucher.voucher_type !== "journal") return false;
+  const text = (voucher.narration ?? "").toLowerCase();
+  return (
+    /profit\s*&\s*loss/.test(text) ||
+    /profit\s+and\s+loss/.test(text) ||
+    /net\s+profit\s+transferred/.test(text) ||
+    /net\s+loss\s+transferred/.test(text) ||
+    /income\s*&\s*expenditure/.test(text) ||
+    /income\s+and\s+expenditure/.test(text)
+  );
+}
+
 export async function fetchLedgerBalances(
   companyId: string,
   asOf: string,
   fromOpt?: string,
+  options: LedgerBalanceOptions = {},
 ): Promise<LedgerBalance[]> {
+  const result = await fetchLedgerBalancesWithMeta(companyId, asOf, fromOpt, options);
+  return result.balances;
+}
+
+export async function fetchLedgerBalancesWithMeta(
+  companyId: string,
+  asOf: string,
+  fromOpt?: string,
+  options: LedgerBalanceOptions = {},
+): Promise<LedgerBalanceResult> {
   const { data: ledgers } = await supabase
     .from("ledgers")
     .select("id, name, type, group_code, opening_balance_paise, opening_balance_is_debit")
@@ -22,7 +68,7 @@ export async function fetchLedgerBalances(
   // Fix: Bundle the date configurations safely into a consolidated modifier object
   let queryBuilder = supabase
     .from("voucher_entries")
-    .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
+    .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id, voucher_type, narration)")
     .eq("vouchers.company_id", companyId);
 
   // Apply sequential evaluation constraints without breaking structural execution paths
@@ -38,15 +84,25 @@ export async function fetchLedgerBalances(
   }
 
   const movements = new Map<string, number>();
-  for (const e of (entries || []) as unknown as { ledger_id: string; debit_paise: number; credit_paise: number }[]) {
+  let excludedClosingTransferEntries = 0;
+  for (const e of (entries || []) as unknown as VoucherEntryForBalance[]) {
+    if (
+      options.excludeProfitLossClosingTransfers &&
+      isProfitLossClosingTransfer(e.vouchers)
+    ) {
+      excludedClosingTransferEntries++;
+      continue;
+    }
     movements.set(e.ledger_id, (movements.get(e.ledger_id) || 0) + e.debit_paise - e.credit_paise);
   }
 
-  return (ledgers || []).map((l) => {
+  const balances = (ledgers || []).map((l) => {
     const ob = fromOpt ? 0 : (l.opening_balance_is_debit ? 1 : -1) * l.opening_balance_paise;
     const closing = ob + (movements.get(l.id) || 0);
     return { id: l.id, name: l.name, type: l.type, group_code: l.group_code ?? null, closing_paise: closing };
   });
+
+  return { balances, excludedClosingTransferEntries };
 }
 
 // Type buckets for P&L and Balance Sheet (sign: +Dr / -Cr balance natural)

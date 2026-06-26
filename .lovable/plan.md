@@ -1,46 +1,38 @@
-# Fix `npm ci` lock-file-out-of-sync error
+## Problem found
 
-## Problem
+For **Mrs. Madhuben Hasmukhbhai Shah**, the data did restore: the database has **120 vouchers and 247 voucher entries**. The P&L is blank/wrong because the restored data contains a **year-end closing journal** dated **2026-03-31** with narration like **“Net Profit Transferred from Profit & Loss Account”**.
 
-On your Windows PC, `npm ci` aborts with `EUSAGE … package.json and package-lock.json … not in sync`, listing dozens of missing optional native packages (`@napi-rs/canvas-*`, `@tailwindcss/oxide-*`, `@tauri-apps/cli-*`, `@esbuild/*`, `lightningcss-*`, `@rollup/rollup-*`, `fsevents`).
+That journal correctly closes income/expense ledgers to Capital for Balance Sheet, but the current P&L report includes it, so income and expenses become zero for the full year. Balance Sheet still appears because it is meant to include the transfer.
 
-These are all **platform-specific optional dependencies**. The current `package-lock.json` in the repo was generated in an environment where npm pruned them out, so npm on your Windows machine sees them as missing. `npm ci` refuses to "fix" the lock — it only installs exactly what the lock says. That is why `tauri build` then fails: `node_modules` was never populated, so the `tauri` CLI binary isn't on PATH.
+## Plan
 
-The previous regeneration was done with `bun`, which doesn't write npm's `optionalDependencies` cross-platform entries the same way npm 10 expects them.
+1. **Add a report-safe filter for closing transfer entries**
+   - In shared report balance calculation, add an option to exclude P&L closing journals.
+   - Detect these entries by journal type plus narration containing phrases like:
+     - `Profit & Loss`
+     - `Profit and Loss`
+     - `Net Profit Transferred`
+     - `Net Loss Transferred`
+     - `Income & Expenditure`
 
-## Fix
+2. **Apply the filter only to period P&L-style reports**
+   - Profit & Loss report: exclude closing transfer entries.
+   - Trading report: exclude closing transfer entries.
+   - Tax audit P&L calculations: exclude closing transfer entries where appropriate.
+   - Balance Sheet and Trial Balance: keep existing behavior, because Balance Sheet should include the capital transfer.
 
-Regenerate `package-lock.json` using npm itself (not bun) with full cross-platform optional metadata, then commit it. After that `npm ci` works on Windows, Linux and macOS.
+3. **Keep restore logic unchanged for now**
+   - The restore itself is not the main failure for this company; entries are present.
+   - We should not delete or mutate accounting data automatically because the year-end closing journal may be intentionally present.
 
-Steps I will run in the sandbox:
+4. **Add a visible accounting note in P&L**
+   - Show a small inline note when closing transfer entries are excluded, so it is clear that the report is showing operational Profit & Loss before year-end appropriation.
 
-1. Delete the current `package-lock.json` and `node_modules`.
-2. Run `npm install --package-lock-only --ignore-scripts` to produce a fresh lock-only file (no install side effects, no Rust/Tauri postinstall hooks).
-3. Verify with `npm ci --ignore-scripts --dry-run` that the lock now resolves cleanly with zero "Missing:" entries.
-4. Commit the updated `package-lock.json`.
+5. **Verify with this company’s data**
+   - Confirm P&L shows Salary Income, FD Interest, Dividend, Bank Charges, etc.
+   - Confirm Balance Sheet remains unchanged/tallied.
+   - Confirm this does not affect companies without year-end closing journals.
 
-No `package.json` changes, no `--force`, no `--legacy-peer-deps`. Only the lock file is rewritten.
+## Expected result
 
-## What you do on Windows after the fix
-
-In your project folder (fresh download or `git pull`):
-
-```powershell
-rmdir /s /q node_modules
-del package-lock.json   # only if you had a stale one locally
-git pull                 # or re-download the zip
-npm ci
-npm run tauri build
-```
-
-`tauri` will now exist at `node_modules\.bin\tauri.cmd` and the build will proceed.
-
-## Why this is the right fix (not "install tauri globally")
-
-`@tauri-apps/cli` is already a devDependency in `package.json`. The reason `tauri` wasn't recognized is purely that `npm ci` aborted before installing anything. Fixing the lock file fixes both errors at once — you do not need to `npm i -g @tauri-apps/cli`.
-
-## Risk / scope
-
-- Touches one file: `package-lock.json`.
-- No runtime code changes, no dependency version bumps.
-- TanStack 1.170.x alignment from the previous regen is preserved (npm will reuse the same resolved versions from `package.json` ranges).
+For **Mrs. Madhuben Hasmukhbhai Shah**, Profit & Loss will show the actual income/expense activity again instead of becoming blank/zero after restore, while Balance Sheet continues to show the closing transfer correctly.

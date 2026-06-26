@@ -9,7 +9,7 @@ import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
-import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
+import { fetchLedgerBalancesWithMeta, type LedgerBalance } from "@/lib/reports";
 import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
 import { openLedgerReport } from "@/lib/voucher-return";
@@ -40,10 +40,16 @@ function ProfitLoss() {
   const { view, setView } = useReportView("profit-loss");
   const [taxView, setTaxView] = useState(false);
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
+  const [excludedClosingEntries, setExcludedClosingEntries] = useState(0);
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    fetchLedgerBalances(activeCompanyId, to, from).then(setBalances);
+    fetchLedgerBalancesWithMeta(activeCompanyId, to, from, {
+      excludeProfitLossClosingTransfers: true,
+    }).then((result) => {
+      setBalances(result.balances);
+      setExcludedClosingEntries(result.excludedClosingTransferEntries);
+    });
   }, [activeCompanyId, from, to]);
 
   // Use ONLY ledgers whose group is in the PL section (Indirect Income / Indirect Expenses)
@@ -148,6 +154,11 @@ function ProfitLoss() {
               ? <>Income &amp; Expenditure for the period — surplus/deficit transfers to the <strong>Corpus / General Fund</strong>.</>
               : <>Indirect Income &amp; Indirect Expenses, grouped per IT-norms. Gross Profit/Loss flows in from the <strong>Trading Account</strong>.</>}
           </p>
+          {excludedClosingEntries > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Year-end Profit &amp; Loss transfer entries are excluded here so the period income and expenses remain visible.
+            </p>
+          )}
         </CardContent>
       </Card>
       {view === "grid" ? (
