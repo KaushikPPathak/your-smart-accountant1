@@ -9,31 +9,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { TECH_USER_EMAIL, TECH_USER_PASSWORD } from "./tech-user-credentials";
 import { lockWorkspace as lockWorkspaceImpl } from "./staff-session";
 
-let inflight: Promise<void> | null = null;
+export type TechSessionResult = { ok: true } | { ok: false; reason: string };
 
-export async function ensureTechSession(): Promise<void> {
-  if (typeof window === "undefined") return;
-  if (inflight) return inflight;
+let inflight: Promise<TechSessionResult> | null = null;
 
-  inflight = (async () => {
+export async function ensureTechSession(force = false): Promise<TechSessionResult> {
+  if (typeof window === "undefined") return { ok: true };
+  if (inflight && !force) return inflight;
+
+  inflight = (async (): Promise<TechSessionResult> => {
     try {
       const { data } = await supabase.auth.getSession();
       const sess = data.session;
       const now = Math.floor(Date.now() / 1000);
-      // Treat session as valid only if it has > 60s of life left. Otherwise
-      // the persisted token in localStorage is expired/near-expired and any
-      // PostgREST call will 403 with "token has invalid claims: token is
-      // expired" before autoRefresh kicks in.
-      if (sess && sess.expires_at && sess.expires_at - now > 60) return;
+      if (!force && sess && sess.expires_at && sess.expires_at - now > 60) {
+        return { ok: true };
+      }
 
       // Try refresh first (cheaper, keeps user id stable).
       if (sess?.refresh_token) {
         const { data: r, error: rerr } = await supabase.auth.refreshSession();
-        if (!rerr && r.session) return;
+        if (!rerr && r.session) return { ok: true };
       }
 
-      // Fall back to a fresh sign-in. Clear any stale persisted token first
-      // so the new session fully replaces it.
+      // Fall back to a fresh sign-in. Clear any stale persisted token first.
       try { await supabase.auth.signOut({ scope: "local" } as never); } catch { /* ignore */ }
       const { error } = await supabase.auth.signInWithPassword({
         email: TECH_USER_EMAIL,
@@ -41,7 +40,12 @@ export async function ensureTechSession(): Promise<void> {
       });
       if (error) {
         console.error("[tech-user] silent sign-in failed:", error.message);
+        return { ok: false, reason: error.message };
       }
+      return { ok: true };
+    } catch (e) {
+      const reason = (e as { message?: string })?.message ?? "Unknown error";
+      return { ok: false, reason };
     } finally {
       inflight = null;
     }
