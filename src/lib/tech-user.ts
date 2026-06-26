@@ -18,7 +18,23 @@ export async function ensureTechSession(): Promise<void> {
   inflight = (async () => {
     try {
       const { data } = await supabase.auth.getSession();
-      if (data.session) return;
+      const sess = data.session;
+      const now = Math.floor(Date.now() / 1000);
+      // Treat session as valid only if it has > 60s of life left. Otherwise
+      // the persisted token in localStorage is expired/near-expired and any
+      // PostgREST call will 403 with "token has invalid claims: token is
+      // expired" before autoRefresh kicks in.
+      if (sess && sess.expires_at && sess.expires_at - now > 60) return;
+
+      // Try refresh first (cheaper, keeps user id stable).
+      if (sess?.refresh_token) {
+        const { data: r, error: rerr } = await supabase.auth.refreshSession();
+        if (!rerr && r.session) return;
+      }
+
+      // Fall back to a fresh sign-in. Clear any stale persisted token first
+      // so the new session fully replaces it.
+      try { await supabase.auth.signOut({ scope: "local" } as never); } catch { /* ignore */ }
       const { error } = await supabase.auth.signInWithPassword({
         email: TECH_USER_EMAIL,
         password: TECH_USER_PASSWORD,
