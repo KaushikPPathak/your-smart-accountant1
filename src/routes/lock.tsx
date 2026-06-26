@@ -136,10 +136,19 @@ function LockScreen() {
       const tryCloud = isOnlineNow();
       if (tryCloud) {
         try {
-          const { data, error } = await supabase.rpc("verify_account_login", {
+          let { data, error } = await supabase.rpc("verify_account_login", {
             _username: loginUser.trim(),
             _password: loginPass,
           });
+          if (error && /jwt|token/i.test(error.message ?? "")) {
+            const r = await ensureTechSession(true);
+            if (r.ok) {
+              ({ data, error } = await supabase.rpc("verify_account_login", {
+                _username: loginUser.trim(),
+                _password: loginPass,
+              }));
+            }
+          }
           if (error) throw error;
           const row = Array.isArray(data) ? data[0] : data;
           if (!row?.id) {
