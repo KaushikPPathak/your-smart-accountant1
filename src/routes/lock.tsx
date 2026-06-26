@@ -275,7 +275,35 @@ function LockScreen() {
           </div>
         </div>
 
+        {sessionError && (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div>
+                <div className="font-medium">Session expired</div>
+                <div className="text-destructive/80">{sessionError}</div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onSignInAgain}
+                disabled={refreshing}
+                className="h-7 border-destructive/40 text-destructive hover:bg-destructive/10"
+              >
+                {refreshing ? (
+                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1.5 h-3 w-3" />
+                )}
+                Sign in again
+              </Button>
+            </div>
+          </div>
+        )}
+
         <Tabs value={tab} onValueChange={(v) => setTab(v as "login" | "signup")}>
+
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login" disabled={!accountsExist}>
               <LogIn className="mr-2 h-4 w-4" /> Log in
