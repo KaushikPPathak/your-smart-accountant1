@@ -333,6 +333,22 @@ export function VerifyAndRepairTool({
       patch("snapshot", { status: "error", message: describeError(err) });
     }
 
+    // ------ Step 9: semantic / report-level checks -----------------------
+    patch("semantic", { status: "running", message: "Auditing reports…" });
+    try {
+      const report = await runSemanticChecks(companyId);
+      const problems = report.findings.filter((f) => f.severity !== "ok");
+      totalFound += problems.length;
+      const status: StepStatus = report.hasError ? "error" : report.hasWarning ? "warn" : "ok";
+      const msg = problems.length === 0
+        ? report.summary
+        : problems.map((p) => `• ${p.message}`).join("\n");
+      patch("semantic", { status, found: problems.length, message: msg });
+    } catch (err) {
+      hadError = true;
+      patch("semantic", { status: "error", message: describeError(err) });
+    }
+
     setRunning(false);
     if (hadError) {
       setSummary(`Completed with errors. Found ${totalFound} issue(s); fixed ${totalFixed}. See per-step messages.`);
