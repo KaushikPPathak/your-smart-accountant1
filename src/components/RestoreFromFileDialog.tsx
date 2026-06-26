@@ -111,10 +111,9 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const insertRow = { id: newId, name, ...payload, created_by: uid } as unknown as Parameters<
-      ReturnType<typeof supabase.from<"companies">>["insert"]
-    >[0];
-    const { error } = await supabase.from("companies").insert(insertRow);
+    const insertRow = { id: newId, name, ...payload, created_by: uid };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await supabase.from("companies").insert(insertRow as any);
     if (error) throw new Error(error.message);
     await supabase.from("company_members").upsert(
       { company_id: newId, user_id: uid, role: "admin" },
