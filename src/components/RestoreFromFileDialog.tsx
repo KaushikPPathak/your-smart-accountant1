@@ -142,10 +142,25 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
         target = targetId;
       }
       const summary = await restoreCompanyBackup(target, backup, { wipeExisting: true });
+      const restoredName = mode === "new" ? newName : (memberships.find((m) => m.company_id === target)?.companies.name ?? "");
       toast.success(
-        `Restored into "${mode === "new" ? newName : (memberships.find((m) => m.company_id === target)?.companies.name ?? "")}": ` +
+        `Restored into "${restoredName}": ` +
         `${summary.ledgers} ledgers, ${summary.items} items, ${summary.vouchers} vouchers`,
       );
+      // Post-restore semantic validation — catches partial restores, missing
+      // entries, blank-P&L, untallied BS before the user finds out manually.
+      try {
+        const report = await runSemanticChecks(target);
+        if (report.hasError) {
+          toast.error(`Restore verified with CRITICAL issues: ${report.summary}`, { duration: 12000 });
+        } else if (report.hasWarning) {
+          toast.warning(`Restore verified: ${report.summary}`, { duration: 8000 });
+        } else {
+          toast.success(`Restore verified — ${report.summary}`);
+        }
+      } catch {
+        toast.warning("Restored, but post-restore verification could not run. Open Housekeeping → Verify & Repair.");
+      }
       onDone?.();
       onOpenChange(false);
       reset();
