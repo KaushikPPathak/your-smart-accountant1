@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { describeError } from "@/lib/error-message";
+import { runSemanticChecks } from "@/lib/semantic-checks";
 import { toast } from "sonner";
 
 type StepStatus = "pending" | "running" | "ok" | "warn" | "error";
@@ -61,6 +62,7 @@ const INITIAL_STEPS: Omit<StepResult, "status" | "message">[] = [
   { key: "xco_ledger",   label: "Cross-company ledger references" },
   { key: "seq_repair",   label: "Recompute next-voucher-number sequences" },
   { key: "snapshot",     label: "Rebuild monthly balance snapshot" },
+  { key: "semantic",     label: "Report-level sanity checks (TB tally, BS tally, blank-P&L, partial restore)" },
 ];
 
 function blankSteps(): StepResult[] {
@@ -331,6 +333,22 @@ export function VerifyAndRepairTool({
       patch("snapshot", { status: "error", message: describeError(err) });
     }
 
+    // ------ Step 9: semantic / report-level checks -----------------------
+    patch("semantic", { status: "running", message: "Auditing reports…" });
+    try {
+      const report = await runSemanticChecks(companyId);
+      const problems = report.findings.filter((f) => f.severity !== "ok");
+      totalFound += problems.length;
+      const status: StepStatus = report.hasError ? "error" : report.hasWarning ? "warn" : "ok";
+      const msg = problems.length === 0
+        ? report.summary
+        : problems.map((p) => `• ${p.message}`).join("\n");
+      patch("semantic", { status, found: problems.length, message: msg });
+    } catch (err) {
+      hadError = true;
+      patch("semantic", { status: "error", message: describeError(err) });
+    }
+
     setRunning(false);
     if (hadError) {
       setSummary(`Completed with errors. Found ${totalFound} issue(s); fixed ${totalFixed}. See per-step messages.`);
@@ -414,7 +432,7 @@ export function VerifyAndRepairTool({
                     </Badge>
                   )}
                 </div>
-                <div className="mt-0.5 text-xs text-muted-foreground">{s.message}</div>
+                <div className="mt-0.5 whitespace-pre-line text-xs text-muted-foreground">{s.message}</div>
               </div>
             </div>
           ))}
