@@ -281,7 +281,10 @@ export async function restoreCompanyBackup(
     if (!error) summary.voucher_items++;
   }
 
-  // Voucher entries
+  // Voucher entries — MUST insert all rows of a voucher in a single statement,
+  // otherwise the Dr=Cr balance trigger (AFTER INSERT FOR EACH STATEMENT) rejects
+  // partial inserts. Group by new voucher_id and insert per-voucher batches.
+  const entriesByVoucher = new Map<string, Record<string, unknown>[]>();
   for (const veRaw of backup.voucher_entries) {
     const { id: _id, voucher_id, ledger_id, created_at: _ca, ...rest } = veRaw as Record<
       string,
@@ -290,11 +293,15 @@ export async function restoreCompanyBackup(
     const newV = voucherIdMap.get(String(voucher_id));
     const newL = ledgerIdMap.get(String(ledger_id));
     if (!newV || !newL) continue;
-    const { error } = await supabase
-      .from("voucher_entries")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert({ ...(rest as any), voucher_id: newV, ledger_id: newL });
-    if (!error) summary.voucher_entries++;
+    const row = { ...(rest as Record<string, unknown>), voucher_id: newV, ledger_id: newL };
+    const arr = entriesByVoucher.get(newV) ?? [];
+    arr.push(row);
+    entriesByVoucher.set(newV, arr);
+  }
+  for (const rows of entriesByVoucher.values()) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await supabase.from("voucher_entries").insert(rows as any);
+    if (!error) summary.voucher_entries += rows.length;
   }
 
   // Bill allocations
