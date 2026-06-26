@@ -23,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   parseBackupFile, restoreCompanyBackup, type CompanyBackup,
 } from "@/lib/backup";
+import { runSemanticChecks } from "@/lib/semantic-checks";
 
 interface Membership {
   company_id: string;
