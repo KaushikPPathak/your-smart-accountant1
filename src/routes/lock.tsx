@@ -36,6 +36,8 @@ function LockScreen() {
   const [bootLoading, setBootLoading] = useState(true);
   const [accountsExist, setAccountsExist] = useState(false);
   const [tab, setTab] = useState<"login" | "signup">("login");
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Login fields
   const [loginUser, setLoginUser] = useState("");
@@ -52,45 +54,76 @@ function LockScreen() {
 
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        if (!isOnlineNow()) {
-          setAccountsExist(true);
-          setTab("login");
-          setTypingManually(true); // offline → no dropdown source
-          return;
-        }
-
-        await Promise.race([
-          ensureTechSession(),
-          new Promise<void>((resolve) => setTimeout(resolve, 1500)),
-        ]);
-
-        const { data, error } = await supabase.rpc("accounts_exist");
-        if (error) throw error;
-        const exists = Boolean(data);
-        setAccountsExist(exists);
-        setTab(exists ? "login" : "signup");
-
-        if (exists) {
-          // Pull visible accounts for the dropdown.
-          const { data: list } = await (supabase as unknown as {
-            rpc: (fn: string) => Promise<{ data: LoginUserOption[] | null }>;
-          }).rpc("list_login_users");
-          const opts = list ?? [];
-          setUserOptions(opts);
-          if (opts.length === 0) setTypingManually(true);
-        }
-      } catch {
+  const boot = async (force = false) => {
+    setBootLoading(true);
+    setSessionError(null);
+    try {
+      if (!isOnlineNow()) {
         setAccountsExist(true);
         setTab("login");
         setTypingManually(true);
-      } finally {
-        setBootLoading(false);
+        return;
       }
-    })();
-  }, []);
+
+      const sess = await ensureTechSession(force);
+      if (!sess.ok) {
+        setSessionError(sess.reason || "Session expired");
+        setAccountsExist(true);
+        setTab("login");
+        setTypingManually(true);
+        return;
+      }
+
+      let { data, error } = await supabase.rpc("accounts_exist");
+      // Auto-retry once on JWT expiry — the persisted token may have died
+      // between ensureTechSession's check and this RPC.
+      if (error && /jwt|token/i.test(error.message ?? "")) {
+        const r = await ensureTechSession(true);
+        if (!r.ok) {
+          setSessionError(r.reason || "Session expired");
+          setAccountsExist(true);
+          setTab("login");
+          setTypingManually(true);
+          return;
+        }
+        ({ data, error } = await supabase.rpc("accounts_exist"));
+      }
+      if (error) throw error;
+
+      const exists = Boolean(data);
+      setAccountsExist(exists);
+      setTab(exists ? "login" : "signup");
+
+      if (exists) {
+        const { data: list } = await (supabase as unknown as {
+          rpc: (fn: string) => Promise<{ data: LoginUserOption[] | null }>;
+        }).rpc("list_login_users");
+        const opts = list ?? [];
+        setUserOptions(opts);
+        if (opts.length === 0) setTypingManually(true);
+      }
+    } catch (e) {
+      const msg = (e as { message?: string })?.message ?? "Couldn't load accounts";
+      setSessionError(msg);
+      setAccountsExist(true);
+      setTab("login");
+      setTypingManually(true);
+    } finally {
+      setBootLoading(false);
+    }
+  };
+
+  useEffect(() => { void boot(); }, []);
+
+  const onSignInAgain = async () => {
+    setRefreshing(true);
+    try {
+      await boot(true);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
 
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
