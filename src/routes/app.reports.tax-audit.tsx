@@ -122,7 +122,9 @@ function TaxAuditPage() {
   const [bookDep, setBookDep] = useState(0);
   useEffect(() => {
     if (!activeCompanyId) return;
-    fetchLedgerBalances(activeCompanyId, fyEnd, fyStart).then((bs) => {
+    fetchLedgerBalances(activeCompanyId, fyEnd, fyStart, {
+      excludeProfitLossClosingTransfers: true,
+    }).then((bs) => {
       setNpBooks(netProfitBooks(bs));
       setBookDep(bookDepreciationPaise(bs));
     });
@@ -246,7 +248,9 @@ function TaxAuditPage() {
   // ---------- Export Audit Pack ----------
   const exportPack = async () => {
     if (!activeCompanyId) return;
-    const balances = await fetchLedgerBalances(activeCompanyId, fyEnd, fyStart);
+    const balances = await fetchLedgerBalances(activeCompanyId, fyEnd, fyStart, {
+      excludeProfitLossClosingTransfers: true,
+    });
     const plRows: (string | number)[][] = [
       ["Profit & Loss — Books", "Amount (₹)"],
       ...balances
