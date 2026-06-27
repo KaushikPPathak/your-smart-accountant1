@@ -264,12 +264,11 @@ export async function pullSnapshot(): Promise<SnapshotResult | null> {
       if (error) return null;
 
       const ids = Array.from(new Set((memberships ?? []).map((r) => r.company_id as string)));
-      let last: SnapshotResult | null = null;
-      for (const id of ids) {
-        const r = await pullCompanySnapshot(id, { full: false });
-        if (r) last = r;
-      }
-      return last;
+      // Parallel per-company minimal pulls — each company is independent.
+      const results = await Promise.all(
+        ids.map((id) => pullCompanySnapshot(id, { full: false }).catch(() => null)),
+      );
+      return results.filter(Boolean).pop() ?? null;
     } finally {
       pullInFlight = null;
     }
