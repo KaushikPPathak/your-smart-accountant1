@@ -38,7 +38,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { describeError } from "@/lib/error-message";
 import { runSemanticChecks } from "@/lib/semantic-checks";
+import { runAccountingAudit } from "@/lib/accounting-audit";
 import { toast } from "sonner";
+
 
 type StepStatus = "pending" | "running" | "ok" | "warn" | "error";
 
@@ -63,7 +65,9 @@ const INITIAL_STEPS: Omit<StepResult, "status" | "message">[] = [
   { key: "seq_repair",   label: "Recompute next-voucher-number sequences" },
   { key: "snapshot",     label: "Rebuild monthly balance snapshot" },
   { key: "semantic",     label: "Report-level sanity checks (TB tally, BS tally, blank-P&L, partial restore)" },
+  { key: "accounting",   label: "CA-grade accounting audit (GST shape, party/POS, cash-negative, bill-alloc, openings…)" },
 ];
+
 
 function blankSteps(): StepResult[] {
   return INITIAL_STEPS.map((s) => ({ ...s, status: "pending", message: "—" }));
@@ -348,6 +352,26 @@ export function VerifyAndRepairTool({
       hadError = true;
       patch("semantic", { status: "error", message: describeError(err) });
     }
+
+    // ------ Step 10: CA-grade accounting audit ---------------------------
+    patch("accounting", { status: "running", message: "Reviewing books like an auditor…" });
+    try {
+      const audit = await runAccountingAudit(companyId);
+      const problems = audit.findings.filter((f) => f.severity !== "ok");
+      totalFound += problems.length;
+      const status: StepStatus = audit.hasError ? "error" : audit.hasWarning ? "warn" : "ok";
+      const msg = problems.length === 0
+        ? audit.summary
+        : problems
+            .map((p) => `• [${p.severity.toUpperCase()}] ${p.label}: ${p.message}` +
+              (p.examples && p.examples.length ? `\n   eg: ${p.examples.join("; ")}` : ""))
+            .join("\n");
+      patch("accounting", { status, found: problems.length, message: msg });
+    } catch (err) {
+      hadError = true;
+      patch("accounting", { status: "error", message: describeError(err) });
+    }
+
 
     setRunning(false);
     if (hadError) {
