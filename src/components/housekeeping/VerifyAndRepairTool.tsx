@@ -353,6 +353,26 @@ export function VerifyAndRepairTool({
       patch("semantic", { status: "error", message: describeError(err) });
     }
 
+    // ------ Step 10: CA-grade accounting audit ---------------------------
+    patch("accounting", { status: "running", message: "Reviewing books like an auditor…" });
+    try {
+      const audit = await runAccountingAudit(companyId);
+      const problems = audit.findings.filter((f) => f.severity !== "ok");
+      totalFound += problems.length;
+      const status: StepStatus = audit.hasError ? "error" : audit.hasWarning ? "warn" : "ok";
+      const msg = problems.length === 0
+        ? audit.summary
+        : problems
+            .map((p) => `• [${p.severity.toUpperCase()}] ${p.label}: ${p.message}` +
+              (p.examples && p.examples.length ? `\n   eg: ${p.examples.join("; ")}` : ""))
+            .join("\n");
+      patch("accounting", { status, found: problems.length, message: msg });
+    } catch (err) {
+      hadError = true;
+      patch("accounting", { status: "error", message: describeError(err) });
+    }
+
+
     setRunning(false);
     if (hadError) {
       setSummary(`Completed with errors. Found ${totalFound} issue(s); fixed ${totalFixed}. See per-step messages.`);
