@@ -36,9 +36,13 @@ async function getDbInstance() {
 const PAGE_SIZE = 1000;
 const EPOCH = "1970-01-01T00:00:00.000Z";
 
-const SNAPSHOT_TABLES = [
-  "companies",
-  "company_settings",
+// Tables pulled on every snapshot tick. Kept intentionally small so the
+// first boot only hydrates what the lock screen and dashboard actually
+// need (companies + their settings). Per-company heavy tables (ledgers,
+// items, vouchers, voucher children) are pulled lazily by
+// pullCompanySnapshot(id, { full: true }) when the user opens a company.
+const MINIMAL_TABLES = ["companies", "company_settings"] as const;
+const HEAVY_TABLES = [
   "ledgers",
   "items",
   "account_subgroups",
@@ -46,6 +50,7 @@ const SNAPSHOT_TABLES = [
   "account_group_overrides",
   "vouchers",
 ] as const;
+const SNAPSHOT_TABLES = [...MINIMAL_TABLES, ...HEAVY_TABLES] as const;
 
 type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 
