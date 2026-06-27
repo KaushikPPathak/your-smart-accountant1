@@ -174,7 +174,10 @@ export interface SnapshotResult {
 
 let pullInFlight: Promise<SnapshotResult | null> | null = null;
 
-export async function pullCompanySnapshot(companyId: string): Promise<SnapshotResult | null> {
+export async function pullCompanySnapshot(
+  companyId: string,
+  opts: { full?: boolean } = {},
+): Promise<SnapshotResult | null> {
   if (!isOnlineNow()) return null;
   const ok = await pingOnline();
   if (!ok) return null;
@@ -186,7 +189,8 @@ export async function pullCompanySnapshot(companyId: string): Promise<SnapshotRe
     finishedAt: 0,
   };
 
-  for (const table of SNAPSHOT_TABLES) {
+  const tables: readonly SnapshotTable[] = opts.full ? SNAPSHOT_TABLES : MINIMAL_TABLES;
+  for (const table of tables) {
     try {
       result.pulled[table] = await pullTable(table, companyId);
     } catch (e) {
@@ -194,12 +198,14 @@ export async function pullCompanySnapshot(companyId: string): Promise<SnapshotRe
     }
   }
 
-  try {
-    const { entries, items } = await pullVoucherChildren(companyId);
-    result.pulled.voucher_entries = entries;
-    result.pulled.voucher_items = items;
-  } catch (e) {
-    result.errors.voucher_children = e instanceof Error ? e.message : String(e);
+  if (opts.full) {
+    try {
+      const { entries, items } = await pullVoucherChildren(companyId);
+      result.pulled.voucher_entries = entries;
+      result.pulled.voucher_items = items;
+    } catch (e) {
+      result.errors.voucher_children = e instanceof Error ? e.message : String(e);
+    }
   }
 
   result.finishedAt = Date.now();
@@ -209,6 +215,12 @@ export async function pullCompanySnapshot(companyId: string): Promise<SnapshotRe
   return result;
 }
 
+/**
+ * Background tick. Pulls ONLY the minimum dataset (companies +
+ * company_settings) for every membership — enough to render the lock
+ * screen and dashboard. Per-company heavy data is pulled on demand by
+ * pullCompanySnapshot(id, { full: true }).
+ */
 export async function pullSnapshot(): Promise<SnapshotResult | null> {
   if (pullInFlight) return pullInFlight;
   pullInFlight = (async () => {
@@ -226,7 +238,7 @@ export async function pullSnapshot(): Promise<SnapshotResult | null> {
       const ids = Array.from(new Set((memberships ?? []).map((r) => r.company_id as string)));
       let last: SnapshotResult | null = null;
       for (const id of ids) {
-        const r = await pullCompanySnapshot(id);
+        const r = await pullCompanySnapshot(id, { full: false });
         if (r) last = r;
       }
       return last;
