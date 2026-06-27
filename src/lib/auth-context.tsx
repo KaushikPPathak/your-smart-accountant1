@@ -51,31 +51,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       // Pre-warm the local DB regardless of network.
       import("./offline/db").catch(() => undefined);
-      
+
+      const isOnline = typeof navigator === "undefined" ? true : navigator.onLine !== false;
       let activeSession: Session | null = null;
-      
+
       try {
-        // Run the background sign-in attempt, but cut it off quickly at 1.5s if it hangs or is offline
-        await Promise.race([
-          ensureTechSession(),
-          new Promise<void>((resolve) => setTimeout(resolve, 1500)),
-        ]);
-        
+        // Read any cached session immediately so the lock screen unblocks fast.
         const { data } = await supabase.auth.getSession();
         if (data.session) {
           activeSession = data.session;
           setSession(data.session);
         }
       } catch {
-        /* offline boot fallback — leave session null, lock screen falls back to cached creds */
-        console.log("Network timeout or offline fallback active. Booting via cached local credentials.");
-        setSession(null);
+        /* ignore — fall through to lock screen */
       } finally {
+        // Release the UI as soon as we know the cached state. Don't block on network.
         setLoading(false);
-        // 2. Only attempt background worker setup if an authenticated user session was successfully resolved
-        if (activeSession) {
-          initSyncEngine(activeSession);
-        }
+        if (activeSession) initSyncEngine(activeSession);
+      }
+
+      // Background: only attempt tech sign-in if we're actually online and have no session.
+      if (isOnline && !activeSession) {
+        Promise.race([
+          ensureTechSession(),
+          new Promise<void>((resolve) => setTimeout(resolve, 800)),
+        ])
+          .then(async () => {
+            const { data } = await supabase.auth.getSession();
+            if (data.session) {
+              setSession(data.session);
+              initSyncEngine(data.session);
+            }
+          })
+          .catch(() => undefined);
       }
     })();
 
