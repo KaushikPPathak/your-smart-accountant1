@@ -38,7 +38,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { describeError } from "@/lib/error-message";
 import { runSemanticChecks } from "@/lib/semantic-checks";
+import { runAccountingAudit } from "@/lib/accounting-audit";
 import { toast } from "sonner";
+
 
 type StepStatus = "pending" | "running" | "ok" | "warn" | "error";
 
