@@ -68,7 +68,7 @@ export function RestoreFromCloudDialog({ open, onOpenChange, onComplete }: Props
     setProgress("Connecting…");
     try {
       setProgress("Pulling ledgers, items, vouchers…");
-      const result = await pullCompanySnapshot(c.company_id);
+      const result = await pullCompanySnapshot(c.company_id, { full: true });
       if (!result) {
         toast.error("Offline — connect to the internet to restore.");
         return;

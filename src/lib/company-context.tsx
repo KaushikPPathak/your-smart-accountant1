@@ -149,7 +149,15 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       if (c.currency_code) setCurrentCurrency(c.currency_code);
       if (c.date_format) setCurrentDateFormat(c.date_format);
     }
-  }, [activeMembership]);
+    // Lazy hydrate heavy per-company tables (ledgers, items, vouchers,
+    // voucher children) on demand — the background tick only pulls the
+    // minimum companies + settings dataset.
+    if (activeCompanyId) {
+      import("@/lib/offline/snapshot")
+        .then((m) => m.pullCompanySnapshot(activeCompanyId, { full: true }))
+        .catch(() => undefined);
+    }
+  }, [activeMembership, activeCompanyId]);
 
   return (
     <CompanyContext.Provider
