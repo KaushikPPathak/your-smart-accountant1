@@ -136,27 +136,28 @@ async function pullVoucherChildren(companyId: string): Promise<{ entries: number
   let items = 0;
   let latest = childCursor;
 
-  for (let i = 0; i < voucherIds.length; i += 200) {
-    const slice = voucherIds.slice(i, i + 200);
+  // Parallelize batches (cap concurrency) instead of strict sequential paging.
+  const slices: string[][] = [];
+  for (let i = 0; i < voucherIds.length; i += 200) slices.push(voucherIds.slice(i, i + 200));
 
-    const [{ data: eData, error: eErr }, { data: iData, error: iErr }] = await Promise.all([
-      supabase.from("voucher_entries").select("*").in("voucher_id", slice),
-      supabase.from("voucher_items").select("*").in("voucher_id", slice),
-    ]);
-    if (eErr) throw new Error(`voucher_entries: ${eErr.message}`);
-    if (iErr) throw new Error(`voucher_items: ${iErr.message}`);
-
-    await db.cache_voucher_entries.where("voucher_id").anyOf(slice).delete();
-    await db.cache_voucher_items.where("voucher_id").anyOf(slice).delete();
-    if (eData?.length) {
-      await db.cache_voucher_entries.bulkPut(eData as any);
-      entries += eData.length;
-    }
-    if (iData?.length) {
-      await db.cache_voucher_items.bulkPut(iData as any);
-      items += iData.length;
+  const CONCURRENCY = 4;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < slices.length) {
+      const slice = slices[cursor++];
+      const [{ data: eData, error: eErr }, { data: iData, error: iErr }] = await Promise.all([
+        supabase.from("voucher_entries").select("*").in("voucher_id", slice),
+        supabase.from("voucher_items").select("*").in("voucher_id", slice),
+      ]);
+      if (eErr) throw new Error(`voucher_entries: ${eErr.message}`);
+      if (iErr) throw new Error(`voucher_items: ${iErr.message}`);
+      await db.cache_voucher_entries.where("voucher_id").anyOf(slice).delete();
+      await db.cache_voucher_items.where("voucher_id").anyOf(slice).delete();
+      if (eData?.length) { await db.cache_voucher_entries.bulkPut(eData as any); entries += eData.length; }
+      if (iData?.length) { await db.cache_voucher_items.bulkPut(iData as any); items += iData.length; }
     }
   }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, slices.length) }, worker));
 
   for (const v of newish) {
     if (String(v.updated_at) > latest) latest = String(v.updated_at);
@@ -173,46 +174,73 @@ export interface SnapshotResult {
 }
 
 let pullInFlight: Promise<SnapshotResult | null> | null = null;
+const perCompanyInFlight = new Map<string, Promise<SnapshotResult | null>>();
+
+async function notifyOfflineReady(companyId: string, result: SnapshotResult) {
+  if (typeof window === "undefined") return;
+  try {
+    const { toast } = await import("sonner");
+    const errCount = Object.keys(result.errors).length;
+    if (errCount === 0) {
+      toast.success("All data available offline", {
+        id: `offline-ready-${companyId}`,
+        description: "You can now work without an internet connection.",
+      });
+    } else {
+      toast.warning("Offline sync partially complete", {
+        id: `offline-partial-${companyId}`,
+        description: `${errCount} table(s) failed — retry will happen automatically.`,
+      });
+    }
+  } catch { /* ignore */ }
+}
 
 export async function pullCompanySnapshot(
   companyId: string,
-  opts: { full?: boolean } = {},
+  opts: { full?: boolean; notify?: boolean } = {},
 ): Promise<SnapshotResult | null> {
   if (!isOnlineNow()) return null;
-  const ok = await pingOnline();
-  if (!ok) return null;
+  const cacheKey = `${companyId}:${opts.full ? "full" : "min"}`;
+  const existing = perCompanyInFlight.get(cacheKey);
+  if (existing) return existing;
 
-  const result: SnapshotResult = {
-    companyId,
-    pulled: {},
-    errors: {},
-    finishedAt: 0,
-  };
+  const run = (async (): Promise<SnapshotResult | null> => {
+    const ok = await pingOnline();
+    if (!ok) return null;
 
-  const tables: readonly SnapshotTable[] = opts.full ? SNAPSHOT_TABLES : MINIMAL_TABLES;
-  for (const table of tables) {
-    try {
-      result.pulled[table] = await pullTable(table, companyId);
-    } catch (e) {
-      result.errors[table] = e instanceof Error ? e.message : String(e);
+    const result: SnapshotResult = { companyId, pulled: {}, errors: {}, finishedAt: 0 };
+    const tables: readonly SnapshotTable[] = opts.full ? SNAPSHOT_TABLES : MINIMAL_TABLES;
+
+    // Parallel table pulls — each table is independent.
+    await Promise.all(tables.map(async (table) => {
+      try {
+        result.pulled[table] = await pullTable(table, companyId);
+      } catch (e) {
+        result.errors[table] = e instanceof Error ? e.message : String(e);
+      }
+    }));
+
+    if (opts.full) {
+      try {
+        const { entries, items } = await pullVoucherChildren(companyId);
+        result.pulled.voucher_entries = entries;
+        result.pulled.voucher_items = items;
+      } catch (e) {
+        result.errors.voucher_children = e instanceof Error ? e.message : String(e);
+      }
     }
-  }
 
-  if (opts.full) {
-    try {
-      const { entries, items } = await pullVoucherChildren(companyId);
-      result.pulled.voucher_entries = entries;
-      result.pulled.voucher_items = items;
-    } catch (e) {
-      result.errors.voucher_children = e instanceof Error ? e.message : String(e);
-    }
-  }
+    result.finishedAt = Date.now();
+    const { setMeta } = await getDbInstance();
+    await setMeta(`snapshot:last:${companyId}`, result);
+    await setMeta("snapshot:last_any", result);
 
-  result.finishedAt = Date.now();
-  const { setMeta } = await getDbInstance();
-  await setMeta(`snapshot:last:${companyId}`, result);
-  await setMeta("snapshot:last_any", result);
-  return result;
+    if (opts.full && opts.notify !== false) await notifyOfflineReady(companyId, result);
+    return result;
+  })().finally(() => { perCompanyInFlight.delete(cacheKey); });
+
+  perCompanyInFlight.set(cacheKey, run);
+  return run;
 }
 
 /**
