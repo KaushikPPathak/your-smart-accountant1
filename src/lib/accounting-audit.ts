@@ -139,11 +139,12 @@ export async function runAccountingAudit(companyId: string): Promise<AuditReport
   };
   type BA = { invoice_voucher_id: string | null; payment_voucher_id: string | null; amount_paise: number };
 
-  const vouchers = (vRes.data ?? []) as V[];
+  const vouchers = (vRes.data ?? []) as unknown as V[];
   const entries = (eRes.data ?? []) as unknown as E[];
   const items = (iRes.data ?? []) as unknown as I[];
-  const ledgers = (lRes.data ?? []) as L[];
-  const billAlloc = (baRes.data ?? []) as BA[];
+  const ledgers = (lRes.data ?? []) as unknown as L[];
+  const billAlloc = (baRes.data ?? []) as unknown as BA[];
+
 
   const ledgerById = new Map(ledgers.map((l) => [l.id, l]));
   const voucherById = new Map(vouchers.map((v) => [v.id, v]));
