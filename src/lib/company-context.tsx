@@ -54,12 +54,12 @@ const COMPANY_DEFAULTS: Omit<CompanyMembership["companies"], "id" | "name"> = {
   inventory_enabled: false,
   annual_turnover_paise: 0,
   mode: "trial_local",
-  entity_status: "active",
+  entity_status: "individual",
   cin: null,
   share_capital_paise: 0,
   corpus_fund_paise: 0,
   currency_code: "INR",
-  date_format: "DD-MM-YYYY",
+  date_format: "dd-mm-yyyy",
 };
 
 function mapCompanyRowToMembership(
