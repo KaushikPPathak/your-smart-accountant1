@@ -15,6 +15,7 @@ import { fmtIndianDate } from "@/lib/format-date";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { readLedgers, readVoucherEntriesWithVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/trial-balance")({
   head: () => ({ meta: [{ title: "Trial Balance — Reports" }] }),
@@ -47,22 +48,44 @@ function TrialBalance() {
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("ledgers")
-      .select("id, name, type, opening_balance_paise, opening_balance_is_debit")
-      .eq("company_id", activeCompanyId)
-      .order("name")
-      .then(({ data }) => setLedgers((data || []) as Ledger[]));
+    let cancelled = false;
+    void withCacheFallback<Ledger[]>(
+      async () => {
+        const { data, error } = await supabase
+          .from("ledgers")
+          .select("id, name, type, opening_balance_paise, opening_balance_is_debit")
+          .eq("company_id", activeCompanyId)
+          .order("name");
+        if (error) throw error;
+        return (data || []) as Ledger[];
+      },
+      async () => (await readLedgers(activeCompanyId)).map((l: any) => ({
+        id: String(l.id),
+        name: String(l.name ?? ""),
+        type: String(l.type ?? ""),
+        opening_balance_paise: Number(l.opening_balance_paise ?? 0),
+        opening_balance_is_debit: Boolean(l.opening_balance_is_debit),
+      })),
+    ).then((rows) => { if (!cancelled) setLedgers(rows); });
+    return () => { cancelled = true; };
   }, [activeCompanyId]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("voucher_entries")
-      .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-      .eq("vouchers.company_id", activeCompanyId)
-      .lte("vouchers.voucher_date", to)
-      .then(({ data }) => setEntries((data || []) as unknown as Entry[]));
+    let cancelled = false;
+    void withCacheFallback<Entry[]>(
+      async () => {
+        const { data, error } = await supabase
+          .from("voucher_entries")
+          .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
+          .eq("vouchers.company_id", activeCompanyId)
+          .lte("vouchers.voucher_date", to);
+        if (error) throw error;
+        return (data || []) as unknown as Entry[];
+      },
+      async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { to })) as Entry[],
+    ).then((rows) => { if (!cancelled) setEntries(rows); });
+    return () => { cancelled = true; };
   }, [activeCompanyId, to]);
 
   const rows = useMemo(() => {
