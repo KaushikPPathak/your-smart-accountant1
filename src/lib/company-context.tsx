@@ -6,6 +6,7 @@ import type { EntityStatus } from "./entity-status";
 import { setCurrentCurrency } from "./currency";
 import { setCurrentDateFormat, type DateFormatCode } from "./date-format";
 import { getActiveStaff } from "./staff-session";
+import { isOnlineNow } from "./offline/online-status";
 
 export interface CompanyMembership {
   company_id: string;
@@ -43,6 +44,85 @@ interface CompanyContextValue {
 const CompanyContext = createContext<CompanyContextValue | undefined>(undefined);
 const ACTIVE_KEY = "ym_active_company_id";
 
+const COMPANY_DEFAULTS: Omit<CompanyMembership["companies"], "id" | "name"> = {
+  gstin: null,
+  state: null,
+  state_code: null,
+  financial_year_start: new Date().getFullYear() + "-04-01",
+  gst_registered: false,
+  gst_filing_frequency: "monthly",
+  inventory_enabled: false,
+  annual_turnover_paise: 0,
+  mode: "trial_local",
+  entity_status: "active",
+  cin: null,
+  share_capital_paise: 0,
+  corpus_fund_paise: 0,
+  currency_code: "INR",
+  date_format: "DD-MM-YYYY",
+};
+
+function mapCompanyRowToMembership(
+  companyId: string,
+  role: CompanyMembership["role"] | string | null | undefined,
+  company: Record<string, any>,
+): CompanyMembership | null {
+  const id = String(company?.id ?? companyId ?? "");
+  const name = String(company?.name ?? "").trim();
+  if (!id || !name) return null;
+  return {
+    company_id: id,
+    role: (role || "admin") as CompanyMembership["role"],
+    companies: {
+      id,
+      name,
+      ...COMPANY_DEFAULTS,
+      ...(company as any),
+    } as CompanyMembership["companies"],
+  };
+}
+
+async function loadCachedMemberships(): Promise<CompanyMembership[]> {
+  try {
+    const { offlineDb } = await import("./offline/db");
+    const [snapshotCompanies, pickerCompanies] = await Promise.all([
+      offlineDb.cache_companies.toArray().catch(() => []),
+      offlineDb.companies.toArray().catch(() => []),
+    ]);
+
+    const byId = new Map<string, Record<string, any>>();
+    for (const row of pickerCompanies as Record<string, any>[]) {
+      if (row?.id) byId.set(String(row.id), row);
+    }
+    for (const row of snapshotCompanies as Record<string, any>[]) {
+      if (row?.id) byId.set(String(row.id), { ...(byId.get(String(row.id)) ?? {}), ...row });
+    }
+
+    return Array.from(byId.values())
+      .map((company) => mapCompanyRowToMembership(String(company.id), company.role ?? "admin", company))
+      .filter(Boolean) as CompanyMembership[];
+  } catch (err) {
+    console.warn("Failed to read cached companies:", err);
+    return [];
+  }
+}
+
+async function persistMembershipsToOfflineCache(list: CompanyMembership[]): Promise<void> {
+  try {
+    const { offlineDb } = await import("./offline/db");
+    await Promise.all([
+      offlineDb.cache_companies.bulkPut(
+        list.map((m) => ({ ...m.companies, id: m.company_id, company_id: m.company_id, updated_at: (m.companies as any).updated_at ?? new Date().toISOString() })),
+      ),
+      offlineDb.companies.bulkPut(
+        list.map((m) => ({ id: m.company_id, name: m.companies.name, has_password: Boolean((m.companies as any).has_password) })),
+      ),
+    ]);
+  } catch {
+    /* cache is best-effort */
+  }
+}
+
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [memberships, setMemberships] = useState<CompanyMembership[]>([]);
@@ -52,8 +132,25 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setLoading(true);
     const activeStaff = getActiveStaff();
+    const applyMemberships = (next: CompanyMembership[]) => {
+      setMemberships(next);
+      const stored = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_KEY) : null;
+      const valid = stored && next.find((m) => m.company_id === stored);
+      setActiveCompanyIdState(valid ? stored : next[0]?.company_id ?? null);
+    };
+
+    const loadOfflineFirst = async () => {
+      const cached = await loadCachedMemberships();
+      if (cached.length > 0) applyMemberships(cached);
+      return cached;
+    };
     
     try {
+      if (!isOnlineNow()) {
+        await loadOfflineFirst();
+        return;
+      }
+
       // Safely process local mock execution records
       const response = await supabase
         .from("company_members")
@@ -65,7 +162,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error("Failed to load company memberships:", error);
-        setMemberships([]);
+        const cached = await loadOfflineFirst();
+        if (cached.length === 0) applyMemberships([]);
       } else {
         const rows = (memberRows ?? []) as Array<{ company_id: string; role: CompanyMembership["role"] }>;
         const out: CompanyMembership[] = [];
@@ -81,28 +179,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
             
           if (!company || !company.id) continue;
           
-          out.push({ 
-            company_id: r.company_id, 
-            role: r.role || "admin", 
-            companies: {
-              gstin: null,
-              state: null,
-              state_code: null,
-              financial_year_start: new Date().getFullYear() + "-04-01",
-              gst_registered: false,
-              gst_filing_frequency: "monthly",
-              inventory_enabled: false,
-              annual_turnover_paise: 0,
-              mode: "trial_local",
-              entity_status: "active",
-              cin: null,
-              share_capital_paise: 0,
-              corpus_fund_paise: 0,
-              currency_code: "INR",
-              date_format: "DD-MM-YYYY",
-              ...(company as any),
-            } as CompanyMembership["companies"] 
-          });
+          const mapped = mapCompanyRowToMembership(r.company_id, r.role, company as any);
+          if (mapped) out.push(mapped);
         }
 
         // Defensive checks to preserve local datasets if no specific cloud constraints are present
@@ -116,16 +194,13 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         // If data exists locally but staff filters cleared them out incorrectly, retain full 'out' array layout as a safety net
         const finalValidList = list.length === 0 && out.length > 0 ? out : list;
 
-        setMemberships(finalValidList);
-        
-        const stored = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_KEY) : null;
-        const valid = stored && finalValidList.find((m) => m.company_id === stored);
-        
-        setActiveCompanyIdState(valid ? stored : finalValidList[0]?.company_id ?? null);
+        applyMemberships(finalValidList);
+        if (finalValidList.length > 0) void persistMembershipsToOfflineCache(finalValidList);
       }
     } catch (criticalRefreshError) {
       console.error("Mehtaji Pipeline: Integrity check failure during context mapping:", criticalRefreshError);
-      setMemberships([]);
+      const cached = await loadOfflineFirst();
+      if (cached.length === 0) applyMemberships([]);
     } finally {
       setLoading(false);
     }
