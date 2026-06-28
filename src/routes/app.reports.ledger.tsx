@@ -581,21 +581,34 @@ function LedgerStatement() {
 
   const buildAllLedgersData = async (): Promise<AllSection[]> => {
     if (!activeCompanyId || ledgers.length === 0) return [];
-    const { data: ent } = await supabase
-      .from("voucher_entries")
-      .select("id, ledger_id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
-      .eq("vouchers.company_id", activeCompanyId)
-      .gte("vouchers.voucher_date", from)
-      .lte("vouchers.voucher_date", to);
-    const allEntries = ((ent || []) as unknown) as (EntryRow & { ledger_id: string })[];
+    const allEntries = await withCacheFallback<(EntryRow & { ledger_id: string })[]>(
+      async () => {
+        const { data, error } = await supabase
+          .from("voucher_entries")
+          .select("id, ledger_id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
+          .eq("vouchers.company_id", activeCompanyId)
+          .gte("vouchers.voucher_date", from)
+          .lte("vouchers.voucher_date", to);
+        if (error) throw error;
+        return ((data || []) as unknown) as (EntryRow & { ledger_id: string })[];
+      },
+      async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { from, to })) as (EntryRow & { ledger_id: string })[],
+    );
 
-    const { data: prior } = await supabase
-      .from("voucher_entries")
-      .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-      .eq("vouchers.company_id", activeCompanyId)
-      .lt("vouchers.voucher_date", from);
+    const prior = await withCacheFallback<{ ledger_id: string; debit_paise: number; credit_paise: number }[]>(
+      async () => {
+        const { data, error } = await supabase
+          .from("voucher_entries")
+          .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
+          .eq("vouchers.company_id", activeCompanyId)
+          .lt("vouchers.voucher_date", from);
+        if (error) throw error;
+        return (data || []) as { ledger_id: string; debit_paise: number; credit_paise: number }[];
+      },
+      async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { before: from })) as { ledger_id: string; debit_paise: number; credit_paise: number }[],
+    );
     const movement = new Map<string, number>();
-    for (const p of (prior || []) as { ledger_id: string; debit_paise: number; credit_paise: number }[]) {
+    for (const p of prior) {
       movement.set(p.ledger_id, (movement.get(p.ledger_id) ?? 0) + p.debit_paise - p.credit_paise);
     }
 
@@ -603,18 +616,42 @@ function LedgerStatement() {
     const sibsByVoucher = new Map<string, { ledger_id: string; debit_paise: number; credit_paise: number }[]>();
     const infoById = new Map<string, { name: string; type: string }>();
     if (voucherIds.length > 0) {
-      const { data: sibs } = await supabase
-        .from("voucher_entries").select("voucher_id, ledger_id, debit_paise, credit_paise").in("voucher_id", voucherIds);
+      const sibs = await withCacheFallback<{ voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[]>(
+        async () => {
+          const { data, error } = await supabase
+            .from("voucher_entries").select("voucher_id, ledger_id, debit_paise, credit_paise").in("voucher_id", voucherIds);
+          if (error) throw error;
+          return (data || []) as { voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[];
+        },
+        async () => ((await readVoucherEntriesWithVouchers(activeCompanyId)) as any[])
+          .filter((e) => voucherIds.includes(String(e.voucher_id)))
+          .map((e) => ({
+            voucher_id: String(e.voucher_id),
+            ledger_id: String(e.ledger_id),
+            debit_paise: Number(e.debit_paise ?? 0),
+            credit_paise: Number(e.credit_paise ?? 0),
+          })),
+      );
       const ledgerIds = new Set<string>();
-      for (const s of (sibs || []) as { voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[]) {
+      for (const s of sibs) {
         const arr = sibsByVoucher.get(s.voucher_id) ?? [];
         arr.push({ ledger_id: s.ledger_id, debit_paise: s.debit_paise, credit_paise: s.credit_paise });
         sibsByVoucher.set(s.voucher_id, arr);
         ledgerIds.add(s.ledger_id);
       }
-      const { data: names } = await supabase
-        .from("ledgers").select("id, name, type").in("id", Array.from(ledgerIds));
-      for (const n of (names || []) as { id: string; name: string; type: string }[]) {
+      const names = await withCacheFallback<{ id: string; name: string; type: string }[]>(
+        async () => {
+          if (ledgerIds.size === 0) return [];
+          const { data, error } = await supabase
+            .from("ledgers").select("id, name, type").in("id", Array.from(ledgerIds));
+          if (error) throw error;
+          return (data || []) as { id: string; name: string; type: string }[];
+        },
+        async () => (await readLedgers(activeCompanyId))
+          .filter((l: any) => ledgerIds.has(String(l.id)))
+          .map((l: any) => ({ id: String(l.id), name: String(l.name ?? ""), type: String(l.type ?? "") })),
+      );
+      for (const n of names) {
         infoById.set(n.id, { name: n.name, type: n.type });
       }
     }
