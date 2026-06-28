@@ -873,7 +873,10 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
     setBusy(true);
     try {
       // For each voucher type, find max trailing number and reset next_number
-      const loaded = await withCacheFallback(
+      const loaded = await withCacheFallback<{
+        source: "cloud" | "cache";
+        vchs: { voucher_type: string; voucher_number: string }[];
+      }>(
         async () => {
           const { data, error } = await supabase
             .from("vouchers")
