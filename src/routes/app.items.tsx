@@ -108,19 +108,30 @@ function ItemsPage() {
       return;
     }
     setLoading(true);
-    const { data, error } = await supabase
-      .from("items")
-      .select("*")
-      .eq("company_id", activeCompanyId)
-      .order("name", { ascending: true });
-    if (error) {
-      toast.error(error.message);
-      setItems([]);
-    } else {
+    const loadFromCache = async () => {
+      const { readItems } = await import("@/lib/offline/cache-read");
+      const cached = await readItems(activeCompanyId);
+      setItems((cached ?? []) as unknown as Item[]);
+    };
+    if (!isOnlineNow()) {
+      try { await loadFromCache(); } catch { setItems([]); }
+      setLoading(false);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("items")
+        .select("*")
+        .eq("company_id", activeCompanyId)
+        .order("name", { ascending: true });
+      if (error) throw error;
       setItems((data ?? []) as Item[]);
+    } catch (err: any) {
+      try { await loadFromCache(); } catch { toast.error(err?.message || "Failed to load items"); setItems([]); }
     }
     setLoading(false);
   };
+
 
   useEffect(() => {
     load();

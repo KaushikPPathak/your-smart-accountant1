@@ -601,20 +601,48 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
     if (!companyId) return;
     setRunning(true);
     try {
-      // Fetch all vouchers + their entries
-      const { data: vchs, error: vErr } = await supabase
-        .from("vouchers")
-        .select("id, voucher_number, voucher_date, voucher_type")
-        .eq("company_id", companyId);
-      if (vErr) throw vErr;
-      const { data: entries, error: eErr } = await supabase
-        .from("voucher_entries")
-        .select("voucher_id, debit_paise, credit_paise, vouchers!inner(company_id)")
-        .eq("vouchers.company_id", companyId);
-      if (eErr) throw eErr;
+      let vchs: { id: string; voucher_number: string; voucher_date: string; voucher_type: string }[] = [];
+      let entries: { voucher_id: string; debit_paise: number; credit_paise: number }[] = [];
+
+      const useCache = async () => {
+        const { readVouchers, readVoucherEntries } = await import("@/lib/offline/cache-read");
+        const cachedV = await readVouchers(companyId);
+        vchs = cachedV.map((v: any) => ({
+          id: v.id, voucher_number: v.voucher_number, voucher_date: v.voucher_date, voucher_type: v.voucher_type,
+        }));
+        const all: typeof entries = [];
+        for (const v of vchs) {
+          const ents = await readVoucherEntries(v.id);
+          for (const e of ents as any[]) {
+            all.push({ voucher_id: e.voucher_id, debit_paise: e.debit_paise ?? 0, credit_paise: e.credit_paise ?? 0 });
+          }
+        }
+        entries = all;
+      };
+
+      if (!isOnlineNow()) {
+        await useCache();
+      } else {
+        try {
+          const { data: vData, error: vErr } = await supabase
+            .from("vouchers")
+            .select("id, voucher_number, voucher_date, voucher_type")
+            .eq("company_id", companyId);
+          if (vErr) throw vErr;
+          const { data: eData, error: eErr } = await supabase
+            .from("voucher_entries")
+            .select("voucher_id, debit_paise, credit_paise, vouchers!inner(company_id)")
+            .eq("vouchers.company_id", companyId);
+          if (eErr) throw eErr;
+          vchs = (vData || []) as any;
+          entries = (eData || []) as any;
+        } catch {
+          await useCache();
+        }
+      }
 
       const totals = new Map<string, { dr: number; cr: number }>();
-      for (const e of (entries || []) as { voucher_id: string; debit_paise: number; credit_paise: number }[]) {
+      for (const e of entries) {
         const cur = totals.get(e.voucher_id) || { dr: 0, cr: 0 };
         cur.dr += e.debit_paise;
         cur.cr += e.credit_paise;
@@ -622,28 +650,24 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
       }
 
       const bad: VoucherCheck[] = [];
-      for (const v of (vchs || []) as { id: string; voucher_number: string; voucher_date: string; voucher_type: string }[]) {
+      for (const v of vchs) {
         const t = totals.get(v.id) || { dr: 0, cr: 0 };
-        if (t.dr !== t.cr) {
-          bad.push({ ...v, dr: t.dr, cr: t.cr, diff: t.dr - t.cr });
-        }
+        if (t.dr !== t.cr) bad.push({ ...v, dr: t.dr, cr: t.cr, diff: t.dr - t.cr });
       }
       setUnbalanced(bad);
 
-      // Orphan entries — entries whose voucher row was somehow deleted (rare; FK should prevent)
-      const voucherIds = new Set((vchs || []).map((v) => v.id));
-      const orphanCount = ((entries || []) as { voucher_id: string }[]).filter(
-        (e) => !voucherIds.has(e.voucher_id),
-      ).length;
+      const voucherIds = new Set(vchs.map((v) => v.id));
+      const orphanCount = entries.filter((e) => !voucherIds.has(e.voucher_id)).length;
       setOrphans(orphanCount);
       setHasRun(true);
-      toast.success("Verification complete");
+      toast.success(isOnlineNow() ? "Verification complete" : "Verification complete (offline cache)");
     } catch (err) {
       toast.error(`Verification failed: ${describeError(err)}`);
     } finally {
       setRunning(false);
     }
   }
+
 
   return (
     <Card>

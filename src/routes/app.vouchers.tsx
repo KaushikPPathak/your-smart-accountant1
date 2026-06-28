@@ -83,24 +83,63 @@ function VouchersHub() {
   const load = async () => {
     if (!activeCompanyId) return;
     setLoading(true);
-    let q = supabase
-      .from("vouchers")
-      .select("id, voucher_date, voucher_number, voucher_type, total_paise, party_ledger_id, reference_no, ledgers:party_ledger_id(name)")
-      .eq("company_id", activeCompanyId)
-      .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (type !== "all") {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      q = q.eq("voucher_type", type as any);
+
+    const loadFromCache = async () => {
+      const { readVouchers, readLedgers } = await import("@/lib/offline/cache-read");
+      const [vchs, ledgers] = await Promise.all([
+        readVouchers(activeCompanyId, {
+          voucher_type: type !== "all" ? type : undefined,
+          from: from || undefined,
+          to: to || undefined,
+        }),
+        readLedgers(activeCompanyId),
+      ]);
+      const ledgerById = new Map<string, { name: string }>();
+      for (const l of ledgers as any[]) ledgerById.set(l.id, { name: l.name });
+      const rows = (vchs as any[]).slice(0, 500).map((v) => ({
+        id: v.id,
+        voucher_date: v.voucher_date,
+        voucher_number: v.voucher_number,
+        voucher_type: v.voucher_type,
+        total_paise: v.total_paise,
+        party_ledger_id: v.party_ledger_id,
+        reference_no: v.reference_no,
+        ledgers: v.party_ledger_id ? ledgerById.get(v.party_ledger_id) ?? null : null,
+      })) as unknown as VoucherRow[];
+      setRows(rows);
+    };
+
+    const { isOnlineNow } = await import("@/lib/offline/online-status");
+    if (!isOnlineNow()) {
+      try { await loadFromCache(); } catch { setRows([]); }
+      setLoading(false);
+      return;
     }
-    if (from) q = q.gte("voucher_date", from);
-    if (to) q = q.lte("voucher_date", to);
-    const { data, error } = await q;
-    if (error) console.error(error);
-    setRows((data as unknown as VoucherRow[]) || []);
+
+    try {
+      let q = supabase
+        .from("vouchers")
+        .select("id, voucher_date, voucher_number, voucher_type, total_paise, party_ledger_id, reference_no, ledgers:party_ledger_id(name)")
+        .eq("company_id", activeCompanyId)
+        .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (type !== "all") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        q = q.eq("voucher_type", type as any);
+      }
+      if (from) q = q.gte("voucher_date", from);
+      if (to) q = q.lte("voucher_date", to);
+      const { data, error } = await q;
+      if (error) throw error;
+      setRows((data as unknown as VoucherRow[]) || []);
+    } catch (err) {
+      console.error(err);
+      try { await loadFromCache(); } catch { setRows([]); }
+    }
     setLoading(false);
   };
+
 
   useEffect(() => {
     if (isNested) return;
