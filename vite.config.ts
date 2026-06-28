@@ -20,6 +20,8 @@ const sharedBuild = {
         if (/[\\/]node_modules[\\/](xlsx|exceljs)[\\/]/.test(id)) return "exports-xlsx";
         if (/[\\/]node_modules[\\/](docx|html-docx-js)[\\/]/.test(id)) return "exports-docx";
         if (/[\\/]node_modules[\\/](recharts|d3-[^/\\]+)[\\/]/.test(id)) return "charts";
+        if (/[\\/]node_modules[\\/]@mlc-ai[\\/]/.test(id)) return "webllm";
+        if (/[\\/]node_modules[\\/](tesseract\.js|pdfjs-dist)[\\/]/.test(id)) return "ocr";
       },
     },
   },
