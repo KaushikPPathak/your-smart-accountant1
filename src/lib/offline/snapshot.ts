@@ -369,7 +369,17 @@ export async function pullSnapshot(opts: { full?: boolean } = {}): Promise<Snaps
       const results = await Promise.all(
         ids.map((id) => pullCompanySnapshot(id, { full: opts.full ?? false, notify: false }).catch(() => null)),
       );
-      return results.filter(Boolean).pop() ?? null;
+      const completed = results.filter(Boolean) as SnapshotResult[];
+      if (completed.length === 0) return null;
+      if (opts.full) {
+        return completed.reduce<SnapshotResult>((acc, r) => {
+          for (const [k, v] of Object.entries(r.pulled)) acc.pulled[k] = (acc.pulled[k] ?? 0) + v;
+          for (const [k, v] of Object.entries(r.errors)) acc.errors[`${r.companyId}:${k}`] = v;
+          acc.finishedAt = Math.max(acc.finishedAt, r.finishedAt);
+          return acc;
+        }, { companyId: "all", pulled: {}, errors: {}, finishedAt: 0 });
+      }
+      return completed.pop() ?? null;
     } finally {
       pullInFlight = null;
     }
