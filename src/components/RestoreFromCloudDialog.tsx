@@ -75,10 +75,14 @@ export function RestoreFromCloudDialog({ open, onOpenChange, onComplete }: Props
       }
       const totalRows = Object.values(result.pulled).reduce((a, b) => a + b, 0);
       const errCount = Object.keys(result.errors).length;
-      if (errCount > 0) {
-        toast.warning(`Restored ${totalRows} rows. ${errCount} table(s) failed — see Offline status.`);
+      if (errCount > 0 || (result.verification && !result.verification.ok)) {
+        toast.error("Restore failed — existing offline data preserved", {
+          description: result.verification?.problems?.[0] ?? Object.values(result.errors)[0] ?? "Verification did not pass.",
+        });
       } else {
-        toast.success(`Restored ${totalRows} rows from cloud for ${c.name}`);
+        toast.success(`All data available in offline mode for ${c.name}`, {
+          description: `${totalRows} rows verified against cloud data.`,
+        });
       }
       onComplete?.();
       onOpenChange(false);

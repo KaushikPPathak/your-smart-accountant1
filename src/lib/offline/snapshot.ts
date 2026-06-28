@@ -55,6 +55,24 @@ const SNAPSHOT_TABLES = [...MINIMAL_TABLES, ...HEAVY_TABLES] as const;
 
 type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 
+type CacheRow = Record<string, unknown>;
+type ExactSnapshotRows = Record<string, CacheRow[]>;
+
+export interface SnapshotVerificationTable {
+  cloudCount: number;
+  localCount: number;
+  cloudChecksum: string;
+  localChecksum: string;
+  match: boolean;
+}
+
+export interface SnapshotVerification {
+  ok: boolean;
+  checkedAt: number;
+  tables: Record<string, SnapshotVerificationTable>;
+  problems: string[];
+}
+
 function dexieFor(table: SnapshotTable, db: any) {
   switch (table) {
     case "companies": return db.cache_companies;
@@ -80,6 +98,47 @@ function rowUpdatedAt(row: Record<string, unknown>, fallback: string) {
   return String(value || fallback);
 }
 
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const obj = value as Record<string, unknown>;
+  return `{${Object.keys(obj).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
+}
+
+function checksumRows(rows: CacheRow[]): string {
+  let hash = 2166136261;
+  const sorted = [...rows].sort((a, b) => String(a.id ?? "").localeCompare(String(b.id ?? "")));
+  const input = sorted.map(stableStringify).join("\n");
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function dedupeRows(rows: CacheRow[]): CacheRow[] {
+  const seen = new Map<string, CacheRow>();
+  for (const row of rows) {
+    const id = String(row.id ?? "");
+    if (!id) continue;
+    seen.set(id, row);
+  }
+  return Array.from(seen.values());
+}
+
+function tableOrderColumn(table: SnapshotTable): string {
+  return table === "company_settings" ? "company_id" : "id";
+}
+
+function latestUpdatedAt(rows: CacheRow[]): string {
+  let latest = EPOCH;
+  for (const row of rows) {
+    const candidate = rowUpdatedAt(row, EPOCH);
+    if (candidate > latest) latest = candidate;
+  }
+  return latest;
+}
+
 async function getCursor(companyId: string, table: string): Promise<string> {
   const key = `${companyId}:${table}`;
   const { db } = await getDbInstance();
@@ -97,6 +156,196 @@ async function setCursor(companyId: string, table: string, last_updated_at: stri
   };
   const { db } = await getDbInstance();
   await db.sync_cursors.put(row);
+}
+
+async function fetchExactTableRows(table: SnapshotTable, companyId: string): Promise<CacheRow[]> {
+  const rows: CacheRow[] = [];
+  let from = 0;
+  const isCompaniesTable = table === "companies";
+  while (true) {
+    let q: any = (supabase.from(table as never) as any)
+      .select("*")
+      .range(from, from + PAGE_SIZE - 1)
+      .order(tableOrderColumn(table), { ascending: true });
+    q = isCompaniesTable ? q.eq("id", companyId) : q.eq("company_id", companyId);
+    const { data, error } = await q;
+    if (error) throw new Error(`${table}: ${error.message}`);
+    const page = normalizeRowsForCache(table, (data ?? []) as CacheRow[]);
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return dedupeRows(rows);
+}
+
+async function fetchExactVoucherChildren(companyId: string, vouchers: CacheRow[]): Promise<{ entries: CacheRow[]; items: CacheRow[] }> {
+  const voucherIds = vouchers.map((v) => String(v.id ?? "")).filter(Boolean);
+  const entries: CacheRow[] = [];
+  const items: CacheRow[] = [];
+  for (let i = 0; i < voucherIds.length; i += 200) {
+    const slice = voucherIds.slice(i, i + 200);
+    const [{ data: eData, error: eErr }, { data: iData, error: iErr }] = await Promise.all([
+      supabase.from("voucher_entries").select("*").in("voucher_id", slice),
+      supabase.from("voucher_items").select("*").in("voucher_id", slice),
+    ]);
+    if (eErr) throw new Error(`voucher_entries: ${eErr.message}`);
+    if (iErr) throw new Error(`voucher_items: ${iErr.message}`);
+    entries.push(...((eData ?? []) as CacheRow[]).map((r) => ({ ...r, company_id: companyId })));
+    items.push(...((iData ?? []) as CacheRow[]).map((r) => ({ ...r, company_id: companyId })));
+  }
+  return { entries: dedupeRows(entries), items: dedupeRows(items) };
+}
+
+function verifySnapshotRows(rows: ExactSnapshotRows): SnapshotVerification {
+  const problems: string[] = [];
+  const tables: Record<string, SnapshotVerificationTable> = {};
+  for (const [table, list] of Object.entries(rows)) {
+    const ids = list.map((r) => String(r.id ?? "")).filter(Boolean);
+    const unique = new Set(ids);
+    if (ids.length !== unique.size) problems.push(`${table}: duplicate row id found in pulled data`);
+    const checksum = checksumRows(list);
+    tables[table] = {
+      cloudCount: list.length,
+      localCount: list.length,
+      cloudChecksum: checksum,
+      localChecksum: checksum,
+      match: ids.length === unique.size,
+    };
+  }
+
+  const voucherIds = new Set((rows.vouchers ?? []).map((v) => String(v.id ?? "")));
+  for (const e of rows.voucher_entries ?? []) {
+    if (!voucherIds.has(String(e.voucher_id ?? ""))) problems.push(`voucher_entries: orphan entry ${String(e.id ?? "")}`);
+  }
+  for (const item of rows.voucher_items ?? []) {
+    if (!voucherIds.has(String(item.voucher_id ?? ""))) problems.push(`voucher_items: orphan item line ${String(item.id ?? "")}`);
+  }
+
+  const ledgerIds = new Set((rows.ledgers ?? []).map((l) => String(l.id ?? "")));
+  for (const e of rows.voucher_entries ?? []) {
+    if (e.ledger_id && !ledgerIds.has(String(e.ledger_id))) problems.push(`voucher_entries: missing ledger ${String(e.ledger_id)}`);
+  }
+
+  return {
+    ok: problems.length === 0,
+    checkedAt: Date.now(),
+    tables,
+    problems,
+  };
+}
+
+async function localRowsForExactTable(db: any, companyId: string, table: string): Promise<CacheRow[]> {
+  if (table === "companies") {
+    const row = await db.cache_companies.get(companyId);
+    return row ? [row] : [];
+  }
+  if (table === "company_settings") return db.cache_company_settings.where("company_id").equals(companyId).toArray();
+  if (table === "ledgers") return db.cache_ledgers.where("company_id").equals(companyId).toArray();
+  if (table === "items") return db.cache_items.where("company_id").equals(companyId).toArray();
+  if (table === "account_subgroups") return db.cache_account_subgroups.where("company_id").equals(companyId).toArray();
+  if (table === "ledger_group_mappings") return db.cache_ledger_group_mappings.where("company_id").equals(companyId).toArray();
+  if (table === "account_group_overrides") return db.cache_account_group_overrides.where("company_id").equals(companyId).toArray();
+  if (table === "vouchers") return db.cache_vouchers.where("company_id").equals(companyId).toArray();
+  if (table === "voucher_entries") return db.cache_voucher_entries.where("company_id").equals(companyId).toArray();
+  if (table === "voucher_items") return db.cache_voucher_items.where("company_id").equals(companyId).toArray();
+  if (table === "bill_allocations") return db.cache_bill_allocations.where("company_id").equals(companyId).toArray();
+  return [];
+}
+
+async function verifyLocalMatches(companyId: string, cloudRows: ExactSnapshotRows): Promise<SnapshotVerification> {
+  const { db } = await getDbInstance();
+  const problems: string[] = [];
+  const tables: Record<string, SnapshotVerificationTable> = {};
+  for (const [table, cloud] of Object.entries(cloudRows)) {
+    const local = await localRowsForExactTable(db, companyId, table);
+    const cloudChecksum = checksumRows(cloud);
+    const localChecksum = checksumRows(local);
+    const match = cloud.length === local.length && cloudChecksum === localChecksum;
+    if (!match) problems.push(`${table}: online ${cloud.length}/${cloudChecksum} offline ${local.length}/${localChecksum}`);
+    tables[table] = {
+      cloudCount: cloud.length,
+      localCount: local.length,
+      cloudChecksum,
+      localChecksum,
+      match,
+    };
+  }
+  return { ok: problems.length === 0, checkedAt: Date.now(), tables, problems };
+}
+
+async function writeExactSnapshotRows(companyId: string, rows: ExactSnapshotRows): Promise<void> {
+  const { db } = await getDbInstance();
+  await db.transaction(
+    "rw",
+    [
+      db.cache_companies,
+      db.cache_company_settings,
+      db.cache_ledgers,
+      db.cache_items,
+      db.cache_account_subgroups,
+      db.cache_ledger_group_mappings,
+      db.cache_account_group_overrides,
+      db.cache_vouchers,
+      db.cache_voucher_entries,
+      db.cache_voucher_items,
+      db.cache_bill_allocations,
+    ],
+    async () => {
+      await Promise.all([
+        db.cache_companies.delete(companyId),
+        db.cache_company_settings.where("company_id").equals(companyId).delete(),
+        db.cache_ledgers.where("company_id").equals(companyId).delete(),
+        db.cache_items.where("company_id").equals(companyId).delete(),
+        db.cache_account_subgroups.where("company_id").equals(companyId).delete(),
+        db.cache_ledger_group_mappings.where("company_id").equals(companyId).delete(),
+        db.cache_account_group_overrides.where("company_id").equals(companyId).delete(),
+        db.cache_vouchers.where("company_id").equals(companyId).delete(),
+        db.cache_voucher_entries.where("company_id").equals(companyId).delete(),
+        db.cache_voucher_items.where("company_id").equals(companyId).delete(),
+        db.cache_bill_allocations.where("company_id").equals(companyId).delete(),
+      ]);
+      if (rows.companies?.length) await db.cache_companies.bulkPut(rows.companies);
+      if (rows.company_settings?.length) await db.cache_company_settings.bulkPut(rows.company_settings);
+      if (rows.ledgers?.length) await db.cache_ledgers.bulkPut(rows.ledgers);
+      if (rows.items?.length) await db.cache_items.bulkPut(rows.items);
+      if (rows.account_subgroups?.length) await db.cache_account_subgroups.bulkPut(rows.account_subgroups);
+      if (rows.ledger_group_mappings?.length) await db.cache_ledger_group_mappings.bulkPut(rows.ledger_group_mappings);
+      if (rows.account_group_overrides?.length) await db.cache_account_group_overrides.bulkPut(rows.account_group_overrides);
+      if (rows.vouchers?.length) await db.cache_vouchers.bulkPut(rows.vouchers);
+      if (rows.voucher_entries?.length) await db.cache_voucher_entries.bulkPut(rows.voucher_entries);
+      if (rows.voucher_items?.length) await db.cache_voucher_items.bulkPut(rows.voucher_items);
+      if (rows.bill_allocations?.length) await db.cache_bill_allocations.bulkPut(rows.bill_allocations);
+    },
+  );
+}
+
+async function pullExactCompanySnapshot(companyId: string): Promise<{ pulled: Record<string, number>; verification: SnapshotVerification }> {
+  const rows: ExactSnapshotRows = {};
+  await Promise.all(SNAPSHOT_TABLES.map(async (table) => {
+    rows[table] = await fetchExactTableRows(table, companyId);
+  }));
+  const children = await fetchExactVoucherChildren(companyId, rows.vouchers ?? []);
+  rows.voucher_entries = children.entries;
+  rows.voucher_items = children.items;
+
+  const preflight = verifySnapshotRows(rows);
+  if (!preflight.ok) {
+    return {
+      pulled: Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length])),
+      verification: preflight,
+    };
+  }
+
+  await writeExactSnapshotRows(companyId, rows);
+  await Promise.all([
+    ...SNAPSHOT_TABLES.map((table) => setCursor(companyId, table, latestUpdatedAt(rows[table] ?? []))),
+    setCursor(companyId, "voucher_children", latestUpdatedAt(rows.vouchers ?? [])),
+  ]);
+
+  return {
+    pulled: Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.length])),
+    verification: await verifyLocalMatches(companyId, rows),
+  };
 }
 
 async function pullTable(table: SnapshotTable, companyId: string, opts: { exact?: boolean } = {}): Promise<number> {
@@ -271,9 +520,10 @@ export interface SnapshotResult {
   pulled: Record<string, number>;
   errors: Record<string, string>;
   finishedAt: number;
+  verification?: SnapshotVerification;
 }
 
-let pullInFlight: Promise<SnapshotResult | null> | null = null;
+const snapshotInFlight = new Map<string, Promise<SnapshotResult | null>>();
 const perCompanyInFlight = new Map<string, Promise<SnapshotResult | null>>();
 
 async function notifyOfflineReady(companyId: string, result: SnapshotResult) {
@@ -281,13 +531,18 @@ async function notifyOfflineReady(companyId: string, result: SnapshotResult) {
   try {
     const { toast } = await import("sonner");
     const errCount = Object.keys(result.errors).length;
-    if (errCount === 0) {
-      toast.success("All data available offline", {
+    if (errCount === 0 && result.verification?.ok) {
+      toast.success("All data available in offline mode", {
         id: `offline-ready-${companyId}`,
-        description: "You can now work without an internet connection.",
+        description: "Online and offline data were verified to match.",
+      });
+    } else if (errCount === 0) {
+      toast.warning("Offline sync not verified", {
+        id: `offline-unverified-${companyId}`,
+        description: "Existing offline data was preserved until verification passes.",
       });
     } else {
-      toast.warning("Offline sync partially complete", {
+      toast.warning("Offline sync failed — existing offline data preserved", {
         id: `offline-partial-${companyId}`,
         description: `${errCount} table(s) failed — retry will happen automatically.`,
       });
@@ -311,25 +566,26 @@ export async function pullCompanySnapshot(
     const result: SnapshotResult = { companyId, pulled: {}, errors: {}, finishedAt: 0 };
     const tables: readonly SnapshotTable[] = opts.full ? SNAPSHOT_TABLES : MINIMAL_TABLES;
 
-    // Parallel table pulls — each table is independent. A full sync is an
-    // exact mirror: local rows for this company are replaced by cloud rows,
-    // so deleted/renamed online records cannot remain stale offline.
-    await Promise.all(tables.map(async (table) => {
-      try {
-        result.pulled[table] = await pullTable(table, companyId, { exact: opts.full });
-      } catch (e) {
-        result.errors[table] = e instanceof Error ? e.message : String(e);
-      }
-    }));
-
     if (opts.full) {
       try {
-        const { entries, items } = await pullVoucherChildren(companyId, { exact: true });
-        result.pulled.voucher_entries = entries;
-        result.pulled.voucher_items = items;
+        const exact = await pullExactCompanySnapshot(companyId);
+        result.pulled = exact.pulled;
+        result.verification = exact.verification;
+        if (!exact.verification.ok) {
+          result.errors.verification = exact.verification.problems.slice(0, 5).join("; ") || "Online/offline verification failed";
+        }
       } catch (e) {
-        result.errors.voucher_children = e instanceof Error ? e.message : String(e);
+        result.errors.snapshot = e instanceof Error ? e.message : String(e);
       }
+    } else {
+      // Parallel table pulls — each table is independent for minimal warm-up.
+      await Promise.all(tables.map(async (table) => {
+        try {
+          result.pulled[table] = await pullTable(table, companyId, { exact: false });
+        } catch (e) {
+          result.errors[table] = e instanceof Error ? e.message : String(e);
+        }
+      }));
     }
 
     result.finishedAt = Date.now();
@@ -352,8 +608,10 @@ export async function pullCompanySnapshot(
  * pullCompanySnapshot(id, { full: true }).
  */
 export async function pullSnapshot(opts: { full?: boolean } = {}): Promise<SnapshotResult | null> {
-  if (pullInFlight) return pullInFlight;
-  pullInFlight = (async () => {
+  const flightKey = opts.full ? "full" : "minimal";
+  const existing = snapshotInFlight.get(flightKey);
+  if (existing) return existing;
+  const run = (async () => {
     try {
       if (!isOnlineNow()) return null;
       const { data: { user } } = await supabase.auth.getUser();
@@ -375,16 +633,27 @@ export async function pullSnapshot(opts: { full?: boolean } = {}): Promise<Snaps
         return completed.reduce<SnapshotResult>((acc, r) => {
           for (const [k, v] of Object.entries(r.pulled)) acc.pulled[k] = (acc.pulled[k] ?? 0) + v;
           for (const [k, v] of Object.entries(r.errors)) acc.errors[`${r.companyId}:${k}`] = v;
+          if (r.verification) {
+            if (!acc.verification) acc.verification = { ok: true, checkedAt: 0, tables: {}, problems: [] };
+            acc.verification.ok = acc.verification.ok && r.verification.ok;
+            acc.verification.checkedAt = Math.max(acc.verification.checkedAt, r.verification.checkedAt);
+            for (const [table, detail] of Object.entries(r.verification.tables)) {
+              const key = completed.length > 1 ? `${r.companyId}:${table}` : table;
+              acc.verification.tables[key] = detail;
+            }
+            acc.verification.problems.push(...r.verification.problems.map((p) => `${r.companyId}: ${p}`));
+          }
           acc.finishedAt = Math.max(acc.finishedAt, r.finishedAt);
           return acc;
-        }, { companyId: "all", pulled: {}, errors: {}, finishedAt: 0 });
+        }, { companyId: "all", pulled: {}, errors: {}, finishedAt: 0, verification: { ok: true, checkedAt: 0, tables: {}, problems: [] } });
       }
       return completed.pop() ?? null;
     } finally {
-      pullInFlight = null;
+      snapshotInFlight.delete(flightKey);
     }
   })();
-  return pullInFlight;
+  snapshotInFlight.set(flightKey, run);
+  return run;
 }
 
 /** Row counts currently in the offline cache (not the last sync delta). */
