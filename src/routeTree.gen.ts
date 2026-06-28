@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LockRouteImport } from './routes/lock'
+import { Route as AssistantRouteImport } from './routes/assistant'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
@@ -67,6 +68,11 @@ import { Route as AppVouchersNewCredit_noteRouteImport } from './routes/app.vouc
 const LockRoute = LockRouteImport.update({
   id: '/lock',
   path: '/lock',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AssistantRoute = AssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -345,6 +351,7 @@ const AppVouchersNewCredit_noteRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/assistant': typeof AssistantRoute
   '/lock': typeof LockRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
@@ -400,6 +407,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/assistant': typeof AssistantRoute
   '/lock': typeof LockRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
@@ -457,6 +465,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/assistant': typeof AssistantRoute
   '/lock': typeof LockRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
@@ -515,6 +524,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/assistant'
     | '/lock'
     | '/app/account-groups'
     | '/app/assistant'
@@ -570,6 +580,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/assistant'
     | '/lock'
     | '/app/account-groups'
     | '/app/assistant'
@@ -626,6 +637,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/assistant'
     | '/lock'
     | '/app/account-groups'
     | '/app/assistant'
@@ -683,6 +695,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  AssistantRoute: typeof AssistantRoute
   LockRoute: typeof LockRoute
 }
 
@@ -693,6 +706,13 @@ declare module '@tanstack/react-router' {
       path: '/lock'
       fullPath: '/lock'
       preLoaderRoute: typeof LockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/assistant': {
+      id: '/assistant'
+      path: '/assistant'
+      fullPath: '/assistant'
+      preLoaderRoute: typeof AssistantRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -1202,6 +1222,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  AssistantRoute: AssistantRoute,
   LockRoute: LockRoute,
 }
 export const routeTree = rootRouteImport
