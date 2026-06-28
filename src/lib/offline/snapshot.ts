@@ -104,6 +104,7 @@ async function pullTable(table: SnapshotTable, companyId: string, opts: { exact?
   let pulled = 0;
   let from = 0;
   let lastSeen = since;
+  const exactRows: Array<Record<string, unknown>> = [];
 
   const isCompaniesTable = table === "companies";
 
@@ -126,16 +127,12 @@ async function pullTable(table: SnapshotTable, companyId: string, opts: { exact?
     const rows = (data ?? []) as Array<Record<string, unknown>>;
     if (rows.length === 0) break;
 
-    const { db } = await getDbInstance();
-    const table_ = dexieFor(table, db);
-    const rowsForCache = normalizeRowsForCache(table, rows);
-    if (opts.exact && from === 0) {
-      await db.transaction("rw", table_, async () => {
-        if (isCompaniesTable) await (table_ as any).delete(companyId);
-        else await (table_ as any).where("company_id").equals(companyId).delete();
-        if (rowsForCache.length) await (table_ as any).bulkPut(rowsForCache);
-      });
+    if (opts.exact) {
+      exactRows.push(...rows);
     } else {
+      const { db } = await getDbInstance();
+      const table_ = dexieFor(table, db);
+      const rowsForCache = normalizeRowsForCache(table, rows);
       await (table_ as any).bulkPut(rowsForCache);
     }
     pulled += rows.length;
@@ -143,6 +140,17 @@ async function pullTable(table: SnapshotTable, companyId: string, opts: { exact?
 
     if (rows.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
+  }
+
+  if (opts.exact) {
+    const { db } = await getDbInstance();
+    const table_ = dexieFor(table, db);
+    const rowsForCache = normalizeRowsForCache(table, exactRows);
+    await db.transaction("rw", table_, async () => {
+      if (isCompaniesTable) await (table_ as any).delete(companyId);
+      else await (table_ as any).where("company_id").equals(companyId).delete();
+      if (rowsForCache.length) await (table_ as any).bulkPut(rowsForCache);
+    });
   }
 
   if (opts.exact || lastSeen !== since) await setCursor(companyId, table, lastSeen);
@@ -200,10 +208,38 @@ async function pullVoucherChildren(companyId: string, opts: { exact?: boolean } 
   for (let i = 0; i < voucherIds.length; i += 200) slices.push(voucherIds.slice(i, i + 200));
 
   const CONCURRENCY = 4;
-  let cursor = 0;
-  async function worker() {
-    while (cursor < slices.length) {
-      const slice = slices[cursor++];
+
+  if (opts.exact) {
+    const allEntries: any[] = [];
+    const allItems: any[] = [];
+    let cursor = 0;
+    async function worker() {
+      while (cursor < slices.length) {
+        const slice = slices[cursor++];
+        const [{ data: eData, error: eErr }, { data: iData, error: iErr }] = await Promise.all([
+          supabase.from("voucher_entries").select("*").in("voucher_id", slice),
+          supabase.from("voucher_items").select("*").in("voucher_id", slice),
+        ]);
+        if (eErr) throw new Error(`voucher_entries: ${eErr.message}`);
+        if (iErr) throw new Error(`voucher_items: ${iErr.message}`);
+        allEntries.push(...(eData ?? []).map((r: any) => ({ ...r, company_id: companyId })));
+        allItems.push(...(iData ?? []).map((r: any) => ({ ...r, company_id: companyId })));
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, slices.length) }, worker));
+    await db.transaction("rw", db.cache_voucher_entries, db.cache_voucher_items, async () => {
+      await db.cache_voucher_entries.where("company_id").equals(companyId).delete();
+      await db.cache_voucher_items.where("company_id").equals(companyId).delete();
+      if (allEntries.length) await db.cache_voucher_entries.bulkPut(allEntries as any);
+      if (allItems.length) await db.cache_voucher_items.bulkPut(allItems as any);
+    });
+    entries = allEntries.length;
+    items = allItems.length;
+  } else {
+    let cursor = 0;
+    async function worker() {
+      while (cursor < slices.length) {
+        const slice = slices[cursor++];
       const [{ data: eData, error: eErr }, { data: iData, error: iErr }] = await Promise.all([
         supabase.from("voucher_entries").select("*").in("voucher_id", slice),
         supabase.from("voucher_items").select("*").in("voucher_id", slice),
@@ -216,9 +252,10 @@ async function pullVoucherChildren(companyId: string, opts: { exact?: boolean } 
       await db.cache_voucher_items.where("voucher_id").anyOf(slice).delete();
       if (entriesForCache.length) { await db.cache_voucher_entries.bulkPut(entriesForCache as any); entries += entriesForCache.length; }
       if (itemsForCache.length) { await db.cache_voucher_items.bulkPut(itemsForCache as any); items += itemsForCache.length; }
+      }
     }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, slices.length) }, worker));
   }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, slices.length) }, worker));
 
   if (opts.exact) await pruneOrphanCachedChildren(db);
 
