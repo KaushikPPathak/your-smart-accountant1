@@ -10,6 +10,27 @@
 
 import { offlineDb } from "./db";
 
+const NETWORK_BLOCKED_KEY = "ym_network_blocked_at";
+
+export function rememberNetworkBlocked() {
+  if (typeof window === "undefined") return;
+  const at = String(Date.now());
+  try { (window as any).__YSA_NETWORK_BLOCKED_AT = at; } catch { /* ignore */ }
+  try { localStorage.setItem(NETWORK_BLOCKED_KEY, at); } catch { /* ignore */ }
+}
+
+export function shouldPreferOfflineCache(): boolean {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  if (typeof window === "undefined") return false;
+  let raw: string | number | null = null;
+  try { raw = (window as any).__YSA_NETWORK_BLOCKED_AT ?? null; } catch { /* ignore */ }
+  if (!raw) {
+    try { raw = localStorage.getItem(NETWORK_BLOCKED_KEY); } catch { /* ignore */ }
+  }
+  const at = Number(raw ?? 0);
+  return Number.isFinite(at) && at > 0 && Date.now() - at < 30_000;
+}
+
 export async function readCompanies() {
   return offlineDb.cache_companies.toArray();
 }
@@ -56,14 +77,22 @@ export async function readVoucherEntriesForCompany(companyId: string) {
   const vouchers = await readVouchers(companyId);
   const ids = vouchers.map((v) => v.id).filter(Boolean);
   if (ids.length === 0) return [];
-  return offlineDb.cache_voucher_entries.where("voucher_id").anyOf(ids).toArray();
+  const out: unknown[] = [];
+  for (let i = 0; i < ids.length; i += 500) {
+    out.push(...await offlineDb.cache_voucher_entries.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray());
+  }
+  return out;
 }
 
 export async function readVoucherItemsForCompany(companyId: string) {
   const vouchers = await readVouchers(companyId);
   const ids = vouchers.map((v) => v.id).filter(Boolean);
   if (ids.length === 0) return [];
-  return offlineDb.cache_voucher_items.where("voucher_id").anyOf(ids).toArray();
+  const out: unknown[] = [];
+  for (let i = 0; i < ids.length; i += 500) {
+    out.push(...await offlineDb.cache_voucher_items.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray());
+  }
+  return out;
 }
 
 export async function readVoucherEntries(voucherId: string) {
@@ -79,9 +108,20 @@ export async function withCacheFallback<T>(
   cloud: () => Promise<T>,
   cache: () => Promise<T>,
 ): Promise<T> {
+  if (shouldPreferOfflineCache()) {
+    try {
+      return await cache();
+    } catch {
+      // If the local cache is not available, still try cloud below.
+    }
+  }
   try {
     return await cloud();
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err ?? "");
+    if (/failed to fetch|failed to send a request|networkerror|offline/i.test(msg)) {
+      rememberNetworkBlocked();
+    }
     return await cache();
   }
 }
