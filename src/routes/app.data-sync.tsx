@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Cloud, Upload, RefreshCw, CheckCircle2, Database } from "lucide-react";
 import { toast } from "sonner";
 import { getOfflineCacheCounts, pullSnapshot } from "@/lib/offline/snapshot";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase as supabaseTyped } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/app/data-sync")({
   component: DataSyncPage,
@@ -25,6 +25,7 @@ export const Route = createFileRoute("/app/data-sync")({
 
 type Counts = Record<string, number>;
 const RESTORE_TABLES = ["companies", "ledgers", "vouchers", "company_members"] as const;
+const supabase: any = supabaseTyped;
 
 function DataSyncPage() {
   const router = useRouter();
@@ -81,7 +82,7 @@ function DataSyncPage() {
           continue;
         }
         try {
-            const { error } = await supabase.from(table as never).insert(rows as never);
+            const { error } = await supabase.from(table).insert(rows as any);
           if (error) {
             toast.error(`Restore failed for ${table}: ${error.message ?? "unknown"}`);
             continue;
