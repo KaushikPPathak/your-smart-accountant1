@@ -82,6 +82,7 @@ export function startSyncWorker() {
 
   // Drain + pull whenever connectivity returns
   window.addEventListener("online", () => { void tick(); });
+  window.addEventListener("offline", () => { rememberWorkMode("offline"); });
   // Pull again when the tab becomes visible — catches "laptop opened again"
   window.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void tick();
