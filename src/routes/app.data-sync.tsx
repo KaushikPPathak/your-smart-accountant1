@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Cloud, Upload, RefreshCw, CheckCircle2, Database } from "lucide-react";
 import { toast } from "sonner";
 import { getOfflineCacheCounts, pullSnapshot } from "@/lib/offline/snapshot";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/app/data-sync")({
   component: DataSyncPage,
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/app/data-sync")({
 });
 
 type Counts = Record<string, number>;
+const RESTORE_TABLES = ["companies", "ledgers", "vouchers", "company_members"] as const;
 
 function DataSyncPage() {
   const router = useRouter();
@@ -71,7 +73,7 @@ function DataSyncPage() {
         toast.error("Invalid backup: expected a JSON object");
         return;
       }
-      for (const table of SYNC_TABLES) {
+      for (const table of RESTORE_TABLES) {
         const rows = Array.isArray(parsed[table]) ? parsed[table] : [];
         if (rows.length === 0) {
           counts[table] = 0;
@@ -79,7 +81,7 @@ function DataSyncPage() {
           continue;
         }
         try {
-          const { error } = await supabase.from(table as string).insert(rows as any);
+            const { error } = await supabase.from(table as never).insert(rows as never);
           if (error) {
             toast.error(`Restore failed for ${table}: ${error.message ?? "unknown"}`);
             continue;
@@ -189,7 +191,7 @@ function DataSyncPage() {
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            {SYNC_TABLES.map((t) => (
+            {RESTORE_TABLES.map((t) => (
               <Badge key={t} variant={restoreCounts[t] != null ? "default" : "outline"}>
                 {t}: {restoreCounts[t] ?? "—"}
               </Badge>
