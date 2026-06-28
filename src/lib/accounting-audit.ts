@@ -24,6 +24,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import { GSTIN_REGEX } from "@/lib/constants";
 import { PL_INCOME, PL_EXPENSE, BS_ASSET, BS_LIAB } from "@/lib/reports";
+import {
+  readLedgers,
+  readVoucherEntriesForCompany,
+  readVoucherItemsForCompany,
+  readVouchers,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 export type AuditSeverity = "ok" | "info" | "warn" | "error";
 
@@ -65,43 +72,6 @@ const TOL = 100; // ₹1 rounding tolerance for cross-check sums
 export async function runAccountingAudit(companyId: string): Promise<AuditReport> {
   const findings: AuditFinding[] = [];
 
-  // -- Bulk pulls (one round trip each table) -------------------------------
-  const [vRes, eRes, iRes, lRes, baRes, plRes] = await Promise.all([
-    supabase
-      .from("vouchers")
-      .select(
-        "id, voucher_number, voucher_type, voucher_date, party_ledger_id, " +
-          "is_interstate, place_of_supply_code, vendor_invoice_no, vendor_invoice_date, " +
-          "subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise",
-      )
-      .eq("company_id", companyId),
-    supabase
-      .from("voucher_entries")
-      .select("voucher_id, ledger_id, debit_paise, credit_paise, vouchers!inner(company_id)")
-      .eq("vouchers.company_id", companyId),
-    supabase
-      .from("voucher_items")
-      .select(
-        "voucher_id, item_id, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate, vouchers!inner(company_id)",
-      )
-      .eq("vouchers.company_id", companyId),
-    supabase
-      .from("ledgers")
-      .select(
-        "id, name, type, gstin, opening_balance_paise, opening_balance_is_debit",
-      )
-      .eq("company_id", companyId),
-    supabase
-      .from("bill_allocations")
-      .select("invoice_voucher_id, payment_voucher_id, amount_paise")
-      .eq("company_id", companyId),
-    supabase
-      .from("period_locks")
-      .select("period_start, period_end, is_active")
-      .eq("company_id", companyId)
-      .eq("is_active", true),
-  ]);
-
   type V = {
     id: string;
     voucher_number: string;
@@ -139,11 +109,109 @@ export async function runAccountingAudit(companyId: string): Promise<AuditReport
   };
   type BA = { invoice_voucher_id: string | null; payment_voucher_id: string | null; amount_paise: number };
 
-  const vouchers = (vRes.data ?? []) as unknown as V[];
-  const entries = (eRes.data ?? []) as unknown as E[];
-  const items = (iRes.data ?? []) as unknown as I[];
-  const ledgers = (lRes.data ?? []) as unknown as L[];
-  const billAlloc = (baRes.data ?? []) as unknown as BA[];
+  const normalizeV = (v: any): V => ({
+    id: String(v.id ?? ""),
+    voucher_number: String(v.voucher_number ?? ""),
+    voucher_type: String(v.voucher_type ?? ""),
+    voucher_date: String(v.voucher_date ?? v.date ?? ""),
+    party_ledger_id: v.party_ledger_id ?? null,
+    is_interstate: v.is_interstate ?? null,
+    place_of_supply_code: v.place_of_supply_code ?? null,
+    vendor_invoice_no: v.vendor_invoice_no ?? null,
+    vendor_invoice_date: v.vendor_invoice_date ?? null,
+    subtotal_paise: Number(v.subtotal_paise ?? 0),
+    cgst_paise: Number(v.cgst_paise ?? 0),
+    sgst_paise: Number(v.sgst_paise ?? 0),
+    igst_paise: Number(v.igst_paise ?? 0),
+    round_off_paise: Number(v.round_off_paise ?? 0),
+    total_paise: Number(v.total_paise ?? v.total_amount_paise ?? 0),
+  });
+  const normalizeE = (e: any): E => ({
+    voucher_id: String(e.voucher_id ?? ""),
+    ledger_id: String(e.ledger_id ?? ""),
+    debit_paise: Number(e.debit_paise ?? 0),
+    credit_paise: Number(e.credit_paise ?? 0),
+  });
+  const normalizeI = (i: any): I => ({
+    voucher_id: String(i.voucher_id ?? ""),
+    item_id: String(i.item_id ?? ""),
+    taxable_paise: Number(i.taxable_paise ?? 0),
+    cgst_paise: Number(i.cgst_paise ?? 0),
+    sgst_paise: Number(i.sgst_paise ?? 0),
+    igst_paise: Number(i.igst_paise ?? 0),
+    gst_rate: Number(i.gst_rate ?? 0),
+  });
+  const normalizeL = (l: any): L => ({
+    id: String(l.id ?? ""),
+    name: String(l.name ?? ""),
+    type: String(l.type ?? ""),
+    gstin: l.gstin ?? null,
+    opening_balance_paise: Number(l.opening_balance_paise ?? 0),
+    opening_balance_is_debit: Boolean(l.opening_balance_is_debit),
+  });
+
+  // -- Bulk pulls (one round trip each table), with IndexedDB fallback for Tauri/offline.
+  const { vouchers, entries, items, ledgers, billAlloc } = await withCacheFallback(
+    async () => {
+      const [vRes, eRes, iRes, lRes, baRes] = await Promise.all([
+        supabase
+          .from("vouchers")
+          .select(
+            "id, voucher_number, voucher_type, voucher_date, party_ledger_id, " +
+              "is_interstate, place_of_supply_code, vendor_invoice_no, vendor_invoice_date, " +
+              "subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise",
+          )
+          .eq("company_id", companyId),
+        supabase
+          .from("voucher_entries")
+          .select("voucher_id, ledger_id, debit_paise, credit_paise, vouchers!inner(company_id)")
+          .eq("vouchers.company_id", companyId),
+        supabase
+          .from("voucher_items")
+          .select(
+            "voucher_id, item_id, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate, vouchers!inner(company_id)",
+          )
+          .eq("vouchers.company_id", companyId),
+        supabase
+          .from("ledgers")
+          .select(
+            "id, name, type, gstin, opening_balance_paise, opening_balance_is_debit",
+          )
+          .eq("company_id", companyId),
+        supabase
+          .from("bill_allocations")
+          .select("invoice_voucher_id, payment_voucher_id, amount_paise")
+          .eq("company_id", companyId),
+      ]);
+      if (vRes.error) throw vRes.error;
+      if (eRes.error) throw eRes.error;
+      if (iRes.error) throw iRes.error;
+      if (lRes.error) throw lRes.error;
+      if (baRes.error) throw baRes.error;
+      return {
+        vouchers: ((vRes.data ?? []) as any[]).map(normalizeV),
+        entries: ((eRes.data ?? []) as any[]).map(normalizeE),
+        items: ((iRes.data ?? []) as any[]).map(normalizeI),
+        ledgers: ((lRes.data ?? []) as any[]).map(normalizeL),
+        billAlloc: (baRes.data ?? []) as unknown as BA[],
+      };
+    },
+    async () => {
+      const [vouchers, entries, items, ledgers] = await Promise.all([
+        readVouchers(companyId),
+        readVoucherEntriesForCompany(companyId),
+        readVoucherItemsForCompany(companyId),
+        readLedgers(companyId),
+      ]);
+      return {
+        vouchers: (vouchers as any[]).map(normalizeV),
+        entries: (entries as any[]).map(normalizeE),
+        items: (items as any[]).map(normalizeI),
+        ledgers: (ledgers as any[]).map(normalizeL),
+        billAlloc: [] as BA[],
+      };
+    },
+  );
 
 
   const ledgerById = new Map(ledgers.map((l) => [l.id, l]));

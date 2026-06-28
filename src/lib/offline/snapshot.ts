@@ -131,7 +131,30 @@ async function pullTable(table: SnapshotTable, companyId: string): Promise<numbe
 async function pullVoucherChildren(companyId: string): Promise<{ entries: number; items: number }> {
   const childCursor = await getCursor(companyId, "voucher_children");
   const { db } = await getDbInstance();
-  const newish = await db.cache_vouchers
+  const allCachedVouchers = await db.cache_vouchers
+    .where("company_id").equals(companyId)
+    .toArray();
+  let newish = allCachedVouchers
+    .filter((v: any) => String(v.updated_at) > childCursor);
+
+  // Recovery path: older builds could advance cursors while voucher_entries /
+  // voucher_items were not actually present in IndexedDB. In that state the
+  // sync screen says "complete" but offline reports have no postings. If a
+  // company has vouchers but no cached children, force a one-time full child
+  // hydrate instead of trusting the cursor.
+  if (newish.length === 0 && allCachedVouchers.length > 0) {
+    const sampleIds = allCachedVouchers.slice(0, 500).map((v: any) => v.id);
+    const [entryCount, itemCount] = await Promise.all([
+      sampleIds.length ? db.cache_voucher_entries.where("voucher_id").anyOf(sampleIds).count() : 0,
+      sampleIds.length ? db.cache_voucher_items.where("voucher_id").anyOf(sampleIds).count() : 0,
+    ]);
+    if (entryCount === 0) newish = allCachedVouchers;
+  }
+
+  // Normal incremental path: only vouchers changed since the last child pull.
+  // The query above is intentionally in memory because all candidate vouchers
+  // for this company are already in the local cache.
+  newish = newish.length > 0 ? newish : await db.cache_vouchers
     .where("company_id").equals(companyId)
     .and((v: any) => String(v.updated_at) > childCursor)
     .toArray();

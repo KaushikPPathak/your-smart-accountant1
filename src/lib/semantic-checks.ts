@@ -22,6 +22,11 @@ import {
   fetchLedgerBalancesWithMeta,
   PL_INCOME, PL_EXPENSE, BS_ASSET, BS_LIAB,
 } from "@/lib/reports";
+import {
+  readVoucherEntriesForCompany,
+  readVouchers,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 export type SemanticSeverity = "ok" | "warn" | "error";
 
@@ -47,15 +52,36 @@ export async function runSemanticChecks(companyId: string): Promise<SemanticRepo
   const asOf = new Date().toISOString().slice(0, 10);
 
   // ---- Pull voucher + entry counts in one shot --------------------------
-  const [vRes, eRes] = await Promise.all([
-    supabase.from("vouchers").select("id, voucher_type").eq("company_id", companyId),
-    supabase
-      .from("voucher_entries")
-      .select("voucher_id, vouchers!inner(company_id)")
-      .eq("vouchers.company_id", companyId),
-  ]);
-  const vouchers = (vRes.data ?? []) as { id: string; voucher_type: string }[];
-  const entries = (eRes.data ?? []) as unknown as { voucher_id: string }[];
+  const { vouchers, entries } = await withCacheFallback(
+    async () => {
+      const [vRes, eRes] = await Promise.all([
+        supabase.from("vouchers").select("id, voucher_type").eq("company_id", companyId),
+        supabase
+          .from("voucher_entries")
+          .select("voucher_id, vouchers!inner(company_id)")
+          .eq("vouchers.company_id", companyId),
+      ]);
+      if (vRes.error) throw vRes.error;
+      if (eRes.error) throw eRes.error;
+      return {
+        vouchers: (vRes.data ?? []) as { id: string; voucher_type: string }[],
+        entries: (eRes.data ?? []) as unknown as { voucher_id: string }[],
+      };
+    },
+    async () => {
+      const [vouchers, entries] = await Promise.all([
+        readVouchers(companyId),
+        readVoucherEntriesForCompany(companyId),
+      ]);
+      return {
+        vouchers: (vouchers as any[]).map((v) => ({
+          id: String(v.id),
+          voucher_type: String(v.voucher_type ?? ""),
+        })),
+        entries: (entries as any[]).map((e) => ({ voucher_id: String(e.voucher_id ?? "") })),
+      };
+    },
+  );
 
   // ---- Zero-entry vouchers (Day Book shows, reports blank) --------------
   const entryCountByVoucher = new Map<string, number>();

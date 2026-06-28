@@ -61,6 +61,7 @@ import { formatINR } from "@/lib/money";
 import { describeError } from "@/lib/error-message";
 import { deactivateLedger as deactivateLedgerOff, deactivateItem as deactivateItemOff } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
+import { readVouchers, shouldPreferOfflineCache, withCacheFallback } from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/housekeeping")({
   head: () => ({ meta: [{ title: "Housekeeping — Accounting Tools" }] }),
@@ -872,26 +873,49 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
     setBusy(true);
     try {
       // For each voucher type, find max trailing number and reset next_number
-      const { data: vchs, error: vErr } = await supabase
-        .from("vouchers")
-        .select("voucher_type, voucher_number")
-        .eq("company_id", companyId);
-      if (vErr) throw vErr;
+      const loaded = await withCacheFallback<{
+        source: "cloud" | "cache";
+        vchs: { voucher_type: string; voucher_number: string }[];
+      }>(
+        async () => {
+          const { data, error } = await supabase
+            .from("vouchers")
+            .select("voucher_type, voucher_number")
+            .eq("company_id", companyId);
+          if (error) throw error;
+          return { source: "cloud" as const, vchs: (data || []) as { voucher_type: string; voucher_number: string }[] };
+        },
+        async () => {
+          const cached = await readVouchers(companyId);
+          return {
+            source: "cache" as const,
+            vchs: cached.map((v: any) => ({
+              voucher_type: String(v.voucher_type ?? ""),
+              voucher_number: String(v.voucher_number ?? ""),
+            })),
+          };
+        },
+      );
       const maxByType = new Map<string, number>();
-      for (const v of (vchs || []) as { voucher_type: string; voucher_number: string }[]) {
+      for (const v of loaded.vchs) {
         const m = v.voucher_number.match(/(\d+)\s*$/);
         if (!m) continue;
         const n = parseInt(m[1], 10);
         const cur = maxByType.get(v.voucher_type) || 0;
         if (n > cur) maxByType.set(v.voucher_type, n);
       }
+      if (loaded.source === "cache") {
+        toast.success(`Checked ${maxByType.size} voucher sequence(s) from offline cache — cloud update skipped until online`);
+        return;
+      }
       let updated = 0;
       for (const [vtype, maxNum] of maxByType.entries()) {
         const { error } = await supabase
           .from("voucher_number_seq")
-          .update({ next_number: maxNum + 1 })
-          .eq("company_id", companyId)
-          .eq("voucher_type", vtype as never);
+          .upsert(
+            { company_id: companyId, voucher_type: vtype as never, prefix: "", next_number: maxNum + 1 },
+            { onConflict: "company_id,voucher_type" },
+          );
         if (error) throw error;
         updated++;
       }
@@ -907,6 +931,10 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
     if (!companyId) return;
     setSnapBusy(true);
     try {
+      if (shouldPreferOfflineCache()) {
+        toast.success("Offline reports use cached vouchers directly — monthly snapshot rebuild skipped until online");
+        return;
+      }
       const { data, error } = await supabase.rpc("recompute_monthly_balances", {
         _company_id: companyId,
       });
