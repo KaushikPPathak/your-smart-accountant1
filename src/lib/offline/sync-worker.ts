@@ -5,6 +5,7 @@
 import { drainOutbox } from "./outbox";
 import { refreshAllCachedCreds } from "./creds-cache";
 import { pullSnapshot } from "./snapshot";
+import { rememberNetworkBlocked } from "./cache-read";
 
 let started = false;
 
@@ -41,10 +42,21 @@ function applyGlobalWorkerSecurityInterceptor() {
       if (!headers.has("apikey")) headers.set("apikey", SUPABASE_ANON_KEY);
       if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${SUPABASE_ANON_KEY}`);
       modifiedInit.headers = headers;
-      return originalFetch.call(this, input, modifiedInit);
+      try {
+        return await originalFetch.call(this, input, modifiedInit);
+      } catch (err) {
+        rememberNetworkBlocked();
+        throw err;
+      }
     }
 
-    return originalFetch.call(this, input, init);
+    try {
+      return await originalFetch.call(this, input, init);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err ?? "");
+      if (/failed to fetch|networkerror|offline/i.test(msg)) rememberNetworkBlocked();
+      throw err;
+    }
   };
 }
 
