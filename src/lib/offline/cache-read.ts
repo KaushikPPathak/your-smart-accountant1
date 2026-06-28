@@ -95,6 +95,10 @@ export async function readVoucherItemsForCompany(companyId: string) {
   return out;
 }
 
+export async function readBillAllocations(companyId: string) {
+  return offlineDb.cache_bill_allocations.where("company_id").equals(companyId).toArray();
+}
+
 export async function readVoucherEntries(voucherId: string) {
   return offlineDb.cache_voucher_entries.where("voucher_id").equals(voucherId).toArray();
 }
