@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "./company-context";
+import { readItems, readLedgers, shouldPreferOfflineCache } from "@/lib/offline/cache-read";
 
 export interface CachedLedger {
   id: string;
@@ -89,6 +90,9 @@ interface Ctx { ready: boolean; loading: boolean; reload: () => Promise<void>; }
 const MastersCtx = createContext<Ctx>({ ready: false, loading: false, reload: async () => undefined });
 
 async function fetchAll<T>(table: "ledgers" | "items", companyId: string, columns: string): Promise<T[]> {
+  if (shouldPreferOfflineCache()) {
+    return (table === "ledgers" ? await readLedgers(companyId) : await readItems(companyId)) as T[];
+  }
   const PAGE = 1000;
   let from = 0;
   const out: T[] = [];
@@ -130,7 +134,19 @@ export function MastersProvider({ children }: { children: ReactNode }) {
       bump();
       setReady(true);
     } catch (e) {
-      console.error("[masters-cache] load failed", e);
+      try {
+        const [lg, it] = await Promise.all([readLedgers(activeCompanyId), readItems(activeCompanyId)]);
+        if (token !== cancelRef.current) return;
+        ledgersMap.clear(); itemsMap.clear();
+        for (const l of lg as CachedLedger[]) ledgersMap.set(l.id, l);
+        for (const i of it as CachedItem[]) itemsMap.set(i.id, i);
+        rebuildSorted();
+        currentCompanyId = activeCompanyId;
+        bump();
+        setReady(true);
+      } catch (cacheErr) {
+        console.error("[masters-cache] load failed", e, cacheErr);
+      }
     } finally {
       if (token === cancelRef.current) setLoading(false);
     }
@@ -140,6 +156,7 @@ export function MastersProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!activeCompanyId) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     const ch = supabase.channel(`masters-${activeCompanyId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "ledgers", filter: `company_id=eq.${activeCompanyId}` }, (payload) => {
         const row = (payload.new ?? payload.old) as CachedLedger | undefined;
