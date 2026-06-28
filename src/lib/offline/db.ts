@@ -149,7 +149,10 @@ function makeStubDb(): OfflineDatabase {
     "outbox", "sync_cursors", "account_creds", "meta",
   ];
   const stub: Record<string, unknown> = {
-    async transaction(_mode: string, _tables: unknown, fn: () => Promise<unknown>) { return fn(); },
+    async transaction(_mode: string, ...args: unknown[]) {
+      const fn = args.find((a) => typeof a === "function") as (() => Promise<unknown>) | undefined;
+      return fn ? fn() : undefined;
+    },
   };
   for (const n of tableNames) stub[n] = makeStubTable();
   return stub as unknown as OfflineDatabase;
