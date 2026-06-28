@@ -431,6 +431,21 @@ function LockScreen() {
             </form>
           </TabsContent>
         </Tabs>
+
+        <div className="mt-5 border-t pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full gap-2"
+            onClick={() => navigate({ to: "/assistant" })}
+          >
+            <Bot className="h-4 w-4" />
+            Diagnose with AI Assistant (offline, no login)
+          </Button>
+          <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            Trouble signing in or syncing? Ask Mate first — works without an account or company.
+          </p>
+        </div>
       </div>
     </div>
   );
