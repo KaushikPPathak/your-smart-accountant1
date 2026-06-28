@@ -133,9 +133,9 @@ export function OfflineStatusChip() {
               {lastSnap ? `Synced ${new Date(lastSnap.finishedAt).toLocaleString()}` : "Never synced"}
             </span>
           </div>
-          {lastSnap && Object.keys(lastSnap.pulled).length > 0 && (
+          {Object.keys(cacheCounts).length > 0 && (
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-              {Object.entries(lastSnap.pulled).map(([k, v]) => (
+              {Object.entries(cacheCounts).map(([k, v]) => (
                 <div key={k} className="flex justify-between"><span>{k}</span><span>{v}</span></div>
               ))}
             </div>
