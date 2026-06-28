@@ -83,8 +83,10 @@ async function tick(): Promise<void> {
   //    handles the "worked online last time → make available offline" case
   //    AND keeps the last-used company hot for offline work.
   try {
-    await pullSnapshot({ full: true });
-    rememberWorkMode("online");
+    const result = await pullSnapshot({ full: true });
+    if (result && Object.keys(result.errors).length === 0 && result.verification?.ok) {
+      rememberWorkMode("online");
+    }
   } catch { /* ignore */ }
 }
 
