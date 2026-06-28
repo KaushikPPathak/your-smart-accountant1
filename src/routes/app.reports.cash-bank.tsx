@@ -104,7 +104,9 @@ function CashBankBook() {
   const [loading, setLoading] = useState(false);
 
   const ledger = getLedger(ledgerId);
-  const selectedLedgerName = ledger?.name ?? cashBankLedgers.find((l) => l.id === ledgerId)?.name ?? "";
+  const selectedCashBankLedger = cashBankLedgers.find((l) => l.id === ledgerId);
+  const selectedLedgerName = ledger?.name ?? selectedCashBankLedger?.name ?? "";
+  const selectedLedgerType = ledger?.type ?? selectedCashBankLedger?.type ?? "";
 
   // Load opening (paise) for the chosen ledger from base ledger row
   useEffect(() => {
@@ -289,7 +291,7 @@ function CashBankBook() {
     return [head, ...body];
   };
 
-  const fileBase = `cash-bank-${ledger?.name ?? "x"}-${from}_to_${to}`;
+  const fileBase = `cash-bank-${selectedLedgerName || "x"}-${from}_to_${to}`;
   const onExportCsv = () => downloadCsv(`${fileBase}.csv`, csvRows());
   const onExportXlsx = () => downloadXlsx(`${fileBase}.xlsx`, [{ name: "Cash & Bank", rows: csvRows() }]);
   const onExportPdf = () => {
@@ -324,7 +326,7 @@ function CashBankBook() {
           ["Closing Balance", "", "", "", "", "", fmtBal(closing)],
         ];
     downloadPdfTable({
-      title: ledger?.name ?? "Cash & Bank Book",
+      title: selectedLedgerName || "Cash & Bank Book",
       subtitle: pdfHeader.dateRangeSubtitle(from, to),
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
@@ -393,10 +395,10 @@ function CashBankBook() {
     );
   }
 
-  const accountHeading = ledger
-    ? ledger.type === "cash"
-      ? `Cash Book${ledger.name ? `: ${ledger.name}` : ""}`
-      : `Bank Book: ${ledger.name}`
+  const accountHeading = selectedLedgerName
+    ? selectedLedgerType === "cash"
+      ? `Cash Book${selectedLedgerName ? `: ${selectedLedgerName}` : ""}`
+      : `Bank Book: ${selectedLedgerName}`
     : "Cash & Bank Book";
 
   return (
