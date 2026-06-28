@@ -263,7 +263,7 @@ function CashBankBook() {
       });
     }
     return out;
-  }, [entries, siblings, opening]);
+  }, [entries, siblings, opening, ledgerNameById]);
 
   const totals = useMemo(() => {
     let dr = 0;
