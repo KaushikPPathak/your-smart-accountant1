@@ -74,6 +74,12 @@ export async function readVouchers(companyId: string, opts?: {
 }
 
 export async function readVoucherEntriesForCompany(companyId: string) {
+  const direct = await offlineDb.cache_voucher_entries.where("company_id").equals(companyId).toArray();
+  if (direct.length > 0) return direct;
+
+  // Backward-compatible recovery for caches created before company_id was
+  // stored on child rows. This prevents "sync complete but no transactions"
+  // when users open an older Windows build offline.
   const vouchers = await readVouchers(companyId);
   const ids = vouchers.map((v) => v.id).filter(Boolean);
   if (ids.length === 0) return [];
@@ -85,6 +91,9 @@ export async function readVoucherEntriesForCompany(companyId: string) {
 }
 
 export async function readVoucherItemsForCompany(companyId: string) {
+  const direct = await offlineDb.cache_voucher_items.where("company_id").equals(companyId).toArray();
+  if (direct.length > 0) return direct;
+
   const vouchers = await readVouchers(companyId);
   const ids = vouchers.map((v) => v.id).filter(Boolean);
   if (ids.length === 0) return [];
@@ -93,6 +102,42 @@ export async function readVoucherItemsForCompany(companyId: string) {
     out.push(...await offlineDb.cache_voucher_items.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray());
   }
   return out;
+}
+
+export async function readVoucherEntriesWithVouchers(companyId: string, opts?: {
+  ledgerId?: string;
+  from?: string;
+  to?: string;
+  before?: string;
+}) {
+  const [vouchers, entries] = await Promise.all([
+    readVouchers(companyId),
+    readVoucherEntriesForCompany(companyId),
+  ]);
+  const voucherById = new Map(vouchers.map((v: any) => [String(v.id), v]));
+  return (entries as any[])
+    .map((e) => {
+      const v = voucherById.get(String(e.voucher_id));
+      if (!v) return null;
+      const voucherDate = String(v.voucher_date ?? v.date ?? "");
+      if (opts?.ledgerId && String(e.ledger_id) !== opts.ledgerId) return null;
+      if (opts?.from && voucherDate < opts.from) return null;
+      if (opts?.to && voucherDate > opts.to) return null;
+      if (opts?.before && voucherDate >= opts.before) return null;
+      return {
+        ...e,
+        vouchers: {
+          id: String(v.id),
+          voucher_date: voucherDate,
+          voucher_number: String(v.voucher_number ?? ""),
+          voucher_type: String(v.voucher_type ?? ""),
+          narration: v.narration ?? null,
+          reference_no: v.reference_no ?? null,
+          company_id: companyId,
+        },
+      };
+    })
+    .filter(Boolean);
 }
 
 export async function readBillAllocations(companyId: string) {
