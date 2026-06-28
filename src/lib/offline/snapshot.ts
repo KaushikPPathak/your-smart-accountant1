@@ -110,7 +110,13 @@ async function pullTable(table: SnapshotTable, companyId: string): Promise<numbe
 
     const { db } = await getDbInstance();
     const table_ = dexieFor(table, db);
-    await (table_ as any).bulkPut(rows);
+    // company_settings has no `id` PK in cloud (PK = company_id). Dexie store
+    // declares `id` as primary key, so synthesize one before bulkPut to avoid
+    // "Data provided to an operation does not meet requirements" failures.
+    const rowsForCache = table === "company_settings"
+      ? rows.map((r) => ({ ...r, id: (r as any).id ?? (r as any).company_id }))
+      : rows;
+    await (table_ as any).bulkPut(rowsForCache);
     pulled += rows.length;
     lastSeen = String(rows[rows.length - 1].updated_at ?? lastSeen);
 
