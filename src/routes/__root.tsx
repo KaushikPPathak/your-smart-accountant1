@@ -68,8 +68,10 @@ function LockGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (location.pathname === "/lock") return;
+    if (location.pathname === "/assistant") return;
     if (!isUnlocked()) navigate({ to: "/lock" });
   }, [loading, location.pathname, navigate]);
+
 
   return <>{children}</>;
 }
