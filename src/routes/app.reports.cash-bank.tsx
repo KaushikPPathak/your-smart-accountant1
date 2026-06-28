@@ -76,20 +76,30 @@ function CashBankBook() {
   const search = Route.useSearch();
   const { from, to, setFrom, setTo } = useFyRangeState(search.from, search.to);
   const mastersVersion = useMastersVersion();
-  const [offlineCashBankLedgers, setOfflineCashBankLedgers] = useState<Array<{ id: string; name: string; type: string }>>([]);
+  const [offlineLedgers, setOfflineLedgers] = useState<Array<{ id: string; name: string; type: string }>>([]);
   const masterCashBankLedgers = useMemo(
     () => getAllLedgers().filter((l) => l.type === "cash" || l.type === "bank"),
     [mastersVersion],
   );
+  const offlineCashBankLedgers = useMemo(
+    () => offlineLedgers.filter((l) => l.type === "cash" || l.type === "bank"),
+    [offlineLedgers],
+  );
   const cashBankLedgers = masterCashBankLedgers.length > 0 ? masterCashBankLedgers : offlineCashBankLedgers;
+  const ledgerNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const l of offlineLedgers) map.set(l.id, l.name);
+    for (const l of getAllLedgers()) map.set(l.id, l.name);
+    return map;
+  }, [mastersVersion, offlineLedgers]);
   const [ledgerId, setLedgerId] = useState<string>(search.ledgerId || "");
   useEffect(() => {
     if (masterCashBankLedgers.length > 0 || !activeCompanyId) return;
     let cancelled = false;
     void readLedgers(activeCompanyId).then((rows) => {
       if (cancelled) return;
-      setOfflineCashBankLedgers((rows as any[])
-        .filter((l) => l.is_active !== false && (l.type === "cash" || l.type === "bank"))
+      setOfflineLedgers((rows as any[])
+        .filter((l) => l.is_active !== false)
         .map((l) => ({ id: String(l.id), name: String(l.name ?? ""), type: String(l.type ?? "") })));
     }).catch(() => undefined);
     return () => { cancelled = true; };
@@ -235,7 +245,7 @@ function CashBankBook() {
       const sibs = siblings.get(v.id) ?? [];
       // Particulars = the contra ledger(s)
       const partyNames = sibs
-        .map((s) => getLedger(s.ledger_id)?.name ?? cashBankLedgers.find((l) => l.id === s.ledger_id)?.name)
+        .map((s) => getLedger(s.ledger_id)?.name ?? ledgerNameById.get(s.ledger_id))
         .filter(Boolean) as string[];
       const particulars = partyNames.length ? partyNames.join(", ") : "—";
       bal = bal + e.debit_paise - e.credit_paise;
