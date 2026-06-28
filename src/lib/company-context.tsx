@@ -194,8 +194,13 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         // If data exists locally but staff filters cleared them out incorrectly, retain full 'out' array layout as a safety net
         const finalValidList = list.length === 0 && out.length > 0 ? out : list;
 
-        applyMemberships(finalValidList);
-        if (finalValidList.length > 0) void persistMembershipsToOfflineCache(finalValidList);
+        if (finalValidList.length > 0) {
+          applyMemberships(finalValidList);
+          void persistMembershipsToOfflineCache(finalValidList);
+        } else {
+          const cached = await loadOfflineFirst();
+          if (cached.length === 0) applyMemberships([]);
+        }
       }
     } catch (criticalRefreshError) {
       console.error("Mehtaji Pipeline: Integrity check failure during context mapping:", criticalRefreshError);
