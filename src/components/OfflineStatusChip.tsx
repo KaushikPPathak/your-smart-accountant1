@@ -68,14 +68,21 @@ export function OfflineStatusChip() {
         toast.error("Pending offline work could not be pushed, so data was not marked as matching");
         return;
       }
-      const r = await getLastSnapshotResult();
+      const r = await pullSnapshot({ full: true });
       if (!r) toast.message("Offline — try again when connected");
-      else {
+      else if (Object.keys(r.errors).length > 0 || (r.verification && !r.verification.ok)) {
+        toast.error("Sync failed — existing offline data preserved", {
+          description: r.verification?.problems?.[0] ?? Object.values(r.errors)[0] ?? "Verification did not pass.",
+        });
+        setLastSnap(r);
+      } else {
         await refreshCounts();
-        const counts = await getOfflineCacheCounts();
+        const counts = r.verification
+          ? Object.fromEntries(Object.entries(r.verification.tables).map(([k, v]) => [k, v.localCount]))
+          : await getOfflineCacheCounts();
         const total = Object.values(counts).reduce((a, b) => a + b, 0);
-        toast.success(`Offline mirror verified (${total} record${total === 1 ? "" : "s"})`, {
-          description: "Online and offline data now match for your companies.",
+        toast.success(`All data available in offline mode (${total} records verified)`, {
+          description: "Online and offline data match for your companies.",
         });
         setLastSnap(r);
       }
@@ -149,6 +156,18 @@ export function OfflineStatusChip() {
             <p className="mt-2 text-destructive">
               Errors: {Object.keys(lastSnap.errors).join(", ")}
             </p>
+          )}
+          {lastSnap?.verification && (
+            <div className="mt-2 rounded border bg-background/60 p-2">
+              <p className={lastSnap.verification.ok ? "text-emerald-600" : "text-destructive"}>
+                {lastSnap.verification.ok ? "Verified: online and offline data match" : "Verification failed — old offline data preserved"}
+              </p>
+              {lastSnap.verification.problems.length > 0 && (
+                <ul className="mt-1 list-disc pl-4 text-[11px] text-destructive">
+                  {lastSnap.verification.problems.slice(0, 4).map((p, i) => <li key={i}>{p}</li>)}
+                </ul>
+              )}
+            </div>
           )}
           <div className="mt-3 flex items-center gap-2">
             <Button size="sm" variant="outline" disabled={!online || pulling} onClick={onPullSnapshot} className="h-7 gap-1.5">
