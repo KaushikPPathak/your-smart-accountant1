@@ -55,6 +55,24 @@ const SNAPSHOT_TABLES = [...MINIMAL_TABLES, ...HEAVY_TABLES] as const;
 
 type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 
+type CacheRow = Record<string, unknown>;
+type ExactSnapshotRows = Record<string, CacheRow[]>;
+
+export interface SnapshotVerificationTable {
+  cloudCount: number;
+  localCount: number;
+  cloudChecksum: string;
+  localChecksum: string;
+  match: boolean;
+}
+
+export interface SnapshotVerification {
+  ok: boolean;
+  checkedAt: number;
+  tables: Record<string, SnapshotVerificationTable>;
+  problems: string[];
+}
+
 function dexieFor(table: SnapshotTable, db: any) {
   switch (table) {
     case "companies": return db.cache_companies;
@@ -78,6 +96,47 @@ function normalizeRowsForCache(table: SnapshotTable, rows: Array<Record<string, 
 function rowUpdatedAt(row: Record<string, unknown>, fallback: string) {
   const value = row.updated_at ?? row.created_at ?? fallback;
   return String(value || fallback);
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const obj = value as Record<string, unknown>;
+  return `{${Object.keys(obj).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
+}
+
+function checksumRows(rows: CacheRow[]): string {
+  let hash = 2166136261;
+  const sorted = [...rows].sort((a, b) => String(a.id ?? "").localeCompare(String(b.id ?? "")));
+  const input = sorted.map(stableStringify).join("\n");
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function dedupeRows(rows: CacheRow[]): CacheRow[] {
+  const seen = new Map<string, CacheRow>();
+  for (const row of rows) {
+    const id = String(row.id ?? "");
+    if (!id) continue;
+    seen.set(id, row);
+  }
+  return Array.from(seen.values());
+}
+
+function tableOrderColumn(table: SnapshotTable): string {
+  return table === "company_settings" ? "company_id" : "id";
+}
+
+function latestUpdatedAt(rows: CacheRow[]): string {
+  let latest = EPOCH;
+  for (const row of rows) {
+    const candidate = rowUpdatedAt(row, EPOCH);
+    if (candidate > latest) latest = candidate;
+  }
+  return latest;
 }
 
 async function getCursor(companyId: string, table: string): Promise<string> {
