@@ -142,26 +142,50 @@ function LedgerStatement() {
 
   const ledger = ledgers.find((l) => l.id === ledgerId);
 
+  const [autoExpandedNote, setAutoExpandedNote] = useState<string | null>(null);
+
   useEffect(() => {
     if (!ledgerId || !ledger) return;
     let cancelled = false;
     void (async () => {
-      const { data: ent } = await supabase
-        .from("voucher_entries")
-        .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
-        .eq("ledger_id", ledgerId)
-        .gte("vouchers.voucher_date", from)
-        .lte("vouchers.voucher_date", to)
-        .order("voucher_date", { referencedTable: "vouchers", ascending: true }).order("voucher_number", { referencedTable: "vouchers", ascending: true });
+      setAutoExpandedNote(null);
+      let effFrom = from;
+      let effTo = to;
+      const fetchEntries = async (f: string, t: string) => {
+        const { data: ent } = await supabase
+          .from("voucher_entries")
+          .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
+          .eq("ledger_id", ledgerId)
+          .gte("vouchers.voucher_date", f)
+          .lte("vouchers.voucher_date", t)
+          .order("voucher_date", { referencedTable: "vouchers", ascending: true })
+          .order("voucher_number", { referencedTable: "vouchers", ascending: true });
+        return (ent || []) as unknown as EntryRow[];
+      };
+      let list = await fetchEntries(effFrom, effTo);
       if (cancelled) return;
-      const list = (ent || []) as unknown as EntryRow[];
+      // Auto-expand: if no entries in selected FY, probe all dates and switch if data exists outside the period.
+      if (list.length === 0) {
+        const { count } = await supabase
+          .from("voucher_entries")
+          .select("id, vouchers!inner(company_id)", { count: "exact", head: true })
+          .eq("ledger_id", ledgerId);
+        if (cancelled) return;
+        if ((count ?? 0) > 0) {
+          effFrom = "1900-01-01";
+          effTo = "2999-12-31";
+          list = await fetchEntries(effFrom, effTo);
+          if (cancelled) return;
+          setAutoExpandedNote(`No entries in ${from} – ${to}; auto-expanded to All Dates (${count} entry/entries found).`);
+        }
+      }
       setEntries(list);
 
       const { data: prior } = await supabase
         .from("voucher_entries")
         .select("debit_paise, credit_paise, vouchers!inner(voucher_date)")
         .eq("ledger_id", ledgerId)
-        .lt("vouchers.voucher_date", from);
+        .lt("vouchers.voucher_date", effFrom);
       if (cancelled) return;
       const movement = (prior || []).reduce(
         (s, e) => s + (e.debit_paise as number) - (e.credit_paise as number),
@@ -207,6 +231,7 @@ function LedgerStatement() {
       cancelled = true;
     };
   }, [ledgerId, from, to, ledger]);
+
 
   // Single-pass totals + columnar rows w/ running balance (integer paise math)
   const { columnarRows, totals } = useMemo(() => {
@@ -888,7 +913,13 @@ function LedgerStatement() {
       onExportPdf={onExportPdf}
       exportFileBase={`${fileBase}-${view}`}
     >
+      {autoExpandedNote && !allMode && (
+        <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          {autoExpandedNote}
+        </div>
+      )}
       {allMode ? (
+
         <div className="space-y-6">
           {(allSections ?? []).length === 0 ? (
             <Card><CardContent className="p-6 text-sm text-muted-foreground">{allLoading ? "Loading all ledgers…" : "No ledgers with activity in this period."}</CardContent></Card>
