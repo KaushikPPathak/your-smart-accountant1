@@ -27,13 +27,17 @@ export function OfflineStatusChip() {
   const [draining, setDraining] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [lastSnap, setLastSnap] = useState<SnapshotResult | null>(null);
+  const [cacheCounts, setCacheCounts] = useState<Record<string, number>>({});
+
+  const refreshCounts = async () => setCacheCounts(await getOfflineCacheCounts());
 
   useEffect(() => {
     const refresh = async () => {
-      const [list, snap] = await Promise.all([listOutbox(), getLastSnapshotResult()]);
+      const [list, snap, counts] = await Promise.all([listOutbox(), getLastSnapshotResult(), getOfflineCacheCounts()]);
       setRows(list);
       setCount(list.length);
       setLastSnap(snap);
+      setCacheCounts(counts);
     };
     void refresh();
     const unsub = subscribeOutbox(() => { void refresh(); });
@@ -50,6 +54,7 @@ export function OfflineStatusChip() {
       else if (res.failed > 0) toast.error("Sync failed — check the queue for details");
       else toast.message("Sync complete");
       setLastSnap(await getLastSnapshotResult());
+      await refreshCounts();
     } finally {
       setDraining(false);
     }
@@ -58,11 +63,15 @@ export function OfflineStatusChip() {
   const onPullSnapshot = async () => {
     setPulling(true);
     try {
-      const r = await pullSnapshot();
+      const r = await pullSnapshot({ full: true });
       if (!r) toast.message("Offline — try again when connected");
       else {
-        const total = Object.values(r.pulled).reduce((a, b) => a + b, 0);
-        toast.success(`Pulled ${total} cloud record${total === 1 ? "" : "s"} into offline cache`);
+        await refreshCounts();
+        const counts = await getOfflineCacheCounts();
+        const total = Object.values(counts).reduce((a, b) => a + b, 0);
+        toast.success(`Offline cache now holds ${total} record${total === 1 ? "" : "s"}`, {
+          description: "All data available offline.",
+        });
         setLastSnap(r);
       }
     } catch (e) {
@@ -76,6 +85,7 @@ export function OfflineStatusChip() {
     if (!confirm("Wipe the offline cache? Next online sync will pull everything again.")) return;
     await resetSnapshotCache();
     setLastSnap(null);
+    await refreshCounts();
     toast.success("Offline cache cleared");
   };
 
