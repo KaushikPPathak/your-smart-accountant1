@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { FileText, Eye, FileType2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { readLedgers, readVoucherEntriesWithVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 
 type ViewMode = "columnar" | "horizontal" | "grid";
 type LedgerSearch = { ledgerId?: string; from?: string; to?: string; view?: ViewMode };
@@ -120,17 +121,32 @@ function LedgerStatement() {
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("ledgers")
-      .select("id, name, opening_balance_paise, opening_balance_is_debit")
-      .eq("company_id", activeCompanyId)
-      .eq("is_active", true)
-      .order("name")
-      .then(({ data }) => {
-        const list = (data || []) as LedgerOpt[];
+    let cancelled = false;
+    void withCacheFallback(
+      async () => {
+        const { data, error } = await supabase
+          .from("ledgers")
+          .select("id, name, opening_balance_paise, opening_balance_is_debit")
+          .eq("company_id", activeCompanyId)
+          .eq("is_active", true)
+          .order("name");
+        if (error) throw error;
+        return (data || []) as LedgerOpt[];
+      },
+      async () => (await readLedgers(activeCompanyId))
+        .filter((l: any) => l.is_active !== false)
+        .map((l: any) => ({
+          id: String(l.id),
+          name: String(l.name ?? ""),
+          opening_balance_paise: Number(l.opening_balance_paise ?? 0),
+          opening_balance_is_debit: Boolean(l.opening_balance_is_debit),
+        })),
+    ).then((list) => {
+        if (cancelled) return;
         setLedgers(list);
         if (!ledgerId && list[0]) setLedgerId(list[0].id);
       });
+    return () => { cancelled = true; };
   }, [activeCompanyId, ledgerId]);
 
   useEffect(() => {
@@ -145,49 +161,61 @@ function LedgerStatement() {
   const [autoExpandedNote, setAutoExpandedNote] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!ledgerId || !ledger) return;
+    if (!activeCompanyId || !ledgerId || !ledger) return;
     let cancelled = false;
     void (async () => {
       setAutoExpandedNote(null);
       let effFrom = from;
       let effTo = to;
       const fetchEntries = async (f: string, t: string) => {
-        const { data: ent } = await supabase
-          .from("voucher_entries")
-          .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
-          .eq("ledger_id", ledgerId)
-          .gte("vouchers.voucher_date", f)
-          .lte("vouchers.voucher_date", t)
-          .order("voucher_date", { referencedTable: "vouchers", ascending: true })
-          .order("voucher_number", { referencedTable: "vouchers", ascending: true });
-        return (ent || []) as unknown as EntryRow[];
+        return withCacheFallback<EntryRow[]>(
+          async () => {
+            const { data: ent, error } = await supabase
+              .from("voucher_entries")
+              .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
+              .eq("ledger_id", ledgerId)
+              .eq("vouchers.company_id", activeCompanyId)
+              .gte("vouchers.voucher_date", f)
+              .lte("vouchers.voucher_date", t)
+              .order("voucher_date", { referencedTable: "vouchers", ascending: true })
+              .order("voucher_number", { referencedTable: "vouchers", ascending: true });
+            if (error) throw error;
+            return (ent || []) as unknown as EntryRow[];
+          },
+          async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, from: f, to: t })) as EntryRow[],
+        );
       };
       let list = await fetchEntries(effFrom, effTo);
       if (cancelled) return;
       // Auto-expand: if no entries in selected FY, probe all dates and switch if data exists outside the period.
       if (list.length === 0) {
-        const { count } = await supabase
-          .from("voucher_entries")
-          .select("id, vouchers!inner(company_id)", { count: "exact", head: true })
-          .eq("ledger_id", ledgerId);
+        const allDates = await fetchEntries("1900-01-01", "2999-12-31");
         if (cancelled) return;
-        if ((count ?? 0) > 0) {
+        if (allDates.length > 0) {
           effFrom = "1900-01-01";
           effTo = "2999-12-31";
-          list = await fetchEntries(effFrom, effTo);
+          list = allDates;
           if (cancelled) return;
-          setAutoExpandedNote(`No entries in ${from} – ${to}; auto-expanded to All Dates (${count} entry/entries found).`);
+          setAutoExpandedNote(`No entries in ${from} – ${to}; auto-expanded to All Dates (${allDates.length} entry/entries found).`);
         }
       }
       setEntries(list);
 
-      const { data: prior } = await supabase
-        .from("voucher_entries")
-        .select("debit_paise, credit_paise, vouchers!inner(voucher_date)")
-        .eq("ledger_id", ledgerId)
-        .lt("vouchers.voucher_date", effFrom);
+      const prior = await withCacheFallback<{ debit_paise: number; credit_paise: number }[]>(
+        async () => {
+          const { data, error } = await supabase
+            .from("voucher_entries")
+            .select("debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
+            .eq("ledger_id", ledgerId)
+            .eq("vouchers.company_id", activeCompanyId)
+            .lt("vouchers.voucher_date", effFrom);
+          if (error) throw error;
+          return (data || []) as { debit_paise: number; credit_paise: number }[];
+        },
+        async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, before: effFrom })) as { debit_paise: number; credit_paise: number }[],
+      );
       if (cancelled) return;
-      const movement = (prior || []).reduce(
+      const movement = prior.reduce(
         (s, e) => s + (e.debit_paise as number) - (e.credit_paise as number),
         0,
       );
@@ -201,28 +229,52 @@ function LedgerStatement() {
         setSiblingNames(new Map());
         return;
       }
-      const { data: sibs } = await supabase
-        .from("voucher_entries")
-        .select("voucher_id, ledger_id, debit_paise, credit_paise")
-        .in("voucher_id", ids)
-        .neq("ledger_id", ledgerId);
+      const sibs = await withCacheFallback<SiblingRow[]>(
+        async () => {
+          const { data, error } = await supabase
+            .from("voucher_entries")
+            .select("voucher_id, ledger_id, debit_paise, credit_paise")
+            .in("voucher_id", ids)
+            .neq("ledger_id", ledgerId);
+          if (error) throw error;
+          return (data || []) as SiblingRow[];
+        },
+        async () => ((await readVoucherEntriesWithVouchers(activeCompanyId)) as any[])
+          .filter((e) => ids.includes(String(e.voucher_id)) && String(e.ledger_id) !== ledgerId)
+          .map((e) => ({
+            voucher_id: String(e.voucher_id),
+            ledger_id: String(e.ledger_id),
+            debit_paise: Number(e.debit_paise ?? 0),
+            credit_paise: Number(e.credit_paise ?? 0),
+          })),
+      );
       if (cancelled) return;
       const map = new Map<string, SiblingRow[]>();
       const ledgerIds = new Set<string>();
-      for (const s of (sibs || []) as SiblingRow[]) {
+      for (const s of sibs) {
         const arr = map.get(s.voucher_id) ?? [];
         arr.push(s);
         map.set(s.voucher_id, arr);
         ledgerIds.add(s.ledger_id);
       }
       setSiblings(map);
-      const { data: names } = await supabase
-        .from("ledgers")
-        .select("id, name, type")
-        .in("id", Array.from(ledgerIds));
+      const names = await withCacheFallback<{ id: string; name: string; type: string }[]>(
+        async () => {
+          if (ledgerIds.size === 0) return [];
+          const { data, error } = await supabase
+            .from("ledgers")
+            .select("id, name, type")
+            .in("id", Array.from(ledgerIds));
+          if (error) throw error;
+          return (data || []) as { id: string; name: string; type: string }[];
+        },
+        async () => (await readLedgers(activeCompanyId))
+          .filter((l: any) => ledgerIds.has(String(l.id)))
+          .map((l: any) => ({ id: String(l.id), name: String(l.name ?? ""), type: String(l.type ?? "") })),
+      );
       if (cancelled) return;
       const nameMap = new Map<string, { name: string; type: string }>();
-      for (const n of (names || []) as { id: string; name: string; type: string }[]) {
+      for (const n of names) {
         nameMap.set(n.id, { name: n.name, type: n.type });
       }
       setSiblingNames(nameMap);
@@ -230,7 +282,7 @@ function LedgerStatement() {
     return () => {
       cancelled = true;
     };
-  }, [ledgerId, from, to, ledger]);
+  }, [activeCompanyId, ledgerId, from, to, ledger]);
 
 
   // Single-pass totals + columnar rows w/ running balance (integer paise math)
@@ -529,21 +581,34 @@ function LedgerStatement() {
 
   const buildAllLedgersData = async (): Promise<AllSection[]> => {
     if (!activeCompanyId || ledgers.length === 0) return [];
-    const { data: ent } = await supabase
-      .from("voucher_entries")
-      .select("id, ledger_id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
-      .eq("vouchers.company_id", activeCompanyId)
-      .gte("vouchers.voucher_date", from)
-      .lte("vouchers.voucher_date", to);
-    const allEntries = ((ent || []) as unknown) as (EntryRow & { ledger_id: string })[];
+    const allEntries = await withCacheFallback<(EntryRow & { ledger_id: string })[]>(
+      async () => {
+        const { data, error } = await supabase
+          .from("voucher_entries")
+          .select("id, ledger_id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
+          .eq("vouchers.company_id", activeCompanyId)
+          .gte("vouchers.voucher_date", from)
+          .lte("vouchers.voucher_date", to);
+        if (error) throw error;
+        return ((data || []) as unknown) as (EntryRow & { ledger_id: string })[];
+      },
+      async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { from, to })) as (EntryRow & { ledger_id: string })[],
+    );
 
-    const { data: prior } = await supabase
-      .from("voucher_entries")
-      .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-      .eq("vouchers.company_id", activeCompanyId)
-      .lt("vouchers.voucher_date", from);
+    const prior = await withCacheFallback<{ ledger_id: string; debit_paise: number; credit_paise: number }[]>(
+      async () => {
+        const { data, error } = await supabase
+          .from("voucher_entries")
+          .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
+          .eq("vouchers.company_id", activeCompanyId)
+          .lt("vouchers.voucher_date", from);
+        if (error) throw error;
+        return (data || []) as { ledger_id: string; debit_paise: number; credit_paise: number }[];
+      },
+      async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { before: from })) as { ledger_id: string; debit_paise: number; credit_paise: number }[],
+    );
     const movement = new Map<string, number>();
-    for (const p of (prior || []) as { ledger_id: string; debit_paise: number; credit_paise: number }[]) {
+    for (const p of prior) {
       movement.set(p.ledger_id, (movement.get(p.ledger_id) ?? 0) + p.debit_paise - p.credit_paise);
     }
 
@@ -551,18 +616,42 @@ function LedgerStatement() {
     const sibsByVoucher = new Map<string, { ledger_id: string; debit_paise: number; credit_paise: number }[]>();
     const infoById = new Map<string, { name: string; type: string }>();
     if (voucherIds.length > 0) {
-      const { data: sibs } = await supabase
-        .from("voucher_entries").select("voucher_id, ledger_id, debit_paise, credit_paise").in("voucher_id", voucherIds);
+      const sibs = await withCacheFallback<{ voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[]>(
+        async () => {
+          const { data, error } = await supabase
+            .from("voucher_entries").select("voucher_id, ledger_id, debit_paise, credit_paise").in("voucher_id", voucherIds);
+          if (error) throw error;
+          return (data || []) as { voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[];
+        },
+        async () => ((await readVoucherEntriesWithVouchers(activeCompanyId)) as any[])
+          .filter((e) => voucherIds.includes(String(e.voucher_id)))
+          .map((e) => ({
+            voucher_id: String(e.voucher_id),
+            ledger_id: String(e.ledger_id),
+            debit_paise: Number(e.debit_paise ?? 0),
+            credit_paise: Number(e.credit_paise ?? 0),
+          })),
+      );
       const ledgerIds = new Set<string>();
-      for (const s of (sibs || []) as { voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[]) {
+      for (const s of sibs) {
         const arr = sibsByVoucher.get(s.voucher_id) ?? [];
         arr.push({ ledger_id: s.ledger_id, debit_paise: s.debit_paise, credit_paise: s.credit_paise });
         sibsByVoucher.set(s.voucher_id, arr);
         ledgerIds.add(s.ledger_id);
       }
-      const { data: names } = await supabase
-        .from("ledgers").select("id, name, type").in("id", Array.from(ledgerIds));
-      for (const n of (names || []) as { id: string; name: string; type: string }[]) {
+      const names = await withCacheFallback<{ id: string; name: string; type: string }[]>(
+        async () => {
+          if (ledgerIds.size === 0) return [];
+          const { data, error } = await supabase
+            .from("ledgers").select("id, name, type").in("id", Array.from(ledgerIds));
+          if (error) throw error;
+          return (data || []) as { id: string; name: string; type: string }[];
+        },
+        async () => (await readLedgers(activeCompanyId))
+          .filter((l: any) => ledgerIds.has(String(l.id)))
+          .map((l: any) => ({ id: String(l.id), name: String(l.name ?? ""), type: String(l.type ?? "") })),
+      );
+      for (const n of names) {
         infoById.set(n.id, { name: n.name, type: n.type });
       }
     }

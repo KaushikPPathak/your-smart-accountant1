@@ -61,7 +61,15 @@ import { formatINR } from "@/lib/money";
 import { describeError } from "@/lib/error-message";
 import { deactivateLedger as deactivateLedgerOff, deactivateItem as deactivateItemOff } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
-import { readVouchers, shouldPreferOfflineCache, withCacheFallback } from "@/lib/offline/cache-read";
+import {
+  readItems,
+  readLedgers,
+  readVoucherEntriesForCompany,
+  readVoucherItemsForCompany,
+  readVouchers,
+  shouldPreferOfflineCache,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/housekeeping")({
   head: () => ({ meta: [{ title: "Housekeeping — Accounting Tools" }] }),
@@ -753,23 +761,49 @@ function CleanupTool({ companyId, disabled }: { companyId: string | null; disabl
     if (!companyId) return;
     setScanning(true);
     try {
-      const [ledgerRes, itemRes, entryRes, vItemRes] = await Promise.all([
-        supabase.from("ledgers").select("id, name").eq("company_id", companyId).eq("is_active", true),
-        supabase.from("items").select("id, name").eq("company_id", companyId).eq("is_active", true),
-        supabase.from("voucher_entries").select("ledger_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId),
-        supabase.from("voucher_items").select("item_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId),
-      ]);
-      const failed = [ledgerRes, itemRes, entryRes, vItemRes].find((r) => r.error);
-      if (failed?.error) throw failed.error;
-      const { data: ledgers } = ledgerRes;
-      const { data: items } = itemRes;
-      const { data: entries } = entryRes;
-      const { data: vItems } = vItemRes;
+      const loaded = await withCacheFallback<{
+        ledgers: { id: string; name: string }[];
+        items: { id: string; name: string }[];
+        entries: { ledger_id: string }[];
+        vItems: { item_id: string }[];
+        source: "cloud" | "cache";
+      }>(
+        async () => {
+          const [ledgerRes, itemRes, entryRes, vItemRes] = await Promise.all([
+            supabase.from("ledgers").select("id, name").eq("company_id", companyId).eq("is_active", true),
+            supabase.from("items").select("id, name").eq("company_id", companyId).eq("is_active", true),
+            supabase.from("voucher_entries").select("ledger_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId),
+            supabase.from("voucher_items").select("item_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId),
+          ]);
+          const failed = [ledgerRes, itemRes, entryRes, vItemRes].find((r) => r.error);
+          if (failed?.error) throw failed.error;
+          return {
+            ledgers: (ledgerRes.data || []) as { id: string; name: string }[],
+            items: (itemRes.data || []) as { id: string; name: string }[],
+            entries: (entryRes.data || []) as { ledger_id: string }[],
+            vItems: (vItemRes.data || []) as { item_id: string }[],
+            source: "cloud" as const,
+          };
+        },
+        async () => ({
+          ledgers: (await readLedgers(companyId))
+            .filter((l: any) => l.is_active !== false)
+            .map((l: any) => ({ id: String(l.id), name: String(l.name ?? "") })),
+          items: (await readItems(companyId))
+            .filter((i: any) => i.is_active !== false)
+            .map((i: any) => ({ id: String(i.id), name: String(i.name ?? "") })),
+          entries: ((await readVoucherEntriesForCompany(companyId)) as any[]).map((e) => ({ ledger_id: String(e.ledger_id ?? "") })),
+          vItems: ((await readVoucherItemsForCompany(companyId)) as any[]).map((v) => ({ item_id: String(v.item_id ?? "") })),
+          source: "cache" as const,
+        }),
+      );
+      const { ledgers, items, entries, vItems } = loaded;
       const usedLedgerIds = new Set(((entries || []) as { ledger_id: string }[]).map((e) => e.ledger_id));
       const usedItemIds = new Set(((vItems || []) as { item_id: string }[]).map((v) => v.item_id));
       setUnusedLedgers(((ledgers || []) as { id: string; name: string }[]).filter((l) => !usedLedgerIds.has(l.id)));
       setUnusedItems(((items || []) as { id: string; name: string }[]).filter((i) => !usedItemIds.has(i.id)));
       setHasRun(true);
+      if (loaded.source === "cache") toast.success("Cleanup scan completed from offline data");
     } catch (err) {
       toast.error(`Cleanup scan failed: ${describeError(err)}`);
     } finally {

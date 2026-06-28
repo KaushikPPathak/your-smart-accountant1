@@ -74,25 +74,86 @@ export async function readVouchers(companyId: string, opts?: {
 }
 
 export async function readVoucherEntriesForCompany(companyId: string) {
+  const direct = await offlineDb.cache_voucher_entries.where("company_id").equals(companyId).toArray();
+
+  // Backward-compatible recovery for caches created before company_id was
+  // stored on child rows. We intentionally MERGE this with direct rows rather
+  // than returning early, because a failed/interrupted sync may leave only some
+  // children stamped with company_id. Returning only `direct` was the source of
+  // "offline reports show partial/no transactions" even after sync said done.
   const vouchers = await readVouchers(companyId);
   const ids = vouchers.map((v) => v.id).filter(Boolean);
-  if (ids.length === 0) return [];
+  if (ids.length === 0) return direct;
+  const seen = new Set(direct.map((r: any) => String(r.id)));
   const out: unknown[] = [];
   for (let i = 0; i < ids.length; i += 500) {
-    out.push(...await offlineDb.cache_voucher_entries.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray());
+    const rows = await offlineDb.cache_voucher_entries.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray();
+    for (const r of rows as any[]) {
+      const id = String(r.id);
+      if (!seen.has(id)) {
+        seen.add(id);
+        out.push({ ...r, company_id: r.company_id ?? companyId });
+      }
+    }
   }
-  return out;
+  return [...direct, ...out];
 }
 
 export async function readVoucherItemsForCompany(companyId: string) {
+  const direct = await offlineDb.cache_voucher_items.where("company_id").equals(companyId).toArray();
+
   const vouchers = await readVouchers(companyId);
   const ids = vouchers.map((v) => v.id).filter(Boolean);
-  if (ids.length === 0) return [];
+  if (ids.length === 0) return direct;
+  const seen = new Set(direct.map((r: any) => String(r.id)));
   const out: unknown[] = [];
   for (let i = 0; i < ids.length; i += 500) {
-    out.push(...await offlineDb.cache_voucher_items.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray());
+    const rows = await offlineDb.cache_voucher_items.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray();
+    for (const r of rows as any[]) {
+      const id = String(r.id);
+      if (!seen.has(id)) {
+        seen.add(id);
+        out.push({ ...r, company_id: r.company_id ?? companyId });
+      }
+    }
   }
-  return out;
+  return [...direct, ...out];
+}
+
+export async function readVoucherEntriesWithVouchers(companyId: string, opts?: {
+  ledgerId?: string;
+  from?: string;
+  to?: string;
+  before?: string;
+}) {
+  const [vouchers, entries] = await Promise.all([
+    readVouchers(companyId),
+    readVoucherEntriesForCompany(companyId),
+  ]);
+  const voucherById = new Map(vouchers.map((v: any) => [String(v.id), v]));
+  return (entries as any[])
+    .map((e) => {
+      const v = voucherById.get(String(e.voucher_id));
+      if (!v) return null;
+      const voucherDate = String(v.voucher_date ?? v.date ?? "");
+      if (opts?.ledgerId && String(e.ledger_id) !== opts.ledgerId) return null;
+      if (opts?.from && voucherDate < opts.from) return null;
+      if (opts?.to && voucherDate > opts.to) return null;
+      if (opts?.before && voucherDate >= opts.before) return null;
+      return {
+        ...e,
+        vouchers: {
+          id: String(v.id),
+          voucher_date: voucherDate,
+          voucher_number: String(v.voucher_number ?? ""),
+          voucher_type: String(v.voucher_type ?? ""),
+          narration: v.narration ?? null,
+          reference_no: v.reference_no ?? null,
+          company_id: companyId,
+        },
+      };
+    })
+    .filter(Boolean);
 }
 
 export async function readBillAllocations(companyId: string) {

@@ -18,6 +18,7 @@ import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { downloadXlsx, downloadPdfTable, r } from "@/lib/exporters";
 import type { LedgerTypeValue } from "@/lib/constants";
+import { readLedgers, readVoucherEntriesWithVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/group-ledger")({
   head: () => ({ meta: [{ title: "Group Ledger Report — Reports" }] }),
@@ -112,19 +113,44 @@ function GroupLedgerReport() {
   useEffect(() => {
     if (!activeCompanyId) return;
     setLoading(true);
-    Promise.all([
-      supabase.from("ledgers")
-        .select("id, name, type, group_code, opening_balance_paise, opening_balance_is_debit")
-        .eq("company_id", activeCompanyId)
-        .eq("is_active", true)
-        .in("type", group.types)
-        .order("name"),
-      supabase.from("voucher_entries")
-        .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-        .eq("vouchers.company_id", activeCompanyId)
-        .lte("vouchers.voucher_date", to),
-    ]).then(([l, e]) => {
-      let rows = (l.data || []) as LedgerRow[];
+    let cancelled = false;
+    withCacheFallback<{ ledgers: LedgerRow[]; entries: EntryRow[] }>(
+      async () => {
+        const [l, e] = await Promise.all([
+          supabase.from("ledgers")
+            .select("id, name, type, group_code, opening_balance_paise, opening_balance_is_debit")
+            .eq("company_id", activeCompanyId)
+            .eq("is_active", true)
+            .in("type", group.types)
+            .order("name"),
+          supabase.from("voucher_entries")
+            .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
+            .eq("vouchers.company_id", activeCompanyId)
+            .lte("vouchers.voucher_date", to),
+        ]);
+        if (l.error) throw l.error;
+        if (e.error) throw e.error;
+        return {
+          ledgers: (l.data || []) as LedgerRow[],
+          entries: (e.data || []) as unknown as EntryRow[],
+        };
+      },
+      async () => ({
+        ledgers: (await readLedgers(activeCompanyId))
+          .filter((l: any) => l.is_active !== false && group.types.includes(String(l.type) as LedgerTypeValue))
+          .map((l: any) => ({
+            id: String(l.id),
+            name: String(l.name ?? ""),
+            type: String(l.type ?? "") as LedgerTypeValue,
+            group_code: l.group_code ?? null,
+            opening_balance_paise: Number(l.opening_balance_paise ?? 0),
+            opening_balance_is_debit: Boolean(l.opening_balance_is_debit),
+          })),
+        entries: (await readVoucherEntriesWithVouchers(activeCompanyId, { to })) as EntryRow[],
+      }),
+    ).then(({ ledgers: ledgerRows, entries }) => {
+      if (cancelled) return;
+      let rows = ledgerRows;
       if (group.groupCodes) {
         const set = new Set(group.groupCodes);
         rows = rows.filter((r) => r.group_code && set.has(r.group_code));
@@ -134,9 +160,12 @@ function GroupLedgerReport() {
         rows = rows.filter((r) => !r.group_code || !ex.has(r.group_code));
       }
       setLedgers(rows);
-      setEntries((e.data || []) as unknown as EntryRow[]);
+      setEntries(entries);
       setLoading(false);
+    }).catch(() => {
+      if (!cancelled) setLoading(false);
     });
+    return () => { cancelled = true; };
   }, [activeCompanyId, group, to]);
 
   const rows = useMemo(() => {
