@@ -97,7 +97,7 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
   }
 
   try {
-    const ctx = await buildCompressedContext(question);
+    const ctx = await buildCompressedContext(question, args?.data?.companyId ?? null);
 
     const baseMessages: ChatMsg[] = [
       ctx.systemMessage as ChatMsg,
