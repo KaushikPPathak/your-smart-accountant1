@@ -523,7 +523,7 @@ export interface SnapshotResult {
   verification?: SnapshotVerification;
 }
 
-let pullInFlight: Promise<SnapshotResult | null> | null = null;
+const snapshotInFlight = new Map<string, Promise<SnapshotResult | null>>();
 const perCompanyInFlight = new Map<string, Promise<SnapshotResult | null>>();
 
 async function notifyOfflineReady(companyId: string, result: SnapshotResult) {
@@ -608,8 +608,10 @@ export async function pullCompanySnapshot(
  * pullCompanySnapshot(id, { full: true }).
  */
 export async function pullSnapshot(opts: { full?: boolean } = {}): Promise<SnapshotResult | null> {
-  if (pullInFlight) return pullInFlight;
-  pullInFlight = (async () => {
+  const flightKey = opts.full ? "full" : "minimal";
+  const existing = snapshotInFlight.get(flightKey);
+  if (existing) return existing;
+  const run = (async () => {
     try {
       if (!isOnlineNow()) return null;
       const { data: { user } } = await supabase.auth.getUser();
@@ -631,16 +633,27 @@ export async function pullSnapshot(opts: { full?: boolean } = {}): Promise<Snaps
         return completed.reduce<SnapshotResult>((acc, r) => {
           for (const [k, v] of Object.entries(r.pulled)) acc.pulled[k] = (acc.pulled[k] ?? 0) + v;
           for (const [k, v] of Object.entries(r.errors)) acc.errors[`${r.companyId}:${k}`] = v;
+          if (r.verification) {
+            if (!acc.verification) acc.verification = { ok: true, checkedAt: 0, tables: {}, problems: [] };
+            acc.verification.ok = acc.verification.ok && r.verification.ok;
+            acc.verification.checkedAt = Math.max(acc.verification.checkedAt, r.verification.checkedAt);
+            for (const [table, detail] of Object.entries(r.verification.tables)) {
+              const key = completed.length > 1 ? `${r.companyId}:${table}` : table;
+              acc.verification.tables[key] = detail;
+            }
+            acc.verification.problems.push(...r.verification.problems.map((p) => `${r.companyId}: ${p}`));
+          }
           acc.finishedAt = Math.max(acc.finishedAt, r.finishedAt);
           return acc;
-        }, { companyId: "all", pulled: {}, errors: {}, finishedAt: 0 });
+        }, { companyId: "all", pulled: {}, errors: {}, finishedAt: 0, verification: { ok: true, checkedAt: 0, tables: {}, problems: [] } });
       }
       return completed.pop() ?? null;
     } finally {
-      pullInFlight = null;
+      snapshotInFlight.delete(flightKey);
     }
   })();
-  return pullInFlight;
+  snapshotInFlight.set(flightKey, run);
+  return run;
 }
 
 /** Row counts currently in the offline cache (not the last sync delta). */
