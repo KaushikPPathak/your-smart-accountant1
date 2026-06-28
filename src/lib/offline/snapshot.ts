@@ -255,7 +255,7 @@ export async function pullCompanySnapshot(
  * screen and dashboard. Per-company heavy data is pulled on demand by
  * pullCompanySnapshot(id, { full: true }).
  */
-export async function pullSnapshot(): Promise<SnapshotResult | null> {
+export async function pullSnapshot(opts: { full?: boolean } = {}): Promise<SnapshotResult | null> {
   if (pullInFlight) return pullInFlight;
   pullInFlight = (async () => {
     try {
@@ -270,9 +270,8 @@ export async function pullSnapshot(): Promise<SnapshotResult | null> {
       if (error) return null;
 
       const ids = Array.from(new Set((memberships ?? []).map((r) => r.company_id as string)));
-      // Parallel per-company minimal pulls — each company is independent.
       const results = await Promise.all(
-        ids.map((id) => pullCompanySnapshot(id, { full: false }).catch(() => null)),
+        ids.map((id) => pullCompanySnapshot(id, { full: opts.full ?? false, notify: false }).catch(() => null)),
       );
       return results.filter(Boolean).pop() ?? null;
     } finally {
@@ -280,6 +279,28 @@ export async function pullSnapshot(): Promise<SnapshotResult | null> {
     }
   })();
   return pullInFlight;
+}
+
+/** Row counts currently in the offline cache (not the last sync delta). */
+export async function getOfflineCacheCounts(): Promise<Record<string, number>> {
+  const { db } = await getDbInstance();
+  const tables: Array<[string, any]> = [
+    ["companies", db.cache_companies],
+    ["company_settings", db.cache_company_settings],
+    ["ledgers", db.cache_ledgers],
+    ["items", db.cache_items],
+    ["account_subgroups", db.cache_account_subgroups],
+    ["ledger_group_mappings", db.cache_ledger_group_mappings],
+    ["account_group_overrides", db.cache_account_group_overrides],
+    ["vouchers", db.cache_vouchers],
+    ["voucher_entries", db.cache_voucher_entries],
+    ["voucher_items", db.cache_voucher_items],
+  ];
+  const out: Record<string, number> = {};
+  await Promise.all(tables.map(async ([k, t]) => {
+    try { out[k] = await t.count(); } catch { out[k] = 0; }
+  }));
+  return out;
 }
 
 export async function getLastSnapshotResult(): Promise<SnapshotResult | null> {
