@@ -63,7 +63,8 @@ export function OfflineStatusChip() {
   const onPullSnapshot = async () => {
     setPulling(true);
     try {
-      const r = await pullSnapshot({ full: true });
+      await runSyncNow();
+      const r = await getLastSnapshotResult();
       if (!r) toast.message("Offline — try again when connected");
       else {
         await refreshCounts();

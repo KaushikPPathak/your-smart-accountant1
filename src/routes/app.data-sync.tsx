@@ -7,6 +7,7 @@ import { Cloud, Upload, RefreshCw, CheckCircle2, Database } from "lucide-react";
 import { toast } from "sonner";
 import { getOfflineCacheCounts, pullSnapshot } from "@/lib/offline/snapshot";
 import { supabase as supabaseTyped } from "@/integrations/supabase/client";
+import { drainOutbox, queueSize } from "@/lib/offline/outbox";
 
 export const Route = createFileRoute("/app/data-sync")({
   component: DataSyncPage,
@@ -43,6 +44,11 @@ function DataSyncPage() {
     setCloudCounts({});
     const counts: Counts = {};
     try {
+      const pushed = await drainOutbox();
+      if (pushed.failed > 0 || await queueSize() > 0) {
+        toast.error("Pending offline work could not be pushed, so data was not marked as matching");
+        return;
+      }
       const result = await pullSnapshot({ full: true });
       if (!result) {
         toast.error("Connect online once to match online and offline data");
