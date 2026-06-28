@@ -277,17 +277,19 @@ async function writeExactSnapshotRows(companyId: string, rows: ExactSnapshotRows
   const { db } = await getDbInstance();
   await db.transaction(
     "rw",
-    db.cache_companies,
-    db.cache_company_settings,
-    db.cache_ledgers,
-    db.cache_items,
-    db.cache_account_subgroups,
-    db.cache_ledger_group_mappings,
-    db.cache_account_group_overrides,
-    db.cache_vouchers,
-    db.cache_voucher_entries,
-    db.cache_voucher_items,
-    db.cache_bill_allocations,
+    [
+      db.cache_companies,
+      db.cache_company_settings,
+      db.cache_ledgers,
+      db.cache_items,
+      db.cache_account_subgroups,
+      db.cache_ledger_group_mappings,
+      db.cache_account_group_overrides,
+      db.cache_vouchers,
+      db.cache_voucher_entries,
+      db.cache_voucher_items,
+      db.cache_bill_allocations,
+    ],
     async () => {
       await Promise.all([
         db.cache_companies.delete(companyId),
