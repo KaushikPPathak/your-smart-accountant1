@@ -103,7 +103,18 @@ function StartScreen() {
           // 🔌 OFFLINE FALLBACK: Read straight from your local hard drive folder
           console.log("Offline mode detected. Querying local database structure...");
           try {
-            const cachedData = await db.companies.toArray();
+            const [pickerCache, snapshotCache] = await Promise.all([
+              db.companies.toArray().catch(() => []),
+              db.cache_companies.toArray().catch(() => []),
+            ]);
+            const merged = new Map<string, any>();
+            for (const c of pickerCache || []) {
+              if (c?.id) merged.set(String(c.id), c);
+            }
+            for (const c of snapshotCache || []) {
+              if (c?.id) merged.set(String(c.id), { ...(merged.get(String(c.id)) ?? {}), ...c });
+            }
+            const cachedData = Array.from(merged.values());
             
             if (cancelled) return;
             
