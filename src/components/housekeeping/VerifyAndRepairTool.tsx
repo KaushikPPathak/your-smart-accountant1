@@ -543,11 +543,52 @@ export function VerifyAndRepairTool({
           ))}
         </div>
 
+        {isAdmin && companyId && (
+          <div className="rounded-md border border-amber-200 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+            <div className="mb-2 text-sm font-medium">Deep repairs (admin)</div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={running}
+                onClick={async () => {
+                  if (!confirm("Post balancing Suspense/Party entries on every voucher that has no posting rows? A 'Suspense Account' ledger will be created if missing. This is logged to voucher_repair_audit.")) return;
+                  try {
+                    const { data, error } = await supabase.rpc("repair_orphan_vouchers_with_suspense", { _company_id: companyId });
+                    if (error) throw error;
+                    const r = data as { repaired: number; skipped: number };
+                    toast.success(`Suspense repair: ${r.repaired} fixed, ${r.skipped} skipped`);
+                  } catch (e) { toast.error(describeError(e)); }
+                }}
+              >
+                <Wrench className="mr-1.5 h-3.5 w-3.5" /> Repair orphan vouchers (Suspense)
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={running}
+                onClick={async () => {
+                  if (!confirm("Reclassify every Receipt/Payment/Contra voucher that has no Cash/Bank ledger to Journal? This is logged to voucher_repair_audit.")) return;
+                  try {
+                    const { data, error } = await supabase.rpc("reclassify_misposted_vouchers", { _company_id: companyId });
+                    if (error) throw error;
+                    const r = data as { reclassified: number };
+                    toast.success(`Reclassified ${r.reclassified} voucher(s) to Journal`);
+                  } catch (e) { toast.error(describeError(e)); }
+                }}
+              >
+                <Wrench className="mr-1.5 h-3.5 w-3.5" /> Reclassify misposted Receipts/Payments → Journal
+              </Button>
+            </div>
+          </div>
+        )}
+
         <p className="text-xs text-muted-foreground">
           Auto-repair only deletes rows that are provably orphaned (no parent voucher). Unbalanced
           vouchers, duplicate numbers, and invalid amounts always require human review and are never
           auto-modified.
         </p>
+
       </CardContent>
     </Card>
   );
