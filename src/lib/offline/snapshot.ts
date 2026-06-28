@@ -520,6 +520,7 @@ export interface SnapshotResult {
   pulled: Record<string, number>;
   errors: Record<string, string>;
   finishedAt: number;
+  verification?: SnapshotVerification;
 }
 
 let pullInFlight: Promise<SnapshotResult | null> | null = null;
@@ -560,25 +561,26 @@ export async function pullCompanySnapshot(
     const result: SnapshotResult = { companyId, pulled: {}, errors: {}, finishedAt: 0 };
     const tables: readonly SnapshotTable[] = opts.full ? SNAPSHOT_TABLES : MINIMAL_TABLES;
 
-    // Parallel table pulls — each table is independent. A full sync is an
-    // exact mirror: local rows for this company are replaced by cloud rows,
-    // so deleted/renamed online records cannot remain stale offline.
-    await Promise.all(tables.map(async (table) => {
-      try {
-        result.pulled[table] = await pullTable(table, companyId, { exact: opts.full });
-      } catch (e) {
-        result.errors[table] = e instanceof Error ? e.message : String(e);
-      }
-    }));
-
     if (opts.full) {
       try {
-        const { entries, items } = await pullVoucherChildren(companyId, { exact: true });
-        result.pulled.voucher_entries = entries;
-        result.pulled.voucher_items = items;
+        const exact = await pullExactCompanySnapshot(companyId);
+        result.pulled = exact.pulled;
+        result.verification = exact.verification;
+        if (!exact.verification.ok) {
+          result.errors.verification = exact.verification.problems.slice(0, 5).join("; ") || "Online/offline verification failed";
+        }
       } catch (e) {
-        result.errors.voucher_children = e instanceof Error ? e.message : String(e);
+        result.errors.snapshot = e instanceof Error ? e.message : String(e);
       }
+    } else {
+      // Parallel table pulls — each table is independent for minimal warm-up.
+      await Promise.all(tables.map(async (table) => {
+        try {
+          result.pulled[table] = await pullTable(table, companyId, { exact: false });
+        } catch (e) {
+          result.errors[table] = e instanceof Error ? e.message : String(e);
+        }
+      }));
     }
 
     result.finishedAt = Date.now();
