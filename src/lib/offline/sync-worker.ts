@@ -48,13 +48,29 @@ function applyGlobalWorkerSecurityInterceptor() {
   };
 }
 
+const LAST_MODE_KEY = "ym_last_work_mode"; // "online" | "offline"
+
+function rememberWorkMode(mode: "online" | "offline") {
+  try { localStorage.setItem(LAST_MODE_KEY, mode); } catch { /* ignore */ }
+}
+
+export function getLastWorkMode(): "online" | "offline" | null {
+  try { return (localStorage.getItem(LAST_MODE_KEY) as any) || null; } catch { return null; }
+}
+
 async function tick(): Promise<void> {
-  // 1) push local changes first so subsequent pull sees authoritative data
+  // 1) push local changes first so subsequent pull sees authoritative data.
+  //    This handles the "worked offline last time → sync back to cloud" case.
   try { await drainOutbox(); } catch { /* ignore */ }
   // 2) refresh login cache for offline auth
   try { await refreshAllCachedCreds(); } catch { /* ignore */ }
-  // 3) pull cloud → local snapshot for offline reads
-  try { await pullSnapshot(); } catch { /* ignore */ }
+  // 3) Full pull cloud → local for every company the user belongs to. This
+  //    handles the "worked online last time → make available offline" case
+  //    AND keeps the last-used company hot for offline work.
+  try {
+    await pullSnapshot({ full: true });
+    rememberWorkMode("online");
+  } catch { /* ignore */ }
 }
 
 export function startSyncWorker() {
@@ -66,6 +82,7 @@ export function startSyncWorker() {
 
   // Drain + pull whenever connectivity returns
   window.addEventListener("online", () => { void tick(); });
+  window.addEventListener("offline", () => { rememberWorkMode("offline"); });
   // Pull again when the tab becomes visible — catches "laptop opened again"
   window.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void tick();
