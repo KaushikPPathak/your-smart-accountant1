@@ -2,7 +2,7 @@
 // Background worker: drains the outbox AND pulls cloud snapshots so the
 // local cache stays warm for offline use.
 
-import { drainOutbox } from "./outbox";
+import { drainOutbox, queueSize } from "./outbox";
 import { refreshAllCachedCreds } from "./creds-cache";
 import { pullSnapshot } from "./snapshot";
 import { rememberNetworkBlocked } from "./cache-read";
@@ -73,7 +73,10 @@ export function getLastWorkMode(): "online" | "offline" | null {
 async function tick(): Promise<void> {
   // 1) push local changes first so subsequent pull sees authoritative data.
   //    This handles the "worked offline last time → sync back to cloud" case.
-  try { await drainOutbox(); } catch { /* ignore */ }
+  try {
+    const pushed = await drainOutbox();
+    if (pushed.failed > 0 || await queueSize() > 0) return;
+  } catch { return; }
   // 2) refresh login cache for offline auth
   try { await refreshAllCachedCreds(); } catch { /* ignore */ }
   // 3) Full pull cloud → local for every company the user belongs to. This

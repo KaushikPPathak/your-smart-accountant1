@@ -49,6 +49,7 @@ const HEAVY_TABLES = [
   "ledger_group_mappings",
   "account_group_overrides",
   "vouchers",
+  "bill_allocations",
 ] as const;
 const SNAPSHOT_TABLES = [...MINIMAL_TABLES, ...HEAVY_TABLES] as const;
 
@@ -64,7 +65,19 @@ function dexieFor(table: SnapshotTable, db: any) {
     case "ledger_group_mappings": return db.cache_ledger_group_mappings;
     case "account_group_overrides": return db.cache_account_group_overrides;
     case "vouchers": return db.cache_vouchers;
+    case "bill_allocations": return db.cache_bill_allocations;
   }
+}
+
+function normalizeRowsForCache(table: SnapshotTable, rows: Array<Record<string, unknown>>) {
+  return table === "company_settings"
+    ? rows.map((r) => ({ ...r, id: (r as any).id ?? (r as any).company_id }))
+    : rows;
+}
+
+function rowUpdatedAt(row: Record<string, unknown>, fallback: string) {
+  const value = row.updated_at ?? row.created_at ?? fallback;
+  return String(value || fallback);
 }
 
 async function getCursor(companyId: string, table: string): Promise<string> {
@@ -86,20 +99,26 @@ async function setCursor(companyId: string, table: string, last_updated_at: stri
   await db.sync_cursors.put(row);
 }
 
-async function pullTable(table: SnapshotTable, companyId: string): Promise<number> {
+async function pullTable(table: SnapshotTable, companyId: string, opts: { exact?: boolean } = {}): Promise<number> {
   const since = await getCursor(companyId, table);
   let pulled = 0;
   let from = 0;
   let lastSeen = since;
+  const exactRows: Array<Record<string, unknown>> = [];
 
   const isCompaniesTable = table === "companies";
 
   while (true) {
     let q: any = (supabase.from(table as never) as any)
       .select("*")
-      .order("updated_at", { ascending: true })
-      .gt("updated_at", since)
       .range(from, from + PAGE_SIZE - 1);
+    if (!opts.exact) {
+      q = q.order("updated_at", { ascending: true }).gt("updated_at", since);
+    } else if (table === "bill_allocations") {
+      q = q.order("created_at", { ascending: true });
+    } else {
+      q = q.order("updated_at", { ascending: true });
+    }
     if (!isCompaniesTable) q = q.eq("company_id", companyId);
     else q = q.eq("id", companyId);
 
@@ -108,34 +127,53 @@ async function pullTable(table: SnapshotTable, companyId: string): Promise<numbe
     const rows = (data ?? []) as Array<Record<string, unknown>>;
     if (rows.length === 0) break;
 
-    const { db } = await getDbInstance();
-    const table_ = dexieFor(table, db);
-    // company_settings has no `id` PK in cloud (PK = company_id). Dexie store
-    // declares `id` as primary key, so synthesize one before bulkPut to avoid
-    // "Data provided to an operation does not meet requirements" failures.
-    const rowsForCache = table === "company_settings"
-      ? rows.map((r) => ({ ...r, id: (r as any).id ?? (r as any).company_id }))
-      : rows;
-    await (table_ as any).bulkPut(rowsForCache);
+    if (opts.exact) {
+      exactRows.push(...rows);
+    } else {
+      const { db } = await getDbInstance();
+      const table_ = dexieFor(table, db);
+      const rowsForCache = normalizeRowsForCache(table, rows);
+      await (table_ as any).bulkPut(rowsForCache);
+    }
     pulled += rows.length;
-    lastSeen = String(rows[rows.length - 1].updated_at ?? lastSeen);
+    lastSeen = rowUpdatedAt(rows[rows.length - 1], lastSeen);
 
     if (rows.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
 
-  if (lastSeen !== since) await setCursor(companyId, table, lastSeen);
+  if (opts.exact) {
+    const { db } = await getDbInstance();
+    const table_ = dexieFor(table, db);
+    const rowsForCache = normalizeRowsForCache(table, exactRows);
+    await db.transaction("rw", table_, async () => {
+      if (isCompaniesTable) await (table_ as any).delete(companyId);
+      else await (table_ as any).where("company_id").equals(companyId).delete();
+      if (rowsForCache.length) await (table_ as any).bulkPut(rowsForCache);
+    });
+  }
+
+  if (opts.exact || lastSeen !== since) await setCursor(companyId, table, lastSeen);
   return pulled;
 }
 
-async function pullVoucherChildren(companyId: string): Promise<{ entries: number; items: number }> {
+async function pruneOrphanCachedChildren(db: any) {
+  const voucherIds = new Set((await db.cache_vouchers.toArray()).map((v: any) => String(v.id)));
+  await Promise.all([
+    db.cache_voucher_entries.filter((e: any) => !voucherIds.has(String(e.voucher_id))).delete(),
+    db.cache_voucher_items.filter((e: any) => !voucherIds.has(String(e.voucher_id))).delete(),
+  ]);
+}
+
+async function pullVoucherChildren(companyId: string, opts: { exact?: boolean } = {}): Promise<{ entries: number; items: number }> {
   const childCursor = await getCursor(companyId, "voucher_children");
   const { db } = await getDbInstance();
   const allCachedVouchers = await db.cache_vouchers
     .where("company_id").equals(companyId)
     .toArray();
-  let newish = allCachedVouchers
-    .filter((v: any) => String(v.updated_at) > childCursor);
+  let newish = opts.exact
+    ? allCachedVouchers
+    : allCachedVouchers.filter((v: any) => String(v.updated_at) > childCursor);
 
   // Recovery path: older builds could advance cursors while voucher_entries /
   // voucher_items were not actually present in IndexedDB. In that state the
@@ -170,23 +208,56 @@ async function pullVoucherChildren(companyId: string): Promise<{ entries: number
   for (let i = 0; i < voucherIds.length; i += 200) slices.push(voucherIds.slice(i, i + 200));
 
   const CONCURRENCY = 4;
-  let cursor = 0;
-  async function worker() {
-    while (cursor < slices.length) {
-      const slice = slices[cursor++];
+
+  if (opts.exact) {
+    const allEntries: any[] = [];
+    const allItems: any[] = [];
+    let cursor = 0;
+    async function worker() {
+      while (cursor < slices.length) {
+        const slice = slices[cursor++];
+        const [{ data: eData, error: eErr }, { data: iData, error: iErr }] = await Promise.all([
+          supabase.from("voucher_entries").select("*").in("voucher_id", slice),
+          supabase.from("voucher_items").select("*").in("voucher_id", slice),
+        ]);
+        if (eErr) throw new Error(`voucher_entries: ${eErr.message}`);
+        if (iErr) throw new Error(`voucher_items: ${iErr.message}`);
+        allEntries.push(...(eData ?? []).map((r: any) => ({ ...r, company_id: companyId })));
+        allItems.push(...(iData ?? []).map((r: any) => ({ ...r, company_id: companyId })));
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, slices.length) }, worker));
+    await db.transaction("rw", db.cache_voucher_entries, db.cache_voucher_items, async () => {
+      await db.cache_voucher_entries.where("company_id").equals(companyId).delete();
+      await db.cache_voucher_items.where("company_id").equals(companyId).delete();
+      if (allEntries.length) await db.cache_voucher_entries.bulkPut(allEntries as any);
+      if (allItems.length) await db.cache_voucher_items.bulkPut(allItems as any);
+    });
+    entries = allEntries.length;
+    items = allItems.length;
+  } else {
+    let cursor = 0;
+    async function worker() {
+      while (cursor < slices.length) {
+        const slice = slices[cursor++];
       const [{ data: eData, error: eErr }, { data: iData, error: iErr }] = await Promise.all([
         supabase.from("voucher_entries").select("*").in("voucher_id", slice),
         supabase.from("voucher_items").select("*").in("voucher_id", slice),
       ]);
       if (eErr) throw new Error(`voucher_entries: ${eErr.message}`);
       if (iErr) throw new Error(`voucher_items: ${iErr.message}`);
+      const entriesForCache = (eData ?? []).map((r: any) => ({ ...r, company_id: companyId }));
+      const itemsForCache = (iData ?? []).map((r: any) => ({ ...r, company_id: companyId }));
       await db.cache_voucher_entries.where("voucher_id").anyOf(slice).delete();
       await db.cache_voucher_items.where("voucher_id").anyOf(slice).delete();
-      if (eData?.length) { await db.cache_voucher_entries.bulkPut(eData as any); entries += eData.length; }
-      if (iData?.length) { await db.cache_voucher_items.bulkPut(iData as any); items += iData.length; }
+      if (entriesForCache.length) { await db.cache_voucher_entries.bulkPut(entriesForCache as any); entries += entriesForCache.length; }
+      if (itemsForCache.length) { await db.cache_voucher_items.bulkPut(itemsForCache as any); items += itemsForCache.length; }
+      }
     }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, slices.length) }, worker));
   }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, slices.length) }, worker));
+
+  if (opts.exact) await pruneOrphanCachedChildren(db);
 
   for (const v of newish) {
     if (String(v.updated_at) > latest) latest = String(v.updated_at);
@@ -240,10 +311,12 @@ export async function pullCompanySnapshot(
     const result: SnapshotResult = { companyId, pulled: {}, errors: {}, finishedAt: 0 };
     const tables: readonly SnapshotTable[] = opts.full ? SNAPSHOT_TABLES : MINIMAL_TABLES;
 
-    // Parallel table pulls — each table is independent.
+    // Parallel table pulls — each table is independent. A full sync is an
+    // exact mirror: local rows for this company are replaced by cloud rows,
+    // so deleted/renamed online records cannot remain stale offline.
     await Promise.all(tables.map(async (table) => {
       try {
-        result.pulled[table] = await pullTable(table, companyId);
+        result.pulled[table] = await pullTable(table, companyId, { exact: opts.full });
       } catch (e) {
         result.errors[table] = e instanceof Error ? e.message : String(e);
       }
@@ -251,7 +324,7 @@ export async function pullCompanySnapshot(
 
     if (opts.full) {
       try {
-        const { entries, items } = await pullVoucherChildren(companyId);
+        const { entries, items } = await pullVoucherChildren(companyId, { exact: true });
         result.pulled.voucher_entries = entries;
         result.pulled.voucher_items = items;
       } catch (e) {
@@ -296,7 +369,17 @@ export async function pullSnapshot(opts: { full?: boolean } = {}): Promise<Snaps
       const results = await Promise.all(
         ids.map((id) => pullCompanySnapshot(id, { full: opts.full ?? false, notify: false }).catch(() => null)),
       );
-      return results.filter(Boolean).pop() ?? null;
+      const completed = results.filter(Boolean) as SnapshotResult[];
+      if (completed.length === 0) return null;
+      if (opts.full) {
+        return completed.reduce<SnapshotResult>((acc, r) => {
+          for (const [k, v] of Object.entries(r.pulled)) acc.pulled[k] = (acc.pulled[k] ?? 0) + v;
+          for (const [k, v] of Object.entries(r.errors)) acc.errors[`${r.companyId}:${k}`] = v;
+          acc.finishedAt = Math.max(acc.finishedAt, r.finishedAt);
+          return acc;
+        }, { companyId: "all", pulled: {}, errors: {}, finishedAt: 0 });
+      }
+      return completed.pop() ?? null;
     } finally {
       pullInFlight = null;
     }
@@ -318,6 +401,7 @@ export async function getOfflineCacheCounts(): Promise<Record<string, number>> {
     ["vouchers", db.cache_vouchers],
     ["voucher_entries", db.cache_voucher_entries],
     ["voucher_items", db.cache_voucher_items],
+    ["bill_allocations", db.cache_bill_allocations],
   ];
   const out: Record<string, number> = {};
   await Promise.all(tables.map(async ([k, t]) => {
@@ -347,6 +431,7 @@ export async function resetSnapshotCache(): Promise<void> {
       db.cache_vouchers,
       db.cache_voucher_entries,
       db.cache_voucher_items,
+      db.cache_bill_allocations,
       db.sync_cursors,
     ],
     async () => {
@@ -361,6 +446,7 @@ export async function resetSnapshotCache(): Promise<void> {
         db.cache_vouchers.clear(),
         db.cache_voucher_entries.clear(),
         db.cache_voucher_items.clear(),
+        db.cache_bill_allocations.clear(),
         db.sync_cursors.clear(),
       ]);
     },

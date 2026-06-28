@@ -82,6 +82,7 @@ class OfflineDatabase extends Dexie {
   cache_vouchers!: Table<any, any>;
   cache_voucher_entries!: Table<any, any>;
   cache_voucher_items!: Table<any, any>;
+  cache_bill_allocations!: Table<any, any>;
   outbox!: Table<any, any>;
   sync_cursors!: Table<any, any>;
   account_creds!: Table<any, any>;
@@ -106,6 +107,11 @@ class OfflineDatabase extends Dexie {
       account_creds: "username, user_id",
       meta: "key",
     });
+    this.version(2).stores({
+      cache_voucher_entries: "id, voucher_id, company_id",
+      cache_voucher_items: "id, voucher_id, company_id",
+      cache_bill_allocations: "id, company_id, invoice_voucher_id, payment_voucher_id",
+    });
   }
 }
 
@@ -123,9 +129,11 @@ function makeStubTable() {
     async clear() { return undefined; },
     async count() { return 0; },
     where() { return this; },
+    filter() { return this; },
     equals() { return this; },
     anyOf() { return this; },
     and() { return this; },
+    update() { return undefined; },
     orderBy() { return this; },
     sortBy() { return []; },
     first() { return undefined; },
@@ -137,11 +145,14 @@ function makeStubDb(): OfflineDatabase {
     "companies", "cache_companies", "cache_company_settings",
     "cache_ledgers", "cache_items", "cache_account_subgroups",
     "cache_ledger_group_mappings", "cache_account_group_overrides",
-    "cache_vouchers", "cache_voucher_entries", "cache_voucher_items",
+    "cache_vouchers", "cache_voucher_entries", "cache_voucher_items", "cache_bill_allocations",
     "outbox", "sync_cursors", "account_creds", "meta",
   ];
   const stub: Record<string, unknown> = {
-    async transaction(_mode: string, _tables: unknown, fn: () => Promise<unknown>) { return fn(); },
+    async transaction(_mode: string, ...args: unknown[]) {
+      const fn = args.find((a) => typeof a === "function") as (() => Promise<unknown>) | undefined;
+      return fn ? fn() : undefined;
+    },
   };
   for (const n of tableNames) stub[n] = makeStubTable();
   return stub as unknown as OfflineDatabase;

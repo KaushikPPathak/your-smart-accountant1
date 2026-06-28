@@ -26,6 +26,7 @@ import { GSTIN_REGEX } from "@/lib/constants";
 import { PL_INCOME, PL_EXPENSE, BS_ASSET, BS_LIAB } from "@/lib/reports";
 import {
   readLedgers,
+  readBillAllocations,
   readVoucherEntriesForCompany,
   readVoucherItemsForCompany,
   readVouchers,
@@ -197,18 +198,19 @@ export async function runAccountingAudit(companyId: string): Promise<AuditReport
       };
     },
     async () => {
-      const [vouchers, entries, items, ledgers] = await Promise.all([
+      const [vouchers, entries, items, ledgers, billAlloc] = await Promise.all([
         readVouchers(companyId),
         readVoucherEntriesForCompany(companyId),
         readVoucherItemsForCompany(companyId),
         readLedgers(companyId),
+        readBillAllocations(companyId),
       ]);
       return {
         vouchers: (vouchers as any[]).map(normalizeV),
         entries: (entries as any[]).map(normalizeE),
         items: (items as any[]).map(normalizeI),
         ledgers: (ledgers as any[]).map(normalizeL),
-        billAlloc: [] as BA[],
+        billAlloc: billAlloc as BA[],
       };
     },
   );

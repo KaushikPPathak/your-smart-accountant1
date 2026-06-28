@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { useOnlineStatus } from "@/lib/offline/online-status";
-import { drainOutbox, listOutbox, subscribeOutbox, clearOutboxRow } from "@/lib/offline/outbox";
+import { drainOutbox, listOutbox, subscribeOutbox, clearOutboxRow, queueSize } from "@/lib/offline/outbox";
 import type { OutboxRow } from "@/lib/offline/db";
 import { runSyncNow } from "@/lib/offline/sync-worker";
 import { getLastSnapshotResult, pullSnapshot, resetSnapshotCache, getOfflineCacheCounts, type SnapshotResult } from "@/lib/offline/snapshot";
@@ -63,14 +63,19 @@ export function OfflineStatusChip() {
   const onPullSnapshot = async () => {
     setPulling(true);
     try {
-      const r = await pullSnapshot({ full: true });
+      await runSyncNow();
+      if (await queueSize() > 0) {
+        toast.error("Pending offline work could not be pushed, so data was not marked as matching");
+        return;
+      }
+      const r = await getLastSnapshotResult();
       if (!r) toast.message("Offline — try again when connected");
       else {
         await refreshCounts();
         const counts = await getOfflineCacheCounts();
         const total = Object.values(counts).reduce((a, b) => a + b, 0);
-        toast.success(`Offline cache now holds ${total} record${total === 1 ? "" : "s"}`, {
-          description: "All data available offline.",
+        toast.success(`Offline mirror verified (${total} record${total === 1 ? "" : "s"})`, {
+          description: "Online and offline data now match for your companies.",
         });
         setLastSnap(r);
       }
@@ -148,7 +153,7 @@ export function OfflineStatusChip() {
           <div className="mt-3 flex items-center gap-2">
             <Button size="sm" variant="outline" disabled={!online || pulling} onClick={onPullSnapshot} className="h-7 gap-1.5">
               {pulling ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-              Pull cloud data
+              Match online/offline data
             </Button>
             <Button size="sm" variant="ghost" onClick={onResetCache} className="h-7 gap-1.5 text-destructive">
               <Trash2 className="h-3 w-3" /> Reset cache

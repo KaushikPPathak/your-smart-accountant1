@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Cloud, Upload, RefreshCw, CheckCircle2, Database } from "lucide-react";
 import { toast } from "sonner";
+import { getOfflineCacheCounts, pullSnapshot } from "@/lib/offline/snapshot";
 import { supabase as supabaseTyped } from "@/integrations/supabase/client";
-const supabase: any = supabaseTyped;
+import { drainOutbox, queueSize } from "@/lib/offline/outbox";
 
 export const Route = createFileRoute("/app/data-sync")({
   component: DataSyncPage,
@@ -23,10 +24,9 @@ export const Route = createFileRoute("/app/data-sync")({
   notFoundComponent: () => <div className="p-6">Page not found.</div>,
 });
 
-const SYNC_TABLES = ["companies", "ledgers", "vouchers", "memberships"] as const;
-type SyncTable = (typeof SYNC_TABLES)[number];
-
-type Counts = Partial<Record<SyncTable, number>>;
+type Counts = Record<string, number>;
+const RESTORE_TABLES = ["companies", "ledgers", "vouchers", "company_members"] as const;
+const supabase: any = supabaseTyped;
 
 function DataSyncPage() {
   const router = useRouter();
@@ -44,34 +44,25 @@ function DataSyncPage() {
     setCloudCounts({});
     const counts: Counts = {};
     try {
-      for (const table of SYNC_TABLES) {
-        try {
-          const { data, error } = await (supabase.from(table as string).select("*") as any);
-          if (error) {
-            toast.error(`Fetch failed for ${table}: ${error.message ?? "unknown"}`);
-            continue;
-          }
-          const rows = Array.isArray(data) ? data : [];
-          if (rows.length === 0) {
-            counts[table] = 0;
-            setCloudCounts({ ...counts });
-            continue;
-          }
-          const { error: insErr } = await supabase.from(table as string).insert(rows as any);
-          if (insErr) {
-            toast.error(`Local write failed for ${table}: ${insErr.message ?? "unknown"}`);
-            continue;
-          }
-          counts[table] = rows.length;
-          setCloudCounts({ ...counts });
-          toast.success(`Synced ${rows.length} ${table} to local storage`);
-        } catch (e: any) {
-          toast.error(`${table}: ${e?.message ?? "error"}`);
-        }
+      const pushed = await drainOutbox();
+      if (pushed.failed > 0 || await queueSize() > 0) {
+        toast.error("Pending offline work could not be pushed, so data was not marked as matching");
+        return;
       }
+      const result = await pullSnapshot({ full: true });
+      if (!result) {
+        toast.error("Connect online once to match online and offline data");
+        return;
+      }
+      if (Object.keys(result.errors).length > 0) {
+        toast.error("Sync incomplete — offline data was not marked as matching");
+        return;
+      }
+      Object.assign(counts, await getOfflineCacheCounts());
+      setCloudCounts({ ...counts });
       setCloudDone(true);
       const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
-      toast.success(`Cloud → Local sync complete (${total} rows total)`);
+      toast.success(`Online and offline data match (${total} local rows verified)`);
     } finally {
       setCloudBusy(false);
     }
@@ -89,7 +80,7 @@ function DataSyncPage() {
         toast.error("Invalid backup: expected a JSON object");
         return;
       }
-      for (const table of SYNC_TABLES) {
+      for (const table of RESTORE_TABLES) {
         const rows = Array.isArray(parsed[table]) ? parsed[table] : [];
         if (rows.length === 0) {
           counts[table] = 0;
@@ -97,7 +88,7 @@ function DataSyncPage() {
           continue;
         }
         try {
-          const { error } = await supabase.from(table as string).insert(rows as any);
+            const { error } = await supabase.from(table).insert(rows as any);
           if (error) {
             toast.error(`Restore failed for ${table}: ${error.message ?? "unknown"}`);
             continue;
@@ -148,8 +139,7 @@ function DataSyncPage() {
             <Cloud className="h-5 w-5" /> Cloud → Local sync
           </CardTitle>
           <CardDescription>
-            One-time pull of companies, ledgers, vouchers and memberships from the cloud into the
-            local offline database. Run this while online.
+            Exact mirror sync: pushes pending offline work first, then replaces stale local rows with current online data.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -157,13 +147,13 @@ function DataSyncPage() {
             {cloudBusy ? (
               <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Syncing…</>
             ) : (
-              <><Cloud className="h-4 w-4 mr-2" /> Sync Cloud Data to Local Storage</>
+              <><Cloud className="h-4 w-4 mr-2" /> Match Online and Offline Data</>
             )}
           </Button>
           <div className="flex flex-wrap gap-2">
-            {SYNC_TABLES.map((t) => (
-              <Badge key={t} variant={cloudCounts[t] != null ? "default" : "outline"}>
-                {t}: {cloudCounts[t] ?? "—"}
+            {Object.entries(cloudCounts).map(([t, n]) => (
+              <Badge key={t} variant="default">
+                {t}: {n}
               </Badge>
             ))}
             {cloudDone && (
@@ -208,7 +198,7 @@ function DataSyncPage() {
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            {SYNC_TABLES.map((t) => (
+            {RESTORE_TABLES.map((t) => (
               <Badge key={t} variant={restoreCounts[t] != null ? "default" : "outline"}>
                 {t}: {restoreCounts[t] ?? "—"}
               </Badge>
