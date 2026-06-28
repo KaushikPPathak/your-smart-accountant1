@@ -531,13 +531,18 @@ async function notifyOfflineReady(companyId: string, result: SnapshotResult) {
   try {
     const { toast } = await import("sonner");
     const errCount = Object.keys(result.errors).length;
-    if (errCount === 0) {
-      toast.success("All data available offline", {
+    if (errCount === 0 && result.verification?.ok) {
+      toast.success("All data available in offline mode", {
         id: `offline-ready-${companyId}`,
-        description: "You can now work without an internet connection.",
+        description: "Online and offline data were verified to match.",
+      });
+    } else if (errCount === 0) {
+      toast.warning("Offline sync not verified", {
+        id: `offline-unverified-${companyId}`,
+        description: "Existing offline data was preserved until verification passes.",
       });
     } else {
-      toast.warning("Offline sync partially complete", {
+      toast.warning("Offline sync failed — existing offline data preserved", {
         id: `offline-partial-${companyId}`,
         description: `${errCount} table(s) failed — retry will happen automatically.`,
       });
