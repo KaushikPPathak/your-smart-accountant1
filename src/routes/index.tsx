@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Lock, Plus, Unlock, LogOut as ExitIcon } from "lucide-react";
+import { Building2, Lock, Plus, Unlock, LogOut as ExitIcon, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -276,6 +276,16 @@ function StartScreen() {
             <LanguageSwitcher compact />
             <CurrencySwitcher compact />
             <DateFormatSwitcher compact />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate({ to: "/assistant" })}
+              className="gap-2"
+              title="Open AI Assistant — works offline without opening any company"
+            >
+              <Bot className="h-4 w-4" />
+              <span className="hidden sm:inline">AI Assistant</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"

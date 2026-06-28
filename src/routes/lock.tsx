@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, LogIn, ShieldCheck, UserPlus, EyeOff, AlertCircle, RefreshCw } from "lucide-react";
+import { Loader2, LogIn, ShieldCheck, UserPlus, EyeOff, AlertCircle, RefreshCw, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -431,6 +431,21 @@ function LockScreen() {
             </form>
           </TabsContent>
         </Tabs>
+
+        <div className="mt-5 border-t pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full gap-2"
+            onClick={() => navigate({ to: "/assistant" })}
+          >
+            <Bot className="h-4 w-4" />
+            Diagnose with AI Assistant (offline, no login)
+          </Button>
+          <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            Trouble signing in or syncing? Ask Mate first — works without an account or company.
+          </p>
+        </div>
       </div>
     </div>
   );
