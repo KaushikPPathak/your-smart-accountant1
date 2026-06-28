@@ -52,6 +52,20 @@ export async function readVouchers(companyId: string, opts?: {
   return rows.sort((a, b) => (a.voucher_date < b.voucher_date ? 1 : -1));
 }
 
+export async function readVoucherEntriesForCompany(companyId: string) {
+  const vouchers = await readVouchers(companyId);
+  const ids = vouchers.map((v) => v.id).filter(Boolean);
+  if (ids.length === 0) return [];
+  return offlineDb.cache_voucher_entries.where("voucher_id").anyOf(ids).toArray();
+}
+
+export async function readVoucherItemsForCompany(companyId: string) {
+  const vouchers = await readVouchers(companyId);
+  const ids = vouchers.map((v) => v.id).filter(Boolean);
+  if (ids.length === 0) return [];
+  return offlineDb.cache_voucher_items.where("voucher_id").anyOf(ids).toArray();
+}
+
 export async function readVoucherEntries(voucherId: string) {
   return offlineDb.cache_voucher_entries.where("voucher_id").equals(voucherId).toArray();
 }

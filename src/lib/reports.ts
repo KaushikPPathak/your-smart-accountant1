@@ -1,5 +1,11 @@
 // Shared computation: closing balances per ledger as of a date
 import { supabase } from "@/integrations/supabase/client";
+import {
+  readLedgers,
+  readVoucherEntriesForCompany,
+  readVouchers,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 export interface LedgerBalance {
   id: string;
@@ -26,6 +32,15 @@ type VoucherEntryForBalance = {
     voucher_type: string | null;
     narration: string | null;
   } | null;
+};
+
+type LedgerForBalance = {
+  id: string;
+  name: string;
+  type: string;
+  group_code: string | null;
+  opening_balance_paise: number;
+  opening_balance_is_debit: boolean;
 };
 
 export function isProfitLossClosingTransfer(voucher: {
@@ -60,32 +75,75 @@ export async function fetchLedgerBalancesWithMeta(
   fromOpt?: string,
   options: LedgerBalanceOptions = {},
 ): Promise<LedgerBalanceResult> {
-  const { data: ledgers } = await supabase
-    .from("ledgers")
-    .select("id, name, type, group_code, opening_balance_paise, opening_balance_is_debit")
-    .eq("company_id", companyId);
+  const { ledgers, entries } = await withCacheFallback(
+    async () => {
+      const { data: ledgers, error: lErr } = await supabase
+        .from("ledgers")
+        .select("id, name, type, group_code, opening_balance_paise, opening_balance_is_debit")
+        .eq("company_id", companyId);
+      if (lErr) throw lErr;
 
-  // Fix: Bundle the date configurations safely into a consolidated modifier object
-  let queryBuilder = supabase
-    .from("voucher_entries")
-    .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id, voucher_type, narration)")
-    .eq("vouchers.company_id", companyId);
+      // Fix: Bundle the date configurations safely into a consolidated modifier object
+      let queryBuilder = supabase
+        .from("voucher_entries")
+        .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id, voucher_type, narration)")
+        .eq("vouchers.company_id", companyId);
 
-  // Apply sequential evaluation constraints without breaking structural execution paths
-  if (fromOpt) {
-    queryBuilder = queryBuilder.filter("vouchers.voucher_date", "gte", fromOpt);
-  }
-  
-  queryBuilder = queryBuilder.filter("vouchers.voucher_date", "lte", asOf);
+      // Apply sequential evaluation constraints without breaking structural execution paths
+      if (fromOpt) {
+        queryBuilder = queryBuilder.filter("vouchers.voucher_date", "gte", fromOpt);
+      }
+      queryBuilder = queryBuilder.filter("vouchers.voucher_date", "lte", asOf);
 
-  const { data: entries, error } = await queryBuilder;
-  if (error) {
-    console.error("Failed calculating report metrics balance streams:", error);
-  }
+      const { data: entries, error: eErr } = await queryBuilder;
+      if (eErr) throw eErr;
+      return {
+        ledgers: (ledgers ?? []) as unknown as LedgerForBalance[],
+        entries: (entries ?? []) as unknown as VoucherEntryForBalance[],
+      };
+    },
+    async () => {
+      const [ledgers, vouchers, rawEntries] = await Promise.all([
+        readLedgers(companyId),
+        readVouchers(companyId),
+        readVoucherEntriesForCompany(companyId),
+      ]);
+      const voucherById = new Map(vouchers.map((v: any) => [String(v.id), v]));
+      const entries = (rawEntries as any[])
+        .map((e) => {
+          const v = voucherById.get(String(e.voucher_id));
+          if (!v) return null;
+          const date = String(v.voucher_date ?? v.date ?? "");
+          if (fromOpt && date < fromOpt) return null;
+          if (asOf && date > asOf) return null;
+          return {
+            ledger_id: String(e.ledger_id ?? ""),
+            debit_paise: Number(e.debit_paise ?? 0),
+            credit_paise: Number(e.credit_paise ?? 0),
+            vouchers: {
+              voucher_type: v.voucher_type ?? null,
+              narration: v.narration ?? null,
+            },
+          } as VoucherEntryForBalance;
+        })
+        .filter(Boolean) as VoucherEntryForBalance[];
+      return {
+        ledgers: (ledgers as any[]).map((l) => ({
+          id: String(l.id),
+          name: String(l.name ?? ""),
+          type: String(l.type ?? ""),
+          group_code: l.group_code ?? null,
+          opening_balance_paise: Number(l.opening_balance_paise ?? 0),
+          opening_balance_is_debit: Boolean(l.opening_balance_is_debit),
+        })) as LedgerForBalance[],
+        entries,
+      };
+    },
+  );
 
   const movements = new Map<string, number>();
   let excludedClosingTransferEntries = 0;
-  for (const e of (entries || []) as unknown as VoucherEntryForBalance[]) {
+  for (const e of entries) {
     if (
       options.excludeProfitLossClosingTransfers &&
       isProfitLossClosingTransfer(e.vouchers)

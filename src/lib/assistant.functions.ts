@@ -46,6 +46,33 @@ async function cloudChat(messages: ChatMsg[], temperature = 0.3): Promise<string
   return payload.text ?? "";
 }
 
+function looksOfflineOrBlocked(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return (
+    /failed to fetch/i.test(msg) ||
+    /failed to send a request/i.test(msg) ||
+    /networkerror/i.test(msg) ||
+    /offline/i.test(msg) ||
+    (typeof navigator !== "undefined" && navigator.onLine === false)
+  );
+}
+
+function offlineAssistantAnswer(question: string, cause?: unknown): string {
+  const causeText = cause instanceof Error ? cause.message : String(cause ?? "offline/network unavailable");
+  return [
+    "**Offline diagnostic mode is active.**",
+    "",
+    "The cloud AI Edge Function is not reachable from this Windows/Tauri session, so I did **not** keep retrying the network request.",
+    `Reason detected: ${causeText}`,
+    "",
+    "For the Verify & Repair error you reported, the important fix is: checks must read the local IndexedDB/offline cache when Supabase fetch fails. You can still diagnose voucher balance, orphan rows, duplicate numbers, invalid Dr/Cr rows, and report-level tally from the cached company data.",
+    "",
+    "If you are fully offline, repairs that write to the cloud (delete orphan rows, recompute voucher-number sequence, rebuild monthly snapshot) should be shown as **skipped until online**, not as failed. Safe read-only audit checks should continue.",
+    "",
+    question ? `Your question: ${question}` : "",
+  ].filter(Boolean).join("\n");
+}
+
 async function smartChat(messages: ChatMsg[], temperature = 0.3): Promise<string> {
   if (isWebGpuAvailable()) {
     try {
@@ -54,6 +81,9 @@ async function smartChat(messages: ChatMsg[], temperature = 0.3): Promise<string
       // WebGPU adapter missing / engine init failed — fall through to cloud.
       console.warn("[assistant] WebGPU local LLM failed, falling back to cloud:", err);
     }
+  }
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    throw new Error("Offline: cloud AI is not reachable and WebGPU local AI is unavailable.");
   }
   return cloudChat(messages, temperature);
 }
@@ -108,6 +138,9 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
 
     return { ok: true, text: answer };
   } catch (err) {
+    if (looksOfflineOrBlocked(err)) {
+      return { ok: true, text: offlineAssistantAnswer(question, err) };
+    }
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, text: "", error: msg };
   }

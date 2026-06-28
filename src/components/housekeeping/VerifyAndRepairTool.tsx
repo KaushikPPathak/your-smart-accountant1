@@ -39,6 +39,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { describeError } from "@/lib/error-message";
 import { runSemanticChecks } from "@/lib/semantic-checks";
 import { runAccountingAudit } from "@/lib/accounting-audit";
+import {
+  readLedgers,
+  readVoucherEntriesForCompany,
+  readVoucherItemsForCompany,
+  readVouchers,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 import { toast } from "sonner";
 
 
@@ -54,6 +61,14 @@ interface StepResult {
   /** Number of issues auto-fixed. */
   fixed?: number;
 }
+
+type VerifySharedData = {
+  source: "cloud" | "cache";
+  vouchers: { id: string; voucher_number: string; voucher_type: string }[];
+  entries: { id: string; voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[];
+  items: { id: string; voucher_id: string }[];
+  ledgerIds: Set<string>;
+};
 
 const INITIAL_STEPS: Omit<StepResult, "status" | "message">[] = [
   { key: "balance",      label: "Voucher debit = credit balance check" },
@@ -107,28 +122,69 @@ export function VerifyAndRepairTool({
     let entries: { id: string; voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[] = [];
     let items: { id: string; voucher_id: string }[] = [];
     let ledgerIds = new Set<string>();
+    let usingOfflineCache = false;
 
     try {
-      const [vRes, eRes, iRes, lRes] = await Promise.all([
-        supabase.from("vouchers")
-          .select("id, voucher_number, voucher_type")
-          .eq("company_id", companyId),
-        supabase.from("voucher_entries")
-          .select("id, voucher_id, ledger_id, debit_paise, credit_paise, vouchers!inner(company_id)")
-          .eq("vouchers.company_id", companyId),
-        supabase.from("voucher_items")
-          .select("id, voucher_id, vouchers!inner(company_id)")
-          .eq("vouchers.company_id", companyId),
-        supabase.from("ledgers").select("id").eq("company_id", companyId),
-      ]);
-      if (vRes.error) throw vRes.error;
-      if (eRes.error) throw eRes.error;
-      if (iRes.error) throw iRes.error;
-      if (lRes.error) throw lRes.error;
-      vchs = (vRes.data ?? []) as typeof vchs;
-      entries = (eRes.data ?? []) as unknown as typeof entries;
-      items = (iRes.data ?? []) as unknown as typeof items;
-      ledgerIds = new Set(((lRes.data ?? []) as { id: string }[]).map((l) => l.id));
+      const loaded = await withCacheFallback<VerifySharedData>(
+        async () => {
+          const [vRes, eRes, iRes, lRes] = await Promise.all([
+            supabase.from("vouchers")
+              .select("id, voucher_number, voucher_type")
+              .eq("company_id", companyId),
+            supabase.from("voucher_entries")
+              .select("id, voucher_id, ledger_id, debit_paise, credit_paise, vouchers!inner(company_id)")
+              .eq("vouchers.company_id", companyId),
+            supabase.from("voucher_items")
+              .select("id, voucher_id, vouchers!inner(company_id)")
+              .eq("vouchers.company_id", companyId),
+            supabase.from("ledgers").select("id").eq("company_id", companyId),
+          ]);
+          if (vRes.error) throw vRes.error;
+          if (eRes.error) throw eRes.error;
+          if (iRes.error) throw iRes.error;
+          if (lRes.error) throw lRes.error;
+          return {
+            source: "cloud" as const,
+            vouchers: (vRes.data ?? []) as typeof vchs,
+            entries: (eRes.data ?? []) as unknown as typeof entries,
+            items: (iRes.data ?? []) as unknown as typeof items,
+            ledgerIds: new Set(((lRes.data ?? []) as { id: string }[]).map((l) => l.id)),
+          };
+        },
+        async () => {
+          const [vRows, eRows, iRows, lRows] = await Promise.all([
+            readVouchers(companyId),
+            readVoucherEntriesForCompany(companyId),
+            readVoucherItemsForCompany(companyId),
+            readLedgers(companyId),
+          ]);
+          return {
+            source: "cache" as const,
+            vouchers: (vRows as any[]).map((v) => ({
+              id: String(v.id ?? ""),
+              voucher_number: String(v.voucher_number ?? ""),
+              voucher_type: String(v.voucher_type ?? ""),
+            })),
+            entries: (eRows as any[]).map((e) => ({
+              id: String(e.id ?? ""),
+              voucher_id: String(e.voucher_id ?? ""),
+              ledger_id: String(e.ledger_id ?? ""),
+              debit_paise: Number(e.debit_paise ?? 0),
+              credit_paise: Number(e.credit_paise ?? 0),
+            })),
+            items: (iRows as any[]).map((it) => ({
+              id: String(it.id ?? ""),
+              voucher_id: String(it.voucher_id ?? ""),
+            })),
+            ledgerIds: new Set((lRows as any[]).map((l) => String(l.id ?? ""))),
+          };
+        },
+      );
+      usingOfflineCache = loaded.source === "cache";
+      vchs = loaded.vouchers;
+      entries = loaded.entries;
+      items = loaded.items;
+      ledgerIds = loaded.ledgerIds;
     } catch (err) {
       // If the shared fetch fails, mark every step as error and stop.
       const msg = describeError(err);
@@ -137,6 +193,12 @@ export function VerifyAndRepairTool({
       setSummary("Could not load company data — check your connection and try again.");
       toast.error("Verification aborted: " + msg);
       return;
+    }
+
+    if (usingOfflineCache) {
+      toast.message("Verifying from offline cache", {
+        description: "Cloud repair actions are skipped until internet is available.",
+      });
     }
 
     const voucherIds = new Set(vchs.map((v) => v.id));
@@ -174,7 +236,7 @@ export function VerifyAndRepairTool({
     try {
       const orphans = entries.filter((e) => !voucherIds.has(e.voucher_id));
       let fixed = 0;
-      if (orphans.length > 0 && autoRepair && isAdmin) {
+      if (orphans.length > 0 && autoRepair && isAdmin && !usingOfflineCache) {
         const ids = orphans.map((o) => o.id);
         const { error } = await supabase.from("voucher_entries").delete().in("id", ids);
         if (error) throw error;
@@ -190,6 +252,8 @@ export function VerifyAndRepairTool({
           ? "No orphan posting rows ✓"
           : fixed > 0
             ? `Found ${orphans.length} orphan row(s) — deleted ${fixed}.`
+            : usingOfflineCache
+              ? `Found ${orphans.length} orphan row(s) in offline cache — deletion requires online mode.`
             : `Found ${orphans.length} orphan row(s) — enable Auto-repair to delete (admin only).`,
       });
     } catch (err) {
@@ -202,7 +266,7 @@ export function VerifyAndRepairTool({
     try {
       const orphans = items.filter((it) => !voucherIds.has(it.voucher_id));
       let fixed = 0;
-      if (orphans.length > 0 && autoRepair && isAdmin) {
+      if (orphans.length > 0 && autoRepair && isAdmin && !usingOfflineCache) {
         const ids = orphans.map((o) => o.id);
         const { error } = await supabase.from("voucher_items").delete().in("id", ids);
         if (error) throw error;
@@ -218,6 +282,8 @@ export function VerifyAndRepairTool({
           ? "No orphan inventory rows ✓"
           : fixed > 0
             ? `Found ${orphans.length} orphan inventory row(s) — deleted ${fixed}.`
+            : usingOfflineCache
+              ? `Found ${orphans.length} orphan inventory row(s) in offline cache — deletion requires online mode.`
             : `Found ${orphans.length} orphan inventory row(s) — enable Auto-repair to delete (admin only).`,
       });
     } catch (err) {
@@ -289,6 +355,13 @@ export function VerifyAndRepairTool({
     // ------ Step 7: recompute voucher_number_seq -------------------------
     patch("seq_repair", { status: "running", message: "Recomputing…" });
     try {
+      if (usingOfflineCache) {
+        patch("seq_repair", {
+          status: "ok",
+          fixed: 0,
+          message: "Checked offline data. Cloud sequence repair will run automatically when online.",
+        });
+      } else {
       const maxByType = new Map<string, number>();
       for (const v of vchs) {
         const m = v.voucher_number.match(/(\d+)\s*$/);
@@ -316,6 +389,7 @@ export function VerifyAndRepairTool({
           ? "No sequences needed updating ✓"
           : `Reset next-number for ${updated} voucher type(s).`,
       });
+      }
     } catch (err) {
       hadError = true;
       patch("seq_repair", { status: "error", message: describeError(err) });
@@ -324,6 +398,12 @@ export function VerifyAndRepairTool({
     // ------ Step 8: rebuild monthly_balances ------------------------------
     patch("snapshot", { status: "running", message: "Rebuilding…" });
     try {
+      if (usingOfflineCache) {
+        patch("snapshot", {
+          status: "ok",
+          message: "Offline report checks use live cached vouchers; cloud monthly snapshot rebuild skipped until online.",
+        });
+      } else {
       const { data, error } = await supabase.rpc("recompute_monthly_balances", {
         _company_id: companyId,
       });
@@ -332,6 +412,7 @@ export function VerifyAndRepairTool({
         status: "ok",
         message: `Snapshot rebuilt — ${data ?? 0} row(s) indexed.`,
       });
+      }
     } catch (err) {
       hadError = true;
       patch("snapshot", { status: "error", message: describeError(err) });
