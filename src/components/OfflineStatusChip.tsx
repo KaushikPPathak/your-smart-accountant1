@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { useOnlineStatus } from "@/lib/offline/online-status";
-import { drainOutbox, listOutbox, subscribeOutbox, clearOutboxRow } from "@/lib/offline/outbox";
+import { drainOutbox, listOutbox, subscribeOutbox, clearOutboxRow, queueSize } from "@/lib/offline/outbox";
 import type { OutboxRow } from "@/lib/offline/db";
 import { runSyncNow } from "@/lib/offline/sync-worker";
 import { getLastSnapshotResult, pullSnapshot, resetSnapshotCache, getOfflineCacheCounts, type SnapshotResult } from "@/lib/offline/snapshot";
@@ -64,6 +64,10 @@ export function OfflineStatusChip() {
     setPulling(true);
     try {
       await runSyncNow();
+      if (await queueSize() > 0) {
+        toast.error("Pending offline work could not be pushed, so data was not marked as matching");
+        return;
+      }
       const r = await getLastSnapshotResult();
       if (!r) toast.message("Offline — try again when connected");
       else {
