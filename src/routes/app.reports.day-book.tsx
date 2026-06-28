@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { BookOpen, LayoutGrid, Columns2 } from "lucide-react";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { Button } from "@/components/ui/button";
+import { readLedgers, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/day-book")({
   head: () => ({ meta: [{ title: "Day Book — Reports" }] }),
@@ -65,18 +66,44 @@ function DayBook() {
 
   useEffect(() => {
     if (!activeCompanyId) return;
+    let cancelled = false;
     setLoading(true);
-    supabase
-      .from("vouchers")
-      .select("id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, ledgers:party_ledger_id(name)")
-      .eq("company_id", activeCompanyId)
-      .gte("voucher_date", from)
-      .lte("voucher_date", to)
-      .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true })
-      .then(({ data }) => {
-        setRows(sortVouchersAsc((data || []) as unknown as Row[]));
-        setLoading(false);
-      });
+    void withCacheFallback<Row[]>(
+      async () => {
+        const { data, error } = await supabase
+          .from("vouchers")
+          .select("id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, party_ledger_id, ledgers:party_ledger_id(name)")
+          .eq("company_id", activeCompanyId)
+          .gte("voucher_date", from)
+          .lte("voucher_date", to)
+          .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true });
+        if (error) throw error;
+        return (data || []) as unknown as Row[];
+      },
+      async () => {
+        const [vouchers, ledgers] = await Promise.all([
+          readVouchers(activeCompanyId, { from, to }),
+          readLedgers(activeCompanyId),
+        ]);
+        const ledgerNames = new Map((ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]));
+        return (vouchers as any[]).map((v) => ({
+          id: String(v.id),
+          voucher_date: String(v.voucher_date ?? ""),
+          voucher_number: String(v.voucher_number ?? ""),
+          voucher_type: String(v.voucher_type ?? ""),
+          total_paise: Number(v.total_paise ?? 0),
+          narration: v.narration ?? null,
+          reference_no: v.reference_no ?? null,
+          ledgers: v.party_ledger_id ? { name: ledgerNames.get(String(v.party_ledger_id)) ?? "" } : null,
+        })) as Row[];
+      },
+    ).then((data) => {
+      if (cancelled) return;
+      setRows(sortVouchersAsc(data));
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
   }, [activeCompanyId, from, to]);
 
   const { drRows, crRows, drTotal, crTotal } = useMemo(() => {
