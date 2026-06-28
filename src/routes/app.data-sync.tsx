@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Cloud, Upload, RefreshCw, CheckCircle2, Database } from "lucide-react";
 import { toast } from "sonner";
-import { getOfflineCacheCounts, pullSnapshot } from "@/lib/offline/snapshot";
+import { getOfflineCacheCounts, pullSnapshot, type SnapshotResult } from "@/lib/offline/snapshot";
 import { supabase as supabaseTyped } from "@/integrations/supabase/client";
 import { drainOutbox, queueSize } from "@/lib/offline/outbox";
 
@@ -33,6 +33,7 @@ function DataSyncPage() {
   const [cloudBusy, setCloudBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [cloudCounts, setCloudCounts] = useState<Counts>({});
+  const [verificationProblems, setVerificationProblems] = useState<string[]>([]);
   const [restoreCounts, setRestoreCounts] = useState<Counts>({});
   const [cloudDone, setCloudDone] = useState(false);
   const [restoreDone, setRestoreDone] = useState(false);
@@ -42,6 +43,7 @@ function DataSyncPage() {
     setCloudBusy(true);
     setCloudDone(false);
     setCloudCounts({});
+    setVerificationProblems([]);
     const counts: Counts = {};
     try {
       const pushed = await drainOutbox();
@@ -49,20 +51,30 @@ function DataSyncPage() {
         toast.error("Pending offline work could not be pushed, so data was not marked as matching");
         return;
       }
-      const result = await pullSnapshot({ full: true });
+      const result = await pullSnapshot({ full: true }) as SnapshotResult | null;
       if (!result) {
         toast.error("Connect online once to match online and offline data");
         return;
       }
       if (Object.keys(result.errors).length > 0) {
-        toast.error("Sync incomplete — offline data was not marked as matching");
+        setVerificationProblems(Object.values(result.errors));
+        toast.error("Sync failed — existing offline data preserved");
         return;
       }
-      Object.assign(counts, await getOfflineCacheCounts());
+      if (result.verification && !result.verification.ok) {
+        setVerificationProblems(result.verification.problems);
+        toast.error("Online and offline data do not match — existing offline data preserved");
+        return;
+      }
+      if (result.verification) {
+        for (const [table, detail] of Object.entries(result.verification.tables)) counts[table] = detail.localCount;
+      } else {
+        Object.assign(counts, await getOfflineCacheCounts());
+      }
       setCloudCounts({ ...counts });
       setCloudDone(true);
       const total = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
-      toast.success(`Online and offline data match (${total} local rows verified)`);
+      toast.success(`All data available in offline mode (${total} rows verified)`);
     } finally {
       setCloudBusy(false);
     }
@@ -162,6 +174,14 @@ function DataSyncPage() {
               </Badge>
             )}
           </div>
+          {verificationProblems.length > 0 && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              <p className="font-medium">Verification failed — existing offline data was preserved.</p>
+              <ul className="mt-2 list-disc pl-5 text-xs">
+                {verificationProblems.slice(0, 8).map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+            </div>
+          )}
         </CardContent>
       </Card>
 
