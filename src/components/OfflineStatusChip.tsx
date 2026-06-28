@@ -17,7 +17,7 @@ import { useOnlineStatus } from "@/lib/offline/online-status";
 import { drainOutbox, listOutbox, subscribeOutbox, clearOutboxRow } from "@/lib/offline/outbox";
 import type { OutboxRow } from "@/lib/offline/db";
 import { runSyncNow } from "@/lib/offline/sync-worker";
-import { getLastSnapshotResult, pullSnapshot, resetSnapshotCache, type SnapshotResult } from "@/lib/offline/snapshot";
+import { getLastSnapshotResult, pullSnapshot, resetSnapshotCache, getOfflineCacheCounts, type SnapshotResult } from "@/lib/offline/snapshot";
 import { toast } from "sonner";
 
 export function OfflineStatusChip() {
