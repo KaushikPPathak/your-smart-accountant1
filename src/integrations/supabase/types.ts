@@ -2261,6 +2261,51 @@ export type Database = {
           },
         ]
       }
+      voucher_repair_audit: {
+        Row: {
+          action: string
+          company_id: string
+          created_at: string
+          details: Json
+          id: string
+          performed_by: string | null
+          voucher_id: string | null
+        }
+        Insert: {
+          action: string
+          company_id: string
+          created_at?: string
+          details?: Json
+          id?: string
+          performed_by?: string | null
+          voucher_id?: string | null
+        }
+        Update: {
+          action?: string
+          company_id?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          performed_by?: string | null
+          voucher_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voucher_repair_audit_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voucher_repair_audit_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vouchers: {
         Row: {
           cgst_paise: number
@@ -2548,9 +2593,17 @@ export type Database = {
         }
         Returns: string
       }
+      reclassify_misposted_vouchers: {
+        Args: { _company_id: string }
+        Returns: Json
+      }
       recompute_monthly_balances: {
         Args: { _company_id: string }
         Returns: number
+      }
+      repair_orphan_vouchers_with_suspense: {
+        Args: { _company_id: string }
+        Returns: Json
       }
       reset_app_user_pin: {
         Args: {
