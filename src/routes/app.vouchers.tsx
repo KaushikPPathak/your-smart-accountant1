@@ -52,6 +52,7 @@ const QUICK = [
   { type: "sales_order", label: "Sales Order", hotkey: "Alt+O", icon: ShoppingCart, to: "/app/vouchers/new/sales_order" },
   { type: "delivery_note", label: "Delivery Challan", hotkey: "Alt+L", icon: ShoppingBag, to: "/app/vouchers/new/delivery_note" },
   { type: "quotation", label: "Quotation", hotkey: "Alt+Q", icon: FilePlus, to: "/app/vouchers/new/quotation" },
+  { type: "manufacturing", label: "Mfg & Process JV", hotkey: "Alt+M", icon: Boxes, to: "/app/vouchers/new/manufacturing", requires: "inventory" as const },
 ] as const;
 
 interface VoucherRow {
