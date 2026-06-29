@@ -66,7 +66,7 @@ interface VoucherRow {
   ledgers?: { name: string } | null;
 }
 
-const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "credit_note", "debit_note", "sales_order", "delivery_note", "quotation"] as const;
+const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "credit_note", "debit_note", "sales_order", "delivery_note", "quotation", "manufacturing"] as const;
 
 function VouchersHub() {
   const location = useLocation();
