@@ -185,6 +185,8 @@ const INVENTORY_URLS = new Set([
   "/app/items",
   "/app/reports/stock-summary",
   "/app/reports/hsn-summary",
+  "/app/vouchers/new/manufacturing",
+  "/app/reports/trading",
 ]);
 
 export function AppSidebar() {
