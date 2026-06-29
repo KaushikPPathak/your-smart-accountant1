@@ -198,7 +198,12 @@ function VouchersHub() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {QUICK.map((q) => (
+        {QUICK.filter((q) => {
+          if ((q as { requires?: string }).requires === "inventory") {
+            return !!activeMembership?.companies.inventory_enabled;
+          }
+          return true;
+        }).map((q) => (
           <Link key={q.type} to={q.to}>
             <Card className="transition-colors hover:border-primary">
               <CardContent className="flex flex-col items-start gap-2 p-4">
