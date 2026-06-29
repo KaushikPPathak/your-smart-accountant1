@@ -13,6 +13,7 @@ import {
   ListOrdered,
   Printer,
   Trash2,
+  Boxes,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -51,6 +52,7 @@ const QUICK = [
   { type: "sales_order", label: "Sales Order", hotkey: "Alt+O", icon: ShoppingCart, to: "/app/vouchers/new/sales_order" },
   { type: "delivery_note", label: "Delivery Challan", hotkey: "Alt+L", icon: ShoppingBag, to: "/app/vouchers/new/delivery_note" },
   { type: "quotation", label: "Quotation", hotkey: "Alt+Q", icon: FilePlus, to: "/app/vouchers/new/quotation" },
+  { type: "manufacturing", label: "Mfg & Process JV", hotkey: "Alt+M", icon: Boxes, to: "/app/vouchers/new/manufacturing", requires: "inventory" as const },
 ] as const;
 
 interface VoucherRow {
@@ -64,7 +66,7 @@ interface VoucherRow {
   ledgers?: { name: string } | null;
 }
 
-const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "credit_note", "debit_note", "sales_order", "delivery_note", "quotation"] as const;
+const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "credit_note", "debit_note", "sales_order", "delivery_note", "quotation", "manufacturing"] as const;
 
 function VouchersHub() {
   const location = useLocation();
@@ -196,7 +198,12 @@ function VouchersHub() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {QUICK.map((q) => (
+        {QUICK.filter((q) => {
+          if ((q as { requires?: string }).requires === "inventory") {
+            return !!activeMembership?.companies.inventory_enabled;
+          }
+          return true;
+        }).map((q) => (
           <Link key={q.type} to={q.to}>
             <Card className="transition-colors hover:border-primary">
               <CardContent className="flex flex-col items-start gap-2 p-4">
