@@ -13,6 +13,7 @@ import {
   ListOrdered,
   Printer,
   Trash2,
+  Boxes,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
