@@ -1,19 +1,22 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { useCompany } from "@/lib/company-context";
 
 export const Route = createFileRoute("/app/reports")({
   head: () => ({ meta: [{ title: "Reports — Your Mehtaji" }] }),
   component: ReportsLayout,
 });
 
-const TABS = [
+type Tab = { to: string; label: string; requires?: "gst" | "inventory" };
+
+const ALL_TABS: readonly Tab[] = [
   { to: "/app/reports/day-book", label: "Day Book" },
   { to: "/app/reports/ledger", label: "Ledger" },
   { to: "/app/reports/cash-bank", label: "Cash & Bank Book" },
   { to: "/app/reports/group-ledger", label: "Group Ledger (B/S & P&L)" },
   { to: "/app/reports/trial-balance", label: "Trial Balance" },
-  { to: "/app/reports/trading", label: "Trading A/c" },
+  { to: "/app/reports/trading", label: "Trading A/c", requires: "inventory" },
   { to: "/app/reports/profit-loss", label: "P&L" },
   { to: "/app/reports/balance-sheet", label: "Balance Sheet" },
   { to: "/app/reports/outstanding", label: "Outstanding (Bill-wise)" },
@@ -22,11 +25,11 @@ const TABS = [
   { to: "/app/reports/payables", label: "Payables" },
   { to: "/app/reports/sales-register", label: "Sales Register" },
   { to: "/app/reports/purchase-register", label: "Purchase Register" },
-  { to: "/app/reports/gstr1", label: "GSTR-1" },
-  { to: "/app/reports/gstr3b", label: "GSTR-3B" },
-  { to: "/app/reports/gstr2b", label: "GSTR-2B Recon" },
+  { to: "/app/reports/gstr1", label: "GSTR-1", requires: "gst" },
+  { to: "/app/reports/gstr3b", label: "GSTR-3B", requires: "gst" },
+  { to: "/app/reports/gstr2b", label: "GSTR-2B Recon", requires: "gst" },
   { to: "/app/reports/brs", label: "Bank Recon (BRS)" },
-  { to: "/app/reports/stock-summary", label: "Stock Summary" },
+  { to: "/app/reports/stock-summary", label: "Stock Summary", requires: "inventory" },
 ] as const;
 
 function ReportsLayout() {
