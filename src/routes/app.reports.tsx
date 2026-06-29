@@ -35,6 +35,19 @@ const ALL_TABS: readonly Tab[] = [
 function ReportsLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { activeMembership } = useCompany();
+  const gstRegistered = !!activeMembership?.companies.gst_registered;
+  const inventoryEnabled = !!activeMembership?.companies.inventory_enabled;
+
+  const TABS = useMemo(
+    () =>
+      ALL_TABS.filter((t) => {
+        if (t.requires === "gst") return gstRegistered;
+        if (t.requires === "inventory") return inventoryEnabled;
+        return true;
+      }),
+    [gstRegistered, inventoryEnabled],
+  );
 
   useEffect(() => {
     if (location.pathname === "/app/reports") {
@@ -46,7 +59,7 @@ function ReportsLayout() {
     <div className="space-y-4">
       <div className="print:hidden">
         <h1 className="text-2xl font-semibold">Reports</h1>
-        <p className="text-xs text-muted-foreground">Books of accounts, GST-ready summaries — date filters, PDF & Excel export.</p>
+        <p className="text-xs text-muted-foreground">Books of accounts{gstRegistered ? ", GST-ready summaries" : ""} — date filters, PDF & Excel export.</p>
       </div>
       <Card className="print:hidden">
         <CardContent className="p-2">
