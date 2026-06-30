@@ -58,60 +58,61 @@
     "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-/* Your Mehtaji — Golden palette: warm ivory paper, rich gold primary,
-   bronze sidebar, amber-gold accent. Tuned for long-session accounting
-   work: low glare, high legibility, tabular numerals, restrained chrome. */
+/* Your Mehtaji — Professional palette:
+   crisp white paper, charcoal-navy sidebar (#2D3142), deep blue primary
+   (#4F5D75), mint green accent (#70E000). Tuned for long-session
+   accounting work: low glare, high legibility, tabular numerals. */
 :root {
   --radius: 0.5rem;
-  /* Warm ivory "paper" background */
-  --background: oklch(0.985 0.008 85);
-  --foreground: oklch(0.22 0.02 70);
+  /* Crisp white background */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.22 0.02 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.02 70);
+  --card-foreground: oklch(0.22 0.02 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.02 70);
-  /* Rich gold primary (~#C99A2B) */
-  --primary: oklch(0.70 0.15 80);
-  --primary-foreground: oklch(0.20 0.04 70);
-  --secondary: oklch(0.95 0.025 85);
-  --secondary-foreground: oklch(0.32 0.06 70);
-  --muted: oklch(0.945 0.015 85);
-  --muted-foreground: oklch(0.48 0.02 70);
-  /* Amber-gold accent (CTA) */
-  --accent: oklch(0.78 0.17 75);
-  --accent-foreground: oklch(0.22 0.05 60);
-  --destructive: oklch(0.55 0.2 27);
+  --popover-foreground: oklch(0.22 0.02 260);
+  /* Deep blue primary (~#4F5D75) */
+  --primary: oklch(0.48 0.045 265);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.005 260);
+  --secondary-foreground: oklch(0.32 0.04 265);
+  --muted: oklch(0.965 0.005 260);
+  --muted-foreground: oklch(0.50 0.015 260);
+  /* Mint green accent (~#70E000) */
+  --accent: oklch(0.84 0.22 135);
+  --accent-foreground: oklch(0.20 0.05 140);
+  --destructive: oklch(0.58 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.62 0.13 152);
-  --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.77 0.16 70);
+  --success: oklch(0.78 0.20 140);
+  --success-foreground: oklch(0.18 0.05 140);
+  --warning: oklch(0.78 0.16 70);
   --warning-foreground: oklch(0.22 0.06 60);
-  --border: oklch(0.9 0.018 85);
-  --input: oklch(0.92 0.018 85);
-  --ring: oklch(0.70 0.15 80);
-  --chart-1: oklch(0.70 0.15 80);
-  --chart-2: oklch(0.78 0.17 75);
-  --chart-3: oklch(0.55 0.10 60);
-  --chart-4: oklch(0.62 0.13 152);
+  --border: oklch(0.92 0.005 260);
+  --input: oklch(0.93 0.005 260);
+  --ring: oklch(0.48 0.045 265);
+  --chart-1: oklch(0.48 0.045 265);
+  --chart-2: oklch(0.78 0.20 140);
+  --chart-3: oklch(0.60 0.10 260);
+  --chart-4: oklch(0.70 0.14 50);
   --chart-5: oklch(0.55 0.18 30);
 
-  /* Brand gradients & shadows — warm gold */
-  --gradient-brand: linear-gradient(135deg, oklch(0.70 0.15 80), oklch(0.78 0.17 75));
-  --gradient-accent: linear-gradient(135deg, oklch(0.78 0.17 75), oklch(0.84 0.14 80));
-  --gradient-hero: radial-gradient(1200px 600px at 15% 0%, oklch(0.92 0.06 85 / 0.7), transparent 60%),
-    radial-gradient(800px 500px at 95% 10%, oklch(0.9 0.10 75 / 0.4), transparent 65%);
-  --shadow-card: 0 1px 2px oklch(0.22 0.02 70 / 0.05), 0 4px 14px -6px oklch(0.22 0.02 70 / 0.08);
-  --shadow-elevated: 0 12px 36px -14px oklch(0.55 0.12 70 / 0.3);
+  /* Brand gradients & shadows — navy-blue with mint highlight */
+  --gradient-brand: linear-gradient(135deg, oklch(0.30 0.04 260), oklch(0.48 0.045 265));
+  --gradient-accent: linear-gradient(135deg, oklch(0.84 0.22 135), oklch(0.90 0.18 140));
+  --gradient-hero: radial-gradient(1200px 600px at 15% 0%, oklch(0.95 0.02 260 / 0.7), transparent 60%),
+    radial-gradient(800px 500px at 95% 10%, oklch(0.90 0.10 140 / 0.3), transparent 65%);
+  --shadow-card: 0 1px 2px oklch(0.22 0.02 260 / 0.06), 0 4px 14px -6px oklch(0.22 0.02 260 / 0.10);
+  --shadow-elevated: 0 12px 36px -14px oklch(0.30 0.04 260 / 0.35);
 
-  /* Sidebar — deep bronze slab, gold active accent */
-  --sidebar: oklch(0.30 0.05 65);
-  --sidebar-foreground: oklch(0.96 0.015 85);
-  --sidebar-primary: oklch(0.78 0.17 75);
-  --sidebar-primary-foreground: oklch(0.20 0.05 60);
-  --sidebar-accent: oklch(0.36 0.06 65);
-  --sidebar-accent-foreground: oklch(0.97 0.012 85);
-  --sidebar-border: oklch(0.40 0.05 65);
-  --sidebar-ring: oklch(0.78 0.17 75);
+  /* Sidebar — deep charcoal/navy (~#2D3142), mint active accent */
+  --sidebar: oklch(0.28 0.025 265);
+  --sidebar-foreground: oklch(0.96 0.005 260);
+  --sidebar-primary: oklch(0.84 0.22 135);
+  --sidebar-primary-foreground: oklch(0.20 0.05 140);
+  --sidebar-accent: oklch(0.34 0.03 265);
+  --sidebar-accent-foreground: oklch(0.97 0.005 260);
+  --sidebar-border: oklch(0.38 0.03 265);
+  --sidebar-ring: oklch(0.84 0.22 135);
 }
 
 .dark {
