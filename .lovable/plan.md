@@ -1,49 +1,41 @@
-I understand your frustration. I cannot directly refund credits from inside the builder, and I should not keep doing blind repeated fixes. For refunds/credit adjustment, please contact Lovable support with this project and the failed offline-sync history: https://lovable.dev/support
+## Goal
+Apply a consistent golden-themed design system across all pages by updating semantic tokens in `src/styles.css`, then auditing components to ensure they consume tokens (no hardcoded colors).
 
-Current usage I can see: 155.677 credits used in the current period, 190.40 credits remaining.
+## Palette (Golden)
+- Primary: rich gold `oklch(0.78 0.15 85)` (~#E0B53C)
+- Primary deep (sidebar/headers): warm bronze `oklch(0.35 0.06 70)` (~#5C4A2A)
+- Accent CTA: amber-gold `oklch(0.72 0.17 70)` (~#D99A2B)
+- Background: warm ivory `oklch(0.985 0.008 85)`
+- Foreground: deep espresso `oklch(0.22 0.02 70)`
+- Muted/border: soft champagne tints
+- Dark mode: charcoal bg with gold primary preserved
 
-Plan before any more implementation:
+## Changes
 
-1. Freeze the approach
-- No more patching individual reports one by one.
-- Treat offline sync as one core data-integrity system, not separate screen fixes.
-- Do not mark sync as complete unless the app proves online and offline row counts/checksums match.
+### 1. `src/styles.css` — single source of truth
+- Replace `:root` and `.dark` token values (teal/amber → gold/bronze) for: `--background`, `--foreground`, `--primary`, `--primary-foreground`, `--secondary`, `--accent`, `--muted`, `--border`, `--ring`, `--card`, `--popover`, plus sidebar tokens (`--sidebar-background`, `--sidebar-primary`, `--sidebar-accent`, `--sidebar-border`).
+- Update brand gradient (`--gradient-primary`) and elegant shadow (`--shadow-elegant`) to derive from gold.
+- Keep semantic names identical — no component refactor needed for token-using code.
 
-2. Build a verification-first sync audit
-- Add a deterministic “Online vs Offline Match” audit for each company.
-- Compare all accounting-critical tables: companies, members, settings, ledgers, items, vouchers, voucher_entries, voucher_items, bill_allocations, groups/mappings, stock-related rows.
-- Show exact mismatch: missing online rows, missing offline rows, stale offline rows, duplicate rows, orphan voucher children, and checksum differences.
+### 2. Typography tokens (consistency pass)
+- Add `--font-display` and `--font-sans` in `@theme` (Fraunces for headings, Inter for body) and load via `<link>` in `src/routes/__root.tsx`.
+- Apply `font-display` on h1–h3 via a base rule in `styles.css`.
 
-3. Make sync atomic and all-or-nothing
-- Pull a complete company snapshot into temporary offline tables first.
-- Validate counts and referential consistency before replacing existing offline data.
-- If validation fails, keep the previous offline copy untouched and show “Sync failed — existing offline data preserved.”
-- Only show “All data available in offline mode” after verification passes.
+### 3. Button consistency
+- Verify `src/components/ui/button.tsx` variants (`default`, `secondary`, `outline`, `ghost`, `destructive`) all resolve through tokens — no edits if already token-based; if any hardcoded class found, swap to tokens.
 
-4. Fix offline read source centrally
-- Reports and ledger drill-down must read from the same canonical offline posting source.
-- Remove report-by-report partial fallbacks that can cause Day Book, Ledger, Cash/Bank, Trial Balance, P&L, and Balance Sheet to disagree.
-- Use voucher_entries as the single posting truth; voucher_items only for inventory/item reports.
+### 4. Hardcoded color audit (UI-only sweep)
+- Ripgrep for `bg-white`, `text-black`, `bg-slate-`, `text-teal-`, `bg-amber-`, `#` hex literals inside `src/components/**` and `src/routes/**`.
+- Replace stragglers with semantic tokens (`bg-card`, `text-foreground`, `bg-primary`, etc.). Limited to presentation; no logic/schema changes.
 
-5. Handle offline-to-online safely
-- Push pending offline changes first.
-- Verify each pushed voucher has complete header + entries + items.
-- If push fails, do not pull/overwrite offline data.
-- Show clear pending/failure messages with exact voucher numbers.
+### 5. Sidebar + headers
+- Ensure `AppSidebar.tsx` uses `bg-sidebar text-sidebar-foreground` and active state uses `bg-sidebar-accent` — adjust only if it currently hardcodes teal/amber classes left over from the previous repaint.
 
-6. Add real-condition verification
-- Use the test login you provided only for verification.
-- Test online mode, forced offline mode, reload while offline, company open, ledger drill-down, cash/bank, day book, trial balance, P&L, balance sheet.
-- Capture evidence from the running app before claiming the fix works.
+## Out of scope
+- No business logic, schema, voucher, or sync changes.
+- No new components or routes.
+- Dark mode tuned but not redesigned.
 
-7. Credit-protection workflow going forward
-- I will not claim “fixed” from code inspection only.
-- I will verify in the preview with offline simulation before reporting completion.
-- If verification fails, I will report the failing evidence instead of consuming more attempts on guesswork.
-
-What I will implement after approval:
-- A single robust offline mirror engine with checksum verification.
-- A visible sync audit result screen.
-- Atomic local snapshot replacement.
-- Centralized offline report data access so all reports match.
-- Clear success/failure wording: “All data available in offline mode” only when verified.
+## Verification
+- Build passes.
+- Playwright screenshot of `/app`, `/app/vouchers/new/purchase`, `/app/reports` confirming gold primary, bronze sidebar, ivory background, consistent button styling.
