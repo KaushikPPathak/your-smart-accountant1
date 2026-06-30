@@ -30,8 +30,8 @@ export default function SalesPurchaseChart({ monthly }: { monthly: MonthRow[] })
         />
         <Tooltip formatter={(v) => `₹ ${Number(v).toLocaleString("en-IN")}`} />
         <Legend />
-        <Bar dataKey="sales" name="Sales" fill="oklch(0.55 0.18 265)" radius={[4, 4, 0, 0]} />
-        <Bar dataKey="purchase" name="Purchase" fill="oklch(0.7 0.16 60)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="sales" name="Sales" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="purchase" name="Purchase" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
