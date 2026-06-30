@@ -271,7 +271,7 @@ function Dashboard() {
           <CardHeader>
             <CardTitle className="text-base">Sales vs Purchase — last 6 months</CardTitle>
           </CardHeader>
-          <CardContent className="h-[280px]">
+          <CardContent className="h-[420px]">
             <Suspense fallback={<div className="h-full w-full animate-pulse rounded bg-muted/30" />}>
               <SalesPurchaseChart monthly={monthly} />
             </Suspense>
