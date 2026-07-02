@@ -130,7 +130,6 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
     const activeStaff = getActiveStaff();
     const applyMemberships = (next: CompanyMembership[]) => {
       setMemberships(next);
@@ -139,75 +138,71 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       setActiveCompanyIdState(valid ? stored : next[0]?.company_id ?? null);
     };
 
-    const loadOfflineFirst = async () => {
-      const cached = await loadCachedMemberships();
-      if (cached.length > 0) applyMemberships(cached);
-      return cached;
-    };
-    
+    // 1) INSTANT PAINT from Dexie cache — never block UI on the network.
+    let paintedFromCache = false;
     try {
-      if (!isOnlineNow()) {
-        await loadOfflineFirst();
-        return;
+      const cached = await loadCachedMemberships();
+      if (cached.length > 0) {
+        applyMemberships(cached);
+        paintedFromCache = true;
       }
+    } catch { /* ignore */ }
+    setLoading(false);
 
-      // Safely process local mock execution records
-      const response = await supabase
+    // 2) Offline? we're done.
+    if (!isOnlineNow()) return;
+
+    // 3) Reconcile with cloud in the background (batched, non-blocking).
+    try {
+      const { data: memberRows, error } = await supabase
         .from("company_members")
         .select("company_id, role")
         .order("created_at", { ascending: true });
-        
-      const memberRows = response?.data;
-      const error = response?.error;
+      if (error) throw error;
 
-      if (error) {
-        console.error("Failed to load company memberships:", error);
-        const cached = await loadOfflineFirst();
-        if (cached.length === 0) applyMemberships([]);
-      } else {
-        const rows = (memberRows ?? []) as Array<{ company_id: string; role: CompanyMembership["role"] }>;
-        const out: CompanyMembership[] = [];
-        
-        for (const r of rows) {
-          if (!r.company_id) continue;
-
-          const { data: company } = await supabase
-            .from("companies")
-            .select("*")
-            .eq("id", r.company_id)
-            .maybeSingle();
-            
-          if (!company || !company.id) continue;
-          
-          const mapped = mapCompanyRowToMembership(r.company_id, r.role, company as any);
-          if (mapped) out.push(mapped);
-        }
-
-        // Defensive checks to preserve local datasets if no specific cloud constraints are present
-        const list = activeStaff
-          ? out.filter((m) => {
-              const ownerId = (m.companies as any)?.owner_app_user_id;
-              return !ownerId || ownerId === activeStaff.id || ownerId === 'offline-user-session';
-            })
-          : out;
-
-        // If data exists locally but staff filters cleared them out incorrectly, retain full 'out' array layout as a safety net
-        const finalValidList = list.length === 0 && out.length > 0 ? out : list;
-
-        if (finalValidList.length > 0) {
-          applyMemberships(finalValidList);
-          void persistMembershipsToOfflineCache(finalValidList);
-        } else {
-          const cached = await loadOfflineFirst();
-          if (cached.length === 0) applyMemberships([]);
-        }
+      const rows = (memberRows ?? []) as Array<{ company_id: string; role: CompanyMembership["role"] }>;
+      const ids = Array.from(new Set(rows.map((r) => r.company_id).filter(Boolean)));
+      if (ids.length === 0) {
+        if (!paintedFromCache) applyMemberships([]);
+        return;
       }
-    } catch (criticalRefreshError) {
-      console.error("Mehtaji Pipeline: Integrity check failure during context mapping:", criticalRefreshError);
-      const cached = await loadOfflineFirst();
-      if (cached.length === 0) applyMemberships([]);
-    } finally {
-      setLoading(false);
+
+      // Single batched fetch instead of N sequential .maybeSingle() calls.
+      const { data: companies } = await supabase
+        .from("companies")
+        .select("*")
+        .in("id", ids);
+
+      const byId = new Map<string, any>();
+      for (const c of (companies ?? []) as any[]) if (c?.id) byId.set(String(c.id), c);
+
+      const out: CompanyMembership[] = [];
+      for (const r of rows) {
+        const c = byId.get(String(r.company_id));
+        if (!c) continue;
+        const mapped = mapCompanyRowToMembership(r.company_id, r.role, c);
+        if (mapped) out.push(mapped);
+      }
+
+      const list = activeStaff
+        ? out.filter((m) => {
+            const ownerId = (m.companies as any)?.owner_app_user_id;
+            return !ownerId || ownerId === activeStaff.id || ownerId === "offline-user-session";
+          })
+        : out;
+      const finalValidList = list.length === 0 && out.length > 0 ? out : list;
+
+      if (finalValidList.length > 0) {
+        applyMemberships(finalValidList);
+        void persistMembershipsToOfflineCache(finalValidList);
+      } else if (!paintedFromCache) {
+        applyMemberships([]);
+      }
+    } catch (err) {
+      // Network hiccup — keep cached view; nothing else to do.
+      if (!paintedFromCache) {
+        console.warn("Company reconcile failed, using cache only:", err);
+      }
     }
   }, [user]);
 
