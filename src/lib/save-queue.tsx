@@ -48,7 +48,16 @@ async function persistAndDrop(job: PendingJob): Promise<boolean> {
     markSaved(job.label);
     if (queue.length === 0) clearFailures();
     bump();
-    toast.success(`${job.label} queued — will sync when online`);
+    // Kick the outbox drain in the background so online users still see
+    // the save land quickly, but the UI is never blocked by slow networks.
+    if (isOnlineNow()) {
+      void import("./offline/outbox").then((m) => m.drainOutbox()).catch(() => {});
+    }
+    toast.success(
+      isOnlineNow()
+        ? `${job.label} saved — syncing`
+        : `${job.label} queued — will sync when online`,
+    );
     return true;
 
   } catch (err) {
