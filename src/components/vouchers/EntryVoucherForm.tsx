@@ -34,6 +34,7 @@ import {
 import { validateEntryVoucher } from "@/lib/schemas/voucher";
 import { EntryRow } from "@/components/fast-form/EntryRow";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
+import { findDuplicateReference } from "@/lib/voucher-duplicate-check";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -343,6 +344,23 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     if (!check.ok) {
       toast.error(check.message);
       return;
+    }
+    // Duplicate cheque / reference-number guard (payment & receipt).
+    // Banks reject a re-used cheque number, so warn before we queue the save.
+    if (snap.refNo && (voucherType === "payment" || voucherType === "receipt")) {
+      const dups = await findDuplicateReference(activeCompanyId, voucherType, snap.refNo);
+      if (dups.length > 0) {
+        const first = dups[0];
+        const label = voucherType === "payment" ? "Cheque / Reference No." : "Reference No.";
+        const ok = window.confirm(
+          `${label} "${snap.refNo}" was already used on ${first.voucher_date} (${dups.length} existing voucher${dups.length > 1 ? "s" : ""}).\n\n` +
+            `Cheque numbers must be unique per bank. Save anyway?`,
+        );
+        if (!ok) {
+          toast.warning("Save cancelled — change the reference number to avoid a duplicate.");
+          return;
+        }
+      }
     }
     rememberNarration(voucherType, narration);
     setRefNo("");
