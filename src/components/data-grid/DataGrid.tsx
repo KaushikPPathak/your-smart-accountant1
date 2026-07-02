@@ -157,17 +157,52 @@ export function DataGrid<T>({
   const cellAlign = (c: DGColumn<T>) =>
     c.align ?? (c.type === "number" ? "right" : "left");
 
-  // Column widths (with persisted overrides)
+  // Column widths (with persisted overrides) — intrinsic (author-requested) size.
   const colWidth = useCallback((c: DGColumn<T>) => {
     const w = state.colWidths?.[c.id];
     if (typeof w === "number" && w > 0) return w;
     return c.width ?? 160;
   }, [state.colWidths]);
 
+  // Measure the outer container so we can auto-fit columns to available width.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setContainerWidth(el.clientWidth));
+    ro.observe(el);
+    setContainerWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  // Displayed widths: scale intrinsic widths to fit container (grow or shrink).
+  // Honors per-column minWidth (default 60px) as a floor when shrinking.
+  const displayWidths = useMemo(() => {
+    const intrinsic = visibleColumns.map((c) => colWidth(c));
+    const total = intrinsic.reduce((s, w) => s + w, 0);
+    if (containerWidth <= 0 || total <= 0) {
+      const out: Record<string, number> = {};
+      visibleColumns.forEach((c, i) => { out[c.id] = intrinsic[i]; });
+      return out;
+    }
+    // Reserve ~2px per column for borders so the row fits without a scrollbar.
+    const target = Math.max(0, containerWidth - visibleColumns.length * 2);
+    const scale = target / total;
+    const out: Record<string, number> = {};
+    visibleColumns.forEach((c, i) => {
+      const min = c.minWidth ?? 60;
+      out[c.id] = Math.max(min, Math.round(intrinsic[i] * scale));
+    });
+    return out;
+  }, [visibleColumns, colWidth, containerWidth]);
+
+  const dispW = useCallback((c: DGColumn<T>) => displayWidths[c.id] ?? colWidth(c), [displayWidths, colWidth]);
+
   // Compute grid template columns
   const gridTemplate = useMemo(
-    () => visibleColumns.map((c) => `${colWidth(c)}px`).join(" "),
-    [visibleColumns, colWidth],
+    () => visibleColumns.map((c) => `${dispW(c)}px`).join(" "),
+    [visibleColumns, dispW],
   );
 
   // Pinned column left offsets (px)
@@ -177,10 +212,10 @@ export function DataGrid<T>({
     for (let i = 0; i < pinnedCount; i++) {
       const c = visibleColumns[i];
       offsets[c.id] = acc;
-      acc += colWidth(c);
+      acc += dispW(c);
     }
     return offsets;
-  }, [visibleColumns, pinnedCount, colWidth]);
+  }, [visibleColumns, pinnedCount, dispW]);
 
   // Resize handler
   const onResizeStart = useCallback((e: React.PointerEvent, col: DGColumn<T>) => {
