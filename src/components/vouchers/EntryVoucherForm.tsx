@@ -34,6 +34,7 @@ import {
 import { validateEntryVoucher } from "@/lib/schemas/voucher";
 import { EntryRow } from "@/components/fast-form/EntryRow";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
+import { findDuplicateReference } from "@/lib/voucher-duplicate-check";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
