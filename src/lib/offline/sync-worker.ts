@@ -104,10 +104,10 @@ export function startSyncWorker() {
   window.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void tick();
   });
-  // Boot run
-  setTimeout(() => { void tick(); }, 1500);
-  // Periodic sync (60s) while the tab is open
-  setInterval(() => { void tick(); }, 60_000);
+  // Boot run — kick off almost immediately so cache is fresh ASAP.
+  setTimeout(() => { void tick(); }, 300);
+  // Periodic sync (30s) while the tab is open — keeps offline data up-to-date.
+  setInterval(() => { void tick(); }, 30_000);
 }
 
 /** Manual trigger for the status drawer. */
