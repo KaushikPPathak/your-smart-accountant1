@@ -72,9 +72,10 @@ async function flush() {
   try {
     while (queue.length > 0) {
       const job = queue[0];
-      // Offline + persistable → skip the network attempt entirely and queue
-      // straight to the durable outbox so it survives reload.
-      if (job.persist && !isOnlineNow()) {
+      // Persistable jobs ALWAYS go through the durable outbox first.
+      // This keeps saves instant even on slow/flaky internet — the outbox
+      // drain worker pushes them to Supabase asynchronously.
+      if (job.persist) {
         if (await persistAndDrop(job)) continue;
       }
       try {
