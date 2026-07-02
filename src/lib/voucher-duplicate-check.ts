@@ -61,7 +61,7 @@ export async function findDuplicateReference(
         .from("vouchers")
         .select("id, voucher_date, voucher_type, reference_no, total_paise")
         .eq("company_id", companyId)
-        .eq("voucher_type", voucherType)
+        .eq("voucher_type", voucherType as never)
         .ilike("reference_no", ref)
         .limit(5);
       if (data) {
