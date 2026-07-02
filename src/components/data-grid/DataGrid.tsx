@@ -258,7 +258,7 @@ export function DataGrid<T>({
   }, [reset, setState]);
 
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
+    <div ref={containerRef} className={cn("flex flex-col gap-2", className)}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
           <GridToolbar
