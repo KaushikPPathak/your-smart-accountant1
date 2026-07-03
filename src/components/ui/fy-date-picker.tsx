@@ -178,7 +178,23 @@ export function FyDatePicker({
   }
 
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
   const prevLenRef = React.useRef<number>(0);
+  const didAutoSelectRef = React.useRef<boolean>(false);
+  const focusSelectedRef = React.useRef<boolean>(false);
+
+  // One-time auto-select on mount when autoFocus is set. Guarded so it
+  // does NOT re-run on every render (which would re-select after each
+  // keystroke and cause "only one digit accepted").
+  React.useEffect(() => {
+    if (!autoFocus || didAutoSelectRef.current) return;
+    didAutoSelectRef.current = true;
+    const el = inputRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      try { el.focus(); el.select(); focusSelectedRef.current = true; } catch { /* noop */ }
+    });
+  }, [autoFocus]);
 
   /** Auto-commit & advance when the user types a complete pure-digit date.
    *  Skipped when the length shrank (user is backspacing/correcting). */
@@ -208,13 +224,16 @@ export function FyDatePicker({
         placeholder={placeholder ?? "DDMM"}
         inputMode="numeric"
         autoFocus={autoFocus}
-        ref={(el) => {
-          if (el && autoFocus) {
-            // Ensure the pre-filled date is selected so typing ddmm overwrites.
-            requestAnimationFrame(() => { try { el.select(); } catch { /* noop */ } });
-          }
+        ref={inputRef}
+        onFocus={(e) => {
+          // Select pre-filled text only on the FIRST focus per mount so
+          // typing ddmm overwrites the previous date. Any later focus event
+          // (e.g. a re-render while the user is mid-type) MUST NOT re-select,
+          // or the next keystroke would replace the just-typed digit.
+          if (focusSelectedRef.current) return;
+          focusSelectedRef.current = true;
+          try { e.currentTarget.select(); } catch { /* noop */ }
         }}
-        onFocus={(e) => { try { e.currentTarget.select(); } catch { /* noop */ } }}
         onChange={(e) => handleChange(e.target.value)}
         onBlur={(e) => commitText(e.target.value)}
         onKeyDown={(e) => {
