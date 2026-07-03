@@ -367,7 +367,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     setNarration("");
     setLines(Array.from({ length: cfg.defaultLines }, blank));
     setSimpleLines(Array.from({ length: 2 }, blankSimple));
-    setCashBankId("");
+    // Keep cashBankId as-is — user often enters multiple vouchers into the same book.
     setFocusedLine(0);
     setSavedTick((n) => n + 1);
     requestAnimationFrame(() => {
