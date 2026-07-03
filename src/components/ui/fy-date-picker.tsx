@@ -208,6 +208,13 @@ export function FyDatePicker({
         placeholder={placeholder ?? "DDMM"}
         inputMode="numeric"
         autoFocus={autoFocus}
+        ref={(el) => {
+          if (el && autoFocus) {
+            // Ensure the pre-filled date is selected so typing ddmm overwrites.
+            requestAnimationFrame(() => { try { el.select(); } catch { /* noop */ } });
+          }
+        }}
+        onFocus={(e) => { try { e.currentTarget.select(); } catch { /* noop */ } }}
         onChange={(e) => handleChange(e.target.value)}
         onBlur={(e) => commitText(e.target.value)}
         onKeyDown={(e) => {
