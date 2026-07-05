@@ -50,8 +50,18 @@ const HEAVY_TABLES = [
   "account_group_overrides",
   "vouchers",
   "bill_allocations",
+  "voucher_export_details",
+  "einvoice_details",
+  "period_locks",
+  "bom_templates",
+  "recurring_invoices",
 ] as const;
 const SNAPSHOT_TABLES = [...MINIMAL_TABLES, ...HEAVY_TABLES] as const;
+
+// Tables whose primary key is `voucher_id` upstream (1-to-1 with vouchers).
+// We mirror them keyed on voucher_id and also copy voucher_id -> id so the
+// generic "order by id" pagination path keeps working.
+const VOUCHER_ID_PK_TABLES = new Set<string>(["voucher_export_details", "einvoice_details"]);
 
 // Tables where `deleted_at` was added by the soft-delete migration. The
 // snapshot pulls tombstones (rows with deleted_at != null) via the delta
