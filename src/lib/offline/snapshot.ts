@@ -744,6 +744,7 @@ export async function resetSnapshotCache(): Promise<void> {
       db.cache_voucher_items,
       db.cache_bill_allocations,
       db.sync_cursors,
+      db.meta,
     ],
     async () => {
       await Promise.all([
@@ -759,7 +760,11 @@ export async function resetSnapshotCache(): Promise<void> {
         db.cache_voucher_items.clear(),
         db.cache_bill_allocations.clear(),
         db.sync_cursors.clear(),
+        // Clear only the exact-done markers so the next full sync repeats the
+        // guaranteed full replace instead of taking the delta fast path.
+        db.meta.where("key").startsWith("snapshot:exact_done:").delete(),
       ]);
     },
   );
 }
+
