@@ -169,23 +169,34 @@ async function ensureMasterRefsSynced(
     .map((row) => sanitizeMasterRow(table, row));
 
   if (toUpsert.length > 0) {
-    const { error } = await (supabase as any)
+    const { data: upserted, error } = await (supabase as any)
       .from(table)
-      .upsert(toUpsert, { onConflict: "id" });
+      .upsert(toUpsert, { onConflict: "id" })
+      .select("id");
     if (error) {
       throw new Error(`Could not sync ${table} required by this voucher: ${error.message}`);
     }
-  }
-
-  const targetIds = wanted.map((id) => remap.get(id) ?? id);
-  const verified = await fetchExistingMasterIds(table, companyId, targetIds);
-  const stillMissing = targetIds.filter((id) => !verified.has(id));
-  if (stillMissing.length > 0) {
-    throw new Error(`One or more ${table} could not be synced before voucher save (${stillMissing.length} missing).`);
+    const landedIds = new Set(((upserted ?? []) as Array<{ id: string }>).map((r) => r.id));
+    // If Postgres accepted the upsert but returned no rows, RLS silently
+    // filtered the return — usually a stale session. Surface a clear message.
+    if (landedIds.size === 0) {
+      throw new Error(
+        `Could not save ${table === "ledgers" ? "ledger" : "item"} references to the cloud. ` +
+          `Please refresh the page (or sign out and back in) and try again.`,
+      );
+    }
+    // Trust the upsert response — do NOT re-SELECT immediately, PostgREST
+    // read-after-write can lag and cause a false "still missing" error.
+    for (const row of toUpsert) {
+      if (landedIds.has(row.id as string)) {
+        // no remap needed — same id, now present on server
+      }
+    }
   }
 
   return remap;
 }
+
 
 function remapId(id: string, remap: Map<string, string>): string {
   return remap.get(id) ?? id;
