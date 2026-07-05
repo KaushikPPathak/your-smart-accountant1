@@ -5,11 +5,13 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen, FolderCog, Folder } from "lucide-react";
+import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen, FolderCog, Folder, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
@@ -27,6 +29,11 @@ import { getAppPaths } from "@/lib/app-paths";
 import { BACKUP_POLICY } from "@/lib/backup-policy";
 import { writeLocalMirror } from "@/lib/local-mirror";
 import { getBackupFolder, setBackupFolder } from "@/lib/backup-location";
+import {
+  savePreRestoreSnapshot, getPreRestoreSnapshot, undoRestore,
+  type AvailableSnapshot,
+} from "@/lib/restore-safety";
+import { runSemanticChecks } from "@/lib/semantic-checks";
 
 interface Props {
   companyId: string;
@@ -45,8 +52,11 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
   const [summary, setSummary] = useState<RestoreSummary | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTyped, setConfirmTyped] = useState("");
   const [dataRoot, setDataRoot] = useState<string | null>(null);
   const [backupFolder, setBackupFolderState] = useState<string | null>(null);
+  const [undoSnap, setUndoSnap] = useState<AvailableSnapshot | null>(null);
+  const [undoing, setUndoing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Resolve the OS-standard local data folder + load the user-chosen backup folder.
@@ -60,6 +70,18 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     setBackupFolderState(getBackupFolder(companyId));
     return () => { cancelled = true; };
   }, [companyId]);
+
+  // Poll for an available "undo restore" snapshot for this company.
+  useEffect(() => {
+    let cancelled = false;
+    async function refresh() {
+      const s = await getPreRestoreSnapshot(companyId);
+      if (!cancelled) setUndoSnap(s);
+    }
+    void refresh();
+    const id = window.setInterval(refresh, 60_000);
+    return () => { cancelled = true; window.clearInterval(id); };
+  }, [companyId, restoring, undoing]);
 
   async function chooseBackupFolder(): Promise<string | null> {
     const r = await pickFolderNative(backupFolder ?? undefined);
@@ -192,6 +214,11 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
 
   async function doRestore() {
     if (!pendingFile) return;
+    // Rule 5 — typed-name confirmation for destructive restore into existing company.
+    if (confirmTyped.trim() !== companyName) {
+      toast.error(`Type the company name exactly: "${companyName}"`);
+      return;
+    }
     setRestoring(true);
     try {
       // Detect archive formats (RAR / ZIP / 7z) by magic bytes before reading as text
@@ -226,16 +253,54 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
         toast.error("Multi-company backup detected. Please use a single-company backup file.");
         return;
       }
+      // Rule 5 — take a silent pre-restore snapshot for 24h "Undo restore".
+      const snap = await savePreRestoreSnapshot(companyId, companyName);
+      if (!snap.ok) {
+        toast.warning("Could not create safety snapshot — proceeding without undo option.");
+      }
       const r = await restoreCompanyBackup(companyId, parsed.data, { wipeExisting: true });
       setSummary(r);
       toast.success("Restore complete");
+      // Rule 6 — post-restore semantic verification.
+      try {
+        const report = await runSemanticChecks(companyId);
+        if (report.hasError) {
+          toast.error(`Restore verified with CRITICAL issues: ${report.summary}`, { duration: 12000 });
+        } else if (report.hasWarning) {
+          toast.warning(`Restore verified: ${report.summary}`, { duration: 8000 });
+        } else {
+          toast.success(`Restore verified — ${report.summary}`);
+        }
+      } catch {
+        toast.warning("Restored, but post-restore verification could not run. Open Verify & Repair.");
+      }
     } catch (e) {
       toast.error((e as Error).message || "Restore failed");
     } finally {
       setRestoring(false);
       setConfirmOpen(false);
       setPendingFile(null);
+      setConfirmTyped("");
       if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function doUndoRestore() {
+    if (!undoSnap) return;
+    if (!confirm(
+      `Undo the last restore in "${companyName}"? ` +
+      "This will replace current data with the snapshot taken automatically before the restore.",
+    )) return;
+    setUndoing(true);
+    try {
+      await undoRestore(companyId);
+      toast.success("Restore undone — company reverted to the pre-restore snapshot.");
+      setSummary(null);
+      setUndoSnap(null);
+    } catch (e) {
+      toast.error((e as Error).message || "Undo failed");
+    } finally {
+      setUndoing(false);
     }
   }
 
@@ -475,6 +540,27 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
               </div>
             </div>
           )}
+          {undoSnap && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs space-y-2">
+              <div className="flex items-start gap-2">
+                <Undo2 className="mt-0.5 h-4 w-4 text-amber-600 shrink-0" />
+                <div className="flex-1">
+                  <div className="font-medium">Undo last restore available</div>
+                  <div className="text-muted-foreground">
+                    A safety snapshot was taken automatically before the last restore
+                    ({new Date(undoSnap.createdAt).toLocaleString()}). You can revert
+                    for the next{" "}
+                    <strong>
+                      {Math.max(0, Math.round(undoSnap.expiresInMs / 3_600_000))}h
+                    </strong>.
+                  </div>
+                </div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => void doUndoRestore()} disabled={undoing}>
+                {undoing ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />Undoing…</> : <><Undo2 className="mr-2 h-3.5 w-3.5" />Undo restore</>}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -509,19 +595,39 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
         </CardContent>
       </Card>
 
-      <AlertDialog open={confirmOpen} onOpenChange={(v) => { setConfirmOpen(v); if (!v) setPendingFile(null); }}>
+      <AlertDialog
+        open={confirmOpen}
+        onOpenChange={(v) => {
+          setConfirmOpen(v);
+          if (!v) { setPendingFile(null); setConfirmTyped(""); }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm restore</AlertDialogTitle>
             <AlertDialogDescription>
-              All ledgers, items, vouchers, postings, and allocations in <strong>{companyName}</strong>{" "}
-              will be deleted and replaced with the contents of <strong>{pendingFile?.name}</strong>.
-              This cannot be undone. Proceed?
+              All ledgers, items, vouchers, postings, and allocations in{" "}
+              <strong>{companyName}</strong> will be deleted and replaced with the
+              contents of <strong>{pendingFile?.name}</strong>. A safety snapshot
+              will be saved locally so you can undo within 24 hours. Type the
+              company name below to confirm.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-1.5 py-2">
+            <Label className="text-xs">Type <code>{companyName}</code> to confirm</Label>
+            <Input
+              value={confirmTyped}
+              onChange={(e) => setConfirmTyped(e.target.value)}
+              placeholder={companyName}
+              autoFocus
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={doRestore} disabled={restoring}>
+            <AlertDialogAction
+              onClick={doRestore}
+              disabled={restoring || confirmTyped.trim() !== companyName}
+            >
               {restoring ? "Restoring…" : "Yes, replace everything"}
             </AlertDialogAction>
           </AlertDialogFooter>

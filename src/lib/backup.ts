@@ -157,12 +157,31 @@ export interface RestoreSummary {
  * - Does NOT touch the target company's settings or member list.
  * - Skips rows that fail (e.g. duplicate voucher numbers).
  */
+// Current schema version this build writes. Older backups are accepted
+// verbatim; newer backups are accepted with a "forward compatibility" warning
+// (unknown fields are ignored, known tables are restored). This mirrors the
+// bidirectional version tolerance users expect from established accounting
+// software — never refuse a legitimate backup just because the version number
+// differs.
+export const CURRENT_BACKUP_SCHEMA = 1;
+
 export async function restoreCompanyBackup(
   targetCompanyId: string,
   backup: CompanyBackup,
   opts: { wipeExisting?: boolean } = {},
 ): Promise<RestoreSummary> {
-  if (backup.schema_version !== 1) throw new Error("Unsupported backup version");
+  const ver = Number((backup as { schema_version?: unknown }).schema_version ?? 0);
+  if (!Number.isFinite(ver) || ver < 1) {
+    throw new Error("Backup file is missing a valid schema_version");
+  }
+  // Older versions: accept and migrate forward (all v1 fields optional-safe below).
+  // Newer versions: accept, ignore unknown fields, warn via console.
+  if (ver > CURRENT_BACKUP_SCHEMA) {
+    console.warn(
+      `Backup schema v${ver} is newer than app schema v${CURRENT_BACKUP_SCHEMA}. ` +
+      `Restoring known fields only; upgrade the app to preserve any new data.`,
+    );
+  }
 
   // STRICT RESTORE RULE: always wipe the target company's data before restoring.
   // "Overwrite existing balances and add missing transactions" is only achievable

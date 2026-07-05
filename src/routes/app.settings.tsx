@@ -8,6 +8,8 @@ import {
   parseBackupFile,
   restoreCompanyBackup,
 } from "@/lib/backup";
+import { savePreRestoreSnapshot } from "@/lib/restore-safety";
+import { runSemanticChecks } from "@/lib/semantic-checks";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -300,7 +302,13 @@ function SettingsPage() {
     if (!isAdmin) { toast.error("Only admins can restore"); return; }
     // Strict restore rule: always wipe target company data before restoring
     // to guarantee "overwrite existing, add missing" semantics — never duplicate.
-    if (!confirm("Strict restore: this will DELETE all current data in this company and replace it with the backup. Continue?")) return;
+    const targetName = activeMembership?.companies.name ?? "";
+    const typed = prompt(
+      `STRICT RESTORE — this will DELETE all current data in "${targetName}" and replace it with the backup.\n\n` +
+      `Type the company name exactly to confirm:`,
+    );
+    if (typed === null) return;
+    if (typed.trim() !== targetName) { toast.error(`Name did not match "${targetName}" — restore cancelled.`); return; }
     setRestoring(true);
     try {
       const text = await file.text();
@@ -308,10 +316,20 @@ function SettingsPage() {
       if (parsed.checksumOk === false) toast.warning("Backup checksum mismatch — file may be corrupted or edited.");
       const single = parsed.kind === "single" ? parsed.data : parsed.data.companies[0];
       if (!single) throw new Error("Backup file is empty");
+      // Rule 5 — silent pre-restore snapshot for 24h undo (Housekeeping → Undo restore).
+      const snap = await savePreRestoreSnapshot(activeCompanyId, targetName);
+      if (!snap.ok) toast.warning("Could not create safety snapshot — proceeding without undo option.");
       const summary = await restoreCompanyBackup(activeCompanyId, single, { wipeExisting: true });
       toast.success(
         `Restored: ${summary.ledgers} ledgers, ${summary.items} items, ${summary.vouchers} vouchers`,
       );
+      // Rule 6 — post-restore semantic verification.
+      try {
+        const report = await runSemanticChecks(activeCompanyId);
+        if (report.hasError) toast.error(`Verified with CRITICAL issues: ${report.summary}`, { duration: 12000 });
+        else if (report.hasWarning) toast.warning(`Verified: ${report.summary}`, { duration: 8000 });
+        else toast.success(`Verified — ${report.summary}`);
+      } catch { /* non-fatal */ }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Restore failed");
     } finally {
