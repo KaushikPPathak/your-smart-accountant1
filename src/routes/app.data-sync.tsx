@@ -239,6 +239,56 @@ function DataSyncPage() {
         </Card>
       )}
 
+      {quota?.supported && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HardDrive className="h-5 w-5" /> Offline storage
+            </CardTitle>
+            <CardDescription>
+              How much of the browser's available storage the offline cache is using on this device.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-baseline justify-between gap-4">
+              <div className="text-sm">
+                <span className="font-medium">{formatBytes(quota.usageBytes)}</span>
+                <span className="text-muted-foreground"> of {formatBytes(quota.quotaBytes)} available</span>
+              </div>
+              <Badge variant={quota.percentUsed > 80 ? "destructive" : "secondary"}>
+                {quota.percentUsed.toFixed(1)}% used
+              </Badge>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-full transition-all ${quota.percentUsed > 80 ? "bg-destructive" : "bg-primary"}`}
+                style={{ width: `${Math.min(100, Math.max(1, quota.percentUsed))}%` }}
+              />
+            </div>
+            {quota.percentUsed > 80 && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                Storage is filling up. If it hits the limit, new offline writes may fail. Consider
+                signing out of unused companies or clearing browser data for other sites on this device.
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <div className="text-xs text-muted-foreground">
+                {quota.persisted
+                  ? "Persistent storage granted — browser will not evict this data under disk pressure."
+                  : "Persistent storage NOT granted — browser may clear this data if the device runs low on space."}
+              </div>
+              {!quota.persisted && (
+                <Button size="sm" variant="outline" onClick={handlePersist}>
+                  Request persistence
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+
+
 
       <Card>
         <CardHeader>
