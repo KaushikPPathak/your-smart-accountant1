@@ -135,29 +135,28 @@ function LedgersPage() {
       return;
     }
     setLoading(true);
-    const loadFromCache = async () => {
-      const { readLedgers } = await import("@/lib/offline/cache-read");
-      const cached = await readLedgers(activeCompanyId);
-      setLedgers((cached ?? []) as unknown as Ledger[]);
+    const { readLedgers } = await import("@/lib/offline/cache-read");
+    const readAll = async () => {
+      const rows = await readLedgers(activeCompanyId);
+      setLedgers((rows ?? []) as unknown as Ledger[]);
     };
-    if (!isOnlineNow()) {
-      try { await loadFromCache(); } catch { setLedgers([]); }
-      setLoading(false);
-      return;
-    }
-    try {
-      const { data, error } = await supabase
-        .from("ledgers")
-        .select("*")
-        .eq("company_id", activeCompanyId)
-        .order("name", { ascending: true });
-      if (error) throw error;
-      setLedgers((data ?? []) as Ledger[]);
-    } catch (err: any) {
-      try { await loadFromCache(); } catch { toast.error(err?.message || "Failed to load ledgers"); setLedgers([]); }
+    // Local-first: render whatever's in the offline cache immediately so the
+    // page works offline and reflects locally-created (not-yet-synced) rows.
+    try { await readAll(); } catch { setLedgers([]); }
+    // If online, pull cloud deltas into the cache and re-read.
+    if (isOnlineNow()) {
+      try {
+        const { syncEssentialMasters } = await import("@/lib/offline/masters");
+        await syncEssentialMasters(activeCompanyId);
+        await readAll();
+      } catch (err: any) {
+        // Non-fatal; cache stays authoritative until network recovers.
+        console.warn("Ledger cloud sync deferred:", err?.message ?? err);
+      }
     }
     setLoading(false);
   };
+
 
 
   useEffect(() => {
