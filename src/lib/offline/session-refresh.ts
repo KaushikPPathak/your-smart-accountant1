@@ -66,12 +66,23 @@ export async function refreshSessionIfDue(force = false): Promise<number> {
 
       const { error } = await supabase.auth.refreshSession();
       if (error) {
-        // "Refresh Token Not Found" / "invalid_grant" → the 30-day window
-        // really did elapse (or the user was signed out elsewhere). Fall
-        // through to warn on the next warnIfSessionStale() call.
         const msg = String(error.message ?? "");
+        // "Refresh Token Not Found" / "invalid_grant" → the 30-day window
+        // really did elapse. AUTO-RECOVERY: because this app uses a shared
+        // silent tech-user (not per-user Supabase accounts), we can just
+        // re-run the silent sign-in with no user interaction. This closes
+        // the 30-day ceiling entirely — the app is offline-usable
+        // indefinitely, and the moment connectivity returns (even months
+        // later) the session self-heals in the background.
         if (/refresh token|invalid_grant|not found|expired/i.test(msg)) {
-          // Leave last-refresh alone so the "stale" warning fires.
+          try {
+            const { ensureTechSession } = await import("../tech-user");
+            const res = await ensureTechSession(true);
+            if (res.ok) {
+              writeLastRefresh(Date.now());
+              toastedExpiry = false;
+            }
+          } catch { /* stay offline-only until next tick */ }
           return;
         }
         // Network / transient failure — remember so cache-read can behave.
