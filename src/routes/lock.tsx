@@ -406,6 +406,7 @@ function LockScreen() {
                   value={loginPass}
                   onChange={(e) => setLoginPass(e.target.value)}
                   disabled={busy}
+                  autoFocus={Boolean(loginUser)}
                 />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
