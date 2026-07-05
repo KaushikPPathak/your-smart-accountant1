@@ -83,6 +83,12 @@ class OfflineDatabase extends Dexie {
   cache_voucher_entries!: Table<any, any>;
   cache_voucher_items!: Table<any, any>;
   cache_bill_allocations!: Table<any, any>;
+  cache_voucher_export_details!: Table<any, any>;
+  cache_einvoice_details!: Table<any, any>;
+  cache_period_locks!: Table<any, any>;
+  cache_bom_templates!: Table<any, any>;
+  cache_bom_template_lines!: Table<any, any>;
+  cache_recurring_invoices!: Table<any, any>;
   outbox!: Table<any, any>;
   dead_letter!: Table<any, any>;
   sync_cursors!: Table<any, any>;
