@@ -67,6 +67,8 @@ function LockScreen() {
       if (cachedOpts.length > 0) {
         setUserOptions(cachedOpts);
         setAccountsExist(true);
+        setTab("login");
+        setBootLoading(false);
       }
 
       if (!isOnlineNow()) {
@@ -197,8 +199,11 @@ function LockScreen() {
           navigate({ to: (consumeReturnTo() ?? "/app") as never });
           return;
         } catch (cloudErr) {
-          const reachable = await pingOnline();
-          if (reachable) throw cloudErr;
+          const msg = cloudErr instanceof Error ? cloudErr.message : String(cloudErr ?? "");
+          if (!/network timeout|failed to fetch|networkerror|offline/i.test(msg)) {
+            const reachable = await pingOnline();
+            if (reachable) throw cloudErr;
+          }
         }
       }
 
