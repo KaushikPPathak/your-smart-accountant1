@@ -35,6 +35,11 @@ function ProfitLoss() {
   const cr = isIE ? "Income" : "Cr. Particulars";
   const surplusLabel = isIE ? "To Excess of Income over Expenditure" : "To Net Profit c/d";
   const deficitLabel = isIE ? "By Excess of Expenditure over Income" : "By Net Loss c/d";
+  // When inventory is disabled the Trading Account is not the primary flow, so
+  // direct income (Sales, Job Work) and direct expense (Purchases, Factory
+  // Wages) must appear in P&L — otherwise those ledgers silently disappear
+  // from every profitability report.
+  const inventoryEnabled = !!activeMembership?.companies?.inventory_enabled;
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const { view, setView } = useReportView("profit-loss");
@@ -52,22 +57,30 @@ function ProfitLoss() {
     });
   }, [activeCompanyId, from, to]);
 
-  // Use ONLY ledgers whose group is in the PL section (Indirect Income / Indirect Expenses)
+  const expenseTypes = inventoryEnabled
+    ? new Set(["expense_indirect"])
+    : new Set(["expense_direct", "expense_indirect"]);
+  const incomeTypes = inventoryEnabled
+    ? new Set(["income_indirect"])
+    : new Set(["income_direct", "income_indirect"]);
+
   const expenseBuckets = useMemo(
     () => groupBalances(
-      balances.filter((b) => b.type === "expense_indirect"),
+      balances.filter((b) => expenseTypes.has(b.type)),
       "PL",
       (b) => b.closing_paise,
     ),
-    [balances],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [balances, inventoryEnabled],
   );
   const incomeBuckets = useMemo(
     () => groupBalances(
-      balances.filter((b) => b.type === "income_indirect"),
+      balances.filter((b) => incomeTypes.has(b.type)),
       "PL",
       (b) => -b.closing_paise,
     ),
-    [balances],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [balances, inventoryEnabled],
   );
 
   const goLedger = (id: string) =>
