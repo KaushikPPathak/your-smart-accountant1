@@ -53,6 +53,20 @@ const HEAVY_TABLES = [
 ] as const;
 const SNAPSHOT_TABLES = [...MINIMAL_TABLES, ...HEAVY_TABLES] as const;
 
+// Tables where `deleted_at` was added by the soft-delete migration. The
+// snapshot pulls tombstones (rows with deleted_at != null) via the delta
+// path so multi-device deletes propagate; the exact/full-replace path
+// filters them out because it rebuilds the local cache from scratch.
+const SOFT_DELETE_TABLES = new Set<string>([
+  "ledgers",
+  "items",
+  "vouchers",
+  "account_subgroups",
+  "ledger_group_mappings",
+  "account_group_overrides",
+]);
+
+
 type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 
 type CacheRow = Record<string, unknown>;
