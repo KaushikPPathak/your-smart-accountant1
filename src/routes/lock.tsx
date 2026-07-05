@@ -263,7 +263,7 @@ function LockScreen() {
       if (error) throw error;
 
       toast.success("Account created successfully!");
-      markUnlocked({ id: newId as string, name: suName.trim(), role: "admin" });
+      markUnlocked({ id: newId as string, name: suName.trim(), role: "admin", username: suUser.trim() });
       navigate({ to: (consumeReturnTo() ?? "/app") as never });
     } catch (e) {
       console.error("Signup failed:", e);
