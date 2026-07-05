@@ -141,6 +141,11 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
           return;
         }
         target = targetId;
+        // Rule 5 — pre-restore safety snapshot (24h undo from Housekeeping).
+        const snap = await savePreRestoreSnapshot(target, targetName);
+        if (!snap.ok) {
+          toast.warning("Could not create safety snapshot — proceeding without undo option.");
+        }
       }
       const summary = await restoreCompanyBackup(target, backup, { wipeExisting: true });
       const restoredName = mode === "new" ? newName : (memberships.find((m) => m.company_id === target)?.companies.name ?? "");
