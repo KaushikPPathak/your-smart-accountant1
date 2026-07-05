@@ -7,6 +7,7 @@ const UNLOCK_KEY = "ym_unlocked";
 const STAFF_ID_KEY = "ym_active_staff_id";
 const STAFF_NAME_KEY = "ym_active_staff_name";
 const STAFF_ROLE_KEY = "ym_active_staff_role";
+const LAST_USERNAME_KEY = "ym_last_username";
 
 export type StaffRole = "admin" | "staff";
 
@@ -15,12 +16,23 @@ export function isUnlocked(): boolean {
   return sessionStorage.getItem(UNLOCK_KEY) === "1";
 }
 
-export function markUnlocked(staff: { id: string; name: string; role: StaffRole }) {
+export function markUnlocked(staff: { id: string; name: string; role: StaffRole; username?: string }) {
   if (typeof window === "undefined") return;
   sessionStorage.setItem(UNLOCK_KEY, "1");
   localStorage.setItem(STAFF_ID_KEY, staff.id);
   localStorage.setItem(STAFF_NAME_KEY, staff.name);
   localStorage.setItem(STAFF_ROLE_KEY, staff.role);
+  if (staff.username) localStorage.setItem(LAST_USERNAME_KEY, staff.username.trim().toLowerCase());
+}
+
+export function rememberLastUsername(username: string) {
+  if (typeof window === "undefined" || !username) return;
+  localStorage.setItem(LAST_USERNAME_KEY, username.trim().toLowerCase());
+}
+
+export function getLastUsername(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(LAST_USERNAME_KEY);
 }
 
 export function lockWorkspace() {
@@ -32,8 +44,8 @@ export function lockWorkspace() {
     if (k && k.startsWith("ym_unlocked_")) sessionStorage.removeItem(k);
   }
   localStorage.removeItem("ym_active_company_id");
-  // Keep the staff identity in localStorage as a hint for "last user", but
-  // they'll still have to re-enter the PIN.
+  // Keep the staff identity + last username in localStorage as a hint for
+  // "last user", but they'll still have to re-enter the password.
 }
 
 export function getActiveStaff(): { id: string; name: string; role: StaffRole } | null {

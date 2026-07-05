@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { markUnlocked, type StaffRole } from "@/lib/staff-session";
+import { markUnlocked, getLastUsername, type StaffRole } from "@/lib/staff-session";
 import { ensureTechSession } from "@/lib/tech-user";
 import { cacheAccountCredsFromCloud, verifyOfflineLogin, listCachedAccounts } from "@/lib/offline/creds-cache";
 import { isOnlineNow, pingOnline } from "@/lib/offline/online-status";
@@ -68,6 +68,11 @@ function LockScreen() {
         setUserOptions(cachedOpts);
         setAccountsExist(true);
         setTab("login");
+        // Preselect last-signed-in user so they only need to type the password.
+        const last = getLastUsername();
+        if (last && cachedOpts.some((o) => o.username === last)) {
+          setLoginUser(last);
+        }
         setBootLoading(false);
       }
 
@@ -194,7 +199,7 @@ function LockScreen() {
             console.error("Company cache sync skipped:", syncErr);
           }
 
-          markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole });
+          markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole, username: loginUser.trim() });
           toast.success(`Welcome, ${row.name}`);
           navigate({ to: (consumeReturnTo() ?? "/app") as never });
           return;
@@ -209,7 +214,7 @@ function LockScreen() {
 
       const local = await verifyOfflineLogin(loginUser.trim(), loginPass);
       if (local) {
-        markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole });
+        markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole, username: loginUser.trim() });
         toast.success(`Welcome, ${local.name} (offline)`);
         navigate({ to: (consumeReturnTo() ?? "/app") as never });
         return;
@@ -258,7 +263,7 @@ function LockScreen() {
       if (error) throw error;
 
       toast.success("Account created successfully!");
-      markUnlocked({ id: newId as string, name: suName.trim(), role: "admin" });
+      markUnlocked({ id: newId as string, name: suName.trim(), role: "admin", username: suUser.trim() });
       navigate({ to: (consumeReturnTo() ?? "/app") as never });
     } catch (e) {
       console.error("Signup failed:", e);
@@ -401,6 +406,7 @@ function LockScreen() {
                   value={loginPass}
                   onChange={(e) => setLoginPass(e.target.value)}
                   disabled={busy}
+                  autoFocus={Boolean(loginUser)}
                 />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
