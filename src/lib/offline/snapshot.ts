@@ -846,6 +846,12 @@ export async function resetSnapshotCache(): Promise<void> {
       db.cache_voucher_entries,
       db.cache_voucher_items,
       db.cache_bill_allocations,
+      db.cache_voucher_export_details,
+      db.cache_einvoice_details,
+      db.cache_period_locks,
+      db.cache_bom_templates,
+      db.cache_bom_template_lines,
+      db.cache_recurring_invoices,
       db.sync_cursors,
       db.meta,
     ],
@@ -862,6 +868,12 @@ export async function resetSnapshotCache(): Promise<void> {
         db.cache_voucher_entries.clear(),
         db.cache_voucher_items.clear(),
         db.cache_bill_allocations.clear(),
+        db.cache_voucher_export_details.clear(),
+        db.cache_einvoice_details.clear(),
+        db.cache_period_locks.clear(),
+        db.cache_bom_templates.clear(),
+        db.cache_bom_template_lines.clear(),
+        db.cache_recurring_invoices.clear(),
         db.sync_cursors.clear(),
         // Clear only the exact-done markers so the next full sync repeats the
         // guaranteed full replace instead of taking the delta fast path.
@@ -870,4 +882,5 @@ export async function resetSnapshotCache(): Promise<void> {
     },
   );
 }
+
 
