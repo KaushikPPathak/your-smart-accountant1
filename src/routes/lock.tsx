@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { markUnlocked, type StaffRole } from "@/lib/staff-session";
+import { markUnlocked, getLastUsername, type StaffRole } from "@/lib/staff-session";
 import { ensureTechSession } from "@/lib/tech-user";
 import { cacheAccountCredsFromCloud, verifyOfflineLogin, listCachedAccounts } from "@/lib/offline/creds-cache";
 import { isOnlineNow, pingOnline } from "@/lib/offline/online-status";
