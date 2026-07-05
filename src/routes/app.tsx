@@ -32,7 +32,6 @@ import { PendingSavesTray } from "@/components/fast-form/PendingSavesTray";
 import { FocusHintsProvider } from "@/components/fast-form/FocusHints";
 import { StatusBar } from "@/components/fast-form/StatusBar";
 import { BackupNudgeBanner } from "@/components/BackupNudgeBanner";
-import { OfflineStatusChip } from "@/components/OfflineStatusChip";
 import { InstallAppButton } from "@/components/InstallAppButton";
 
 export const Route = createFileRoute("/app")({
@@ -239,7 +238,7 @@ function AppLayout() {
             <div className="h-5 w-px bg-border" />
             <CompanySwitcher />
             <div className="ml-auto flex items-center gap-2">
-              <OfflineStatusChip />
+              {/* Offline/online status is intentionally hidden — sync runs silently in the background. */}
               <InstallAppButton />
               <LanguageSwitcher compact />
               <CurrencySwitcher compact />

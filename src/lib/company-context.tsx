@@ -231,33 +231,18 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     // minimum companies + settings dataset.
     if (activeCompanyId && isOnlineNow()) {
       const last = Number(localStorage.getItem(fullSnapshotKey(activeCompanyId)) ?? "0");
-      const isFirstRun = !last;
       if (!last || Date.now() - last > FULL_SNAPSHOT_THROTTLE_MS) {
+        // Silent hydrate — no toasts, no banners. Sync stays a background
+        // detail; the user only sees data, never plumbing.
         const hydrate = () => {
-          let startedToastId: string | number | undefined;
-          if (isFirstRun) {
-            void import("sonner").then(({ toast }) => {
-              startedToastId = toast.loading("Preparing offline copy…", {
-                id: `offline-hydrate-${activeCompanyId}`,
-                description: "Downloading masters and last 12 months of vouchers.",
-              });
-            }).catch(() => undefined);
-          }
           import("@/lib/offline/snapshot")
-            .then((m) => m.pullCompanySnapshot(activeCompanyId, { full: true, notify: isFirstRun }))
+            .then((m) => m.pullCompanySnapshot(activeCompanyId, { full: true, notify: false }))
             .then((result) => {
               if (result && Object.keys(result.errors).length === 0 && result.verification?.ok !== false) {
                 localStorage.setItem(fullSnapshotKey(activeCompanyId), String(Date.now()));
               }
-              if (isFirstRun && startedToastId !== undefined) {
-                void import("sonner").then(({ toast }) => toast.dismiss(startedToastId));
-              }
             })
-            .catch(() => {
-              if (isFirstRun && startedToastId !== undefined) {
-                void import("sonner").then(({ toast }) => toast.dismiss(startedToastId));
-              }
-            });
+            .catch(() => { /* swallow — offline/online is invisible to the user */ });
         };
         const idle = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => void }).requestIdleCallback;
         if (idle) idle(hydrate, { timeout: 5_000 });
