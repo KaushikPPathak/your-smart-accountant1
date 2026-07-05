@@ -128,9 +128,9 @@ export function GstinPortalWindow({ gstin, onDataFetched }: GstinPortalWindowPro
               type="button"
               onClick={handleCopyAndRedirect}
               className={`w-full text-xs h-9 gap-2 font-medium transition-all duration-300 shadow-sm ${
-                copied 
-                  ? "bg-teal-600 hover:bg-teal-700 text-white" 
-                  : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100"
+                copied
+                  ? "bg-success text-success-foreground hover:bg-success/90"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
               }`}
             >
               {copied ? (
