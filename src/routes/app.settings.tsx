@@ -298,7 +298,9 @@ function SettingsPage() {
     e.target.value = "";
     if (!file || !activeCompanyId) return;
     if (!isAdmin) { toast.error("Only admins can restore"); return; }
-    if (wipeBeforeRestore && !confirm("This will DELETE all current data in this company before restoring. Continue?")) return;
+    // Strict restore rule: always wipe target company data before restoring
+    // to guarantee "overwrite existing, add missing" semantics — never duplicate.
+    if (!confirm("Strict restore: this will DELETE all current data in this company and replace it with the backup. Continue?")) return;
     setRestoring(true);
     try {
       const text = await file.text();
@@ -306,7 +308,7 @@ function SettingsPage() {
       if (parsed.checksumOk === false) toast.warning("Backup checksum mismatch — file may be corrupted or edited.");
       const single = parsed.kind === "single" ? parsed.data : parsed.data.companies[0];
       if (!single) throw new Error("Backup file is empty");
-      const summary = await restoreCompanyBackup(activeCompanyId, single, { wipeExisting: wipeBeforeRestore });
+      const summary = await restoreCompanyBackup(activeCompanyId, single, { wipeExisting: true });
       toast.success(
         `Restored: ${summary.ledgers} ledgers, ${summary.items} items, ${summary.vouchers} vouchers`,
       );
