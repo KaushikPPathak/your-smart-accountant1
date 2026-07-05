@@ -97,8 +97,18 @@ async function executeOutboxRow(row: OutboxRow): Promise<void> {
   const q = supabase.from(row.table as never);
 
   if (row.op === "insert") {
-    const { error } = await q.insert(row.payload as never);
-    if (error) throw new Error(error.message);
+    if (row.table === "ledgers" || row.table === "items") {
+      const { error } = await q.upsert(row.payload as never, { onConflict: "id" });
+      if (error) {
+        const code = (error as { code?: string }).code;
+        const message = error.message ?? "Insert failed";
+        if (code === "23505" || /duplicate key/i.test(message)) return;
+        throw new Error(message);
+      }
+    } else {
+      const { error } = await q.insert(row.payload as never);
+      if (error) throw new Error(error.message);
+    }
   } 
   
   else if (row.op === "update") {
