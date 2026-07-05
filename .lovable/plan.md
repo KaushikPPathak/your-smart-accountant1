@@ -1,88 +1,50 @@
+## Why your desktop app isn't updating
 
-# Plan — Run YourMehtaji fully offline (no internet required)
+The most common reasons a GitHub Actions build "doesn't update" are all fixable in the workflow file itself. I'll harden `.github/workflows/build.yml` so every push produces a fresh, downloadable installer, and bump the app version so you can actually see the new build.
 
-Goal: the user can open the app with the network cable pulled, view masters, create/edit vouchers, print, and see reports. When internet returns, everything syncs to the cloud automatically. No feature should throw "not synced yet" errors in normal use.
+## What I'll change
 
-The infra is already partially there (`src/lib/offline/*`, `outbox.ts`, `voucher-executors.ts`, `snapshot.ts`, `sync-worker.ts`). This plan finishes it and makes offline the default path.
+### 1. Trigger builds on every push, not just tags
+Right now the workflow only runs on manual dispatch or `v*` tags. If you edit code and just sync to GitHub, nothing happens. I'll add:
+- `push` to `main` → builds artifacts (downloadable from Actions tab)
+- `pull_request` → builds for verification
+- Keep `workflow_dispatch` and `v*` tags → publishes GitHub Release
 
----
+### 2. Bump version on every build so you can tell it's new
+Inject the short commit SHA + run number into `tauri.conf.json` `version` before building, so the installer filename becomes e.g. `SmartAccountant_0.1.0-build.42_x64-setup.exe`. No more "did it actually rebuild?" doubt.
 
-## 1. Offline data store (IndexedDB is the source of truth)
+### 3. Fix likely Android build failures
+- Pre-create `src-tauri/gen/android` guard so `tauri android init` doesn't fail on re-runs
+- Set `NDK_HOME` at the job level (not per-step) so all steps see it
+- Add `--split-per-abi` off / single universal APK for simpler sideloading
+- Ensure `bun run build:tauri` (frontend) succeeds before Android packaging
 
-- Extend `src/lib/offline/db.ts` (Dexie) with full tables for: `companies`, `ledgers`, `groups`, `items`, `godowns`, `units`, `vouchers`, `voucher_items`, `voucher_postings`, `bom_templates`, `recurring`, `bank_txns`, `period_locks`, `outbox`, `sync_meta`.
-- Each row carries `local_id` (uuid), optional `remote_id`, `updated_at`, `dirty` flag, `deleted` flag (soft delete), `company_id`.
-- Add a `sync_meta` table storing per-table `last_pulled_at` cursor.
-- Migrate current partial store; keep the existing `outbox` shape.
+### 4. Make failures visible
+- `continue-on-error: false` (default, but explicit)
+- Upload build logs as an artifact when a step fails, so you don't have to scroll the web UI
+- Add a final "Summary" step that prints artifact download links to the run summary page
 
-## 2. Read path — everything reads local first
+### 5. Cache-bust properly
+Rust cache key currently keyed only on workspace; add lockfile hash so a `Cargo.lock` change forces a rebuild instead of serving stale objects.
 
-- Introduce `src/lib/offline/repo/*.ts` (one file per entity: `ledgers.ts`, `items.ts`, `vouchers.ts`, …) exposing `list()`, `get(id)`, `create()`, `update()`, `remove()`.
-- Repos always read/write Dexie. Writes also enqueue an outbox row.
-- Refactor route loaders and components (`app.ledgers.tsx`, `app.items.tsx`, `app.vouchers.tsx`, voucher forms, reports) to call repos instead of Supabase directly.
-- Voucher form ledger/item pickers use the local Dexie list — fixes the current "ledger not synced yet" error, because the picker and the executor share one store.
+### 6. Document the "why nothing happened" cases in `BUILDS.md`
+- If Actions tab is empty → workflow permissions disabled in repo Settings → Actions → General
+- If run is red → click the failing job, expand the red step
+- If artifacts missing after green run → 90-day retention, re-run needed
+- If installed .exe still shows old UI → uninstall old version first, or check `%LOCALAPPDATA%\com.smartaccountant.app\` for cached webview
 
-## 3. Write path — outbox + executors
+## Files touched
+- `.github/workflows/build.yml` — rewrite triggers, add version injection, fix Android env, add failure-log upload and run summary
+- `BUILDS.md` — add troubleshooting section for the four "nothing updated" cases
+- `src-tauri/tauri.conf.json` — bump base version `0.1.0` → `0.2.0` so a fresh install is unambiguously newer
 
-- Every mutation:
-  1. Write to Dexie (optimistic, immediately visible).
-  2. Push an outbox job `{op, table, local_id, payload, deps:[local_ids]}`.
-- Extend `voucher-executors.ts` to cover all entities (already handles vouchers). Executors translate `local_id → remote_id` using a local id-map before hitting Supabase, so a voucher created offline referencing an offline-created ledger will resolve correctly once both are pushed.
-- `sync-worker.ts`: on `online` event and every 30s, drain outbox in dependency order; on success stamp `remote_id` back onto the local row.
+## Not touched
+No app code, no UI, no database. Pure CI/packaging.
 
-## 4. Pull / reconcile
+## After you approve
+You'll need to (once):
+1. GitHub repo → **Settings → Actions → General** → set **Workflow permissions** to **Read and write** (required for the Release job).
+2. Sync latest from Lovable, then check the **Actions** tab — a run should appear within ~30 seconds of the push.
+3. Open the run → **Artifacts** section at the bottom → download `SmartAccountant-Windows` and `SmartAccountant-Android`.
 
-- New `src/lib/offline/pull.ts`: for each table, `select * where updated_at > last_pulled_at`, upsert into Dexie, advance cursor.
-- Runs on: app boot (if online), after successful outbox drain, and via a "Sync now" button on `app.data-sync.tsx`.
-- Conflict rule: local `dirty` rows win until they're pushed; server wins otherwise (last-write-wins by `updated_at`).
-
-## 5. Initial hydration (first-run online snapshot)
-
-- After login while online, `snapshot.ts` bulk-downloads all masters + last 12 months of vouchers into Dexie so the user can go offline immediately.
-- Show a one-time progress screen: "Preparing offline copy…".
-
-## 6. Auth offline
-
-- Cache the Supabase session + a hashed PIN in Dexie (already partly in `creds-cache.ts`).
-- On boot without network: if a cached session exists and PIN matches, unlock the app in offline mode; skip Supabase calls.
-- Session refresh is deferred until the network is back.
-
-## 7. Reports & printing offline
-
-- Trial balance, day book, ledger, GSTR previews, receivables, cash/bank — all recomputed from local `voucher_postings`. No server calls.
-- PDF/print uses the existing client-side renderer; no change needed beyond pointing data queries at repos.
-- Features that inherently need internet (e-invoice IRN, e-way bill, GSTR filing, bank OCR upload, AI assistant) show a clear "Requires internet" state and queue the request to run when back online where it makes sense.
-
-## 8. App shell — installable & offline-capable
-
-- Web: enable `vite-plugin-pwa` with `generateSW`, `NetworkFirst` for HTML, `CacheFirst` for hashed assets, `injectRegister: null`. Registration wrapper (already stubbed in `pwa-registration.ts`) refuses to register in Lovable preview / iframe / dev, and supports `?sw=off` kill switch.
-- Tauri desktop build already exists; it's inherently offline. Keep the current guard so `virtual:pwa-register` is not touched in Tauri builds.
-- Add an "Offline" badge in the top bar driven by `online-status.ts`, plus an outbox counter ("3 changes pending sync").
-
-## 9. UX polish
-
-- Remove the blocking "ledger not synced" toast — replace with a non-blocking chip "will sync when online".
-- `app.data-sync.tsx`: show outbox queue, last pull time, per-table row counts, "Retry failed", "Force full re-pull".
-- Housekeeping page gets a "Clear local cache & re-download" button.
-
-## 10. Rollout order
-
-1. Extend Dexie schema + repos for ledgers & items (unblocks the current bug).
-2. Refactor voucher forms + `app.ledgers` / `app.items` to repos.
-3. Full outbox executor coverage + id-map.
-4. Pull/reconcile + initial snapshot.
-5. Reports read from local postings.
-6. PWA install + offline badge + sync panel polish.
-7. Offline auth (PIN) hardening.
-
----
-
-## Out of scope (needs internet, will be gated)
-
-E-invoice IRN generation, e-way bill, GSTIN portal window, GSTR upload, AI assistant chat, bank statement OCR upload, Google/OAuth sign-in flows.
-
-## Technical notes
-
-- Dexie v4 with compound indexes on `[company_id+updated_at]` and `[company_id+deleted]`.
-- Outbox drains sequentially per company to preserve voucher numbering.
-- All Supabase calls are funnelled through `src/lib/offline/net.ts` which short-circuits when offline and enqueues instead.
-- No schema changes on the Supabase side are required; we only add `updated_at` triggers where missing (single migration).
+If you want a public download page (not just Actions artifacts), tag a release from GitHub → Releases → **Draft new release** → tag `v0.2.0` → Publish. The workflow attaches `.exe`/`.msi`/`.apk` automatically.
