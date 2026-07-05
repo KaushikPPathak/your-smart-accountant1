@@ -5,11 +5,13 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen, FolderCog, Folder } from "lucide-react";
+import { Download, Upload, Loader2, ShieldAlert, HardDriveDownload, FolderOpen, FolderCog, Folder, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   exportCompanyBackup, parseBackupFile, restoreCompanyBackup,
@@ -27,6 +29,11 @@ import { getAppPaths } from "@/lib/app-paths";
 import { BACKUP_POLICY } from "@/lib/backup-policy";
 import { writeLocalMirror } from "@/lib/local-mirror";
 import { getBackupFolder, setBackupFolder } from "@/lib/backup-location";
+import {
+  savePreRestoreSnapshot, getPreRestoreSnapshot, undoRestore,
+  type AvailableSnapshot,
+} from "@/lib/restore-safety";
+import { runSemanticChecks } from "@/lib/semantic-checks";
 
 interface Props {
   companyId: string;
