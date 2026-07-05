@@ -563,7 +563,7 @@ async function notifyOfflineReady(companyId: string, result: SnapshotResult) {
 
 export async function pullCompanySnapshot(
   companyId: string,
-  opts: { full?: boolean; notify?: boolean } = {},
+  opts: { full?: boolean; notify?: boolean; forceExact?: boolean } = {},
 ): Promise<SnapshotResult | null> {
   if (!isOnlineNow()) return null;
   const cacheKey = `${companyId}:${opts.full ? "full" : "min"}`;
@@ -576,17 +576,47 @@ export async function pullCompanySnapshot(
 
     const result: SnapshotResult = { companyId, pulled: {}, errors: {}, finishedAt: 0 };
     const tables: readonly SnapshotTable[] = opts.full ? SNAPSHOT_TABLES : MINIMAL_TABLES;
+    const { setMeta, db } = await getDbInstance();
 
     if (opts.full) {
-      try {
-        const exact = await pullExactCompanySnapshot(companyId);
-        result.pulled = exact.pulled;
-        result.verification = exact.verification;
-        if (!exact.verification.ok) {
-          result.errors.verification = exact.verification.problems.slice(0, 5).join("; ") || "Online/offline verification failed";
+      // Delta path: if we've already done an exact snapshot for this company,
+      // do the fast cursor-based incremental pull. Falls back to the full
+      // exact snapshot only on the first run or when the caller forces it
+      // (user-initiated "Sync now" / "Restore from cloud").
+      const exactDoneRow = await db.meta.get(`snapshot:exact_done:${companyId}`);
+      const canDelta = !opts.forceExact && Boolean(exactDoneRow?.value);
+      if (canDelta) {
+        try {
+          await Promise.all(SNAPSHOT_TABLES.map(async (table) => {
+            try {
+              result.pulled[table] = await pullTable(table, companyId, { exact: false });
+            } catch (e) {
+              result.errors[table] = e instanceof Error ? e.message : String(e);
+            }
+          }));
+          try {
+            const children = await pullVoucherChildren(companyId, { exact: false });
+            result.pulled.voucher_entries = children.entries;
+            result.pulled.voucher_items = children.items;
+          } catch (e) {
+            result.errors.voucher_children = e instanceof Error ? e.message : String(e);
+          }
+        } catch (e) {
+          result.errors.snapshot = e instanceof Error ? e.message : String(e);
         }
-      } catch (e) {
-        result.errors.snapshot = e instanceof Error ? e.message : String(e);
+      } else {
+        try {
+          const exact = await pullExactCompanySnapshot(companyId);
+          result.pulled = exact.pulled;
+          result.verification = exact.verification;
+          if (!exact.verification.ok) {
+            result.errors.verification = exact.verification.problems.slice(0, 5).join("; ") || "Online/offline verification failed";
+          } else {
+            await setMeta(`snapshot:exact_done:${companyId}`, { at: Date.now() });
+          }
+        } catch (e) {
+          result.errors.snapshot = e instanceof Error ? e.message : String(e);
+        }
       }
     } else {
       // Parallel table pulls — each table is independent for minimal warm-up.
@@ -600,7 +630,6 @@ export async function pullCompanySnapshot(
     }
 
     result.finishedAt = Date.now();
-    const { setMeta } = await getDbInstance();
     await setMeta(`snapshot:last:${companyId}`, result);
     await setMeta("snapshot:last_any", result);
 
@@ -612,14 +641,15 @@ export async function pullCompanySnapshot(
   return run;
 }
 
+
 /**
  * Background tick. Pulls ONLY the minimum dataset (companies +
  * company_settings) for every membership — enough to render the lock
  * screen and dashboard. Per-company heavy data is pulled on demand by
  * pullCompanySnapshot(id, { full: true }).
  */
-export async function pullSnapshot(opts: { full?: boolean } = {}): Promise<SnapshotResult | null> {
-  const flightKey = opts.full ? "full" : "minimal";
+export async function pullSnapshot(opts: { full?: boolean; forceExact?: boolean } = {}): Promise<SnapshotResult | null> {
+  const flightKey = opts.full ? (opts.forceExact ? "full-exact" : "full") : "minimal";
   const existing = snapshotInFlight.get(flightKey);
   if (existing) return existing;
   const run = (async () => {
@@ -636,8 +666,9 @@ export async function pullSnapshot(opts: { full?: boolean } = {}): Promise<Snaps
 
       const ids = Array.from(new Set((memberships ?? []).map((r) => r.company_id as string)));
       const results = await Promise.all(
-        ids.map((id) => pullCompanySnapshot(id, { full: opts.full ?? false, notify: false }).catch(() => null)),
+        ids.map((id) => pullCompanySnapshot(id, { full: opts.full ?? false, forceExact: opts.forceExact, notify: false }).catch(() => null)),
       );
+
       const completed = results.filter(Boolean) as SnapshotResult[];
       if (completed.length === 0) return null;
       if (opts.full) {
@@ -713,6 +744,7 @@ export async function resetSnapshotCache(): Promise<void> {
       db.cache_voucher_items,
       db.cache_bill_allocations,
       db.sync_cursors,
+      db.meta,
     ],
     async () => {
       await Promise.all([
@@ -728,7 +760,11 @@ export async function resetSnapshotCache(): Promise<void> {
         db.cache_voucher_items.clear(),
         db.cache_bill_allocations.clear(),
         db.sync_cursors.clear(),
+        // Clear only the exact-done markers so the next full sync repeats the
+        // guaranteed full replace instead of taking the delta fast path.
+        db.meta.where("key").startsWith("snapshot:exact_done:").delete(),
       ]);
     },
   );
 }
+
