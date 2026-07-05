@@ -162,7 +162,9 @@ function dedupeRows(rows: CacheRow[]): CacheRow[] {
 }
 
 function tableOrderColumn(table: SnapshotTable): string {
-  return table === "company_settings" ? "company_id" : "id";
+  if (table === "company_settings") return "company_id";
+  if (VOUCHER_ID_PK_TABLES.has(table)) return "voucher_id";
+  return "id";
 }
 
 function latestUpdatedAt(rows: CacheRow[]): string {
