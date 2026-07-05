@@ -240,6 +240,7 @@ function AppLayout() {
             <CompanySwitcher />
             <div className="ml-auto flex items-center gap-2">
               <OfflineStatusChip />
+              <InstallAppButton />
               <LanguageSwitcher compact />
               <CurrencySwitcher compact />
               <DateFormatSwitcher compact />
