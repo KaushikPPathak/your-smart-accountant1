@@ -6,6 +6,7 @@ import { drainOutbox, queueSize } from "./outbox";
 import { refreshAllCachedCreds } from "./creds-cache";
 import { pullSnapshot } from "./snapshot";
 import { rememberNetworkBlocked } from "./cache-read";
+import { requestPersistentStorage } from "./storage-quota";
 
 let started = false;
 
