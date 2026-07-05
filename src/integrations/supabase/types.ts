@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          deleted_at: string | null
           group_code: string
           id: string
           label: string
@@ -26,6 +27,7 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string
+          deleted_at?: string | null
           group_code: string
           id?: string
           label: string
@@ -34,6 +36,7 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string
+          deleted_at?: string | null
           group_code?: string
           id?: string
           label?: string
@@ -45,6 +48,7 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          deleted_at: string | null
           id: string
           name: string
           parent_group_code: string
@@ -53,6 +57,7 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name: string
           parent_group_code: string
@@ -61,6 +66,7 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name?: string
           parent_group_code?: string
@@ -1413,6 +1419,7 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          deleted_at: string | null
           gst_rate: number
           hsn_code: string | null
           id: string
@@ -1430,6 +1437,7 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string
+          deleted_at?: string | null
           gst_rate?: number
           hsn_code?: string | null
           id?: string
@@ -1447,6 +1455,7 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string
+          deleted_at?: string | null
           gst_rate?: number
           hsn_code?: string | null
           id?: string
@@ -1483,6 +1492,7 @@ export type Database = {
           company_id: string
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           group_code: string
           id: string
           ledger_type: string
@@ -1494,6 +1504,7 @@ export type Database = {
           company_id: string
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           group_code: string
           id?: string
           ledger_type: string
@@ -1505,6 +1516,7 @@ export type Database = {
           company_id?: string
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           group_code?: string
           id?: string
           ledger_type?: string
@@ -1537,6 +1549,7 @@ export type Database = {
           created_at: string
           credit_days: number
           credit_limit_paise: number
+          deleted_at: string | null
           email: string | null
           group_code: string | null
           gst_treatment: Database["public"]["Enums"]["gst_treatment"]
@@ -1564,6 +1577,7 @@ export type Database = {
           created_at?: string
           credit_days?: number
           credit_limit_paise?: number
+          deleted_at?: string | null
           email?: string | null
           group_code?: string | null
           gst_treatment?: Database["public"]["Enums"]["gst_treatment"]
@@ -1591,6 +1605,7 @@ export type Database = {
           created_at?: string
           credit_days?: number
           credit_limit_paise?: number
+          deleted_at?: string | null
           email?: string | null
           group_code?: string | null
           gst_treatment?: Database["public"]["Enums"]["gst_treatment"]
@@ -2313,6 +2328,7 @@ export type Database = {
           company_id: string
           created_at: string
           created_by: string
+          deleted_at: string | null
           due_date: string | null
           id: string
           igst_paise: number
@@ -2355,6 +2371,7 @@ export type Database = {
           company_id: string
           created_at?: string
           created_by: string
+          deleted_at?: string | null
           due_date?: string | null
           id?: string
           igst_paise?: number
@@ -2397,6 +2414,7 @@ export type Database = {
           company_id?: string
           created_at?: string
           created_by?: string
+          deleted_at?: string | null
           due_date?: string | null
           id?: string
           igst_paise?: number
