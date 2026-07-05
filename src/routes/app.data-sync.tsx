@@ -47,6 +47,28 @@ function DataSyncPage() {
   const [cloudDone, setCloudDone] = useState(false);
   const [restoreDone, setRestoreDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [deadLetter, setDeadLetter] = useState<DeadLetterRow[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      const rows = await listDeadLetter();
+      if (alive) setDeadLetter(rows);
+    };
+    void refresh();
+    const unsub = subscribeOutbox(() => { void refresh(); });
+    return () => { alive = false; unsub(); };
+  }, []);
+
+  async function onRetryDead(id: number) {
+    await retryDeadLetter(id);
+    toast.success("Queued for retry — will push on next sync");
+  }
+  async function onDiscardDead(id: number) {
+    await discardDeadLetter(id);
+    toast.success("Discarded");
+  }
+
 
   async function handleCloudSync() {
     setCloudBusy(true);
