@@ -91,7 +91,9 @@ function GroupManagerPage() {
 
   const deleteSub = async (sg: Subgroup) => {
     if (!confirm(`Delete sub-group "${sg.name}"? Ledgers tagged to it will revert to the parent group.`)) return;
-    const { error } = await supabase.from("account_subgroups").delete().eq("id", sg.id);
+    const { error } = await supabase.from("account_subgroups")
+      .update({ deleted_at: new Date().toISOString() } as never)
+      .eq("id", sg.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Deleted");
     reload();
