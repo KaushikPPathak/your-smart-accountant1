@@ -49,6 +49,7 @@ function DataSyncPage() {
   const [restoreDone, setRestoreDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [deadLetter, setDeadLetter] = useState<DeadLetterRow[]>([]);
+  const [quota, setQuota] = useState<StorageQuota | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -60,6 +61,24 @@ function DataSyncPage() {
     const unsub = subscribeOutbox(() => { void refresh(); });
     return () => { alive = false; unsub(); };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      const q = await getStorageQuota();
+      if (alive) setQuota(q);
+    };
+    void refresh();
+    const id = setInterval(refresh, 30_000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
+  async function handlePersist() {
+    const ok = await requestPersistentStorage();
+    setQuota(await getStorageQuota());
+    if (ok) toast.success("Offline data marked as persistent");
+    else toast.warning("Browser declined — data may still be evicted if disk gets low");
+  }
 
   async function onRetryDead(id: number) {
     await retryDeadLetter(id);
