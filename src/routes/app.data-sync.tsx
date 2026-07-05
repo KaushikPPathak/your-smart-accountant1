@@ -1,13 +1,22 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Cloud, Upload, RefreshCw, CheckCircle2, Database } from "lucide-react";
+import { Cloud, Upload, RefreshCw, CheckCircle2, Database, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { getOfflineCacheCounts, pullSnapshot, type SnapshotResult } from "@/lib/offline/snapshot";
 import { supabase as supabaseTyped } from "@/integrations/supabase/client";
-import { drainOutbox, queueSize } from "@/lib/offline/outbox";
+import {
+  drainOutbox,
+  queueSize,
+  listDeadLetter,
+  retryDeadLetter,
+  discardDeadLetter,
+  subscribeOutbox,
+  type DeadLetterRow,
+} from "@/lib/offline/outbox";
+
 
 export const Route = createFileRoute("/app/data-sync")({
   component: DataSyncPage,
@@ -38,6 +47,28 @@ function DataSyncPage() {
   const [cloudDone, setCloudDone] = useState(false);
   const [restoreDone, setRestoreDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [deadLetter, setDeadLetter] = useState<DeadLetterRow[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      const rows = await listDeadLetter();
+      if (alive) setDeadLetter(rows);
+    };
+    void refresh();
+    const unsub = subscribeOutbox(() => { void refresh(); });
+    return () => { alive = false; unsub(); };
+  }, []);
+
+  async function onRetryDead(id: number) {
+    await retryDeadLetter(id);
+    toast.success("Queued for retry — will push on next sync");
+  }
+  async function onDiscardDead(id: number) {
+    await discardDeadLetter(id);
+    toast.success("Discarded");
+  }
+
 
   async function handleCloudSync() {
     setCloudBusy(true);
@@ -144,6 +175,50 @@ function DataSyncPage() {
           Seed local offline storage from the cloud, or restore from a JSON backup file.
         </p>
       </div>
+
+      {deadLetter.length > 0 && (
+        <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-5 w-5" />
+              {deadLetter.length} change{deadLetter.length === 1 ? "" : "s"} need your attention
+            </CardTitle>
+            <CardDescription>
+              These local edits could not be saved to the cloud (the server rejected them or
+              they failed too many times). Your other work is unaffected. Review and retry or discard each one.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {deadLetter.map((row) => (
+              <div
+                key={row.id}
+                className="flex items-start justify-between gap-3 rounded-md border bg-background p-3 text-sm"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate">
+                    {row.label || `${row.op.toUpperCase()} ${row.table || row.rpc || row.executor || "unknown"}`}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground truncate">
+                    {row.last_error || "Unknown error"}
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">
+                    {new Date(row.moved_at).toLocaleString()} · {row.attempts ?? 0} attempt(s)
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button size="sm" variant="outline" onClick={() => onRetryDead(row.id as number)}>
+                    Retry
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onDiscardDead(row.id as number)}>
+                    Discard
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
 
       <Card>
         <CardHeader>
