@@ -64,21 +64,27 @@ function ProfitLoss() {
     ? new Set(["income_indirect"])
     : new Set(["income_direct", "income_indirect"]);
 
+  // Direct income/expense ledgers default to TRADING-section groups
+  // (SALES_ACCOUNTS / PURCHASE_ACCOUNTS / DIRECT_EXPENSES / DIRECT_INCOMES).
+  // When inventory is off, the Trading A/c is not the primary flow, so we
+  // must also pull those TRADING buckets into the P&L — otherwise Job Work
+  // Income and Factory Wages get silently dropped by groupBalances().
+  const plSections: ("PL" | "TRADING")[] = inventoryEnabled ? ["PL"] : ["PL", "TRADING"];
   const expenseBuckets = useMemo(
-    () => groupBalances(
+    () => plSections.flatMap((sec) => groupBalances(
       balances.filter((b) => expenseTypes.has(b.type)),
-      "PL",
+      sec,
       (b) => b.closing_paise,
-    ),
+    )),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [balances, inventoryEnabled],
   );
   const incomeBuckets = useMemo(
-    () => groupBalances(
+    () => plSections.flatMap((sec) => groupBalances(
       balances.filter((b) => incomeTypes.has(b.type)),
-      "PL",
+      sec,
       (b) => -b.closing_paise,
-    ),
+    )),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [balances, inventoryEnabled],
   );
