@@ -74,6 +74,14 @@ export function getLastWorkMode(): "online" | "offline" | null {
 }
 
 async function tick(): Promise<void> {
+  // 0) Keep the Supabase refresh-token clock reset. Rate-limited to once
+  //    every 6h internally so this is cheap to call every tick. Without
+  //    this, a user who's online only briefly won't hit the built-in
+  //    autoRefresh (which only fires near access-token expiry) and could
+  //    silently burn down the 30-day refresh-token window.
+  try { await refreshSessionIfDue(); } catch { /* ignore */ }
+  // If we've gone dangerously long without a successful refresh, tell them.
+  try { await warnIfSessionStale(); } catch { /* ignore */ }
   // 1) push local changes first so subsequent pull sees authoritative data.
   //    This handles the "worked offline last time → sync back to cloud" case.
   try {
