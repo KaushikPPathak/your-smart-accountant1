@@ -5,11 +5,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Truck } from "lucide-react";
+import { Truck, Clock, RefreshCw, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { EwayBillPrepDialog } from "@/components/vouchers/EwayBillPrepDialog";
+import {
+  listEinvoiceQueue, subscribeEinvoiceQueue, discardEinvoiceQueue,
+  retryEinvoiceQueue, drainEinvoiceQueue, type EinvoiceQueueRow,
+} from "@/lib/offline/einvoice-queue";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/einvoice")({
   head: () => ({ meta: [{ title: "E-Invoice & E-Way Bill — Your Mehtaji" }] }),
@@ -37,6 +42,8 @@ function EinvoicePage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [dlg, setDlg] = useState<{ open: boolean; voucher: Row | null }>({ open: false, voucher: null });
+  const [queue, setQueue] = useState<EinvoiceQueueRow[]>([]);
+  const [draining, setDraining] = useState(false);
 
   async function load() {
     if (!activeCompanyId) return;
@@ -49,6 +56,28 @@ function EinvoicePage() {
     setLoading(false);
   }
   useEffect(() => { load(); }, [activeCompanyId]);
+
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      const rows = await listEinvoiceQueue(activeCompanyId ?? undefined);
+      if (alive) setQueue(rows);
+    };
+    void refresh();
+    const unsub = subscribeEinvoiceQueue(() => { void refresh(); });
+    return () => { alive = false; unsub(); };
+  }, [activeCompanyId]);
+
+  async function retryAll() {
+    setDraining(true);
+    try {
+      const r = await drainEinvoiceQueue();
+      if (r.ok > 0) toast.success(`${r.ok} generated`);
+      if (r.failed > 0) toast.error(`${r.failed} permanently failed — see queue below`);
+      if (r.ok === 0 && r.failed === 0 && r.kept > 0) toast.info("Still waiting on the portal");
+      await load();
+    } finally { setDraining(false); }
+  }
 
   return (
     <div className="space-y-4">
