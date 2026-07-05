@@ -18,6 +18,7 @@ import { upsertEinvoice, ddmmyyyy } from "@/lib/einvoice";
 import { formatINR } from "@/lib/money";
 import { INDIAN_STATES } from "@/lib/constants";
 import { generateIrn, generateEwb, getSetuStatus } from "@/utils/setu.functions";
+import { enqueueEinvoice, isOffline } from "@/lib/offline/einvoice-queue";
 import { toast } from "sonner";
 import { saveExport } from "@/lib/desktop-save";
 
@@ -237,6 +238,17 @@ export function EwayBillPrepDialog({
 
   async function autoGenerateIrn() {
     if (!voucher || !irpPayload) return;
+    // Offline? Skip the network round-trip entirely and queue the request so
+    // the sync worker mints the IRN as soon as we're back online.
+    if (isOffline()) {
+      await enqueueEinvoice({
+        kind: "irn", voucherId: voucher.id, companyId: voucher.company_id,
+        voucherNumber: voucher.voucher_number, payload: irpPayload as Record<string, unknown>,
+      });
+      toast.success("Queued — IRN will be generated when back online");
+      onSaved?.();
+      return;
+    }
     setGenIrn(true);
     try {
       const res = await generateIrn({ data: { voucherId: voucher.id, companyId: voucher.company_id, payload: irpPayload as Record<string, unknown> } });
@@ -246,10 +258,28 @@ export function EwayBillPrepDialog({
         toast.success(`IRN generated: ${res.irn?.slice(0, 12)}…`);
         onSaved?.();
       } else {
-        toast.error(res.error ?? "Failed to generate IRN");
+        // GSP declined — permanent problem (bad GSTIN, duplicate) OR transient.
+        // Queue transient so the user can carry on; surface permanent errors.
+        const msg = res.error ?? "Failed to generate IRN";
+        if (/unavailable|network|timeout|econn|503|502|504|not configured/i.test(msg)) {
+          await enqueueEinvoice({
+            kind: "irn", voucherId: voucher.id, companyId: voucher.company_id,
+            voucherNumber: voucher.voucher_number, payload: irpPayload as Record<string, unknown>,
+          });
+          toast.success("Queued — IRN will be generated when the portal is reachable");
+          onSaved?.();
+        } else {
+          toast.error(msg);
+        }
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "IRN generation failed");
+      // Network / fetch failure — queue and move on.
+      await enqueueEinvoice({
+        kind: "irn", voucherId: voucher.id, companyId: voucher.company_id,
+        voucherNumber: voucher.voucher_number, payload: irpPayload as Record<string, unknown>,
+      });
+      toast.success("Queued — IRN will be generated when back online");
+      onSaved?.();
     } finally {
       setGenIrn(false);
     }
@@ -257,6 +287,15 @@ export function EwayBillPrepDialog({
 
   async function autoGenerateEwb() {
     if (!voucher || !ewbPayload) return;
+    if (isOffline()) {
+      await enqueueEinvoice({
+        kind: "ewb", voucherId: voucher.id, companyId: voucher.company_id,
+        voucherNumber: voucher.voucher_number, payload: ewbPayload as Record<string, unknown>,
+      });
+      toast.success("Queued — E-Way Bill will be generated when back online");
+      onSaved?.();
+      return;
+    }
     setGenEwb(true);
     try {
       const res = await generateEwb({ data: { voucherId: voucher.id, companyId: voucher.company_id, payload: ewbPayload as Record<string, unknown> } });
@@ -266,10 +305,25 @@ export function EwayBillPrepDialog({
         toast.success(`E-Way Bill generated: ${res.ewbNo}`);
         onSaved?.();
       } else {
-        toast.error(res.error ?? "Failed to generate E-Way Bill");
+        const msg = res.error ?? "Failed to generate E-Way Bill";
+        if (/unavailable|network|timeout|econn|503|502|504|not configured/i.test(msg)) {
+          await enqueueEinvoice({
+            kind: "ewb", voucherId: voucher.id, companyId: voucher.company_id,
+            voucherNumber: voucher.voucher_number, payload: ewbPayload as Record<string, unknown>,
+          });
+          toast.success("Queued — E-Way Bill will be generated when the portal is reachable");
+          onSaved?.();
+        } else {
+          toast.error(msg);
+        }
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "EWB generation failed");
+      await enqueueEinvoice({
+        kind: "ewb", voucherId: voucher.id, companyId: voucher.company_id,
+        voucherNumber: voucher.voucher_number, payload: ewbPayload as Record<string, unknown>,
+      });
+      toast.success("Queued — E-Way Bill will be generated when back online");
+      onSaved?.();
     } finally {
       setGenEwb(false);
     }

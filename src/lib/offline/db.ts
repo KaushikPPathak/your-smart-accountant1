@@ -89,6 +89,7 @@ class OfflineDatabase extends Dexie {
   cache_bom_templates!: Table<any, any>;
   cache_bom_template_lines!: Table<any, any>;
   cache_recurring_invoices!: Table<any, any>;
+  einvoice_queue!: Table<any, any>;
   outbox!: Table<any, any>;
   dead_letter!: Table<any, any>;
   sync_cursors!: Table<any, any>;
@@ -126,18 +127,21 @@ class OfflineDatabase extends Dexie {
       dead_letter: "++id, moved_at, company_id, table",
     });
     this.version(4).stores({
-      // Additional cache tables so more of the app is usable offline:
-      // reprint export invoices, view e-invoice IRN/QR, enforce FY-locks,
-      // create manufacturing vouchers from BOM templates, and see recurring
-      // invoice schedules. voucher_export_details / einvoice_details use
-      // voucher_id as their primary key upstream — mirrored here so the
-      // by-id upserts work identically to the sibling cache tables.
       cache_voucher_export_details: "voucher_id, company_id, updated_at",
       cache_einvoice_details: "voucher_id, company_id, updated_at",
       cache_period_locks: "id, company_id, updated_at, return_type, period",
       cache_bom_templates: "id, company_id, output_item_id, updated_at",
       cache_bom_template_lines: "id, template_id, company_id",
       cache_recurring_invoices: "id, company_id, updated_at, is_active",
+    });
+    this.version(5).stores({
+      // Deferred IRN / E-Way Bill generation requests. IRP / EWB portal calls
+      // require the device to be online AND the Setu (or other GSP) API to be
+      // reachable. When either is unavailable we queue the request here and
+      // the sync worker drains it on the next successful connectivity window,
+      // so users can carry on issuing invoices offline without losing the
+      // pending IRN/EWB work.
+      einvoice_queue: "++id, kind, voucher_id, company_id, status, created_at",
     });
   }
 }
@@ -176,6 +180,7 @@ function makeStubDb(): OfflineDatabase {
     "cache_vouchers", "cache_voucher_entries", "cache_voucher_items", "cache_bill_allocations",
     "cache_voucher_export_details", "cache_einvoice_details", "cache_period_locks",
     "cache_bom_templates", "cache_bom_template_lines", "cache_recurring_invoices",
+    "einvoice_queue",
     "outbox", "dead_letter", "sync_cursors", "account_creds", "meta",
   ];
   const stub: Record<string, unknown> = {

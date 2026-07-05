@@ -7,6 +7,7 @@ import { refreshAllCachedCreds } from "./creds-cache";
 import { pullSnapshot } from "./snapshot";
 import { rememberNetworkBlocked } from "./cache-read";
 import { requestPersistentStorage, startStorageWatcher } from "./storage-quota";
+import { drainEinvoiceQueue } from "./einvoice-queue";
 
 let started = false;
 
@@ -89,6 +90,9 @@ async function tick(): Promise<void> {
       rememberWorkMode("online");
     }
   } catch { /* ignore */ }
+  // 4) Retry deferred IRN / E-Way Bill portal calls that were queued while
+  //    the device was offline or the GSP was unreachable.
+  try { await drainEinvoiceQueue(); } catch { /* ignore */ }
 }
 
 export function startSyncWorker() {
