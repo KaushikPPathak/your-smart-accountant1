@@ -17,6 +17,180 @@ export type VoucherExecutor = (snap: unknown) => Promise<void>;
 
 const registry: Record<string, VoucherExecutor> = {};
 
+type MasterTable = "ledgers" | "items";
+type OfflineMasterRow = Record<string, unknown> & {
+  id: string;
+  company_id: string;
+  name?: string;
+  is_deleted?: boolean;
+};
+
+const LEDGER_COLUMNS = [
+  "id",
+  "company_id",
+  "name",
+  "type",
+  "group_code",
+  "subgroup_id",
+  "gstin",
+  "pan",
+  "state",
+  "state_code",
+  "address",
+  "phone",
+  "email",
+  "opening_balance_paise",
+  "opening_balance_is_debit",
+  "credit_limit_paise",
+  "credit_days",
+  "whatsapp_number",
+  "reminders_enabled",
+  "gst_treatment",
+  "country",
+  "is_active",
+  "updated_at",
+] as const;
+
+const ITEM_COLUMNS = [
+  "id",
+  "company_id",
+  "name",
+  "hsn_code",
+  "unit",
+  "gst_rate",
+  "opening_stock_qty",
+  "opening_stock_rate_paise",
+  "reorder_level",
+  "is_active",
+  "purchase_price_paise",
+  "sale_price_paise",
+  "updated_at",
+] as const;
+
+async function getOfflineDb() {
+  const module = await import("./db");
+  return module.default || module.offlineDb || module.db || (module as any);
+}
+
+function uniqueIds(ids: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(ids.filter((id): id is string => Boolean(id))));
+}
+
+async function fetchExistingMasterIds(table: MasterTable, companyId: string, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const { data, error } = await (supabase as any)
+    .from(table)
+    .select("id")
+    .eq("company_id", companyId)
+    .in("id", ids);
+  if (error) throw error;
+  return new Set(((data ?? []) as Array<{ id: string }>).map((r) => r.id));
+}
+
+function sanitizeMasterRow(table: MasterTable, row: OfflineMasterRow): Record<string, unknown> {
+  const columns = table === "ledgers" ? LEDGER_COLUMNS : ITEM_COLUMNS;
+  const clean: Record<string, unknown> = {};
+  for (const col of columns) {
+    if (row[col] !== undefined) clean[col] = row[col];
+  }
+
+  clean.id = row.id;
+  clean.company_id = row.company_id;
+  clean.name = String(row.name ?? "").trim();
+  clean.updated_at = typeof row.updated_at === "string" ? row.updated_at : new Date().toISOString();
+  clean.is_active = row.is_active !== false;
+
+  if (table === "ledgers") {
+    clean.type = clean.type ?? "sundry_debtor";
+    clean.gst_treatment = clean.gst_treatment ?? "regular";
+    clean.opening_balance_paise = clean.opening_balance_paise ?? 0;
+    clean.opening_balance_is_debit = clean.opening_balance_is_debit ?? true;
+    clean.credit_limit_paise = clean.credit_limit_paise ?? 0;
+    clean.credit_days = clean.credit_days ?? 0;
+  } else {
+    clean.unit = clean.unit ?? "NOS";
+    clean.gst_rate = clean.gst_rate ?? 0;
+    clean.opening_stock_qty = clean.opening_stock_qty ?? 0;
+    clean.opening_stock_rate_paise = clean.opening_stock_rate_paise ?? 0;
+    clean.reorder_level = clean.reorder_level ?? 0;
+    clean.purchase_price_paise = clean.purchase_price_paise ?? 0;
+    clean.sale_price_paise = clean.sale_price_paise ?? 0;
+  }
+
+  return clean;
+}
+
+async function ensureMasterRefsSynced(
+  table: MasterTable,
+  companyId: string,
+  ids: Array<string | null | undefined>,
+): Promise<Map<string, string>> {
+  const wanted = uniqueIds(ids);
+  const remap = new Map<string, string>();
+  if (wanted.length === 0) return remap;
+
+  const existing = await fetchExistingMasterIds(table, companyId, wanted);
+  const missing = wanted.filter((id) => !existing.has(id));
+  if (missing.length === 0) return remap;
+
+  const db = await getOfflineDb();
+  const cache = table === "ledgers" ? db.cache_ledgers : db.cache_items;
+  const cached = (await Promise.all(missing.map((id) => cache.get(id)))) as Array<OfflineMasterRow | undefined>;
+  const cachedById = new Map(cached.filter(Boolean).map((r) => [r!.id, r!]));
+  const unavailable = missing.filter((id) => {
+    const row = cachedById.get(id);
+    return !row || row.company_id !== companyId || row.is_deleted === true || !String(row.name ?? "").trim();
+  });
+  if (unavailable.length > 0) {
+    throw new Error(
+      `One or more ${table} used in this voucher are missing from both cloud and offline cache (${unavailable.length} missing). ` +
+        `Refresh ${table === "ledgers" ? "Ledgers" : "Items"}, re-pick the entry, and save again.`,
+    );
+  }
+
+  const usable = missing.map((id) => cachedById.get(id)!).filter(Boolean);
+  const names = uniqueIds(usable.map((row) => String(row.name ?? "").trim()));
+  if (names.length > 0) {
+    const { data, error } = await (supabase as any)
+      .from(table)
+      .select("id, name")
+      .eq("company_id", companyId)
+      .in("name", names);
+    if (error) throw error;
+    const byName = new Map(((data ?? []) as Array<{ id: string; name: string }>).map((row) => [row.name, row.id]));
+    for (const row of usable) {
+      const existingId = byName.get(String(row.name ?? "").trim());
+      if (existingId) remap.set(row.id, existingId);
+    }
+  }
+
+  const toUpsert = usable
+    .filter((row) => !remap.has(row.id))
+    .map((row) => sanitizeMasterRow(table, row));
+
+  if (toUpsert.length > 0) {
+    const { error } = await (supabase as any)
+      .from(table)
+      .upsert(toUpsert, { onConflict: "id" });
+    if (error) {
+      throw new Error(`Could not sync ${table} required by this voucher: ${error.message}`);
+    }
+  }
+
+  const targetIds = wanted.map((id) => remap.get(id) ?? id);
+  const verified = await fetchExistingMasterIds(table, companyId, targetIds);
+  const stillMissing = targetIds.filter((id) => !verified.has(id));
+  if (stillMissing.length > 0) {
+    throw new Error(`One or more ${table} could not be synced before voucher save (${stillMissing.length} missing).`);
+  }
+
+  return remap;
+}
+
+function remapId(id: string, remap: Map<string, string>): string {
+  return remap.get(id) ?? id;
+}
+
 export function registerVoucherExecutor(key: string, fn: VoucherExecutor): void {
   registry[key] = fn;
 }
@@ -94,6 +268,14 @@ export interface EntryVoucherSnap {
 // ---------- Item voucher executor -------------------------------------------
 
 export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
+  const ledgerRemap = await ensureMasterRefsSynced("ledgers", snap.companyId, [snap.partyId]);
+  const itemRemap = await ensureMasterRefsSynced("items", snap.companyId, snap.lines.map((x) => x.l.item_id));
+  const partyId = remapId(snap.partyId, ledgerRemap);
+  const lines = snap.lines.map(({ l, c }) => ({
+    l: { ...l, item_id: remapId(l.item_id, itemRemap) },
+    c,
+  }));
+
   const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
     _company_id: snap.companyId,
     _type: snap.voucherType,
@@ -101,7 +283,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
   if (numErr) throw numErr;
   const voucherNumber = numData as string;
 
-  const itemRows = snap.lines.map(({ l, c }, i) => ({
+  const itemRows = lines.map(({ l, c }, i) => ({
     item_id: l.item_id,
     line_no: i + 1,
     description: l.description || null,
@@ -136,13 +318,13 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
       igst_paise: number;
     }> | undefined;
     if (snap.itcClass === "capital_goods") {
-      const ids = snap.lines.map((x) => x.l.item_id).filter(Boolean);
+      const ids = lines.map((x) => x.l.item_id).filter(Boolean);
       const { data: itemRecs } = await supabase
         .from("items")
         .select("id, name")
         .in("id", ids);
       const byId = new Map((itemRecs ?? []).map((r) => [r.id, r.name as string]));
-      capitalItems = snap.lines.map(({ l, c }) => ({
+      capitalItems = lines.map(({ l, c }) => ({
         name: (byId.get(l.item_id) || l.description || "Capital Asset").trim(),
         taxable_paise: c.taxable_paise,
         cgst_paise: c.cgst_paise,
@@ -153,7 +335,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
     const postings = await buildItemVoucherPostings(
       snap.companyId,
       snap.voucherType as "sales" | "purchase" | "credit_note" | "debit_note",
-      snap.partyId,
+      partyId,
       snap.totals,
       {
         itcClass: snap.itcClass,
@@ -174,7 +356,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
     voucher_type: snap.voucherType,
     voucher_number: voucherNumber,
     voucher_date: snap.voucherDate,
-    party_ledger_id: snap.partyId,
+    party_ledger_id: partyId,
     reference_no: snap.refNo || null,
     narration: snap.narration || null,
     is_interstate: snap.interstate,
@@ -203,12 +385,6 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
 // ---------- Entry voucher executor ------------------------------------------
 
 export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void> {
-  // Pre-flight: every ledger referenced by an entry (and the party ledger, if
-  // any) must already exist in the cloud `ledgers` table belonging to this
-  // company. Otherwise the FK on voucher_entries.ledger_id throws an opaque
-  // 23503 and the user has no idea which row is wrong. This usually happens
-  // when a ledger was created offline and hasn't been synced/refreshed yet,
-  // or when the form holds a stale UUID from a deleted ledger.
   const ledgerIds = Array.from(
     new Set(
       [
@@ -217,22 +393,9 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
       ].filter(Boolean),
     ),
   );
-  if (ledgerIds.length > 0) {
-    const { data: existing, error: lookupErr } = await supabase
-      .from("ledgers")
-      .select("id, name")
-      .eq("company_id", snap.companyId)
-      .in("id", ledgerIds);
-    if (lookupErr) throw lookupErr;
-    const found = new Set((existing ?? []).map((r) => r.id as string));
-    const missing = ledgerIds.filter((id) => !found.has(id));
-    if (missing.length > 0) {
-      throw new Error(
-        `One or more ledgers are not synced to the cloud yet (${missing.length} missing). ` +
-          "Open the Ledgers screen so the list refreshes, then re-pick the ledger and save again.",
-      );
-    }
-  }
+  const ledgerRemap = await ensureMasterRefsSynced("ledgers", snap.companyId, ledgerIds);
+  const partyLedgerId = snap.partyLedgerId ? remapId(snap.partyLedgerId, ledgerRemap) : null;
+  const snapEntries = snap.entries.map((e) => ({ ...e, ledger_id: remapId(e.ledger_id, ledgerRemap) }));
 
   const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
     _company_id: snap.companyId,
@@ -244,14 +407,14 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
     voucher_type: snap.voucherType,
     voucher_number: numData as string,
     voucher_date: snap.voucherDate,
-    party_ledger_id: snap.partyLedgerId,
+    party_ledger_id: partyLedgerId,
     reference_no: snap.refNo || null,
     narration: snap.narration || null,
     is_interstate: false,
     subtotal_paise: snap.total,
     total_paise: snap.total,
   };
-  const entries = snap.entries.map((e) => ({
+  const entries = snapEntries.map((e) => ({
     ledger_id: e.ledger_id,
     debit_paise: e.debit_paise,
     credit_paise: e.credit_paise,
