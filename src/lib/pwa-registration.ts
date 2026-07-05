@@ -1,7 +1,3 @@
-/// <reference types="vite-plugin-pwa/client" />
-
-import { registerSW } from "virtual:pwa-register";
-
 const APP_SW_PATH = "/sw.js";
 
 function isPreviewHost(hostname: string): boolean {
@@ -20,6 +16,7 @@ function isPreviewHost(hostname: string): boolean {
 function shouldRegisterAppShellCache(): boolean {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return false;
   if (!import.meta.env.PROD) return false;
+  if (import.meta.env.TAURI_ENV_PLATFORM) return false;
   if (window.self !== window.top) return false;
   if (isPreviewHost(window.location.hostname)) return false;
   if (new URLSearchParams(window.location.search).get("sw") === "off") return false;
@@ -49,5 +46,7 @@ export function setupAppShellCache(): void {
     return;
   }
 
-  registerSW({ immediate: true });
+  void navigator.serviceWorker.register(APP_SW_PATH).catch(() => {
+    /* registration is optional; app must still run online */
+  });
 }
