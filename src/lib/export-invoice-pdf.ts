@@ -48,42 +48,91 @@ const DEFAULT_DECL: Record<string, string> = {
 };
 
 export async function downloadExportInvoicePdf(voucherId: string, companyId: string): Promise<void> {
-  const [voucherQ, itemsQ, companyQ, exportQ, settingsQ] = await Promise.all([
-    supabase
-      .from("vouchers")
-      .select(
-        "voucher_number, voucher_date, voucher_type, reference_no, narration, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, shipping_bill_no, shipping_bill_date, port_code, ledgers:party_ledger_id(name, gstin, address, state, state_code, phone)",
-      )
-      .eq("id", voucherId)
-      .single(),
-    supabase
-      .from("voucher_items")
-      .select(
-        "line_no, description, qty, rate_paise, discount_paise, taxable_paise, gst_rate, igst_paise, amount_paise, items:item_id(name, hsn_code, unit)",
-      )
-      .eq("voucher_id", voucherId)
-      .order("line_no"),
-    supabase
-      .from("companies")
-      .select(
-        "name, gstin, pan, address, state, state_code, email, phone, logo_url, bank_name, bank_account_no, bank_ifsc, bank_branch",
-      )
-      .eq("id", companyId)
-      .single(),
-    supabase.from("voucher_export_details").select("*").eq("voucher_id", voucherId).maybeSingle(),
-    supabase
-      .from("company_settings")
-      .select("invoice_footer_note, show_bank_details, show_signatory")
-      .eq("company_id", companyId)
-      .maybeSingle(),
-  ]);
+  type Bundle = { v: any; items: any[]; company: any; ed: any; settings: any };
+  const defaultSettings = { show_bank_details: true, show_signatory: true, invoice_footer_note: null };
 
-  if (voucherQ.error || !voucherQ.data) throw voucherQ.error || new Error("Voucher not found");
-  const v = voucherQ.data as any;
-  const items = (itemsQ.data || []) as any[];
-  const company = (companyQ.data || {}) as any;
-  const ed = (exportQ.data || {}) as any;
-  const settings = (settingsQ.data || { show_bank_details: true, show_signatory: true, invoice_footer_note: null }) as any;
+  const bundle = await withCacheFallback<Bundle>(
+    async () => {
+      const [voucherQ, itemsQ, companyQ, exportQ, settingsQ] = await Promise.all([
+        supabase
+          .from("vouchers")
+          .select(
+            "voucher_number, voucher_date, voucher_type, reference_no, narration, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, shipping_bill_no, shipping_bill_date, port_code, ledgers:party_ledger_id(name, gstin, address, state, state_code, phone)",
+          )
+          .eq("id", voucherId)
+          .single(),
+        supabase
+          .from("voucher_items")
+          .select(
+            "line_no, description, qty, rate_paise, discount_paise, taxable_paise, gst_rate, igst_paise, amount_paise, items:item_id(name, hsn_code, unit)",
+          )
+          .eq("voucher_id", voucherId)
+          .order("line_no"),
+        supabase
+          .from("companies")
+          .select(
+            "name, gstin, pan, address, state, state_code, email, phone, logo_url, bank_name, bank_account_no, bank_ifsc, bank_branch",
+          )
+          .eq("id", companyId)
+          .single(),
+        supabase.from("voucher_export_details").select("*").eq("voucher_id", voucherId).maybeSingle(),
+        supabase
+          .from("company_settings")
+          .select("invoice_footer_note, show_bank_details, show_signatory")
+          .eq("company_id", companyId)
+          .maybeSingle(),
+      ]);
+      if (voucherQ.error || !voucherQ.data) throw voucherQ.error || new Error("Voucher not found");
+      return {
+        v: voucherQ.data as any,
+        items: (itemsQ.data || []) as any[],
+        company: (companyQ.data || {}) as any,
+        ed: (exportQ.data || {}) as any,
+        settings: (settingsQ.data || defaultSettings) as any,
+      };
+    },
+    async () => {
+      const [voucherRaw, itemRows, ledgers, itemsMaster, companies, settings] = await Promise.all([
+        offlineDb.cache_vouchers.get(voucherId) as Promise<any>,
+        readVoucherItems(voucherId) as Promise<any[]>,
+        readLedgers(companyId) as Promise<any[]>,
+        readItems(companyId) as Promise<any[]>,
+        readCompanies() as Promise<any[]>,
+        readCompanySettings(companyId) as Promise<any>,
+      ]);
+      if (!voucherRaw) throw new Error("Voucher not available offline");
+      const ledgerById = new Map(ledgers.map((l) => [String(l.id), l]));
+      const itemById = new Map(itemsMaster.map((i) => [String(i.id), i]));
+      const party = voucherRaw.party_ledger_id
+        ? ledgerById.get(String(voucherRaw.party_ledger_id)) ?? null
+        : null;
+      const items = (itemRows || [])
+        .sort((a, b) => Number(a.line_no ?? 0) - Number(b.line_no ?? 0))
+        .map((it) => ({
+          ...it,
+          items: it.item_id
+            ? (() => {
+                const m = itemById.get(String(it.item_id));
+                return m ? { name: m.name, hsn_code: m.hsn_code ?? null, unit: m.unit } : null;
+              })()
+            : null,
+        }));
+      const company = companies.find((c) => String(c.id) === String(companyId)) ?? {};
+      return {
+        v: { ...voucherRaw, ledgers: party },
+        items,
+        company,
+        ed: {}, // voucher_export_details is not cached locally; fall back to defaults offline
+        settings: (settings as any) || defaultSettings,
+      };
+    },
+  );
+
+  const v = bundle.v;
+  const items = bundle.items;
+  const company = bundle.company;
+  const ed = bundle.ed;
+  const settings = bundle.settings;
   const party = v.ledgers || {};
 
   const ccy = (ed.currency_code as string) || "USD";
