@@ -7,6 +7,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { amountInWords, formatINR } from "@/lib/money";
 import { saveExport } from "@/lib/desktop-save";
 import { exportCurrencySymbol } from "@/lib/export-format";
+import {
+  withCacheFallback,
+  readCompanies,
+  readCompanySettings,
+  readVoucherItems,
+  readLedgers,
+  readItems,
+} from "@/lib/offline/cache-read";
+import { offlineDb } from "@/lib/offline/db";
 
 const r = (paise: number) => (paise / 100).toFixed(2);
 
@@ -115,45 +124,98 @@ async function loadLogo(url: string): Promise<{ data: string; w: number; h: numb
 }
 
 export async function downloadInvoicePdf(voucherId: string, companyId: string): Promise<void> {
-  const [voucherQ, itemsQ, companyQ, settingsQ] = await Promise.all([
-    supabase
-      .from("vouchers")
-      .select(
-        "voucher_number, voucher_date, voucher_type, reference_no, narration, is_interstate, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, place_of_supply_code, vendor_invoice_no, vendor_invoice_date, party_ledger_id, ledgers:party_ledger_id(name, gstin, pan, address, state, state_code, phone)",
-      )
-      .eq("id", voucherId)
-      .single(),
-    supabase
-      .from("voucher_items")
-      .select(
-        "line_no, description, qty, rate_paise, discount_paise, taxable_paise, gst_rate, cgst_paise, sgst_paise, igst_paise, amount_paise, items:item_id(name, hsn_code, unit)",
-      )
-      .eq("voucher_id", voucherId)
-      .order("line_no"),
-    supabase
-      .from("companies")
-      .select(
-        "name, gstin, pan, address, state, state_code, email, phone, logo_url, bank_name, bank_account_no, bank_ifsc, bank_branch",
-      )
-      .eq("id", companyId)
-      .single(),
-    supabase
-      .from("company_settings")
-      .select("invoice_footer_note, invoice_terms, show_bank_details, show_signatory")
-      .eq("company_id", companyId)
-      .maybeSingle(),
-  ]);
-
-  if (voucherQ.error || !voucherQ.data) throw voucherQ.error || new Error("Voucher not found");
-  const v = voucherQ.data as VoucherRow & { ledgers: PartyRow | null };
-  const items = (itemsQ.data || []) as unknown as ItemRow[];
-  const company = (companyQ.data || {}) as CompanyRow;
-  const settings: SettingsRow = (settingsQ.data as SettingsRow | null) || {
+  type Bundle = {
+    v: VoucherRow & { ledgers: PartyRow | null };
+    items: ItemRow[];
+    company: CompanyRow;
+    settings: SettingsRow;
+  };
+  const defaultSettings: SettingsRow = {
     invoice_footer_note: null,
     invoice_terms: null,
     show_bank_details: true,
     show_signatory: true,
   };
+
+  const bundle = await withCacheFallback<Bundle>(
+    async () => {
+      const [voucherQ, itemsQ, companyQ, settingsQ] = await Promise.all([
+        supabase
+          .from("vouchers")
+          .select(
+            "voucher_number, voucher_date, voucher_type, reference_no, narration, is_interstate, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, place_of_supply_code, vendor_invoice_no, vendor_invoice_date, party_ledger_id, ledgers:party_ledger_id(name, gstin, pan, address, state, state_code, phone)",
+          )
+          .eq("id", voucherId)
+          .single(),
+        supabase
+          .from("voucher_items")
+          .select(
+            "line_no, description, qty, rate_paise, discount_paise, taxable_paise, gst_rate, cgst_paise, sgst_paise, igst_paise, amount_paise, items:item_id(name, hsn_code, unit)",
+          )
+          .eq("voucher_id", voucherId)
+          .order("line_no"),
+        supabase
+          .from("companies")
+          .select(
+            "name, gstin, pan, address, state, state_code, email, phone, logo_url, bank_name, bank_account_no, bank_ifsc, bank_branch",
+          )
+          .eq("id", companyId)
+          .single(),
+        supabase
+          .from("company_settings")
+          .select("invoice_footer_note, invoice_terms, show_bank_details, show_signatory")
+          .eq("company_id", companyId)
+          .maybeSingle(),
+      ]);
+      if (voucherQ.error || !voucherQ.data) throw voucherQ.error || new Error("Voucher not found");
+      return {
+        v: voucherQ.data as VoucherRow & { ledgers: PartyRow | null },
+        items: (itemsQ.data || []) as unknown as ItemRow[],
+        company: (companyQ.data || {}) as CompanyRow,
+        settings: (settingsQ.data as SettingsRow | null) || defaultSettings,
+      };
+    },
+    async () => {
+      // Offline path: assemble the same shape from IndexedDB caches.
+      const [voucherRaw, itemRows, ledgers, itemsMaster, companies, settings] = await Promise.all([
+        offlineDb.cache_vouchers.get(voucherId) as Promise<any>,
+        readVoucherItems(voucherId) as Promise<any[]>,
+        readLedgers(companyId) as Promise<any[]>,
+        readItems(companyId) as Promise<any[]>,
+        readCompanies() as Promise<any[]>,
+        readCompanySettings(companyId) as Promise<any>,
+      ]);
+      if (!voucherRaw) throw new Error("Voucher not available offline");
+      const ledgerById = new Map(ledgers.map((l) => [String(l.id), l]));
+      const itemById = new Map(itemsMaster.map((i) => [String(i.id), i]));
+      const party = voucherRaw.party_ledger_id
+        ? ledgerById.get(String(voucherRaw.party_ledger_id)) ?? null
+        : null;
+      const items: ItemRow[] = (itemRows || [])
+        .sort((a, b) => (Number(a.line_no ?? 0) - Number(b.line_no ?? 0)))
+        .map((it) => ({
+          ...it,
+          items: it.item_id
+            ? (() => {
+                const m = itemById.get(String(it.item_id));
+                return m ? { name: m.name, hsn_code: m.hsn_code ?? null, unit: m.unit } : null;
+              })()
+            : null,
+        })) as ItemRow[];
+      const company = (companies.find((c) => String(c.id) === String(companyId)) ?? {}) as CompanyRow;
+      return {
+        v: { ...voucherRaw, ledgers: (party as PartyRow | null) ?? null } as VoucherRow & { ledgers: PartyRow | null },
+        items,
+        company,
+        settings: (settings as SettingsRow | null) || defaultSettings,
+      };
+    },
+  );
+
+  const v = bundle.v;
+  const items = bundle.items;
+  const company = bundle.company;
+  const settings = bundle.settings;
   const party = v.ledgers;
 
   const { jsPDF, autoTable } = await loadJsPdf();
