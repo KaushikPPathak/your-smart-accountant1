@@ -79,12 +79,12 @@ async function tick(): Promise<void> {
   } catch { return; }
   // 2) refresh login cache for offline auth
   try { await refreshAllCachedCreds(); } catch { /* ignore */ }
-  // 3) Full pull cloud → local for every company the user belongs to. This
-  //    handles the "worked online last time → make available offline" case
-  //    AND keeps the last-used company hot for offline work.
+  // 3) Keep the essential company/settings cache fresh. Full voucher/report
+  //    snapshots are intentionally not run every 30s because they can be very
+  //    large; the active company performs a throttled full hydrate separately.
   try {
-    const result = await pullSnapshot({ full: true });
-    if (result && Object.keys(result.errors).length === 0 && result.verification?.ok) {
+    const result = await pullSnapshot({ full: false });
+    if (result && Object.keys(result.errors).length === 0) {
       rememberWorkMode("online");
     }
   } catch { /* ignore */ }
@@ -104,10 +104,11 @@ export function startSyncWorker() {
   window.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void tick();
   });
-  // Boot run — kick off almost immediately so cache is fresh ASAP.
-  setTimeout(() => { void tick(); }, 300);
-  // Periodic sync (30s) while the tab is open — keeps offline data up-to-date.
-  setInterval(() => { void tick(); }, 30_000);
+  // Boot run — wait until the UI has painted so sync can never slow launch.
+  setTimeout(() => { void tick(); }, 3_000);
+  // Periodic lightweight sync while the tab is open — keeps offline data fresh
+  // without repeatedly downloading every voucher/report row.
+  setInterval(() => { void tick(); }, 120_000);
 }
 
 /** Manual trigger for the status drawer. */

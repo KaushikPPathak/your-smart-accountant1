@@ -213,12 +213,12 @@ export async function isAccountCached(username: string): Promise<boolean> {
   return Boolean(row);
 }
 
-export async function clearAccountCache(): Promise<void> {
 export async function listCachedAccounts(): Promise<AccountCredCacheRow[]> {
   const offlineDb = await getOfflineDb();
   return (await offlineDb.account_creds.toArray()) as unknown as AccountCredCacheRow[];
 }
 
+export async function clearAccountCache(): Promise<void> {
   const offlineDb = await getOfflineDb();
   await offlineDb.account_creds.clear();
   localStorage.removeItem(LOCKOUT_KEY);

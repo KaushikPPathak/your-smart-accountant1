@@ -31,6 +31,9 @@ interface LoginUserOption {
 
 const TYPE_MANUALLY = "__type_manually__";
 
+const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> =>
+  Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
+
 function LockScreen() {
   const navigate = useNavigate();
   const [bootLoading, setBootLoading] = useState(true);
@@ -54,9 +57,6 @@ function LockScreen() {
 
   const [busy, setBusy] = useState(false);
 
-const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => 
-  Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
-
   const boot = async (force = false) => {
     setBootLoading(true);
     setSessionError(null);
@@ -76,7 +76,7 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<
       }
 
       // 2. Try network with aggressive timeout
-      const sess = await withTimeout(ensureTechSession(force), 2500, { ok: false, reason: "Network timeout" } as any);
+      const sess = await withTimeout(ensureTechSession(force), 1200, { ok: false, reason: "Network timeout" } as any);
       
       if (!sess.ok) {
         // Fall back to local only
@@ -91,7 +91,7 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<
 
       const { data, error } = await withTimeout(
         supabase.rpc("accounts_exist"),
-        2000,
+        1200,
         { data: cachedOpts.length > 0, error: null }
       );
       
@@ -102,7 +102,7 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<
       if (exists) {
         const { data: list } = await withTimeout(
           (supabase as any).rpc("list_login_users"),
-          2000,
+          1200,
           { data: null }
         );
         if (list) {
@@ -143,17 +143,25 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<
       const tryCloud = isOnlineNow();
       if (tryCloud) {
         try {
-          let { data, error } = await supabase.rpc("verify_account_login", {
-            _username: loginUser.trim(),
-            _password: loginPass,
-          });
+          let { data, error } = await withTimeout(
+            supabase.rpc("verify_account_login", {
+              _username: loginUser.trim(),
+              _password: loginPass,
+            }),
+            1800,
+            { data: null, error: { message: "Network timeout" } } as any,
+          );
           if (error && /jwt|token/i.test(error.message ?? "")) {
-            const r = await ensureTechSession(true);
+            const r = await withTimeout(ensureTechSession(true), 1200, { ok: false, reason: "Network timeout" } as any);
             if (r.ok) {
-              ({ data, error } = await supabase.rpc("verify_account_login", {
-                _username: loginUser.trim(),
-                _password: loginPass,
-              }));
+              ({ data, error } = await withTimeout(
+                supabase.rpc("verify_account_login", {
+                  _username: loginUser.trim(),
+                  _password: loginPass,
+                }),
+                1800,
+                { data: null, error: { message: "Network timeout" } } as any,
+              ));
             }
           }
           if (error) throw error;

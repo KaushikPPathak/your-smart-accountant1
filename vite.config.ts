@@ -38,26 +38,53 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
+      injectRegister: null,
+      filename: "sw.js",
+      devOptions: { enabled: false },
       manifest: {
         name: "Smart Accountant",
         short_name: "SmartAcc",
+        display: "standalone",
+        start_url: "/",
+        scope: "/",
         theme_color: "#ffffff",
+        background_color: "#ffffff",
         icons: [
           {
-            src: "/pwa-192x192.png",
-            sizes: "192x192",
-            type: "image/png"
-          },
-          {
-            src: "/pwa-512x512.png",
-            sizes: "512x512",
-            type: "image/png"
+            src: "/pwa-icon.svg",
+            sizes: "any",
+            type: "image/svg+xml",
+            purpose: "any maskable"
           }
         ]
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+        navigateFallback: "/index.html",
+        navigateFallbackDenylist: [/^\/~oauth/],
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === "navigate",
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "app-html",
+              networkTimeoutSeconds: 2,
+              expiration: { maxEntries: 8, maxAgeSeconds: 7 * 24 * 60 * 60 },
+            },
+          },
+          {
+            urlPattern: ({ url, request }) => url.origin === self.location.origin && ["script", "style", "worker"].includes(request.destination),
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "app-assets",
+              expiration: { maxEntries: 80, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            },
+          },
+        ],
       }
     }),
     tsconfigPaths(),
