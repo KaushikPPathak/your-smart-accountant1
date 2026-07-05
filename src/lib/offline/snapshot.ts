@@ -108,13 +108,24 @@ function dexieFor(table: SnapshotTable, db: any) {
     case "account_group_overrides": return db.cache_account_group_overrides;
     case "vouchers": return db.cache_vouchers;
     case "bill_allocations": return db.cache_bill_allocations;
+    case "voucher_export_details": return db.cache_voucher_export_details;
+    case "einvoice_details": return db.cache_einvoice_details;
+    case "period_locks": return db.cache_period_locks;
+    case "bom_templates": return db.cache_bom_templates;
+    case "recurring_invoices": return db.cache_recurring_invoices;
   }
 }
 
 function normalizeRowsForCache(table: SnapshotTable, rows: Array<Record<string, unknown>>) {
-  return table === "company_settings"
-    ? rows.map((r) => ({ ...r, id: (r as any).id ?? (r as any).company_id }))
-    : rows;
+  if (table === "company_settings") {
+    return rows.map((r) => ({ ...r, id: (r as any).id ?? (r as any).company_id }));
+  }
+  if (VOUCHER_ID_PK_TABLES.has(table)) {
+    // Mirror voucher_id -> id so the generic "id" pagination + verification
+    // path treats these like every other cache table.
+    return rows.map((r) => ({ ...r, id: (r as any).voucher_id }));
+  }
+  return rows;
 }
 
 function rowUpdatedAt(row: Record<string, unknown>, fallback: string) {
