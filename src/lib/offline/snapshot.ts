@@ -410,9 +410,28 @@ async function pullTable(table: SnapshotTable, companyId: string, opts: { exact?
     } else {
       const { db } = await getDbInstance();
       const table_ = dexieFor(table, db);
-      const rowsForCache = normalizeRowsForCache(table, rows);
-      await (table_ as any).bulkPut(rowsForCache);
+      // Split into live rows (upsert) and tombstones (remove locally + drop
+      // any voucher children). This is what makes a delete on device A
+      // disappear from device B's local cache on the next delta pull.
+      const isSoftDelete = SOFT_DELETE_TABLES.has(table);
+      const live = isSoftDelete ? rows.filter((r) => !r.deleted_at) : rows;
+      const tombstones = isSoftDelete ? rows.filter((r) => r.deleted_at) : [];
+      const rowsForCache = normalizeRowsForCache(table, live);
+      if (rowsForCache.length) await (table_ as any).bulkPut(rowsForCache);
+      if (tombstones.length) {
+        const ids = tombstones.map((r) => String(r.id ?? "")).filter(Boolean);
+        await (table_ as any).where("id").anyOf(ids).delete();
+        if (table === "vouchers") {
+          await Promise.all([
+            db.cache_voucher_entries.where("voucher_id").anyOf(ids).delete(),
+            db.cache_voucher_items.where("voucher_id").anyOf(ids).delete(),
+            db.cache_bill_allocations.where("invoice_voucher_id").anyOf(ids).delete(),
+            db.cache_bill_allocations.where("payment_voucher_id").anyOf(ids).delete(),
+          ]);
+        }
+      }
     }
+
     pulled += rows.length;
     lastSeen = rowUpdatedAt(rows[rows.length - 1], lastSeen);
 
