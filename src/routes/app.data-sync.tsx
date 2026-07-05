@@ -3,9 +3,10 @@ import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Cloud, Upload, RefreshCw, CheckCircle2, Database, AlertTriangle } from "lucide-react";
+import { Cloud, Upload, RefreshCw, CheckCircle2, Database, AlertTriangle, HardDrive } from "lucide-react";
 import { toast } from "sonner";
 import { getOfflineCacheCounts, pullSnapshot, type SnapshotResult } from "@/lib/offline/snapshot";
+import { getStorageQuota, requestPersistentStorage, formatBytes, type StorageQuota } from "@/lib/offline/storage-quota";
 import { supabase as supabaseTyped } from "@/integrations/supabase/client";
 import {
   drainOutbox,
