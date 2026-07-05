@@ -174,6 +174,8 @@ function makeStubDb(): OfflineDatabase {
     "cache_ledgers", "cache_items", "cache_account_subgroups",
     "cache_ledger_group_mappings", "cache_account_group_overrides",
     "cache_vouchers", "cache_voucher_entries", "cache_voucher_items", "cache_bill_allocations",
+    "cache_voucher_export_details", "cache_einvoice_details", "cache_period_locks",
+    "cache_bom_templates", "cache_bom_template_lines", "cache_recurring_invoices",
     "outbox", "dead_letter", "sync_cursors", "account_creds", "meta",
   ];
   const stub: Record<string, unknown> = {
