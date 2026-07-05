@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "SmartAccountant",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.smartaccountant.app",
   "build": {
     "beforeBuildCommand": "bun run build:tauri",
