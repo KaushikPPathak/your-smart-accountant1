@@ -72,3 +72,67 @@ export function formatBytes(bytes: number): string {
   while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
   return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
 }
+
+// ---------------------------------------------------------------------------
+// Global low-storage watcher
+// ---------------------------------------------------------------------------
+// Polls the browser storage estimate and surfaces a toast when the offline
+// cache is close to its quota. If we cross the quota, IndexedDB writes start
+// throwing QuotaExceededError and the app cannot save vouchers offline — we
+// tell the user in plain language before that happens.
+
+const WARN_PCT = 80;   // "getting full"
+const CRIT_PCT = 92;   // "app will stop working"
+const CHECK_MS = 60_000;
+
+let watcherStarted = false;
+let lastLevel: "ok" | "warn" | "crit" = "ok";
+let lastToastAt = 0;
+
+async function checkAndWarn() {
+  const q = await getStorageQuota();
+  if (!q.supported || q.quotaBytes === 0) return;
+
+  const level: "ok" | "warn" | "crit" =
+    q.percentUsed >= CRIT_PCT ? "crit" : q.percentUsed >= WARN_PCT ? "warn" : "ok";
+
+  // Ask the browser again for persistence when we cross into warn/crit —
+  // some browsers only grant it once usage is meaningful.
+  if (level !== "ok" && !q.persisted) void requestPersistentStorage();
+
+  if (level === "ok") { lastLevel = "ok"; return; }
+
+  // Re-toast when level escalates, or every 30 min at the same level.
+  const escalated = level !== lastLevel;
+  const stale = Date.now() - lastToastAt > 30 * 60_000;
+  if (!escalated && !stale) return;
+
+  lastLevel = level;
+  lastToastAt = Date.now();
+
+  const free = Math.max(0, q.quotaBytes - q.usageBytes);
+  const { toast } = await import("sonner");
+  if (level === "crit") {
+    toast.error("Device storage almost full", {
+      description: `Only ${formatBytes(free)} left for offline data. The app will stop saving new entries unless you free up space on this device.`,
+      duration: 15_000,
+    });
+  } else {
+    toast.warning("Device storage getting full", {
+      description: `${Math.round(q.percentUsed)}% used (${formatBytes(free)} free). Free up space soon or the app may stop working offline.`,
+      duration: 10_000,
+    });
+  }
+}
+
+/** Start the background low-storage watcher. Idempotent. */
+export function startStorageWatcher() {
+  if (watcherStarted) return;
+  if (typeof window === "undefined") return;
+  watcherStarted = true;
+  setTimeout(() => { void checkAndWarn(); }, 8_000);
+  setInterval(() => { void checkAndWarn(); }, CHECK_MS);
+  window.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void checkAndWarn();
+  });
+}

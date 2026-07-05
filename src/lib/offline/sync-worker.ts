@@ -6,7 +6,7 @@ import { drainOutbox, queueSize } from "./outbox";
 import { refreshAllCachedCreds } from "./creds-cache";
 import { pullSnapshot } from "./snapshot";
 import { rememberNetworkBlocked } from "./cache-read";
-import { requestPersistentStorage } from "./storage-quota";
+import { requestPersistentStorage, startStorageWatcher } from "./storage-quota";
 
 let started = false;
 
@@ -102,6 +102,9 @@ export function startSyncWorker() {
   // Best-effort: some grant automatically, iOS Safari usually declines but
   // still extends its 7-day eviction window.
   void requestPersistentStorage();
+
+  // Watch storage usage and warn the user before the browser refuses writes.
+  startStorageWatcher();
 
 
   // Drain + pull whenever connectivity returns
