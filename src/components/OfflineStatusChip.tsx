@@ -68,7 +68,7 @@ export function OfflineStatusChip() {
         toast.error("Pending offline work could not be pushed, so data was not marked as matching");
         return;
       }
-      const r = await pullSnapshot({ full: true });
+      const r = await pullSnapshot({ full: true, forceExact: true });
       if (!r) toast.message("Offline — try again when connected");
       else if (Object.keys(r.errors).length > 0 || (r.verification && !r.verification.ok)) {
         toast.error("Sync failed — existing offline data preserved", {
