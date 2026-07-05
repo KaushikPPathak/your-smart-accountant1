@@ -13,7 +13,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { markUnlocked, type StaffRole } from "@/lib/staff-session";
 import { ensureTechSession } from "@/lib/tech-user";
-import { cacheAccountCredsFromCloud, verifyOfflineLogin } from "@/lib/offline/creds-cache";
+import { cacheAccountCredsFromCloud, verifyOfflineLogin, listCachedAccounts } from "@/lib/offline/creds-cache";
 import { isOnlineNow, pingOnline } from "@/lib/offline/online-status";
 import { consumeReturnTo } from "@/lib/return-to";
 
@@ -53,6 +53,9 @@ function LockScreen() {
   const [suHide, setSuHide] = useState(false);
 
   const [busy, setBusy] = useState(false);
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => 
+  Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
 
   const boot = async (force = false) => {
     setBootLoading(true);
