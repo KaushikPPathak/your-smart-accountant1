@@ -88,6 +88,9 @@ export default defineConfig({
   base: isTauri ? "./" : "/",
   clearScreen: false,
   envPrefix: ["VITE_", "TAURI_ENV_"],
+  resolve: isTauri
+    ? { alias: { "virtual:pwa-register": "/src/lib/pwa-register-stub.ts" } }
+    : undefined,
   plugins: [
     tanstackRouter({ target: "react", autoCodeSplitting: true }),
     react(),
@@ -95,6 +98,7 @@ export default defineConfig({
     ...pwaPlugins,
     tsconfigPaths(),
   ],
+
   server: isTauri
     ? {
         port: 1420,
