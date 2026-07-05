@@ -199,7 +199,7 @@ function LockScreen() {
             console.error("Company cache sync skipped:", syncErr);
           }
 
-          markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole });
+          markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole, username: loginUser.trim() });
           toast.success(`Welcome, ${row.name}`);
           navigate({ to: (consumeReturnTo() ?? "/app") as never });
           return;
