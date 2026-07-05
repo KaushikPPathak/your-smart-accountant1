@@ -53,6 +53,20 @@ const HEAVY_TABLES = [
 ] as const;
 const SNAPSHOT_TABLES = [...MINIMAL_TABLES, ...HEAVY_TABLES] as const;
 
+// Tables where `deleted_at` was added by the soft-delete migration. The
+// snapshot pulls tombstones (rows with deleted_at != null) via the delta
+// path so multi-device deletes propagate; the exact/full-replace path
+// filters them out because it rebuilds the local cache from scratch.
+const SOFT_DELETE_TABLES = new Set<string>([
+  "ledgers",
+  "items",
+  "vouchers",
+  "account_subgroups",
+  "ledger_group_mappings",
+  "account_group_overrides",
+]);
+
+
 type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 
 type CacheRow = Record<string, unknown>;
@@ -179,6 +193,10 @@ async function fetchExactTableRows(table: SnapshotTable, companyId: string): Pro
       .order(tableOrderColumn(table), { ascending: true });
     q = isCompaniesTable ? q.eq("id", companyId) : q.eq("company_id", companyId);
     if (table === "vouchers") q = q.gte("voucher_date", voucherInitialCutoffISO());
+    // Exact snapshot is a full replace — soft-deleted rows must not come
+    // back into the local cache. The incremental delta path below still
+    // pulls them (as tombstones) so cross-device deletes propagate.
+    if (SOFT_DELETE_TABLES.has(table)) q = q.is("deleted_at", null);
     const { data, error } = await q;
     if (error) throw new Error(`${table}: ${error.message}`);
     const page = normalizeRowsForCache(table, (data ?? []) as CacheRow[]);
@@ -392,9 +410,28 @@ async function pullTable(table: SnapshotTable, companyId: string, opts: { exact?
     } else {
       const { db } = await getDbInstance();
       const table_ = dexieFor(table, db);
-      const rowsForCache = normalizeRowsForCache(table, rows);
-      await (table_ as any).bulkPut(rowsForCache);
+      // Split into live rows (upsert) and tombstones (remove locally + drop
+      // any voucher children). This is what makes a delete on device A
+      // disappear from device B's local cache on the next delta pull.
+      const isSoftDelete = SOFT_DELETE_TABLES.has(table);
+      const live = isSoftDelete ? rows.filter((r) => !r.deleted_at) : rows;
+      const tombstones = isSoftDelete ? rows.filter((r) => r.deleted_at) : [];
+      const rowsForCache = normalizeRowsForCache(table, live);
+      if (rowsForCache.length) await (table_ as any).bulkPut(rowsForCache);
+      if (tombstones.length) {
+        const ids = tombstones.map((r) => String(r.id ?? "")).filter(Boolean);
+        await (table_ as any).where("id").anyOf(ids).delete();
+        if (table === "vouchers") {
+          await Promise.all([
+            db.cache_voucher_entries.where("voucher_id").anyOf(ids).delete(),
+            db.cache_voucher_items.where("voucher_id").anyOf(ids).delete(),
+            db.cache_bill_allocations.where("invoice_voucher_id").anyOf(ids).delete(),
+            db.cache_bill_allocations.where("payment_voucher_id").anyOf(ids).delete(),
+          ]);
+        }
+      }
     }
+
     pulled += rows.length;
     lastSeen = rowUpdatedAt(rows[rows.length - 1], lastSeen);
 

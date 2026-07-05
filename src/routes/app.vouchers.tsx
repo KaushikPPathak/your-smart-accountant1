@@ -176,15 +176,21 @@ function VouchersHub() {
 
   const onDelete = async (r: VoucherRow) => {
     if (!confirm(`Delete voucher ${r.voucher_number}? This cannot be undone.`)) return;
+    // Children can go hard — the parent tombstone will cause other devices
+    // to drop this voucher (and any leftover children) from their cache.
     const { error: e1 } = await supabase.from("voucher_entries").delete().eq("voucher_id", r.id);
     if (e1) { toast.error(e1.message); return; }
     const { error: e2 } = await supabase.from("voucher_items").delete().eq("voucher_id", r.id);
     if (e2) { toast.error(e2.message); return; }
-    const { error: e3 } = await supabase.from("vouchers").delete().eq("id", r.id);
+    // Soft delete the parent so multi-device delta sync can propagate it.
+    const { error: e3 } = await supabase.from("vouchers")
+      .update({ deleted_at: new Date().toISOString() } as never)
+      .eq("id", r.id);
     if (e3) { toast.error(e3.message); return; }
     toast.success("Voucher deleted");
     load();
   };
+
 
   if (isNested) return <Outlet />;
 
