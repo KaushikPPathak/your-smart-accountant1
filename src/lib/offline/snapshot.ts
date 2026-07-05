@@ -301,6 +301,11 @@ async function localRowsForExactTable(db: any, companyId: string, table: string)
   if (table === "voucher_entries") return db.cache_voucher_entries.where("company_id").equals(companyId).toArray();
   if (table === "voucher_items") return db.cache_voucher_items.where("company_id").equals(companyId).toArray();
   if (table === "bill_allocations") return db.cache_bill_allocations.where("company_id").equals(companyId).toArray();
+  if (table === "voucher_export_details") return db.cache_voucher_export_details.where("company_id").equals(companyId).toArray();
+  if (table === "einvoice_details") return db.cache_einvoice_details.where("company_id").equals(companyId).toArray();
+  if (table === "period_locks") return db.cache_period_locks.where("company_id").equals(companyId).toArray();
+  if (table === "bom_templates") return db.cache_bom_templates.where("company_id").equals(companyId).toArray();
+  if (table === "recurring_invoices") return db.cache_recurring_invoices.where("company_id").equals(companyId).toArray();
   return [];
 }
 
