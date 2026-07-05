@@ -176,6 +176,50 @@ function DataSyncPage() {
         </p>
       </div>
 
+      {deadLetter.length > 0 && (
+        <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-5 w-5" />
+              {deadLetter.length} change{deadLetter.length === 1 ? "" : "s"} need your attention
+            </CardTitle>
+            <CardDescription>
+              These local edits could not be saved to the cloud (the server rejected them or
+              they failed too many times). Your other work is unaffected. Review and retry or discard each one.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {deadLetter.map((row) => (
+              <div
+                key={row.id}
+                className="flex items-start justify-between gap-3 rounded-md border bg-background p-3 text-sm"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate">
+                    {row.label || `${row.op.toUpperCase()} ${row.table || row.rpc || row.executor || "unknown"}`}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground truncate">
+                    {row.last_error || "Unknown error"}
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">
+                    {new Date(row.moved_at).toLocaleString()} · {row.attempts ?? 0} attempt(s)
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button size="sm" variant="outline" onClick={() => onRetryDead(row.id as number)}>
+                    Retry
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onDiscardDead(row.id as number)}>
+                    Discard
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
