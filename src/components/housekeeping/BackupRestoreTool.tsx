@@ -214,6 +214,11 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
 
   async function doRestore() {
     if (!pendingFile) return;
+    // Rule 5 — typed-name confirmation for destructive restore into existing company.
+    if (confirmTyped.trim() !== companyName) {
+      toast.error(`Type the company name exactly: "${companyName}"`);
+      return;
+    }
     setRestoring(true);
     try {
       // Detect archive formats (RAR / ZIP / 7z) by magic bytes before reading as text
@@ -248,9 +253,27 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
         toast.error("Multi-company backup detected. Please use a single-company backup file.");
         return;
       }
+      // Rule 5 — take a silent pre-restore snapshot for 24h "Undo restore".
+      const snap = await savePreRestoreSnapshot(companyId, companyName);
+      if (!snap.ok) {
+        toast.warning("Could not create safety snapshot — proceeding without undo option.");
+      }
       const r = await restoreCompanyBackup(companyId, parsed.data, { wipeExisting: true });
       setSummary(r);
       toast.success("Restore complete");
+      // Rule 6 — post-restore semantic verification.
+      try {
+        const report = await runSemanticChecks(companyId);
+        if (report.hasError) {
+          toast.error(`Restore verified with CRITICAL issues: ${report.summary}`, { duration: 12000 });
+        } else if (report.hasWarning) {
+          toast.warning(`Restore verified: ${report.summary}`, { duration: 8000 });
+        } else {
+          toast.success(`Restore verified — ${report.summary}`);
+        }
+      } catch {
+        toast.warning("Restored, but post-restore verification could not run. Open Verify & Repair.");
+      }
     } catch (e) {
       toast.error((e as Error).message || "Restore failed");
     } finally {
