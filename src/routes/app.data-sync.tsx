@@ -1,13 +1,22 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Cloud, Upload, RefreshCw, CheckCircle2, Database } from "lucide-react";
+import { Cloud, Upload, RefreshCw, CheckCircle2, Database, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { getOfflineCacheCounts, pullSnapshot, type SnapshotResult } from "@/lib/offline/snapshot";
 import { supabase as supabaseTyped } from "@/integrations/supabase/client";
-import { drainOutbox, queueSize } from "@/lib/offline/outbox";
+import {
+  drainOutbox,
+  queueSize,
+  listDeadLetter,
+  retryDeadLetter,
+  discardDeadLetter,
+  subscribeOutbox,
+  type DeadLetterRow,
+} from "@/lib/offline/outbox";
+
 
 export const Route = createFileRoute("/app/data-sync")({
   component: DataSyncPage,
