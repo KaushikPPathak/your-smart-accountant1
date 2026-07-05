@@ -48,7 +48,7 @@ interface PickerCompany {
   has_password: boolean;
 }
 
-const companyFetchTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T | null> =>
+const companyFetchTimeout = <T,>(promise: PromiseLike<T>, ms: number): Promise<T | null> =>
   Promise.race([promise, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
 
 function formatCachedCompanies(cachedData: any[]): PickerCompany[] {
@@ -104,8 +104,8 @@ function StartScreen() {
           return;
         }
 
-        const cloud = await companyFetchTimeout(
-          supabase.from("companies_picker").select("id, name, has_password").order("name", { ascending: true }),
+        const cloud = await companyFetchTimeout<{ data: PickerCompany[] | null; error: { message?: string } | null }>(
+          supabase.from("companies_picker").select("id, name, has_password").order("name", { ascending: true }) as PromiseLike<{ data: PickerCompany[] | null; error: { message?: string } | null }>,
           cachedCompanies.length > 0 ? 1200 : 3500,
         );
         if (!cloud) {
