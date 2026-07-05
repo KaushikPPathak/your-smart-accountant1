@@ -12,6 +12,8 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const sessionTimeoutFallback = { data: { session: null }, error: null } as Awaited<ReturnType<typeof supabase.auth.getSession>>;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,9 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // Read any cached session immediately so the lock screen unblocks fast.
         // Add a small timeout for the initial session check to avoid blocking render on slow networks.
-        const { data } = await Promise.race([
+        const { data } = await Promise.race<Awaited<ReturnType<typeof supabase.auth.getSession>>>([
           supabase.auth.getSession(),
-          new Promise<{data: {session: null}}>((resolve) => setTimeout(() => resolve({data: {session: null}}), 1200))
+          new Promise((resolve) => setTimeout(() => resolve(sessionTimeoutFallback), 700))
         ]);
         if (data.session) {
           activeSession = data.session;
