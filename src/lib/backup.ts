@@ -164,7 +164,13 @@ export async function restoreCompanyBackup(
 ): Promise<RestoreSummary> {
   if (backup.schema_version !== 1) throw new Error("Unsupported backup version");
 
-  if (opts.wipeExisting) {
+  // STRICT RESTORE RULE: always wipe the target company's data before restoring.
+  // "Overwrite existing balances and add missing transactions" is only achievable
+  // by replacing the full snapshot — merging by heuristic keys produces
+  // duplicate ledgers / duplicate vouchers / mismatched balances. This is
+  // non-negotiable and ignores any caller that tries to disable it.
+  void opts.wipeExisting;
+  {
     // Order matters due to FKs.
     await supabase.from("bill_allocations").delete().eq("company_id", targetCompanyId);
     const { data: existingVouchers } = await supabase
