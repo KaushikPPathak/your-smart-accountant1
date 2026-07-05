@@ -51,7 +51,7 @@ function DataSyncPage() {
         toast.error("Pending offline work could not be pushed, so data was not marked as matching");
         return;
       }
-      const result = await pullSnapshot({ full: true }) as SnapshotResult | null;
+      const result = await pullSnapshot({ full: true, forceExact: true }) as SnapshotResult | null;
       if (!result) {
         toast.error("Connect online once to match online and offline data");
         return;
