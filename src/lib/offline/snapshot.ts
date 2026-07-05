@@ -346,6 +346,12 @@ async function writeExactSnapshotRows(companyId: string, rows: ExactSnapshotRows
       db.cache_voucher_entries,
       db.cache_voucher_items,
       db.cache_bill_allocations,
+      db.cache_voucher_export_details,
+      db.cache_einvoice_details,
+      db.cache_period_locks,
+      db.cache_bom_templates,
+      db.cache_bom_template_lines,
+      db.cache_recurring_invoices,
     ],
     async () => {
       await Promise.all([
@@ -360,6 +366,12 @@ async function writeExactSnapshotRows(companyId: string, rows: ExactSnapshotRows
         db.cache_voucher_entries.where("company_id").equals(companyId).delete(),
         db.cache_voucher_items.where("company_id").equals(companyId).delete(),
         db.cache_bill_allocations.where("company_id").equals(companyId).delete(),
+        db.cache_voucher_export_details.where("company_id").equals(companyId).delete(),
+        db.cache_einvoice_details.where("company_id").equals(companyId).delete(),
+        db.cache_period_locks.where("company_id").equals(companyId).delete(),
+        db.cache_bom_templates.where("company_id").equals(companyId).delete(),
+        db.cache_bom_template_lines.where("company_id").equals(companyId).delete(),
+        db.cache_recurring_invoices.where("company_id").equals(companyId).delete(),
       ]);
       if (rows.companies?.length) await db.cache_companies.bulkPut(rows.companies);
       if (rows.company_settings?.length) await db.cache_company_settings.bulkPut(rows.company_settings);
@@ -372,6 +384,12 @@ async function writeExactSnapshotRows(companyId: string, rows: ExactSnapshotRows
       if (rows.voucher_entries?.length) await db.cache_voucher_entries.bulkPut(rows.voucher_entries);
       if (rows.voucher_items?.length) await db.cache_voucher_items.bulkPut(rows.voucher_items);
       if (rows.bill_allocations?.length) await db.cache_bill_allocations.bulkPut(rows.bill_allocations);
+      if (rows.voucher_export_details?.length) await db.cache_voucher_export_details.bulkPut(rows.voucher_export_details);
+      if (rows.einvoice_details?.length) await db.cache_einvoice_details.bulkPut(rows.einvoice_details);
+      if (rows.period_locks?.length) await db.cache_period_locks.bulkPut(rows.period_locks);
+      if (rows.bom_templates?.length) await db.cache_bom_templates.bulkPut(rows.bom_templates);
+      if (rows.bom_template_lines?.length) await db.cache_bom_template_lines.bulkPut(rows.bom_template_lines);
+      if (rows.recurring_invoices?.length) await db.cache_recurring_invoices.bulkPut(rows.recurring_invoices);
     },
   );
 }
