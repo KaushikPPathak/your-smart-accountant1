@@ -648,8 +648,8 @@ export async function pullCompanySnapshot(
  * screen and dashboard. Per-company heavy data is pulled on demand by
  * pullCompanySnapshot(id, { full: true }).
  */
-export async function pullSnapshot(opts: { full?: boolean } = {}): Promise<SnapshotResult | null> {
-  const flightKey = opts.full ? "full" : "minimal";
+export async function pullSnapshot(opts: { full?: boolean; forceExact?: boolean } = {}): Promise<SnapshotResult | null> {
+  const flightKey = opts.full ? (opts.forceExact ? "full-exact" : "full") : "minimal";
   const existing = snapshotInFlight.get(flightKey);
   if (existing) return existing;
   const run = (async () => {
@@ -666,8 +666,9 @@ export async function pullSnapshot(opts: { full?: boolean } = {}): Promise<Snaps
 
       const ids = Array.from(new Set((memberships ?? []).map((r) => r.company_id as string)));
       const results = await Promise.all(
-        ids.map((id) => pullCompanySnapshot(id, { full: opts.full ?? false, notify: false }).catch(() => null)),
+        ids.map((id) => pullCompanySnapshot(id, { full: opts.full ?? false, forceExact: opts.forceExact, notify: false }).catch(() => null)),
       );
+
       const completed = results.filter(Boolean) as SnapshotResult[];
       if (completed.length === 0) return null;
       if (opts.full) {
