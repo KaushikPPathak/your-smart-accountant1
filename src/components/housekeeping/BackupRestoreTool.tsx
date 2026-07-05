@@ -280,7 +280,27 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
       setRestoring(false);
       setConfirmOpen(false);
       setPendingFile(null);
+      setConfirmTyped("");
       if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function doUndoRestore() {
+    if (!undoSnap) return;
+    if (!confirm(
+      `Undo the last restore in "${companyName}"? ` +
+      "This will replace current data with the snapshot taken automatically before the restore.",
+    )) return;
+    setUndoing(true);
+    try {
+      await undoRestore(companyId);
+      toast.success("Restore undone — company reverted to the pre-restore snapshot.");
+      setSummary(null);
+      setUndoSnap(null);
+    } catch (e) {
+      toast.error((e as Error).message || "Undo failed");
+    } finally {
+      setUndoing(false);
     }
   }
 
