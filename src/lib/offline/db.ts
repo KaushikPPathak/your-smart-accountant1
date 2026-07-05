@@ -84,6 +84,7 @@ class OfflineDatabase extends Dexie {
   cache_voucher_items!: Table<any, any>;
   cache_bill_allocations!: Table<any, any>;
   outbox!: Table<any, any>;
+  dead_letter!: Table<any, any>;
   sync_cursors!: Table<any, any>;
   account_creds!: Table<any, any>;
   meta!: Table<any, any>;
@@ -112,8 +113,15 @@ class OfflineDatabase extends Dexie {
       cache_voucher_items: "id, voucher_id, company_id",
       cache_bill_allocations: "id, company_id, invoice_voucher_id, payment_voucher_id",
     });
+    this.version(3).stores({
+      // Poison / permanently-failing outbox rows. Kept separate from `outbox`
+      // so the drain loop doesn't keep retrying them forever and blocking the
+      // queue. Users can inspect / retry / discard from the Data Sync screen.
+      dead_letter: "++id, moved_at, company_id, table",
+    });
   }
 }
+
 
 // --- Safe stub for environments without IndexedDB -------------------------
 
