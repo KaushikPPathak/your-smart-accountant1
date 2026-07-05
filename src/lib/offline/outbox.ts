@@ -130,21 +130,48 @@ async function executeOutboxRow(row: OutboxRow): Promise<void> {
   }
 }
 
-let draining = false;
+// A row is "poison" when the server rejected it for a reason that will not
+// resolve itself on retry: RLS denies, validation/constraint violation,
+// invalid input, foreign-key gap, etc. These get moved to `dead_letter`
+// immediately instead of blocking the queue.
+const POISON_ERROR_RE =
+  /permission denied|not authorized|unauthorized|violates|check constraint|foreign key|invalid input|duplicate key|not-null|out of range|column .* does not exist|relation .* does not exist/i;
+const MAX_TRANSIENT_ATTEMPTS = 8;
 
-export async function drainOutbox(): Promise<{ pushed: number; failed: number }> {
-  if (draining) return { pushed: 0, failed: 0 };
+function isPoisonError(message: string): boolean {
+  return POISON_ERROR_RE.test(message || "");
+}
+
+async function moveToDeadLetter(
+  db: any,
+  row: OutboxRow,
+  message: string,
+): Promise<void> {
+  const { id: _drop, ...rest } = row;
+  await db.dead_letter.add({
+    ...rest,
+    original_id: row.id ?? null,
+    moved_at: Date.now(),
+    last_error: message,
+    attempts: (row.attempts ?? 0) + 1,
+  });
+  if (row.id !== undefined) await db.outbox.delete(row.id);
+}
+
+export async function drainOutbox(): Promise<{ pushed: number; failed: number; poisoned: number }> {
+  if (draining) return { pushed: 0, failed: 0, poisoned: 0 };
   draining = true;
   let pushed = 0;
   let failed = 0;
-  
+  let poisoned = 0;
+
   try {
     const online = await pingOnline();
-    if (!online) return { pushed: 0, failed: 0 };
-    
+    if (!online) return { pushed: 0, failed: 0, poisoned: 0 };
+
     const db = await getDbInstance();
     const rows = await db.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
-    
+
     for (const row of rows) {
       try {
         await executeOutboxRow(row);
@@ -165,28 +192,34 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
         pushed += 1;
         emit();
       } catch (e) {
-        failed += 1;
-        if (row.id !== undefined) {
-          await db.outbox.update(row.id, {
-            attempts: (row.attempts ?? 0) + 1,
-            last_error: e instanceof Error ? e.message : String(e),
-          });
+        const message = e instanceof Error ? e.message : String(e);
+        const nextAttempts = (row.attempts ?? 0) + 1;
+        if (isPoisonError(message) || nextAttempts >= MAX_TRANSIENT_ATTEMPTS) {
+          // Move out of the hot queue so it stops blocking siblings and can
+          // be inspected / retried / discarded from the Data Sync screen.
+          await moveToDeadLetter(db, row, message);
+          poisoned += 1;
+        } else {
+          failed += 1;
+          if (row.id !== undefined) {
+            await db.outbox.update(row.id, {
+              attempts: nextAttempts,
+              last_error: message,
+            });
+          }
         }
-        // Keep going — one bad row (e.g. a voucher whose party ledger was
-        // manually deleted on the cloud) must not block every other pending
-        // change. The row stays queued with attempts++ for the user to retry
-        // or clear from the Data Sync screen.
+        // Keep going — one bad row must not block every other pending change.
         continue;
       }
     }
 
-    
+
     if (rows.length > 0 && rows[0].company_id) {
       const { syncEssentialMasters } = await import("./masters");
       await syncEssentialMasters(rows[0].company_id);
     }
 
-    return { pushed, failed };
+    return { pushed, failed, poisoned };
   } finally {
     draining = false;
     emit();
@@ -198,3 +231,42 @@ export async function clearOutboxRow(id: number): Promise<void> {
   await db.outbox.delete(id);
   emit();
 }
+
+// --- Dead-letter (needs-attention) queue ---------------------------------
+
+export interface DeadLetterRow extends OutboxRow {
+  moved_at: number;
+  original_id: number | null;
+}
+
+export async function listDeadLetter(): Promise<DeadLetterRow[]> {
+  const db = await getDbInstance();
+  return db.dead_letter.orderBy("moved_at").toArray() as unknown as DeadLetterRow[];
+}
+
+export async function deadLetterCount(): Promise<number> {
+  const db = await getDbInstance();
+  return db.dead_letter.count();
+}
+
+export async function retryDeadLetter(id: number): Promise<void> {
+  const db = await getDbInstance();
+  const row = await db.dead_letter.get(id) as DeadLetterRow | undefined;
+  if (!row) return;
+  const { id: _dropId, moved_at: _m, original_id: _o, ...rest } = row;
+  await db.outbox.add({
+    ...rest,
+    attempts: 0,
+    last_error: null,
+    created_at: Date.now(),
+  });
+  await db.dead_letter.delete(id);
+  emit();
+}
+
+export async function discardDeadLetter(id: number): Promise<void> {
+  const db = await getDbInstance();
+  await db.dead_letter.delete(id);
+  emit();
+}
+
