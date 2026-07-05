@@ -239,7 +239,7 @@ function AppLayout() {
             <div className="h-5 w-px bg-border" />
             <CompanySwitcher />
             <div className="ml-auto flex items-center gap-2">
-              <OfflineStatusChip />
+              {/* Offline/online status is intentionally hidden — sync runs silently in the background. */}
               <InstallAppButton />
               <LanguageSwitcher compact />
               <CurrencySwitcher compact />
