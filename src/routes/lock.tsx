@@ -214,7 +214,7 @@ function LockScreen() {
 
       const local = await verifyOfflineLogin(loginUser.trim(), loginPass);
       if (local) {
-        markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole });
+        markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole, username: loginUser.trim() });
         toast.success(`Welcome, ${local.name} (offline)`);
         navigate({ to: (consumeReturnTo() ?? "/app") as never });
         return;
