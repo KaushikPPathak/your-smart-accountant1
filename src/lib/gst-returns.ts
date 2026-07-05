@@ -242,28 +242,120 @@ export async function fetchVouchers(
   to: string,
   types: VoucherTypeEnum[],
 ): Promise<VoucherRow[]> {
-  const { data } = await supabase
-    .from("vouchers")
-    .select(SELECT)
-    .eq("company_id", companyId)
-    .in("voucher_type", types)
-    .gte("voucher_date", from)
-    .lte("voucher_date", to)
-    .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true });
-  return (data || []) as unknown as VoucherRow[];
+  return withCacheFallback<VoucherRow[]>(
+    async () => {
+      const { data } = await supabase
+        .from("vouchers")
+        .select(SELECT)
+        .eq("company_id", companyId)
+        .in("voucher_type", types)
+        .gte("voucher_date", from)
+        .lte("voucher_date", to)
+        .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true });
+      return (data || []) as unknown as VoucherRow[];
+    },
+    async () => {
+      const typeSet = new Set(types as unknown as string[]);
+      const [vouchers, ledgers, items, viRows] = await Promise.all([
+        readVouchers(companyId, { from, to }),
+        readLedgers(companyId),
+        readItems(companyId),
+        readVoucherItemsForCompany(companyId),
+      ]);
+      const ledgerById = new Map((ledgers as any[]).map((l) => [String(l.id), l]));
+      const itemById = new Map((items as any[]).map((i) => [String(i.id), i]));
+      const viByVoucher = new Map<string, any[]>();
+      for (const vi of viRows as any[]) {
+        const key = String(vi.voucher_id);
+        const list = viByVoucher.get(key) ?? [];
+        list.push(vi);
+        viByVoucher.set(key, list);
+      }
+      const filtered = (vouchers as any[]).filter((v) => typeSet.has(String(v.voucher_type)));
+      const rows: VoucherRow[] = filtered.map((v) => {
+        const l = v.party_ledger_id ? ledgerById.get(String(v.party_ledger_id)) : null;
+        const lines = (viByVoucher.get(String(v.id)) ?? []).map((vi: any) => {
+          const it = vi.item_id ? itemById.get(String(vi.item_id)) : null;
+          return {
+            qty: Number(vi.qty ?? 0),
+            rate_paise: Number(vi.rate_paise ?? 0),
+            taxable_paise: Number(vi.taxable_paise ?? 0),
+            cgst_paise: Number(vi.cgst_paise ?? 0),
+            sgst_paise: Number(vi.sgst_paise ?? 0),
+            igst_paise: Number(vi.igst_paise ?? 0),
+            gst_rate: Number(vi.gst_rate ?? 0),
+            items: it ? { name: String(it.name ?? ""), hsn_code: it.hsn_code ?? null, unit: String(it.unit ?? "") } : null,
+          };
+        });
+        return {
+          id: String(v.id),
+          voucher_date: String(v.voucher_date ?? ""),
+          voucher_number: String(v.voucher_number ?? ""),
+          voucher_type: String(v.voucher_type ?? ""),
+          is_interstate: Boolean(v.is_interstate),
+          place_of_supply_code: v.place_of_supply_code ?? null,
+          reference_no: v.reference_no ?? null,
+          vendor_invoice_no: v.vendor_invoice_no ?? null,
+          vendor_invoice_date: v.vendor_invoice_date ?? null,
+          reason: v.reason ?? null,
+          original_voucher_id: v.original_voucher_id ?? null,
+          subtotal_paise: Number(v.subtotal_paise ?? 0),
+          cgst_paise: Number(v.cgst_paise ?? 0),
+          sgst_paise: Number(v.sgst_paise ?? 0),
+          igst_paise: Number(v.igst_paise ?? 0),
+          total_paise: Number(v.total_paise ?? 0),
+          supply_nature: (v.supply_nature ?? "taxable") as SupplyNature,
+          shipping_bill_no: v.shipping_bill_no ?? null,
+          shipping_bill_date: v.shipping_bill_date ?? null,
+          port_code: v.port_code ?? null,
+          is_amendment: Boolean(v.is_amendment),
+          orig_invoice_no: v.orig_invoice_no ?? null,
+          orig_invoice_date: v.orig_invoice_date ?? null,
+          orig_period: v.orig_period ?? null,
+          itc_class: v.itc_class ?? null,
+          itc_eligible: v.itc_eligible ?? null,
+          ledgers: l ? {
+            name: String(l.name ?? ""),
+            gstin: l.gstin ?? null,
+            state_code: l.state_code ?? null,
+            gst_treatment: (l.gst_treatment ?? "regular") as GstTreatment,
+            country: l.country ?? null,
+          } : null,
+          voucher_items: lines,
+        };
+      });
+      rows.sort((a, b) => a.voucher_date === b.voucher_date
+        ? a.voucher_number.localeCompare(b.voucher_number)
+        : a.voucher_date < b.voucher_date ? -1 : 1);
+      return rows;
+    },
+  );
 }
 
 export async function fetchCompanyMeta(companyId: string): Promise<CompanyMeta> {
-  const { data } = await supabase
-    .from("companies")
-    .select("name, gstin, state_code")
-    .eq("id", companyId)
-    .maybeSingle();
-  return {
-    name: data?.name ?? "",
-    gstin: data?.gstin ?? null,
-    state_code: data?.state_code ?? null,
-  };
+  return withCacheFallback<CompanyMeta>(
+    async () => {
+      const { data } = await supabase
+        .from("companies")
+        .select("name, gstin, state_code")
+        .eq("id", companyId)
+        .maybeSingle();
+      return {
+        name: data?.name ?? "",
+        gstin: data?.gstin ?? null,
+        state_code: data?.state_code ?? null,
+      };
+    },
+    async () => {
+      const rows = await readCompanies();
+      const c = (rows as any[]).find((r) => String(r.id) === companyId);
+      return {
+        name: c?.name ?? "",
+        gstin: c?.gstin ?? null,
+        state_code: c?.state_code ?? null,
+      };
+    },
+  );
 }
 
 export interface InwardSummaryRow {
