@@ -40,12 +40,15 @@ export async function readCompanySettings(companyId: string) {
 }
 
 export async function readLedgers(companyId: string) {
-  return offlineDb.cache_ledgers.where("company_id").equals(companyId).sortBy("name");
+  const rows = await offlineDb.cache_ledgers.where("company_id").equals(companyId).sortBy("name");
+  return (rows as any[]).filter((r) => r?.is_deleted !== true);
 }
 
 export async function readItems(companyId: string) {
-  return offlineDb.cache_items.where("company_id").equals(companyId).sortBy("name");
+  const rows = await offlineDb.cache_items.where("company_id").equals(companyId).sortBy("name");
+  return (rows as any[]).filter((r) => r?.is_deleted !== true);
 }
+
 
 export async function readAccountSubgroups(companyId: string) {
   return offlineDb.cache_account_subgroups.where("company_id").equals(companyId).toArray();
