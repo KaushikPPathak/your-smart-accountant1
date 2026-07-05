@@ -52,8 +52,11 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
   const [summary, setSummary] = useState<RestoreSummary | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTyped, setConfirmTyped] = useState("");
   const [dataRoot, setDataRoot] = useState<string | null>(null);
   const [backupFolder, setBackupFolderState] = useState<string | null>(null);
+  const [undoSnap, setUndoSnap] = useState<AvailableSnapshot | null>(null);
+  const [undoing, setUndoing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Resolve the OS-standard local data folder + load the user-chosen backup folder.
@@ -67,6 +70,18 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     setBackupFolderState(getBackupFolder(companyId));
     return () => { cancelled = true; };
   }, [companyId]);
+
+  // Poll for an available "undo restore" snapshot for this company.
+  useEffect(() => {
+    let cancelled = false;
+    async function refresh() {
+      const s = await getPreRestoreSnapshot(companyId);
+      if (!cancelled) setUndoSnap(s);
+    }
+    void refresh();
+    const id = window.setInterval(refresh, 60_000);
+    return () => { cancelled = true; window.clearInterval(id); };
+  }, [companyId, restoring, undoing]);
 
   async function chooseBackupFolder(): Promise<string | null> {
     const r = await pickFolderNative(backupFolder ?? undefined);
