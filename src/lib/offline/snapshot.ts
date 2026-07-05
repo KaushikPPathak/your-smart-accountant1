@@ -50,8 +50,18 @@ const HEAVY_TABLES = [
   "account_group_overrides",
   "vouchers",
   "bill_allocations",
+  "voucher_export_details",
+  "einvoice_details",
+  "period_locks",
+  "bom_templates",
+  "recurring_invoices",
 ] as const;
 const SNAPSHOT_TABLES = [...MINIMAL_TABLES, ...HEAVY_TABLES] as const;
+
+// Tables whose primary key is `voucher_id` upstream (1-to-1 with vouchers).
+// We mirror them keyed on voucher_id and also copy voucher_id -> id so the
+// generic "order by id" pagination path keeps working.
+const VOUCHER_ID_PK_TABLES = new Set<string>(["voucher_export_details", "einvoice_details"]);
 
 // Tables where `deleted_at` was added by the soft-delete migration. The
 // snapshot pulls tombstones (rows with deleted_at != null) via the delta
@@ -98,13 +108,24 @@ function dexieFor(table: SnapshotTable, db: any) {
     case "account_group_overrides": return db.cache_account_group_overrides;
     case "vouchers": return db.cache_vouchers;
     case "bill_allocations": return db.cache_bill_allocations;
+    case "voucher_export_details": return db.cache_voucher_export_details;
+    case "einvoice_details": return db.cache_einvoice_details;
+    case "period_locks": return db.cache_period_locks;
+    case "bom_templates": return db.cache_bom_templates;
+    case "recurring_invoices": return db.cache_recurring_invoices;
   }
 }
 
 function normalizeRowsForCache(table: SnapshotTable, rows: Array<Record<string, unknown>>) {
-  return table === "company_settings"
-    ? rows.map((r) => ({ ...r, id: (r as any).id ?? (r as any).company_id }))
-    : rows;
+  if (table === "company_settings") {
+    return rows.map((r) => ({ ...r, id: (r as any).id ?? (r as any).company_id }));
+  }
+  if (VOUCHER_ID_PK_TABLES.has(table)) {
+    // Mirror voucher_id -> id so the generic "id" pagination + verification
+    // path treats these like every other cache table.
+    return rows.map((r) => ({ ...r, id: (r as any).voucher_id }));
+  }
+  return rows;
 }
 
 function rowUpdatedAt(row: Record<string, unknown>, fallback: string) {
@@ -141,7 +162,9 @@ function dedupeRows(rows: CacheRow[]): CacheRow[] {
 }
 
 function tableOrderColumn(table: SnapshotTable): string {
-  return table === "company_settings" ? "company_id" : "id";
+  if (table === "company_settings") return "company_id";
+  if (VOUCHER_ID_PK_TABLES.has(table)) return "voucher_id";
+  return "id";
 }
 
 function latestUpdatedAt(rows: CacheRow[]): string {
@@ -225,6 +248,19 @@ async function fetchExactVoucherChildren(companyId: string, vouchers: CacheRow[]
   return { entries: dedupeRows(entries), items: dedupeRows(items) };
 }
 
+async function fetchBomTemplateLines(companyId: string, templates: CacheRow[]): Promise<CacheRow[]> {
+  const templateIds = templates.map((t) => String(t.id ?? "")).filter(Boolean);
+  if (templateIds.length === 0) return [];
+  const lines: CacheRow[] = [];
+  for (let i = 0; i < templateIds.length; i += 200) {
+    const slice = templateIds.slice(i, i + 200);
+    const { data, error } = await supabase.from("bom_template_lines").select("*").in("template_id", slice);
+    if (error) throw new Error(`bom_template_lines: ${error.message}`);
+    lines.push(...((data ?? []) as CacheRow[]).map((r) => ({ ...r, company_id: companyId })));
+  }
+  return dedupeRows(lines);
+}
+
 function verifySnapshotRows(rows: ExactSnapshotRows): SnapshotVerification {
   const problems: string[] = [];
   const tables: Record<string, SnapshotVerificationTable> = {};
@@ -278,6 +314,11 @@ async function localRowsForExactTable(db: any, companyId: string, table: string)
   if (table === "voucher_entries") return db.cache_voucher_entries.where("company_id").equals(companyId).toArray();
   if (table === "voucher_items") return db.cache_voucher_items.where("company_id").equals(companyId).toArray();
   if (table === "bill_allocations") return db.cache_bill_allocations.where("company_id").equals(companyId).toArray();
+  if (table === "voucher_export_details") return db.cache_voucher_export_details.where("company_id").equals(companyId).toArray();
+  if (table === "einvoice_details") return db.cache_einvoice_details.where("company_id").equals(companyId).toArray();
+  if (table === "period_locks") return db.cache_period_locks.where("company_id").equals(companyId).toArray();
+  if (table === "bom_templates") return db.cache_bom_templates.where("company_id").equals(companyId).toArray();
+  if (table === "recurring_invoices") return db.cache_recurring_invoices.where("company_id").equals(companyId).toArray();
   return [];
 }
 
@@ -318,6 +359,12 @@ async function writeExactSnapshotRows(companyId: string, rows: ExactSnapshotRows
       db.cache_voucher_entries,
       db.cache_voucher_items,
       db.cache_bill_allocations,
+      db.cache_voucher_export_details,
+      db.cache_einvoice_details,
+      db.cache_period_locks,
+      db.cache_bom_templates,
+      db.cache_bom_template_lines,
+      db.cache_recurring_invoices,
     ],
     async () => {
       await Promise.all([
@@ -332,6 +379,12 @@ async function writeExactSnapshotRows(companyId: string, rows: ExactSnapshotRows
         db.cache_voucher_entries.where("company_id").equals(companyId).delete(),
         db.cache_voucher_items.where("company_id").equals(companyId).delete(),
         db.cache_bill_allocations.where("company_id").equals(companyId).delete(),
+        db.cache_voucher_export_details.where("company_id").equals(companyId).delete(),
+        db.cache_einvoice_details.where("company_id").equals(companyId).delete(),
+        db.cache_period_locks.where("company_id").equals(companyId).delete(),
+        db.cache_bom_templates.where("company_id").equals(companyId).delete(),
+        db.cache_bom_template_lines.where("company_id").equals(companyId).delete(),
+        db.cache_recurring_invoices.where("company_id").equals(companyId).delete(),
       ]);
       if (rows.companies?.length) await db.cache_companies.bulkPut(rows.companies);
       if (rows.company_settings?.length) await db.cache_company_settings.bulkPut(rows.company_settings);
@@ -344,6 +397,12 @@ async function writeExactSnapshotRows(companyId: string, rows: ExactSnapshotRows
       if (rows.voucher_entries?.length) await db.cache_voucher_entries.bulkPut(rows.voucher_entries);
       if (rows.voucher_items?.length) await db.cache_voucher_items.bulkPut(rows.voucher_items);
       if (rows.bill_allocations?.length) await db.cache_bill_allocations.bulkPut(rows.bill_allocations);
+      if (rows.voucher_export_details?.length) await db.cache_voucher_export_details.bulkPut(rows.voucher_export_details);
+      if (rows.einvoice_details?.length) await db.cache_einvoice_details.bulkPut(rows.einvoice_details);
+      if (rows.period_locks?.length) await db.cache_period_locks.bulkPut(rows.period_locks);
+      if (rows.bom_templates?.length) await db.cache_bom_templates.bulkPut(rows.bom_templates);
+      if (rows.bom_template_lines?.length) await db.cache_bom_template_lines.bulkPut(rows.bom_template_lines);
+      if (rows.recurring_invoices?.length) await db.cache_recurring_invoices.bulkPut(rows.recurring_invoices);
     },
   );
 }
@@ -356,6 +415,7 @@ async function pullExactCompanySnapshot(companyId: string): Promise<{ pulled: Re
   const children = await fetchExactVoucherChildren(companyId, rows.vouchers ?? []);
   rows.voucher_entries = children.entries;
   rows.voucher_items = children.items;
+  rows.bom_template_lines = await fetchBomTemplateLines(companyId, rows.bom_templates ?? []);
 
   const preflight = verifySnapshotRows(rows);
   if (!preflight.ok) {
@@ -638,6 +698,20 @@ export async function pullCompanySnapshot(
           } catch (e) {
             result.errors.voucher_children = e instanceof Error ? e.message : String(e);
           }
+          try {
+            // BOM template lines have no updated_at upstream, so we refresh
+            // lines for every cached template on each delta pull. Templates
+            // are small (dozens per company), so this stays cheap.
+            const cachedTemplates = await db.cache_bom_templates.where("company_id").equals(companyId).toArray();
+            const lines = await fetchBomTemplateLines(companyId, cachedTemplates);
+            await db.transaction("rw", db.cache_bom_template_lines, async () => {
+              await db.cache_bom_template_lines.where("company_id").equals(companyId).delete();
+              if (lines.length) await db.cache_bom_template_lines.bulkPut(lines);
+            });
+            result.pulled.bom_template_lines = lines.length;
+          } catch (e) {
+            result.errors.bom_template_lines = e instanceof Error ? e.message : String(e);
+          }
         } catch (e) {
           result.errors.snapshot = e instanceof Error ? e.message : String(e);
         }
@@ -750,6 +824,12 @@ export async function getOfflineCacheCounts(): Promise<Record<string, number>> {
     ["voucher_entries", db.cache_voucher_entries],
     ["voucher_items", db.cache_voucher_items],
     ["bill_allocations", db.cache_bill_allocations],
+    ["voucher_export_details", db.cache_voucher_export_details],
+    ["einvoice_details", db.cache_einvoice_details],
+    ["period_locks", db.cache_period_locks],
+    ["bom_templates", db.cache_bom_templates],
+    ["bom_template_lines", db.cache_bom_template_lines],
+    ["recurring_invoices", db.cache_recurring_invoices],
   ];
   const out: Record<string, number> = {};
   await Promise.all(tables.map(async ([k, t]) => {
@@ -780,6 +860,12 @@ export async function resetSnapshotCache(): Promise<void> {
       db.cache_voucher_entries,
       db.cache_voucher_items,
       db.cache_bill_allocations,
+      db.cache_voucher_export_details,
+      db.cache_einvoice_details,
+      db.cache_period_locks,
+      db.cache_bom_templates,
+      db.cache_bom_template_lines,
+      db.cache_recurring_invoices,
       db.sync_cursors,
       db.meta,
     ],
@@ -796,6 +882,12 @@ export async function resetSnapshotCache(): Promise<void> {
         db.cache_voucher_entries.clear(),
         db.cache_voucher_items.clear(),
         db.cache_bill_allocations.clear(),
+        db.cache_voucher_export_details.clear(),
+        db.cache_einvoice_details.clear(),
+        db.cache_period_locks.clear(),
+        db.cache_bom_templates.clear(),
+        db.cache_bom_template_lines.clear(),
+        db.cache_recurring_invoices.clear(),
         db.sync_cursors.clear(),
         // Clear only the exact-done markers so the next full sync repeats the
         // guaranteed full replace instead of taking the delta fast path.
@@ -804,4 +896,5 @@ export async function resetSnapshotCache(): Promise<void> {
     },
   );
 }
+
 

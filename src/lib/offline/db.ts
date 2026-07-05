@@ -83,6 +83,12 @@ class OfflineDatabase extends Dexie {
   cache_voucher_entries!: Table<any, any>;
   cache_voucher_items!: Table<any, any>;
   cache_bill_allocations!: Table<any, any>;
+  cache_voucher_export_details!: Table<any, any>;
+  cache_einvoice_details!: Table<any, any>;
+  cache_period_locks!: Table<any, any>;
+  cache_bom_templates!: Table<any, any>;
+  cache_bom_template_lines!: Table<any, any>;
+  cache_recurring_invoices!: Table<any, any>;
   outbox!: Table<any, any>;
   dead_letter!: Table<any, any>;
   sync_cursors!: Table<any, any>;
@@ -119,6 +125,20 @@ class OfflineDatabase extends Dexie {
       // queue. Users can inspect / retry / discard from the Data Sync screen.
       dead_letter: "++id, moved_at, company_id, table",
     });
+    this.version(4).stores({
+      // Additional cache tables so more of the app is usable offline:
+      // reprint export invoices, view e-invoice IRN/QR, enforce FY-locks,
+      // create manufacturing vouchers from BOM templates, and see recurring
+      // invoice schedules. voucher_export_details / einvoice_details use
+      // voucher_id as their primary key upstream — mirrored here so the
+      // by-id upserts work identically to the sibling cache tables.
+      cache_voucher_export_details: "voucher_id, company_id, updated_at",
+      cache_einvoice_details: "voucher_id, company_id, updated_at",
+      cache_period_locks: "id, company_id, updated_at, return_type, period",
+      cache_bom_templates: "id, company_id, output_item_id, updated_at",
+      cache_bom_template_lines: "id, template_id, company_id",
+      cache_recurring_invoices: "id, company_id, updated_at, is_active",
+    });
   }
 }
 
@@ -154,6 +174,8 @@ function makeStubDb(): OfflineDatabase {
     "cache_ledgers", "cache_items", "cache_account_subgroups",
     "cache_ledger_group_mappings", "cache_account_group_overrides",
     "cache_vouchers", "cache_voucher_entries", "cache_voucher_items", "cache_bill_allocations",
+    "cache_voucher_export_details", "cache_einvoice_details", "cache_period_locks",
+    "cache_bom_templates", "cache_bom_template_lines", "cache_recurring_invoices",
     "outbox", "dead_letter", "sync_cursors", "account_creds", "meta",
   ];
   const stub: Record<string, unknown> = {
