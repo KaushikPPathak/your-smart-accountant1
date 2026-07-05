@@ -1,18 +1,53 @@
 name: Build Desktop & Mobile
 
-# Run manually from the Actions tab, or automatically on version tags (v1.0.0 etc).
+# Runs on:
+#  - every push to main            → uploads artifacts to the run (downloadable ~90 days)
+#  - every pull request            → verifies build stays green
+#  - manual dispatch (Actions tab) → same as above
+#  - version tags (v1.2.3)         → additionally publishes a public GitHub Release
 on:
-  workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  # ─────────────────────────────────────────────
+  # Stamp a unique version onto every build so it's obvious
+  # which build a downloaded installer came from.
+  # ─────────────────────────────────────────────
+  version:
+    name: Compute build version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        shell: bash
+        run: |
+          BASE=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            OUT="${GITHUB_REF#refs/tags/v}"
+          else
+            SHA=$(git rev-parse --short HEAD)
+            OUT="${BASE}-build.${GITHUB_RUN_NUMBER}+${SHA}"
+          fi
+          echo "version=$OUT" >> "$GITHUB_OUTPUT"
+          echo "Build version: $OUT"
+
   # ─────────────────────────────────────────────
   # Windows installer (.msi + .exe via NSIS) — Tauri
   # ─────────────────────────────────────────────
   windows:
     name: Windows (.msi + .exe)
+    needs: version
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +64,19 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
+          key: win-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Stamp version ${{ needs.version.outputs.version }}
+        shell: bash
+        run: |
+          node -e "
+            const fs=require('fs');
+            const p='src-tauri/tauri.conf.json';
+            const j=JSON.parse(fs.readFileSync(p,'utf8'));
+            j.version='${{ needs.version.outputs.version }}';
+            fs.writeFileSync(p, JSON.stringify(j,null,2));
+            console.log('Stamped', j.version);
+          "
 
       - name: Install JS deps
         run: bun install
@@ -45,12 +93,27 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
+      - name: Upload Windows build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-log
+          path: |
+            src-tauri/target/release/build/**/output
+            src-tauri/target/release/build/**/stderr
+          if-no-files-found: ignore
+
   # ─────────────────────────────────────────────
   # Android APK — Tauri v2 mobile
   # ─────────────────────────────────────────────
   android:
     name: Android (.apk)
+    needs: version
     runs-on: ubuntu-latest
+    env:
+      NDK_VERSION: "27.0.12077973"
+      NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/27.0.12077973
+      ANDROID_NDK_ROOT: ${{ github.workspace }}/android-sdk/ndk/27.0.12077973
     steps:
       - uses: actions/checkout@v4
 
@@ -68,8 +131,12 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android NDK
-        run: sdkmanager --install "ndk;27.0.12077973" "platforms;android-34" "build-tools;34.0.0"
+      - name: Install Android NDK + platform + build-tools
+        run: |
+          sdkmanager --install "ndk;${NDK_VERSION}" "platforms;android-34" "build-tools;34.0.0"
+          # Expose the resolved NDK path for later steps.
+          echo "NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
       - name: Setup Rust with Android targets
         uses: dtolnay/rust-toolchain@stable
@@ -80,20 +147,31 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
+          key: android-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Stamp version ${{ needs.version.outputs.version }}
+        run: |
+          node -e "
+            const fs=require('fs');
+            const p='src-tauri/tauri.conf.json';
+            const j=JSON.parse(fs.readFileSync(p,'utf8'));
+            j.version='${{ needs.version.outputs.version }}';
+            fs.writeFileSync(p, JSON.stringify(j,null,2));
+            console.log('Stamped', j.version);
+          "
 
       - name: Install JS deps
         run: bun install
 
-      - name: Init Tauri Android project
-        env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
-        run: bunx tauri android init
+      - name: Init Tauri Android project (idempotent)
+        run: |
+          if [ ! -d "src-tauri/gen/android" ]; then
+            bunx tauri android init
+          else
+            echo "Android project already initialized, skipping init."
+          fi
 
       - name: Build Android APK
-        env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
         run: bunx tauri android build --apk
 
       - name: Upload Android artifacts
@@ -103,12 +181,42 @@ jobs:
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
 
+      - name: Upload Android build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-log
+          path: |
+            src-tauri/gen/android/app/build/outputs/logs/**
+            src-tauri/gen/android/app/build/reports/**
+          if-no-files-found: ignore
+
+  # ─────────────────────────────────────────────
+  # Print artifact download hint into the run summary
+  # ─────────────────────────────────────────────
+  summary:
+    name: Build summary
+    needs: [version, windows, android]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write summary
+        run: |
+          {
+            echo "## Smart Accountant build ${{ needs.version.outputs.version }}"
+            echo ""
+            echo "- Windows: **${{ needs.windows.result }}**"
+            echo "- Android: **${{ needs.android.result }}**"
+            echo ""
+            echo "Scroll to the **Artifacts** section at the bottom of this run to download \`SmartAccountant-Windows\` and \`SmartAccountant-Android\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # ─────────────────────────────────────────────
   # On a version tag: publish a GitHub Release
   # ─────────────────────────────────────────────
   release:
     name: Publish GitHub Release
-    needs: [windows, android]
+    needs: [version, windows, android]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
