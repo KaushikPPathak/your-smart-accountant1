@@ -248,6 +248,19 @@ async function fetchExactVoucherChildren(companyId: string, vouchers: CacheRow[]
   return { entries: dedupeRows(entries), items: dedupeRows(items) };
 }
 
+async function fetchBomTemplateLines(companyId: string, templates: CacheRow[]): Promise<CacheRow[]> {
+  const templateIds = templates.map((t) => String(t.id ?? "")).filter(Boolean);
+  if (templateIds.length === 0) return [];
+  const lines: CacheRow[] = [];
+  for (let i = 0; i < templateIds.length; i += 200) {
+    const slice = templateIds.slice(i, i + 200);
+    const { data, error } = await supabase.from("bom_template_lines").select("*").in("template_id", slice);
+    if (error) throw new Error(`bom_template_lines: ${error.message}`);
+    lines.push(...((data ?? []) as CacheRow[]).map((r) => ({ ...r, company_id: companyId })));
+  }
+  return dedupeRows(lines);
+}
+
 function verifySnapshotRows(rows: ExactSnapshotRows): SnapshotVerification {
   const problems: string[] = [];
   const tables: Record<string, SnapshotVerificationTable> = {};
