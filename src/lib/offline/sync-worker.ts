@@ -6,6 +6,7 @@ import { drainOutbox, queueSize } from "./outbox";
 import { refreshAllCachedCreds } from "./creds-cache";
 import { pullSnapshot } from "./snapshot";
 import { rememberNetworkBlocked } from "./cache-read";
+import { requestPersistentStorage } from "./storage-quota";
 
 let started = false;
 
@@ -96,6 +97,12 @@ export function startSyncWorker() {
   started = true;
 
   applyGlobalWorkerSecurityInterceptor();
+
+  // Ask the browser to keep our IndexedDB cache under storage pressure.
+  // Best-effort: some grant automatically, iOS Safari usually declines but
+  // still extends its 7-day eviction window.
+  void requestPersistentStorage();
+
 
   // Drain + pull whenever connectivity returns
   window.addEventListener("online", () => { void tick(); });
