@@ -595,19 +595,39 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
         </CardContent>
       </Card>
 
-      <AlertDialog open={confirmOpen} onOpenChange={(v) => { setConfirmOpen(v); if (!v) setPendingFile(null); }}>
+      <AlertDialog
+        open={confirmOpen}
+        onOpenChange={(v) => {
+          setConfirmOpen(v);
+          if (!v) { setPendingFile(null); setConfirmTyped(""); }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm restore</AlertDialogTitle>
             <AlertDialogDescription>
-              All ledgers, items, vouchers, postings, and allocations in <strong>{companyName}</strong>{" "}
-              will be deleted and replaced with the contents of <strong>{pendingFile?.name}</strong>.
-              This cannot be undone. Proceed?
+              All ledgers, items, vouchers, postings, and allocations in{" "}
+              <strong>{companyName}</strong> will be deleted and replaced with the
+              contents of <strong>{pendingFile?.name}</strong>. A safety snapshot
+              will be saved locally so you can undo within 24 hours. Type the
+              company name below to confirm.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-1.5 py-2">
+            <Label className="text-xs">Type <code>{companyName}</code> to confirm</Label>
+            <Input
+              value={confirmTyped}
+              onChange={(e) => setConfirmTyped(e.target.value)}
+              placeholder={companyName}
+              autoFocus
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={doRestore} disabled={restoring}>
+            <AlertDialogAction
+              onClick={doRestore}
+              disabled={restoring || confirmTyped.trim() !== companyName}
+            >
               {restoring ? "Restoring…" : "Yes, replace everything"}
             </AlertDialogAction>
           </AlertDialogFooter>
