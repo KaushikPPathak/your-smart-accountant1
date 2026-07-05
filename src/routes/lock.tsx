@@ -68,6 +68,11 @@ function LockScreen() {
         setUserOptions(cachedOpts);
         setAccountsExist(true);
         setTab("login");
+        // Preselect last-signed-in user so they only need to type the password.
+        const last = getLastUsername();
+        if (last && cachedOpts.some((o) => o.username === last)) {
+          setLoginUser(last);
+        }
         setBootLoading(false);
       }
 
