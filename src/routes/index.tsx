@@ -48,6 +48,19 @@ interface PickerCompany {
   has_password: boolean;
 }
 
+const companyFetchTimeout = <T,>(promise: PromiseLike<T>, ms: number): Promise<T | null> =>
+  Promise.race([promise, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
+
+function formatCachedCompanies(cachedData: any[]): PickerCompany[] {
+  return (cachedData || [])
+    .filter((c: any) => c?.id)
+    .map((c: any) => ({
+      id: String(c.id),
+      name: c.name || c.company_name || "Saved Company Workspace",
+      has_password: "has_password" in c ? Boolean(c.has_password) : false,
+    }));
+}
+
 function StartScreen() {
   const navigate = useNavigate();
   const { setActiveCompanyId } = useCompany();
@@ -72,81 +85,56 @@ function StartScreen() {
         const dbModule = await import("@/lib/offline/db");
         const db = dbModule.default || dbModule.offlineDb || (dbModule as any).db;
 
-        if (online) {
-          // 🌐 ONLINE: Fetch from cloud database
-          const { data, error } = await supabase
-            .from("companies_picker")
-            .select("id, name, has_password")
-            .order("name", { ascending: true });
+        const [pickerCache, snapshotCache] = await Promise.all([
+          db.companies.toArray().catch(() => []),
+          db.cache_companies.toArray().catch(() => []),
+        ]);
+        const merged = new Map<string, any>();
+        for (const c of pickerCache || []) if (c?.id) merged.set(String(c.id), c);
+        for (const c of snapshotCache || []) if (c?.id) merged.set(String(c.id), { ...(merged.get(String(c.id)) ?? {}), ...c });
 
-          if (error) throw error;
-          if (cancelled) return;
+        const cachedCompanies = formatCachedCompanies(Array.from(merged.values()));
+        if (cachedCompanies.length > 0 && !cancelled) {
+          setCompanies(cachedCompanies);
+          setLoading(false);
+        }
 
-          const fetchedCompanies = (data ?? []) as PickerCompany[];
-          setCompanies(fetchedCompanies);
+        if (!online) {
+          if (cachedCompanies.length === 0) toast.error("No offline data cache found. Please log in once while connected to the internet.");
+          return;
+        }
 
-          // 💾 Safe Cache: Save this structure to your local hard drive for offline mode
-          try {
-            const localMapping = fetchedCompanies.map(c => ({
+        const cloud = await companyFetchTimeout<{ data: PickerCompany[] | null; error: { message?: string } | null }>(
+          supabase.from("companies_picker").select("id, name, has_password").order("name", { ascending: true }) as PromiseLike<{ data: PickerCompany[] | null; error: { message?: string } | null }>,
+          cachedCompanies.length > 0 ? 1200 : 3500,
+        );
+        if (!cloud) {
+          if (cachedCompanies.length === 0) toast.error("Connection is slow — showing cached companies when available.");
+          return;
+        }
+        if (cloud.error) throw cloud.error;
+        if (cancelled) return;
+
+        const fetchedCompanies = (cloud.data ?? []) as PickerCompany[];
+        setCompanies(fetchedCompanies);
+        if (fetchedCompanies.length > 0) {
+          void db.companies.bulkPut(
+            fetchedCompanies.map(c => ({
               id: c.id,
               name: c.name,
               has_password: c.has_password,
               account_id: session?.user?.id || "local-user"
-            }));
-            await db.companies.bulkPut(localMapping);
-            console.log(`Cached ${localMapping.length} companies to local storage drive.`);
-          } catch (cacheErr) {
-            console.warn("Failed to update offline hard drive cache:", cacheErr);
-          }
-
-        } else {
-          // 🔌 OFFLINE FALLBACK: Read straight from your local hard drive folder
-          console.log("Offline mode detected. Querying local database structure...");
-          try {
-            const [pickerCache, snapshotCache] = await Promise.all([
-              db.companies.toArray().catch(() => []),
-              db.cache_companies.toArray().catch(() => []),
-            ]);
-            const merged = new Map<string, any>();
-            for (const c of pickerCache || []) {
-              if (c?.id) merged.set(String(c.id), c);
-            }
-            for (const c of snapshotCache || []) {
-              if (c?.id) merged.set(String(c.id), { ...(merged.get(String(c.id)) ?? {}), ...c });
-            }
-            const cachedData = Array.from(merged.values());
-            
-            if (cancelled) return;
-            
-            // Safe Parsing: Handles empty records or mismatched database column properties safely
-            const formattedLocal = (cachedData || []).map((c: any) => ({
-              id: c.id || String(Math.random()),
-              name: c.name || c.company_name || "Saved Company Workspace",
-              has_password: 'has_password' in c ? Boolean(c.has_password) : false
-            }));
-            
-            setCompanies(formattedLocal);
-            
-            if (formattedLocal.length > 0) {
-              toast.info("Running in offline standalone mode.");
-            } else {
-              toast.error("No offline data cache found. Please log in once while connected to the internet.");
-            }
-          } catch (dbErr) {
-            console.error("Local database retrieval crash handled:", dbErr);
-            const backupActiveId = localStorage.getItem("ym_active_company_id");
-            if (backupActiveId && !cancelled) {
-              setCompanies([
-                { id: backupActiveId, name: "Active Company (Offline Backup)", has_password: false }
-              ]);
-            } else {
-              toast.error("Offline database initialization delayed. Connect online once to re-sync.");
-            }
-          }
+            })),
+          ).catch(() => undefined);
         }
       } catch (e) {
         if (cancelled) return;
         console.error(e);
+        const backupActiveId = localStorage.getItem("ym_active_company_id");
+        if (backupActiveId) {
+          setCompanies([{ id: backupActiveId, name: "Active Company (Offline Backup)", has_password: false }]);
+          return;
+        }
         toast.error(
           e instanceof Error ? e.message : "Couldn't load companies — check your connection",
         );

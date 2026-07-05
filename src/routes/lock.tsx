@@ -13,7 +13,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { markUnlocked, type StaffRole } from "@/lib/staff-session";
 import { ensureTechSession } from "@/lib/tech-user";
-import { cacheAccountCredsFromCloud, verifyOfflineLogin } from "@/lib/offline/creds-cache";
+import { cacheAccountCredsFromCloud, verifyOfflineLogin, listCachedAccounts } from "@/lib/offline/creds-cache";
 import { isOnlineNow, pingOnline } from "@/lib/offline/online-status";
 import { consumeReturnTo } from "@/lib/return-to";
 
@@ -30,6 +30,9 @@ interface LoginUserOption {
 }
 
 const TYPE_MANUALLY = "__type_manually__";
+
+const withTimeout = <T,>(promise: PromiseLike<T>, ms: number, fallback: T): Promise<T> =>
+  Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
 
 function LockScreen() {
   const navigate = useNavigate();
@@ -58,60 +61,67 @@ function LockScreen() {
     setBootLoading(true);
     setSessionError(null);
     try {
+      // 1. Load local accounts immediately (parallel, instant)
+      const cached = await listCachedAccounts();
+      const cachedOpts = cached.map(c => ({ id: c.user_id, name: c.name, username: c.username, role: c.role }));
+      if (cachedOpts.length > 0) {
+        setUserOptions(cachedOpts);
+        setAccountsExist(true);
+        setTab("login");
+        setBootLoading(false);
+      }
+
       if (!isOnlineNow()) {
-        setAccountsExist(true);
-        setTab("login");
-        setTypingManually(true);
+        if (cachedOpts.length === 0) setTypingManually(true);
+        setBootLoading(false);
         return;
       }
 
-      const sess = await ensureTechSession(force);
+      // 2. Try network with aggressive timeout
+      const sess = await withTimeout(ensureTechSession(force), 1200, { ok: false, reason: "Network timeout" } as any);
+      
       if (!sess.ok) {
-        setSessionError(sess.reason || "Session expired");
-        setAccountsExist(true);
-        setTab("login");
-        setTypingManually(true);
-        return;
-      }
-
-      let { data, error } = await supabase.rpc("accounts_exist");
-      // Auto-retry once on JWT expiry — the persisted token may have died
-      // between ensureTechSession's check and this RPC.
-      if (error && /jwt|token/i.test(error.message ?? "")) {
-        const r = await ensureTechSession(true);
-        if (!r.ok) {
-          setSessionError(r.reason || "Session expired");
+        // Fall back to local only
+        if (cachedOpts.length === 0) {
+          setSessionError(sess.reason);
           setAccountsExist(true);
           setTab("login");
           setTypingManually(true);
-          return;
         }
-        ({ data, error } = await supabase.rpc("accounts_exist"));
+        return;
       }
-      if (error) throw error;
 
+      const { data, error } = await withTimeout<{ data: boolean | null; error: { message?: string } | null }>(
+        supabase.rpc("accounts_exist") as PromiseLike<{ data: boolean | null; error: { message?: string } | null }>,
+        1200,
+        { data: cachedOpts.length > 0, error: null }
+      );
+      if (error) throw error;
+      
       const exists = Boolean(data);
       setAccountsExist(exists);
       setTab(exists ? "login" : "signup");
 
       if (exists) {
-        const { data: list } = await (supabase as unknown as {
-          rpc: (fn: string) => Promise<{ data: LoginUserOption[] | null }>;
-        }).rpc("list_login_users");
-        const opts = list ?? [];
-        setUserOptions(opts);
-        if (opts.length === 0) setTypingManually(true);
+        const { data: list } = await withTimeout<{ data: LoginUserOption[] | null }>(
+          (supabase as unknown as { rpc: (fn: string) => PromiseLike<{ data: LoginUserOption[] | null }> }).rpc("list_login_users"),
+          1200,
+          { data: null }
+        );
+        if (list) {
+          setUserOptions(list);
+          if (list.length === 0) setTypingManually(true);
+        }
       }
     } catch (e) {
-      const msg = (e as { message?: string })?.message ?? "Couldn't load accounts";
-      setSessionError(msg);
+      console.warn("Boot network check failed, falling back to cache:", e);
       setAccountsExist(true);
       setTab("login");
-      setTypingManually(true);
     } finally {
       setBootLoading(false);
     }
   };
+
 
   useEffect(() => { void boot(); }, []);
 
@@ -136,17 +146,25 @@ function LockScreen() {
       const tryCloud = isOnlineNow();
       if (tryCloud) {
         try {
-          let { data, error } = await supabase.rpc("verify_account_login", {
-            _username: loginUser.trim(),
-            _password: loginPass,
-          });
+          let { data, error } = await withTimeout<any>(
+            supabase.rpc("verify_account_login", {
+              _username: loginUser.trim(),
+              _password: loginPass,
+            }) as PromiseLike<any>,
+            1800,
+            { data: null, error: { message: "Network timeout" } } as any,
+          );
           if (error && /jwt|token/i.test(error.message ?? "")) {
-            const r = await ensureTechSession(true);
+            const r = await withTimeout(ensureTechSession(true), 1200, { ok: false, reason: "Network timeout" } as any);
             if (r.ok) {
-              ({ data, error } = await supabase.rpc("verify_account_login", {
-                _username: loginUser.trim(),
-                _password: loginPass,
-              }));
+              ({ data, error } = await withTimeout<any>(
+                supabase.rpc("verify_account_login", {
+                  _username: loginUser.trim(),
+                  _password: loginPass,
+                }) as PromiseLike<any>,
+                1800,
+                { data: null, error: { message: "Network timeout" } } as any,
+              ));
             }
           }
           if (error) throw error;
@@ -181,8 +199,11 @@ function LockScreen() {
           navigate({ to: (consumeReturnTo() ?? "/app") as never });
           return;
         } catch (cloudErr) {
-          const reachable = await pingOnline();
-          if (reachable) throw cloudErr;
+          const msg = cloudErr instanceof Error ? cloudErr.message : String(cloudErr ?? "");
+          if (!/network timeout|failed to fetch|networkerror|offline/i.test(msg)) {
+            const reachable = await pingOnline();
+            if (reachable) throw cloudErr;
+          }
         }
       }
 

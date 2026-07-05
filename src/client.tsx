@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { getRouter } from "./router";
+import { setupAppShellCache } from "./lib/pwa-registration";
 import "./styles.css";
 
 // Ask the browser to keep our IndexedDB / cache data across eviction
@@ -14,6 +15,8 @@ if (typeof navigator !== "undefined" && navigator.storage?.persist) {
     }
   });
 }
+
+setupAppShellCache();
 
 const router = getRouter();
 const container = document.getElementById("root");

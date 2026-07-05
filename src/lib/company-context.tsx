@@ -43,6 +43,8 @@ interface CompanyContextValue {
 
 const CompanyContext = createContext<CompanyContextValue | undefined>(undefined);
 const ACTIVE_KEY = "ym_active_company_id";
+const FULL_SNAPSHOT_THROTTLE_MS = 10 * 60 * 1000;
+const fullSnapshotKey = (companyId: string) => `ym_full_snapshot_at:${companyId}`;
 
 const COMPANY_DEFAULTS: Omit<CompanyMembership["companies"], "id" | "name"> = {
   gstin: null,
@@ -227,10 +229,23 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     // Lazy hydrate heavy per-company tables (ledgers, items, vouchers,
     // voucher children) on demand — the background tick only pulls the
     // minimum companies + settings dataset.
-    if (activeCompanyId) {
-      import("@/lib/offline/snapshot")
-        .then((m) => m.pullCompanySnapshot(activeCompanyId, { full: true }))
-        .catch(() => undefined);
+    if (activeCompanyId && isOnlineNow()) {
+      const last = Number(localStorage.getItem(fullSnapshotKey(activeCompanyId)) ?? "0");
+      if (!last || Date.now() - last > FULL_SNAPSHOT_THROTTLE_MS) {
+        const hydrate = () => {
+          import("@/lib/offline/snapshot")
+            .then((m) => m.pullCompanySnapshot(activeCompanyId, { full: true, notify: false }))
+            .then((result) => {
+              if (result && Object.keys(result.errors).length === 0 && result.verification?.ok !== false) {
+                localStorage.setItem(fullSnapshotKey(activeCompanyId), String(Date.now()));
+              }
+            })
+            .catch(() => undefined);
+        };
+        const idle = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => void }).requestIdleCallback;
+        if (idle) idle(hydrate, { timeout: 5_000 });
+        else setTimeout(hydrate, 2_000);
+      }
     }
   }, [activeMembership, activeCompanyId]);
 
