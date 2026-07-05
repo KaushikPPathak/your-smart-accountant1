@@ -540,6 +540,27 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
               </div>
             </div>
           )}
+          {undoSnap && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs space-y-2">
+              <div className="flex items-start gap-2">
+                <Undo2 className="mt-0.5 h-4 w-4 text-amber-600 shrink-0" />
+                <div className="flex-1">
+                  <div className="font-medium">Undo last restore available</div>
+                  <div className="text-muted-foreground">
+                    A safety snapshot was taken automatically before the last restore
+                    ({new Date(undoSnap.createdAt).toLocaleString()}). You can revert
+                    for the next{" "}
+                    <strong>
+                      {Math.max(0, Math.round(undoSnap.expiresInMs / 3_600_000))}h
+                    </strong>.
+                  </div>
+                </div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => void doUndoRestore()} disabled={undoing}>
+                {undoing ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />Undoing…</> : <><Undo2 className="mr-2 h-3.5 w-3.5" />Undo restore</>}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
