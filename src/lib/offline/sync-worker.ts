@@ -98,6 +98,12 @@ export function startSyncWorker() {
 
   applyGlobalWorkerSecurityInterceptor();
 
+  // Ask the browser to keep our IndexedDB cache under storage pressure.
+  // Best-effort: some grant automatically, iOS Safari usually declines but
+  // still extends its 7-day eviction window.
+  void requestPersistentStorage();
+
+
   // Drain + pull whenever connectivity returns
   window.addEventListener("online", () => { void tick(); });
   window.addEventListener("offline", () => { rememberWorkMode("offline"); });
