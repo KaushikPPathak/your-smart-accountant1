@@ -8,6 +8,7 @@ import { pullSnapshot } from "./snapshot";
 import { rememberNetworkBlocked } from "./cache-read";
 import { requestPersistentStorage, startStorageWatcher } from "./storage-quota";
 import { drainEinvoiceQueue } from "./einvoice-queue";
+import { refreshSessionIfDue, warnIfSessionStale } from "./session-refresh";
 
 let started = false;
 
