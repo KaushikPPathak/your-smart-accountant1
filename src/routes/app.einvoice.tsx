@@ -88,6 +88,56 @@ function EinvoicePage() {
         </p>
       </div>
 
+      {queue.length > 0 && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-600" />
+                <span className="font-semibold text-sm">
+                  {queue.length} pending {queue.length === 1 ? "request" : "requests"} to the IRP / EWB portal
+                </span>
+              </div>
+              <Button size="sm" variant="outline" onClick={retryAll} disabled={draining}>
+                <RefreshCw className={`h-3 w-3 mr-1 ${draining ? "animate-spin" : ""}`} />
+                {draining ? "Retrying…" : "Retry now"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              These invoices were saved offline (or the portal was unreachable). They&apos;ll be generated automatically when the portal is reachable — no action needed.
+            </p>
+            <div className="rounded border divide-y">
+              {queue.map((q) => (
+                <div key={q.id} className="flex items-center justify-between p-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={q.status === "failed" ? "destructive" : "outline"}>
+                      {q.kind === "irn" ? "IRN" : "EWB"} · {q.status}
+                    </Badge>
+                    <span className="font-mono">{q.voucher_number || q.voucher_id.slice(0, 8)}</span>
+                    {q.attempts > 0 && (
+                      <span className="text-muted-foreground">· {q.attempts} {q.attempts === 1 ? "attempt" : "attempts"}</span>
+                    )}
+                    {q.last_error && q.status === "failed" && (
+                      <span className="text-destructive truncate max-w-[300px]" title={q.last_error}>· {q.last_error}</span>
+                    )}
+                  </div>
+                  <div className="flex gap-1">
+                    {q.status === "failed" && (
+                      <Button size="sm" variant="ghost" onClick={() => retryEinvoiceQueue(q.id!)}>
+                        <RefreshCw className="h-3 w-3" />
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => discardEinvoiceQueue(q.id!)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <Table>
