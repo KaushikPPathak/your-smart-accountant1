@@ -130,6 +130,9 @@ async function executeOutboxRow(row: OutboxRow): Promise<void> {
   }
 }
 
+let draining = false;
+
+
 // A row is "poison" when the server rejected it for a reason that will not
 // resolve itself on retry: RLS denies, validation/constraint violation,
 // invalid input, foreign-key gap, etc. These get moved to `dead_letter`
