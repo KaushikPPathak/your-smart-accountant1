@@ -810,6 +810,12 @@ export async function getOfflineCacheCounts(): Promise<Record<string, number>> {
     ["voucher_entries", db.cache_voucher_entries],
     ["voucher_items", db.cache_voucher_items],
     ["bill_allocations", db.cache_bill_allocations],
+    ["voucher_export_details", db.cache_voucher_export_details],
+    ["einvoice_details", db.cache_einvoice_details],
+    ["period_locks", db.cache_period_locks],
+    ["bom_templates", db.cache_bom_templates],
+    ["bom_template_lines", db.cache_bom_template_lines],
+    ["recurring_invoices", db.cache_recurring_invoices],
   ];
   const out: Record<string, number> = {};
   await Promise.all(tables.map(async ([k, t]) => {
