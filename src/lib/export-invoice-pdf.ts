@@ -7,6 +7,15 @@ import type jsPDFType from "jspdf";
 import type autoTableType from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import { saveExport } from "@/lib/desktop-save";
+import {
+  withCacheFallback,
+  readCompanies,
+  readCompanySettings,
+  readVoucherItems,
+  readLedgers,
+  readItems,
+} from "@/lib/offline/cache-read";
+import { offlineDb } from "@/lib/offline/db";
 
 const r = (paise: number) => (paise / 100).toFixed(2);
 const fmt = (n: number, d = 2) =>
