@@ -7,6 +7,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { amountInWords, formatINR } from "@/lib/money";
 import { saveExport } from "@/lib/desktop-save";
 import { exportCurrencySymbol } from "@/lib/export-format";
+import {
+  withCacheFallback,
+  readCompanies,
+  readCompanySettings,
+  readVoucherItems,
+  readLedgers,
+  readItems,
+} from "@/lib/offline/cache-read";
+import { offlineDb } from "@/lib/offline/db";
 
 const r = (paise: number) => (paise / 100).toFixed(2);
 
