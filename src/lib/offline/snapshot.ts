@@ -698,6 +698,20 @@ export async function pullCompanySnapshot(
           } catch (e) {
             result.errors.voucher_children = e instanceof Error ? e.message : String(e);
           }
+          try {
+            // BOM template lines have no updated_at upstream, so we refresh
+            // lines for every cached template on each delta pull. Templates
+            // are small (dozens per company), so this stays cheap.
+            const cachedTemplates = await db.cache_bom_templates.where("company_id").equals(companyId).toArray();
+            const lines = await fetchBomTemplateLines(companyId, cachedTemplates);
+            await db.transaction("rw", db.cache_bom_template_lines, async () => {
+              await db.cache_bom_template_lines.where("company_id").equals(companyId).delete();
+              if (lines.length) await db.cache_bom_template_lines.bulkPut(lines);
+            });
+            result.pulled.bom_template_lines = lines.length;
+          } catch (e) {
+            result.errors.bom_template_lines = e instanceof Error ? e.message : String(e);
+          }
         } catch (e) {
           result.errors.snapshot = e instanceof Error ? e.message : String(e);
         }
