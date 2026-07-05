@@ -158,6 +158,16 @@ async function setCursor(companyId: string, table: string, last_updated_at: stri
   await db.sync_cursors.put(row);
 }
 
+// Cap the initial voucher pull to the last 12 months so first-run hydration
+// stays quick on companies with years of history. Older vouchers still stream
+// in incrementally via the cursor-based `pullTable` path.
+const VOUCHER_INITIAL_MONTHS = 12;
+function voucherInitialCutoffISO(): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - VOUCHER_INITIAL_MONTHS);
+  return d.toISOString().slice(0, 10);
+}
+
 async function fetchExactTableRows(table: SnapshotTable, companyId: string): Promise<CacheRow[]> {
   const rows: CacheRow[] = [];
   let from = 0;
@@ -168,6 +178,7 @@ async function fetchExactTableRows(table: SnapshotTable, companyId: string): Pro
       .range(from, from + PAGE_SIZE - 1)
       .order(tableOrderColumn(table), { ascending: true });
     q = isCompaniesTable ? q.eq("id", companyId) : q.eq("company_id", companyId);
+    if (table === "vouchers") q = q.gte("voucher_date", voucherInitialCutoffISO());
     const { data, error } = await q;
     if (error) throw new Error(`${table}: ${error.message}`);
     const page = normalizeRowsForCache(table, (data ?? []) as CacheRow[]);
