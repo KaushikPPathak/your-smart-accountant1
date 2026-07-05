@@ -57,7 +57,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         // Read any cached session immediately so the lock screen unblocks fast.
-        const { data } = await supabase.auth.getSession();
+        // Add a small timeout for the initial session check to avoid blocking render on slow networks.
+        const { data } = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<{data: {session: null}}>((resolve) => setTimeout(() => resolve({data: {session: null}}), 1200))
+        ]);
         if (data.session) {
           activeSession = data.session;
           setSession(data.session);

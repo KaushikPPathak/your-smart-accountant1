@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { getRouter } from "./router";
+import { registerSW } from "virtual:pwa-register";
 import "./styles.css";
 
 // Ask the browser to keep our IndexedDB / cache data across eviction
@@ -12,6 +13,11 @@ if (typeof navigator !== "undefined" && navigator.storage?.persist) {
         /* user denied or unsupported — ignore */
       });
     }
+n// Register PWA service worker for offline asset caching
+if (typeof window !== "undefined") {
+  registerSW({ immediate: true });
+}
+
   });
 }
 

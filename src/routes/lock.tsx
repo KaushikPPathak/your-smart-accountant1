@@ -61,60 +61,64 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<
     setBootLoading(true);
     setSessionError(null);
     try {
+      // 1. Load local accounts immediately (parallel, instant)
+      const cached = await listCachedAccounts();
+      const cachedOpts = cached.map(c => ({ id: c.user_id, name: c.name, username: c.username, role: c.role }));
+      if (cachedOpts.length > 0) {
+        setUserOptions(cachedOpts);
+        setAccountsExist(true);
+      }
+
       if (!isOnlineNow()) {
-        setAccountsExist(true);
-        setTab("login");
-        setTypingManually(true);
+        if (cachedOpts.length === 0) setTypingManually(true);
+        setBootLoading(false);
         return;
       }
 
-      const sess = await ensureTechSession(force);
+      // 2. Try network with aggressive timeout
+      const sess = await withTimeout(ensureTechSession(force), 2500, { ok: false, reason: "Network timeout" } as any);
+      
       if (!sess.ok) {
-        setSessionError(sess.reason || "Session expired");
-        setAccountsExist(true);
-        setTab("login");
-        setTypingManually(true);
-        return;
-      }
-
-      let { data, error } = await supabase.rpc("accounts_exist");
-      // Auto-retry once on JWT expiry — the persisted token may have died
-      // between ensureTechSession's check and this RPC.
-      if (error && /jwt|token/i.test(error.message ?? "")) {
-        const r = await ensureTechSession(true);
-        if (!r.ok) {
-          setSessionError(r.reason || "Session expired");
+        // Fall back to local only
+        if (cachedOpts.length === 0) {
+          setSessionError(sess.reason);
           setAccountsExist(true);
           setTab("login");
           setTypingManually(true);
-          return;
         }
-        ({ data, error } = await supabase.rpc("accounts_exist"));
+        return;
       }
-      if (error) throw error;
 
+      const { data, error } = await withTimeout(
+        supabase.rpc("accounts_exist"),
+        2000,
+        { data: cachedOpts.length > 0, error: null }
+      );
+      
       const exists = Boolean(data);
       setAccountsExist(exists);
       setTab(exists ? "login" : "signup");
 
       if (exists) {
-        const { data: list } = await (supabase as unknown as {
-          rpc: (fn: string) => Promise<{ data: LoginUserOption[] | null }>;
-        }).rpc("list_login_users");
-        const opts = list ?? [];
-        setUserOptions(opts);
-        if (opts.length === 0) setTypingManually(true);
+        const { data: list } = await withTimeout(
+          (supabase as any).rpc("list_login_users"),
+          2000,
+          { data: null }
+        );
+        if (list) {
+          setUserOptions(list);
+          if (list.length === 0) setTypingManually(true);
+        }
       }
     } catch (e) {
-      const msg = (e as { message?: string })?.message ?? "Couldn't load accounts";
-      setSessionError(msg);
+      console.warn("Boot network check failed, falling back to cache:", e);
       setAccountsExist(true);
       setTab("login");
-      setTypingManually(true);
     } finally {
       setBootLoading(false);
     }
   };
+
 
   useEffect(() => { void boot(); }, []);
 
