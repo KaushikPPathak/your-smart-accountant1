@@ -179,6 +179,10 @@ async function fetchExactTableRows(table: SnapshotTable, companyId: string): Pro
       .order(tableOrderColumn(table), { ascending: true });
     q = isCompaniesTable ? q.eq("id", companyId) : q.eq("company_id", companyId);
     if (table === "vouchers") q = q.gte("voucher_date", voucherInitialCutoffISO());
+    // Exact snapshot is a full replace — soft-deleted rows must not come
+    // back into the local cache. The incremental delta path below still
+    // pulls them (as tombstones) so cross-device deletes propagate.
+    if (SOFT_DELETE_TABLES.has(table)) q = q.is("deleted_at", null);
     const { data, error } = await q;
     if (error) throw new Error(`${table}: ${error.message}`);
     const page = normalizeRowsForCache(table, (data ?? []) as CacheRow[]);
