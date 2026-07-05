@@ -349,7 +349,10 @@ function VoucherEditPage() {
     if (!confirm(`Delete ${voucher.voucher_number}? This cannot be undone.`)) return;
     await supabase.from("voucher_entries").delete().eq("voucher_id", voucher.id);
     await supabase.from("voucher_items").delete().eq("voucher_id", voucher.id);
-    const { error } = await supabase.from("vouchers").delete().eq("id", voucher.id);
+    // Soft delete the parent so multi-device delta sync can propagate it.
+    const { error } = await supabase.from("vouchers")
+      .update({ deleted_at: new Date().toISOString() } as never)
+      .eq("id", voucher.id);
     if (error) {
       toast.error(error.message);
       return;
