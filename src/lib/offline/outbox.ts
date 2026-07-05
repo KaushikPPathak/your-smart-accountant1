@@ -125,10 +125,33 @@ async function executeOutboxRow(row: OutboxRow): Promise<void> {
   
   else if (row.op === "delete") {
     const p = row.payload as { id: string };
-    const { error } = await q.delete().eq("id", p.id);
-    if (error) throw new Error(error.message);
+    // Soft-delete tables: leave a tombstone (deleted_at = now) so other
+    // devices learn about the delete on their next delta sync. The local
+    // cache is pruned by the caller as it was for hard deletes.
+    if (SOFT_DELETE_TABLES.has(row.table)) {
+      const { error } = await q
+        .update({ deleted_at: new Date().toISOString() } as never)
+        .eq("id", p.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await q.delete().eq("id", p.id);
+      if (error) throw new Error(error.message);
+    }
   }
 }
+
+// Tables where `deleted_at` was added by the soft-delete migration. Delete
+// ops targeting these tables become tombstone UPDATEs on the server so the
+// delete propagates to other devices via the delta pull.
+const SOFT_DELETE_TABLES = new Set<string>([
+  "ledgers",
+  "items",
+  "vouchers",
+  "account_subgroups",
+  "ledger_group_mappings",
+  "account_group_overrides",
+]);
+
 
 let draining = false;
 
