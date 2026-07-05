@@ -1,41 +1,88 @@
-## Goal
-Apply a consistent golden-themed design system across all pages by updating semantic tokens in `src/styles.css`, then auditing components to ensure they consume tokens (no hardcoded colors).
 
-## Palette (Golden)
-- Primary: rich gold `oklch(0.78 0.15 85)` (~#E0B53C)
-- Primary deep (sidebar/headers): warm bronze `oklch(0.35 0.06 70)` (~#5C4A2A)
-- Accent CTA: amber-gold `oklch(0.72 0.17 70)` (~#D99A2B)
-- Background: warm ivory `oklch(0.985 0.008 85)`
-- Foreground: deep espresso `oklch(0.22 0.02 70)`
-- Muted/border: soft champagne tints
-- Dark mode: charcoal bg with gold primary preserved
+# Plan — Run YourMehtaji fully offline (no internet required)
 
-## Changes
+Goal: the user can open the app with the network cable pulled, view masters, create/edit vouchers, print, and see reports. When internet returns, everything syncs to the cloud automatically. No feature should throw "not synced yet" errors in normal use.
 
-### 1. `src/styles.css` — single source of truth
-- Replace `:root` and `.dark` token values (teal/amber → gold/bronze) for: `--background`, `--foreground`, `--primary`, `--primary-foreground`, `--secondary`, `--accent`, `--muted`, `--border`, `--ring`, `--card`, `--popover`, plus sidebar tokens (`--sidebar-background`, `--sidebar-primary`, `--sidebar-accent`, `--sidebar-border`).
-- Update brand gradient (`--gradient-primary`) and elegant shadow (`--shadow-elegant`) to derive from gold.
-- Keep semantic names identical — no component refactor needed for token-using code.
+The infra is already partially there (`src/lib/offline/*`, `outbox.ts`, `voucher-executors.ts`, `snapshot.ts`, `sync-worker.ts`). This plan finishes it and makes offline the default path.
 
-### 2. Typography tokens (consistency pass)
-- Add `--font-display` and `--font-sans` in `@theme` (Fraunces for headings, Inter for body) and load via `<link>` in `src/routes/__root.tsx`.
-- Apply `font-display` on h1–h3 via a base rule in `styles.css`.
+---
 
-### 3. Button consistency
-- Verify `src/components/ui/button.tsx` variants (`default`, `secondary`, `outline`, `ghost`, `destructive`) all resolve through tokens — no edits if already token-based; if any hardcoded class found, swap to tokens.
+## 1. Offline data store (IndexedDB is the source of truth)
 
-### 4. Hardcoded color audit (UI-only sweep)
-- Ripgrep for `bg-white`, `text-black`, `bg-slate-`, `text-teal-`, `bg-amber-`, `#` hex literals inside `src/components/**` and `src/routes/**`.
-- Replace stragglers with semantic tokens (`bg-card`, `text-foreground`, `bg-primary`, etc.). Limited to presentation; no logic/schema changes.
+- Extend `src/lib/offline/db.ts` (Dexie) with full tables for: `companies`, `ledgers`, `groups`, `items`, `godowns`, `units`, `vouchers`, `voucher_items`, `voucher_postings`, `bom_templates`, `recurring`, `bank_txns`, `period_locks`, `outbox`, `sync_meta`.
+- Each row carries `local_id` (uuid), optional `remote_id`, `updated_at`, `dirty` flag, `deleted` flag (soft delete), `company_id`.
+- Add a `sync_meta` table storing per-table `last_pulled_at` cursor.
+- Migrate current partial store; keep the existing `outbox` shape.
 
-### 5. Sidebar + headers
-- Ensure `AppSidebar.tsx` uses `bg-sidebar text-sidebar-foreground` and active state uses `bg-sidebar-accent` — adjust only if it currently hardcodes teal/amber classes left over from the previous repaint.
+## 2. Read path — everything reads local first
 
-## Out of scope
-- No business logic, schema, voucher, or sync changes.
-- No new components or routes.
-- Dark mode tuned but not redesigned.
+- Introduce `src/lib/offline/repo/*.ts` (one file per entity: `ledgers.ts`, `items.ts`, `vouchers.ts`, …) exposing `list()`, `get(id)`, `create()`, `update()`, `remove()`.
+- Repos always read/write Dexie. Writes also enqueue an outbox row.
+- Refactor route loaders and components (`app.ledgers.tsx`, `app.items.tsx`, `app.vouchers.tsx`, voucher forms, reports) to call repos instead of Supabase directly.
+- Voucher form ledger/item pickers use the local Dexie list — fixes the current "ledger not synced yet" error, because the picker and the executor share one store.
 
-## Verification
-- Build passes.
-- Playwright screenshot of `/app`, `/app/vouchers/new/purchase`, `/app/reports` confirming gold primary, bronze sidebar, ivory background, consistent button styling.
+## 3. Write path — outbox + executors
+
+- Every mutation:
+  1. Write to Dexie (optimistic, immediately visible).
+  2. Push an outbox job `{op, table, local_id, payload, deps:[local_ids]}`.
+- Extend `voucher-executors.ts` to cover all entities (already handles vouchers). Executors translate `local_id → remote_id` using a local id-map before hitting Supabase, so a voucher created offline referencing an offline-created ledger will resolve correctly once both are pushed.
+- `sync-worker.ts`: on `online` event and every 30s, drain outbox in dependency order; on success stamp `remote_id` back onto the local row.
+
+## 4. Pull / reconcile
+
+- New `src/lib/offline/pull.ts`: for each table, `select * where updated_at > last_pulled_at`, upsert into Dexie, advance cursor.
+- Runs on: app boot (if online), after successful outbox drain, and via a "Sync now" button on `app.data-sync.tsx`.
+- Conflict rule: local `dirty` rows win until they're pushed; server wins otherwise (last-write-wins by `updated_at`).
+
+## 5. Initial hydration (first-run online snapshot)
+
+- After login while online, `snapshot.ts` bulk-downloads all masters + last 12 months of vouchers into Dexie so the user can go offline immediately.
+- Show a one-time progress screen: "Preparing offline copy…".
+
+## 6. Auth offline
+
+- Cache the Supabase session + a hashed PIN in Dexie (already partly in `creds-cache.ts`).
+- On boot without network: if a cached session exists and PIN matches, unlock the app in offline mode; skip Supabase calls.
+- Session refresh is deferred until the network is back.
+
+## 7. Reports & printing offline
+
+- Trial balance, day book, ledger, GSTR previews, receivables, cash/bank — all recomputed from local `voucher_postings`. No server calls.
+- PDF/print uses the existing client-side renderer; no change needed beyond pointing data queries at repos.
+- Features that inherently need internet (e-invoice IRN, e-way bill, GSTR filing, bank OCR upload, AI assistant) show a clear "Requires internet" state and queue the request to run when back online where it makes sense.
+
+## 8. App shell — installable & offline-capable
+
+- Web: enable `vite-plugin-pwa` with `generateSW`, `NetworkFirst` for HTML, `CacheFirst` for hashed assets, `injectRegister: null`. Registration wrapper (already stubbed in `pwa-registration.ts`) refuses to register in Lovable preview / iframe / dev, and supports `?sw=off` kill switch.
+- Tauri desktop build already exists; it's inherently offline. Keep the current guard so `virtual:pwa-register` is not touched in Tauri builds.
+- Add an "Offline" badge in the top bar driven by `online-status.ts`, plus an outbox counter ("3 changes pending sync").
+
+## 9. UX polish
+
+- Remove the blocking "ledger not synced" toast — replace with a non-blocking chip "will sync when online".
+- `app.data-sync.tsx`: show outbox queue, last pull time, per-table row counts, "Retry failed", "Force full re-pull".
+- Housekeeping page gets a "Clear local cache & re-download" button.
+
+## 10. Rollout order
+
+1. Extend Dexie schema + repos for ledgers & items (unblocks the current bug).
+2. Refactor voucher forms + `app.ledgers` / `app.items` to repos.
+3. Full outbox executor coverage + id-map.
+4. Pull/reconcile + initial snapshot.
+5. Reports read from local postings.
+6. PWA install + offline badge + sync panel polish.
+7. Offline auth (PIN) hardening.
+
+---
+
+## Out of scope (needs internet, will be gated)
+
+E-invoice IRN generation, e-way bill, GSTIN portal window, GSTR upload, AI assistant chat, bank statement OCR upload, Google/OAuth sign-in flows.
+
+## Technical notes
+
+- Dexie v4 with compound indexes on `[company_id+updated_at]` and `[company_id+deleted]`.
+- Outbox drains sequentially per company to preserve voucher numbering.
+- All Supabase calls are funnelled through `src/lib/offline/net.ts` which short-circuits when offline and enqueues instead.
+- No schema changes on the Supabase side are required; we only add `updated_at` triggers where missing (single migration).
