@@ -402,6 +402,7 @@ async function pullExactCompanySnapshot(companyId: string): Promise<{ pulled: Re
   const children = await fetchExactVoucherChildren(companyId, rows.vouchers ?? []);
   rows.voucher_entries = children.entries;
   rows.voucher_items = children.items;
+  rows.bom_template_lines = await fetchBomTemplateLines(companyId, rows.bom_templates ?? []);
 
   const preflight = verifySnapshotRows(rows);
   if (!preflight.ok) {
