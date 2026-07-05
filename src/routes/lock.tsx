@@ -103,7 +103,9 @@ function LockScreen() {
       );
       if (error) throw error;
       
-      const exists = Boolean(data);
+      // Never let a cloud "no accounts" response disable the login tab when
+      // we already have cached accounts locally — offline-first must win.
+      const exists = Boolean(data) || cachedOpts.length > 0;
       setAccountsExist(exists);
       setTab(exists ? "login" : "signup");
 
@@ -113,9 +115,10 @@ function LockScreen() {
           1200,
           { data: null }
         );
-        if (list) {
+        if (list && list.length > 0) {
           setUserOptions(list);
-          if (list.length === 0) setTypingManually(true);
+        } else if (cachedOpts.length === 0) {
+          setTypingManually(true);
         }
       }
     } catch (e) {
