@@ -33,6 +33,7 @@ import { FocusHintsProvider } from "@/components/fast-form/FocusHints";
 import { StatusBar } from "@/components/fast-form/StatusBar";
 import { BackupNudgeBanner } from "@/components/BackupNudgeBanner";
 import { OfflineStatusChip } from "@/components/OfflineStatusChip";
+import { InstallAppButton } from "@/components/InstallAppButton";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
@@ -239,6 +240,7 @@ function AppLayout() {
             <CompanySwitcher />
             <div className="ml-auto flex items-center gap-2">
               <OfflineStatusChip />
+              <InstallAppButton />
               <LanguageSwitcher compact />
               <CurrencySwitcher compact />
               <DateFormatSwitcher compact />
