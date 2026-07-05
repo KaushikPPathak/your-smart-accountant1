@@ -6,6 +6,14 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import type { XlsxSheet } from "@/lib/exporters";
+import {
+  readCompanies,
+  readItems,
+  readLedgers,
+  readVoucherItemsForCompany,
+  readVouchers,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 type VoucherTypeEnum = Database["public"]["Enums"]["voucher_type"];
 type SupplyNature = Database["public"]["Enums"]["supply_nature"];
