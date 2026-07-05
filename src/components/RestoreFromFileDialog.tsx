@@ -24,6 +24,7 @@ import {
   parseBackupFile, restoreCompanyBackup, type CompanyBackup,
 } from "@/lib/backup";
 import { runSemanticChecks } from "@/lib/semantic-checks";
+import { savePreRestoreSnapshot } from "@/lib/restore-safety";
 
 interface Membership {
   company_id: string;
