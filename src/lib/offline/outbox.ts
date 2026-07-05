@@ -149,6 +149,19 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
       try {
         await executeOutboxRow(row);
         if (row.id !== undefined) await db.outbox.delete(row.id);
+        // Stamp local master cache as synced so UI badges reflect reality.
+        try {
+          if ((row.op === "insert" || row.op === "update") && (row.table === "ledgers" || row.table === "items")) {
+            const table = row.table === "ledgers" ? db.cache_ledgers : db.cache_items;
+            const id = row.op === "insert"
+              ? (row.payload as { id?: string })?.id
+              : (row.payload as { id?: string })?.id;
+            if (id) {
+              const existing = await table.get(id);
+              if (existing) await table.put({ ...existing, is_synced: true });
+            }
+          }
+        } catch { /* cosmetic; ignore */ }
         pushed += 1;
         emit();
       } catch (e) {
@@ -159,9 +172,14 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number }>
             last_error: e instanceof Error ? e.message : String(e),
           });
         }
-        break;
+        // Keep going — one bad row (e.g. a voucher whose party ledger was
+        // manually deleted on the cloud) must not block every other pending
+        // change. The row stays queued with attempts++ for the user to retry
+        // or clear from the Data Sync screen.
+        continue;
       }
     }
+
     
     if (rows.length > 0 && rows[0].company_id) {
       const { syncEssentialMasters } = await import("./masters");
