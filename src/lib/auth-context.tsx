@@ -46,6 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return newSession;
       });
       if (newSession && event === "SIGNED_IN") {
+        // Seed the "last successful cloud handshake" clock so the offline
+        // session-refresh watcher never false-warns immediately after a
+        // fresh sign-in.
+        import("./offline/session-refresh").then(m => m.markSessionFresh()).catch(() => undefined);
         initSyncEngine(newSession);
       }
     });
@@ -73,7 +77,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } finally {
         // Release the UI as soon as we know the cached state. Don't block on network.
         setLoading(false);
-        if (activeSession) initSyncEngine(activeSession);
+        if (activeSession) {
+          // Cached session already exists — seed the refresh clock so the
+          // auto-refresh watcher knows when this device last talked to the cloud.
+          import("./offline/session-refresh").then(m => m.markSessionFresh()).catch(() => undefined);
+          initSyncEngine(activeSession);
+        }
       }
 
       // Background: only attempt tech sign-in if we're actually online and have no session.
