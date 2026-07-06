@@ -351,6 +351,20 @@ function SettingsPage() {
       <DataLocationCard />
       <CloudBackupCard />
 
+      <Card>
+        <CardHeader><CardTitle className="text-base">Diagnostics</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            View errors and failures recorded on this device. Nothing is sent to any server.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => navigate({ to: "/app/diagnostics" })}>
+            Open diagnostics
+          </Button>
+        </CardContent>
+      </Card>
+
+
+
 
 
 
