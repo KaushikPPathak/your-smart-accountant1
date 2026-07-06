@@ -20,6 +20,23 @@ concurrency:
 
 jobs:
   # ─────────────────────────────────────────────
+  # Reliability gate — runs before any bundle work. Green here means the
+  # install → data → profile-orphan → restore round-trip still preserves
+  # every voucher. Blocks the pipeline on regression. See
+  # src/test/restore-roundtrip.test.ts.
+  # ─────────────────────────────────────────────
+  test:
+    name: Reliability tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+      - run: bun run test
+
+  # ─────────────────────────────────────────────
   # Stamp a unique version onto every build so it's obvious
   # which build a downloaded installer came from.
   # ─────────────────────────────────────────────
