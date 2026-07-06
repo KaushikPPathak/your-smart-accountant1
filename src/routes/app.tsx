@@ -244,8 +244,8 @@ function AppLayout() {
     );
   }
 
-  // No companies yet → invite to create one (allow assistant + companies pages through)
-  if (memberships.length === 0 && !onCompaniesPage && !onAssistantPage) {
+  // No companies yet → invite to create one (companies page still reachable).
+  if (memberships.length === 0 && !onCompaniesPage) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-muted/30 px-4 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-xl">
