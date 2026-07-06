@@ -228,6 +228,7 @@ export async function restoreCompanyBackup(
   };
 
   // Ledgers
+  if (!localOnly) {
   for (const lRaw of backup.ledgers) {
     const { id, company_id: _c, created_at: _ca, updated_at: _ua, ...rest } = lRaw as Record<
       string,
