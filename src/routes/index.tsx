@@ -81,6 +81,7 @@ function StartScreen() {
       setLoading(true);
       try {
         const online = isOnlineNow();
+        const localOnly = isLocalOnlyMode();
 
         // Dynamically import DB module engine to safely isolate bundling compilation
         const dbModule = await import("@/lib/offline/db");
@@ -94,11 +95,43 @@ function StartScreen() {
         for (const c of pickerCache || []) if (c?.id) merged.set(String(c.id), c);
         for (const c of snapshotCache || []) if (c?.id) merged.set(String(c.id), { ...(merged.get(String(c.id)) ?? {}), ...c });
 
+        // In local-only mode business data lives ONLY on this device.
+        // Compute per-company row counts and, when several ids share the
+        // same name, keep the one with the most data (drops empty
+        // cloud-leftover duplicates so the picker never shows the same
+        // company twice after a restore).
+        async function dedupeLocal(list: PickerCompany[]): Promise<PickerCompany[]> {
+          const withCounts = await Promise.all(
+            list.map(async (c) => {
+              const [l, i, v] = await Promise.all([
+                db.cache_ledgers.where("company_id").equals(c.id).count().catch(() => 0),
+                db.cache_items.where("company_id").equals(c.id).count().catch(() => 0),
+                db.cache_vouchers.where("company_id").equals(c.id).count().catch(() => 0),
+              ]);
+              return { c, rows: (l as number) + (i as number) + (v as number) };
+            }),
+          );
+          const byName = new Map<string, { c: PickerCompany; rows: number }>();
+          for (const entry of withCounts) {
+            const key = entry.c.name.trim().toLowerCase();
+            const cur = byName.get(key);
+            if (!cur || entry.rows > cur.rows) byName.set(key, entry);
+          }
+          return Array.from(byName.values())
+            .map((e) => e.c)
+            .sort((a, b) => a.name.localeCompare(b.name));
+        }
+
         const cachedCompanies = formatCachedCompanies(Array.from(merged.values()));
-        if (cachedCompanies.length > 0 && !cancelled) {
-          setCompanies(cachedCompanies);
+        const displayCached = localOnly ? await dedupeLocal(cachedCompanies) : cachedCompanies;
+        if (displayCached.length > 0 && !cancelled) {
+          setCompanies(displayCached);
           setLoading(false);
         }
+
+        // Local-only: never hit the cloud picker — cloud rows would
+        // reintroduce the duplicates we just collapsed.
+        if (localOnly) return;
 
         if (!online) {
           if (cachedCompanies.length === 0) toast.error("No offline data cache found. Please log in once while connected to the internet.");
