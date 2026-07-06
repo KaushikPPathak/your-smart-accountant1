@@ -1,5 +1,5 @@
 import { Outlet, Link, createRootRoute, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { CompanyProvider } from "@/lib/company-context";
 import { ThemeProvider } from "@/lib/theme-context";
@@ -9,6 +9,8 @@ import { DateFormatProvider } from "@/lib/date-format";
 import { Toaster } from "@/components/ui/sonner";
 import { isUnlocked } from "@/lib/staff-session";
 import { BrainProvider } from "@/brain/BrainProvider";
+import { isDesktopRuntime } from "@/lib/native-bridge";
+import { WebDemoLanding } from "@/components/WebDemoLanding";
 
 function NotFoundComponent() {
   return (
@@ -46,9 +48,11 @@ function RootComponent() {
             <AuthProvider>
               <CompanyProvider>
                 <BrainProvider>
-                  <LockGate>
-                    <Outlet />
-                  </LockGate>
+                  <WebGate>
+                    <LockGate>
+                      <Outlet />
+                    </LockGate>
+                  </WebGate>
                 </BrainProvider>
                 <Toaster richColors position="top-right" />
               </CompanyProvider>
@@ -60,6 +64,20 @@ function RootComponent() {
   );
 }
 
+/**
+ * Web-runtime gate. The shipping product is the Windows desktop (Tauri) build;
+ * the browser build MUST NOT expose the accounting workspace, financial data,
+ * or the offline assistant. On the web, always render the demo landing —
+ * regardless of URL — so no /app/* route can be opened.
+ */
+function WebGate({ children }: { children: React.ReactNode }) {
+  // useState so runtime detection is stable across renders and we render the
+  // same tree on first paint (avoids a flash of the workspace shell).
+  const [isDesktop] = useState<boolean>(() => isDesktopRuntime());
+  if (!isDesktop) return <WebDemoLanding />;
+  return <>{children}</>;
+}
+
 function LockGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -68,10 +86,8 @@ function LockGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (location.pathname === "/lock") return;
-    if (location.pathname === "/assistant") return;
     if (!isUnlocked()) navigate({ to: "/lock" });
   }, [loading, location.pathname, navigate]);
-
 
   return <>{children}</>;
 }
