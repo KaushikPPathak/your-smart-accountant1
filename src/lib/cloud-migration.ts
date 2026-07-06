@@ -53,6 +53,18 @@ export async function runOneTimeCloudMigrationDown(): Promise<MigrationResult> {
     return result;
   }
 
+  // Local-only mode: this device is authoritative. Do NOT pull cloud
+  // snapshots back — that would resurrect old / duplicate companies and
+  // overwrite restored local data. Mark done permanently and exit.
+  try {
+    const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+    if (isLocalOnlyMode()) {
+      await setMeta(MIGRATION_FLAG, { at: Date.now(), note: "local-only; skipped cloud pull" });
+      result.alreadyDone = true;
+      return result;
+    }
+  } catch { /* ignore */ }
+
   // Must be online + signed in — otherwise defer to a future launch.
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     result.errors.push("Offline; will retry when online.");
