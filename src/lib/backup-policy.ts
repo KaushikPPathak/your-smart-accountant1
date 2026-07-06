@@ -18,15 +18,27 @@ export const BACKUP_POLICY = {
     "Mass-delete / Verify-and-repair",
     "Software upgrade",
   ],
-  /** Grand-father-Father-Son rotation kept on disk. */
+  /**
+   * Retention: local snapshots and backups are kept FOREVER on the user's
+   * device. The app never deletes user data automatically — no day count,
+   * no rotation, no configuration switch turns this off. Only the user can
+   * remove a backup file, by deleting it from disk themselves.
+   *
+   * The counts below are only *recommendations* shown in the UI so users
+   * know how many copies they should keep OFFSITE (USB / cloud) under the
+   * industry 3-2-1 rule. They are not enforced against local storage.
+   */
   retention: {
-    daily: 7,        // last 7 daily snapshots
-    weekly: 4,       // 4 weekly snapshots (1 / week)
-    monthly: 12,     // 12 month-end snapshots
-    yearly: "forever" as const, // every financial-year-end kept forever
-    /** Minimum legal preservation period (Income-tax + Companies Act). */
+    daily: "forever" as const,
+    weekly: "forever" as const,
+    monthly: "forever" as const,
+    yearly: "forever" as const,
+    /** Statutory minimum (Income-tax + Companies Act) — for user awareness only. */
     minimumMonths: 96, // 8 financial years
+    /** Suggested offsite copies for the user's own backup rotation. */
+    suggestedOffsite: { daily: 7, weekly: 4, monthly: 12 },
   },
+
   /** 3-2-1 rule. */
   copies: {
     count: 3,
