@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { StaffPinPanel } from "@/components/StaffPinPanel";
 import { DataLocationCard } from "@/components/settings/DataLocationCard";
+import { CloudBackupCard } from "@/components/settings/CloudBackupCard";
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({ meta: [{ title: "Settings — Your Mehtaji" }] }),
@@ -348,6 +349,9 @@ function SettingsPage() {
       </div>
 
       <DataLocationCard />
+      <CloudBackupCard />
+
+
 
 
       <Card>
