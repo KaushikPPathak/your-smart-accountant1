@@ -110,7 +110,7 @@ function DataHealthPage() {
                 {rows.map((r) => {
                   const liveTotal = r.live.ledgers + r.live.items + r.live.vouchers;
                   const manifestTotal = r.manifest ? totalRows(r.manifest) : 0;
-                  let status: { label: string; icon: JSX.Element; tone: string };
+                  let status: { label: string; icon: ReactElement; tone: string };
                   if (!r.manifest) status = { label: "No baseline yet", icon: <HelpCircle className="h-3.5 w-3.5" />, tone: "bg-muted text-muted-foreground" };
                   else if (manifestTotal === 0) status = { label: "Empty (never had data)", icon: <HelpCircle className="h-3.5 w-3.5" />, tone: "bg-muted text-muted-foreground" };
                   else if (liveTotal >= manifestTotal * 0.9) status = { label: "Healthy", icon: <CheckCircle2 className="h-3.5 w-3.5" />, tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" };
