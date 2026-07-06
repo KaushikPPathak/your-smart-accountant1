@@ -662,6 +662,8 @@ export async function pullCompanySnapshot(
   companyId: string,
   opts: { full?: boolean; notify?: boolean; forceExact?: boolean } = {},
 ): Promise<SnapshotResult | null> {
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) return null;
   if (!isOnlineNow()) return null;
   const cacheKey = `${companyId}:${opts.full ? "full" : "min"}`;
   const existing = perCompanyInFlight.get(cacheKey);

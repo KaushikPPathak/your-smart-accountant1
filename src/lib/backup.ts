@@ -501,7 +501,7 @@ async function mirrorRestoreToLocalCache(
   const allocationId = (id: unknown) => remapId("allocation", id);
   const recurringId = (id: unknown) => remapId("recurring", id);
 
-  const stamp = (row: Record<string, unknown>) => ({
+  const stamp = (row: Record<string, unknown>): Record<string, unknown> => ({
     ...row,
     company_id: targetCompanyId,
     updated_at: (row.updated_at as string) ?? new Date().toISOString(),
