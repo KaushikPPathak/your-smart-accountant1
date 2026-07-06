@@ -36,13 +36,10 @@ pub fn run() {
             let webview_dir = local_data.join(WEBVIEW_SUBDIR);
             std::fs::create_dir_all(&webview_dir).ok();
 
-            // Replace the config-declared window with one that has the
-            // pinned data_directory. Closing + rebuilding keeps title,
-            // size and behaviour identical while guaranteeing every future
-            // launch reads IndexedDB from the same folder.
-            if let Some(existing) = app.get_webview_window("main") {
-                let _ = existing.close();
-            }
+            // Build the main window here (not in tauri.conf.json) so we can
+            // guarantee it opens with the pinned data_directory. Declaring
+            // it in config and then close/rebuild would exit the app when
+            // the last window closes.
             WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("Smart Accountant")
                 .inner_size(1280.0, 800.0)
