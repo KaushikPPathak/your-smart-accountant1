@@ -11,6 +11,11 @@ import { isUnlocked } from "@/lib/staff-session";
 import { BrainProvider } from "@/brain/BrainProvider";
 import { isDesktopRuntime } from "@/lib/native-bridge";
 import { WebDemoLanding } from "@/components/WebDemoLanding";
+import { installCrashHandlers } from "@/lib/crash-log";
+
+// Layer 5 — install global crash + rejection handlers once at module load
+// (browser only; no-op on SSR). Failures land in a bounded local ring buffer.
+installCrashHandlers();
 
 function NotFoundComponent() {
   return (
