@@ -18,6 +18,7 @@ import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppVouchersRouteImport } from './routes/app.vouchers'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
+import { Route as AppReleaseChecklistRouteImport } from './routes/app.release-checklist'
 import { Route as AppRecurringRouteImport } from './routes/app.recurring'
 import { Route as AppLedgersRouteImport } from './routes/app.ledgers'
 import { Route as AppItemsRouteImport } from './routes/app.items'
@@ -111,6 +112,11 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
 const AppReportsRoute = AppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReleaseChecklistRoute = AppReleaseChecklistRouteImport.update({
+  id: '/release-checklist',
+  path: '/release-checklist',
   getParentRoute: () => AppRoute,
 } as any)
 const AppRecurringRoute = AppRecurringRouteImport.update({
@@ -384,6 +390,7 @@ export interface FileRoutesByFullPath {
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
   '/app/recurring': typeof AppRecurringRoute
+  '/app/release-checklist': typeof AppReleaseChecklistRoute
   '/app/reports': typeof AppReportsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
@@ -443,6 +450,7 @@ export interface FileRoutesByTo {
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
   '/app/recurring': typeof AppRecurringRoute
+  '/app/release-checklist': typeof AppReleaseChecklistRoute
   '/app/reports': typeof AppReportsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
@@ -504,6 +512,7 @@ export interface FileRoutesById {
   '/app/items': typeof AppItemsRoute
   '/app/ledgers': typeof AppLedgersRoute
   '/app/recurring': typeof AppRecurringRoute
+  '/app/release-checklist': typeof AppReleaseChecklistRoute
   '/app/reports': typeof AppReportsRouteWithChildren
   '/app/settings': typeof AppSettingsRoute
   '/app/vouchers': typeof AppVouchersRouteWithChildren
@@ -566,6 +575,7 @@ export interface FileRouteTypes {
     | '/app/items'
     | '/app/ledgers'
     | '/app/recurring'
+    | '/app/release-checklist'
     | '/app/reports'
     | '/app/settings'
     | '/app/vouchers'
@@ -625,6 +635,7 @@ export interface FileRouteTypes {
     | '/app/items'
     | '/app/ledgers'
     | '/app/recurring'
+    | '/app/release-checklist'
     | '/app/reports'
     | '/app/settings'
     | '/app/vouchers'
@@ -685,6 +696,7 @@ export interface FileRouteTypes {
     | '/app/items'
     | '/app/ledgers'
     | '/app/recurring'
+    | '/app/release-checklist'
     | '/app/reports'
     | '/app/settings'
     | '/app/vouchers'
@@ -799,6 +811,13 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/app/reports'
       preLoaderRoute: typeof AppReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/release-checklist': {
+      id: '/app/release-checklist'
+      path: '/release-checklist'
+      fullPath: '/app/release-checklist'
+      preLoaderRoute: typeof AppReleaseChecklistRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/recurring': {
@@ -1254,6 +1273,7 @@ interface AppRouteChildren {
   AppItemsRoute: typeof AppItemsRoute
   AppLedgersRoute: typeof AppLedgersRoute
   AppRecurringRoute: typeof AppRecurringRoute
+  AppReleaseChecklistRoute: typeof AppReleaseChecklistRoute
   AppReportsRoute: typeof AppReportsRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
   AppVouchersRoute: typeof AppVouchersRouteWithChildren
@@ -1273,6 +1293,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppItemsRoute: AppItemsRoute,
   AppLedgersRoute: AppLedgersRoute,
   AppRecurringRoute: AppRecurringRoute,
+  AppReleaseChecklistRoute: AppReleaseChecklistRoute,
   AppReportsRoute: AppReportsRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
   AppVouchersRoute: AppVouchersRouteWithChildren,

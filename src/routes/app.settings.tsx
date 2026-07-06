@@ -376,6 +376,19 @@ function SettingsPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader><CardTitle className="text-base">Release checklist</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Printable pre-release sign-off. Verify every box before shipping a new version.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => navigate({ to: "/app/release-checklist" })}>
+            Open checklist
+          </Button>
+        </CardContent>
+      </Card>
+
+
 
 
 
