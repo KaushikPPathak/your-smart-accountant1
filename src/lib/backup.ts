@@ -381,8 +381,102 @@ export async function restoreCompanyBackup(
     if (!error) summary.recurring_invoices++;
   }
 
+  // ------------------------------------------------------------------
+  // Local-cache mirror (CRITICAL for local-only mode).
+  // The UI reads from IndexedDB cache tables, not from supabase. Cloud
+  // sync is disabled in local-only mode, so without this mirror the
+  // user sees an empty company after a "successful" restore.
+  // We keep original source IDs (UUIDs) so voucher_entries/items still
+  // reference the parent vouchers correctly; company_id is remapped.
+  // ------------------------------------------------------------------
+  try {
+    await mirrorRestoreToLocalCache(targetCompanyId, backup, summary);
+  } catch (err) {
+    console.error("[restore] local cache mirror failed:", err);
+  }
+
   return summary;
 }
+
+async function mirrorRestoreToLocalCache(
+  targetCompanyId: string,
+  backup: CompanyBackup,
+  summary: RestoreSummary,
+): Promise<void> {
+  if (typeof window === "undefined" || typeof indexedDB === "undefined") return;
+  const { offlineDb: db } = await import("./offline/db");
+
+  const stamp = (row: Record<string, unknown>) => ({
+    ...row,
+    company_id: targetCompanyId,
+    updated_at: (row.updated_at as string) ?? new Date().toISOString(),
+    is_synced: true,
+  });
+
+  // Wipe target company's cache first, mirroring the supabase wipe.
+  await Promise.all([
+    db.cache_ledgers.where("company_id").equals(targetCompanyId).delete(),
+    db.cache_items.where("company_id").equals(targetCompanyId).delete(),
+    db.cache_vouchers.where("company_id").equals(targetCompanyId).delete(),
+    db.cache_voucher_entries.where("company_id").equals(targetCompanyId).delete(),
+    db.cache_voucher_items.where("company_id").equals(targetCompanyId).delete(),
+    db.cache_bill_allocations.where("company_id").equals(targetCompanyId).delete(),
+    db.cache_recurring_invoices.where("company_id").equals(targetCompanyId).delete(),
+    db.cache_company_settings.where("company_id").equals(targetCompanyId).delete(),
+  ]);
+
+  // Ensure company exists in cache (upsert renamed to target id).
+  if (backup.company) {
+    const companyRow = stamp({ ...(backup.company as Record<string, unknown>), id: targetCompanyId });
+    await db.cache_companies.put(companyRow);
+  }
+  if (backup.settings) {
+    const s = stamp({ ...(backup.settings as Record<string, unknown>) });
+    if (!s.id) s.id = `settings-${targetCompanyId}`;
+    await db.cache_company_settings.put(s);
+  }
+
+  if (backup.ledgers?.length) {
+    await db.cache_ledgers.bulkPut(backup.ledgers.map((r) => stamp(r as Record<string, unknown>)));
+    summary.ledgers = Math.max(summary.ledgers, backup.ledgers.length);
+  }
+  if (backup.items?.length) {
+    await db.cache_items.bulkPut(backup.items.map((r) => stamp(r as Record<string, unknown>)));
+    summary.items = Math.max(summary.items, backup.items.length);
+  }
+  if (backup.vouchers?.length) {
+    await db.cache_vouchers.bulkPut(backup.vouchers.map((r) => stamp(r as Record<string, unknown>)));
+    summary.vouchers = Math.max(summary.vouchers, backup.vouchers.length);
+  }
+  if (backup.voucher_entries?.length) {
+    await db.cache_voucher_entries.bulkPut(
+      backup.voucher_entries.map((r) => stamp(r as Record<string, unknown>)),
+    );
+    summary.voucher_entries = Math.max(summary.voucher_entries, backup.voucher_entries.length);
+  }
+  if (backup.voucher_items?.length) {
+    await db.cache_voucher_items.bulkPut(
+      backup.voucher_items.map((r) => stamp(r as Record<string, unknown>)),
+    );
+    summary.voucher_items = Math.max(summary.voucher_items, backup.voucher_items.length);
+  }
+  if (backup.bill_allocations?.length) {
+    await db.cache_bill_allocations.bulkPut(
+      backup.bill_allocations.map((r) => stamp(r as Record<string, unknown>)),
+    );
+    summary.bill_allocations = Math.max(summary.bill_allocations, backup.bill_allocations.length);
+  }
+  if (backup.recurring_invoices?.length) {
+    await db.cache_recurring_invoices.bulkPut(
+      backup.recurring_invoices.map((r) => stamp(r as Record<string, unknown>)),
+    );
+    summary.recurring_invoices = Math.max(
+      summary.recurring_invoices,
+      backup.recurring_invoices.length,
+    );
+  }
+}
+
 
 export async function parseBackupFile(
   text: string,
