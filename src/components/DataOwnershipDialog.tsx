@@ -86,12 +86,15 @@ export function DataOwnershipDialog() {
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
             <div>
               <p className="font-medium text-destructive">
-                A fresh install starts empty.
+                A fresh install on a new device starts empty.
               </p>
               <p className="mt-1 text-destructive/90">
-                If you uninstall the app, clear browser data, use a different
-                browser or PC, or reinstall Windows — this device&apos;s data
-                will be gone <strong>unless you have a backup file</strong>.
+                Normal version updates through the installer or auto-updater
+                <strong> keep all your data</strong> — the update writes only
+                to the program folder, never to your data folder. But if you
+                uninstall &amp; reinstall manually, clear browser data, use a
+                different browser or PC, or reinstall Windows — this device&apos;s
+                data will be gone <strong>unless you have a backup file</strong>.
                 We cannot recover it for you.
               </p>
             </div>
