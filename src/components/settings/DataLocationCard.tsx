@@ -44,12 +44,20 @@ export function DataLocationCard() {
           adding one-click backup to your own cloud account shortly.
         </div>
         <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-          <strong>Version updates are safe.</strong> Installer and auto-updater
-          upgrades write only to the program folder — your data folder
-          (<code>%LOCALAPPDATA%\SmartAccountant\</code>) is never touched.
-          On every launch we also verify the local database is intact and
-          warn you if it looks unexpectedly empty after an update.
+          <strong>Version updates are safe.</strong> The WebView data folder is
+          pinned to a fixed path (<code>%LOCALAPPDATA%\com.smartaccountant.app\EBWebView\</code>)
+          and the installer is configured to leave <code>%LOCALAPPDATA%\com.smartaccountant.app\</code>
+          untouched on upgrade and uninstall. On every launch we also verify the
+          local database is intact and warn you if it looks unexpectedly empty
+          after an update.
         </div>
+        <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+          <strong>Your data stays forever.</strong> Snapshots and backups on
+          this device are kept permanently — no day count, no auto-purge, no
+          hidden rotation. The app never deletes accounting data on its own.
+          Only you can remove a file, by deleting it from disk yourself.
+        </div>
+
       </CardContent>
     </Card>
   );

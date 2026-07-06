@@ -582,10 +582,13 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
             {" "}<strong>{BACKUP_POLICY.copies.media}</strong> different media, with
             {" "}<strong>{BACKUP_POLICY.copies.offsite}</strong> stored off-site
             (cloud / external HDD in another premise).</div>
-          <div><strong>Retention (GFS rotation):</strong> last {BACKUP_POLICY.retention.daily} daily,
-            {" "}{BACKUP_POLICY.retention.weekly} weekly, {BACKUP_POLICY.retention.monthly} monthly,
-            plus every financial-year-end <strong>kept forever</strong>.
+          <div><strong>Retention on this device:</strong> <strong>forever</strong>.
+            The app never auto-deletes your backups or snapshots — only you can remove them.
+            Suggested <em>offsite</em> rotation (USB / cloud): last {BACKUP_POLICY.retention.suggestedOffsite.daily} daily,
+            {" "}{BACKUP_POLICY.retention.suggestedOffsite.weekly} weekly, {BACKUP_POLICY.retention.suggestedOffsite.monthly} monthly,
+            plus every financial-year-end.
             Minimum legal retention: <strong>{BACKUP_POLICY.retention.minimumMonths / 12} years</strong>.</div>
+
           <div><strong>Test restore:</strong> verify a backup on a scratch company at least every
             {" "}{BACKUP_POLICY.testRestoreFrequencyDays} days — an untested backup is not a backup.</div>
           <div className="text-muted-foreground">
