@@ -29,9 +29,11 @@ describe("paiseToRupees", () => {
 
 describe("formatINR (Indian grouping)", () => {
   it("groups lakhs and crores", () => {
-    expect(formatINR(12_34_567_89, { symbol: false })).toBe("12,34,567.89");
-    expect(formatINR(1_23_45_67_89, { symbol: false })).toBe("1,23,45,67.89");
+    expect(formatINR(1_23_45_67_89, { symbol: false })).toBe("12,34,567.89");
+    // ₹1,23,45,67,890.12 → 12345678901200 paise? Use a definite crore value.
+    expect(formatINR(1234567890012, { symbol: false })).toBe("12,34,56,78,900.12");
   });
+
   it("handles negatives with sign before symbol", () => {
     expect(formatINR(-10000, { symbol: false })).toBe("-100.00");
   });
