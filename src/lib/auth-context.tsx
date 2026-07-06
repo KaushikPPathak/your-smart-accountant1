@@ -26,6 +26,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       import("./offline/sync-worker")
         .then((m) => m.startSyncWorker())
         .catch(() => undefined);
+
+      // One-time cloud-to-local migration for users upgrading from the
+      // old cloud-primary version. Idempotent, non-blocking.
+      import("./cloud-migration")
+        .then((m) => m.scheduleCloudMigrationDown())
+        .catch(() => undefined);
     };
 
     // Listener first (Supabase best practice).
