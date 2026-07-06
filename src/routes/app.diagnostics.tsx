@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Download, RefreshCw, Trash2 } from "lucide-react";
 import {
@@ -120,9 +120,8 @@ function DiagnosticsPage() {
                 </TableHeader>
                 <TableBody>
                   {entries.map((e) => (
-                    <>
+                    <Fragment key={e.id}>
                       <TableRow
-                        key={e.id}
                         className="cursor-pointer"
                         onClick={() => setExpanded(expanded === e.id ? null : e.id)}
                       >
@@ -136,7 +135,7 @@ function DiagnosticsPage() {
                         <TableCell className="max-w-md truncate text-xs">{e.message}</TableCell>
                       </TableRow>
                       {expanded === e.id && (
-                        <TableRow key={`${e.id}-detail`}>
+                        <TableRow>
                           <TableCell colSpan={4} className="bg-muted/30">
                             <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs">
 {JSON.stringify(e, null, 2)}
@@ -144,7 +143,7 @@ function DiagnosticsPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
