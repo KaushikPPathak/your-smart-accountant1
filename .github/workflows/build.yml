@@ -1,13 +1,14 @@
 name: Build Desktop & Mobile
 
 # Runs on:
-#  - every push to main            → uploads artifacts to the run (downloadable ~90 days)
+#  - once a day (06:00 UTC)       → daily artifacts (downloadable ~90 days)
 #  - every pull request            → verifies build stays green
 #  - manual dispatch (Actions tab) → same as above
 #  - version tags (v1.2.3)         → additionally publishes a public GitHub Release
 on:
+  schedule:
+    - cron: "0 6 * * *"
   push:
-    branches: [main]
     tags: ["v*"]
   pull_request:
     branches: [main]
