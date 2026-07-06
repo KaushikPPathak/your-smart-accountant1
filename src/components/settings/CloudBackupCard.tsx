@@ -45,8 +45,9 @@ function safeName(s: string | null | undefined): string {
 export function CloudBackupCard() {
   const { activeCompanyId, activeMembership, memberships } = useCompany();
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const [busy, setBusy] = useState<null | "one" | "all" | "restore" | ProviderId>(null);
+  const [busy, setBusy] = useState<null | "one" | "all" | ProviderId>(null);
   const [lastAt, setLastAt] = useState<string | null>(() => getLastUserCloudBackup());
+  const [inspectOpen, setInspectOpen] = useState(false);
   const [connections, setConnections] = useState<Record<ProviderId, { connected: boolean; label?: string }>>({
     gdrive: { connected: false }, onedrive: { connected: false }, dropbox: { connected: false },
   });
