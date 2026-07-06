@@ -185,6 +185,11 @@ async function moveToDeadLetter(
 }
 
 export async function drainOutbox(): Promise<{ pushed: number; failed: number; poisoned: number }> {
+  // Local-only mode: never push business data to our servers. When enabled
+  // (the default), the outbox stays purely local — the user's data never
+  // leaves the device except via a user-controlled backup they configure.
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) return { pushed: 0, failed: 0, poisoned: 0 };
   if (draining) return { pushed: 0, failed: 0, poisoned: 0 };
   draining = true;
   let pushed = 0;

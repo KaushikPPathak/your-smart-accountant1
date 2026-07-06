@@ -74,6 +74,10 @@ export function getLastWorkMode(): "online" | "offline" | null {
 }
 
 async function tick(): Promise<void> {
+  // Local-only mode: no cloud sync of any business data. Just quietly do
+  // nothing so no server calls are made.
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) { rememberWorkMode("offline"); return; }
   // 0) Keep the Supabase refresh-token clock reset. Rate-limited to once
   //    every 6h internally so this is cheap to call every tick. Without
   //    this, a user who's online only briefly won't hit the built-in

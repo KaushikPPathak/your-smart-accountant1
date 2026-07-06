@@ -765,6 +765,10 @@ export async function pullSnapshot(opts: { full?: boolean; forceExact?: boolean 
   if (existing) return existing;
   const run = (async () => {
     try {
+      // Local-only mode: never pull business data from our servers. Every
+      // read is served from local IndexedDB.
+      const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+      if (isLocalOnlyMode()) return null;
       if (!isOnlineNow()) return null;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
