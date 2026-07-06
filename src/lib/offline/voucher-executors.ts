@@ -369,6 +369,15 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
     }));
   }
 
+  // Post-build, pre-write invariant: Dr = Cr in paise. See
+  // src/lib/voucher-invariants.ts. Skip for non-posting voucher types
+  // (quotation, sales_order, delivery_note) that intentionally carry no
+  // ledger entries.
+  if (!skipPostings) {
+    const { assertVoucherBalanced } = await import("@/lib/voucher-invariants");
+    assertVoucherBalanced(entryRows, { voucherType: snap.voucherType, companyId: snap.companyId });
+  }
+
   const header = {
     company_id: snap.companyId,
     voucher_type: snap.voucherType,
@@ -439,6 +448,10 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
     narration: e.narration,
     line_no: e.line_no,
   }));
+  // Post-build, pre-write invariant: Dr = Cr in paise.
+  const { assertVoucherBalanced } = await import("@/lib/voucher-invariants");
+  assertVoucherBalanced(entries, { voucherType: snap.voucherType, companyId: snap.companyId });
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: saveErr } = await supabase.rpc("save_voucher_atomic", {
     _header: header as any,
