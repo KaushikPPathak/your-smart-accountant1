@@ -176,8 +176,13 @@ jobs:
             echo "Android project already initialized, skipping init."
           fi
 
-      - name: Build Android APK
-        run: bunx tauri android build --apk
+      - name: Build Android APK (arm64 + universal)
+        # arm64-v8a covers ~all modern phones; also emit a universal APK so
+        # users don't have to know their CPU arch. "App not installed" on
+        # Android is almost always the user picking the wrong-ABI APK.
+        run: |
+          bunx tauri android build --apk --target aarch64
+          bunx tauri android build --apk
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
