@@ -18,9 +18,9 @@ import {
   getLastUserCloudBackup,
   LACCBAK_EXT,
 } from "@/lib/user-cloud-backup";
-import { parseBackupFile, restoreCompanyBackup, buildCompanyBackup } from "@/lib/backup";
+import { buildCompanyBackup } from "@/lib/backup";
 import { wrapBackup } from "@/lib/backup-policy";
-import { savePreRestoreSnapshot } from "@/lib/restore-safety";
+import { BackupInspectDialog } from "@/components/BackupInspectDialog";
 import {
   PROVIDERS,
   connectProvider,
@@ -45,8 +45,9 @@ function safeName(s: string | null | undefined): string {
 export function CloudBackupCard() {
   const { activeCompanyId, activeMembership, memberships } = useCompany();
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const [busy, setBusy] = useState<null | "one" | "all" | "restore" | ProviderId>(null);
+  const [busy, setBusy] = useState<null | "one" | "all" | ProviderId>(null);
   const [lastAt, setLastAt] = useState<string | null>(() => getLastUserCloudBackup());
+  const [inspectOpen, setInspectOpen] = useState(false);
   const [connections, setConnections] = useState<Record<ProviderId, { connected: boolean; label?: string }>>({
     gdrive: { connected: false }, onedrive: { connected: false }, dropbox: { connected: false },
   });
@@ -90,32 +91,8 @@ export function CloudBackupCard() {
     } finally { setBusy(null); }
   };
 
-  const onRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !activeCompanyId) return;
-    if (!isAdmin) { toast.error("Only admins can restore"); return; }
-    const targetName = activeMembership?.companies.name ?? "";
-    const typed = prompt(
-      `RESTORE — this will REPLACE all current data in "${targetName}" with the backup file.\n\nType the company name exactly to confirm:`,
-    );
-    if (typed === null) return;
-    if (typed.trim() !== targetName) { toast.error(`Name did not match "${targetName}" — restore cancelled.`); return; }
-    setBusy("restore");
-    try {
-      const text = await file.text();
-      const parsed = await parseBackupFile(text);
-      if (parsed.checksumOk === false) toast.warning("Backup checksum mismatch — file may be corrupted or edited.");
-      const single = parsed.kind === "single" ? parsed.data : parsed.data.companies[0];
-      if (!single) throw new Error("Backup file is empty");
-      const snap = await savePreRestoreSnapshot(activeCompanyId, targetName);
-      if (!snap.ok) toast.warning("Could not create safety snapshot — proceeding without undo option.");
-      const summary = await restoreCompanyBackup(activeCompanyId, single, { wipeExisting: true });
-      toast.success(`Restored: ${summary.ledgers} ledgers, ${summary.items} items, ${summary.vouchers} vouchers`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Restore failed");
-    } finally { setBusy(null); }
-  };
+  // Restore is handled by the BackupInspectDialog — see JSX below. The
+  // dialog does automatic integrity validation before any wipe.
 
   // ---------- OAuth providers ----------
   const connect = async (id: ProviderId) => {
@@ -205,17 +182,18 @@ export function CloudBackupCard() {
             </Button>
             <Button
               size="sm" variant="outline"
-              onClick={() => fileRef.current?.click()}
-              disabled={busy !== null || !isAdmin}
-              title={isAdmin ? "" : "Only admins can restore"}
+              onClick={() => setInspectOpen(true)}
+              disabled={busy !== null || !isAdmin || !activeCompanyId}
+              title={isAdmin ? "Inspect a backup file, then restore" : "Only admins can restore"}
             >
               <Upload className="mr-2 h-4 w-4" />
-              {busy === "restore" ? "Restoring…" : `Restore from .${LACCBAK_EXT}`}
+              Inspect &amp; restore .{LACCBAK_EXT}
             </Button>
+            {/* Legacy hidden input retained to avoid ref-null crashes; not used now. */}
             <input
               ref={fileRef} type="file"
               accept={`.${LACCBAK_EXT},.json,application/json,application/octet-stream`}
-              className="hidden" onChange={onRestore}
+              className="hidden"
             />
           </div>
         </div>
@@ -284,6 +262,13 @@ export function CloudBackupCard() {
           </div>
         </div>
       </CardContent>
+      <BackupInspectDialog
+        open={inspectOpen}
+        onOpenChange={setInspectOpen}
+        targetCompanyId={activeCompanyId ?? null}
+        targetCompanyName={activeMembership?.companies.name ?? ""}
+        isAdmin={isAdmin}
+      />
     </Card>
   );
 }
