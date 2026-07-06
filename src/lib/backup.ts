@@ -468,6 +468,19 @@ async function restoreCompanyBackupImpl(
     console.error("[restore] local cache mirror failed:", err);
   }
 
+  // Lock out the one-time cloud→local migration permanently. After a
+  // restore, local IndexedDB is authoritative; if the flag were still
+  // unset (e.g. user restored on a fresh install), the next sign-in
+  // would call scheduleCloudMigrationDown() and re-pull old cloud
+  // companies, resurrecting the very duplicates the restore removed
+  // and overwriting the restored data.
+  try {
+    const { setMeta } = await import("./offline/db");
+    await setMeta("cloud_migration_v1_done", { at: Date.now(), note: "locked by restore" });
+  } catch (err) {
+    console.warn("[restore] failed to lock cloud migration flag:", err);
+  }
+
   return summary;
 }
 
