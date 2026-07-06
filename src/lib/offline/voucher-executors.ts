@@ -129,6 +129,13 @@ async function ensureMasterRefsSynced(
   const remap = new Map<string, string>();
   if (wanted.length === 0) return remap;
 
+  // Bug 2.1 guard — in local-only mode there is no cloud master list to
+  // reconcile against. Skip the Supabase SELECT/UPSERT entirely; the local
+  // IndexedDB is authoritative and voucher entries reference cache_ledgers
+  // / cache_items by id directly.
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) return remap;
+
   const existing = await fetchExistingMasterIds(table, companyId, wanted);
   const missing = wanted.filter((id) => !existing.has(id));
   if (missing.length === 0) return remap;

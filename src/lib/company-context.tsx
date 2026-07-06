@@ -7,6 +7,7 @@ import { setCurrentCurrency } from "./currency";
 import { setCurrentDateFormat, type DateFormatCode } from "./date-format";
 import { getActiveStaff } from "./staff-session";
 import { isOnlineNow } from "./offline/online-status";
+import { isLocalOnlyMode } from "./local-only-mode";
 
 export interface CompanyMembership {
   company_id: string;
@@ -151,8 +152,10 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     } catch { /* ignore */ }
     setLoading(false);
 
-    // 2) Offline? we're done.
-    if (!isOnlineNow()) return;
+    // 2) Offline OR local-only? we're done — cloud company_members is
+    // not authoritative and the fetch just produces aborted requests
+    // (see runtime audit — 12 ERR_ABORTED on the picker).
+    if (!isOnlineNow() || isLocalOnlyMode()) return;
 
     // 3) Reconcile with cloud in the background (batched, non-blocking).
     try {
