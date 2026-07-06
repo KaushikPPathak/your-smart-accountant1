@@ -33,11 +33,16 @@ jobs:
         shell: bash
         run: |
           BASE=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          # Strip any pre-existing pre-release / build metadata from BASE so
+          # we always emit MAJOR.MINOR.PATCH.BUILD — the only shape the MSI
+          # (WiX) target accepts. MSI rejects semver pre-release ("-build.N")
+          # and build metadata ("+sha") entirely.
+          BASE_CLEAN=$(echo "$BASE" | sed -E 's/[-+].*$//')
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            OUT="${GITHUB_REF#refs/tags/v}"
+            RAW="${GITHUB_REF#refs/tags/v}"
+            OUT=$(echo "$RAW" | sed -E 's/[-+].*$//')
           else
-            SHA=$(git rev-parse --short HEAD)
-            OUT="${BASE}-build.${GITHUB_RUN_NUMBER}+${SHA}"
+            OUT="${BASE_CLEAN}.${GITHUB_RUN_NUMBER}"
           fi
           echo "version=$OUT" >> "$GITHUB_OUTPUT"
           echo "Build version: $OUT"
