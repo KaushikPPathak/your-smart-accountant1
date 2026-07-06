@@ -32,6 +32,7 @@ import { PendingSavesTray } from "@/components/fast-form/PendingSavesTray";
 import { FocusHintsProvider } from "@/components/fast-form/FocusHints";
 import { StatusBar } from "@/components/fast-form/StatusBar";
 import { BackupNudgeBanner } from "@/components/BackupNudgeBanner";
+import { DataOwnershipDialog } from "@/components/DataOwnershipDialog";
 import { InstallAppButton } from "@/components/InstallAppButton";
 
 export const Route = createFileRoute("/app")({
@@ -291,6 +292,7 @@ function AppLayout() {
         </SidebarInset>
       </div>
       <KeyboardCheatSheet open={helpOpen} onOpenChange={setHelpOpen} />
+      <DataOwnershipDialog />
     </SidebarProvider>
   );
 }
