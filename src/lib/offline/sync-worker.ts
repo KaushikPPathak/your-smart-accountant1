@@ -81,7 +81,6 @@ async function tick(): Promise<void> {
   // 0) Keep the Supabase refresh-token clock reset. Rate-limited to once
   //    every 6h internally so this is cheap to call every tick. Without
   //    this, a user who's online only briefly won't hit the built-in
-  //    this, a user who's online only briefly won't hit the built-in
   //    autoRefresh (which only fires near access-token expiry) and could
   //    silently burn down the 30-day refresh-token window.
   try { await refreshSessionIfDue(); } catch { /* ignore */ }
