@@ -183,13 +183,19 @@ export async function restoreCompanyBackup(
     );
   }
 
+  // In local-only mode, skip all supabase writes — the company id only
+  // exists in IndexedDB, and any cloud inserts would fail FK checks (or
+  // pollute a stale cloud row). The mirror below is authoritative.
+  const { isLocalOnlyMode } = await import("./local-only-mode");
+  const localOnly = isLocalOnlyMode();
+
   // STRICT RESTORE RULE: always wipe the target company's data before restoring.
   // "Overwrite existing balances and add missing transactions" is only achievable
   // by replacing the full snapshot — merging by heuristic keys produces
   // duplicate ledgers / duplicate vouchers / mismatched balances. This is
   // non-negotiable and ignores any caller that tries to disable it.
   void opts.wipeExisting;
-  {
+  if (!localOnly) {
     // Order matters due to FKs.
     await supabase.from("bill_allocations").delete().eq("company_id", targetCompanyId);
     const { data: existingVouchers } = await supabase
@@ -222,6 +228,7 @@ export async function restoreCompanyBackup(
   };
 
   // Ledgers
+  if (!localOnly) {
   for (const lRaw of backup.ledgers) {
     const { id, company_id: _c, created_at: _ca, updated_at: _ua, ...rest } = lRaw as Record<
       string,
@@ -380,6 +387,8 @@ export async function restoreCompanyBackup(
     });
     if (!error) summary.recurring_invoices++;
   }
+  } // end if (!localOnly)
+
 
   // ------------------------------------------------------------------
   // Local-cache mirror (CRITICAL for local-only mode).
