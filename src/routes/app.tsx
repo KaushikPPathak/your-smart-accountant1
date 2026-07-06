@@ -33,6 +33,7 @@ import { FocusHintsProvider } from "@/components/fast-form/FocusHints";
 import { StatusBar } from "@/components/fast-form/StatusBar";
 import { BackupNudgeBanner } from "@/components/BackupNudgeBanner";
 import { DataOwnershipDialog } from "@/components/DataOwnershipDialog";
+import { UpdateRecoveryBanner } from "@/components/UpdateRecoveryBanner";
 import { InstallAppButton } from "@/components/InstallAppButton";
 
 export const Route = createFileRoute("/app")({
