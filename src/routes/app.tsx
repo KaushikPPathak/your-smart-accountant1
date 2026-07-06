@@ -100,6 +100,13 @@ function AppLayout() {
     let cancelled = false;
     (async () => {
       try {
+        // Record version transition + detect unexpectedly-empty DB. Runs on
+        // every launch, on every platform.
+        try {
+          const { checkUpdateSafety } = await import("@/lib/update-safety");
+          await checkUpdateSafety();
+        } catch { /* silent — never block boot on the safety check */ }
+
         if (isDesktopRuntime()) {
           void runAppDataMigrationsOnce().catch(() => undefined);
           // Auto-snapshot every company once per day to APPLOCALDATA so a
@@ -110,6 +117,19 @@ function AppLayout() {
               .filter((c) => c.id);
             const { runAutoSnapshotOnce } = await import("@/lib/auto-snapshot");
             void runAutoSnapshotOnce(list).catch(() => undefined);
+
+            // If a new service worker is waiting to take over, snapshot
+            // FIRST, then let it activate. Ensures the outgoing build's
+            // data is on disk before the new SW replaces the app shell.
+            if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+              try {
+                const reg = await navigator.serviceWorker.getRegistration();
+                if (reg?.waiting) {
+                  const { runPreUpdateSnapshot } = await import("@/lib/update-safety");
+                  await runPreUpdateSnapshot(list);
+                }
+              } catch { /* ignore */ }
+            }
           }
         }
       } finally {
