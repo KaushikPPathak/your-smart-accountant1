@@ -162,18 +162,18 @@ function LockScreen() {
               _username: loginUser.trim(),
               _password: loginPass,
             }) as PromiseLike<any>,
-            1800,
+            10000,
             { data: null, error: { message: "Network timeout" } } as any,
           );
           if (error && /jwt|token/i.test(error.message ?? "")) {
-            const r = await withTimeout(ensureTechSession(true), 1200, { ok: false, reason: "Network timeout" } as any);
+            const r = await withTimeout(ensureTechSession(true), 8000, { ok: false, reason: "Network timeout" } as any);
             if (r.ok) {
               ({ data, error } = await withTimeout<any>(
                 supabase.rpc("verify_account_login", {
                   _username: loginUser.trim(),
                   _password: loginPass,
                 }) as PromiseLike<any>,
-                1800,
+                10000,
                 { data: null, error: { message: "Network timeout" } } as any,
               ));
             }
