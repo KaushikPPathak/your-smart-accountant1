@@ -346,6 +346,9 @@ function SettingsPage() {
         </p>
       </div>
 
+      <DataLocationCard />
+
+
       <Card>
         <CardHeader><CardTitle className="text-base">{t("settings.theme")}</CardTitle></CardHeader>
         <CardContent className="flex items-center gap-3">
