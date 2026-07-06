@@ -211,6 +211,29 @@ export async function restoreCompanyBackup(
   backup: CompanyBackup,
   opts: { wipeExisting?: boolean } = {},
 ): Promise<RestoreSummary> {
+  try {
+    return await restoreCompanyBackupImpl(targetCompanyId, backup, opts);
+  } catch (err) {
+    // Layer 5 — record restore failures locally so users / support can see
+    // what went wrong on the device without any network telemetry.
+    try {
+      const { recordFailure } = await import("./crash-log");
+      recordFailure("restore", err, {
+        company_id: targetCompanyId,
+        schema_version: (backup as { schema_version?: unknown }).schema_version,
+        ledgers: backup.ledgers?.length ?? 0,
+        vouchers: backup.vouchers?.length ?? 0,
+      });
+    } catch { /* never let telemetry mask the real error */ }
+    throw err;
+  }
+}
+
+async function restoreCompanyBackupImpl(
+  targetCompanyId: string,
+  backup: CompanyBackup,
+  opts: { wipeExisting?: boolean } = {},
+): Promise<RestoreSummary> {
   const ver = Number((backup as { schema_version?: unknown }).schema_version ?? 0);
   if (!Number.isFinite(ver) || ver < 1) {
     throw new Error("Backup file is missing a valid schema_version");
