@@ -25,6 +25,10 @@ export interface AutoRestoreOutcome {
   liveBefore?: number;
   liveAfter?: number;
   manifestTotal?: number;
+  /** Vouchers missing at detection time (manifestVouchers - liveVouchers, clamped ≥0). */
+  missingVouchers?: number;
+  /** Total vouchers the manifest expected. */
+  manifestVouchers?: number;
   error?: string;
 }
 
@@ -151,11 +155,14 @@ export async function runAutoRestore(
       restored = { path: cand.absPath, payload };
       break;
     }
+    const manifestVouchers = m?.vouchers ?? 0;
+    const missingVouchers = Math.max(0, manifestVouchers - live.vouchers);
     if (!restored) {
       const out: AutoRestoreOutcome = {
         companyId: c.id, companyName: c.name, status: "no-snapshot",
         liveBefore: live.ledgers + live.items + live.vouchers,
         manifestTotal: m ? totalRows(m) : 0,
+        manifestVouchers, missingVouchers,
       };
       results.push(out);
       await logEvent(out);
@@ -172,6 +179,7 @@ export async function runAutoRestore(
         liveBefore: live.ledgers + live.items + live.vouchers,
         liveAfter: after.ledgers + after.items + after.vouchers,
         manifestTotal: m ? totalRows(m) : 0,
+        manifestVouchers, missingVouchers,
       };
       results.push(out);
       await logEvent(out);
@@ -181,6 +189,7 @@ export async function runAutoRestore(
         error: e instanceof Error ? e.message : String(e),
         liveBefore: live.ledgers + live.items + live.vouchers,
         manifestTotal: m ? totalRows(m) : 0,
+        manifestVouchers, missingVouchers,
       };
       results.push(out);
       await logEvent(out);

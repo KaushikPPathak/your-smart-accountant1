@@ -165,6 +165,12 @@ function DataHealthPage() {
                    <HelpCircle className="mt-0.5 h-4 w-4 text-muted-foreground" />}
                   <div className="min-w-0 flex-1">
                     <div className="font-medium">{e.companyName} — {e.status}</div>
+                    {typeof e.missingVouchers === "number" && e.missingVouchers > 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        {e.missingVouchers} voucher{e.missingVouchers === 1 ? "" : "s"} missing before restore
+                        {typeof e.manifestVouchers === "number" ? ` (expected ${e.manifestVouchers})` : ""}
+                      </div>
+                    )}
                     {e.restoredFrom && <div className="truncate text-xs text-muted-foreground">from {e.restoredFrom}</div>}
                     {e.error && <div className="text-xs text-destructive">{e.error}</div>}
                     {e.restoredAtIso && <div className="text-xs text-muted-foreground">{new Date(e.restoredAtIso).toLocaleString()}</div>}

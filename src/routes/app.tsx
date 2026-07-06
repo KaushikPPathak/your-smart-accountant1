@@ -219,22 +219,22 @@ function AppLayout() {
   }, [navigate, location.pathname]);
 
   const onCompaniesPage = location.pathname.startsWith("/app/companies");
-  const onAssistantPage = location.pathname.startsWith("/app/assistant");
 
   // Gate: every page under /app requires a chosen + unlocked company
-  // (except /app/companies, which is reachable when the user clicked "+ New company")
+  // (except /app/companies, which is reachable when the user clicked "+ New company").
+  // /app/assistant is intentionally NOT exempted — it can read accounting data.
   useEffect(() => {
     if (bootstrapping || loading || companyLoading) return;
-    if (!user) return; // tech sign-in still in flight or failed
-    if (memberships.length === 0) return; // empty-state handled below
-    if (onCompaniesPage || onAssistantPage) return;
+    if (!user) return;
+    if (memberships.length === 0) return;
+    if (onCompaniesPage) return;
     if (!activeCompanyId || !isCompanyUnlocked(activeCompanyId)) {
       import("@/lib/return-to").then(({ rememberReturnTo }) => {
         rememberReturnTo(location.pathname + (typeof window !== "undefined" ? window.location.search : ""));
       });
       navigate({ to: "/" });
     }
-  }, [bootstrapping, loading, companyLoading, user, memberships.length, activeCompanyId, onCompaniesPage, onAssistantPage, navigate]);
+  }, [bootstrapping, loading, companyLoading, user, memberships.length, activeCompanyId, onCompaniesPage, navigate]);
 
   if (bootstrapping || loading || !user || companyLoading) {
     return (
@@ -244,8 +244,8 @@ function AppLayout() {
     );
   }
 
-  // No companies yet → invite to create one (allow assistant + companies pages through)
-  if (memberships.length === 0 && !onCompaniesPage && !onAssistantPage) {
+  // No companies yet → invite to create one (companies page still reachable).
+  if (memberships.length === 0 && !onCompaniesPage) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-muted/30 px-4 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-xl">
