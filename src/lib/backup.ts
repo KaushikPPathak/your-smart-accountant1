@@ -431,10 +431,11 @@ async function mirrorRestoreToLocalCache(
     await db.cache_companies.put(companyRow);
   }
   if (backup.settings) {
-    const s = stamp({ ...(backup.settings as Record<string, unknown>) });
+    const s = stamp({ ...(backup.settings as Record<string, unknown>) }) as Record<string, unknown>;
     if (!s.id) s.id = `settings-${targetCompanyId}`;
     await db.cache_company_settings.put(s);
   }
+
 
   if (backup.ledgers?.length) {
     await db.cache_ledgers.bulkPut(backup.ledgers.map((r) => stamp(r as Record<string, unknown>)));
