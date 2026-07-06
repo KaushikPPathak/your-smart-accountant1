@@ -43,6 +43,13 @@ export function DataLocationCard() {
           upload it to your own Google Drive / OneDrive / Dropbox. We&apos;re
           adding one-click backup to your own cloud account shortly.
         </div>
+        <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+          <strong>Version updates are safe.</strong> Installer and auto-updater
+          upgrades write only to the program folder — your data folder
+          (<code>%LOCALAPPDATA%\SmartAccountant\</code>) is never touched.
+          On every launch we also verify the local database is intact and
+          warn you if it looks unexpectedly empty after an update.
+        </div>
       </CardContent>
     </Card>
   );
