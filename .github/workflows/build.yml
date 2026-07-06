@@ -176,13 +176,13 @@ jobs:
             echo "Android project already initialized, skipping init."
           fi
 
-      - name: Build Android APK (arm64 + universal)
-        # arm64-v8a covers ~all modern phones; also emit a universal APK so
-        # users don't have to know their CPU arch. "App not installed" on
-        # Android is almost always the user picking the wrong-ABI APK.
-        run: |
-          bunx tauri android build --apk --target aarch64
-          bunx tauri android build --apk
+      - name: Build Android APK (debug — auto-signed, installable)
+        # We build --debug so the APK is auto-signed with Android's debug
+        # keystore and installs on any phone without "App not installed".
+        # Release builds produce an *-unsigned.apk that Android refuses to
+        # install; a proper release keystore + GitHub secret is needed for
+        # that path (Play Store distribution).
+        run: bunx tauri android build --apk --debug
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
