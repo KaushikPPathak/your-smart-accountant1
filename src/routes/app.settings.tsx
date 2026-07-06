@@ -322,7 +322,7 @@ function SettingsPage() {
           "This is an all-companies backup. Do not restore it into one company. Use Companies → Restore from file so each company is restored separately.",
         );
       }
-      const single = parsed.kind === "single" ? parsed.data : parsed.data.companies[0];
+      const single = parsed.data;
       if (!single) throw new Error("Backup file is empty");
       // Rule 5 — silent pre-restore snapshot for 24h undo (Housekeeping → Undo restore).
       const snap = await savePreRestoreSnapshot(activeCompanyId, targetName);
