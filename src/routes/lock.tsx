@@ -16,6 +16,7 @@ import { ensureTechSession } from "@/lib/tech-user";
 import { cacheAccountCredsFromCloud, verifyOfflineLogin, listCachedAccounts } from "@/lib/offline/creds-cache";
 import { isOnlineNow, pingOnline } from "@/lib/offline/online-status";
 import { consumeReturnTo } from "@/lib/return-to";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 export const Route = createFileRoute("/lock")({
   head: () => ({ meta: [{ title: "Sign in — Smart Accountant" }] }),
@@ -185,6 +186,7 @@ function LockScreen() {
           void cacheAccountCredsFromCloud(loginUser.trim(), loginPass);
 
           try {
+            if (isLocalOnlyMode()) throw new Error("Local-only mode: skip cloud company cache");
             const { data: cloudCompanies } = await supabase
               .from("companies_picker")
               .select("id, name, has_password");

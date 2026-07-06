@@ -479,12 +479,49 @@ async function mirrorRestoreToLocalCache(
   if (typeof window === "undefined" || typeof indexedDB === "undefined") return;
   const { offlineDb: db } = await import("./offline/db");
 
-  const stamp = (row: Record<string, unknown>) => ({
+  const sourceCompanyId = String(
+    ((backup.company as Record<string, unknown> | null)?.id ??
+      (backup.company as Record<string, unknown> | null)?.company_id ??
+      ""),
+  );
+  const shouldRemapIds = !sourceCompanyId || sourceCompanyId !== targetCompanyId;
+
+  const remapId = (scope: string, id: unknown): string | undefined => {
+    if (id === null || id === undefined || id === "") return undefined;
+    const raw = String(id);
+    if (!shouldRemapIds) return raw;
+    return `local:${targetCompanyId}:${scope}:${raw}`;
+  };
+
+  const ledgerId = (id: unknown) => remapId("ledger", id);
+  const itemId = (id: unknown) => remapId("item", id);
+  const voucherId = (id: unknown) => remapId("voucher", id);
+  const entryId = (id: unknown) => remapId("entry", id);
+  const voucherItemId = (id: unknown) => remapId("voucher-item", id);
+  const allocationId = (id: unknown) => remapId("allocation", id);
+  const recurringId = (id: unknown) => remapId("recurring", id);
+
+  const stamp = (row: Record<string, unknown>): Record<string, unknown> => ({
     ...row,
     company_id: targetCompanyId,
     updated_at: (row.updated_at as string) ?? new Date().toISOString(),
     is_synced: true,
   });
+
+  const withId = (
+    row: Record<string, unknown>,
+    id: string | undefined,
+    extra: Record<string, unknown> = {},
+  ) => {
+    const out = stamp({ ...row, ...extra });
+    if (id) out.id = id;
+    return out;
+  };
+
+  const mapLinkedVoucherIds = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map((id) => voucherId(id) ?? id);
+    return value;
+  };
 
   // ATOMIC: wipe + rewrite for this company happens inside ONE Dexie
   // transaction. A crash mid-restore either rolls the whole thing back
@@ -492,6 +529,7 @@ async function mirrorRestoreToLocalCache(
   // this, an app close between the wipe and the bulkPut left the
   // company with zero rows and no snapshot to recover from. See Bug 3.1.
   const tables = [
+    db.companies,
     db.cache_companies,
     db.cache_company_settings,
     db.cache_ledgers,
@@ -518,46 +556,98 @@ async function mirrorRestoreToLocalCache(
     if (backup.company) {
       const companyRow = stamp({ ...(backup.company as Record<string, unknown>), id: targetCompanyId });
       await db.cache_companies.put(companyRow);
+      await db.companies.put({
+        id: targetCompanyId,
+        name: String(companyRow.name ?? "Restored company"),
+        has_password: Boolean((companyRow as { has_password?: unknown }).has_password),
+        account_id: "local-user",
+      });
     }
     if (backup.settings) {
       const s = stamp({ ...(backup.settings as Record<string, unknown>) }) as Record<string, unknown>;
-      if (!s.id) s.id = `settings-${targetCompanyId}`;
+      s.id = shouldRemapIds ? `settings-${targetCompanyId}` : (s.id || `settings-${targetCompanyId}`);
       await db.cache_company_settings.put(s);
     }
 
     if (backup.ledgers?.length) {
-      await db.cache_ledgers.bulkPut(backup.ledgers.map((r) => stamp(r as Record<string, unknown>)));
+      await db.cache_ledgers.bulkPut(
+        backup.ledgers.map((r) => {
+          const row = r as Record<string, unknown>;
+          return withId(row, ledgerId(row.id));
+        }),
+      );
       summary.ledgers = Math.max(summary.ledgers, backup.ledgers.length);
     }
     if (backup.items?.length) {
-      await db.cache_items.bulkPut(backup.items.map((r) => stamp(r as Record<string, unknown>)));
+      await db.cache_items.bulkPut(
+        backup.items.map((r) => {
+          const row = r as Record<string, unknown>;
+          return withId(row, itemId(row.id));
+        }),
+      );
       summary.items = Math.max(summary.items, backup.items.length);
     }
     if (backup.vouchers?.length) {
-      await db.cache_vouchers.bulkPut(backup.vouchers.map((r) => stamp(r as Record<string, unknown>)));
+      await db.cache_vouchers.bulkPut(
+        backup.vouchers.map((r) => {
+          const row = r as Record<string, unknown>;
+          return withId(row, voucherId(row.id), {
+            party_ledger_id: row.party_ledger_id ? ledgerId(row.party_ledger_id) ?? null : row.party_ledger_id,
+            original_voucher_id: row.original_voucher_id ? voucherId(row.original_voucher_id) ?? null : row.original_voucher_id,
+            linked_voucher_ids: mapLinkedVoucherIds(row.linked_voucher_ids),
+          });
+        }),
+      );
       summary.vouchers = Math.max(summary.vouchers, backup.vouchers.length);
     }
     if (backup.voucher_entries?.length) {
       await db.cache_voucher_entries.bulkPut(
-        backup.voucher_entries.map((r) => stamp(r as Record<string, unknown>)),
+        backup.voucher_entries.map((r) => {
+          const row = r as Record<string, unknown>;
+          return withId(row, entryId(row.id), {
+            voucher_id: voucherId(row.voucher_id) ?? row.voucher_id,
+            ledger_id: ledgerId(row.ledger_id) ?? row.ledger_id,
+          });
+        }),
       );
       summary.voucher_entries = Math.max(summary.voucher_entries, backup.voucher_entries.length);
     }
     if (backup.voucher_items?.length) {
       await db.cache_voucher_items.bulkPut(
-        backup.voucher_items.map((r) => stamp(r as Record<string, unknown>)),
+        backup.voucher_items.map((r) => {
+          const row = r as Record<string, unknown>;
+          return withId(row, voucherItemId(row.id), {
+            voucher_id: voucherId(row.voucher_id) ?? row.voucher_id,
+            item_id: itemId(row.item_id) ?? row.item_id,
+          });
+        }),
       );
       summary.voucher_items = Math.max(summary.voucher_items, backup.voucher_items.length);
     }
     if (backup.bill_allocations?.length) {
       await db.cache_bill_allocations.bulkPut(
-        backup.bill_allocations.map((r) => stamp(r as Record<string, unknown>)),
+        backup.bill_allocations.map((r) => {
+          const row = r as Record<string, unknown>;
+          return withId(row, allocationId(row.id), {
+            invoice_voucher_id: voucherId(row.invoice_voucher_id) ?? row.invoice_voucher_id,
+            payment_voucher_id: voucherId(row.payment_voucher_id) ?? row.payment_voucher_id,
+            ledger_id: ledgerId(row.ledger_id) ?? row.ledger_id,
+          });
+        }),
       );
       summary.bill_allocations = Math.max(summary.bill_allocations, backup.bill_allocations.length);
     }
     if (backup.recurring_invoices?.length) {
       await db.cache_recurring_invoices.bulkPut(
-        backup.recurring_invoices.map((r) => stamp(r as Record<string, unknown>)),
+        backup.recurring_invoices.map((r) => {
+          const row = r as Record<string, unknown>;
+          return withId(row, recurringId(row.id), {
+            party_ledger_id: row.party_ledger_id ? ledgerId(row.party_ledger_id) ?? null : row.party_ledger_id,
+            last_generated_voucher_id: row.last_generated_voucher_id
+              ? voucherId(row.last_generated_voucher_id) ?? null
+              : row.last_generated_voucher_id,
+          });
+        }),
       );
       summary.recurring_invoices = Math.max(
         summary.recurring_invoices,

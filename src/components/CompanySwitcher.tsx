@@ -14,6 +14,7 @@ import { useI18n } from "@/lib/i18n";
 import { isCompanyUnlocked, markCompanyUnlocked } from "@/lib/tech-user";
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineNow } from "@/lib/offline/online-status";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 export function CompanySwitcher() {
   const { memberships, activeMembership, setActiveCompanyId } = useCompany();
@@ -26,8 +27,8 @@ export function CompanySwitcher() {
       return;
     }
 
-    // Check if the system is offline
-    if (!isOnlineNow()) {
+    // Local-only/offline: company password state is local; never query cloud picker.
+    if (isLocalOnlyMode() || !isOnlineNow()) {
       console.log("Offline mode: checking local hard drive cache for password protection state...");
       try {
         const { offlineDb } = await import("@/lib/offline/db");
