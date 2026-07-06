@@ -292,6 +292,7 @@ function AppLayout() {
         </SidebarInset>
       </div>
       <KeyboardCheatSheet open={helpOpen} onOpenChange={setHelpOpen} />
+      <DataOwnershipDialog />
     </SidebarProvider>
   );
 }
