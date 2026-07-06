@@ -297,6 +297,7 @@ function AppLayout() {
               </Button>
             </div>
           </header>
+          <UpdateRecoveryBanner />
           <BackupNudgeBanner />
           <AccountGroupsProvider>
           <MastersProvider>
