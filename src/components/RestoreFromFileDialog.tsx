@@ -95,9 +95,7 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
   }
 
   async function createNewCompanyFrom(b: CompanyBackup, name: string): Promise<string> {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const uid = sessionData.session?.user?.id;
-    if (!uid) throw new Error("Not signed in");
+    const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
     const src = (b.company ?? {}) as Record<string, unknown>;
     // Copy a safe subset; drop ids/timestamps/audit fields.
     const KEEP = [
@@ -113,6 +111,26 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    if (isLocalOnlyMode()) {
+      // Local-only: write ONLY to IndexedDB. Never touch the cloud —
+      // cloud rows reappear in the picker as duplicates on next launch.
+      const { offlineDb: db } = await import("@/lib/offline/db");
+      const row = {
+        id: newId,
+        ...payload,
+        company_id: newId,
+        updated_at: new Date().toISOString(),
+        is_synced: true,
+      };
+      await db.cache_companies.put(row);
+      await db.companies.put({ id: newId, name, has_password: false, account_id: "local-user" });
+      return newId;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const uid = sessionData.session?.user?.id;
+    if (!uid) throw new Error("Not signed in");
     const insertRow = { id: newId, name, ...payload, created_by: uid };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await supabase.from("companies").insert(insertRow as any);
