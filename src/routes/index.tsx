@@ -84,6 +84,10 @@ function StartScreen() {
         const online = isOnlineNow();
         const localOnly = isLocalOnlyMode();
 
+        // Physically remove empty duplicate companies from IndexedDB once
+        // per session before we read them. Guarded to local-only mode.
+        if (localOnly) await dedupeLocalCompaniesOnce();
+
         // Dynamically import DB module engine to safely isolate bundling compilation
         const dbModule = await import("@/lib/offline/db");
         const db = dbModule.default || dbModule.offlineDb || (dbModule as any).db;
