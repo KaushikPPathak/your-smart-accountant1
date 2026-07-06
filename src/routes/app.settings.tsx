@@ -317,6 +317,11 @@ function SettingsPage() {
       const text = await file.text();
       const parsed = await parseBackupFile(text);
       if (parsed.checksumOk === false) toast.warning("Backup checksum mismatch — file may be corrupted or edited.");
+      if (parsed.kind !== "single") {
+        throw new Error(
+          "This is an all-companies backup. Do not restore it into one company. Use Companies → Restore from file so each company is restored separately.",
+        );
+      }
       const single = parsed.kind === "single" ? parsed.data : parsed.data.companies[0];
       if (!single) throw new Error("Backup file is empty");
       // Rule 5 — silent pre-restore snapshot for 24h undo (Housekeeping → Undo restore).
