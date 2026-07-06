@@ -219,22 +219,22 @@ function AppLayout() {
   }, [navigate, location.pathname]);
 
   const onCompaniesPage = location.pathname.startsWith("/app/companies");
-  const onAssistantPage = location.pathname.startsWith("/app/assistant");
 
   // Gate: every page under /app requires a chosen + unlocked company
-  // (except /app/companies, which is reachable when the user clicked "+ New company")
+  // (except /app/companies, which is reachable when the user clicked "+ New company").
+  // /app/assistant is intentionally NOT exempted — it can read accounting data.
   useEffect(() => {
     if (bootstrapping || loading || companyLoading) return;
-    if (!user) return; // tech sign-in still in flight or failed
-    if (memberships.length === 0) return; // empty-state handled below
-    if (onCompaniesPage || onAssistantPage) return;
+    if (!user) return;
+    if (memberships.length === 0) return;
+    if (onCompaniesPage) return;
     if (!activeCompanyId || !isCompanyUnlocked(activeCompanyId)) {
       import("@/lib/return-to").then(({ rememberReturnTo }) => {
         rememberReturnTo(location.pathname + (typeof window !== "undefined" ? window.location.search : ""));
       });
       navigate({ to: "/" });
     }
-  }, [bootstrapping, loading, companyLoading, user, memberships.length, activeCompanyId, onCompaniesPage, onAssistantPage, navigate]);
+  }, [bootstrapping, loading, companyLoading, user, memberships.length, activeCompanyId, onCompaniesPage, navigate]);
 
   if (bootstrapping || loading || !user || companyLoading) {
     return (
