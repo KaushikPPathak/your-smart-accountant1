@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { ShieldCheck, RefreshCw, AlertTriangle, CheckCircle2, HelpCircle, HardDriveDownload } from "lucide-react";
