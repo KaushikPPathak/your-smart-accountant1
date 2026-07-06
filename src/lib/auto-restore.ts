@@ -25,6 +25,10 @@ export interface AutoRestoreOutcome {
   liveBefore?: number;
   liveAfter?: number;
   manifestTotal?: number;
+  /** Vouchers missing at detection time (manifestVouchers - liveVouchers, clamped ≥0). */
+  missingVouchers?: number;
+  /** Total vouchers the manifest expected. */
+  manifestVouchers?: number;
   error?: string;
 }
 
