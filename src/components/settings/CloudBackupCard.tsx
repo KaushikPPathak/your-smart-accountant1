@@ -182,17 +182,18 @@ export function CloudBackupCard() {
             </Button>
             <Button
               size="sm" variant="outline"
-              onClick={() => fileRef.current?.click()}
-              disabled={busy !== null || !isAdmin}
-              title={isAdmin ? "" : "Only admins can restore"}
+              onClick={() => setInspectOpen(true)}
+              disabled={busy !== null || !isAdmin || !activeCompanyId}
+              title={isAdmin ? "Inspect a backup file, then restore" : "Only admins can restore"}
             >
               <Upload className="mr-2 h-4 w-4" />
-              {busy === "restore" ? "Restoring…" : `Restore from .${LACCBAK_EXT}`}
+              Inspect &amp; restore .{LACCBAK_EXT}
             </Button>
+            {/* Legacy hidden input retained to avoid ref-null crashes; not used now. */}
             <input
               ref={fileRef} type="file"
               accept={`.${LACCBAK_EXT},.json,application/json,application/octet-stream`}
-              className="hidden" onChange={onRestore}
+              className="hidden"
             />
           </div>
         </div>
