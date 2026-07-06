@@ -122,6 +122,21 @@ jobs:
       NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/27.0.12077973
       ANDROID_NDK_ROOT: ${{ github.workspace }}/android-sdk/ndk/27.0.12077973
     steps:
+      - name: Free disk space on runner
+        # The Android build (SDK + NDK + Rust targets + Gradle caches) easily
+        # exceeds the ~14 GB free on a stock ubuntu-latest runner. Purge the
+        # preinstalled toolchains we don't use to reclaim ~25 GB before we
+        # start downloading Android bits.
+        run: |
+          echo "Before cleanup:" && df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/ndk /opt/ghc \
+                      /usr/local/share/boost /usr/local/share/powershell \
+                      /usr/local/lib/node_modules /opt/hostedtoolcache/CodeQL \
+                      "$AGENT_TOOLSDIRECTORY" || true
+          sudo apt-get clean
+          docker image prune -af || true
+          echo "After cleanup:" && df -h /
+
       - uses: actions/checkout@v4
 
       - name: Setup Bun
