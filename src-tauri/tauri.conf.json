@@ -2,7 +2,9 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "SmartAccountant",
   "version": "0.2.0",
+  "//identifier": "FROZEN — changing this orphans every user's IndexedDB. Do not edit.",
   "identifier": "com.smartaccountant.app",
+
   "build": {
     "beforeBuildCommand": "bun run build:tauri",
     "beforeDevCommand": "bun run dev",
@@ -39,12 +41,16 @@
       "nsis": {
         "installerIcon": "icons/icon.ico",
         "installMode": "currentUser",
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "//deleteAppDataOnUninstall": "OFF — user data under %LOCALAPPDATA%\\com.smartaccountant.app\\ is preserved on uninstall so re-installs never wipe accounting data. Users who want a true clean uninstall can delete the folder by hand.",
+        "deleteAppDataOnUninstall": false
       },
       "wix": {
+        "//upgradeCode": "FROZEN — changing this makes MSI upgrades run as brand-new installs and can trigger a data-folder wipe. Do not edit.",
         "upgradeCode": "F7E5A1C2-4B6D-4C8A-9F2E-1A3B5C7D9E11"
       },
       "allowDowngrades": false
+
     }
   },
   "plugins": {
