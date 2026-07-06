@@ -26,6 +26,7 @@ import { closeNativeApp } from "@/lib/native-bridge";
 import { useAuth } from "@/lib/auth-context";
 import { isOnlineNow } from "@/lib/offline/online-status";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { dedupeLocalCompaniesOnce } from "@/lib/dedupe-local-companies";
 import { consumeReturnTo } from "@/lib/return-to";
 
 function gotoAfterUnlock(navigate: ReturnType<typeof useNavigate>) {
