@@ -109,18 +109,35 @@ function AppLayout() {
 
         if (isDesktopRuntime()) {
           void runAppDataMigrationsOnce().catch(() => undefined);
-          // Auto-snapshot every company once per day to APPLOCALDATA so a
-          // Windows installer upgrade can never lose all data.
           if (memberships.length > 0) {
             const list = memberships
               .map((m) => ({ id: m.company_id, name: m.companies?.name ?? "company" }))
               .filter((c) => c.id);
+
+            // 1) Silent auto-restore FIRST — if the live DB is empty but
+            //    a valid snapshot exists on disk, put the data back before
+            //    the UI renders. Toast the outcome; never prompt.
+            try {
+              const { runAutoRestore } = await import("@/lib/auto-restore");
+              const outcomes = await runAutoRestore(list);
+              const restored = outcomes.filter((o) => o.status === "restored");
+              if (restored.length > 0) {
+                toast.success(
+                  restored.length === 1
+                    ? `Restored ${restored[0].companyName} from local safety snapshot`
+                    : `Restored ${restored.length} companies from local safety snapshots`,
+                  { description: "Your books were reloaded automatically from your on-device backup." },
+                );
+              }
+            } catch { /* silent — banner remains as fallback */ }
+
+            // 2) Then take today's snapshot (respects the "never overwrite
+            //    a good file with an empty one" rule inside auto-snapshot).
             const { runAutoSnapshotOnce } = await import("@/lib/auto-snapshot");
             void runAutoSnapshotOnce(list).catch(() => undefined);
 
             // If a new service worker is waiting to take over, snapshot
-            // FIRST, then let it activate. Ensures the outgoing build's
-            // data is on disk before the new SW replaces the app shell.
+            // FIRST, then let it activate.
             if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
               try {
                 const reg = await navigator.serviceWorker.getRegistration();
