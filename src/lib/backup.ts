@@ -387,6 +387,8 @@ export async function restoreCompanyBackup(
     });
     if (!error) summary.recurring_invoices++;
   }
+  } // end if (!localOnly)
+
 
   // ------------------------------------------------------------------
   // Local-cache mirror (CRITICAL for local-only mode).
