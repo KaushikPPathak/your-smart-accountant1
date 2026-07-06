@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { pullCompanySnapshot } from "@/lib/offline/snapshot";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 interface CloudCompany {
   company_id: string;
@@ -64,6 +65,16 @@ export function RestoreFromCloudDialog({ open, onOpenChange, onComplete }: Props
   }, [open]);
 
   const handlePull = async (c: CloudCompany) => {
+    // Bug 1.2 guard — in local-only mode the local IndexedDB is
+    // authoritative and cloud rows are stale/empty. Pulling would wipe
+    // the local cache with cloud data and silently destroy the user's
+    // real books. Refuse the operation.
+    if (isLocalOnlyMode()) {
+      toast.error("Local-only mode is on — cloud restore is disabled", {
+        description: "Your data lives on this device. Use 'Restore from file' to load a backup.",
+      });
+      return;
+    }
     setPulling(c.company_id);
     setProgress("Connecting…");
     try {

@@ -4,6 +4,7 @@ import { markSaved, markFailure, clearFailures } from "./save-status";
 import { describeError } from "./error-message";
 import { isOnlineNow } from "./offline/online-status";
 import { enqueueWrite } from "./offline/outbox";
+import { isLocalOnlyMode } from "./local-only-mode";
 
 export interface PersistSpec {
   executor: string;
@@ -77,6 +78,19 @@ async function flush() {
       // drain worker pushes them to Supabase asynchronously.
       if (job.persist) {
         if (await persistAndDrop(job)) continue;
+        // Bug 1.3 guard — persist failed (IDB quota / corruption). In
+        // local-only mode we MUST NOT fall through to job.run(), because
+        // job.run() calls supabase.rpc(...) directly and would leak
+        // business data to the cloud. Surface the IDB failure instead.
+        if (isLocalOnlyMode()) {
+          job.attempts += 1;
+          job.lastError = "Local storage write failed. Free up disk space and retry.";
+          console.error("Local outbox enqueue failed in local-only mode", { label: job.label });
+          markFailure();
+          bump();
+          toast.error(`Save failed: ${job.label}`, { description: job.lastError });
+          break;
+        }
       }
       try {
         await job.run();

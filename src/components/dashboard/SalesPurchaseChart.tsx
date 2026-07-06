@@ -18,7 +18,7 @@ interface MonthRow {
 
 export default function SalesPurchaseChart({ monthly }: { monthly: MonthRow[] }) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
       <BarChart data={monthly}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
         <XAxis dataKey="month" fontSize={11} />
