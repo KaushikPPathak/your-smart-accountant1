@@ -262,6 +262,13 @@ export function CloudBackupCard() {
           </div>
         </div>
       </CardContent>
+      <BackupInspectDialog
+        open={inspectOpen}
+        onOpenChange={setInspectOpen}
+        targetCompanyId={activeCompanyId ?? null}
+        targetCompanyName={activeMembership?.companies.name ?? ""}
+        isAdmin={isAdmin}
+      />
     </Card>
   );
 }
