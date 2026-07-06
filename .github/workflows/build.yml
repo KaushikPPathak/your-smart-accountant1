@@ -71,7 +71,7 @@ jobs:
   # ─────────────────────────────────────────────
   windows:
     name: Windows (.msi + .exe)
-    needs: version
+    needs: [version, test]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,7 +132,7 @@ jobs:
   # ─────────────────────────────────────────────
   android:
     name: Android (.apk)
-    needs: version
+    needs: [version, test]
     runs-on: ubuntu-latest
     env:
       NDK_VERSION: "27.0.12077973"
