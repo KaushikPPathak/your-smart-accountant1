@@ -1,5 +1,6 @@
 // Auto-create system ledgers and post double-entry for item vouchers.
 import { supabase } from "@/integrations/supabase/client";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 type LedgerType =
   | "income_direct"
@@ -31,6 +32,31 @@ const IN_IGST: SystemLedgerSpec = { name: "Input IGST", type: "duties_taxes" };
 const ROUND_OFF: SystemLedgerSpec = { name: "Round Off", type: "expense_indirect" };
 
 async function getOrCreateLedger(companyId: string, spec: SystemLedgerSpec): Promise<string> {
+  if (isLocalOnlyMode()) {
+    const { offlineDb } = await import("@/lib/offline/db");
+    const rows = await offlineDb.cache_ledgers.where("company_id").equals(companyId).toArray();
+    const existing = (rows as Array<{ id: string; name?: string; is_deleted?: boolean }>).find(
+      (row) => row.is_deleted !== true && String(row.name ?? "").trim().toLowerCase() === spec.name.toLowerCase(),
+    );
+    if (existing?.id) return existing.id;
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await offlineDb.cache_ledgers.put({
+      id,
+      company_id: companyId,
+      name: spec.name,
+      type: spec.type,
+      gst_treatment: "regular",
+      opening_balance_paise: 0,
+      opening_balance_is_debit: true,
+      is_active: true,
+      is_synced: true,
+      is_deleted: false,
+      updated_at: now,
+    });
+    return id;
+  }
+
   const { data: existing } = await supabase
     .from("ledgers")
     .select("id")

@@ -9,6 +9,7 @@
 //   return cloud.data;
 
 import { offlineDb } from "./db";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 const NETWORK_BLOCKED_KEY = "ym_network_blocked_at";
 
@@ -20,6 +21,7 @@ export function rememberNetworkBlocked() {
 }
 
 export function shouldPreferOfflineCache(): boolean {
+  if (isLocalOnlyMode()) return true;
   if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
   if (typeof window === "undefined") return false;
   let raw: string | number | null = null;

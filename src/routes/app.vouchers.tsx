@@ -111,8 +111,11 @@ function VouchersHub() {
       setRows(rows);
     };
 
-    const { isOnlineNow } = await import("@/lib/offline/online-status");
-    if (!isOnlineNow()) {
+    const [{ isOnlineNow }, { isLocalOnlyMode }] = await Promise.all([
+      import("@/lib/offline/online-status"),
+      import("@/lib/local-only-mode"),
+    ]);
+    if (isLocalOnlyMode() || !isOnlineNow()) {
       try { await loadFromCache(); } catch { setRows([]); }
       setLoading(false);
       return;

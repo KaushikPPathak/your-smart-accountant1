@@ -40,6 +40,7 @@ import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { createItem, updateItem, deleteItem } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { HsnCodeAutocomplete } from "@/components/HsnCodeAutocomplete";
 
 export const Route = createFileRoute("/app/items")({
@@ -220,9 +221,11 @@ function ItemsPage() {
     }
     setSubmitting(false);
     toast.success(
-      isOnlineNow()
-        ? (editing ? "Item updated" : "Item created")
-        : (editing ? "Item update queued — will sync when online" : "Item queued — will sync when online"),
+      isLocalOnlyMode()
+        ? (editing ? "Item updated on this device" : "Item created on this device")
+        : isOnlineNow()
+          ? (editing ? "Item updated" : "Item created")
+          : (editing ? "Item update saved on this device" : "Item saved on this device"),
     );
     setOpen(false);
     setEditing(null);
@@ -239,7 +242,7 @@ function ItemsPage() {
       toast.error(err instanceof Error ? err.message : "Delete failed");
       return;
     }
-    toast.success(isOnlineNow() ? "Item deleted" : "Delete queued — will sync when online");
+    toast.success(isLocalOnlyMode() || !isOnlineNow() ? "Item deleted on this device" : "Item deleted");
     load();
   };
 

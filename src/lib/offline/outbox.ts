@@ -257,6 +257,36 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number; p
   }
 }
 
+export async function materializeLocalOnlyOutbox(): Promise<{ applied: number; failed: number }> {
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (!isLocalOnlyMode()) return { applied: 0, failed: 0 };
+  const db = await getDbInstance();
+  const rows = await db.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
+  let applied = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    try {
+      if (row.op === "custom" && row.executor) {
+        await executeOutboxRow(row);
+        if (row.id !== undefined) await db.outbox.delete(row.id);
+        applied += 1;
+        emit();
+      }
+    } catch (e) {
+      failed += 1;
+      if (row.id !== undefined) {
+        await db.outbox.update(row.id, {
+          attempts: (row.attempts ?? 0) + 1,
+          last_error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+  }
+
+  return { applied, failed };
+}
+
 export async function clearOutboxRow(id: number): Promise<void> {
   const db = await getDbInstance();
   await db.outbox.delete(id);

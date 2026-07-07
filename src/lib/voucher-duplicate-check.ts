@@ -7,6 +7,7 @@
 import { offlineDb } from "@/lib/offline/db";
 import { supabase } from "@/integrations/supabase/client";
 import { isOnlineNow } from "@/lib/offline/online-status";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 export interface DuplicateVoucherHit {
   id: string;
@@ -55,7 +56,7 @@ export async function findDuplicateReference(
     // ignore — Dexie might be unavailable
   }
 
-  if (isOnlineNow()) {
+  if (!isLocalOnlyMode() && isOnlineNow()) {
     try {
       const { data } = await supabase
         .from("vouchers")

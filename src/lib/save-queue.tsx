@@ -77,6 +77,28 @@ async function flush() {
       // This keeps saves instant even on slow/flaky internet — the outbox
       // drain worker pushes them to Supabase asynchronously.
       if (job.persist) {
+        // Local-only mode: there is no cloud replay. Execute the job now so
+        // vouchers/masters are written into IndexedDB immediately instead of
+        // being parked forever in an outbox that intentionally never drains.
+        if (isLocalOnlyMode()) {
+          try {
+            await job.run();
+            queue.shift();
+            markSaved(job.label);
+            if (queue.length === 0) clearFailures();
+            bump();
+            toast.success(`${job.label} saved on this device`);
+            continue;
+          } catch (e) {
+            job.attempts += 1;
+            job.lastError = describeError(e);
+            console.error("Local save failed", { label: job.label, error: e });
+            markFailure();
+            bump();
+            toast.error(`Save failed: ${job.label}`, { description: job.lastError });
+            break;
+          }
+        }
         if (await persistAndDrop(job)) continue;
         // Bug 1.3 guard — persist failed (IDB quota / corruption). In
         // local-only mode we MUST NOT fall through to job.run(), because

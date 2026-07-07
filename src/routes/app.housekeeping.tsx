@@ -61,6 +61,7 @@ import { formatINR } from "@/lib/money";
 import { describeError } from "@/lib/error-message";
 import { deactivateLedger as deactivateLedgerOff, deactivateItem as deactivateItemOff } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import {
   readItems,
   readLedgers,
@@ -816,7 +817,7 @@ function CleanupTool({ companyId, disabled }: { companyId: string | null; disabl
     try {
       await deactivateLedgerOff(id, companyId);
       setUnusedLedgers((l) => l.filter((x) => x.id !== id));
-      toast.success(isOnlineNow() ? "Ledger deactivated" : "Deactivation queued — will sync when online");
+      toast.success(isLocalOnlyMode() || !isOnlineNow() ? "Ledger deactivated on this device" : "Ledger deactivated");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed");
     }
@@ -826,7 +827,7 @@ function CleanupTool({ companyId, disabled }: { companyId: string | null; disabl
     try {
       await deactivateItemOff(id, companyId);
       setUnusedItems((l) => l.filter((x) => x.id !== id));
-      toast.success(isOnlineNow() ? "Item deactivated" : "Deactivation queued — will sync when online");
+      toast.success(isLocalOnlyMode() || !isOnlineNow() ? "Item deactivated on this device" : "Item deactivated");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed");
     }

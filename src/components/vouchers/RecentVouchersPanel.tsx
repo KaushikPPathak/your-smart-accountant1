@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useCompany } from "@/lib/company-context";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { readLedgers, readVouchers } from "@/lib/offline/cache-read";
 import { formatINR } from "@/lib/money";
 import { Pencil } from "lucide-react";
 
@@ -41,6 +43,19 @@ export function RecentVouchersPanel({
     if (!activeCompanyId) return;
     let cancelled = false;
     (async () => {
+      if (isLocalOnlyMode()) {
+        const [vouchers, ledgers] = await Promise.all([
+          readVouchers(activeCompanyId, { voucher_type: voucherType }),
+          readLedgers(activeCompanyId),
+        ]);
+        if (cancelled) return;
+        const list = (vouchers as RecentRow[]).slice(0, limit);
+        setRows(list);
+        const m: Record<string, string> = {};
+        for (const l of ledgers as Array<{ id: string; name: string }>) m[l.id] = l.name;
+        setPartyNames(m);
+        return;
+      }
       const { data } = await supabase
         .from("vouchers")
         .select("id, voucher_number, voucher_date, total_paise, party_ledger_id")

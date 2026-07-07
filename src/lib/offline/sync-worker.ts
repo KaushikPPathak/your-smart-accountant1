@@ -2,7 +2,7 @@
 // Background worker: drains the outbox AND pulls cloud snapshots so the
 // local cache stays warm for offline use.
 
-import { drainOutbox, queueSize } from "./outbox";
+import { drainOutbox, materializeLocalOnlyOutbox, queueSize } from "./outbox";
 import { refreshAllCachedCreds } from "./creds-cache";
 import { pullSnapshot } from "./snapshot";
 import { rememberNetworkBlocked } from "./cache-read";
@@ -77,7 +77,11 @@ async function tick(): Promise<void> {
   // Local-only mode: no cloud sync of any business data. Just quietly do
   // nothing so no server calls are made.
   const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
-  if (isLocalOnlyMode()) { rememberWorkMode("offline"); return; }
+  if (isLocalOnlyMode()) {
+    try { await materializeLocalOnlyOutbox(); } catch { /* ignore */ }
+    rememberWorkMode("offline");
+    return;
+  }
   // 0) Keep the Supabase refresh-token clock reset. Rate-limited to once
   //    every 6h internally so this is cheap to call every tick. Without
   //    this, a user who's online only briefly won't hit the built-in

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "./company-context";
+import { isLocalOnlyMode } from "./local-only-mode";
 import { readItems, readLedgers, shouldPreferOfflineCache } from "@/lib/offline/cache-read";
 
 export interface CachedLedger {
@@ -90,7 +91,7 @@ interface Ctx { ready: boolean; loading: boolean; reload: () => Promise<void>; }
 const MastersCtx = createContext<Ctx>({ ready: false, loading: false, reload: async () => undefined });
 
 async function fetchAll<T>(table: "ledgers" | "items", companyId: string, columns: string): Promise<T[]> {
-  if (shouldPreferOfflineCache()) {
+  if (isLocalOnlyMode() || shouldPreferOfflineCache()) {
     return (table === "ledgers" ? await readLedgers(companyId) : await readItems(companyId)) as T[];
   }
   const PAGE = 1000;

@@ -5,6 +5,7 @@
 // pulls down cloud updates incrementally using cursor high-water marks.
 
 import { supabase } from "@/integrations/supabase/client";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { isOnlineNow } from "./online-status";
 import { enqueueWrite } from "./outbox";
 
@@ -41,6 +42,7 @@ async function getDbInstance() {
  * Evaluates Local vs Remote state using Last-Write-Wins (LWW) timestamp logic.
  */
 export async function syncEssentialMasters(companyId: string): Promise<void> {
+  if (isLocalOnlyMode()) return;
   if (!isOnlineNow() || !companyId) return;
 
   const tablesToSync = ["ledgers", "items"] as const;
@@ -152,16 +154,18 @@ export async function createLedger(payload: LedgerInsertPayload): Promise<Ledger
   // Write directly to local v2 cache table
   await offlineDb.cache_ledgers.put(localRecord);
 
-  // Queue write to the durable outbox to allow replay on reconnect
-  await enqueueWrite({
-    op: "insert",
-    table: "ledgers",
-    payload: { ...payload, id, updated_at: now },
-    company_id: payload.company_id,
-    label: `Ledger: ${payload.name}`,
-  });
+  if (!isLocalOnlyMode()) {
+    // Queue write to the durable outbox to allow replay on reconnect.
+    await enqueueWrite({
+      op: "insert",
+      table: "ledgers",
+      payload: { ...payload, id, updated_at: now },
+      company_id: payload.company_id,
+      label: `Ledger: ${payload.name}`,
+    });
+  }
 
-  if (isOnlineNow()) {
+  if (!isLocalOnlyMode() && isOnlineNow()) {
     // Non-blocking catch-up execution call
     syncEssentialMasters(payload.company_id);
   }
@@ -195,15 +199,17 @@ export async function updateLedger(
     await offlineDb.cache_ledgers.put(updatedRecord);
   }
 
-  await enqueueWrite({
-    op: "update",
-    table: "ledgers",
-    payload: { id, values: { ...values, updated_at: now } },
-    company_id: companyId,
-    label: `Update ledger: ${values.name ?? id.slice(0, 8)}`,
-  });
+  if (!isLocalOnlyMode()) {
+    await enqueueWrite({
+      op: "update",
+      table: "ledgers",
+      payload: { id, values: { ...values, updated_at: now } },
+      company_id: companyId,
+      label: `Update ledger: ${values.name ?? id.slice(0, 8)}`,
+    });
+  }
 
-  if (isOnlineNow()) {
+  if (!isLocalOnlyMode() && isOnlineNow()) {
     syncEssentialMasters(companyId);
   }
 
@@ -225,15 +231,17 @@ export async function deleteLedger(id: string, companyId: string, label?: string
     });
   }
 
-  await enqueueWrite({
-    op: "delete",
-    table: "ledgers",
-    payload: { id },
-    company_id: companyId,
-    label: `Delete ledger: ${label ?? id.slice(0, 8)}`,
-  });
+  if (!isLocalOnlyMode()) {
+    await enqueueWrite({
+      op: "delete",
+      table: "ledgers",
+      payload: { id },
+      company_id: companyId,
+      label: `Delete ledger: ${label ?? id.slice(0, 8)}`,
+    });
+  }
 
-  if (isOnlineNow()) {
+  if (!isLocalOnlyMode() && isOnlineNow()) {
     syncEssentialMasters(companyId);
   }
 }
@@ -280,15 +288,17 @@ export async function createItem(payload: ItemInsertPayload): Promise<ItemRow> {
 
   await offlineDb.cache_items.put(localRecord);
 
-  await enqueueWrite({
-    op: "insert",
-    table: "items",
-    payload: { ...payload, id, updated_at: now },
-    company_id: payload.company_id,
-    label: `Item: ${payload.name}`,
-  });
+  if (!isLocalOnlyMode()) {
+    await enqueueWrite({
+      op: "insert",
+      table: "items",
+      payload: { ...payload, id, updated_at: now },
+      company_id: payload.company_id,
+      label: `Item: ${payload.name}`,
+    });
+  }
 
-  if (isOnlineNow()) {
+  if (!isLocalOnlyMode() && isOnlineNow()) {
     syncEssentialMasters(payload.company_id);
   }
 
@@ -320,15 +330,17 @@ export async function updateItem(
     await offlineDb.cache_items.put(updatedRecord);
   }
 
-  await enqueueWrite({
-    op: "update",
-    table: "items",
-    payload: { id, values: { ...values, updated_at: now } },
-    company_id: companyId,
-    label: `Update item: ${values.name ?? id.slice(0, 8)}`,
-  });
+  if (!isLocalOnlyMode()) {
+    await enqueueWrite({
+      op: "update",
+      table: "items",
+      payload: { id, values: { ...values, updated_at: now } },
+      company_id: companyId,
+      label: `Update item: ${values.name ?? id.slice(0, 8)}`,
+    });
+  }
 
-  if (isOnlineNow()) {
+  if (!isLocalOnlyMode() && isOnlineNow()) {
     syncEssentialMasters(companyId);
   }
 
@@ -349,15 +361,17 @@ export async function deleteItem(id: string, companyId: string, label?: string):
     });
   }
 
-  await enqueueWrite({
-    op: "delete",
-    table: "items",
-    payload: { id },
-    company_id: companyId,
-    label: `Delete item: ${label ?? id.slice(0, 8)}`,
-  });
+  if (!isLocalOnlyMode()) {
+    await enqueueWrite({
+      op: "delete",
+      table: "items",
+      payload: { id },
+      company_id: companyId,
+      label: `Delete item: ${label ?? id.slice(0, 8)}`,
+    });
+  }
 
-  if (isOnlineNow()) {
+  if (!isLocalOnlyMode() && isOnlineNow()) {
     syncEssentialMasters(companyId);
   }
 }
