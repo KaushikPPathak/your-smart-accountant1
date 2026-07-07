@@ -72,6 +72,200 @@ async function getOfflineDb() {
   return module.default || module.offlineDb || module.db || (module as any);
 }
 
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+async function nextLocalVoucherNumber(companyId: string, voucherType: string): Promise<string> {
+  const db = await getOfflineDb();
+  const rows = await db.cache_vouchers
+    .where("company_id")
+    .equals(companyId)
+    .filter((v: any) => v?.is_deleted !== true && v?.voucher_type === voucherType)
+    .toArray();
+  let max = 0;
+  for (const row of rows as Array<{ voucher_number?: unknown }>) {
+    const n = parseInt(String(row.voucher_number ?? "").replace(/\D/g, ""), 10);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return String(max + 1);
+}
+
+async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
+  const db = await getOfflineDb();
+  const voucherId = crypto.randomUUID();
+  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType);
+  const stamp = nowIso();
+  const lines = snap.lines.map(({ l, c }) => ({ l, c }));
+
+  const itemRows = lines.map(({ l, c }, i) => ({
+    id: crypto.randomUUID(),
+    voucher_id: voucherId,
+    company_id: snap.companyId,
+    item_id: l.item_id,
+    line_no: i + 1,
+    description: l.description || null,
+    qty: parseFloat(l.qty) || 0,
+    rate_paise: Math.round((parseFloat(l.rate) || 0) * 100),
+    discount_paise: c.discount_paise,
+    amount_paise: c.amount_paise,
+    taxable_paise: c.taxable_paise,
+    gst_rate: c.gst_rate,
+    cgst_paise: c.cgst_paise,
+    sgst_paise: c.sgst_paise,
+    igst_paise: c.igst_paise,
+    updated_at: stamp,
+  }));
+
+  const skipPostings =
+    snap.voucherType === "sales_order" ||
+    snap.voucherType === "delivery_note" ||
+    snap.voucherType === "quotation";
+
+  let entryRows: Array<{
+    id: string;
+    voucher_id: string;
+    company_id: string;
+    ledger_id: string;
+    debit_paise: number;
+    credit_paise: number;
+    line_no: number;
+    narration: string | null;
+    updated_at: string;
+  }> = [];
+
+  if (!skipPostings) {
+    let capitalItems: Array<{
+      name: string;
+      taxable_paise: number;
+      cgst_paise: number;
+      sgst_paise: number;
+      igst_paise: number;
+    }> | undefined;
+
+    if (snap.itcClass === "capital_goods") {
+      const ids = uniqueIds(lines.map((x) => x.l.item_id));
+      const cached = await Promise.all(ids.map((id) => db.cache_items.get(id)));
+      const byId = new Map(cached.filter(Boolean).map((row: any) => [row.id, row.name as string]));
+      capitalItems = lines.map(({ l, c }) => ({
+        name: (byId.get(l.item_id) || l.description || "Capital Asset").trim(),
+        taxable_paise: c.taxable_paise,
+        cgst_paise: c.cgst_paise,
+        sgst_paise: c.sgst_paise,
+        igst_paise: c.igst_paise,
+      }));
+    }
+
+    const postings = await buildItemVoucherPostings(
+      snap.companyId,
+      snap.voucherType as "sales" | "purchase" | "credit_note" | "debit_note",
+      snap.partyId,
+      snap.totals,
+      {
+        itcClass: snap.itcClass,
+        itcEligible: snap.itcEligible,
+        capitalItems,
+      },
+    );
+    const { assertVoucherBalanced } = await import("@/lib/voucher-invariants");
+    assertVoucherBalanced(postings, { voucherType: snap.voucherType, companyId: snap.companyId });
+    entryRows = postings.map((p) => ({
+      id: crypto.randomUUID(),
+      voucher_id: voucherId,
+      company_id: snap.companyId,
+      ledger_id: p.ledger_id,
+      debit_paise: p.debit_paise,
+      credit_paise: p.credit_paise,
+      narration: p.narration ?? null,
+      line_no: p.line_no,
+      updated_at: stamp,
+    }));
+  }
+
+  await db.transaction(
+    "rw",
+    db.cache_vouchers,
+    db.cache_voucher_items,
+    db.cache_voucher_entries,
+    async () => {
+      await db.cache_vouchers.put({
+        id: voucherId,
+        company_id: snap.companyId,
+        voucher_type: snap.voucherType,
+        voucher_number: voucherNumber,
+        voucher_date: snap.voucherDate,
+        party_ledger_id: snap.partyId,
+        reference_no: snap.refNo || null,
+        narration: snap.narration || null,
+        is_interstate: snap.interstate,
+        subtotal_paise: snap.totals.subtotal_paise,
+        cgst_paise: snap.totals.cgst_paise,
+        sgst_paise: snap.totals.sgst_paise,
+        igst_paise: snap.totals.igst_paise,
+        round_off_paise: snap.totals.round_off_paise ?? 0,
+        total_paise: snap.totals.total_paise,
+        place_of_supply_code: snap.placeOfSupply || null,
+        itc_class: snap.itcClass,
+        itc_eligible: snap.itcEligible,
+        original_voucher_id: snap.originalVoucherId,
+        is_deleted: false,
+        is_synced: true,
+        created_at: stamp,
+        updated_at: stamp,
+      });
+      if (itemRows.length > 0) await db.cache_voucher_items.bulkPut(itemRows);
+      if (entryRows.length > 0) await db.cache_voucher_entries.bulkPut(entryRows);
+    },
+  );
+
+  return { voucherId, voucherNumber };
+}
+
+async function runLocalEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void> {
+  const db = await getOfflineDb();
+  const voucherId = crypto.randomUUID();
+  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType);
+  const stamp = nowIso();
+  const entries = snap.entries.map((e) => ({
+    id: crypto.randomUUID(),
+    voucher_id: voucherId,
+    company_id: snap.companyId,
+    ledger_id: e.ledger_id,
+    debit_paise: e.debit_paise,
+    credit_paise: e.credit_paise,
+    narration: e.narration,
+    line_no: e.line_no,
+    updated_at: stamp,
+  }));
+  const { assertVoucherBalanced } = await import("@/lib/voucher-invariants");
+  assertVoucherBalanced(entries, { voucherType: snap.voucherType, companyId: snap.companyId });
+
+  await db.transaction("rw", db.cache_vouchers, db.cache_voucher_entries, async () => {
+    await db.cache_vouchers.put({
+      id: voucherId,
+      company_id: snap.companyId,
+      voucher_type: snap.voucherType,
+      voucher_number: voucherNumber,
+      voucher_date: snap.voucherDate,
+      party_ledger_id: snap.partyLedgerId,
+      reference_no: snap.refNo || null,
+      narration: snap.narration || null,
+      is_interstate: false,
+      subtotal_paise: snap.total,
+      cgst_paise: 0,
+      sgst_paise: 0,
+      igst_paise: 0,
+      round_off_paise: 0,
+      total_paise: snap.total,
+      is_deleted: false,
+      is_synced: true,
+      created_at: stamp,
+      updated_at: stamp,
+    });
+    await db.cache_voucher_entries.bulkPut(entries);
+  });
+}
+
 function uniqueIds(ids: Array<string | null | undefined>): string[] {
   return Array.from(new Set(ids.filter((id): id is string => Boolean(id))));
 }
@@ -286,6 +480,9 @@ export interface EntryVoucherSnap {
 // ---------- Item voucher executor -------------------------------------------
 
 export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) return runLocalItemVoucherCreate(snap);
+
   const ledgerRemap = await ensureMasterRefsSynced("ledgers", snap.companyId, [snap.partyId]);
   const itemRemap = await ensureMasterRefsSynced("items", snap.companyId, snap.lines.map((x) => x.l.item_id));
   const partyId = remapId(snap.partyId, ledgerRemap);
@@ -412,6 +609,9 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
 // ---------- Entry voucher executor ------------------------------------------
 
 export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void> {
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) return runLocalEntryVoucherCreate(snap);
+
   const ledgerIds = Array.from(
     new Set(
       [
