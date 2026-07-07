@@ -65,8 +65,8 @@ describe("switching offline → online in local-only mode", () => {
 
     // Simulate going online: navigator.onLine flip + spy on fetch.
     Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
-    const fetchSpy = vi.spyOn(globalThis, "fetch" as never).mockResolvedValue(
-      new Response("{}", { status: 200 }) as never,
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 200 }),
     );
 
     // Both paths that could push/pull in a sync tick.
