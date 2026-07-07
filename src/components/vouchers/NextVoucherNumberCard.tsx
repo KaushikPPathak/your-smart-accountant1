@@ -13,6 +13,8 @@
 import { useEffect, useState } from "react";
 import { Hash, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { readVouchers } from "@/lib/offline/cache-read";
 
 interface Props {
   companyId: string | null;
@@ -31,6 +33,16 @@ export function NextVoucherNumberCard({ companyId, voucherType, refreshKey = 0 }
     setLoading(true);
     (async () => {
       try {
+        if (isLocalOnlyMode()) {
+          const rows = await readVouchers(companyId, { voucher_type: voucherType });
+          let maxNum = 0;
+          for (const row of rows ?? []) {
+            const n = parseInt(String(row.voucher_number).replace(/\D/g, ""), 10);
+            if (Number.isFinite(n) && n > maxNum) maxNum = n;
+          }
+          if (!cancelled) setNext(maxNum + 1);
+          return;
+        }
         const [seqRes, maxRes] = await Promise.all([
           supabase
             .from("voucher_number_seq")

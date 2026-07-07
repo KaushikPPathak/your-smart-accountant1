@@ -11,6 +11,7 @@ import { GstinPortalWindow } from "@/components/GstinPortalWindow";
 import { GstinInlineError } from "@/components/GstinInlineError";
 import { createLedger, updateLedger } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 export interface QuickLedger {
   id: string;
@@ -98,7 +99,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
       
       if (editId) {
         const row = await updateLedger(editId, companyId, payload);
-        toast.success(isOnlineNow() ? "Ledger updated" : "Ledger update queued — will sync when online");
+        toast.success(isLocalOnlyMode() || isOnlineNow() ? "Ledger updated on this device" : "Ledger saved on this device");
         onSaved(
           row ?? {
             id: editId,
@@ -111,7 +112,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         );
       } else {
         const row = await createLedger(payload);
-        toast.success(isOnlineNow() ? "Ledger created" : "Ledger queued — will sync when online");
+        toast.success(isLocalOnlyMode() || isOnlineNow() ? "Ledger created on this device" : "Ledger saved on this device");
         onSaved(row);
       }
       onOpenChange(false);

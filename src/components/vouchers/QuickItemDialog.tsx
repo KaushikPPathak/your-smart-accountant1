@@ -10,6 +10,7 @@ import { UNITS, GST_RATES } from "@/lib/constants";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { createItem, updateItem } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { HsnCodeAutocomplete } from "@/components/HsnCodeAutocomplete";
 
 export interface QuickItem {
@@ -75,7 +76,7 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
       };
       if (editId) {
         const row = await updateItem(editId, companyId, payload);
-        toast.success(isOnlineNow() ? "Item updated" : "Item update queued — will sync when online");
+        toast.success(isLocalOnlyMode() || isOnlineNow() ? "Item updated on this device" : "Item saved on this device");
         onSaved(
           row ?? {
             id: editId,
@@ -87,7 +88,7 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
         );
       } else {
         const row = await createItem(payload);
-        toast.success(isOnlineNow() ? "Item created" : "Item queued — will sync when online");
+        toast.success(isLocalOnlyMode() || isOnlineNow() ? "Item created on this device" : "Item saved on this device");
         onSaved(row);
       }
       onOpenChange(false);
