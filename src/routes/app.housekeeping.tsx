@@ -130,8 +130,8 @@ function HousekeepingPage() {
 
       <Tabs value={currentTab} onValueChange={updateTab} activationMode="manual" className="space-y-4">
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 p-1">
-          <TabsTrigger value="verify_repair" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-            <ShieldCheck className="mr-1 h-3.5 w-3.5" /> Verify &amp; Repair
+          <TabsTrigger value="reindex_repost" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <RefreshCw className="mr-1 h-3.5 w-3.5" /> Reindex &amp; Re-post
           </TabsTrigger>
           <TabsTrigger value="verify">
             <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Verify Books
