@@ -170,9 +170,8 @@ function HousekeepingPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="reindex_repost">
-          <ReindexAndRepostTool companyId={activeCompanyId} />
-        </TabsContent>
+
+
 
         <TabsContent value="opening">
           {activeCompanyId ? (
