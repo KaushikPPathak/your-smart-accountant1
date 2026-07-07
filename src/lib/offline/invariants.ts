@@ -29,10 +29,10 @@ const MIN_INTERVAL_MS = 30_000; // don't thrash if called repeatedly
  * Sweep orphan child rows and re-derive item-voucher postings when they
  * drift from the stored totals. Silent, idempotent, safe to call anytime.
  */
-export async function enforceLocalInvariants(): Promise<void> {
+export async function enforceLocalInvariants(opts: { force?: boolean } = {}): Promise<void> {
   if (running) return;
   const now = Date.now();
-  if (now - lastRunAt < MIN_INTERVAL_MS) return;
+  if (!opts.force && now - lastRunAt < MIN_INTERVAL_MS) return;
   running = true;
   try {
     const [vouchers, entries, items] = await Promise.all([
