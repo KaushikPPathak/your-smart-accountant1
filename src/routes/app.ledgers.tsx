@@ -54,6 +54,7 @@ import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { createLedger, updateLedger, deleteLedger } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 export const Route = createFileRoute("/app/ledgers")({
   head: () => ({ meta: [{ title: "Ledgers — Your Mehtaji" }] }),
@@ -287,9 +288,11 @@ function LedgersPage() {
     }
     setSubmitting(false);
     toast.success(
-      isOnlineNow()
-        ? (editing ? "Ledger updated" : "Ledger created")
-        : (editing ? "Ledger update queued — will sync when online" : "Ledger queued — will sync when online"),
+      isLocalOnlyMode()
+        ? (editing ? "Ledger updated on this device" : "Ledger created on this device")
+        : isOnlineNow()
+          ? (editing ? "Ledger updated" : "Ledger created")
+          : (editing ? "Ledger update saved on this device" : "Ledger saved on this device"),
     );
     setOpen(false);
     setEditing(null);
@@ -306,7 +309,7 @@ function LedgersPage() {
       toast.error(err instanceof Error ? err.message : "Delete failed");
       return;
     }
-    toast.success(isOnlineNow() ? "Ledger deleted" : "Delete queued — will sync when online");
+    toast.success(isLocalOnlyMode() || !isOnlineNow() ? "Ledger deleted on this device" : "Ledger deleted");
     load();
   };
 
