@@ -183,7 +183,7 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
           toast.success(`Restore verified — ${report.summary}`);
         }
       } catch {
-        toast.warning("Restored, but post-restore verification could not run. Open Housekeeping → Verify & Repair.");
+        toast.warning("Restored, but post-restore verification could not run. Open Housekeeping → Reindex & Re-post.");
       }
       onDone?.();
       onOpenChange(false);
