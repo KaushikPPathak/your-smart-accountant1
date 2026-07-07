@@ -15,7 +15,7 @@ export const BACKUP_POLICY = {
     "Year-end closure",
     "Bulk import (Tally / Busy / Excel)",
     "Restore from another backup",
-    "Mass-delete / Verify-and-repair",
+    "Mass-delete / Reindex & Re-post",
     "Software upgrade",
   ],
   /**
