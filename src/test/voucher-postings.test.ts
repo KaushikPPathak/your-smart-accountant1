@@ -75,7 +75,14 @@ function totals(sub = 10000, cgst = 900, sgst = 900, igst = 0, round = 0): Posti
 }
 
 describe("buildItemVoucherPostings — invariants", () => {
-  beforeEach(() => { nameById.clear(); idByName.clear(); });
+  beforeEach(() => {
+    nameById.clear();
+    idByName.clear();
+    // These tests exercise the cloud path via the supabase mock above; opt
+    // out of local-only mode (the default) so lookups don't go to an empty
+    // IndexedDB and mint random UUIDs.
+    localStorage.setItem("ym_local_only_mode", "0");
+  });
 
   it("intra-state sales: party Dr = subtotal+CGST+SGST Cr, balanced", async () => {
     const t = totals();
