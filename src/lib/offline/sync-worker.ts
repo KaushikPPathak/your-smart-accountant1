@@ -137,6 +137,12 @@ export function startSyncWorker() {
   });
   // Boot run — wait until the UI has painted so sync can never slow launch.
   setTimeout(() => { void tick(); }, 3_000);
+  // Silent local invariant sweep (orphan children, drifted item-voucher
+  // postings). Runs quietly in the background so nothing ever needs a
+  // user-visible "repair" screen.
+  setTimeout(() => {
+    void import("./invariants").then((m) => m.enforceLocalInvariants()).catch(() => { /* ignore */ });
+  }, 5_000);
   // Periodic lightweight sync while the tab is open — keeps offline data fresh
   // without repeatedly downloading every voucher/report row.
   setInterval(() => { void tick(); }, 120_000);
