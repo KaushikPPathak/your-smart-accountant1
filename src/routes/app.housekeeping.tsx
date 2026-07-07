@@ -93,7 +93,7 @@ function HousekeepingPage() {
   const companyName = activeMembership?.companies?.name ?? "company";
   const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
   const turnoverPaise = activeMembership?.companies?.annual_turnover_paise ?? 0;
-  const currentTab = search.tab ?? "reindex_repost";
+  const currentTab = search.tab ?? "verify";
 
   const updateTab = (tab: string) => {
     navigate({
