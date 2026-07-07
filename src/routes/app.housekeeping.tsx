@@ -173,8 +173,8 @@ function HousekeepingPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="verify_repair">
-          <VerifyAndRepairTool companyId={activeCompanyId} isAdmin={isAdmin} />
+        <TabsContent value="reindex_repost">
+          <ReindexAndRepostTool companyId={activeCompanyId} />
         </TabsContent>
 
         <TabsContent value="opening">
