@@ -272,7 +272,7 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
           toast.success(`Restore verified — ${report.summary}`);
         }
       } catch {
-        toast.warning("Restored, but post-restore verification could not run. Open Verify & Repair.");
+        toast.warning("Restored, but post-restore verification could not run. Open Housekeeping → Reindex & Re-post.");
       }
     } catch (e) {
       toast.error((e as Error).message || "Restore failed");

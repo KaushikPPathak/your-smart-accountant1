@@ -65,9 +65,9 @@ function offlineAssistantAnswer(question: string, cause?: unknown): string {
     "The cloud AI Edge Function is not reachable from this Windows/Tauri session, so I did **not** keep retrying the network request.",
     `Reason detected: ${causeText}`,
     "",
-    "For the Verify & Repair error you reported, the important fix is: checks must read the local IndexedDB/offline cache when Supabase fetch fails. You can still diagnose voucher balance, orphan rows, duplicate numbers, invalid Dr/Cr rows, and report-level tally from the cached company data.",
+    "For the Reindex & Re-post error you reported, the important fix is: everything must read and write the local IndexedDB. You can still diagnose voucher balance, orphan rows, and rebuild derived postings from the cached company data on this device.",
     "",
-    "If you are fully offline, repairs that write to the cloud (delete orphan rows, recompute voucher-number sequence, rebuild monthly snapshot) should be shown as **skipped until online**, not as failed. Safe read-only audit checks should continue.",
+    "This app never syncs business data to the cloud, so there is nothing to defer or retry against a server — reindex and re-post are local-only operations.",
     "",
     question ? `Your question: ${question}` : "",
   ].filter(Boolean).join("\n");

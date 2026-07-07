@@ -17,7 +17,7 @@
 //   • Are there future-dated vouchers or duplicate party-invoice numbers?
 //   • Is a P&L-nature ledger mis-typed as a Balance-Sheet ledger (or vice-versa)?
 //
-// Designed to plug into VerifyAndRepairTool as an additional step and to be
+// Designed to plug into ReindexAndRepostTool as an additional step and to be
 // callable from RestoreFromFileDialog after restore. All checks are read-only
 // and aggregate into a single report.
 

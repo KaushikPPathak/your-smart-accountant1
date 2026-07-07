@@ -5,8 +5,8 @@
  * does NOT mutate any data. It tells the user (and support) whether the
  * app is wired up correctly on this PC / browser for the active company.
  *
- * Distinct from VerifyAndRepairTool (which checks data integrity):
- *   - VerifyAndRepair  → "are my books consistent?"
+ * Distinct from ReindexAndRepostTool (which checks data integrity):
+ *   - ReindexAndRepost  → "are my books consistent?"
  *   - SelfTest         → "is the app itself healthy on this machine?"
  */
 import { useCallback, useState } from "react";

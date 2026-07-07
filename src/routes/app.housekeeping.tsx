@@ -46,7 +46,7 @@ import { BackupRestoreTool } from "@/components/housekeeping/BackupRestoreTool";
 import { YearEndClosure } from "@/components/housekeeping/YearEndClosure";
 import { FinancialYearTransferWizard } from "@/components/housekeeping/FinancialYearTransferWizard";
 import { YearEndLockToggle } from "@/components/housekeeping/YearEndLockToggle";
-import { VerifyAndRepairTool } from "@/components/housekeeping/VerifyAndRepairTool";
+import { ReindexAndRepostTool } from "@/components/housekeeping/ReindexAndRepostTool";
 import { SelfTestPanel } from "@/components/housekeeping/SelfTestPanel";
 import { ImportHistoryPanel } from "@/components/housekeeping/ImportHistoryPanel";
 const TallyBusyImport = lazy(() =>
@@ -93,7 +93,7 @@ function HousekeepingPage() {
   const companyName = activeMembership?.companies?.name ?? "company";
   const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
   const turnoverPaise = activeMembership?.companies?.annual_turnover_paise ?? 0;
-  const currentTab = search.tab ?? "verify_repair";
+  const currentTab = search.tab ?? "reindex_repost";
 
   const updateTab = (tab: string) => {
     navigate({
@@ -130,8 +130,8 @@ function HousekeepingPage() {
 
       <Tabs value={currentTab} onValueChange={updateTab} activationMode="manual" className="space-y-4">
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 p-1">
-          <TabsTrigger value="verify_repair" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-            <ShieldCheck className="mr-1 h-3.5 w-3.5" /> Verify &amp; Repair
+          <TabsTrigger value="reindex_repost" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <RefreshCw className="mr-1 h-3.5 w-3.5" /> Reindex &amp; Re-post
           </TabsTrigger>
           <TabsTrigger value="verify">
             <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Verify Books
@@ -173,8 +173,8 @@ function HousekeepingPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="verify_repair">
-          <VerifyAndRepairTool companyId={activeCompanyId} isAdmin={isAdmin} />
+        <TabsContent value="reindex_repost">
+          <ReindexAndRepostTool companyId={activeCompanyId} />
         </TabsContent>
 
         <TabsContent value="opening">

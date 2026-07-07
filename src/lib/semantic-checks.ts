@@ -1,6 +1,6 @@
 // Semantic post-condition checks for a company's books.
 //
-// Unlike VerifyAndRepairTool (which audits *structural* integrity — orphans,
+// Unlike ReindexAndRepostTool (which audits *structural* integrity — orphans,
 // Dr=Cr, duplicates), these checks ask the harder report-level questions:
 //
 //   - Does Trial Balance tally? (sum of Dr balances == sum of Cr balances)
@@ -13,7 +13,7 @@
 //     reports are blank" pattern)?
 //
 // Designed to be called from:
-//   - VerifyAndRepairTool — adds semantic findings to its step feed.
+//   - ReindexAndRepostTool — adds semantic findings to its step feed.
 //   - RestoreFromFileDialog — runs immediately after restore so the user
 //     gets a "Restored AND verified" confirmation, not just "Restored".
 
@@ -118,7 +118,7 @@ export async function runSemanticChecks(companyId: string): Promise<SemanticRepo
       message:
         `${singleEntryVouchers.length} voucher(s) have exactly 1 posting row. ` +
         `A valid double-entry voucher always has 2+ rows (Dr=Cr). ` +
-        `Open Verify & Repair → Verify Books to inspect.`,
+        `Open Housekeeping → Verify Books to inspect.`,
     });
   }
 
