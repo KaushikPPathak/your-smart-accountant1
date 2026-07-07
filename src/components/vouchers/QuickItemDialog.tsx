@@ -11,6 +11,7 @@ import { useEnterAsTab } from "./useEnterAsTab";
 import { createItem, updateItem } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { offlineDb } from "@/lib/offline/db";
 import { HsnCodeAutocomplete } from "@/components/HsnCodeAutocomplete";
 
 export interface QuickItem {
@@ -39,6 +40,17 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
   useEffect(() => {
     if (!open) return;
     if (editId) {
+      if (isLocalOnlyMode()) {
+        offlineDb.cache_items.get(editId).then((data) => {
+          if (data) {
+            setName(data.name ?? "");
+            setUnit(data.unit ?? "NOS");
+            setGstRate(String(data.gst_rate ?? 0));
+            setHsn(data.hsn_code || "");
+          }
+        });
+        return;
+      }
       supabase
         .from("items")
         .select("name, unit, gst_rate, hsn_code")
