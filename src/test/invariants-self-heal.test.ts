@@ -46,7 +46,7 @@ describe("silent invariant enforcement", () => {
       description: null, updated_at: "2026-07-07T00:00:00.000Z",
     });
 
-    await enforceLocalInvariants();
+    await enforceLocalInvariants({ force: true });
 
     expect(await offlineDb.cache_voucher_entries.count()).toBe(0);
     expect(await offlineDb.cache_voucher_items.count()).toBe(0);
@@ -67,7 +67,7 @@ describe("silent invariant enforcement", () => {
       created_at: "2026-07-07T00:00:00.000Z", updated_at: "2026-07-07T00:00:00.000Z",
     });
 
-    await enforceLocalInvariants();
+    await enforceLocalInvariants({ force: true });
 
     const rebuilt = await offlineDb.cache_voucher_entries.where("voucher_id").equals("v-1").toArray();
     expect(rebuilt.length).toBeGreaterThan(0);
@@ -96,7 +96,7 @@ describe("silent invariant enforcement", () => {
       { id: "keep-2", voucher_id: "v-good", company_id: CO, ledger_id: "sales-led", debit_paise: 0, credit_paise: 5_000, line_no: 2, narration: null, updated_at: "2026-07-07T00:00:00.000Z" },
     ]);
 
-    await enforceLocalInvariants();
+    await enforceLocalInvariants({ force: true });
 
     const still = await offlineDb.cache_voucher_entries.where("voucher_id").equals("v-good").toArray();
     const ids = still.map((r: any) => r.id).sort();
