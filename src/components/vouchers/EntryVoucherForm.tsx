@@ -117,6 +117,31 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const { lock, locked } = usePeriodLock(date);
   const formRootRef = useRef<HTMLDivElement | null>(null);
 
+  // ---------- Draft persistence (crash recovery) ----------
+  const draftKey = activeCompanyId ? `voucher-draft:${activeCompanyId}:${voucherType}` : null;
+  const draftSnap = useMemo(
+    () => ({ date, refNo, narration, cashBankId, lines, simpleLines }),
+    [date, refNo, narration, cashBankId, lines, simpleLines],
+  );
+  const applyDraft = useCallback(
+    (d: typeof draftSnap) => {
+      if (d.date) setDate(d.date);
+      if (typeof d.refNo === "string") setRefNo(d.refNo);
+      if (typeof d.narration === "string") setNarration(d.narration);
+      if (typeof d.cashBankId === "string") setCashBankId(d.cashBankId);
+      if (Array.isArray(d.lines) && d.lines.length > 0) setLines(d.lines);
+      if (Array.isArray(d.simpleLines) && d.simpleLines.length > 0) setSimpleLines(d.simpleLines);
+    },
+    [],
+  );
+  const isDraftEmpty = useCallback((s: typeof draftSnap) => {
+    const hasEntry = s.lines.some((l) => l.ledger_id || parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0);
+    const hasSimple = s.simpleLines.some((l) => l.ledger_id || parseFloat(l.amount) > 0);
+    return !s.refNo && !s.narration && !s.cashBankId && !hasEntry && !hasSimple;
+  }, []);
+  const draft = useVoucherDraft(draftKey, draftSnap, applyDraft, isDraftEmpty);
+  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
+
   // Assistant prefill: when the AI chat drafts a Payment/Receipt, it stashes
   // the parsed JSON in sessionStorage and navigates here. Apply once on mount.
   useEffect(() => {
