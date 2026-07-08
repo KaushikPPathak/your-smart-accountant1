@@ -37,6 +37,9 @@ import { rememberNarration, recallNarration } from "@/lib/recall-store";
 import { findDuplicateReference } from "@/lib/voucher-duplicate-check";
 import { useVoucherDraft, clearVoucherDraft } from "@/hooks/useVoucherDraft";
 import { DraftRecoveredBanner } from "./DraftRecoveredBanner";
+import { useTaxTemplates } from "@/hooks/useVoucherMasters";
+import type { Resolution, TaxTemplate } from "@/lib/voucher-resolver";
+import { AutoTaxChip } from "./AutoTaxChip";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -141,6 +144,11 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   }, []);
   const draft = useVoucherDraft(draftKey, draftSnap, applyDraft, isDraftEmpty);
   const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
+  // Journal-only: manual tax-template override when auto-resolution can't
+  // pin one down. Kept purely in memory — it's a UX guardrail so the user
+  // consciously confirms which GST rectype this journal represents, not a
+  // persisted field. Save is blocked until it's resolved.
+  const [manualTaxTemplateId, setManualTaxTemplateId] = useState<string | null>(null);
 
   // Assistant prefill: when the AI chat drafts a Payment/Receipt, it stashes
   // the parsed JSON in sessionStorage and navigates here. Apply once on mount.
@@ -254,6 +262,39 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     () => ledgers.filter((l) => l.type === "cash" || l.type === "bank"),
     [ledgers],
   );
+
+  // ------------------------------------------------------------------
+  // Journal GST rectype — progressive disclosure.
+  // Only surfaces when the journal touches a GST tax ledger AND the
+  // user has configured tax templates. Otherwise stays hidden.
+  // Interstate is inferred from ledger name (IGST vs CGST/SGST).
+  // ------------------------------------------------------------------
+  const taxTemplates = useTaxTemplates(activeCompanyId ?? null);
+  const taxResolution: Resolution<TaxTemplate> = useMemo(() => {
+    if (voucherType !== "journal" || taxTemplates.length === 0) {
+      return { status: "hidden", candidates: [] };
+    }
+    const selectedIds = new Set(lines.map((l) => l.ledger_id).filter(Boolean));
+    const gstLedgers = ledgers.filter(
+      (lg) => selectedIds.has(lg.id) && lg.type === "duties_taxes",
+    );
+    if (gstLedgers.length === 0) return { status: "hidden", candidates: [] };
+    const hasIgst = gstLedgers.some((lg) => /\bIGST\b/i.test(lg.name));
+    const hasCgstSgst = gstLedgers.some((lg) => /\bCGST\b|\bSGST\b/i.test(lg.name));
+    // Prefer explicit signal; if only IGST → interstate, only CGST/SGST → intrastate.
+    // Mixed / neither → leave undecided and show all as candidates.
+    let candidates = taxTemplates;
+    if (hasIgst && !hasCgstSgst) candidates = taxTemplates.filter((t) => t.is_interstate);
+    else if (hasCgstSgst && !hasIgst) candidates = taxTemplates.filter((t) => !t.is_interstate);
+    if (candidates.length === 0) return { status: "unresolved", candidates: [...taxTemplates] };
+    if (candidates.length === 1) return { status: "auto", value: candidates[0], candidates: [...candidates] };
+    return { status: "ambiguous", candidates: [...candidates] };
+  }, [voucherType, taxTemplates, lines, ledgers]);
+  const taxTemplateBlocksSave =
+    (taxResolution.status === "ambiguous" || taxResolution.status === "unresolved") &&
+    !manualTaxTemplateId;
+
+
 
   const update = useCallback((i: number, patch: Partial<Line>) => {
     startTransition(() => setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l))));
@@ -493,6 +534,15 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           <p className="text-xs text-muted-foreground">
             {cfg.subtitle} · <kbd className="rounded border px-1">Enter</kbd> next field · <kbd className="rounded border px-1">Ctrl+S</kbd> save & next · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit ledger
           </p>
+          {voucherType === "journal" && taxResolution.status !== "hidden" && (
+            <div className="mt-1.5">
+              <AutoTaxChip
+                resolution={taxResolution}
+                manualId={manualTaxTemplateId}
+                onManualChange={setManualTaxTemplateId}
+              />
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <Button
@@ -508,11 +558,12 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           >
             <X className="mr-1 h-4 w-4" /> Cancel
           </Button>
-          <Button data-assistant-save onClick={save} disabled={saving || !canWrite || !balanced || locked}>
+          <Button data-assistant-save onClick={save} disabled={saving || !canWrite || !balanced || locked || taxTemplateBlocksSave}>
             <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       </div>
+
 
       {draft.restored && !draftBannerDismissed && (
         <DraftRecoveredBanner
