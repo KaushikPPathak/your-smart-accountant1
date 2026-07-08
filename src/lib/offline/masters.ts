@@ -150,7 +150,7 @@ export async function createLedger(payload: LedgerInsertPayload): Promise<Ledger
   const localRecord: LedgerCacheRow = {
     ...payload,
     id,
-    gst_treatment: "regular",
+    gst_treatment: (payload.gst_registration_type as string | undefined) ?? "regular",
     updated_at: now,
     is_synced: false,
     is_deleted: false,
