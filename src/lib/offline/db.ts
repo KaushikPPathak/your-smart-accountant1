@@ -150,6 +150,24 @@ class OfflineDatabase extends Dexie {
       // pending IRN/EWB work.
       einvoice_queue: "++id, kind, voucher_id, company_id, status, created_at",
     });
+    this.version(6).stores({
+      // Voucher series: multiple numbering series per (company, voucher_type).
+      // When exactly one row exists for a (company, voucher_type) it is auto-
+      // applied and NO picker is shown. Zero rows = fall back to legacy
+      // next_voucher_number(). >1 row = user must pick (rare case).
+      cache_voucher_series: "id, company_id, voucher_type, [company_id+voucher_type], updated_at",
+      // Tax templates (Busy STPT). Resolver in src/lib/voucher-resolver.ts
+      // looks these up by (party.gst_treatment, item.hsn_code, is_interstate)
+      // and only surfaces a picker when resolution is ambiguous or missing.
+      cache_tax_templates: "id, company_id, gst_rate, is_interstate, updated_at",
+      // Bill sundries: non-item lines (freight, packing, discount, round-off,
+      // GST components). Child of voucher. Rendered on demand via "+ Add
+      // charge" in the totals block — never a permanent chip strip.
+      cache_bill_sundries: "id, voucher_id, company_id, sundry_type, updated_at",
+      // Transport / e-way bill fields, one row per voucher. Panel stays
+      // collapsed unless F7 or invoice value >= state e-way threshold.
+      cache_transport_details: "voucher_id, company_id, updated_at",
+    });
   }
 }
 
