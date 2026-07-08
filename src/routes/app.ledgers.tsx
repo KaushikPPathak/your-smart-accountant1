@@ -49,7 +49,7 @@ import {
 } from "@/lib/account-groups";
 import { useAccountGroups, resolveGroupLabel, subgroupsFor } from "@/lib/account-groups-runtime";
 import { EmptyState } from "@/components/EmptyState";
-import { ledgerFormSchema as schema } from "@/lib/schemas/ledger";
+import { ledgerFormSchema as schema, GST_REGISTRATION_TYPES, MSME_CLASSIFICATIONS } from "@/lib/schemas/ledger";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { createLedger, updateLedger, deleteLedger } from "@/lib/offline/masters";
