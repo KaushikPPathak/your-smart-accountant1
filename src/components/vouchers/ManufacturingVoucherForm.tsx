@@ -129,6 +129,45 @@ export function ManufacturingVoucherForm() {
   const { lock } = usePeriodLock(date);
   const mastersVersion = useMastersVersion();
 
+  // ---------- Draft persistence (crash recovery) ----------
+  const draftKey = activeCompanyId ? `voucher-draft:${activeCompanyId}:manufacturing` : null;
+  const draftSnap = useMemo(
+    () => ({
+      date, productionOrderNo, department, processTemplate, batchNo, expiryDate,
+      finalProductId, qtyToProduce, consume, outputs, consumeDirty,
+      processingCost, scrapValue, machineParams, narration,
+    }),
+    [date, productionOrderNo, department, processTemplate, batchNo, expiryDate,
+     finalProductId, qtyToProduce, consume, outputs, consumeDirty,
+     processingCost, scrapValue, machineParams, narration],
+  );
+  const applyDraft = useCallback((d: typeof draftSnap) => {
+    if (d.date) setDate(d.date);
+    if (typeof d.productionOrderNo === "string") setProductionOrderNo(d.productionOrderNo);
+    if (typeof d.department === "string") setDepartment(d.department);
+    if (typeof d.processTemplate === "string") setProcessTemplate(d.processTemplate);
+    if (typeof d.batchNo === "string") setBatchNo(d.batchNo);
+    if (typeof d.expiryDate === "string") setExpiryDate(d.expiryDate);
+    if (typeof d.finalProductId === "string") setFinalProductId(d.finalProductId);
+    if (typeof d.qtyToProduce === "string") setQtyToProduce(d.qtyToProduce);
+    if (Array.isArray(d.consume) && d.consume.length > 0) setConsume(d.consume);
+    if (Array.isArray(d.outputs) && d.outputs.length > 0) setOutputs(d.outputs);
+    if (typeof d.consumeDirty === "boolean") setConsumeDirty(d.consumeDirty);
+    if (typeof d.processingCost === "string") setProcessingCost(d.processingCost);
+    if (typeof d.scrapValue === "string") setScrapValue(d.scrapValue);
+    if (typeof d.machineParams === "string") setMachineParams(d.machineParams);
+    if (typeof d.narration === "string") setNarration(d.narration);
+  }, []);
+  const isDraftEmpty = useCallback((s: typeof draftSnap) => {
+    const hasConsume = s.consume.some((r) => r.item_id || (parseFloat(r.qty) || 0) > 0);
+    const hasOutput = s.outputs.some((r) => r.item_id || (parseFloat(r.qty) || 0) > 0);
+    return !s.productionOrderNo && !s.department && !s.processTemplate && !s.batchNo &&
+      !s.expiryDate && !s.finalProductId && !s.narration && !s.machineParams &&
+      !hasConsume && !hasOutput;
+  }, []);
+  const draft = useVoucherDraft(draftKey, draftSnap, applyDraft, isDraftEmpty);
+  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
+
   useEffect(() => {
     setItems(
       getAllItems().map((i) => ({ id: i.id, name: i.name, unit: i.unit })),
