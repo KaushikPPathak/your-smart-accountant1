@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from "react";
-import { Pencil, PackagePlus, Trash2 } from "lucide-react";
+import { Pencil, PackagePlus, Trash2, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,6 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Combo } from "@/components/vouchers/Combo";
 import { GST_RATES } from "@/lib/constants";
