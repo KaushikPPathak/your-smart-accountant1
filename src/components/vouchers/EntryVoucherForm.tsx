@@ -534,6 +534,15 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           <p className="text-xs text-muted-foreground">
             {cfg.subtitle} · <kbd className="rounded border px-1">Enter</kbd> next field · <kbd className="rounded border px-1">Ctrl+S</kbd> save & next · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit ledger
           </p>
+          {voucherType === "journal" && taxResolution.status !== "hidden" && (
+            <div className="mt-1.5">
+              <AutoTaxChip
+                resolution={taxResolution}
+                manualId={manualTaxTemplateId}
+                onManualChange={setManualTaxTemplateId}
+              />
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <Button
@@ -549,11 +558,12 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           >
             <X className="mr-1 h-4 w-4" /> Cancel
           </Button>
-          <Button data-assistant-save onClick={save} disabled={saving || !canWrite || !balanced || locked}>
+          <Button data-assistant-save onClick={save} disabled={saving || !canWrite || !balanced || locked || taxTemplateBlocksSave}>
             <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       </div>
+
 
       {draft.restored && !draftBannerDismissed && (
         <DraftRecoveredBanner
