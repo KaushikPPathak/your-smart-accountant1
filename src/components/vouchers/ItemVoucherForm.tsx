@@ -54,6 +54,9 @@ import {
 import { ItemRow, type ItemRowData } from "@/components/fast-form/ItemRow";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
 import { HSN_MASTER_DATASET } from "@/lib/hsn/seedHsnData";
+import { useTaxTemplates } from "@/hooks/useVoucherMasters";
+import { resolveTaxTemplate } from "@/lib/voucher-resolver";
+import { AutoTaxChip } from "./AutoTaxChip";
 
 type VoucherType =
   | "sales"
@@ -160,6 +163,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [saving, setSaving] = useState(false);
   const [focusedLine, setFocusedLine] = useState<number>(0);
   const [savedTick, setSavedTick] = useState(0);
+  const [manualTaxTemplateId, setManualTaxTemplateId] = useState<string | null>(null);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null }>({
     open: false,
     editId: null,
@@ -401,6 +405,32 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       setItcEligible(false);
     }
   }, [partyLedger, isPurchaseSide]);
+
+  // Phase 1: tax-template auto-resolution (progressive disclosure).
+  // When no templates are configured (default state) or party is
+  // unregistered/composition, resolution returns `hidden` and no UI renders.
+  const taxTemplates = useTaxTemplates(activeCompanyId ?? null);
+  const firstItem = useMemo(() => {
+    const first = lines.find((l) => l.item_id);
+    if (!first) return null;
+    const meta = items.find((i) => i.id === first.item_id);
+    return meta ? { hsn_code: meta.hsn_code ?? null, gst_rate: meta.gst_rate ?? null } : null;
+  }, [lines, items]);
+  const taxResolution = useMemo(
+    () =>
+      resolveTaxTemplate(taxTemplates, {
+        companyStateCode,
+        party: partyLedger
+          ? { gst_treatment: partyLedger.gst_treatment ?? null, state_code: partyLedger.state_code ?? null }
+          : null,
+        item: firstItem,
+      }),
+    [taxTemplates, companyStateCode, partyLedger, firstItem],
+  );
+  // Save is blocked only when the picker is required AND the user hasn't picked.
+  const taxTemplateBlocksSave =
+    (taxResolution.status === "ambiguous" || taxResolution.status === "unresolved") &&
+    !manualTaxTemplateId;
 
   const deferredLines = useDeferredValue(lines);
   const computed: GstLineResult[] = useMemo(
@@ -764,7 +794,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
               <X className="mr-1 h-4 w-4" /> Cancel
             </Button>
-            <Button data-assistant-save onClick={save} disabled={saving || !canWrite || locked}>
+            <Button
+              data-assistant-save
+              onClick={save}
+              disabled={saving || !canWrite || locked || taxTemplateBlocksSave}
+              title={taxTemplateBlocksSave ? "Pick a tax template to enable Save" : undefined}
+            >
               <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
             </Button>
           </div>
@@ -842,6 +877,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                         ITC ineligible
                       </span>
                     )}
+                    <AutoTaxChip
+                      resolution={taxResolution}
+                      manualId={manualTaxTemplateId}
+                      onManualChange={setManualTaxTemplateId}
+                    />
                   </div>
                 )}
               </div>
