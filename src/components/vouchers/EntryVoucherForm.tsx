@@ -37,6 +37,9 @@ import { rememberNarration, recallNarration } from "@/lib/recall-store";
 import { findDuplicateReference } from "@/lib/voucher-duplicate-check";
 import { useVoucherDraft, clearVoucherDraft } from "@/hooks/useVoucherDraft";
 import { DraftRecoveredBanner } from "./DraftRecoveredBanner";
+import { useTaxTemplates } from "@/hooks/useVoucherMasters";
+import type { Resolution, TaxTemplate } from "@/lib/voucher-resolver";
+import { AutoTaxChip } from "./AutoTaxChip";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
