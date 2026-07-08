@@ -872,6 +872,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                         ITC ineligible
                       </span>
                     )}
+                    <AutoTaxChip
+                      resolution={taxResolution}
+                      manualId={manualTaxTemplateId}
+                      onManualChange={setManualTaxTemplateId}
+                    />
                   </div>
                 )}
               </div>
