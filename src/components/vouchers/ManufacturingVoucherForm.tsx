@@ -635,7 +635,17 @@ export function ManufacturingVoucherForm() {
           <h1 className="text-2xl font-semibold">Manufacturing &amp; Processing Journal</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate({ to: "/app/vouchers" })}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (!isDraftEmpty(draftSnap)) {
+                const ok = window.confirm("Discard this manufacturing entry? Unsaved changes will be lost.");
+                if (!ok) return;
+                clearVoucherDraft(draftKey);
+              }
+              navigate({ to: "/app/vouchers" });
+            }}
+          >
             Cancel
           </Button>
           <Button onClick={save} disabled={saving} className="gap-1">
@@ -643,6 +653,30 @@ export function ManufacturingVoucherForm() {
           </Button>
         </div>
       </div>
+
+      {draft.restored && !draftBannerDismissed && (
+        <DraftRecoveredBanner
+          onDismiss={() => setDraftBannerDismissed(true)}
+          onDiscard={() => {
+            draft.discard();
+            setDraftBannerDismissed(true);
+            setFinalProductId("");
+            setQtyToProduce("1");
+            setProductionOrderNo("");
+            setProcessTemplate("");
+            setBatchNo("");
+            setExpiryDate("");
+            setDepartment("");
+            setNarration("");
+            setMachineParams("");
+            setProcessingCost("0");
+            setScrapValue("0");
+            setConsume([blankConsume()]);
+            setOutputs([blankOutput()]);
+            setConsumeDirty(false);
+          }}
+        />
+      )}
 
       <PeriodLockBanner lock={lock} />
 
