@@ -99,6 +99,17 @@ export interface PostingOptions {
    * asset (e.g. "AC Machine") rather than a generic head.
    */
   capitalItems?: CapitalItemLine[];
+  /**
+   * Bill sundries — non-item charges (freight, packing, discount, ...). Each
+   * amount is SIGNED (positive adds to invoice total, negative reduces).
+   *
+   * Postings: on the sales side, positive sundries credit the sundry ledger
+   * (income/recovery) and negative sundries debit it (discount allowed).
+   * On the purchase side the direction is mirrored. `totals.total_paise` is
+   * assumed by the caller to already include the net sundry amount, so the
+   * party leg stays consistent.
+   */
+  sundries?: PostingSundry[];
 }
 
 export interface CapitalItemLine {
@@ -108,6 +119,13 @@ export interface CapitalItemLine {
   sgst_paise: number;
   igst_paise: number;
 }
+
+export interface PostingSundry {
+  ledger_id: string;
+  /** Signed paise: positive = adds to total, negative = reduces. */
+  amount_paise: number;
+}
+
 
 export interface PostingEntry {
   ledger_id: string;
