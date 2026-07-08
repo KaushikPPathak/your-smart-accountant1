@@ -23,6 +23,8 @@ export interface ItemRowData {
   rate: string;
   discount: string;
   gst_rate: string;
+  cost_centre_id?: string | null;
+  cost_category_id?: string | null;
 }
 
 interface ItemOpt {
