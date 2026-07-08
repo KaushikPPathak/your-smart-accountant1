@@ -44,7 +44,7 @@ export const Route = createFileRoute("/app")({
 function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading } = useAuth();
+  useAuth(); // keeps AuthProvider subscription mounted; we don't gate on it here
   const { loading: companyLoading, memberships, activeCompanyId, activeMembership } = useCompany();
   const { t } = useI18n();
   const [bootstrapping, setBootstrapping] = useState(true);
