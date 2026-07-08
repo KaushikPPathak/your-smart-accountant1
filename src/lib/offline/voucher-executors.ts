@@ -591,6 +591,10 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
         itcClass: snap.itcClass,
         itcEligible: snap.itcEligible,
         capitalItems,
+        sundries: (snap.sundries ?? []).map((s) => ({
+          ledger_id: s.ledger_id,
+          amount_paise: s.amount_paise,
+        })),
       },
     );
     entryRows = postings.map((p) => ({
