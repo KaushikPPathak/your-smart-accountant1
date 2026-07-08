@@ -598,11 +598,22 @@ export function ManufacturingVoucherForm() {
         e.preventDefault();
         e.stopPropagation();
         if (!saving) save();
+        return;
+      }
+      if (e.key === "Escape") {
+        const dirty = !isDraftEmpty(draftSnap);
+        if (dirty) {
+          e.preventDefault();
+          const ok = window.confirm("Discard this manufacturing entry? Unsaved changes will be lost.");
+          if (!ok) return;
+          clearVoucherDraft(draftKey);
+        }
+        navigate({ to: "/app/vouchers" });
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [save, saving]);
+  }, [save, saving, isDraftEmpty, draftSnap, draftKey, navigate]);
 
   const enterTab = useEnterAsTab(() => {
     if (!saving) save();
