@@ -83,6 +83,11 @@ function WebGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Routes reachable without unlocking — the offline diagnostic assistant is
+// intentionally exempt so users can troubleshoot sign-in / sync issues before
+// they get past the lock screen.
+const LOCK_EXEMPT_PATHS = new Set(["/lock", "/assistant"]);
+
 function LockGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -90,7 +95,7 @@ function LockGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading) return;
-    if (location.pathname === "/lock") return;
+    if (LOCK_EXEMPT_PATHS.has(location.pathname)) return;
     if (!isUnlocked()) navigate({ to: "/lock" });
   }, [loading, location.pathname, navigate]);
 
