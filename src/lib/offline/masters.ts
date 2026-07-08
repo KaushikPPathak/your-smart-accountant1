@@ -181,7 +181,7 @@ export async function createLedger(payload: LedgerInsertPayload): Promise<Ledger
     type: String(payload.type),
     state_code: payload.state_code ?? null,
     gstin: payload.gstin ?? null,
-    gst_treatment: "regular",
+    gst_treatment: (payload.gst_registration_type as string | undefined) ?? "regular",
   };
 }
 
