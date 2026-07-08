@@ -144,6 +144,11 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   }, []);
   const draft = useVoucherDraft(draftKey, draftSnap, applyDraft, isDraftEmpty);
   const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
+  // Journal-only: manual tax-template override when auto-resolution can't
+  // pin one down. Kept purely in memory — it's a UX guardrail so the user
+  // consciously confirms which GST rectype this journal represents, not a
+  // persisted field. Save is blocked until it's resolved.
+  const [manualTaxTemplateId, setManualTaxTemplateId] = useState<string | null>(null);
 
   // Assistant prefill: when the AI chat drafts a Payment/Receipt, it stashes
   // the parsed JSON in sessionStorage and navigates here. Apply once on mount.
