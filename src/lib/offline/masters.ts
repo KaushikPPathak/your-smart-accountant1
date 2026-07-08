@@ -195,9 +195,14 @@ export async function updateLedger(
   const existing = await offlineDb.cache_ledgers.get(id);
 
   if (existing) {
+    const nextGstTreatment =
+      values.gst_registration_type !== undefined
+        ? (values.gst_registration_type as string | null) ?? "regular"
+        : existing.gst_treatment;
     const updatedRecord: LedgerCacheRow = {
       ...existing,
       ...values,
+      gst_treatment: nextGstTreatment,
       updated_at: now,
       is_synced: false,
     };
