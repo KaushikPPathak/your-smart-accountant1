@@ -35,6 +35,8 @@ import { validateEntryVoucher } from "@/lib/schemas/voucher";
 import { EntryRow } from "@/components/fast-form/EntryRow";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
 import { findDuplicateReference } from "@/lib/voucher-duplicate-check";
+import { useVoucherDraft, clearVoucherDraft } from "@/hooks/useVoucherDraft";
+import { DraftRecoveredBanner } from "./DraftRecoveredBanner";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -114,6 +116,31 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
   const { lock, locked } = usePeriodLock(date);
   const formRootRef = useRef<HTMLDivElement | null>(null);
+
+  // ---------- Draft persistence (crash recovery) ----------
+  const draftKey = activeCompanyId ? `voucher-draft:${activeCompanyId}:${voucherType}` : null;
+  const draftSnap = useMemo(
+    () => ({ date, refNo, narration, cashBankId, lines, simpleLines }),
+    [date, refNo, narration, cashBankId, lines, simpleLines],
+  );
+  const applyDraft = useCallback(
+    (d: typeof draftSnap) => {
+      if (d.date) setDate(d.date);
+      if (typeof d.refNo === "string") setRefNo(d.refNo);
+      if (typeof d.narration === "string") setNarration(d.narration);
+      if (typeof d.cashBankId === "string") setCashBankId(d.cashBankId);
+      if (Array.isArray(d.lines) && d.lines.length > 0) setLines(d.lines);
+      if (Array.isArray(d.simpleLines) && d.simpleLines.length > 0) setSimpleLines(d.simpleLines);
+    },
+    [],
+  );
+  const isDraftEmpty = useCallback((s: typeof draftSnap) => {
+    const hasEntry = s.lines.some((l) => l.ledger_id || parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0);
+    const hasSimple = s.simpleLines.some((l) => l.ledger_id || parseFloat(l.amount) > 0);
+    return !s.refNo && !s.narration && !s.cashBankId && !hasEntry && !hasSimple;
+  }, []);
+  const draft = useVoucherDraft(draftKey, draftSnap, applyDraft, isDraftEmpty);
+  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
 
   // Assistant prefill: when the AI chat drafts a Payment/Receipt, it stashes
   // the parsed JSON in sessionStorage and navigates here. Apply once on mount.
@@ -345,16 +372,22 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       toast.error(check.message);
       return;
     }
-    // Duplicate cheque / reference-number guard (payment & receipt).
-    // Banks reject a re-used cheque number, so warn before we queue the save.
-    if (snap.refNo && (voucherType === "payment" || voucherType === "receipt")) {
+    // Duplicate reference-number guard (all entry voucher types).
+    // Banks reject a re-used cheque number, and a duplicate journal ref is
+    // almost always a data-entry mistake — warn before we queue the save.
+    if (snap.refNo) {
       const dups = await findDuplicateReference(activeCompanyId, voucherType, snap.refNo);
       if (dups.length > 0) {
         const first = dups[0];
-        const label = voucherType === "payment" ? "Cheque / Reference No." : "Reference No.";
+        const label =
+          voucherType === "payment"
+            ? "Cheque / Reference No."
+            : voucherType === "receipt"
+              ? "Reference No."
+              : "Journal Reference No.";
         const ok = window.confirm(
           `${label} "${snap.refNo}" was already used on ${first.voucher_date} (${dups.length} existing voucher${dups.length > 1 ? "s" : ""}).\n\n` +
-            `Cheque numbers must be unique per bank. Save anyway?`,
+            `Save anyway?`,
         );
         if (!ok) {
           toast.warning("Save cancelled — change the reference number to avoid a duplicate.");
@@ -363,6 +396,8 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       }
     }
     rememberNarration(voucherType, narration);
+    clearVoucherDraft(draftKey);
+    setDraftBannerDismissed(true);
     setRefNo("");
     setNarration("");
     setLines(Array.from({ length: cfg.defaultLines }, blank));
@@ -383,7 +418,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       },
       { executor: ENTRY_VOUCHER_KEY, snap, companyId: snap.companyId },
     );
-  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg]);
+  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg, draftKey]);
 
   const save = useCallback(() => { void performSave(); }, [performSave]);
 
@@ -409,11 +444,21 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         } else {
           setLedgerDlg({ open: true, editId: null, lineIdx: focusedLine });
         }
+      } else if (e.key === "Escape") {
+        // Guarded cancel: only prompt when there's real content to lose.
+        const dirty = !isDraftEmpty(draftSnap);
+        if (dirty) {
+          e.preventDefault();
+          const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
+          if (!ok) return;
+          clearVoucherDraft(draftKey);
+        }
+        navigate({ to: "/app/vouchers" });
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, navigate, saving, lines, focusedLine, voucherType, isSimple, simpleLines, remove, removeSimple]);
+  }, [save, navigate, saving, lines, focusedLine, voucherType, isSimple, simpleLines, remove, removeSimple, draftKey, draftSnap, isDraftEmpty]);
 
   const onLedgerSaved = (lg: QuickLedger) => {
     upsertCachedLedger({
@@ -450,7 +495,17 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              if (!isDraftEmpty(draftSnap)) {
+                const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
+                if (!ok) return;
+                clearVoucherDraft(draftKey);
+              }
+              navigate({ to: "/app/vouchers" });
+            }}
+          >
             <X className="mr-1 h-4 w-4" /> Cancel
           </Button>
           <Button data-assistant-save onClick={save} disabled={saving || !canWrite || !balanced || locked}>
@@ -458,6 +513,21 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           </Button>
         </div>
       </div>
+
+      {draft.restored && !draftBannerDismissed && (
+        <DraftRecoveredBanner
+          onDismiss={() => setDraftBannerDismissed(true)}
+          onDiscard={() => {
+            draft.discard();
+            setDraftBannerDismissed(true);
+            setRefNo("");
+            setNarration("");
+            setCashBankId("");
+            setLines(Array.from({ length: cfg.defaultLines }, blank));
+            setSimpleLines(Array.from({ length: 2 }, blankSimple));
+          }}
+        />
+      )}
 
       <PeriodLockBanner lock={lock} />
 

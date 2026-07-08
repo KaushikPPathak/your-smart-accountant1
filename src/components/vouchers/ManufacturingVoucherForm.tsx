@@ -28,6 +28,9 @@ import { BomTemplateDialog } from "./BomTemplateDialog";
 import { getAllItems, useMastersVersion } from "@/lib/masters-cache";
 import { enqueueSave } from "@/lib/save-queue";
 import { loadBomForOutput } from "@/lib/bom";
+import { findDuplicateReference } from "@/lib/voucher-duplicate-check";
+import { useVoucherDraft, clearVoucherDraft } from "@/hooks/useVoucherDraft";
+import { DraftRecoveredBanner } from "./DraftRecoveredBanner";
 
 interface ItemOpt {
   id: string;
@@ -125,6 +128,45 @@ export function ManufacturingVoucherForm() {
   const [savedTick, setSavedTick] = useState(0);
   const { lock } = usePeriodLock(date);
   const mastersVersion = useMastersVersion();
+
+  // ---------- Draft persistence (crash recovery) ----------
+  const draftKey = activeCompanyId ? `voucher-draft:${activeCompanyId}:manufacturing` : null;
+  const draftSnap = useMemo(
+    () => ({
+      date, productionOrderNo, department, processTemplate, batchNo, expiryDate,
+      finalProductId, qtyToProduce, consume, outputs, consumeDirty,
+      processingCost, scrapValue, machineParams, narration,
+    }),
+    [date, productionOrderNo, department, processTemplate, batchNo, expiryDate,
+     finalProductId, qtyToProduce, consume, outputs, consumeDirty,
+     processingCost, scrapValue, machineParams, narration],
+  );
+  const applyDraft = useCallback((d: typeof draftSnap) => {
+    if (d.date) setDate(d.date);
+    if (typeof d.productionOrderNo === "string") setProductionOrderNo(d.productionOrderNo);
+    if (typeof d.department === "string") setDepartment(d.department);
+    if (typeof d.processTemplate === "string") setProcessTemplate(d.processTemplate);
+    if (typeof d.batchNo === "string") setBatchNo(d.batchNo);
+    if (typeof d.expiryDate === "string") setExpiryDate(d.expiryDate);
+    if (typeof d.finalProductId === "string") setFinalProductId(d.finalProductId);
+    if (typeof d.qtyToProduce === "string") setQtyToProduce(d.qtyToProduce);
+    if (Array.isArray(d.consume) && d.consume.length > 0) setConsume(d.consume);
+    if (Array.isArray(d.outputs) && d.outputs.length > 0) setOutputs(d.outputs);
+    if (typeof d.consumeDirty === "boolean") setConsumeDirty(d.consumeDirty);
+    if (typeof d.processingCost === "string") setProcessingCost(d.processingCost);
+    if (typeof d.scrapValue === "string") setScrapValue(d.scrapValue);
+    if (typeof d.machineParams === "string") setMachineParams(d.machineParams);
+    if (typeof d.narration === "string") setNarration(d.narration);
+  }, []);
+  const isDraftEmpty = useCallback((s: typeof draftSnap) => {
+    const hasConsume = s.consume.some((r) => r.item_id || (parseFloat(r.qty) || 0) > 0);
+    const hasOutput = s.outputs.some((r) => r.item_id || (parseFloat(r.qty) || 0) > 0);
+    return !s.productionOrderNo && !s.department && !s.processTemplate && !s.batchNo &&
+      !s.expiryDate && !s.finalProductId && !s.narration && !s.machineParams &&
+      !hasConsume && !hasOutput;
+  }, []);
+  const draft = useVoucherDraft(draftKey, draftSnap, applyDraft, isDraftEmpty);
+  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
 
   useEffect(() => {
     setItems(
@@ -271,6 +313,22 @@ export function ManufacturingVoucherForm() {
       return;
     }
 
+    // Duplicate Production Order No. guard — a repeated PO is almost always
+    // a mistake (two vouchers for the same batch).
+    if (productionOrderNo) {
+      const dups = await findDuplicateReference(activeCompanyId, "manufacturing", productionOrderNo);
+      if (dups.length > 0) {
+        const first = dups[0];
+        const ok = window.confirm(
+          `Production Order "${productionOrderNo}" was already used on ${first.voucher_date} (${dups.length} existing voucher${dups.length > 1 ? "s" : ""}).\n\nSave anyway?`,
+        );
+        if (!ok) {
+          toast.warning("Save cancelled — change the Production Order No. to avoid a duplicate.");
+          return;
+        }
+      }
+    }
+
     setSaving(true);
 
     const headerMeta: Record<string, string> = {};
@@ -304,6 +362,8 @@ export function ManufacturingVoucherForm() {
     };
 
     // Reset
+    clearVoucherDraft(draftKey);
+    setDraftBannerDismissed(true);
     setFinalProductId("");
     setQtyToProduce("1");
     setProductionOrderNo("");
@@ -522,6 +582,7 @@ export function ManufacturingVoucherForm() {
     totalConsumePaise,
     processingPaise,
     scrapPaise,
+    draftKey,
   ]);
 
   const save = useCallback(() => {
@@ -537,11 +598,22 @@ export function ManufacturingVoucherForm() {
         e.preventDefault();
         e.stopPropagation();
         if (!saving) save();
+        return;
+      }
+      if (e.key === "Escape") {
+        const dirty = !isDraftEmpty(draftSnap);
+        if (dirty) {
+          e.preventDefault();
+          const ok = window.confirm("Discard this manufacturing entry? Unsaved changes will be lost.");
+          if (!ok) return;
+          clearVoucherDraft(draftKey);
+        }
+        navigate({ to: "/app/vouchers" });
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [save, saving]);
+  }, [save, saving, isDraftEmpty, draftSnap, draftKey, navigate]);
 
   const enterTab = useEnterAsTab(() => {
     if (!saving) save();
@@ -563,7 +635,17 @@ export function ManufacturingVoucherForm() {
           <h1 className="text-2xl font-semibold">Manufacturing &amp; Processing Journal</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate({ to: "/app/vouchers" })}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (!isDraftEmpty(draftSnap)) {
+                const ok = window.confirm("Discard this manufacturing entry? Unsaved changes will be lost.");
+                if (!ok) return;
+                clearVoucherDraft(draftKey);
+              }
+              navigate({ to: "/app/vouchers" });
+            }}
+          >
             Cancel
           </Button>
           <Button onClick={save} disabled={saving} className="gap-1">
@@ -571,6 +653,30 @@ export function ManufacturingVoucherForm() {
           </Button>
         </div>
       </div>
+
+      {draft.restored && !draftBannerDismissed && (
+        <DraftRecoveredBanner
+          onDismiss={() => setDraftBannerDismissed(true)}
+          onDiscard={() => {
+            draft.discard();
+            setDraftBannerDismissed(true);
+            setFinalProductId("");
+            setQtyToProduce("1");
+            setProductionOrderNo("");
+            setProcessTemplate("");
+            setBatchNo("");
+            setExpiryDate("");
+            setDepartment("");
+            setNarration("");
+            setMachineParams("");
+            setProcessingCost("0");
+            setScrapValue("0");
+            setConsume([blankConsume()]);
+            setOutputs([blankOutput()]);
+            setConsumeDirty(false);
+          }}
+        />
+      )}
 
       <PeriodLockBanner lock={lock} />
 
