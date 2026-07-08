@@ -469,6 +469,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     () => Math.round((miscPreGstPaise * weightedGstRate) / 100),
     [miscPreGstPaise, weightedGstRate],
   );
+  const sundriesNetPaise = useMemo(() => netSundryPaise(sundries), [sundries]);
   const adjustedTotals = useMemo(() => {
     const cgstAdd = interstate ? 0 : Math.floor(miscPreTaxPaise / 2);
     const sgstAdd = interstate ? 0 : Math.floor(miscPreTaxPaise / 2);
@@ -481,9 +482,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       igst_paise: rawTotals.igst_paise + igstAdd,
       rounding_paise: rawTotals.rounding_paise + taxLeftover,
       total_paise:
-        rawTotals.total_paise + miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise,
+        rawTotals.total_paise + miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise + sundriesNetPaise,
     };
-  }, [rawTotals, miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, interstate]);
+  }, [rawTotals, miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, sundriesNetPaise, interstate]);
   const roundOffPaise = useMemo(() => {
     if (!roundOff) return 0;
     const rounded = Math.round(adjustedTotals.total_paise / 100) * 100;
