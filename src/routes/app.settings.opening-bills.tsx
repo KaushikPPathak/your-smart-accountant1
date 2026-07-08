@@ -72,7 +72,7 @@ const emptyDraft = (): Draft => ({
 function OpeningBillsPage() {
   const { activeCompanyId } = useCompany();
   const navigate = useNavigate();
-  useMastersVersion(); // subscribe so ledgers refresh
+  const mastersVersion = useMastersVersion();
   const [ledgerId, setLedgerId] = useState<string>("");
   const [bills, setBills] = useState<OpeningBillRow[]>([]);
   const [allOpeningByParty, setAllOpeningByParty] = useState<Map<string, number>>(new Map());
@@ -85,8 +85,7 @@ function OpeningBillsPage() {
 
   const parties = useMemo<CachedLedger[]>(
     () => getAllLedgers().filter((l) => l.type === "sundry_debtor" || l.type === "sundry_creditor"),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [useMastersVersion()],
+    [mastersVersion],
   );
   const selected = parties.find((p) => p.id === ledgerId) ?? null;
   const partyKind: "debtor" | "creditor" | null = selected
