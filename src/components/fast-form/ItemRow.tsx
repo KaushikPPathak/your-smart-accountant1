@@ -36,6 +36,8 @@ interface ItemOpt {
   hsn_code?: string | null;
 }
 
+interface CostOpt { id: string; name: string; code?: string | null }
+
 interface Props {
   idx: number;
   row: ItemRowData;
@@ -53,6 +55,8 @@ interface Props {
   showGstColumn?: boolean;
   showHsnColumn?: boolean;
   hsnDescriptionFor?: (code: string) => string | undefined;
+  costCentres?: CostOpt[];
+  costCategories?: CostOpt[];
 }
 
 function ItemRowImpl({
