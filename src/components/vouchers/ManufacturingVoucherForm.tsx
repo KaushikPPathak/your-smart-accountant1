@@ -582,6 +582,7 @@ export function ManufacturingVoucherForm() {
     totalConsumePaise,
     processingPaise,
     scrapPaise,
+    draftKey,
   ]);
 
   const save = useCallback(() => {
