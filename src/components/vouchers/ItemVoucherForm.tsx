@@ -1075,6 +1075,17 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 </div>
               )}
               <div className="my-2 border-t" />
+              <SundryStrip
+                sundries={sundries}
+                onChange={setSundries}
+                ledgerOptions={ledgers.filter((lg) =>
+                  lg.type === "expense_direct" ||
+                  lg.type === "expense_indirect" ||
+                  lg.type === "income_direct" ||
+                  lg.type === "income_indirect"
+                )}
+              />
+              <div className="my-2 border-t" />
               <div className="flex items-center justify-between text-xs">
                 <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer">
                   <input
