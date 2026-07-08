@@ -57,6 +57,8 @@ import { HSN_MASTER_DATASET } from "@/lib/hsn/seedHsnData";
 import { useTaxTemplates } from "@/hooks/useVoucherMasters";
 import { resolveTaxTemplate } from "@/lib/voucher-resolver";
 import { AutoTaxChip } from "./AutoTaxChip";
+import { SundryStrip } from "./SundryStrip";
+import { netSundryPaise } from "@/lib/sundries";
 
 type VoucherType =
   | "sales"
@@ -157,6 +159,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [miscPreGst, setMiscPreGst] = useState<string>("0");
   const [miscPostGst, setMiscPostGst] = useState<string>("0");
+  // Bill sundries — freight, packing, discount, etc. Empty by default;
+  // "+ Add charge" popover in the totals block adds structured entries that
+  // are persisted to cache_bill_sundries and included in postings.
+  const [sundries, setSundries] = useState<import("@/lib/sundries").Sundry[]>([]);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [items, setItems] = useState<ItemOpt[]>([]);
   const [companyStateCode, setCompanyStateCode] = useState<string | null>(null);
@@ -463,6 +469,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     () => Math.round((miscPreGstPaise * weightedGstRate) / 100),
     [miscPreGstPaise, weightedGstRate],
   );
+  const sundriesNetPaise = useMemo(() => netSundryPaise(sundries), [sundries]);
   const adjustedTotals = useMemo(() => {
     const cgstAdd = interstate ? 0 : Math.floor(miscPreTaxPaise / 2);
     const sgstAdd = interstate ? 0 : Math.floor(miscPreTaxPaise / 2);
@@ -475,9 +482,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       igst_paise: rawTotals.igst_paise + igstAdd,
       rounding_paise: rawTotals.rounding_paise + taxLeftover,
       total_paise:
-        rawTotals.total_paise + miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise,
+        rawTotals.total_paise + miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise + sundriesNetPaise,
     };
-  }, [rawTotals, miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, interstate]);
+  }, [rawTotals, miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, sundriesNetPaise, interstate]);
   const roundOffPaise = useMemo(() => {
     if (!roundOff) return 0;
     const rounded = Math.round(adjustedTotals.total_paise / 100) * 100;
@@ -617,6 +624,13 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       lines: lines
         .map((l, i) => ({ l, c: computed[i] }))
         .filter((x) => x.l.item_id && x.c?.total_paise > 0),
+      sundries: sundries.map((s) => ({
+        id: s.id,
+        sundry_type: s.sundry_type,
+        ledger_id: s.ledger_id,
+        amount_paise: s.amount_paise,
+        narration: s.narration ?? null,
+      })),
     };
     rememberNarration(voucherType, narration);
     // Reset form INSTANTLY
@@ -627,6 +641,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setLines([blankLine()]);
     setMiscPreGst("0");
     setMiscPostGst("0");
+    setSundries([]);
     setFocusedLine(0);
     setSavedTick((n) => n + 1);
     if (draftKey) {
@@ -1059,6 +1074,17 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   Adj: {formatINR(miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise)} added
                 </div>
               )}
+              <div className="my-2 border-t" />
+              <SundryStrip
+                sundries={sundries}
+                onChange={setSundries}
+                ledgerOptions={ledgers.filter((lg) =>
+                  lg.type === "expense_direct" ||
+                  lg.type === "expense_indirect" ||
+                  lg.type === "income_direct" ||
+                  lg.type === "income_indirect"
+                )}
+              />
               <div className="my-2 border-t" />
               <div className="flex items-center justify-between text-xs">
                 <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer">

@@ -172,4 +172,42 @@ describe("buildItemVoucherPostings — invariants", () => {
     expect(balanced(neg).ok).toBe(true);
     expect(neg.some((e) => e.ledger_id === idFor("Round Off") && e.debit_paise === 1)).toBe(true);
   });
+
+  it("sundries on sales: freight +500 credits ledger, discount −200 debits ledger, balanced", async () => {
+    // Caller folds net sundries into total_paise before invoking. Here:
+    // net = +500 − 200 = +300, so total = base + 300.
+    const base = totals(10000, 900, 900, 0, 0);
+    const t: PostingTotals = { ...base, total_paise: base.total_paise + 300 };
+    const entries = await buildItemVoucherPostings("co", "sales", PARTY, t, {
+      sundries: [
+        { ledger_id: idFor("Freight Outward"), amount_paise: 500 },
+        { ledger_id: idFor("Discount Allowed"), amount_paise: -200 },
+      ],
+    });
+    expect(balanced(entries).ok).toBe(true);
+    expect(entries.find((e) => e.ledger_id === PARTY)!.debit_paise).toBe(t.total_paise);
+    const freight = entries.find((e) => e.ledger_id === idFor("Freight Outward"))!;
+    expect(freight.credit_paise).toBe(500);
+    const discount = entries.find((e) => e.ledger_id === idFor("Discount Allowed"))!;
+    expect(discount.debit_paise).toBe(200);
+  });
+
+  it("sundries on purchase: freight +500 debits ledger, discount received −200 credits ledger, balanced", async () => {
+    const base = totals(10000, 900, 900, 0, 0);
+    const t: PostingTotals = { ...base, total_paise: base.total_paise + 300 };
+    const entries = await buildItemVoucherPostings("co", "purchase", PARTY, t, {
+      itcClass: "inputs", itcEligible: true,
+      sundries: [
+        { ledger_id: idFor("Freight Inward"), amount_paise: 500 },
+        { ledger_id: idFor("Discount Received"), amount_paise: -200 },
+      ],
+    });
+    expect(balanced(entries).ok).toBe(true);
+    expect(entries.find((e) => e.ledger_id === PARTY)!.credit_paise).toBe(t.total_paise);
+    const freight = entries.find((e) => e.ledger_id === idFor("Freight Inward"))!;
+    expect(freight.debit_paise).toBe(500);
+    const disc = entries.find((e) => e.ledger_id === idFor("Discount Received"))!;
+    expect(disc.credit_paise).toBe(200);
+  });
 });
+

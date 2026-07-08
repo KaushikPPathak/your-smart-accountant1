@@ -165,6 +165,10 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
         itcClass: snap.itcClass,
         itcEligible: snap.itcEligible,
         capitalItems,
+        sundries: (snap.sundries ?? []).map((s) => ({
+          ledger_id: s.ledger_id,
+          amount_paise: s.amount_paise,
+        })),
       },
     );
     const { assertVoucherBalanced } = await import("@/lib/voucher-invariants");
@@ -182,11 +186,26 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
     }));
   }
 
+  const sundryRows = (snap.sundries ?? [])
+    .filter((s) => s && s.ledger_id && s.amount_paise !== 0)
+    .map((s, i) => ({
+      id: s.id ?? crypto.randomUUID(),
+      voucher_id: voucherId,
+      company_id: snap.companyId,
+      sundry_type: s.sundry_type,
+      ledger_id: s.ledger_id,
+      amount_paise: s.amount_paise,
+      line_no: i + 1,
+      narration: s.narration ?? null,
+      updated_at: stamp,
+    }));
+
   await db.transaction(
     "rw",
     db.cache_vouchers,
     db.cache_voucher_items,
     db.cache_voucher_entries,
+    db.cache_bill_sundries,
     async () => {
       await db.cache_vouchers.put({
         id: voucherId,
@@ -215,11 +234,13 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
       });
       if (itemRows.length > 0) await db.cache_voucher_items.bulkPut(itemRows);
       if (entryRows.length > 0) await db.cache_voucher_entries.bulkPut(entryRows);
+      if (sundryRows.length > 0) await db.cache_bill_sundries.bulkPut(sundryRows);
     },
   );
 
   return { voucherId, voucherNumber };
 }
+
 
 async function runLocalEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void> {
   const db = await getOfflineDb();
@@ -458,7 +479,21 @@ export interface ItemVoucherSnap {
       total_paise: number;
     };
   }>;
+  /**
+   * Bill sundries (freight, packing, discount, ...). Optional; when omitted
+   * the voucher behaves exactly as before. `amount_paise` is signed. Caller
+   * is responsible for having folded the net into `totals.total_paise`
+   * before invoking the executor.
+   */
+  sundries?: Array<{
+    id: string;
+    sundry_type: string;
+    ledger_id: string;
+    amount_paise: number;
+    narration?: string | null;
+  }>;
 }
+
 
 export interface EntryVoucherSnap {
   companyId: string;
@@ -556,6 +591,10 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
         itcClass: snap.itcClass,
         itcEligible: snap.itcEligible,
         capitalItems,
+        sundries: (snap.sundries ?? []).map((s) => ({
+          ledger_id: s.ledger_id,
+          amount_paise: s.amount_paise,
+        })),
       },
     );
     entryRows = postings.map((p) => ({

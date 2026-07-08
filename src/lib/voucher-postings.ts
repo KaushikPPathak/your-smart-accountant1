@@ -99,6 +99,17 @@ export interface PostingOptions {
    * asset (e.g. "AC Machine") rather than a generic head.
    */
   capitalItems?: CapitalItemLine[];
+  /**
+   * Bill sundries — non-item charges (freight, packing, discount, ...). Each
+   * amount is SIGNED (positive adds to invoice total, negative reduces).
+   *
+   * Postings: on the sales side, positive sundries credit the sundry ledger
+   * (income/recovery) and negative sundries debit it (discount allowed).
+   * On the purchase side the direction is mirrored. `totals.total_paise` is
+   * assumed by the caller to already include the net sundry amount, so the
+   * party leg stays consistent.
+   */
+  sundries?: PostingSundry[];
 }
 
 export interface CapitalItemLine {
@@ -108,6 +119,13 @@ export interface CapitalItemLine {
   sgst_paise: number;
   igst_paise: number;
 }
+
+export interface PostingSundry {
+  ledger_id: string;
+  /** Signed paise: positive = adds to total, negative = reduces. */
+  amount_paise: number;
+}
+
 
 export interface PostingEntry {
   ledger_id: string;
@@ -230,5 +248,27 @@ export async function buildItemVoucherPostings(
     if (roundOffId && roundOff < 0) entries.push({ ledger_id: roundOffId, debit_paise: -roundOff, credit_paise: 0, line_no: line++ });
   }
 
+  // Bill sundries — post each against its own ledger. Direction depends on
+  // voucher side. `totals.total_paise` already reflects net sundries so the
+  // party leg above is correct; these entries close the double-entry loop.
+  //   sales / credit_note (sales-side):  +amount → Cr ledger,  −amount → Dr ledger
+  //   purchase / debit_note (purch-side): +amount → Dr ledger, −amount → Cr ledger
+  const sundries = options.sundries ?? [];
+  if (sundries.length > 0) {
+    for (const s of sundries) {
+      if (!s.ledger_id || s.amount_paise === 0) continue;
+      const abs = Math.abs(s.amount_paise);
+      const debitOnSalesSide = s.amount_paise < 0; // discount allowed → Dr
+      const debit = isSalesSide ? debitOnSalesSide : !debitOnSalesSide;
+      entries.push({
+        ledger_id: s.ledger_id,
+        debit_paise: debit ? abs : 0,
+        credit_paise: debit ? 0 : abs,
+        line_no: line++,
+      });
+    }
+  }
+
   return entries;
 }
+
