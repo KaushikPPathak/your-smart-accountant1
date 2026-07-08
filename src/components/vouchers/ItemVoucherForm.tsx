@@ -55,6 +55,7 @@ import { ItemRow, type ItemRowData } from "@/components/fast-form/ItemRow";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
 import { HSN_MASTER_DATASET } from "@/lib/hsn/seedHsnData";
 import { useTaxTemplates } from "@/hooks/useVoucherMasters";
+import { useCostCentres } from "@/hooks/useCostCentres";
 import { resolveTaxTemplate } from "@/lib/voucher-resolver";
 import { AutoTaxChip } from "./AutoTaxChip";
 import { SundryStrip } from "./SundryStrip";
@@ -416,6 +417,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   // When no templates are configured (default state) or party is
   // unregistered/composition, resolution returns `hidden` and no UI renders.
   const taxTemplates = useTaxTemplates(activeCompanyId ?? null);
+  const { centres: costCentres, categories: costCategories } = useCostCentres(activeCompanyId ?? null);
   const firstItem = useMemo(() => {
     const first = lines.find((l) => l.item_id);
     if (!first) return null;
@@ -1005,6 +1007,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     showGstColumn={showGstColumn}
                     showHsnColumn={showHsnColumn}
                     hsnDescriptionFor={hsnDescriptionFor}
+                    costCentres={costCentres}
+                    costCategories={costCategories}
                   />
                 ))}
               </TableBody>

@@ -406,6 +406,19 @@ function SettingsPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader><CardTitle className="text-base">Cost centres &amp; categories</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Tag voucher lines by branch, project, or cost pool. Pickers stay hidden until at
+            least one cost centre is configured.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => navigate({ to: "/app/settings/cost-centres" })}>
+            Manage cost centres
+          </Button>
+        </CardContent>
+      </Card>
+
 
 
       <Card>

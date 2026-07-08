@@ -33,6 +33,7 @@ import { Route as AppAssistantRouteImport } from './routes/app.assistant'
 import { Route as AppAccountGroupsRouteImport } from './routes/app.account-groups'
 import { Route as AppVouchersVoucherIdRouteImport } from './routes/app.vouchers.$voucherId'
 import { Route as AppSettingsTaxTemplatesRouteImport } from './routes/app.settings.tax-templates'
+import { Route as AppSettingsCostCentresRouteImport } from './routes/app.settings.cost-centres'
 import { Route as AppReportsTrialBalanceRouteImport } from './routes/app.reports.trial-balance'
 import { Route as AppReportsTradingRouteImport } from './routes/app.reports.trading'
 import { Route as AppReportsTaxAuditRouteImport } from './routes/app.reports.tax-audit'
@@ -54,6 +55,7 @@ import { Route as AppReportsGstSalesBookRouteImport } from './routes/app.reports
 import { Route as AppReportsGstPurchaseBookRouteImport } from './routes/app.reports.gst-purchase-book'
 import { Route as AppReportsGroupLedgerRouteImport } from './routes/app.reports.group-ledger'
 import { Route as AppReportsDayBookRouteImport } from './routes/app.reports.day-book'
+import { Route as AppReportsCostCentreRouteImport } from './routes/app.reports.cost-centre'
 import { Route as AppReportsCashBankRouteImport } from './routes/app.reports.cash-bank'
 import { Route as AppReportsBrsRouteImport } from './routes/app.reports.brs'
 import { Route as AppReportsBalanceSheetRouteImport } from './routes/app.reports.balance-sheet'
@@ -190,6 +192,11 @@ const AppSettingsTaxTemplatesRoute = AppSettingsTaxTemplatesRouteImport.update({
   path: '/tax-templates',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsCostCentresRoute = AppSettingsCostCentresRouteImport.update({
+  id: '/cost-centres',
+  path: '/cost-centres',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const AppReportsTrialBalanceRoute = AppReportsTrialBalanceRouteImport.update({
   id: '/trial-balance',
   path: '/trial-balance',
@@ -295,6 +302,11 @@ const AppReportsGroupLedgerRoute = AppReportsGroupLedgerRouteImport.update({
 const AppReportsDayBookRoute = AppReportsDayBookRouteImport.update({
   id: '/day-book',
   path: '/day-book',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsCostCentreRoute = AppReportsCostCentreRouteImport.update({
+  id: '/cost-centre',
+  path: '/cost-centre',
   getParentRoute: () => AppReportsRoute,
 } as any)
 const AppReportsCashBankRoute = AppReportsCashBankRouteImport.update({
@@ -405,6 +417,7 @@ export interface FileRoutesByFullPath {
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/cash-bank': typeof AppReportsCashBankRoute
+  '/app/reports/cost-centre': typeof AppReportsCostCentreRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
   '/app/reports/group-ledger': typeof AppReportsGroupLedgerRoute
   '/app/reports/gst-purchase-book': typeof AppReportsGstPurchaseBookRoute
@@ -426,6 +439,7 @@ export interface FileRoutesByFullPath {
   '/app/reports/tax-audit': typeof AppReportsTaxAuditRoute
   '/app/reports/trading': typeof AppReportsTradingRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
+  '/app/settings/cost-centres': typeof AppSettingsCostCentresRoute
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
@@ -466,6 +480,7 @@ export interface FileRoutesByTo {
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/cash-bank': typeof AppReportsCashBankRoute
+  '/app/reports/cost-centre': typeof AppReportsCostCentreRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
   '/app/reports/group-ledger': typeof AppReportsGroupLedgerRoute
   '/app/reports/gst-purchase-book': typeof AppReportsGstPurchaseBookRoute
@@ -487,6 +502,7 @@ export interface FileRoutesByTo {
   '/app/reports/tax-audit': typeof AppReportsTaxAuditRoute
   '/app/reports/trading': typeof AppReportsTradingRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
+  '/app/settings/cost-centres': typeof AppSettingsCostCentresRoute
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
@@ -529,6 +545,7 @@ export interface FileRoutesById {
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/cash-bank': typeof AppReportsCashBankRoute
+  '/app/reports/cost-centre': typeof AppReportsCostCentreRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
   '/app/reports/group-ledger': typeof AppReportsGroupLedgerRoute
   '/app/reports/gst-purchase-book': typeof AppReportsGstPurchaseBookRoute
@@ -550,6 +567,7 @@ export interface FileRoutesById {
   '/app/reports/tax-audit': typeof AppReportsTaxAuditRoute
   '/app/reports/trading': typeof AppReportsTradingRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
+  '/app/settings/cost-centres': typeof AppSettingsCostCentresRoute
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
@@ -593,6 +611,7 @@ export interface FileRouteTypes {
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
     | '/app/reports/cash-bank'
+    | '/app/reports/cost-centre'
     | '/app/reports/day-book'
     | '/app/reports/group-ledger'
     | '/app/reports/gst-purchase-book'
@@ -614,6 +633,7 @@ export interface FileRouteTypes {
     | '/app/reports/tax-audit'
     | '/app/reports/trading'
     | '/app/reports/trial-balance'
+    | '/app/settings/cost-centres'
     | '/app/settings/tax-templates'
     | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
@@ -654,6 +674,7 @@ export interface FileRouteTypes {
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
     | '/app/reports/cash-bank'
+    | '/app/reports/cost-centre'
     | '/app/reports/day-book'
     | '/app/reports/group-ledger'
     | '/app/reports/gst-purchase-book'
@@ -675,6 +696,7 @@ export interface FileRouteTypes {
     | '/app/reports/tax-audit'
     | '/app/reports/trading'
     | '/app/reports/trial-balance'
+    | '/app/settings/cost-centres'
     | '/app/settings/tax-templates'
     | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
@@ -716,6 +738,7 @@ export interface FileRouteTypes {
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
     | '/app/reports/cash-bank'
+    | '/app/reports/cost-centre'
     | '/app/reports/day-book'
     | '/app/reports/group-ledger'
     | '/app/reports/gst-purchase-book'
@@ -737,6 +760,7 @@ export interface FileRouteTypes {
     | '/app/reports/tax-audit'
     | '/app/reports/trading'
     | '/app/reports/trial-balance'
+    | '/app/settings/cost-centres'
     | '/app/settings/tax-templates'
     | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
@@ -930,6 +954,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsTaxTemplatesRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/app/settings/cost-centres': {
+      id: '/app/settings/cost-centres'
+      path: '/cost-centres'
+      fullPath: '/app/settings/cost-centres'
+      preLoaderRoute: typeof AppSettingsCostCentresRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/app/reports/trial-balance': {
       id: '/app/reports/trial-balance'
       path: '/trial-balance'
@@ -1077,6 +1108,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsDayBookRouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/cost-centre': {
+      id: '/app/reports/cost-centre'
+      path: '/cost-centre'
+      fullPath: '/app/reports/cost-centre'
+      preLoaderRoute: typeof AppReportsCostCentreRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/reports/cash-bank': {
       id: '/app/reports/cash-bank'
       path: '/cash-bank'
@@ -1190,6 +1228,7 @@ interface AppReportsRouteChildren {
   AppReportsBalanceSheetRoute: typeof AppReportsBalanceSheetRoute
   AppReportsBrsRoute: typeof AppReportsBrsRoute
   AppReportsCashBankRoute: typeof AppReportsCashBankRoute
+  AppReportsCostCentreRoute: typeof AppReportsCostCentreRoute
   AppReportsDayBookRoute: typeof AppReportsDayBookRoute
   AppReportsGroupLedgerRoute: typeof AppReportsGroupLedgerRoute
   AppReportsGstPurchaseBookRoute: typeof AppReportsGstPurchaseBookRoute
@@ -1218,6 +1257,7 @@ const AppReportsRouteChildren: AppReportsRouteChildren = {
   AppReportsBalanceSheetRoute: AppReportsBalanceSheetRoute,
   AppReportsBrsRoute: AppReportsBrsRoute,
   AppReportsCashBankRoute: AppReportsCashBankRoute,
+  AppReportsCostCentreRoute: AppReportsCostCentreRoute,
   AppReportsDayBookRoute: AppReportsDayBookRoute,
   AppReportsGroupLedgerRoute: AppReportsGroupLedgerRoute,
   AppReportsGstPurchaseBookRoute: AppReportsGstPurchaseBookRoute,
@@ -1246,10 +1286,12 @@ const AppReportsRouteWithChildren = AppReportsRoute._addFileChildren(
 )
 
 interface AppSettingsRouteChildren {
+  AppSettingsCostCentresRoute: typeof AppSettingsCostCentresRoute
   AppSettingsTaxTemplatesRoute: typeof AppSettingsTaxTemplatesRoute
 }
 
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
+  AppSettingsCostCentresRoute: AppSettingsCostCentresRoute,
   AppSettingsTaxTemplatesRoute: AppSettingsTaxTemplatesRoute,
 }
 

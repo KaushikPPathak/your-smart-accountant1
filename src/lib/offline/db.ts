@@ -97,6 +97,11 @@ class OfflineDatabase extends Dexie {
   cache_tax_templates!: Table<any, any>;
   cache_bill_sundries!: Table<any, any>;
   cache_transport_details!: Table<any, any>;
+  // Cost accounting primitives (local-only). Pickers on voucher lines only
+  // render when at least one cost centre exists for the active company;
+  // categories are optional and further hidden until the user configures any.
+  cache_cost_centres!: Table<any, any>;
+  cache_cost_categories!: Table<any, any>;
   outbox!: Table<any, any>;
   dead_letter!: Table<any, any>;
   sync_cursors!: Table<any, any>;
@@ -168,6 +173,10 @@ class OfflineDatabase extends Dexie {
       // collapsed unless F7 or invoice value >= state e-way threshold.
       cache_transport_details: "voucher_id, company_id, updated_at",
     });
+    this.version(7).stores({
+      cache_cost_centres: "id, company_id, name, is_active, updated_at",
+      cache_cost_categories: "id, company_id, name, is_active, updated_at",
+    });
   }
 }
 
@@ -207,6 +216,7 @@ function makeStubDb(): OfflineDatabase {
     "cache_bom_templates", "cache_bom_template_lines", "cache_recurring_invoices",
     "einvoice_queue",
     "cache_voucher_series", "cache_tax_templates", "cache_bill_sundries", "cache_transport_details",
+    "cache_cost_centres", "cache_cost_categories",
     "outbox", "dead_letter", "sync_cursors", "account_creds", "meta",
   ];
   const stub: Record<string, unknown> = {
