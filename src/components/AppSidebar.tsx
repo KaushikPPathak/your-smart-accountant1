@@ -130,6 +130,7 @@ const SECTIONS: NavSection[] = [
           { title: "Profit & Loss", url: "/app/reports/profit-loss", icon: TrendingUp, i18nKey: "nav.profitLoss" },
           { title: "Balance Sheet", url: "/app/reports/balance-sheet", icon: FileSpreadsheet, i18nKey: "nav.balanceSheet" },
           { title: "Outstanding", url: "/app/reports/outstanding", icon: ClipboardList },
+          { title: "Cost Centre", url: "/app/reports/cost-centre", icon: Layers },
         ],
       },
       {
