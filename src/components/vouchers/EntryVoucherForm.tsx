@@ -263,6 +263,39 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     [ledgers],
   );
 
+  // ------------------------------------------------------------------
+  // Journal GST rectype — progressive disclosure.
+  // Only surfaces when the journal touches a GST tax ledger AND the
+  // user has configured tax templates. Otherwise stays hidden.
+  // Interstate is inferred from ledger name (IGST vs CGST/SGST).
+  // ------------------------------------------------------------------
+  const taxTemplates = useTaxTemplates(activeCompanyId ?? null);
+  const taxResolution: Resolution<TaxTemplate> = useMemo(() => {
+    if (voucherType !== "journal" || taxTemplates.length === 0) {
+      return { status: "hidden", candidates: [] };
+    }
+    const selectedIds = new Set(lines.map((l) => l.ledger_id).filter(Boolean));
+    const gstLedgers = ledgers.filter(
+      (lg) => selectedIds.has(lg.id) && lg.type === "duties_taxes",
+    );
+    if (gstLedgers.length === 0) return { status: "hidden", candidates: [] };
+    const hasIgst = gstLedgers.some((lg) => /\bIGST\b/i.test(lg.name));
+    const hasCgstSgst = gstLedgers.some((lg) => /\bCGST\b|\bSGST\b/i.test(lg.name));
+    // Prefer explicit signal; if only IGST → interstate, only CGST/SGST → intrastate.
+    // Mixed / neither → leave undecided and show all as candidates.
+    let candidates = taxTemplates;
+    if (hasIgst && !hasCgstSgst) candidates = taxTemplates.filter((t) => t.is_interstate);
+    else if (hasCgstSgst && !hasIgst) candidates = taxTemplates.filter((t) => !t.is_interstate);
+    if (candidates.length === 0) return { status: "unresolved", candidates: [...taxTemplates] };
+    if (candidates.length === 1) return { status: "auto", value: candidates[0], candidates: [...candidates] };
+    return { status: "ambiguous", candidates: [...candidates] };
+  }, [voucherType, taxTemplates, lines, ledgers]);
+  const taxTemplateBlocksSave =
+    (taxResolution.status === "ambiguous" || taxResolution.status === "unresolved") &&
+    !manualTaxTemplateId;
+
+
+
   const update = useCallback((i: number, patch: Partial<Line>) => {
     startTransition(() => setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l))));
   }, []);
