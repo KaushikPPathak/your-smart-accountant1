@@ -1005,6 +1005,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     showGstColumn={showGstColumn}
                     showHsnColumn={showHsnColumn}
                     hsnDescriptionFor={hsnDescriptionFor}
+                    costCentres={costCentres}
+                    costCategories={costCategories}
                   />
                 ))}
               </TableBody>
