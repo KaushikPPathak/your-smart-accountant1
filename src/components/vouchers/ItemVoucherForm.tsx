@@ -157,6 +157,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [miscPreGst, setMiscPreGst] = useState<string>("0");
   const [miscPostGst, setMiscPostGst] = useState<string>("0");
+  // Bill sundries — freight, packing, discount, etc. Empty by default;
+  // "+ Add charge" popover in the totals block adds structured entries that
+  // are persisted to cache_bill_sundries and included in postings.
+  const [sundries, setSundries] = useState<import("@/lib/sundries").Sundry[]>([]);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [items, setItems] = useState<ItemOpt[]>([]);
   const [companyStateCode, setCompanyStateCode] = useState<string | null>(null);
