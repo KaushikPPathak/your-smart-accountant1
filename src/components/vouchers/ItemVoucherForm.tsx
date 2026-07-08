@@ -417,6 +417,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   // When no templates are configured (default state) or party is
   // unregistered/composition, resolution returns `hidden` and no UI renders.
   const taxTemplates = useTaxTemplates(activeCompanyId ?? null);
+  const { centres: costCentres, categories: costCategories } = useCostCentres(activeCompanyId ?? null);
   const firstItem = useMemo(() => {
     const first = lines.find((l) => l.item_id);
     if (!first) return null;
