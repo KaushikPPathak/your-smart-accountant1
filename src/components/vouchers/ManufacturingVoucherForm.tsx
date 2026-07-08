@@ -28,6 +28,9 @@ import { BomTemplateDialog } from "./BomTemplateDialog";
 import { getAllItems, useMastersVersion } from "@/lib/masters-cache";
 import { enqueueSave } from "@/lib/save-queue";
 import { loadBomForOutput } from "@/lib/bom";
+import { findDuplicateReference } from "@/lib/voucher-duplicate-check";
+import { useVoucherDraft, clearVoucherDraft } from "@/hooks/useVoucherDraft";
+import { DraftRecoveredBanner } from "./DraftRecoveredBanner";
 
 interface ItemOpt {
   id: string;
