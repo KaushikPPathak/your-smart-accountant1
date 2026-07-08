@@ -76,6 +76,8 @@ function ItemRowImpl({
   showGstColumn = true,
   showHsnColumn = false,
   hsnDescriptionFor,
+  costCentres = [],
+  costCategories = [],
 }: Props) {
   const { setHints, clearHints } = useFocusHints();
   const zone = `item-row`;
