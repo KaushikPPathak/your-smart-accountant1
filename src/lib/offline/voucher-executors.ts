@@ -458,7 +458,21 @@ export interface ItemVoucherSnap {
       total_paise: number;
     };
   }>;
+  /**
+   * Bill sundries (freight, packing, discount, ...). Optional; when omitted
+   * the voucher behaves exactly as before. `amount_paise` is signed. Caller
+   * is responsible for having folded the net into `totals.total_paise`
+   * before invoking the executor.
+   */
+  sundries?: Array<{
+    id: string;
+    sundry_type: string;
+    ledger_id: string;
+    amount_paise: number;
+    narration?: string | null;
+  }>;
 }
+
 
 export interface EntryVoucherSnap {
   companyId: string;
