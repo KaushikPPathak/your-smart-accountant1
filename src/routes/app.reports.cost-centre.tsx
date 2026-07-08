@@ -127,7 +127,7 @@ function CostCentreReport() {
           Net turnover per cost centre (sales &minus; purchases &plusmn; returns), grouped by category.
         </p>
       </div>
-      <ReportToolbar from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
+      <ReportToolbar from={from} to={to} onFrom={setFrom} onTo={setTo} />
 
       {grouped.length === 0 ? (
         <EmptyState
