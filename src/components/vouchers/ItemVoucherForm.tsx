@@ -57,6 +57,8 @@ import { HSN_MASTER_DATASET } from "@/lib/hsn/seedHsnData";
 import { useTaxTemplates } from "@/hooks/useVoucherMasters";
 import { resolveTaxTemplate } from "@/lib/voucher-resolver";
 import { AutoTaxChip } from "./AutoTaxChip";
+import { SundryStrip } from "./SundryStrip";
+import { netSundryPaise } from "@/lib/sundries";
 
 type VoucherType =
   | "sales"
