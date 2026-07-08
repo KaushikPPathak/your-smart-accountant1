@@ -597,6 +597,83 @@ function LedgersPage() {
                     <Input id="credit_days" type="number" value={form.credit_days} onChange={(e) => setForm({ ...form, credit_days: e.target.value })} placeholder="0" />
                   </div>
 
+                  {(form.type === "sundry_debtor" || form.type === "sundry_creditor") && (
+                    <>
+                      <div className="col-span-2 mt-2 border-t pt-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Party details (GST &amp; MSME)
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Drives GST return sectioning (B2B / B2CL / SEZ / Export) and Sec 43B MSME payable ageing.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1 col-span-2 sm:col-span-1">
+                        <Label htmlFor="gst_registration_type">GST registration type</Label>
+                        <Select
+                          value={form.gst_registration_type || "regular"}
+                          onValueChange={(v) => setForm({ ...form, gst_registration_type: v })}
+                        >
+                          <SelectTrigger id="gst_registration_type" className="bg-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {GST_REGISTRATION_TYPES.map((t) => (
+                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1 col-span-2 sm:col-span-1">
+                        <Label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={form.msme_registered}
+                            onChange={(e) => setForm({ ...form, msme_registered: e.target.checked })}
+                          />
+                          Registered under MSME (UDYAM)
+                        </Label>
+                        <p className="text-[11px] text-muted-foreground pl-6">
+                          Enables 45-day payment ageing (Sec 43B(h)).
+                        </p>
+                      </div>
+
+                      {form.msme_registered && (
+                        <>
+                          <div className="space-y-1 col-span-2 sm:col-span-1">
+                            <Label htmlFor="msme_udyam_no">UDYAM registration no.</Label>
+                            <Input
+                              id="msme_udyam_no"
+                              value={form.msme_udyam_no}
+                              onChange={(e) => setForm({ ...form, msme_udyam_no: e.target.value.toUpperCase() })}
+                              maxLength={19}
+                              placeholder="UDYAM-XX-00-0000000"
+                              className="font-mono uppercase"
+                            />
+                          </div>
+                          <div className="space-y-1 col-span-2 sm:col-span-1">
+                            <Label htmlFor="msme_classification">Classification</Label>
+                            <Select
+                              value={form.msme_classification || ""}
+                              onValueChange={(v) => setForm({ ...form, msme_classification: v })}
+                            >
+                              <SelectTrigger id="msme_classification" className="bg-white">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {MSME_CLASSIFICATIONS.map((c) => (
+                                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+
                 </div>
                 <DialogFooter className="px-4 sm:px-6 py-3 border-t shrink-0 bg-background gap-2">
                   <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
