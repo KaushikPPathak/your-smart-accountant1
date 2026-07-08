@@ -419,6 +419,19 @@ function SettingsPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader><CardTitle className="text-base">Bill-wise opening balances</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Enter unpaid invoices carried over from before your changeover date so ageing
+            buckets and receipt / payment allocation work correctly from day 1.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => navigate({ to: "/app/settings/opening-bills" })}>
+            Manage opening bills
+          </Button>
+        </CardContent>
+      </Card>
+
 
 
       <Card>
