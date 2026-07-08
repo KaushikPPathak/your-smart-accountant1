@@ -393,11 +393,18 @@ function SettingsPage() {
         </CardContent>
       </Card>
 
-
-
-
-
-
+      <Card>
+        <CardHeader><CardTitle className="text-base">Tax templates</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Reusable GST/Cess presets. Vouchers auto-apply silently; a picker appears only when
+            more than one template fits.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => navigate({ to: "/app/settings/tax-templates" })}>
+            Manage templates
+          </Button>
+        </CardContent>
+      </Card>
 
 
 
