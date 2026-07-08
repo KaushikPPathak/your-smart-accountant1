@@ -54,6 +54,9 @@ import {
 import { ItemRow, type ItemRowData } from "@/components/fast-form/ItemRow";
 import { rememberNarration, recallNarration } from "@/lib/recall-store";
 import { HSN_MASTER_DATASET } from "@/lib/hsn/seedHsnData";
+import { useTaxTemplates } from "@/hooks/useVoucherMasters";
+import { resolveTaxTemplate } from "@/lib/voucher-resolver";
+import { AutoTaxChip } from "./AutoTaxChip";
 
 type VoucherType =
   | "sales"
