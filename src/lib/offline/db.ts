@@ -90,6 +90,13 @@ class OfflineDatabase extends Dexie {
   cache_bom_template_lines!: Table<any, any>;
   cache_recurring_invoices!: Table<any, any>;
   einvoice_queue!: Table<any, any>;
+  // Phase 1 (Busy-inspired) voucher primitives. Progressive-disclosure rule:
+  // the presence of >1 row per (company, voucher_type) drives whether pickers
+  // render; a single row (or zero) auto-applies silently. See voucher-resolver.
+  cache_voucher_series!: Table<any, any>;
+  cache_tax_templates!: Table<any, any>;
+  cache_bill_sundries!: Table<any, any>;
+  cache_transport_details!: Table<any, any>;
   outbox!: Table<any, any>;
   dead_letter!: Table<any, any>;
   sync_cursors!: Table<any, any>;
