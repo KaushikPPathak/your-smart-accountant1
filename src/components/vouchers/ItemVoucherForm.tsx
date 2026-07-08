@@ -624,6 +624,13 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       lines: lines
         .map((l, i) => ({ l, c: computed[i] }))
         .filter((x) => x.l.item_id && x.c?.total_paise > 0),
+      sundries: sundries.map((s) => ({
+        id: s.id,
+        sundry_type: s.sundry_type,
+        ledger_id: s.ledger_id,
+        amount_paise: s.amount_paise,
+        narration: s.narration ?? null,
+      })),
     };
     rememberNarration(voucherType, narration);
     // Reset form INSTANTLY
@@ -634,6 +641,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setLines([blankLine()]);
     setMiscPreGst("0");
     setMiscPostGst("0");
+    setSundries([]);
     setFocusedLine(0);
     setSavedTick((n) => n + 1);
     if (draftKey) {
