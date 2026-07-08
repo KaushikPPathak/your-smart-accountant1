@@ -163,6 +163,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [saving, setSaving] = useState(false);
   const [focusedLine, setFocusedLine] = useState<number>(0);
   const [savedTick, setSavedTick] = useState(0);
+  const [manualTaxTemplateId, setManualTaxTemplateId] = useState<string | null>(null);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null }>({
     open: false,
     editId: null,
