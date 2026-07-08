@@ -495,7 +495,17 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              if (!isDraftEmpty(draftSnap)) {
+                const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
+                if (!ok) return;
+                clearVoucherDraft(draftKey);
+              }
+              navigate({ to: "/app/vouchers" });
+            }}
+          >
             <X className="mr-1 h-4 w-4" /> Cancel
           </Button>
           <Button data-assistant-save onClick={save} disabled={saving || !canWrite || !balanced || locked}>
@@ -503,6 +513,21 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           </Button>
         </div>
       </div>
+
+      {draft.restored && !draftBannerDismissed && (
+        <DraftRecoveredBanner
+          onDismiss={() => setDraftBannerDismissed(true)}
+          onDiscard={() => {
+            draft.discard();
+            setDraftBannerDismissed(true);
+            setRefNo("");
+            setNarration("");
+            setCashBankId("");
+            setLines(Array.from({ length: cfg.defaultLines }, blank));
+            setSimpleLines(Array.from({ length: 2 }, blankSimple));
+          }}
+        />
+      )}
 
       <PeriodLockBanner lock={lock} />
 
