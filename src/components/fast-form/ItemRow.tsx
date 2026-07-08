@@ -332,15 +332,75 @@ function ItemRowImpl({
         />
       </TableCell>
       <TableCell>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onDelete(idx)}
-          disabled={!canDelete}
-          title="Delete row (Ctrl+D)"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center justify-end gap-1">
+          {costCentres.length > 0 && (() => {
+            const cc = costCentres.find((c) => c.id === row.cost_centre_id);
+            const cat = costCategories.find((c) => c.id === row.cost_category_id);
+            const tagged = !!(cc || cat);
+            return (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={tagged ? "text-indigo-600" : "text-muted-foreground"}
+                    title={tagged
+                      ? `Cost: ${cc?.name ?? "—"}${cat ? " · " + cat.name : ""}`
+                      : "Tag cost centre / category"}
+                  >
+                    <Tag className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-72 space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Cost centre</Label>
+                    <Select
+                      value={row.cost_centre_id ?? "__none__"}
+                      onValueChange={(v) => onCommit(idx, { cost_centre_id: v === "__none__" ? null : v })}
+                    >
+                      <SelectTrigger className="h-8"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— None —</SelectItem>
+                        {costCentres.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}{c.code ? ` (${c.code})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {costCategories.length > 0 && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Category (optional)</Label>
+                      <Select
+                        value={row.cost_category_id ?? "__none__"}
+                        onValueChange={(v) => onCommit(idx, { cost_category_id: v === "__none__" ? null : v })}
+                      >
+                        <SelectTrigger className="h-8"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">— None —</SelectItem>
+                          {costCategories.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            );
+          })()}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onDelete(idx)}
+            disabled={!canDelete}
+            title="Delete row (Ctrl+D)"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   );
