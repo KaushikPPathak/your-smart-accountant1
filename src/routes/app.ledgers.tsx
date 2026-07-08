@@ -79,6 +79,11 @@ interface Ledger {
   credit_limit_paise: number;
   credit_days: number;
   is_active: boolean;
+  gst_registration_type: string | null;
+  gst_treatment: string | null;
+  msme_registered: boolean | null;
+  msme_udyam_no: string | null;
+  msme_classification: string | null;
 }
 
 type FormState = {
@@ -97,6 +102,10 @@ type FormState = {
   opening_balance_is_debit: boolean;
   credit_limit: string;
   credit_days: string;
+  gst_registration_type: string;
+  msme_registered: boolean;
+  msme_udyam_no: string;
+  msme_classification: string;
 };
 
 const emptyForm: FormState = {
@@ -115,6 +124,10 @@ const emptyForm: FormState = {
   opening_balance_is_debit: true,
   credit_limit: "",
   credit_days: "",
+  gst_registration_type: "regular",
+  msme_registered: false,
+  msme_udyam_no: "",
+  msme_classification: "",
 };
 
 function LedgersPage() {
