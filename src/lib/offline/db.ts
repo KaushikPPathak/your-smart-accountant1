@@ -173,6 +173,10 @@ class OfflineDatabase extends Dexie {
       // collapsed unless F7 or invoice value >= state e-way threshold.
       cache_transport_details: "voucher_id, company_id, updated_at",
     });
+    this.version(7).stores({
+      cache_cost_centres: "id, company_id, name, is_active, updated_at",
+      cache_cost_categories: "id, company_id, name, is_active, updated_at",
+    });
   }
 }
 
