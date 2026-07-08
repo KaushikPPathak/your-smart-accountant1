@@ -313,6 +313,22 @@ export function ManufacturingVoucherForm() {
       return;
     }
 
+    // Duplicate Production Order No. guard — a repeated PO is almost always
+    // a mistake (two vouchers for the same batch).
+    if (productionOrderNo) {
+      const dups = await findDuplicateReference(activeCompanyId, "manufacturing", productionOrderNo);
+      if (dups.length > 0) {
+        const first = dups[0];
+        const ok = window.confirm(
+          `Production Order "${productionOrderNo}" was already used on ${first.voucher_date} (${dups.length} existing voucher${dups.length > 1 ? "s" : ""}).\n\nSave anyway?`,
+        );
+        if (!ok) {
+          toast.warning("Save cancelled — change the Production Order No. to avoid a duplicate.");
+          return;
+        }
+      }
+    }
+
     setSaving(true);
 
     const headerMeta: Record<string, string> = {};
