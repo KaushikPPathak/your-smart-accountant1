@@ -55,6 +55,7 @@ import { Route as AppReportsGstSalesBookRouteImport } from './routes/app.reports
 import { Route as AppReportsGstPurchaseBookRouteImport } from './routes/app.reports.gst-purchase-book'
 import { Route as AppReportsGroupLedgerRouteImport } from './routes/app.reports.group-ledger'
 import { Route as AppReportsDayBookRouteImport } from './routes/app.reports.day-book'
+import { Route as AppReportsCostCentreRouteImport } from './routes/app.reports.cost-centre'
 import { Route as AppReportsCashBankRouteImport } from './routes/app.reports.cash-bank'
 import { Route as AppReportsBrsRouteImport } from './routes/app.reports.brs'
 import { Route as AppReportsBalanceSheetRouteImport } from './routes/app.reports.balance-sheet'
@@ -303,6 +304,11 @@ const AppReportsDayBookRoute = AppReportsDayBookRouteImport.update({
   path: '/day-book',
   getParentRoute: () => AppReportsRoute,
 } as any)
+const AppReportsCostCentreRoute = AppReportsCostCentreRouteImport.update({
+  id: '/cost-centre',
+  path: '/cost-centre',
+  getParentRoute: () => AppReportsRoute,
+} as any)
 const AppReportsCashBankRoute = AppReportsCashBankRouteImport.update({
   id: '/cash-bank',
   path: '/cash-bank',
@@ -411,6 +417,7 @@ export interface FileRoutesByFullPath {
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/cash-bank': typeof AppReportsCashBankRoute
+  '/app/reports/cost-centre': typeof AppReportsCostCentreRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
   '/app/reports/group-ledger': typeof AppReportsGroupLedgerRoute
   '/app/reports/gst-purchase-book': typeof AppReportsGstPurchaseBookRoute
@@ -473,6 +480,7 @@ export interface FileRoutesByTo {
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/cash-bank': typeof AppReportsCashBankRoute
+  '/app/reports/cost-centre': typeof AppReportsCostCentreRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
   '/app/reports/group-ledger': typeof AppReportsGroupLedgerRoute
   '/app/reports/gst-purchase-book': typeof AppReportsGstPurchaseBookRoute
@@ -537,6 +545,7 @@ export interface FileRoutesById {
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
   '/app/reports/cash-bank': typeof AppReportsCashBankRoute
+  '/app/reports/cost-centre': typeof AppReportsCostCentreRoute
   '/app/reports/day-book': typeof AppReportsDayBookRoute
   '/app/reports/group-ledger': typeof AppReportsGroupLedgerRoute
   '/app/reports/gst-purchase-book': typeof AppReportsGstPurchaseBookRoute
@@ -602,6 +611,7 @@ export interface FileRouteTypes {
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
     | '/app/reports/cash-bank'
+    | '/app/reports/cost-centre'
     | '/app/reports/day-book'
     | '/app/reports/group-ledger'
     | '/app/reports/gst-purchase-book'
@@ -664,6 +674,7 @@ export interface FileRouteTypes {
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
     | '/app/reports/cash-bank'
+    | '/app/reports/cost-centre'
     | '/app/reports/day-book'
     | '/app/reports/group-ledger'
     | '/app/reports/gst-purchase-book'
@@ -727,6 +738,7 @@ export interface FileRouteTypes {
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
     | '/app/reports/cash-bank'
+    | '/app/reports/cost-centre'
     | '/app/reports/day-book'
     | '/app/reports/group-ledger'
     | '/app/reports/gst-purchase-book'
@@ -1096,6 +1108,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsDayBookRouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/cost-centre': {
+      id: '/app/reports/cost-centre'
+      path: '/cost-centre'
+      fullPath: '/app/reports/cost-centre'
+      preLoaderRoute: typeof AppReportsCostCentreRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/reports/cash-bank': {
       id: '/app/reports/cash-bank'
       path: '/cash-bank'
@@ -1209,6 +1228,7 @@ interface AppReportsRouteChildren {
   AppReportsBalanceSheetRoute: typeof AppReportsBalanceSheetRoute
   AppReportsBrsRoute: typeof AppReportsBrsRoute
   AppReportsCashBankRoute: typeof AppReportsCashBankRoute
+  AppReportsCostCentreRoute: typeof AppReportsCostCentreRoute
   AppReportsDayBookRoute: typeof AppReportsDayBookRoute
   AppReportsGroupLedgerRoute: typeof AppReportsGroupLedgerRoute
   AppReportsGstPurchaseBookRoute: typeof AppReportsGstPurchaseBookRoute
@@ -1237,6 +1257,7 @@ const AppReportsRouteChildren: AppReportsRouteChildren = {
   AppReportsBalanceSheetRoute: AppReportsBalanceSheetRoute,
   AppReportsBrsRoute: AppReportsBrsRoute,
   AppReportsCashBankRoute: AppReportsCashBankRoute,
+  AppReportsCostCentreRoute: AppReportsCostCentreRoute,
   AppReportsDayBookRoute: AppReportsDayBookRoute,
   AppReportsGroupLedgerRoute: AppReportsGroupLedgerRoute,
   AppReportsGstPurchaseBookRoute: AppReportsGstPurchaseBookRoute,
