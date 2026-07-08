@@ -114,6 +114,8 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
     cgst_paise: c.cgst_paise,
     sgst_paise: c.sgst_paise,
     igst_paise: c.igst_paise,
+    cost_centre_id: (l as any).cost_centre_id ?? null,
+    cost_category_id: (l as any).cost_category_id ?? null,
     updated_at: stamp,
   }));
 
