@@ -362,6 +362,8 @@ export function ManufacturingVoucherForm() {
     };
 
     // Reset
+    clearVoucherDraft(draftKey);
+    setDraftBannerDismissed(true);
     setFinalProductId("");
     setQtyToProduce("1");
     setProductionOrderNo("");
