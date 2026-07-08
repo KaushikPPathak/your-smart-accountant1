@@ -165,6 +165,10 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
         itcClass: snap.itcClass,
         itcEligible: snap.itcEligible,
         capitalItems,
+        sundries: (snap.sundries ?? []).map((s) => ({
+          ledger_id: s.ledger_id,
+          amount_paise: s.amount_paise,
+        })),
       },
     );
     const { assertVoucherBalanced } = await import("@/lib/voucher-invariants");
