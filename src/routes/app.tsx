@@ -223,9 +223,17 @@ function AppLayout() {
   // Gate: every page under /app requires a chosen + unlocked company
   // (except /app/companies, which is reachable when the user clicked "+ New company").
   // /app/assistant is intentionally NOT exempted — it can read accounting data.
+  // Gate: every page under /app requires a chosen + unlocked company
+  // (except /app/companies, which is reachable when the user clicked "+ New company").
+  // /app/assistant is intentionally NOT exempted — it can read accounting data.
+  //
+  // NOTE: we intentionally do NOT block on `!user` (the silent Supabase
+  // tech-session). Identity for this local-only app comes from the staff PIN
+  // (already enforced by LockGate). Requiring `user` here caused the workspace
+  // to hang on "Loading…" whenever the background tech sign-in stalled on a
+  // slow / stagnant connection, forcing users to hard-refresh.
   useEffect(() => {
-    if (bootstrapping || loading || companyLoading) return;
-    if (!user) return;
+    if (bootstrapping || companyLoading) return;
     if (memberships.length === 0) return;
     if (onCompaniesPage) return;
     if (!activeCompanyId || !isCompanyUnlocked(activeCompanyId)) {
@@ -234,9 +242,9 @@ function AppLayout() {
       });
       navigate({ to: "/" });
     }
-  }, [bootstrapping, loading, companyLoading, user, memberships.length, activeCompanyId, onCompaniesPage, navigate]);
+  }, [bootstrapping, companyLoading, memberships.length, activeCompanyId, onCompaniesPage, navigate]);
 
-  if (bootstrapping || loading || !user || companyLoading) {
+  if (bootstrapping || companyLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
         Loading…
