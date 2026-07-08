@@ -406,6 +406,32 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
   }, [partyLedger, isPurchaseSide]);
 
+  // Phase 1: tax-template auto-resolution (progressive disclosure).
+  // When no templates are configured (default state) or party is
+  // unregistered/composition, resolution returns `hidden` and no UI renders.
+  const taxTemplates = useTaxTemplates(activeCompanyId ?? null);
+  const firstItem = useMemo(() => {
+    const first = lines.find((l) => l.item_id);
+    if (!first) return null;
+    const meta = items.find((i) => i.id === first.item_id);
+    return meta ? { hsn_code: meta.hsn_code ?? null, gst_rate: meta.gst_rate ?? null } : null;
+  }, [lines, items]);
+  const taxResolution = useMemo(
+    () =>
+      resolveTaxTemplate(taxTemplates, {
+        companyStateCode,
+        party: partyLedger
+          ? { gst_treatment: partyLedger.gst_treatment ?? null, state_code: partyLedger.state_code ?? null }
+          : null,
+        item: firstItem,
+      }),
+    [taxTemplates, companyStateCode, partyLedger, firstItem],
+  );
+  // Save is blocked only when the picker is required AND the user hasn't picked.
+  const taxTemplateBlocksSave =
+    (taxResolution.status === "ambiguous" || taxResolution.status === "unresolved") &&
+    !manualTaxTemplateId;
+
   const deferredLines = useDeferredValue(lines);
   const computed: GstLineResult[] = useMemo(
     () =>
