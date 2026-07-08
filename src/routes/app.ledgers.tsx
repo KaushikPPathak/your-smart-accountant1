@@ -244,6 +244,10 @@ function LedgersPage() {
       opening_balance_is_debit: l.opening_balance_is_debit,
       credit_limit: l.credit_limit_paise ? String(paiseToRupees(l.credit_limit_paise)) : "",
       credit_days: l.credit_days ? String(l.credit_days) : "",
+      gst_registration_type: l.gst_registration_type ?? l.gst_treatment ?? "regular",
+      msme_registered: !!l.msme_registered,
+      msme_udyam_no: l.msme_udyam_no ?? "",
+      msme_classification: l.msme_classification ?? "",
     });
     setOpen(true);
   };
