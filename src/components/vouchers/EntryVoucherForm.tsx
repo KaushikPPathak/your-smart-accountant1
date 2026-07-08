@@ -444,11 +444,21 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         } else {
           setLedgerDlg({ open: true, editId: null, lineIdx: focusedLine });
         }
+      } else if (e.key === "Escape") {
+        // Guarded cancel: only prompt when there's real content to lose.
+        const dirty = !isDraftEmpty(draftSnap);
+        if (dirty) {
+          e.preventDefault();
+          const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
+          if (!ok) return;
+          clearVoucherDraft(draftKey);
+        }
+        navigate({ to: "/app/vouchers" });
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, navigate, saving, lines, focusedLine, voucherType, isSimple, simpleLines, remove, removeSimple]);
+  }, [save, navigate, saving, lines, focusedLine, voucherType, isSimple, simpleLines, remove, removeSimple, draftKey, draftSnap, isDraftEmpty]);
 
   const onLedgerSaved = (lg: QuickLedger) => {
     upsertCachedLedger({
