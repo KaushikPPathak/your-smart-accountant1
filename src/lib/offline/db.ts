@@ -97,6 +97,11 @@ class OfflineDatabase extends Dexie {
   cache_tax_templates!: Table<any, any>;
   cache_bill_sundries!: Table<any, any>;
   cache_transport_details!: Table<any, any>;
+  // Cost accounting primitives (local-only). Pickers on voucher lines only
+  // render when at least one cost centre exists for the active company;
+  // categories are optional and further hidden until the user configures any.
+  cache_cost_centres!: Table<any, any>;
+  cache_cost_categories!: Table<any, any>;
   outbox!: Table<any, any>;
   dead_letter!: Table<any, any>;
   sync_cursors!: Table<any, any>;
