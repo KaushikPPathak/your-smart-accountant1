@@ -290,6 +290,10 @@ function LedgersPage() {
       opening_balance_is_debit: parsed.data.opening_balance_is_debit,
       credit_limit_paise: isFinite(cl) ? rupeesToPaise(cl) : 0,
       credit_days: isFinite(cd) ? cd : 0,
+      gst_registration_type: form.gst_registration_type || "regular",
+      msme_registered: form.msme_registered,
+      msme_udyam_no: form.msme_registered ? (form.msme_udyam_no.trim().toUpperCase() || null) : null,
+      msme_classification: form.msme_registered ? (form.msme_classification || null) : null,
     };
 
     try {
