@@ -126,6 +126,11 @@ export interface LedgerInsertPayload {
   opening_balance_is_debit?: boolean;
   credit_limit_paise?: number;
   credit_days?: number;
+  // Party master (local-only; drives GST + 43B downstream automations).
+  gst_registration_type?: string | null;
+  msme_registered?: boolean;
+  msme_udyam_no?: string | null;
+  msme_classification?: string | null;
 }
 
 export interface LedgerRow {
@@ -145,7 +150,7 @@ export async function createLedger(payload: LedgerInsertPayload): Promise<Ledger
   const localRecord: LedgerCacheRow = {
     ...payload,
     id,
-    gst_treatment: "regular",
+    gst_treatment: (payload.gst_registration_type as string | undefined) ?? "regular",
     updated_at: now,
     is_synced: false,
     is_deleted: false,
@@ -176,7 +181,7 @@ export async function createLedger(payload: LedgerInsertPayload): Promise<Ledger
     type: String(payload.type),
     state_code: payload.state_code ?? null,
     gstin: payload.gstin ?? null,
-    gst_treatment: "regular",
+    gst_treatment: (payload.gst_registration_type as string | undefined) ?? "regular",
   };
 }
 
@@ -190,9 +195,14 @@ export async function updateLedger(
   const existing = await offlineDb.cache_ledgers.get(id);
 
   if (existing) {
+    const nextGstTreatment =
+      values.gst_registration_type !== undefined
+        ? (values.gst_registration_type as string | null) ?? "regular"
+        : existing.gst_treatment;
     const updatedRecord: LedgerCacheRow = {
       ...existing,
       ...values,
+      gst_treatment: nextGstTreatment,
       updated_at: now,
       is_synced: false,
     };

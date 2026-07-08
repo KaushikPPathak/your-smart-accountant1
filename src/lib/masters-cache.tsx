@@ -11,6 +11,11 @@ export interface CachedLedger {
   state_code: string | null;
   gstin: string | null;
   gst_treatment: string | null;
+  gst_registration_type?: string | null;
+  msme_registered?: boolean | null;
+  msme_udyam_no?: string | null;
+  msme_classification?: string | null;
+  credit_days?: number | null;
   is_active: boolean;
 }
 
