@@ -1,6 +1,7 @@
 // Offline Opening-Stock import: upload an item/stock summary image or PDF,
 // OCR-extract item name, HSN, qty, unit, rate, value. Map to existing items
 // (or create new) and write opening_stock_qty / opening_stock_rate_paise.
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -313,7 +314,7 @@ export function OpeningStockImport({ companyId, disabled, annualTurnoverPaise }:
                         </TableCell>
                         <TableCell>
                           <Input className="h-7 text-xs" value={r.name}
-                            onChange={(e) => update(r._key, { name: e.target.value, item_id: autoMatch(e.target.value) })} />
+                            onChange={(e) => update(r._key, { name: toTitleCaseOnType(e.target.value), item_id: autoMatch(toTitleCaseOnType(e.target.value)) })} />
                         </TableCell>
                         <TableCell>
                           <Select value={r.item_id || "__new__"}

@@ -7,6 +7,7 @@
 //   3. Inline edit: rename, change role, hide/unhide from login dropdown,
 //      activate/deactivate, reset password. Delete with confirmation.
 
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Pencil, Plus, Trash2, ShieldCheck, EyeOff, Eye } from "lucide-react";
@@ -271,7 +272,7 @@ function EditAccountForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Name</Label>
-          <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+          <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: toTitleCaseOnType(e.target.value) })} />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Role</Label>

@@ -1,3 +1,4 @@
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -195,7 +196,7 @@ function CostCentresPage() {
               <Input
                 id="cc-name"
                 value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                onChange={(e) => setDraft({ ...draft, name: toTitleCaseOnType(e.target.value) })}
                 autoFocus
                 maxLength={80}
               />

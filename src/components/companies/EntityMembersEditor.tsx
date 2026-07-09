@@ -1,3 +1,4 @@
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Users } from "lucide-react";
@@ -113,8 +114,8 @@ export function EntityMembersEditor({
             <div key={m.id} className="grid gap-2 rounded border bg-background p-2 md:grid-cols-12">
               <div className="md:col-span-3">
                 <Label className="text-[10px] uppercase">Name</Label>
-                <Input value={m.full_name} onChange={(e) => setRows((r) => r.map((x) => x.id === m.id ? { ...x, full_name: e.target.value } : x))}
-                  onBlur={(e) => update(m.id, { full_name: e.target.value })} />
+                <Input value={m.full_name} onChange={(e) => setRows((r) => r.map((x) => x.id === m.id ? { ...x, full_name: toTitleCaseOnType(e.target.value) } : x))}
+                  onBlur={(e) => update(m.id, { full_name: toTitleCaseOnType(e.target.value) })} />
               </div>
               <div className="md:col-span-2">
                 <Label className="text-[10px] uppercase">PAN</Label>

@@ -1,6 +1,7 @@
 // Offline Opening-Balance import: upload trial balance / balance sheet image or PDF,
 // OCR-extract account name + amount + Dr/Cr, map each row to an existing ledger
 // (or create a new one), then write opening balances onto ledgers.
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -420,8 +421,8 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
                       <TableCell>
                         <Input className="h-7 text-xs" value={r.account_name}
                           onChange={(e) => update(r._key, {
-                            account_name: e.target.value,
-                            ledger_id: autoMatch(e.target.value),
+                            account_name: toTitleCaseOnType(e.target.value),
+                            ledger_id: autoMatch(toTitleCaseOnType(e.target.value)),
                           })} />
                       </TableCell>
                       <TableCell>

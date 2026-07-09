@@ -1,3 +1,4 @@
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { createFileRoute, useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -398,7 +399,7 @@ function CompaniesPage() {
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1.5 md:col-span-2">
                   <Label>Company name *</Label>
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: toTitleCaseOnType(e.target.value) })} required />
                 </div>
                 <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
                   <Label className="text-sm font-semibold">Entity Status</Label>
@@ -685,7 +686,7 @@ function CompaniesPage() {
                 <div className="md:col-span-2 mt-2 border-t pt-3 text-sm font-semibold text-muted-foreground">Bank Details</div>
                 <div className="space-y-1.5">
                   <Label>Bank name</Label>
-                  <Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} />
+                  <Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: toTitleCaseOnType(e.target.value) })} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Account no.</Label>

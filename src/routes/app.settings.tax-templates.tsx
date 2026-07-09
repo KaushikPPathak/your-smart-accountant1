@@ -1,3 +1,4 @@
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -213,7 +214,7 @@ function TaxTemplatesPage() {
               <Label>Name</Label>
               <Input
                 value={draft.name}
-                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                onChange={(e) => setDraft((d) => ({ ...d, name: toTitleCaseOnType(e.target.value) }))}
                 placeholder="e.g. GST 18% Intra"
                 autoFocus
               />
