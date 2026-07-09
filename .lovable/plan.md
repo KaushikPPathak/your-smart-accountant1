@@ -1,49 +1,76 @@
-## Goal
-Bring every voucher form up to the same robustness bar. Today only the item-based form (Sales/Purchase/etc.) has crash-recovery drafts and duplicate protection. Journal/Payment/Receipt/Contra and Manufacturing lag behind, and keyboard flow is inconsistent.
 
-## Scope (4 areas, one pass)
+# Self-healing cache + audit system
 
-### 1. Draft auto-save & crash recovery
-- Extract the existing draft logic from `ItemVoucherForm.tsx` into a reusable hook `src/hooks/useVoucherDraft.ts` (debounced write, restore on mount, clear on save/cancel, per company + voucher type key).
-- Wire it into `EntryVoucherForm.tsx` (Journal / Payment / Receipt / Contra) and `ManufacturingVoucherForm.tsx`.
-- On restore, show a small inline "Draft recovered — Discard" banner (not a toast) so nothing is silently overwritten.
+Retire the class of bug where an old Dexie row spread over new defaults leaves fields silently `false`/`null`. Five parts, ordered by impact.
 
-### 2. Validation & duplicate protection
-- Reuse `voucher-duplicate-check.ts` in `EntryVoucherForm` and `ManufacturingVoucherForm` (same warn-before-save pattern already used in `ItemVoucherForm`).
-- Add inline field-level errors (currently some errors only appear as toasts):
-  - Unbalanced Dr/Cr in Journal
-  - Missing party for Payment/Receipt when narration implies one
-  - Duplicate voucher number for the same series in the current FY
-  - Negative stock warning in Manufacturing (uses existing invariants)
-- Errors render under the offending field; Save stays disabled until fixed (or user explicitly overrides for soft warnings).
+## 1. Safe cache rebuild (replaces "nuke Dexie")
 
-### 3. Keyboard-only speed
-- Standardise the Enter-to-advance behaviour (`enterTab` is already used in most forms — audit and fix gaps in Manufacturing).
-- Global voucher shortcuts inside a voucher form:
-  - `Ctrl+S` save, `Esc` cancel with confirm-if-dirty
-  - `Ctrl+D` duplicate last row (item/entry grids)
-  - `Ctrl+Del` remove current row
-  - `F2` focus date, `F4` focus party, `Alt+N` new voucher after save
-- Ensure `autoFocus` lands on Date on mount, then Enter moves through Party → Ref → Place of Supply → first grid row.
+Nuking `ym_offline_cache_v3` would delete pending outbox rows and any local-only-mode company data, which breaks the `local-data-permanent` rule. Instead:
 
-### 4. Auto-complete & smart defaults
-- Party picker: remember last-used party per voucher type; pre-select on new voucher (opt-out via a setting).
-- Item picker: on select, auto-fill unit, rate, HSN, GST rate from item master (already partially done — audit + fill gaps in Purchase and Credit/Debit Note).
-- Ledger picker in Journal: rank by recency-of-use within the current company.
-- Reference number: auto-suggest next number based on the highest existing ref for that party+voucher type in the current FY (suggestion only, editable).
+- Add a **"Rebuild cache from server"** button on `/app/data-health` (per company).
+- It clears only `cache_*` tables for that company (not `outbox`, `dead_letter`, `meta`, `account_creds`, `companies` picker), then triggers a full snapshot pull.
+- Guarded: refuses to run for a company whose outbox has pending rows, and refuses in local-only mode.
+- One-click way for the user to fix a stale company without touching devtools.
 
-## Files touched
-- New: `src/hooks/useVoucherDraft.ts`, `src/hooks/useVoucherShortcuts.ts`
-- Edited: `src/components/vouchers/EntryVoucherForm.tsx`, `ManufacturingVoucherForm.tsx`, `ItemVoucherForm.tsx` (refactor to use the shared hook), plus small helpers in `src/lib/voucher-defaults.ts` (new) for last-used party / recency ranking.
-- Tests: extend `src/test/voucher-invariants.test.ts` with duplicate-number and draft-restore cases.
+## 2. Cache normalizers (self-healing on read)
 
-## Out of scope for this pass
-- Voice entry, barcode scanning, multi-currency, batch/serial tracking — separate hardening passes.
-- No schema changes; drafts stay in `localStorage` (local-only per project rule).
+New file `src/lib/offline/cache-normalizers.ts` exporting one function per cached row type:
 
-## Order of work
-1. Extract `useVoucherDraft` and migrate all three forms.
-2. Add duplicate + inline validation to `EntryVoucherForm` and `ManufacturingVoucherForm`.
-3. Add `useVoucherShortcuts` and wire into all three forms.
-4. Smart defaults (last-used party, ref suggestion, ledger recency).
-5. Run the voucher test suite and typecheck.
+- `normalizeCompany(row)` — `gst_registered ||= !!gstin`, `inventory_enabled ??= true`, `state_code ||= deriveFromGstin(gstin)`, `entity_status ??= "individual"`, `currency_code ??= "INR"`, `date_format ??= "dd-mm-yyyy"`, `gst_filing_frequency ??= "monthly"`.
+- `normalizeLedger(row)` — `is_active ??= true`, `is_deleted ??= false`.
+- `normalizeItem(row)` — same is_active/is_deleted defaults + `gst_rate ??= 0`.
+- `normalizeVoucher(row)` — coerces numeric strings, defaults `is_deleted`.
+
+Wired into `cache-read.ts` so every read returns normalized rows, and into `company-context.tsx` so `activeMembership.companies` is always coherent. Old rows heal on next read; new fields added later = one line change.
+
+## 3. Schema-version stamp
+
+- `SCHEMA_VERSION = 8` constant in a new `src/lib/offline/schema-version.ts`.
+- On app boot, read `meta['schema_version']`. If missing or lower:
+  - For online, non-local-only companies: silently trigger snapshot refetch (same code path as manual rebuild).
+  - For local-only companies: log a warning + surface a soft banner on `/app/data-health` saying "Cache schema older than app — Rebuild recommended".
+- Stamp bumps once refetch completes.
+
+Any future field addition = bump version + add one line to the relevant normalizer. Users self-heal on next open.
+
+## 4. Data-health audit panel
+
+Extend `/app/data-health` with a new "Field integrity" section. For the active company it runs invariant checks and shows a table:
+
+```text
+Table              Issue                              Count
+Ledgers            missing gst_treatment              12
+Ledgers            missing group_id                    3
+Items              missing hsn_code                    7
+Items              gst_rate = 0 but is_taxable=true    2
+Companies          missing state_code                  1
+Vouchers           without postings                    0
+Bill allocations   orphaned (voucher deleted)          0
+```
+
+- One "Refresh audit" button + one "Rebuild cache from server" button (reuses step 1).
+- Read-only — no auto-fix. Gives you an honest number for "how many bugs are left".
+
+## 5. Playwright smoke script
+
+Add `scripts/smoke.mjs` (Node, calls `playwright` via `bunx`) that:
+
+- Boots against `http://localhost:8080`.
+- Iterates every sidebar link, asserts route mounts without console error.
+- Opens each voucher-new route, asserts form renders.
+- Opens each report route, asserts page renders (empty state OK).
+- Screenshots each into `.smoke/` and writes a JSON summary.
+
+Not wired into CI in this pass (would need `.github/workflows/build.yml` edit + secrets). Just runnable locally with `bun run smoke`. Second pass can gate builds on it.
+
+---
+
+## Technical notes
+
+- Files created: `src/lib/offline/cache-normalizers.ts`, `src/lib/offline/schema-version.ts`, `src/lib/offline/cache-rebuild.ts`, `src/components/data-health/FieldIntegrityPanel.tsx`, `scripts/smoke.mjs`.
+- Files edited: `src/lib/offline/cache-read.ts` (apply normalizers), `src/lib/company-context.tsx` (normalize on load), `src/components/AppSidebar.tsx` (already fixed last turn — keep), `src/routes/app.data-health.tsx` (mount FieldIntegrityPanel + rebuild button), `src/client.tsx` or wherever boot runs (call schema-version check), `package.json` (add `smoke` script).
+- No Dexie version bump needed (schema unchanged). No Supabase changes.
+- Respects `local-data-permanent`: rebuild is opt-in and refuses when outbox has pending work or in local-only mode.
+- Respects "never compare to Tally/Busy" memory — no such references introduced.
+
+Reply **go** to execute all five, or tell me which parts to drop / reorder.
