@@ -35,7 +35,7 @@ function formatWhen(ms?: number | null): string {
 }
 
 function DataHealthPage() {
-  const { memberships } = useCompany();
+  const { memberships, activeCompanyId } = useCompany();
   const [rows, setRows] = useState<Row[]>([]);
   const [events, setEvents] = useState<AutoRestoreOutcome[]>([]);
   const [busy, setBusy] = useState(false);
