@@ -237,6 +237,11 @@ export function BackupInspectDialog({
                     ))}
                   </ul>
                 )}
+                {hardBlocks && (
+                  <div className="mt-1 rounded border border-destructive/60 bg-destructive/10 p-2 text-[11px] text-destructive">
+                    <strong>Restore blocked.</strong> The backup fails one or more hard-fail integrity checks (listed above). These cannot be overridden — the file is not safe to restore.
+                  </div>
+                )}
                 {report.ok && report.warnings.length === 0 && (
                   <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-400">
                     <CheckCircle2 className="h-3 w-3" /> All integrity checks passed.
