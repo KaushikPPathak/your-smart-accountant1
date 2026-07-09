@@ -96,6 +96,34 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
     }
   }, [gstin]);
 
+  // 3. Auto-verify via API Setu once a valid 15-char GSTIN is entered.
+  //    Fills legal name (if user hasn't already typed one) and address.
+  useEffect(() => {
+    const cleanGstin = gstin.trim().toUpperCase();
+    if (cleanGstin.length !== 15) return;
+    if (!validateGSTIN(cleanGstin).valid) return;
+    if (verifiedForRef.current === cleanGstin) return;
+    let cancelled = false;
+    verifiedForRef.current = cleanGstin;
+    setVerifying(true);
+    lookupGstinViaSetu(cleanGstin)
+      .then((res) => {
+        if (cancelled) return;
+        if (!res.success) {
+          if (res.error) toast.error(`GSTIN verify: ${res.error}`);
+          return;
+        }
+        setName((prev) => (prev.trim() ? prev : (res.legalName || res.tradeName || prev)));
+        if (res.principalPlaceOfBusiness) {
+          setAddress((prev) => (prev.trim() ? prev : res.principalPlaceOfBusiness ?? prev));
+        }
+        toast.success(`Verified: ${res.legalName || res.tradeName}`);
+      })
+      .catch((e) => { if (!cancelled) toast.error(String(e?.message ?? e)); })
+      .finally(() => { if (!cancelled) setVerifying(false); });
+    return () => { cancelled = true; };
+  }, [gstin]);
+
   const submit = async () => {
     if (!name.trim()) {
       toast.error("Name required");
