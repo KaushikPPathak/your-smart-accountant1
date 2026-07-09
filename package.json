@@ -16,7 +16,8 @@
     "tauri:build:debug": "cross-env TAURI_ENV_PLATFORM=windows tauri build --debug",
     "build:tauri": "cross-env TAURI_ENV_PLATFORM=windows vite build",
     "tauri:verify-dist": "cross-env TAURI_ENV_PLATFORM=windows vite build",
-    "tsr:generate": "echo 'Bypassing broken CLI - Router plugin is compiling route assets inside Vite'"
+    "tsr:generate": "echo 'Bypassing broken CLI - Router plugin is compiling route assets inside Vite'",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.47",
