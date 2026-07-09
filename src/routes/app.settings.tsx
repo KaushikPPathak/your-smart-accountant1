@@ -10,6 +10,7 @@ import {
 } from "@/lib/backup";
 import { savePreRestoreSnapshot } from "@/lib/restore-safety";
 import { runSemanticChecks } from "@/lib/semantic-checks";
+import { preflightIntegrityToast } from "@/lib/offline/integrity-preflight";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -275,6 +276,7 @@ function SettingsPage() {
     setExporting(true);
     try {
       const name = activeMembership?.companies.name ?? "company";
+      await preflightIntegrityToast(activeCompanyId, "backup");
       const res = await exportCompanyBackup(activeCompanyId, name);
       toast.success(res.desktopPath ? `Saved to ${res.desktopPath}` : `Downloaded ${res.fileName}`);
     } catch (e) {
@@ -314,6 +316,7 @@ function SettingsPage() {
     if (typed.trim() !== targetName) { toast.error(`Name did not match "${targetName}" — restore cancelled.`); return; }
     setRestoring(true);
     try {
+      await preflightIntegrityToast(activeCompanyId, "restore");
       const text = await file.text();
       const parsed = await parseBackupFile(text);
       if (parsed.checksumOk === false) toast.warning("Backup checksum mismatch — file may be corrupted or edited.");

@@ -34,23 +34,7 @@ import {
   type AvailableSnapshot,
 } from "@/lib/restore-safety";
 import { runSemanticChecks } from "@/lib/semantic-checks";
-import { runIntegrityScan, totalIssues } from "@/lib/offline/integrity-scan";
-
-async function preflightIntegrity(companyId: string, when: "backup" | "restore"): Promise<void> {
-  try {
-    const issues = await runIntegrityScan(companyId);
-    const n = totalIssues(issues);
-    if (n > 0) {
-      const top = issues.filter((i) => i.count > 0).slice(0, 2).map((i) => `${i.issue} (${i.count})`).join("; ");
-      toast.warning(
-        when === "backup"
-          ? `Integrity scan found ${n} issue(s) before backup: ${top}. Backup will proceed.`
-          : `Integrity scan found ${n} issue(s) in current data before restore: ${top}.`,
-        { duration: 7000 },
-      );
-    }
-  } catch { /* preflight is best-effort */ }
-}
+import { preflightIntegrityToast } from "@/lib/offline/integrity-preflight";
 
 interface Props {
   companyId: string;
@@ -120,7 +104,7 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     }
     setExporting(true);
     try {
-      await preflightIntegrity(companyId, "backup");
+      await preflightIntegrityToast(companyId, "backup");
       const r = await exportCompanyBackup(companyId, companyName);
       toast.success(`Backup saved: ${r.fileName}${r.desktopPath ? ` (${r.desktopPath})` : ""}`);
       try { localStorage.setItem(`lastBackup:${companyId}`, new Date().toISOString()); } catch { /* ignore */ }
@@ -272,7 +256,7 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
         return;
       }
       // Pre-restore integrity scan on current data (advisory only).
-      await preflightIntegrity(companyId, "restore");
+      await preflightIntegrityToast(companyId, "restore");
       // Rule 5 — take a silent pre-restore snapshot for 24h "Undo restore".
       const snap = await savePreRestoreSnapshot(companyId, companyName);
       if (!snap.ok) {

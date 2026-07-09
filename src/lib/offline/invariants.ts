@@ -18,6 +18,7 @@
 
 import { offlineDb } from "@/lib/offline/db";
 import { buildItemVoucherPostings, type ItemVoucherKind, type ItcClass } from "@/lib/voucher-postings";
+import { isVoucherFrozen, hasPendingOutbox } from "./frozen-guard";
 
 const ITEM_KINDS = new Set<string>(["sales", "purchase", "credit_note", "debit_note"]);
 
@@ -45,17 +46,38 @@ export async function enforceLocalInvariants(opts: { force?: boolean } = {}): Pr
       (vouchers as any[]).filter((v) => v?.is_deleted !== true).map((v) => v.id as string),
     );
 
-    // 1) Drop orphan children.
-    const orphanEntries = (entries as any[]).filter((e) => !liveIds.has(e.voucher_id));
-    const orphanItems = (items as any[]).filter((i) => !liveIds.has(i.voucher_id));
-    if (orphanEntries.length || orphanItems.length) {
+    // Frozen-row guard: never touch children of a locked-period voucher
+    // or a voucher with pending outbox work.
+    const frozenVoucherIds = new Set<string>();
+    for (const v of vouchers as any[]) {
+      const chk = await isVoucherFrozen(v);
+      if (chk.frozen) frozenVoucherIds.add(String(v.id));
+    }
+
+    // 1) Drop orphan children — but only for non-frozen parents.
+    const orphanEntries = (entries as any[]).filter(
+      (e) => !liveIds.has(e.voucher_id) && !frozenVoucherIds.has(String(e.voucher_id)),
+    );
+    const orphanItems = (items as any[]).filter(
+      (i) => !liveIds.has(i.voucher_id) && !frozenVoucherIds.has(String(i.voucher_id)),
+    );
+    // Also skip orphan children that themselves have pending outbox work.
+    const orphanEntriesSafe: any[] = [];
+    for (const e of orphanEntries) {
+      if (!(await hasPendingOutbox(e.id))) orphanEntriesSafe.push(e);
+    }
+    const orphanItemsSafe: any[] = [];
+    for (const i of orphanItems) {
+      if (!(await hasPendingOutbox(i.id))) orphanItemsSafe.push(i);
+    }
+    if (orphanEntriesSafe.length || orphanItemsSafe.length) {
       await offlineDb.transaction(
         "rw",
         offlineDb.cache_voucher_entries,
         offlineDb.cache_voucher_items,
         async () => {
-          if (orphanEntries.length) await offlineDb.cache_voucher_entries.bulkDelete(orphanEntries.map((e) => e.id));
-          if (orphanItems.length)   await offlineDb.cache_voucher_items.bulkDelete(orphanItems.map((i) => i.id));
+          if (orphanEntriesSafe.length) await offlineDb.cache_voucher_entries.bulkDelete(orphanEntriesSafe.map((e) => e.id));
+          if (orphanItemsSafe.length)   await offlineDb.cache_voucher_items.bulkDelete(orphanItemsSafe.map((i) => i.id));
         },
       );
     }
@@ -81,6 +103,8 @@ export async function enforceLocalInvariants(opts: { force?: boolean } = {}): Pr
       if (v?.is_deleted) continue;
       if (!ITEM_KINDS.has(v.voucher_type)) continue;
       if (!v.party_ledger_id) continue;
+      // Frozen guard: posted in a locked period, or has outbox work.
+      if (frozenVoucherIds.has(String(v.id))) continue;
 
       const existing = liveEntriesByVoucher.get(v.id) ?? [];
       const dr = existing.reduce((s, e) => s + (e.debit_paise ?? 0), 0);

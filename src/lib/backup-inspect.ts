@@ -8,6 +8,7 @@
 
 import {
   parseBackupFile,
+  CURRENT_BACKUP_SCHEMA,
   type CompanyBackup,
   type MultiCompanyBackup,
 } from "@/lib/backup";
@@ -79,7 +80,7 @@ function isoDate(v: unknown): string | null {
 function summariseCompany(
   index: number,
   c: CompanyBackup,
-): CompanyPreview {
+): CompanyPreview & { hardErrors: string[] } {
   const company = (c.company ?? {}) as Record<string, unknown>;
   const name = String(company.name ?? "Unknown company");
   const gstin = (company.gstin as string | null | undefined) ?? null;
@@ -88,7 +89,41 @@ function summariseCompany(
   let minDate: string | null = null;
   let maxDate: string | null = null;
   const issues: string[] = [];
+  const hardErrors: string[] = [];
   let missingDate = 0;
+
+  // -------- Hard-fail invariants (restore MUST be blocked) --------
+  // 1) Duplicate voucher primary keys.
+  const voucherIdCounts = new Map<string, number>();
+  for (const v of c.vouchers ?? []) {
+    const id = String((v as Record<string, unknown>).id ?? "");
+    if (!id) { hardErrors.push("Voucher with empty id"); continue; }
+    voucherIdCounts.set(id, (voucherIdCounts.get(id) ?? 0) + 1);
+  }
+  const dupVoucher = [...voucherIdCounts.values()].filter((n) => n > 1).length;
+  if (dupVoucher > 0) hardErrors.push(`${dupVoucher} duplicate voucher id(s)`);
+
+  // 2) Duplicate ledger primary keys.
+  const ledgerIdCounts = new Map<string, number>();
+  for (const l of c.ledgers ?? []) {
+    const id = String((l as Record<string, unknown>).id ?? "");
+    if (!id) { hardErrors.push("Ledger with empty id"); continue; }
+    ledgerIdCounts.set(id, (ledgerIdCounts.get(id) ?? 0) + 1);
+  }
+  const dupLedger = [...ledgerIdCounts.values()].filter((n) => n > 1).length;
+  if (dupLedger > 0) hardErrors.push(`${dupLedger} duplicate ledger id(s)`);
+
+  // 3) Orphan voucher_entries pointing at a missing voucher.
+  const voucherIds = new Set(voucherIdCounts.keys());
+  let orphanEntries = 0;
+  for (const ve of c.voucher_entries ?? []) {
+    const vid = String((ve as Record<string, unknown>).voucher_id ?? "");
+    if (vid && !voucherIds.has(vid)) orphanEntries++;
+  }
+  if (orphanEntries > 0) {
+    hardErrors.push(`${orphanEntries} GL entr${orphanEntries === 1 ? "y" : "ies"} reference a missing voucher`);
+  }
+  // ----------------------------------------------------------------
 
   for (const v of c.vouchers ?? []) {
     const d = isoDate((v as Record<string, unknown>).date);
@@ -99,10 +134,7 @@ function summariseCompany(
   if (missingDate > 0) {
     issues.push(`${missingDate} voucher(s) missing a valid date`);
   }
-  // Structural sanity: voucher_items / voucher_entries should reference vouchers.
-  const voucherIds = new Set(
-    (c.vouchers ?? []).map((v) => String((v as Record<string, unknown>).id ?? "")),
-  );
+  // Voucher_items orphans: informational only (not a hard fail — line rows).
   let orphanItems = 0;
   for (const vi of c.voucher_items ?? []) {
     const vid = String((vi as Record<string, unknown>).voucher_id ?? "");
@@ -124,6 +156,7 @@ function summariseCompany(
     voucherEntries: c.voucher_entries?.length ?? 0,
     dateRange: { from: minDate, to: maxDate },
     issues,
+    hardErrors,
   };
 }
 
@@ -174,7 +207,18 @@ export async function inspectBackupFile(file: File): Promise<InspectionReport> {
     }
   }
 
-  // Aggregate structural issues into report-level warnings so the summary tile is honest.
+  // Hard-fail invariants → report-level errors. These block restore.
+  for (const c of companies) {
+    const hardErrors = (c as CompanyPreview & { hardErrors?: string[] }).hardErrors ?? [];
+    for (const he of hardErrors) errors.push(`${c.name}: ${he}`);
+  }
+  // Schema newer than this app can restore → hard fail.
+  if (schemaVersion > CURRENT_BACKUP_SCHEMA) {
+    errors.push(
+      `Backup schema v${schemaVersion} is newer than this app supports (v${CURRENT_BACKUP_SCHEMA}). Update the app before restoring.`,
+    );
+  }
+  // Aggregate soft issues into report-level warnings.
   for (const c of companies) {
     for (const iss of c.issues) warnings.push(`${c.name}: ${iss}`);
   }

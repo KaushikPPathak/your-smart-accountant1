@@ -94,13 +94,22 @@ export function BackupInspectDialog({
   })();
   const pickedPreview = report?.companies[pickedIndex] ?? null;
 
+  // The checksum error is the ONE error a user can override with the
+  // explicit "I understand" toggle. Every other error (duplicate ids,
+  // orphan GL entries, schema-newer-than-app) is a hard fail — restore
+  // is blocked. See src/lib/backup-inspect.ts.
+  const CHECKSUM_ERR_PREFIX = "Signed checksum";
+  const nonChecksumErrors = (report?.errors ?? []).filter(
+    (e) => !e.startsWith(CHECKSUM_ERR_PREFIX),
+  );
   const checksumBlocks =
     report?.checksumOk === false && !overrideChecksum;
+  const hardBlocks = nonChecksumErrors.length > 0;
   const nameMatches = confirmName.trim() === targetCompanyName;
   const canRestore =
     !!report &&
     !!picked &&
-    report.errors.filter((_e) => !checksumBlocks).length === 0 &&
+    !hardBlocks &&
     !checksumBlocks &&
     !!targetCompanyId &&
     isAdmin &&
@@ -227,6 +236,11 @@ export function BackupInspectDialog({
                       </li>
                     ))}
                   </ul>
+                )}
+                {hardBlocks && (
+                  <div className="mt-1 rounded border border-destructive/60 bg-destructive/10 p-2 text-[11px] text-destructive">
+                    <strong>Restore blocked.</strong> The backup fails one or more hard-fail integrity checks (listed above). These cannot be overridden — the file is not safe to restore.
+                  </div>
                 )}
                 {report.ok && report.warnings.length === 0 && (
                   <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-400">
