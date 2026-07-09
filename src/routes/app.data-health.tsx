@@ -90,6 +90,7 @@ function DataHealthPage() {
           <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} /> Verify all now
         </Button>
       </div>
+      <FieldIntegrityPanel companyId={activeCompanyId} />
 
       <Card>
         <CardHeader>
