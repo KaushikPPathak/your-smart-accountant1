@@ -385,6 +385,14 @@ export async function updateItem(
       is_synced: false,
     };
     await offlineDb.cache_items.put(updatedRecord);
+    upsertCachedItem({
+      id,
+      name: (updatedRecord.name ?? existing.name) as string,
+      unit: (updatedRecord.unit ?? existing.unit) as string,
+      gst_rate: (updatedRecord.gst_rate ?? existing.gst_rate) as number,
+      hsn_code: (updatedRecord.hsn_code ?? existing.hsn_code) ?? null,
+      is_active: updatedRecord.is_active !== false,
+    } as CachedItem);
   }
 
   if (!isLocalOnlyMode()) {
