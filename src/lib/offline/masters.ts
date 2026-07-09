@@ -8,6 +8,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { isOnlineNow } from "./online-status";
 import { enqueueWrite } from "./outbox";
+import {
+  upsertCachedLedger,
+  upsertCachedItem,
+  removeCachedLedger,
+  removeCachedItem,
+  type CachedLedger,
+  type CachedItem,
+} from "@/lib/masters-cache";
 
 // Explicitly declare interfaces to strip out top-level import bindings entirely
 export interface LedgerCacheRow extends LedgerInsertPayload {
