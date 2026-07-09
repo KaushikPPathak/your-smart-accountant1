@@ -10,6 +10,7 @@ import {
 } from "@/lib/backup";
 import { savePreRestoreSnapshot } from "@/lib/restore-safety";
 import { runSemanticChecks } from "@/lib/semantic-checks";
+import { preflightIntegrityToast } from "@/lib/offline/integrity-preflight";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
