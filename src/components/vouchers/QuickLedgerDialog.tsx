@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,8 @@ import { createLedger, updateLedger } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { offlineDb } from "@/lib/offline/db";
+import { lookupGstinViaSetu } from "@/lib/setu";
+import { validateGSTIN } from "@/utils/gstinValidator";
 
 export interface QuickLedger {
   id: string;
