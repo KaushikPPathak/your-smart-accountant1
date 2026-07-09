@@ -94,13 +94,22 @@ export function BackupInspectDialog({
   })();
   const pickedPreview = report?.companies[pickedIndex] ?? null;
 
+  // The checksum error is the ONE error a user can override with the
+  // explicit "I understand" toggle. Every other error (duplicate ids,
+  // orphan GL entries, schema-newer-than-app) is a hard fail — restore
+  // is blocked. See src/lib/backup-inspect.ts.
+  const CHECKSUM_ERR_PREFIX = "Signed checksum";
+  const nonChecksumErrors = (report?.errors ?? []).filter(
+    (e) => !e.startsWith(CHECKSUM_ERR_PREFIX),
+  );
   const checksumBlocks =
     report?.checksumOk === false && !overrideChecksum;
+  const hardBlocks = nonChecksumErrors.length > 0;
   const nameMatches = confirmName.trim() === targetCompanyName;
   const canRestore =
     !!report &&
     !!picked &&
-    report.errors.filter((_e) => !checksumBlocks).length === 0 &&
+    !hardBlocks &&
     !checksumBlocks &&
     !!targetCompanyId &&
     isAdmin &&
