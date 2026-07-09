@@ -424,6 +424,7 @@ export async function deleteItem(id: string, companyId: string, label?: string):
       is_synced: false,
       updated_at: now,
     });
+    removeCachedItem(id);
   }
 
   if (!isLocalOnlyMode()) {
