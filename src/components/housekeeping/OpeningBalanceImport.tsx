@@ -421,8 +421,8 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
                       <TableCell>
                         <Input className="h-7 text-xs" value={r.account_name}
                           onChange={(e) => update(r._key, {
-                            account_name: e.target.value,
-                            ledger_id: autoMatch(e.target.value),
+                            account_name: toTitleCaseOnType(e.target.value),
+                            ledger_id: autoMatch(toTitleCaseOnType(e.target.value)),
                           })} />
                       </TableCell>
                       <TableCell>
