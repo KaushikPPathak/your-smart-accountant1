@@ -189,4 +189,6 @@ export function useMasters() { return useContext(MastersCtx); }
 
 export function upsertCachedLedger(l: CachedLedger) { ledgersMap.set(l.id, l); rebuildSorted(); bump(); }
 export function upsertCachedItem(i: CachedItem) { itemsMap.set(i.id, i); rebuildSorted(); bump(); }
+export function removeCachedLedger(id: string) { ledgersMap.delete(id); rebuildSorted(); bump(); }
+export function removeCachedItem(id: string) { itemsMap.delete(id); rebuildSorted(); bump(); }
 export function getCurrentCompanyId() { return currentCompanyId; }
