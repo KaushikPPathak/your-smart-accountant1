@@ -336,6 +336,14 @@ export async function createItem(payload: ItemInsertPayload): Promise<ItemRow> {
   };
 
   await offlineDb.cache_items.put(localRecord);
+  upsertCachedItem({
+    id,
+    name: payload.name,
+    unit: payload.unit,
+    gst_rate: payload.gst_rate,
+    hsn_code: payload.hsn_code ?? null,
+    is_active: true,
+  } as CachedItem);
 
   if (!isLocalOnlyMode()) {
     await enqueueWrite({
