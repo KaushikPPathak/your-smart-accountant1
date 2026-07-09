@@ -277,6 +277,7 @@ export async function deleteLedger(id: string, companyId: string, label?: string
       is_synced: false,
       updated_at: now,
     });
+    removeCachedLedger(id);
   }
 
   if (!isLocalOnlyMode()) {
