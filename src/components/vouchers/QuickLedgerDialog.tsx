@@ -227,6 +227,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                   placeholder="24AAAAA0000A1Z5"
                   className="flex-1 font-mono uppercase tracking-wider h-9 border-slate-200 focus-visible:ring-indigo-500"
                 />
+                {verifying && <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />}
                 <GstinPortalWindow 
                   gstin={gstin} 
                   onDataFetched={(parsedParty) => {
