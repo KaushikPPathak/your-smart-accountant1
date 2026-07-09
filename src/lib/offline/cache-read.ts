@@ -10,6 +10,13 @@
 
 import { offlineDb } from "./db";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import {
+  normalizeAll,
+  normalizeCompany,
+  normalizeItem,
+  normalizeLedger,
+  normalizeVoucher,
+} from "./cache-normalizers";
 
 const NETWORK_BLOCKED_KEY = "ym_network_blocked_at";
 
