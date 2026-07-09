@@ -197,7 +197,13 @@ export function AppSidebar() {
   const location = useLocation();
   const { activeMembership } = useCompany();
   const { t } = useI18n();
-  const gstEnabled = activeMembership?.companies?.gst_registered ?? false;
+  // Treat the company as GST-enabled if either the explicit flag is set OR a
+  // GSTIN has been captured. This is a safety net for older cached rows
+  // (pre-migration) where `gst_registered` wasn't persisted but a GSTIN is
+  // present, so the GST Reports section still appears in the sidebar.
+  const gstEnabled =
+    Boolean(activeMembership?.companies?.gst_registered) ||
+    Boolean(activeMembership?.companies?.gstin);
   const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
 
   const tt = (item: { title: string; i18nKey?: string }) =>
