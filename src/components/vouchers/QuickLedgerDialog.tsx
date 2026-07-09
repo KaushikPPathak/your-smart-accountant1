@@ -42,6 +42,8 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   const [stateCode, setStateCode] = useState<string>("");
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const verifiedForRef = useRef<string>("");
 
   // 1. Hook to track editing states and pull master rows down dynamically from local storage
   useEffect(() => {
