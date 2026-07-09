@@ -195,7 +195,7 @@ function CostCentresPage() {
               <Input
                 id="cc-name"
                 value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                onChange={(e) => setDraft({ ...draft, name: toTitleCaseOnType(e.target.value) })}
                 autoFocus
                 maxLength={80}
               />

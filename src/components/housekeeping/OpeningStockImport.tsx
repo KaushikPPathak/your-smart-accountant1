@@ -313,7 +313,7 @@ export function OpeningStockImport({ companyId, disabled, annualTurnoverPaise }:
                         </TableCell>
                         <TableCell>
                           <Input className="h-7 text-xs" value={r.name}
-                            onChange={(e) => update(r._key, { name: e.target.value, item_id: autoMatch(e.target.value) })} />
+                            onChange={(e) => update(r._key, { name: toTitleCaseOnType(e.target.value), item_id: autoMatch(toTitleCaseOnType(e.target.value)) })} />
                         </TableCell>
                         <TableCell>
                           <Select value={r.item_id || "__new__"}
