@@ -1,6 +1,7 @@
 // Offline Opening-Stock import: upload an item/stock summary image or PDF,
 // OCR-extract item name, HSN, qty, unit, rate, value. Map to existing items
 // (or create new) and write opening_stock_qty / opening_stock_rate_paise.
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

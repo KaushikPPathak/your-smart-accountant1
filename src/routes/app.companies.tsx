@@ -1,3 +1,4 @@
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { createFileRoute, useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";

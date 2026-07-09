@@ -1,6 +1,7 @@
 // Offline Opening-Balance import: upload trial balance / balance sheet image or PDF,
 // OCR-extract account name + amount + Dr/Cr, map each row to an existing ledger
 // (or create a new one), then write opening balances onto ledgers.
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
