@@ -25,6 +25,7 @@ import {
 } from "@/lib/backup";
 import { runSemanticChecks } from "@/lib/semantic-checks";
 import { savePreRestoreSnapshot } from "@/lib/restore-safety";
+import { preflightIntegrityToast } from "@/lib/offline/integrity-preflight";
 
 interface Membership {
   company_id: string;
@@ -165,6 +166,7 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
           toast.warning("Could not create safety snapshot — proceeding without undo option.");
         }
       }
+      if (mode !== "new") await preflightIntegrityToast(target, "restore");
       const summary = await restoreCompanyBackup(target, backup, { wipeExisting: true });
       const restoredName = mode === "new" ? newName : (memberships.find((m) => m.company_id === target)?.companies.name ?? "");
       toast.success(
