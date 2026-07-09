@@ -9,6 +9,7 @@ import { useCompany } from "@/lib/company-context";
 import { getAllIntegrity, countLive, totalRows, type IntegrityEntry } from "@/lib/integrity";
 import { runAutoRestore, getAutoRestoreEvents, type AutoRestoreOutcome } from "@/lib/auto-restore";
 import { toast } from "sonner";
+import { FieldIntegrityPanel } from "@/components/data-health/FieldIntegrityPanel";
 
 export const Route = createFileRoute("/app/data-health")({
   head: () => ({
@@ -34,7 +35,7 @@ function formatWhen(ms?: number | null): string {
 }
 
 function DataHealthPage() {
-  const { memberships } = useCompany();
+  const { memberships, activeCompanyId } = useCompany();
   const [rows, setRows] = useState<Row[]>([]);
   const [events, setEvents] = useState<AutoRestoreOutcome[]>([]);
   const [busy, setBusy] = useState(false);
@@ -89,6 +90,7 @@ function DataHealthPage() {
           <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} /> Verify all now
         </Button>
       </div>
+      <FieldIntegrityPanel companyId={activeCompanyId} />
 
       <Card>
         <CardHeader>

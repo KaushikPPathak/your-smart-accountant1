@@ -8,6 +8,7 @@ import { setCurrentDateFormat, type DateFormatCode } from "./date-format";
 import { getActiveStaff } from "./staff-session";
 import { isOnlineNow } from "./offline/online-status";
 import { isLocalOnlyMode } from "./local-only-mode";
+import { normalizeCompany } from "./offline/cache-normalizers";
 
 export interface CompanyMembership {
   company_id: string;
@@ -73,15 +74,15 @@ function mapCompanyRowToMembership(
   const id = String(company?.id ?? companyId ?? "");
   const name = String(company?.name ?? "").trim();
   if (!id || !name) return null;
+  // Merge defaults first, then the cached row on top, then run the
+  // self-healing normalizer so old rows (written before newer columns
+  // existed) don't silently poison flags like gst_registered.
+  const merged = { ...COMPANY_DEFAULTS, ...(company as any), id, name } as any;
+  const normalized = normalizeCompany(merged) ?? merged;
   return {
     company_id: id,
     role: (role || "admin") as CompanyMembership["role"],
-    companies: {
-      id,
-      name,
-      ...COMPANY_DEFAULTS,
-      ...(company as any),
-    } as CompanyMembership["companies"],
+    companies: normalized as CompanyMembership["companies"],
   };
 }
 

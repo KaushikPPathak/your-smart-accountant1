@@ -10,6 +10,13 @@
 
 import { offlineDb } from "./db";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import {
+  normalizeAll,
+  normalizeCompany,
+  normalizeItem,
+  normalizeLedger,
+  normalizeVoucher,
+} from "./cache-normalizers";
 
 const NETWORK_BLOCKED_KEY = "ym_network_blocked_at";
 
@@ -34,7 +41,8 @@ export function shouldPreferOfflineCache(): boolean {
 }
 
 export async function readCompanies() {
-  return offlineDb.cache_companies.toArray();
+  const rows = await offlineDb.cache_companies.toArray();
+  return normalizeAll(rows as any[], normalizeCompany);
 }
 
 export async function readCompanySettings(companyId: string) {
@@ -43,12 +51,12 @@ export async function readCompanySettings(companyId: string) {
 
 export async function readLedgers(companyId: string) {
   const rows = await offlineDb.cache_ledgers.where("company_id").equals(companyId).sortBy("name");
-  return (rows as any[]).filter((r) => r?.is_deleted !== true);
+  return normalizeAll((rows as any[]).filter((r) => r?.is_deleted !== true), normalizeLedger);
 }
 
 export async function readItems(companyId: string) {
   const rows = await offlineDb.cache_items.where("company_id").equals(companyId).sortBy("name");
-  return (rows as any[]).filter((r) => r?.is_deleted !== true);
+  return normalizeAll((rows as any[]).filter((r) => r?.is_deleted !== true), normalizeItem);
 }
 
 
@@ -75,7 +83,8 @@ export async function readVouchers(companyId: string, opts?: {
     });
   }
   const rows = await coll.toArray();
-  return rows.sort((a, b) => (a.voucher_date < b.voucher_date ? 1 : -1));
+  const normalized = normalizeAll(rows as any[], normalizeVoucher);
+  return normalized.sort((a: any, b: any) => (a.voucher_date < b.voucher_date ? 1 : -1));
 }
 
 export async function readVoucherEntriesForCompany(companyId: string) {
