@@ -231,6 +231,20 @@ export async function updateLedger(
       is_synced: false,
     };
     await offlineDb.cache_ledgers.put(updatedRecord);
+    upsertCachedLedger({
+      id,
+      name: (updatedRecord.name ?? existing.name) as string,
+      type: String(updatedRecord.type ?? existing.type),
+      state_code: (updatedRecord.state_code ?? existing.state_code) ?? null,
+      gstin: (updatedRecord.gstin ?? existing.gstin) ?? null,
+      gst_treatment: nextGstTreatment ?? "regular",
+      gst_registration_type: updatedRecord.gst_registration_type ?? null,
+      msme_registered: updatedRecord.msme_registered ?? null,
+      msme_udyam_no: updatedRecord.msme_udyam_no ?? null,
+      msme_classification: updatedRecord.msme_classification ?? null,
+      credit_days: updatedRecord.credit_days ?? null,
+      is_active: updatedRecord.is_active !== false,
+    } as CachedLedger);
   }
 
   if (!isLocalOnlyMode()) {
