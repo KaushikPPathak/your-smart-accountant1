@@ -328,6 +328,25 @@ function CompaniesPage() {
       return;
     }
     setSubmitting(false);
+    // Rewrite the Dexie cache row so flags like gst_registered/inventory_enabled
+    // reflect the just-saved values immediately — otherwise the sidebar/menu
+    // keeps reading the stale cached row until the next full snapshot pull.
+    try {
+      const savedId = editingId ?? (payload as any).id;
+      if (savedId) {
+        const { offlineDb } = await import("@/lib/offline/db");
+        const { normalizeCompany } = await import("@/lib/offline/cache-normalizers");
+        const existing = (await offlineDb.cache_companies.get(savedId).catch(() => null)) ?? {};
+        const merged = normalizeCompany({
+          ...existing,
+          ...payload,
+          id: savedId,
+          company_id: savedId,
+          updated_at: new Date().toISOString(),
+        });
+        if (merged) await offlineDb.cache_companies.put(merged as any);
+      }
+    } catch { /* cache refresh is best-effort */ }
     await refresh();
     setForm(empty);
     setEditingId(null);
