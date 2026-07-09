@@ -167,6 +167,22 @@ export async function createLedger(payload: LedgerInsertPayload): Promise<Ledger
   // Write directly to local v2 cache table
   await offlineDb.cache_ledgers.put(localRecord);
 
+  // Mirror into in-memory masters cache so pickers see it immediately.
+  upsertCachedLedger({
+    id,
+    name: payload.name,
+    type: String(payload.type),
+    state_code: payload.state_code ?? null,
+    gstin: payload.gstin ?? null,
+    gst_treatment: (payload.gst_registration_type as string | undefined) ?? "regular",
+    gst_registration_type: payload.gst_registration_type ?? null,
+    msme_registered: payload.msme_registered ?? null,
+    msme_udyam_no: payload.msme_udyam_no ?? null,
+    msme_classification: payload.msme_classification ?? null,
+    credit_days: payload.credit_days ?? null,
+    is_active: true,
+  } as CachedLedger);
+
   if (!isLocalOnlyMode()) {
     // Queue write to the durable outbox to allow replay on reconnect.
     await enqueueWrite({
