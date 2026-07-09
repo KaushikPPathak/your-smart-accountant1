@@ -8,6 +8,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { isOnlineNow } from "./online-status";
 import { enqueueWrite } from "./outbox";
+import {
+  upsertCachedLedger,
+  upsertCachedItem,
+  removeCachedLedger,
+  removeCachedItem,
+  type CachedLedger,
+  type CachedItem,
+} from "@/lib/masters-cache";
 
 // Explicitly declare interfaces to strip out top-level import bindings entirely
 export interface LedgerCacheRow extends LedgerInsertPayload {
@@ -159,6 +167,22 @@ export async function createLedger(payload: LedgerInsertPayload): Promise<Ledger
   // Write directly to local v2 cache table
   await offlineDb.cache_ledgers.put(localRecord);
 
+  // Mirror into in-memory masters cache so pickers see it immediately.
+  upsertCachedLedger({
+    id,
+    name: payload.name,
+    type: String(payload.type),
+    state_code: payload.state_code ?? null,
+    gstin: payload.gstin ?? null,
+    gst_treatment: (payload.gst_registration_type as string | undefined) ?? "regular",
+    gst_registration_type: payload.gst_registration_type ?? null,
+    msme_registered: payload.msme_registered ?? null,
+    msme_udyam_no: payload.msme_udyam_no ?? null,
+    msme_classification: payload.msme_classification ?? null,
+    credit_days: payload.credit_days ?? null,
+    is_active: true,
+  } as CachedLedger);
+
   if (!isLocalOnlyMode()) {
     // Queue write to the durable outbox to allow replay on reconnect.
     await enqueueWrite({
@@ -207,6 +231,20 @@ export async function updateLedger(
       is_synced: false,
     };
     await offlineDb.cache_ledgers.put(updatedRecord);
+    upsertCachedLedger({
+      id,
+      name: (updatedRecord.name ?? existing.name) as string,
+      type: String(updatedRecord.type ?? existing.type),
+      state_code: (updatedRecord.state_code ?? existing.state_code) ?? null,
+      gstin: (updatedRecord.gstin ?? existing.gstin) ?? null,
+      gst_treatment: nextGstTreatment ?? "regular",
+      gst_registration_type: updatedRecord.gst_registration_type ?? null,
+      msme_registered: updatedRecord.msme_registered ?? null,
+      msme_udyam_no: updatedRecord.msme_udyam_no ?? null,
+      msme_classification: updatedRecord.msme_classification ?? null,
+      credit_days: updatedRecord.credit_days ?? null,
+      is_active: updatedRecord.is_active !== false,
+    } as CachedLedger);
   }
 
   if (!isLocalOnlyMode()) {
@@ -239,6 +277,7 @@ export async function deleteLedger(id: string, companyId: string, label?: string
       is_synced: false,
       updated_at: now,
     });
+    removeCachedLedger(id);
   }
 
   if (!isLocalOnlyMode()) {
@@ -297,6 +336,14 @@ export async function createItem(payload: ItemInsertPayload): Promise<ItemRow> {
   };
 
   await offlineDb.cache_items.put(localRecord);
+  upsertCachedItem({
+    id,
+    name: payload.name,
+    unit: payload.unit,
+    gst_rate: payload.gst_rate,
+    hsn_code: payload.hsn_code ?? null,
+    is_active: true,
+  } as CachedItem);
 
   if (!isLocalOnlyMode()) {
     await enqueueWrite({
@@ -338,6 +385,14 @@ export async function updateItem(
       is_synced: false,
     };
     await offlineDb.cache_items.put(updatedRecord);
+    upsertCachedItem({
+      id,
+      name: (updatedRecord.name ?? existing.name) as string,
+      unit: (updatedRecord.unit ?? existing.unit) as string,
+      gst_rate: (updatedRecord.gst_rate ?? existing.gst_rate) as number,
+      hsn_code: (updatedRecord.hsn_code ?? existing.hsn_code) ?? null,
+      is_active: updatedRecord.is_active !== false,
+    } as CachedItem);
   }
 
   if (!isLocalOnlyMode()) {
@@ -369,6 +424,7 @@ export async function deleteItem(id: string, companyId: string, label?: string):
       is_synced: false,
       updated_at: now,
     });
+    removeCachedItem(id);
   }
 
   if (!isLocalOnlyMode()) {

@@ -17,18 +17,34 @@ export function GstinPortalWindow({ gstin, onDataFetched }: GstinPortalWindowPro
   const cleanGstin = gstin.trim().toUpperCase();
   const isValidGstin = cleanGstin.length === 15;
 
+  const openExternal = async (url: string) => {
+    // In Tauri desktop, window.open may open a blank in-app webview. Prefer
+    // the shell/opener plugin when it's available so the OS default browser
+    // is used instead.
+    const w = window as unknown as { __TAURI_INTERNALS__?: unknown };
+    if (w.__TAURI_INTERNALS__) {
+      try {
+        const openerName = "@tauri-apps/plugin-opener";
+        const shellName = "@tauri-apps/plugin-shell";
+        const mod: any = await import(/* @vite-ignore */ openerName).catch(() => null);
+        if (mod?.openUrl) { await mod.openUrl(url); return; }
+        const shell: any = await import(/* @vite-ignore */ shellName).catch(() => null);
+        if (shell?.open) { await shell.open(url); return; }
+      } catch { /* fall through */ }
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   const handleCopyAndRedirect = async () => {
     if (!cleanGstin) return;
     try {
       await navigator.clipboard.writeText(cleanGstin);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      
-      // Open the GST portal tracking desk safely in a beautifully centered mini-window
-      window.open("https://services.gst.gov.in/services/searchtp", "_blank", "noopener,noreferrer");
-    } catch (err) {
-      window.open("https://services.gst.gov.in/services/searchtp", "_blank", "noopener,noreferrer");
+    } catch {
+      /* clipboard may be blocked — proceed to open portal anyway */
     }
+    await openExternal("https://services.gst.gov.in/services/searchtp");
   };
 
   const handleParsing = (text: string) => {
