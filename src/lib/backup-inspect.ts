@@ -207,7 +207,18 @@ export async function inspectBackupFile(file: File): Promise<InspectionReport> {
     }
   }
 
-  // Aggregate structural issues into report-level warnings so the summary tile is honest.
+  // Hard-fail invariants → report-level errors. These block restore.
+  for (const c of companies) {
+    const hardErrors = (c as CompanyPreview & { hardErrors?: string[] }).hardErrors ?? [];
+    for (const he of hardErrors) errors.push(`${c.name}: ${he}`);
+  }
+  // Schema newer than this app can restore → hard fail.
+  if (schemaVersion > CURRENT_BACKUP_SCHEMA) {
+    errors.push(
+      `Backup schema v${schemaVersion} is newer than this app supports (v${CURRENT_BACKUP_SCHEMA}). Update the app before restoring.`,
+    );
+  }
+  // Aggregate soft issues into report-level warnings.
   for (const c of companies) {
     for (const iss of c.issues) warnings.push(`${c.name}: ${iss}`);
   }
