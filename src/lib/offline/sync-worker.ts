@@ -137,12 +137,10 @@ export function startSyncWorker() {
   });
   // Boot run — wait until the UI has painted so sync can never slow launch.
   setTimeout(() => { void tick(); }, 3_000);
-  // Silent local invariant sweep (orphan children, drifted item-voucher
-  // postings). Runs quietly in the background so nothing ever needs a
-  // user-visible "repair" screen.
-  setTimeout(() => {
-    void import("./invariants").then((m) => m.enforceLocalInvariants()).catch(() => { /* ignore */ });
-  }, 5_000);
+  // NOTE: Integrity/invariant sweeps are NOT run in the background. They
+  // would compete with the UI on lower-end devices. Scans only run when
+  // triggered explicitly from Data Health, before backup, before restore,
+  // or once after a schema-version upgrade (see checkSchemaVersionOnBoot).
   // Periodic lightweight sync while the tab is open — keeps offline data fresh
   // without repeatedly downloading every voucher/report row.
   setInterval(() => { void tick(); }, 120_000);
