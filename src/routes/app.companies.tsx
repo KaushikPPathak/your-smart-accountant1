@@ -297,10 +297,12 @@ function CompaniesPage() {
       date_format: parsed.data.date_format || "dd-mm-yyyy",
     };
 
+    let savedId: string | null = null;
     try {
       if (editingId) {
         const { error } = await supabase.from("companies").update(payload).eq("id", editingId);
         if (error) { setSubmitting(false); toast.error(error.message); return; }
+        savedId = editingId;
         toast.success("Company updated");
       } else {
         const activeStaffId = typeof window !== "undefined" ? localStorage.getItem("ym_active_staff_id") : null;
@@ -319,6 +321,7 @@ function CompaniesPage() {
           { onConflict: "company_id,user_id", ignoreDuplicates: true },
         );
 
+        savedId = newId;
         setActiveCompanyId(newId);
         toast.success("Company created");
       }
@@ -328,6 +331,24 @@ function CompaniesPage() {
       return;
     }
     setSubmitting(false);
+    // Rewrite the Dexie cache row so flags like gst_registered/inventory_enabled
+    // reflect the just-saved values immediately — otherwise the sidebar/menu
+    // keeps reading the stale cached row until the next full snapshot pull.
+    try {
+      if (savedId) {
+        const { offlineDb } = await import("@/lib/offline/db");
+        const { normalizeCompany } = await import("@/lib/offline/cache-normalizers");
+        const existing = (await offlineDb.cache_companies.get(savedId).catch(() => null)) ?? {};
+        const merged = normalizeCompany({
+          ...existing,
+          ...payload,
+          id: savedId,
+          company_id: savedId,
+          updated_at: new Date().toISOString(),
+        });
+        if (merged) await offlineDb.cache_companies.put(merged as any);
+      }
+    } catch { /* cache refresh is best-effort */ }
     await refresh();
     setForm(empty);
     setEditingId(null);
