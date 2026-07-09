@@ -77,6 +77,19 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
     }
   };
 
+  const openExternal = async (url: string) => {
+    const w = window as unknown as { __TAURI_INTERNALS__?: unknown };
+    if (w.__TAURI_INTERNALS__) {
+      try {
+        const mod: any = await import(/* @vite-ignore */ "@tauri-apps/plugin-opener").catch(() => null);
+        if (mod?.openUrl) { await mod.openUrl(url); return; }
+        const shell: any = await import(/* @vite-ignore */ "@tauri-apps/plugin-shell").catch(() => null);
+        if (shell?.open) { await shell.open(url); return; }
+      } catch { /* fall through */ }
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   const handlePortalRedirect = async () => {
     if (!cleanGstin) {
       toast.error("Enter a GSTIN first");
@@ -90,7 +103,7 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
     } catch {
       /* ignore */
     }
-    window.open("https://services.gst.gov.in/services/searchtp", "_blank", "noopener,noreferrer");
+    await openExternal("https://services.gst.gov.in/services/searchtp");
   };
 
   const handlePasteParsing = (text: string) => {
