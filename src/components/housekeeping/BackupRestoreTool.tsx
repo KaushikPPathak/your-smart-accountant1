@@ -104,7 +104,7 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     }
     setExporting(true);
     try {
-      await preflightIntegrity(companyId, "backup");
+      await preflightIntegrityToast(companyId, "backup");
       const r = await exportCompanyBackup(companyId, companyName);
       toast.success(`Backup saved: ${r.fileName}${r.desktopPath ? ` (${r.desktopPath})` : ""}`);
       try { localStorage.setItem(`lastBackup:${companyId}`, new Date().toISOString()); } catch { /* ignore */ }
@@ -256,7 +256,7 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
         return;
       }
       // Pre-restore integrity scan on current data (advisory only).
-      await preflightIntegrity(companyId, "restore");
+      await preflightIntegrityToast(companyId, "restore");
       // Rule 5 — take a silent pre-restore snapshot for 24h "Undo restore".
       const snap = await savePreRestoreSnapshot(companyId, companyName);
       if (!snap.ok) {
