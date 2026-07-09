@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { AlertTriangle, Boxes, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -281,7 +282,7 @@ function ItemsPage() {
                     <Input
                       id="name"
                       value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      onChange={(e) => setForm({ ...form, name: toTitleCaseOnType(e.target.value) })}
                       required
                       autoFocus
                     />

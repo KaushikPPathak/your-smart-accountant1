@@ -6,6 +6,7 @@ import { GstinPortalButton } from "@/components/GstinPortalButton";
 import { GstinInlineError } from "@/components/GstinInlineError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toTitleCaseOnType } from "@/lib/text-case";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -369,7 +370,7 @@ function LedgersPage() {
                     <Input
                       id="name"
                       value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      onChange={(e) => setForm({ ...form, name: toTitleCaseOnType(e.target.value) })}
                       required
                       autoFocus
                     />
