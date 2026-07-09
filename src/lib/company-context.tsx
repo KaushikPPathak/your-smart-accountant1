@@ -8,6 +8,7 @@ import { setCurrentDateFormat, type DateFormatCode } from "./date-format";
 import { getActiveStaff } from "./staff-session";
 import { isOnlineNow } from "./offline/online-status";
 import { isLocalOnlyMode } from "./local-only-mode";
+import { normalizeCompany } from "./offline/cache-normalizers";
 
 export interface CompanyMembership {
   company_id: string;
