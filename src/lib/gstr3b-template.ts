@@ -70,8 +70,10 @@ function forceFullCalc(workbookXml: string): string {
   return workbookXml.replace("</workbook>", `<calcPr fullCalcOnLoad="1"/></workbook>`);
 }
 
-/** Convert paise → rupees rounded to 2 decimals, matching utility expectations. */
-const r2 = (paise: number): number => Number((paise / 100).toFixed(2));
+/** Round to 2 decimals. BuiltGstr3B already exposes amounts in rupees
+ *  (gst-returns.ts converts paise→rupees via its internal `r()`), so we
+ *  MUST NOT divide by 100 again here — doing so under-reports 100x. */
+const r2 = (rupees: number): number => Number((Number(rupees) || 0).toFixed(2));
 
 /** Map the period FP (MMYYYY) into the Year string used by the utility's dropdown. */
 function fpToYearLabel(fp: string): string {
