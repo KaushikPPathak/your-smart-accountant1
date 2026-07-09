@@ -271,6 +271,8 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
         toast.error("Multi-company backup detected. Please use a single-company backup file.");
         return;
       }
+      // Pre-restore integrity scan on current data (advisory only).
+      await preflightIntegrity(companyId, "restore");
       // Rule 5 — take a silent pre-restore snapshot for 24h "Undo restore".
       const snap = await savePreRestoreSnapshot(companyId, companyName);
       if (!snap.ok) {
