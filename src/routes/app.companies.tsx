@@ -336,7 +336,6 @@ function CompaniesPage() {
     // keeps reading the stale cached row until the next full snapshot pull.
     try {
       if (savedId) {
-      if (savedId) {
         const { offlineDb } = await import("@/lib/offline/db");
         const { normalizeCompany } = await import("@/lib/offline/cache-normalizers");
         const existing = (await offlineDb.cache_companies.get(savedId).catch(() => null)) ?? {};
