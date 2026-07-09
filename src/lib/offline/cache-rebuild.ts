@@ -39,6 +39,23 @@ export async function checkCanRebuild(companyId: string): Promise<RebuildGuard> 
       reason: `${pending} unsynced change(s) are queued for this company. Wait for sync to finish before rebuilding.`,
     };
   }
+  // Guard: if a locked period exists, rebuild must go through a full server
+  // refetch. That's already what this function does, but we also refuse if
+  // any period-lock audit rows are queued for sync (avoid data drift).
+  try {
+    const auditQueued = await offlineDb.outbox
+      .filter((r: any) => {
+        const t = String(r?.table_name ?? r?.table ?? "");
+        return t === "period_lock_audit" || t === "voucher_repair_audit";
+      })
+      .count();
+    if (auditQueued > 0) {
+      return {
+        ok: false,
+        reason: "Audit-log entries are still syncing. Try again in a moment.",
+      };
+    }
+  } catch { /* ignore */ }
   return { ok: true };
 }
 
