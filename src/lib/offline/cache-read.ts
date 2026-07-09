@@ -41,7 +41,8 @@ export function shouldPreferOfflineCache(): boolean {
 }
 
 export async function readCompanies() {
-  return offlineDb.cache_companies.toArray();
+  const rows = await offlineDb.cache_companies.toArray();
+  return normalizeAll(rows as any[], normalizeCompany);
 }
 
 export async function readCompanySettings(companyId: string) {
@@ -50,12 +51,12 @@ export async function readCompanySettings(companyId: string) {
 
 export async function readLedgers(companyId: string) {
   const rows = await offlineDb.cache_ledgers.where("company_id").equals(companyId).sortBy("name");
-  return (rows as any[]).filter((r) => r?.is_deleted !== true);
+  return normalizeAll((rows as any[]).filter((r) => r?.is_deleted !== true), normalizeLedger);
 }
 
 export async function readItems(companyId: string) {
   const rows = await offlineDb.cache_items.where("company_id").equals(companyId).sortBy("name");
-  return (rows as any[]).filter((r) => r?.is_deleted !== true);
+  return normalizeAll((rows as any[]).filter((r) => r?.is_deleted !== true), normalizeItem);
 }
 
 
