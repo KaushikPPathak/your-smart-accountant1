@@ -297,10 +297,12 @@ function CompaniesPage() {
       date_format: parsed.data.date_format || "dd-mm-yyyy",
     };
 
+    let savedId: string | null = null;
     try {
       if (editingId) {
         const { error } = await supabase.from("companies").update(payload).eq("id", editingId);
         if (error) { setSubmitting(false); toast.error(error.message); return; }
+        savedId = editingId;
         toast.success("Company updated");
       } else {
         const activeStaffId = typeof window !== "undefined" ? localStorage.getItem("ym_active_staff_id") : null;
@@ -319,6 +321,7 @@ function CompaniesPage() {
           { onConflict: "company_id,user_id", ignoreDuplicates: true },
         );
 
+        savedId = newId;
         setActiveCompanyId(newId);
         toast.success("Company created");
       }
@@ -332,7 +335,7 @@ function CompaniesPage() {
     // reflect the just-saved values immediately — otherwise the sidebar/menu
     // keeps reading the stale cached row until the next full snapshot pull.
     try {
-      const savedId = editingId ?? (payload as any).id;
+      if (savedId) {
       if (savedId) {
         const { offlineDb } = await import("@/lib/offline/db");
         const { normalizeCompany } = await import("@/lib/offline/cache-normalizers");
