@@ -81,9 +81,11 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPorta
     const w = window as unknown as { __TAURI_INTERNALS__?: unknown };
     if (w.__TAURI_INTERNALS__) {
       try {
-        const mod: any = await import(/* @vite-ignore */ "@tauri-apps/plugin-opener").catch(() => null);
+        const openerName = "@tauri-apps/plugin-opener";
+        const shellName = "@tauri-apps/plugin-shell";
+        const mod: any = await import(/* @vite-ignore */ openerName).catch(() => null);
         if (mod?.openUrl) { await mod.openUrl(url); return; }
-        const shell: any = await import(/* @vite-ignore */ "@tauri-apps/plugin-shell").catch(() => null);
+        const shell: any = await import(/* @vite-ignore */ shellName).catch(() => null);
         if (shell?.open) { await shell.open(url); return; }
       } catch { /* fall through */ }
     }
