@@ -9,6 +9,7 @@ import { useCompany } from "@/lib/company-context";
 import { getAllIntegrity, countLive, totalRows, type IntegrityEntry } from "@/lib/integrity";
 import { runAutoRestore, getAutoRestoreEvents, type AutoRestoreOutcome } from "@/lib/auto-restore";
 import { toast } from "sonner";
+import { FieldIntegrityPanel } from "@/components/data-health/FieldIntegrityPanel";
 
 export const Route = createFileRoute("/app/data-health")({
   head: () => ({
