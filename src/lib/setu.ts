@@ -116,11 +116,9 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
   let httpOk = false;
   let httpStatus = 0;
 
-  if (isTauri) {
-    // Desktop build — call API Setu directly.
-    if (!creds.clientId || !creds.clientSecret) {
-      return { ...empty, error: "API Setu credentials not configured" };
-    }
+  const hasLocalCreds = Boolean(creds.clientId && creds.clientSecret);
+  if (isTauri && hasLocalCreds) {
+    // Desktop build with local creds — call API Setu directly.
     const url = `https://apisetu.gov.in/gstn/v2/taxpayers/${encodeURIComponent(cleanGstin)}`;
     const headers: Record<string, string> = {
       "X-APISETU-CLIENTID": creds.clientId,
