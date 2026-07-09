@@ -112,7 +112,7 @@ export async function rebuildCompanyCache(companyId: string): Promise<RebuildRes
   } catch { /* ignore */ }
 
   const result = await pullCompanySnapshot(companyId, { full: true, forceExact: true });
-  const fetchedTables = result && result.tables ? Object.keys(result.tables).length : 0;
+  const fetchedTables = result && result.pulled ? Object.keys(result.pulled).length : 0;
   await stampSchemaVersion();
   return { cleared, fetchedTables };
 }
