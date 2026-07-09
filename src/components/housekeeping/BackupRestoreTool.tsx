@@ -120,6 +120,7 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     }
     setExporting(true);
     try {
+      await preflightIntegrity(companyId, "backup");
       const r = await exportCompanyBackup(companyId, companyName);
       toast.success(`Backup saved: ${r.fileName}${r.desktopPath ? ` (${r.desktopPath})` : ""}`);
       try { localStorage.setItem(`lastBackup:${companyId}`, new Date().toISOString()); } catch { /* ignore */ }
