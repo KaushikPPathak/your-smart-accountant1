@@ -78,9 +78,6 @@ function mapCompanyRowToMembership(
   // self-healing normalizer so old rows (written before newer columns
   // existed) don't silently poison flags like gst_registered.
   const merged = { ...COMPANY_DEFAULTS, ...(company as any), id, name } as any;
-  // Lazy require to avoid a circular import at module init.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { normalizeCompany } = require("./offline/cache-normalizers") as typeof import("./offline/cache-normalizers");
   const normalized = normalizeCompany(merged) ?? merged;
   return {
     company_id: id,
