@@ -83,7 +83,8 @@ export async function readVouchers(companyId: string, opts?: {
     });
   }
   const rows = await coll.toArray();
-  return rows.sort((a, b) => (a.voucher_date < b.voucher_date ? 1 : -1));
+  const normalized = normalizeAll(rows as any[], normalizeVoucher);
+  return normalized.sort((a: any, b: any) => (a.voucher_date < b.voucher_date ? 1 : -1));
 }
 
 export async function readVoucherEntriesForCompany(companyId: string) {
