@@ -2,7 +2,15 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { getRouter } from "./router";
 import { setupAppShellCache } from "./lib/pwa-registration";
+import { checkSchemaVersionOnBoot } from "./lib/offline/schema-version";
 import "./styles.css";
+
+// Self-healing schema check: if the local cache was written by an older
+// version of the app, silently trigger a full snapshot refetch (when
+// online + not local-only). Fire-and-forget — never blocks first paint.
+void checkSchemaVersionOnBoot().catch((err) => {
+  console.warn("schema-version check failed:", err);
+});
 
 // Ask the browser to keep our IndexedDB / cache data across eviction
 // pressure. Best-effort: silently no-ops on browsers without the API.
