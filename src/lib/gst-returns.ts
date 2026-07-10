@@ -472,7 +472,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     }
 
     if (sn === "nil_rated" || sn === "exempt" || sn === "non_gst") {
-      accNil(v);
+      accNil(v, sn);
       continue;
     }
 
