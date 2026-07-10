@@ -443,26 +443,36 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
   const exp: EXPInvoice[] = [];
   const nilMap = new Map<NilGroup["sply_ty"], NilGroup>();
 
-  const accNil = (v: VoucherRow) => {
+  const accNil = (v: VoucherRow, natureOverride?: SupplyNature) => {
     const interstate = v.is_interstate;
     const partyGstin = v.ledgers?.gstin || "";
     const key: NilGroup["sply_ty"] = interstate
       ? (partyGstin ? "INTRB2B" : "INTRB2C")
       : (partyGstin ? "INTRAB2B" : "INTRAB2C");
     const cur = nilMap.get(key) ?? { sply_ty: key, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 };
-    // Fallback to total_paise if subtotal is missing (legacy vouchers).
     const amt = v.subtotal_paise || v.total_paise;
-    if (v.supply_nature === "nil_rated") cur.nil_amt += amt;
-    else if (v.supply_nature === "exempt") cur.expt_amt += amt;
-    else if (v.supply_nature === "non_gst") cur.ngsup_amt += amt;
+    const nature = natureOverride ?? v.supply_nature;
+    if (nature === "nil_rated") cur.nil_amt += amt;
+    else if (nature === "exempt") cur.expt_amt += amt;
+    else if (nature === "non_gst") cur.ngsup_amt += amt;
     nilMap.set(key, cur);
   };
 
   for (const v of sales) {
-    const sn = v.supply_nature;
+    let sn = v.supply_nature;
+
+    // Auto-classify: if user didn't mark supply_nature but every line is 0% GST
+    // with zero tax, treat the whole voucher as nil-rated so it lands in the
+    // GSTR-1 "nil / exempt / non-GST" sheet instead of B2B / B2CS.
+    if (sn === "taxable" && v.voucher_items.length > 0) {
+      const allZero = v.voucher_items.every(
+        (it) => (it.gst_rate || 0) === 0 && (it.cgst_paise || 0) === 0 && (it.sgst_paise || 0) === 0 && (it.igst_paise || 0) === 0,
+      );
+      if (allZero) sn = "nil_rated";
+    }
 
     if (sn === "nil_rated" || sn === "exempt" || sn === "non_gst") {
-      accNil(v);
+      accNil(v, sn);
       continue;
     }
 
