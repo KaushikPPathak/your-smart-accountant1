@@ -16,7 +16,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import {
   buildGstr3B, fetchVouchers, fetchCompanyMeta, gstr3bToJson,
-  monthRange, periodFP, downloadJson, fetchInwardSummary, fetchItcReversal, validateGstr3B,
+  monthRange, quarterRange, periodFP, downloadJson, fetchInwardSummary, fetchItcReversal, validateGstr3B,
   type CompanyMeta, type BuiltGstr3B, type InwardSummaryRow, type ItcReversalRow,
 } from "@/lib/gst-returns";
 import { downloadGstr3bOfficial } from "@/lib/gstr3b-template";
@@ -37,7 +37,10 @@ function GSTR3BPage() {
   const { activeCompanyId } = useCompany();
   const today = new Date();
   const fyYear = today.getMonth() < 3 ? today.getFullYear() - 1 : today.getFullYear();
+  const [cadence, setCadence] = useState<"monthly" | "quarterly">("monthly");
   const [month, setMonth] = useState<string>(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`);
+  const [year, setYear] = useState<number>(today.getFullYear());
+  const [quarter, setQuarter] = useState<1 | 2 | 3 | 4>(((Math.floor(today.getMonth() / 3) + 1) as 1 | 2 | 3 | 4));
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [built, setBuilt] = useState<BuiltGstr3B | null>(null);
   const [inward, setInward] = useState<InwardSummaryRow[]>([]);
@@ -47,9 +50,13 @@ function GSTR3BPage() {
   const [calcOpen, setCalcOpen] = useState(false);
 
   const period = useMemo(() => {
+    if (cadence === "quarterly") {
+      const r = quarterRange(year, quarter);
+      return { ...r, fp: periodFP(r.to) };
+    }
     const r = monthRange(month);
     return { ...r, fp: periodFP(r.from) };
-  }, [month]);
+  }, [cadence, year, quarter, month]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -85,16 +92,52 @@ function GSTR3BPage() {
         <CardContent className="p-3 print:hidden">
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Return period</Label>
-              <Select value={month} onValueChange={setMonth}>
-                <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+              <Label className="text-xs">Filing frequency</Label>
+              <Select value={cadence} onValueChange={(v) => setCadence(v as "monthly" | "quarterly")}>
+                <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[fyYear, fyYear + 1].flatMap((y) => monthsOfYear(y)).map((m) => (
-                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                  ))}
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly (QRMP)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {cadence === "monthly" ? (
+              <div className="space-y-1">
+                <Label className="text-xs">Return period</Label>
+                <Select value={month} onValueChange={setMonth}>
+                  <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[fyYear, fyYear + 1].flatMap((y) => monthsOfYear(y)).map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-xs">Year</Label>
+                  <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+                    <SelectTrigger className="h-9 w-[120px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[fyYear - 1, fyYear, fyYear + 1].map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Quarter</Label>
+                  <Select value={String(quarter)} onValueChange={(v) => setQuarter(Number(v) as 1 | 2 | 3 | 4)}>
+                    <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Q1 (Apr–Jun)</SelectItem>
+                      <SelectItem value="2">Q2 (Jul–Sep)</SelectItem>
+                      <SelectItem value="3">Q3 (Oct–Dec)</SelectItem>
+                      <SelectItem value="4">Q4 (Jan–Mar)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
             <div className="ml-auto flex gap-2">
               <Button variant="outline" size="sm" disabled={!built}
                 onClick={async () => {
@@ -163,10 +206,10 @@ function GSTR3BPage() {
 
           <PeriodLockCard
             returnType="GSTR3B"
-            period={month}
+            period={cadence === "quarterly" ? `${year}-Q${quarter}` : month}
             periodStart={period.from}
             periodEnd={period.to}
-            periodLabel={new Date(period.from).toLocaleString("en-IN", { month: "short", year: "numeric" })}
+            periodLabel={cadence === "quarterly" ? `Q${quarter} ${year}` : new Date(period.from).toLocaleString("en-IN", { month: "short", year: "numeric" })}
           />
 
           <ManualEntryCard
