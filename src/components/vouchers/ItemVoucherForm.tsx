@@ -660,6 +660,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       interstate,
       itcClass: isPurchaseSide ? itcClass : "na",
       itcEligible: isPurchaseSide ? itcEligible : true,
+      supplyNature,
       originalVoucherId: isNote ? originalVoucherId : null,
       totals: { ...totals, round_off_paise: roundOffPaise + miscPostGstPaise },
       lines: lines
