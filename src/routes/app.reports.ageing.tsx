@@ -11,6 +11,12 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import {
+  readVouchers,
+  readLedgers,
+  readBillAllocations,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/ageing")({
   head: () => ({ meta: [{ title: "Ageing Analysis — Reports" }] }),
