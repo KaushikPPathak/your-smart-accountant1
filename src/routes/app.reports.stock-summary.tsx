@@ -12,6 +12,12 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import {
+  readItems,
+  readVouchers,
+  readVoucherItemsForCompany,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/stock-summary")({
   head: () => ({ meta: [{ title: "Stock Summary — Reports" }] }),
@@ -47,23 +53,78 @@ function StockSummary() {
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("items")
-      .select("id, name, unit, hsn_code, opening_stock_qty, opening_stock_rate_paise, reorder_level")
-      .eq("company_id", activeCompanyId)
-      .order("name")
-      .then(({ data }) => setItems((data || []) as Item[]));
+    (async () => {
+      const data = await withCacheFallback<Item[]>(
+        async () => {
+          const { data } = await supabase
+            .from("items")
+            .select("id, name, unit, hsn_code, opening_stock_qty, opening_stock_rate_paise, reorder_level")
+            .eq("company_id", activeCompanyId)
+            .order("name");
+          return (data || []) as Item[];
+        },
+        async () => {
+          const rows = await readItems(activeCompanyId);
+          return (rows as any[]).map((i) => ({
+            id: String(i.id),
+            name: String(i.name ?? ""),
+            unit: String(i.unit ?? ""),
+            hsn_code: i.hsn_code ?? null,
+            opening_stock_qty: Number(i.opening_stock_qty ?? 0),
+            opening_stock_rate_paise: Number(i.opening_stock_rate_paise ?? 0),
+            reorder_level: Number(i.reorder_level ?? 0),
+          })) as Item[];
+        },
+      );
+      setItems(data);
+    })();
   }, [activeCompanyId]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("voucher_items")
-      .select("qty, rate_paise, taxable_paise, item_id, voucher_id, vouchers!inner(voucher_type, voucher_date, company_id)")
-      .eq("vouchers.company_id", activeCompanyId)
-      .lte("vouchers.voucher_date", to)
-      .then(({ data }) => setMoves((data || []) as unknown as ItemMove[]));
+    (async () => {
+      const data = await withCacheFallback<ItemMove[]>(
+        async () => {
+          const { data } = await supabase
+            .from("voucher_items")
+            .select("qty, rate_paise, taxable_paise, item_id, voucher_id, vouchers!inner(voucher_type, voucher_date, company_id)")
+            .eq("vouchers.company_id", activeCompanyId)
+            .lte("vouchers.voucher_date", to);
+          return (data || []) as unknown as ItemMove[];
+        },
+        async () => {
+          const [vouchers, viRows] = await Promise.all([
+            readVouchers(activeCompanyId),
+            readVoucherItemsForCompany(activeCompanyId),
+          ]);
+          const vById = new Map((vouchers as any[]).map((v) => [String(v.id), v]));
+          return (viRows as any[])
+            .map((vi) => {
+              const v = vById.get(String(vi.voucher_id));
+              if (!v) return null;
+              if (v.is_deleted === true) return null;
+              const date = String(v.voucher_date ?? "");
+              if (to && date > to) return null;
+              return {
+                qty: Number(vi.qty ?? 0),
+                rate_paise: Number(vi.rate_paise ?? 0),
+                taxable_paise: Number(vi.taxable_paise ?? 0),
+                item_id: String(vi.item_id ?? ""),
+                voucher_id: String(vi.voucher_id ?? ""),
+                vouchers: {
+                  voucher_type: String(v.voucher_type ?? ""),
+                  voucher_date: date,
+                  company_id: String(v.company_id ?? activeCompanyId),
+                },
+              } as ItemMove;
+            })
+            .filter(Boolean) as ItemMove[];
+        },
+      );
+      setMoves(data);
+    })();
   }, [activeCompanyId, to]);
+
 
   // Inward = purchase + credit_note (sales return) + manufacturing output (qty > 0)
   // Outward = sales + debit_note (purchase return) + manufacturing consumption (qty < 0)
