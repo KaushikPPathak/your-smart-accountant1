@@ -1,0 +1,187 @@
+// GSTR-1 export using the OFFICIAL GSTN Offline-Tool Excel template.
+// The template ships as a CDN asset (see src/assets/gstr1_template.xlsx.asset.json)
+// and every sheet — colours, drop-downs (data validations), summary formulas,
+// column widths, freeze panes — is preserved exactly. We ONLY inject data rows
+// starting at row 5 of each mapped sheet. Sheets we don't compute (amendments,
+// advances, e-commerce operator) are left blank but still delivered so the
+// workbook matches the GSTN template shape 1-for-1.
+
+import type { BuiltGstr1 } from "@/lib/gst-returns";
+import { saveExport } from "@/lib/desktop-save";
+import templateAsset from "@/assets/gstr1_template.xlsx.asset.json";
+
+// Map POS state code ("07") to the master-sheet POS label ("07-Delhi").
+// The GSTN template drop-down uses the "NN-State" form; using just "07"
+// would trigger data-validation warnings in Excel.
+const STATE_NAMES: Record<string, string> = {
+  "01":"Jammu & Kashmir","02":"Himachal Pradesh","03":"Punjab","04":"Chandigarh",
+  "05":"Uttarakhand","06":"Haryana","07":"Delhi","08":"Rajasthan","09":"Uttar Pradesh",
+  "10":"Bihar","11":"Sikkim","12":"Arunachal Pradesh","13":"Nagaland","14":"Manipur",
+  "15":"Mizoram","16":"Tripura","17":"Meghalaya","18":"Assam","19":"West Bengal",
+  "20":"Jharkhand","21":"Odisha","22":"Chhattisgarh","23":"Madhya Pradesh","24":"Gujarat",
+  "25":"Daman & Diu","26":"Dadra & Nagar Haveli and Daman & Diu","27":"Maharashtra",
+  "28":"Andhra Pradesh (Old)","29":"Karnataka","30":"Goa","31":"Lakshadweep",
+  "32":"Kerala","33":"Tamil Nadu","34":"Puducherry","35":"Andaman & Nicobar Islands",
+  "36":"Telangana","37":"Andhra Pradesh","38":"Ladakh","96":"Other Country","97":"Other Territory",
+};
+const posLabel = (code: string | number): string => {
+  const s = String(code ?? "").padStart(2, "0");
+  const name = STATE_NAMES[s];
+  return name ? `${s}-${name}` : s;
+};
+
+const NIL_DESC: Record<string, string> = {
+  INTRB2B:  "Inter-State supplies to registered persons",
+  INTRAB2B: "Intra-State supplies to registered persons",
+  INTRB2C:  "Inter-State supplies to unregistered persons",
+  INTRAB2C: "Intra-State supplies to unregistered persons",
+};
+
+export async function exportGstr1UsingOfficialTemplate(
+  g: BuiltGstr1,
+  fileName: string,
+  subFolder = "Reports",
+): Promise<void> {
+  const [{ default: ExcelJS }, res] = await Promise.all([
+    import("exceljs"),
+    fetch(templateAsset.url),
+  ]);
+  if (!res.ok) throw new Error(`Failed to fetch GSTR-1 template (${res.status})`);
+  const buf = await res.arrayBuffer();
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+
+  const writeRows = (sheetName: string, rows: (string | number)[][], startRow = 5) => {
+    const ws = wb.getWorksheet(sheetName);
+    if (!ws) return;
+    rows.forEach((row, i) => {
+      const r = ws.getRow(startRow + i);
+      row.forEach((v, c) => { r.getCell(c + 1).value = v as never; });
+      r.commit();
+    });
+  };
+
+  // ── b2b,sez,de ────────────────────────────────────────────────
+  const b2bRows: (string | number)[][] = [];
+  for (const inv of g.b2b) for (const it of inv.itms) {
+    b2bRows.push([
+      inv.ctin, "", inv.inum, inv.idt, inv.val, posLabel(inv.pos),
+      inv.rchrg, "", inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
+      "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
+    ]);
+  }
+  writeRows("b2b,sez,de", b2bRows);
+
+  // ── b2ba ──────────────────────────────────────────────────────
+  const b2baRows: (string | number)[][] = [];
+  for (const inv of g.b2ba) for (const it of inv.itms) {
+    b2baRows.push([
+      inv.ctin, "", inv.oinum, inv.oidt, inv.inum, inv.idt, inv.val,
+      posLabel(inv.pos), inv.rchrg, "", inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
+      "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
+    ]);
+  }
+  writeRows("b2ba", b2baRows);
+
+  // ── b2cl ──────────────────────────────────────────────────────
+  const b2clRows: (string | number)[][] = [];
+  for (const inv of g.b2cl) for (const it of inv.itms) {
+    b2clRows.push([inv.inum, inv.idt, inv.val, posLabel(inv.pos), "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, ""]);
+  }
+  writeRows("b2cl", b2clRows);
+
+  // ── b2cla ─────────────────────────────────────────────────────
+  const b2claRows: (string | number)[][] = [];
+  for (const inv of g.b2cla) for (const it of inv.itms) {
+    b2claRows.push([inv.oinum, inv.oidt, posLabel(inv.pos), inv.inum, inv.idt, inv.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, ""]);
+  }
+  writeRows("b2cla", b2claRows);
+
+  // ── b2cs ──────────────────────────────────────────────────────
+  const b2csRows: (string | number)[][] = [];
+  for (const g2 of g.b2cs) b2csRows.push(["OE", posLabel(g2.pos), "", g2.rt, g2.txval, g2.csamt, ""]);
+  writeRows("b2cs", b2csRows);
+
+  // ── cdnr ──────────────────────────────────────────────────────
+  const cdnrRows: (string | number)[][] = [];
+  for (const n of g.cdnr) for (const it of n.itms) {
+    const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
+    cdnrRows.push([
+      n.ctin, "", n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos), n.rchrg, supTy,
+      n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
+    ]);
+  }
+  writeRows("cdnr", cdnrRows);
+
+  // ── cdnra ─────────────────────────────────────────────────────
+  const cdnraRows: (string | number)[][] = [];
+  for (const n of g.cdnra) for (const it of n.itms) {
+    const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
+    cdnraRows.push([
+      n.ctin, "", n.ont_num, n.ont_dt, n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos),
+      n.rchrg, supTy, n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
+    ]);
+  }
+  writeRows("cdnra", cdnraRows);
+
+  // ── cdnur ─────────────────────────────────────────────────────
+  const cdnurRows: (string | number)[][] = [];
+  for (const n of g.cdnur) for (const it of n.itms) {
+    cdnurRows.push([n.typ, n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos), n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt]);
+  }
+  writeRows("cdnur", cdnurRows);
+
+  // ── exp ───────────────────────────────────────────────────────
+  const expRows: (string | number)[][] = [];
+  for (const e of g.exp) for (const it of e.itms) {
+    expRows.push([
+      e.exp_typ === "WPAY" ? "WPAY" : "WOPAY",
+      e.inum, e.idt, e.val,
+      e.sbpcode || "", e.sbnum || "", e.sbdt || "",
+      it.rt, it.txval, it.csamt,
+    ]);
+  }
+  writeRows("exp", expRows);
+
+  // ── exemp (Nil rated / Exempted / Non-GST) ────────────────────
+  // The GSTN template expects the 4 fixed descriptions. Aggregate by sply_ty.
+  const nilByTy = new Map<string, { nil: number; exp: number; ngs: number }>();
+  for (const n of g.nil) {
+    const cur = nilByTy.get(n.sply_ty) ?? { nil: 0, exp: 0, ngs: 0 };
+    cur.nil += n.nil_amt; cur.exp += n.expt_amt; cur.ngs += n.ngsup_amt;
+    nilByTy.set(n.sply_ty, cur);
+  }
+  const exempOrder: (keyof typeof NIL_DESC)[] = ["INTRB2B", "INTRAB2B", "INTRB2C", "INTRAB2C"];
+  const exempRows: (string | number)[][] = exempOrder.map((k) => {
+    const v = nilByTy.get(k) ?? { nil: 0, exp: 0, ngs: 0 };
+    return [NIL_DESC[k], v.nil, v.exp, v.ngs];
+  });
+  writeRows("exemp", exempRows);
+
+  // ── hsn(b2b) ──────────────────────────────────────────────────
+  const hsnB2B: (string | number)[][] = g.hsn_b2b.map((h) => [
+    h.hsn_sc, h.desc, h.uqc, h.qty, h.val, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt,
+  ]);
+  writeRows("hsn(b2b)", hsnB2B);
+
+  // ── hsn(b2c) ──────────────────────────────────────────────────
+  const hsnB2C: (string | number)[][] = g.hsn_b2c.map((h) => [
+    h.hsn_sc, h.desc, h.uqc, h.qty, h.val, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt,
+  ]);
+  writeRows("hsn(b2c)", hsnB2C);
+
+  // ── docs ──────────────────────────────────────────────────────
+  const docsRows: (string | number)[][] = g.docs.map((d) => [
+    d.doc_typ, d.from, d.to, d.totnum, d.cancel,
+  ]);
+  writeRows("docs", docsRows);
+
+  const out = await wb.xlsx.writeBuffer();
+  await saveExport({
+    subFolder,
+    fileName,
+    contents: out as ArrayBuffer,
+    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+}
