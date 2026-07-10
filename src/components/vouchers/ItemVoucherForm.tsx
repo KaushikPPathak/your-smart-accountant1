@@ -742,6 +742,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     isPurchaseSide,
     itcClass,
     itcEligible,
+    supplyNature,
   ]);
 
   const save = useCallback(() => {
