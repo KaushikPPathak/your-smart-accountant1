@@ -260,12 +260,18 @@ function ProfitLoss() {
               {
                 side: dr,
                 buckets: expenseBuckets,
-                extras: profit > 0 ? [{ group: "Result", name: surplusLabel, valuePaise: profit }] : [],
+                extras: [
+                  ...(tradingGp < 0 ? [{ group: "Trading", name: "Gross Loss b/d", valuePaise: -tradingGp }] : []),
+                  ...(profit > 0 ? [{ group: "Result", name: surplusLabel, valuePaise: profit }] : []),
+                ],
               },
               {
                 side: cr,
                 buckets: incomeBuckets,
-                extras: profit < 0 ? [{ group: "Result", name: deficitLabel, valuePaise: -profit }] : [],
+                extras: [
+                  ...(tradingGp > 0 ? [{ group: "Trading", name: "Gross Profit b/d", valuePaise: tradingGp }] : []),
+                  ...(profit < 0 ? [{ group: "Result", name: deficitLabel, valuePaise: -profit }] : []),
+                ],
               },
             ]}
           />
