@@ -18,6 +18,11 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { sortEntriesByVoucherAsc } from "@/lib/voucher-sort";
 import { toast } from "sonner";
+import {
+  readLedgers,
+  readVoucherEntriesWithVouchers,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/brs")({
   head: () => ({ meta: [{ title: "Bank Reconciliation (BRS) — Reports" }] }),
