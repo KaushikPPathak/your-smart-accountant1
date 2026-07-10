@@ -56,11 +56,10 @@ First build takes 10–25 minutes (Rust compiles everything). Subsequent builds 
 When the build finishes, the installers are here:
 
 ```
-src-tauri\target\release\bundle\nsis\SmartAccountant_0.1.0_x64-setup.exe
-src-tauri\target\release\bundle\msi\SmartAccountant_0.1.0_x64_en-US.msi
+src-tauri\target\release\bundle\nsis\SmartAccountant_0.2.0_x64-setup.exe
 ```
 
-Double-click either one to install. Use **NSIS (.exe)** for a normal user install (no admin needed); use **MSI** if you want to push it via group policy.
+Double-click the **NSIS (.exe)** installer. The project intentionally produces only one Windows installer type so an old MSI and a new EXE cannot remain installed side by side and open different app versions.
 
 After install, launch **Smart Accountant** from the Start menu. It will open in its own window and connect to the same Lovable Cloud backend as the web app.
 
@@ -75,7 +74,9 @@ npm ci
 npm run tauri build
 ```
 
-Then re-run the new installer over the old one — your data is in the cloud backend and in `%LOCALAPPDATA%\com.smartaccountant.app\`, both untouched by re-install.
+Then re-run the new versioned `.exe` over the old one. Your business data remains in `%LOCALAPPDATA%\com.smartaccountant.app\` and is untouched by re-install.
+
+If the old app opens after updating, close it and check Windows **Installed Apps** for more than one SmartAccountant entry. Uninstall all app entries, keep `%LOCALAPPDATA%\com.smartaccountant.app\` untouched, and install the newest `.exe` once.
 
 ---
 

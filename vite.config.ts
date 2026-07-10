@@ -3,8 +3,12 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
+import { readFileSync } from "node:fs";
 
 const isTauri = Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_PLATFORM);
+const desktopVersion = isTauri
+  ? String(JSON.parse(readFileSync(new URL("./src-tauri/tauri.conf.json", import.meta.url), "utf8")).version)
+  : null;
 
 const pwaPlugins = isTauri
   ? []
@@ -86,6 +90,11 @@ const sharedBuild = {
 
 export default defineConfig({
   base: isTauri ? "./" : "/",
+  // Keep the frontend's update-safety marker identical to the native bundle
+  // version stamped by CI. Previously every desktop build reported 0.0.0.
+  define: desktopVersion
+    ? { "import.meta.env.VITE_APP_VERSION": JSON.stringify(desktopVersion) }
+    : undefined,
   clearScreen: false,
   envPrefix: ["VITE_", "TAURI_ENV_"],
   plugins: [

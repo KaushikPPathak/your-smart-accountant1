@@ -1,10 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { getChannel, setChannel, type ReleaseChannel } from "@/lib/rollout";
 
 export function ReleaseChannelPicker() {
   const [channel, setChannelState] = useState<ReleaseChannel>(() => getChannel());
+  const [installedVersion, setInstalledVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    void import("@tauri-apps/api/app")
+      .then(({ getVersion }) => getVersion())
+      .then(setInstalledVersion)
+      .catch(() => setInstalledVersion(import.meta.env.VITE_APP_VERSION || null));
+  }, []);
 
   function pick(next: ReleaseChannel) {
     if (next === channel) return;
@@ -12,8 +21,8 @@ export function ReleaseChannelPicker() {
     setChannelState(next);
     toast.success(
       next === "beta"
-        ? "Switched to Beta — you will get new features first."
-        : "Switched to Stable — only released features from now on.",
+        ? "Beta features enabled for this installation."
+        : "Stable features enabled for this installation.",
     );
   }
 
@@ -34,7 +43,8 @@ export function ReleaseChannelPicker() {
         Beta
       </Button>
       <span className="ml-2 text-xs text-muted-foreground">
-        Current: <strong>{channel}</strong>
+        Channel: <strong>{channel}</strong>
+        {installedVersion ? <> · Installed: <strong>v{installedVersion}</strong></> : null}
       </span>
     </div>
   );
