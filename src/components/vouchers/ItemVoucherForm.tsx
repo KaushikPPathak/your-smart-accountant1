@@ -684,6 +684,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setMiscPreGst("0");
     setMiscPostGst("0");
     setSundries([]);
+    setSupplyNature("taxable");
     setFocusedLine(0);
     setSavedTick((n) => n + 1);
     if (draftKey) {
