@@ -19,6 +19,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Scale } from "lucide-react";
 import { TaxAuditPanel } from "@/components/reports/TaxAuditPanel";
+import { supabase } from "@/integrations/supabase/client";
+import { readLedgers, readItems, withCacheFallback } from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
   head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
