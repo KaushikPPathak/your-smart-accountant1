@@ -107,19 +107,31 @@ function ProfitLoss() {
     })();
   }, [activeCompanyId, inventoryEnabled]);
 
-  const expenseTypes = inventoryEnabled
+  // In "inventory enabled" mode, direct income/expense normally flow through
+  // the Trading A/c and carry into P&L as Gross Profit / Loss. But if the user
+  // has direct-income/direct-expense ledgers without a matching stock_in_hand
+  // ledger (e.g. they enabled Inventory late, or never set opening stock), the
+  // Trading Account may end up with a lopsided balance and NOTHING would reach
+  // the P&L. To avoid silently dropping activity, we still include the
+  // direct-income/direct-expense buckets on P&L when inventoryEnabled is true
+  // AND the app has never posted a stock_in_hand movement (openingStock=0 and
+  // closingStock=0). This mirrors what "inventory disabled" does.
+  const hasStock = openingStock !== 0 || closingStock !== 0;
+  const forcePLDirect = inventoryEnabled && !hasStock;
+  const expenseTypes = inventoryEnabled && hasStock
     ? new Set(["expense_indirect"])
     : new Set(["expense_direct", "expense_indirect"]);
-  const incomeTypes = inventoryEnabled
+  const incomeTypes = inventoryEnabled && hasStock
     ? new Set(["income_indirect"])
     : new Set(["income_direct", "income_indirect"]);
 
   // Direct income/expense ledgers default to TRADING-section groups
   // (SALES_ACCOUNTS / PURCHASE_ACCOUNTS / DIRECT_EXPENSES / DIRECT_INCOMES).
-  // When inventory is off, the Trading A/c is not the primary flow, so we
-  // must also pull those TRADING buckets into the P&L — otherwise Job Work
-  // Income and Factory Wages get silently dropped by groupBalances().
-  const plSections: ("PL" | "TRADING")[] = inventoryEnabled ? ["PL"] : ["PL", "TRADING"];
+  // When inventory is off (or forcePLDirect), pull those TRADING buckets into
+  // the P&L — otherwise Sales / Job Work Income / Factory Wages get silently
+  // dropped by groupBalances().
+  const plSections: ("PL" | "TRADING")[] =
+    inventoryEnabled && hasStock ? ["PL"] : ["PL", "TRADING"];
   const expenseBuckets = useMemo(
     () => plSections.flatMap((sec) => groupBalances(
       balances.filter((b) => expenseTypes.has(b.type)),
@@ -127,7 +139,7 @@ function ProfitLoss() {
       (b) => b.closing_paise,
     )),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balances, inventoryEnabled],
+    [balances, inventoryEnabled, hasStock],
   );
   const incomeBuckets = useMemo(
     () => plSections.flatMap((sec) => groupBalances(
@@ -136,7 +148,7 @@ function ProfitLoss() {
       (b) => -b.closing_paise,
     )),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balances, inventoryEnabled],
+    [balances, inventoryEnabled, hasStock],
   );
 
   const goLedger = (id: string) =>
@@ -145,11 +157,10 @@ function ProfitLoss() {
   const exp = groupedTRows(expenseBuckets, goLedger);
   const inc = groupedTRows(incomeBuckets, goLedger);
 
-  // Trading Gross Profit / Gross Loss carry — only when inventoryEnabled (so
-  // Trading A/c is the primary flow for Sales / Purchase / Direct Expenses).
-  // Without this the P&L stays empty when all activity is trading activity.
+  // Trading Gross Profit / Gross Loss carry — only when the Trading A/c is
+  // the primary flow (inventoryEnabled AND stock ledgers exist).
   const tradingGp = useMemo(() => {
-    if (!inventoryEnabled) return 0;
+    if (!inventoryEnabled || !hasStock) return 0;
     const directIncome = balances
       .filter((b) => b.type === "income_direct")
       .reduce((s, b) => s + -b.closing_paise, 0);
@@ -157,7 +168,8 @@ function ProfitLoss() {
       .filter((b) => b.type === "expense_direct")
       .reduce((s, b) => s + b.closing_paise, 0);
     return directIncome + closingStock - (directExpense + openingStock);
-  }, [balances, inventoryEnabled, openingStock, closingStock]);
+  }, [balances, inventoryEnabled, hasStock, openingStock, closingStock]);
+  void forcePLDirect;
 
   const profit = inc.totalPaise - exp.totalPaise + tradingGp;
 
