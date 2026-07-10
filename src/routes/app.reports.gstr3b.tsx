@@ -92,16 +92,52 @@ function GSTR3BPage() {
         <CardContent className="p-3 print:hidden">
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Return period</Label>
-              <Select value={month} onValueChange={setMonth}>
-                <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+              <Label className="text-xs">Filing frequency</Label>
+              <Select value={cadence} onValueChange={(v) => setCadence(v as "monthly" | "quarterly")}>
+                <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[fyYear, fyYear + 1].flatMap((y) => monthsOfYear(y)).map((m) => (
-                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                  ))}
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly (QRMP)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {cadence === "monthly" ? (
+              <div className="space-y-1">
+                <Label className="text-xs">Return period</Label>
+                <Select value={month} onValueChange={setMonth}>
+                  <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[fyYear, fyYear + 1].flatMap((y) => monthsOfYear(y)).map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-xs">Year</Label>
+                  <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+                    <SelectTrigger className="h-9 w-[120px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[fyYear - 1, fyYear, fyYear + 1].map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Quarter</Label>
+                  <Select value={String(quarter)} onValueChange={(v) => setQuarter(Number(v) as 1 | 2 | 3 | 4)}>
+                    <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Q1 (Apr–Jun)</SelectItem>
+                      <SelectItem value="2">Q2 (Jul–Sep)</SelectItem>
+                      <SelectItem value="3">Q3 (Oct–Dec)</SelectItem>
+                      <SelectItem value="4">Q4 (Jan–Mar)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
             <div className="ml-auto flex gap-2">
               <Button variant="outline" size="sm" disabled={!built}
                 onClick={async () => {
