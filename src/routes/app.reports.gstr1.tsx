@@ -104,7 +104,7 @@ function GSTR1Page() {
   const fileBase = `GSTR1_${company?.gstin || "GSTIN"}_${period.fp}${iffMode ? "_IFF" : ""}`;
 
   const onDownloadJson = () => built && downloadJson(`${fileBase}.json`, gstr1ToJson(built));
-  const onDownloadExcel = () => built && downloadXlsx(`${fileBase}.xlsx`, gstr1ToXlsxSheets(built));
+  const onDownloadExcel = () => { void (built && exportGstr1UsingOfficialTemplate(built, `${fileBase}.xlsx`)); };
 
   const exportQuarter = (iff: boolean) => {
     if (!company) return;
@@ -118,7 +118,7 @@ function GSTR1Page() {
       iffOnly: iff,
     });
     const name = `GSTR1_${company.gstin || "GSTIN"}_${period.fp}${iff ? "_IFF_B2B_CDNR" : "_Quarterly_Full"}.xlsx`;
-    downloadXlsx(name, gstr1ToXlsxSheets(b));
+    void exportGstr1UsingOfficialTemplate(b, name);
   };
 
   return (
