@@ -179,11 +179,22 @@ function GSTR1Page() {
               </>
             )}
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
               <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
-              <Button variant="outline" size="sm" onClick={onDownloadExcel} disabled={!built}>
-                <FileSpreadsheet className="mr-1 h-4 w-4" /> Offline Tool Excel
-              </Button>
+              {cadence === "quarterly" ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => exportQuarter(false)} disabled={!company}>
+                    <FileSpreadsheet className="mr-1 h-4 w-4" /> Full Quarter (3 months)
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => exportQuarter(true)} disabled={!company}>
+                    <FileSpreadsheet className="mr-1 h-4 w-4" /> IFF only (B2B + CDNR)
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" size="sm" onClick={onDownloadExcel} disabled={!built}>
+                  <FileSpreadsheet className="mr-1 h-4 w-4" /> Offline Tool Excel
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={onDownloadJson} disabled={!built}>
                 <FileJson className="mr-1 h-4 w-4" /> GSTN JSON
               </Button>
