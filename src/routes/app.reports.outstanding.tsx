@@ -13,6 +13,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { sortVouchersAsc } from "@/lib/voucher-sort";
+import {
+  readVouchers,
+  readLedgers,
+  readBillAllocations,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/outstanding")({
   head: () => ({ meta: [{ title: "Bill-by-Bill Outstanding — Reports" }] }),
@@ -47,21 +53,55 @@ function OutstandingPage() {
     if (!activeCompanyId) return;
     setLoading(true);
     const type = mode === "receivables" ? "sales" : "purchase";
-    Promise.all([
-      supabase.from("vouchers")
-        .select("id, voucher_number, voucher_date, due_date, total_paise, party_ledger_id, voucher_type, ledgers:party_ledger_id(name)")
-        .eq("company_id", activeCompanyId)
-        .eq("voucher_type", type)
-        .lte("voucher_date", asOf)
-        .order("voucher_date").order("voucher_number", { ascending: true }),
-      supabase.from("bill_allocations")
-        .select("invoice_voucher_id, amount_paise")
-        .eq("company_id", activeCompanyId),
-    ]).then(([v, a]) => {
-      setInvs(sortVouchersAsc((v.data || []) as unknown as InvRow[]));
-      setAllocs((a.data || []) as AllocRow[]);
+    withCacheFallback<{ invs: InvRow[]; allocs: AllocRow[] }>(
+      async () => {
+        const [v, a] = await Promise.all([
+          supabase.from("vouchers")
+            .select("id, voucher_number, voucher_date, due_date, total_paise, party_ledger_id, voucher_type, ledgers:party_ledger_id(name)")
+            .eq("company_id", activeCompanyId)
+            .eq("voucher_type", type)
+            .lte("voucher_date", asOf)
+            .order("voucher_date").order("voucher_number", { ascending: true }),
+          supabase.from("bill_allocations")
+            .select("invoice_voucher_id, amount_paise")
+            .eq("company_id", activeCompanyId),
+        ]);
+        return {
+          invs: (v.data || []) as unknown as InvRow[],
+          allocs: (a.data || []) as AllocRow[],
+        };
+      },
+      async () => {
+        const [vouchers, ledgers, allocRows] = await Promise.all([
+          readVouchers(activeCompanyId, { voucher_type: type, to: asOf }),
+          readLedgers(activeCompanyId),
+          readBillAllocations(activeCompanyId),
+        ]);
+        const ledgerById = new Map((ledgers as any[]).map((l) => [String(l.id), l]));
+        return {
+          invs: (vouchers as any[]).map((v) => ({
+            id: String(v.id),
+            voucher_number: String(v.voucher_number ?? ""),
+            voucher_date: String(v.voucher_date ?? ""),
+            due_date: v.due_date ?? null,
+            total_paise: Number(v.total_paise || 0),
+            party_ledger_id: v.party_ledger_id ?? null,
+            voucher_type: String(v.voucher_type ?? ""),
+            ledgers: v.party_ledger_id
+              ? { name: ledgerById.get(String(v.party_ledger_id))?.name ?? "" }
+              : null,
+          })) as InvRow[],
+          allocs: (allocRows as any[]).map((a) => ({
+            invoice_voucher_id: String(a.invoice_voucher_id),
+            amount_paise: Number(a.amount_paise || 0),
+          })),
+        };
+      },
+    ).then(({ invs, allocs }) => {
+      setInvs(sortVouchersAsc(invs));
+      setAllocs(allocs);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [activeCompanyId, mode, asOf]);
 
   const rows = useMemo(() => {
