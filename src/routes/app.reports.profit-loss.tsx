@@ -145,15 +145,32 @@ function ProfitLoss() {
   const exp = groupedTRows(expenseBuckets, goLedger);
   const inc = groupedTRows(incomeBuckets, goLedger);
 
-  const profit = inc.totalPaise - exp.totalPaise;
+  // Trading Gross Profit / Gross Loss carry — only when inventoryEnabled (so
+  // Trading A/c is the primary flow for Sales / Purchase / Direct Expenses).
+  // Without this the P&L stays empty when all activity is trading activity.
+  const tradingGp = useMemo(() => {
+    if (!inventoryEnabled) return 0;
+    const directIncome = balances
+      .filter((b) => b.type === "income_direct")
+      .reduce((s, b) => s + -b.closing_paise, 0);
+    const directExpense = balances
+      .filter((b) => b.type === "expense_direct")
+      .reduce((s, b) => s + b.closing_paise, 0);
+    return directIncome + closingStock - (directExpense + openingStock);
+  }, [balances, inventoryEnabled, openingStock, closingStock]);
+
+  const profit = inc.totalPaise - exp.totalPaise + tradingGp;
 
   const expenseRows: TRow[] = [...exp.rows];
-  const incomeRows: TRow[] = [...inc.rows];
+  const incomeRows: TRow[] = [];
+  if (tradingGp > 0) incomeRows.push({ label: "By Gross Profit b/d", amount: formatINR(tradingGp), emphasis: "bold" });
+  if (tradingGp < 0) expenseRows.unshift({ label: "To Gross Loss b/d", amount: formatINR(-tradingGp), emphasis: "bold" });
+  incomeRows.push(...inc.rows);
   if (profit > 0) expenseRows.push({ label: surplusLabel, amount: formatINR(profit), emphasis: "bold" });
   if (profit < 0) incomeRows.push({ label: deficitLabel, amount: formatINR(-profit), emphasis: "bold" });
 
-  const grandLeft = exp.totalPaise + Math.max(0, profit);
-  const grandRight = inc.totalPaise + Math.max(0, -profit);
+  const grandLeft = exp.totalPaise + Math.max(0, -tradingGp) + Math.max(0, profit);
+  const grandRight = inc.totalPaise + Math.max(0, tradingGp) + Math.max(0, -profit);
 
   // Exports
   const drExp = groupedExportRows(expenseBuckets, isIE ? "" : "To ");
