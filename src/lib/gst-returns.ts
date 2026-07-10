@@ -216,9 +216,11 @@ export const monthRange = (yyyymm: string): { from: string; to: string } => {
 };
 
 export const quarterRange = (year: number, q: 1 | 2 | 3 | 4): { from: string; to: string } => {
-  const startMonth = (q - 1) * 3 + 1;
-  const from = `${year}-${String(startMonth).padStart(2, "0")}-01`;
+  // Indian FY quarters: Q1 Apr–Jun, Q2 Jul–Sep, Q3 Oct–Dec, Q4 Jan–Mar (of `year`).
+  // `year` is treated as the calendar year that contains the quarter's months.
+  const startMonth = q === 1 ? 4 : q === 2 ? 7 : q === 3 ? 10 : 1;
   const endMonth = startMonth + 2;
+  const from = `${year}-${String(startMonth).padStart(2, "0")}-01`;
   const last = new Date(year, endMonth, 0).getDate();
   const to = `${year}-${String(endMonth).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
   return { from, to };
