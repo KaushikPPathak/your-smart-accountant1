@@ -459,7 +459,17 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
   };
 
   for (const v of sales) {
-    const sn = v.supply_nature;
+    let sn = v.supply_nature;
+
+    // Auto-classify: if user didn't mark supply_nature but every line is 0% GST
+    // with zero tax, treat the whole voucher as nil-rated so it lands in the
+    // GSTR-1 "nil / exempt / non-GST" sheet instead of B2B / B2CS.
+    if (sn === "taxable" && v.voucher_items.length > 0) {
+      const allZero = v.voucher_items.every(
+        (it) => (it.gst_rate || 0) === 0 && (it.cgst_paise || 0) === 0 && (it.sgst_paise || 0) === 0 && (it.igst_paise || 0) === 0,
+      );
+      if (allZero) sn = "nil_rated";
+    }
 
     if (sn === "nil_rated" || sn === "exempt" || sn === "non_gst") {
       accNil(v);
