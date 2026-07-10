@@ -522,6 +522,38 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setLines((cur) => (cur.length === 1 ? cur : cur.filter((_, i) => i !== idx)));
   }, []);
 
+  /**
+   * Proportionally scale every line's rate so the bill grand total matches
+   * `targetRupees`. Misc, sundries and round-off are subtracted first, so the
+   * scaler only touches item lines. Used by the "Fit Grand Total" input to
+   * back-solve rates for multi-item bills.
+   */
+  const fitGrandTotal = useCallback((targetRupees: number) => {
+    if (!isFinite(targetRupees) || targetRupees <= 0) return;
+    const targetPaise = Math.round(targetRupees * 100);
+    const extrasPaise = miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise + sundriesNetPaise + roundOffPaise;
+    const targetLinesPaise = targetPaise - extrasPaise;
+    if (targetLinesPaise <= 0) {
+      toast.error("Target is less than the extras (misc / sundries) already added");
+      return;
+    }
+    const currentLinesPaise = rawTotals.total_paise;
+    if (currentLinesPaise <= 0) {
+      toast.error("Enter qty and rate on at least one line before fitting the total");
+      return;
+    }
+    const k = targetLinesPaise / currentLinesPaise;
+    setLines((cur) => cur.map((l) => {
+      const r = parseFloat(l.rate) || 0;
+      if (r <= 0) return l;
+      const scaled = r * k;
+      // Keep up to 4 decimals, strip trailing zeros safely.
+      const s = scaled.toFixed(4).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+      return { ...l, rate: s };
+    }));
+    toast.success(`Rates scaled by ×${k.toFixed(4)} to fit ₹${targetRupees.toFixed(2)}`);
+  }, [miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, sundriesNetPaise, roundOffPaise, rawTotals.total_paise]);
+
   /** Focus the Item Combo trigger of the row at `idx` (after paint). */
   const focusRowItemCombo = useCallback((idx: number) => {
     requestAnimationFrame(() => {
