@@ -70,6 +70,7 @@
     "date-fns": "^4.1.0",
     "dexie": "^4.4.2",
     "embla-carousel-react": "^8.6.0",
+    "exceljs": "^4.4.0",
     "fast-xml-parser": "^5.7.2",
     "fflate": "^0.8.2",
     "headroom-ai": "^0.22.4",
