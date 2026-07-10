@@ -228,6 +228,7 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
         place_of_supply_code: snap.placeOfSupply || null,
         itc_class: snap.itcClass,
         itc_eligible: snap.itcEligible,
+        supply_nature: snap.supplyNature ?? "taxable",
         original_voucher_id: snap.originalVoucherId,
         is_deleted: false,
         is_synced: true,
