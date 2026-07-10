@@ -48,6 +48,8 @@ function ProfitLoss() {
   const [taxView, setTaxView] = useState(false);
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
   const [excludedClosingEntries, setExcludedClosingEntries] = useState(0);
+  const [openingStock, setOpeningStock] = useState(0);
+  const [closingStock, setClosingStock] = useState(0);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -58,6 +60,52 @@ function ProfitLoss() {
       setExcludedClosingEntries(result.excludedClosingTransferEntries);
     });
   }, [activeCompanyId, from, to]);
+
+  // Opening / Closing stock for gross-profit carry from Trading A/c.
+  useEffect(() => {
+    if (!activeCompanyId || !inventoryEnabled) return;
+    (async () => {
+      try {
+        const { ledgers, items } = await withCacheFallback(
+          async () => {
+            const [sLed, itms] = await Promise.all([
+              supabase
+                .from("ledgers")
+                .select("opening_balance_paise, opening_balance_is_debit")
+                .eq("company_id", activeCompanyId)
+                .eq("type", "stock_in_hand"),
+              supabase
+                .from("items")
+                .select("opening_stock_qty, opening_stock_rate_paise")
+                .eq("company_id", activeCompanyId),
+            ]);
+            return { ledgers: (sLed.data || []) as any[], items: (itms.data || []) as any[] };
+          },
+          async () => {
+            const [ledgers, items] = await Promise.all([readLedgers(activeCompanyId), readItems(activeCompanyId)]);
+            return {
+              ledgers: (ledgers as any[]).filter((l) => l.type === "stock_in_hand"),
+              items: items as any[],
+            };
+          },
+        );
+        const ledOp = (ledgers as any[]).reduce(
+          (s, l) => s + (l.opening_balance_is_debit ? 1 : -1) * Number(l.opening_balance_paise || 0),
+          0,
+        );
+        const itemOp = (items as any[]).reduce(
+          (s, it) => s + Math.round(Number(it.opening_stock_qty || 0) * Number(it.opening_stock_rate_paise || 0)),
+          0,
+        );
+        const stk = ledOp || itemOp;
+        setOpeningStock(stk);
+        setClosingStock(stk);
+      } catch {
+        setOpeningStock(0);
+        setClosingStock(0);
+      }
+    })();
+  }, [activeCompanyId, inventoryEnabled]);
 
   const expenseTypes = inventoryEnabled
     ? new Set(["expense_indirect"])
