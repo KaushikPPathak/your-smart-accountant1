@@ -12,7 +12,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { exportGstr1UsingOfficialTemplate } from "@/lib/gstr1-template-export";
 import {
-  buildGstr1, fetchVouchers, fetchCompanyMeta, gstr1ToJson, gstr1ToXlsxSheets,
+  buildGstr1, fetchVouchers, fetchCompanyMeta, gstr1ToJson,
   monthRange, quarterRange, periodFP, downloadJson, validateGstr1,
   type VoucherRow, type CompanyMeta, type BuiltGstr1,
 } from "@/lib/gst-returns";
