@@ -990,6 +990,29 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 />
               </div>
             </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">
+              <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Supply Nature
+              </Label>
+              <Select value={supplyNature} onValueChange={(v) => setSupplyNature(v as typeof supplyNature)}>
+                <SelectTrigger className="h-8 w-[220px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="taxable">Taxable</SelectItem>
+                  <SelectItem value="nil_rated">Nil-rated</SelectItem>
+                  <SelectItem value="exempt">Exempt</SelectItem>
+                  <SelectItem value="non_gst">Non-GST</SelectItem>
+                  <SelectItem value="zero_rated_wp">Zero-rated (with payment / LUT-WPAY)</SelectItem>
+                  <SelectItem value="zero_rated_wop">Zero-rated (without payment / LUT-WOPAY)</SelectItem>
+                </SelectContent>
+              </Select>
+              {supplyNature !== "taxable" && (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                  Will be reported under GSTR-1 {supplyNature === "nil_rated" || supplyNature === "exempt" || supplyNature === "non_gst" ? "Nil / Exempt / Non-GST" : "Exports"} section
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
 
