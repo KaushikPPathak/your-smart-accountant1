@@ -105,12 +105,99 @@ function VoucherEditPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+
+    // Local-only / offline path: read directly from the on-device cache.
+    // The cloud table is empty in local-only mode, so a supabase.from() call
+    // would return "no rows" and bounce the user back to the list — which is
+    // exactly the bug being reported ("Voucher not found" on edit).
+    const [{ isOnlineNow }, { isLocalOnlyMode }, cacheRead] = await Promise.all([
+      import("@/lib/offline/online-status"),
+      import("@/lib/local-only-mode"),
+      import("@/lib/offline/cache-read"),
+    ]);
+    const preferLocal = isLocalOnlyMode() || !isOnlineNow();
+
+    const applyLocal = async (): Promise<boolean> => {
+      const { offlineDb } = await import("@/lib/offline/db");
+      const vRowRaw = await offlineDb.cache_vouchers.where("id").equals(voucherId).first();
+      if (!vRowRaw) return false;
+      const vRow = vRowRaw as unknown as Voucher;
+      const partyId = vRow.party_ledger_id;
+      const [itemRows, entryRows, masterItems, masterLedgers, partyRow] = await Promise.all([
+        cacheRead.readVoucherItems(voucherId),
+        cacheRead.readVoucherEntries(voucherId),
+        cacheRead.readItems(vRow.company_id),
+        cacheRead.readLedgers(vRow.company_id),
+        partyId ? offlineDb.cache_ledgers.where("id").equals(partyId).first() : Promise.resolve(null),
+      ]);
+      setVoucher(vRow);
+      setPartyName((partyRow as unknown as { name?: string } | null)?.name ?? "");
+      setItemLines(
+        (itemRows as unknown as { id: string; item_id: string; description: string | null; qty: number; rate_paise: number; discount_paise: number; gst_rate: number; line_no?: number }[])
+          .slice()
+          .sort((a, b) => (a.line_no ?? 0) - (b.line_no ?? 0))
+          .map((r) => ({
+            id: r.id,
+            item_id: r.item_id,
+            description: r.description ?? "",
+            qty: String(r.qty),
+            rate: paiseToRupees(r.rate_paise).toString(),
+            discount: paiseToRupees(r.discount_paise).toString(),
+            gst_rate: String(r.gst_rate),
+          })),
+      );
+      setEntryLines(
+        (entryRows as unknown as { id: string; ledger_id: string; debit_paise: number; credit_paise: number; narration: string | null; line_no?: number }[])
+          .slice()
+          .sort((a, b) => (a.line_no ?? 0) - (b.line_no ?? 0))
+          .map((r) => ({
+            id: r.id,
+            ledger_id: r.ledger_id,
+            debit: r.debit_paise ? paiseToRupees(r.debit_paise).toString() : "",
+            credit: r.credit_paise ? paiseToRupees(r.credit_paise).toString() : "",
+            narration: r.narration ?? "",
+          })),
+      );
+      setItems((masterItems as unknown as ItemOpt[]).filter((i) => (i as unknown as { is_active?: boolean }).is_active !== false));
+      const ledgerList = (masterLedgers as unknown as LedgerOpt[]).filter((l) => (l as unknown as { is_active?: boolean }).is_active !== false);
+      setLedgers(ledgerList);
+      const itcCls = (vRow as unknown as { itc_class?: string }).itc_class;
+      if (itcCls === "capital_goods") {
+        const pooledIds = new Set(
+          ledgerList
+            .filter((lg) => lg.type === "fixed_asset" && /^capital goods( a\/c)?$/i.test(lg.name.trim()))
+            .map((lg) => lg.id),
+        );
+        const entryLedgerIds = (entryRows as unknown as { ledger_id: string }[]).map((r) => r.ledger_id);
+        setHasPooledCapital(entryLedgerIds.some((id) => pooledIds.has(id)));
+      } else {
+        setHasPooledCapital(false);
+      }
+      return true;
+    };
+
+    if (preferLocal) {
+      try {
+        if (await applyLocal()) { setLoading(false); return; }
+      } catch (e) { console.error("local voucher load failed", e); }
+      // Fall through to cloud only if local produced nothing AND we're online.
+      if (!isOnlineNow()) {
+        toast.error("Voucher not found");
+        navigate({ to: "/app/vouchers" });
+        return;
+      }
+    }
+
     const { data: v, error } = await supabase
       .from("vouchers")
       .select("*, ledgers:party_ledger_id(name)")
       .eq("id", voucherId)
       .single();
     if (error || !v) {
+      // Last-chance fallback to local cache before bouncing out.
+      try {
+        if (await applyLocal()) { setLoading(false); return; }
+      } catch { /* ignore */ }
       toast.error("Voucher not found");
       navigate({ to: "/app/vouchers" });
       return;
@@ -148,8 +235,6 @@ function VoucherEditPage() {
     setItems((masterItems.data || []) as ItemOpt[]);
     const ledgerList = (masterLedgers.data || []) as LedgerOpt[];
     setLedgers(ledgerList);
-    // Detect legacy pooled "Capital Goods A/c" posting on this voucher so we
-    // can warn the user that saving will rebuild entries to per-item ledgers.
     const itcCls = (vRow as unknown as { itc_class?: string }).itc_class;
     if (itcCls === "capital_goods") {
       const pooledIds = new Set(
@@ -164,6 +249,7 @@ function VoucherEditPage() {
     }
     setLoading(false);
   }, [voucherId, navigate]);
+
 
   useEffect(() => { load(); }, [load]);
 
