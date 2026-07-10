@@ -228,6 +228,7 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
         place_of_supply_code: snap.placeOfSupply || null,
         itc_class: snap.itcClass,
         itc_eligible: snap.itcEligible,
+        supply_nature: snap.supplyNature ?? "taxable",
         original_voucher_id: snap.originalVoucherId,
         is_deleted: false,
         is_synced: true,
@@ -454,6 +455,7 @@ export interface ItemVoucherSnap {
   interstate: boolean;
   itcClass: "inputs" | "capital_goods" | "input_services" | "ineligible" | "na";
   itcEligible: boolean;
+  supplyNature?: "taxable" | "zero_rated_wp" | "zero_rated_wop" | "nil_rated" | "exempt" | "non_gst";
   originalVoucherId: string | null;
   totals: {
     subtotal_paise: number;
@@ -634,6 +636,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
     place_of_supply_code: snap.placeOfSupply || null,
     itc_class: snap.itcClass,
     itc_eligible: snap.itcEligible,
+    supply_nature: snap.supplyNature ?? "taxable",
     original_voucher_id: snap.originalVoucherId,
   };
 

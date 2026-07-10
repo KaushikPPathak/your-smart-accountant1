@@ -186,6 +186,9 @@ export type XlsxCell = string | number | XLSXType.CellObject;
 export interface XlsxSheet {
   name: string;
   rows: XlsxCell[][]; // first row may be header
+  /** 0-based row index of the header row to attach an auto-filter to.
+   *  Defaults to 0 (first row). Set to null to skip auto-filter for this sheet. */
+  autoFilterHeaderRow?: number | null;
 }
 
 export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = "Reports"): void {
@@ -204,13 +207,23 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
       const promoted = promoteRows(localized as unknown[][]) as XlsxCell[][];
       const sheetName = localizeExportText(s.name, lang);
       const ws = XLSX.utils.aoa_to_sheet(promoted);
-      // Compute reasonable column widths from header lengths
-      const header = promoted[0] ?? [];
+      // Compute column widths from the widest of the header row and its data
+      const headerRowIdx = s.autoFilterHeaderRow ?? 0;
+      const header = promoted[headerRowIdx] ?? promoted[0] ?? [];
       ws["!cols"] = header.map((cell) => {
         const text = typeof cell === "string" ? cell : (cell as XLSXType.CellObject)?.v ?? "";
         const len = String(text).length;
         return { wch: Math.max(10, Math.min(40, len + 4)) };
       });
+      // Attach an auto-filter (drop-down arrows) to the header row so users
+      // can sort/filter every column in Excel — matches the GST Offline Tool.
+      if (s.autoFilterHeaderRow !== null && header.length > 0) {
+        const lastCol = header.length - 1;
+        const lastRow = Math.max(headerRowIdx, promoted.length - 1);
+        const start = XLSX.utils.encode_cell({ r: headerRowIdx, c: 0 });
+        const end = XLSX.utils.encode_cell({ r: lastRow, c: lastCol });
+        ws["!autofilter"] = { ref: `${start}:${end}` };
+      }
       XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
     }
     const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;

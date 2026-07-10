@@ -157,6 +157,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     "inputs" | "capital_goods" | "input_services" | "ineligible" | "na"
   >(isPurchaseSide ? "inputs" : "na");
   const [itcEligible, setItcEligible] = useState<boolean>(true);
+  const [supplyNature, setSupplyNature] = useState<
+    "taxable" | "zero_rated_wp" | "zero_rated_wop" | "nil_rated" | "exempt" | "non_gst"
+  >("taxable");
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [miscPreGst, setMiscPreGst] = useState<string>("0");
   const [miscPostGst, setMiscPostGst] = useState<string>("0");
@@ -231,6 +234,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         roundOff: boolean;
         itcClass: typeof itcClass;
         itcEligible: boolean;
+        supplyNature: typeof supplyNature;
         lines: Line[];
         miscPreGst: string;
         miscPostGst: string;
@@ -243,6 +247,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if (typeof d.roundOff === "boolean") setRoundOff(d.roundOff);
       if (d.itcClass) setItcClass(d.itcClass);
       if (typeof d.itcEligible === "boolean") setItcEligible(d.itcEligible);
+      if (d.supplyNature) setSupplyNature(d.supplyNature);
       if (Array.isArray(d.lines) && d.lines.length > 0) setLines(d.lines);
       if (typeof d.miscPreGst === "string") setMiscPreGst(d.miscPreGst);
       if (typeof d.miscPostGst === "string") setMiscPostGst(d.miscPostGst);
@@ -296,6 +301,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             roundOff,
             itcClass,
             itcEligible,
+            supplyNature,
             lines,
             miscPreGst,
             miscPostGst,
@@ -315,6 +321,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     roundOff,
     itcClass,
     itcEligible,
+    supplyNature,
     lines,
     miscPreGst,
     miscPostGst,
@@ -653,6 +660,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       interstate,
       itcClass: isPurchaseSide ? itcClass : "na",
       itcEligible: isPurchaseSide ? itcEligible : true,
+      supplyNature,
       originalVoucherId: isNote ? originalVoucherId : null,
       totals: { ...totals, round_off_paise: roundOffPaise + miscPostGstPaise },
       lines: lines
@@ -676,6 +684,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setMiscPreGst("0");
     setMiscPostGst("0");
     setSundries([]);
+    setSupplyNature("taxable");
     setFocusedLine(0);
     setSavedTick((n) => n + 1);
     if (draftKey) {
@@ -734,6 +743,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     isPurchaseSide,
     itcClass,
     itcEligible,
+    supplyNature,
   ]);
 
   const save = useCallback(() => {
@@ -979,6 +989,29 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   refreshKey={savedTick}
                 />
               </div>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">
+              <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Supply Nature
+              </Label>
+              <Select value={supplyNature} onValueChange={(v) => setSupplyNature(v as typeof supplyNature)}>
+                <SelectTrigger className="h-8 w-[220px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="taxable">Taxable</SelectItem>
+                  <SelectItem value="nil_rated">Nil-rated</SelectItem>
+                  <SelectItem value="exempt">Exempt</SelectItem>
+                  <SelectItem value="non_gst">Non-GST</SelectItem>
+                  <SelectItem value="zero_rated_wp">Zero-rated (with payment / LUT-WPAY)</SelectItem>
+                  <SelectItem value="zero_rated_wop">Zero-rated (without payment / LUT-WOPAY)</SelectItem>
+                </SelectContent>
+              </Select>
+              {supplyNature !== "taxable" && (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                  Will be reported under GSTR-1 {supplyNature === "nil_rated" || supplyNature === "exempt" || supplyNature === "non_gst" ? "Nil / Exempt / Non-GST" : "Exports"} section
+                </span>
+              )}
             </div>
           </CardContent>
         </Card>

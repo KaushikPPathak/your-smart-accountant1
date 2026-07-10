@@ -852,20 +852,22 @@ export function gstr1ToXlsxSheets(g: BuiltGstr1): XlsxSheet[] {
   ];
   for (const d of g.docs) docsRows.push([d.doc_typ, d.from, d.to, d.totnum, d.cancel, d.net_issue]);
 
+  // Header row inside every sheet is row index 3 (rows 0-2 hold the preamble).
+  const AF = 3;
   return [
-    { name: "b2b", rows: headerRows(b2bRows) },
-    { name: "b2ba", rows: headerRows(b2baRows) },
-    { name: "b2cl", rows: headerRows(b2clRows) },
-    { name: "b2cla", rows: headerRows(b2claRows) },
-    { name: "b2cs", rows: headerRows(b2csRows) },
-    { name: "cdnr", rows: headerRows(cdnrRows) },
-    { name: "cdnra", rows: headerRows(cdnraRows) },
-    { name: "cdnur", rows: headerRows(cdnurRows) },
-    { name: "exp", rows: headerRows(expRows) },
-    { name: "nil", rows: headerRows(nilRows) },
-    { name: "hsn_b2b", rows: headerRows(hsnB2BRows) },
-    { name: "hsn_b2c", rows: headerRows(hsnB2CRows) },
-    { name: "docs", rows: headerRows(docsRows) },
+    { name: "b2b", rows: headerRows(b2bRows), autoFilterHeaderRow: AF },
+    { name: "b2ba", rows: headerRows(b2baRows), autoFilterHeaderRow: AF },
+    { name: "b2cl", rows: headerRows(b2clRows), autoFilterHeaderRow: AF },
+    { name: "b2cla", rows: headerRows(b2claRows), autoFilterHeaderRow: AF },
+    { name: "b2cs", rows: headerRows(b2csRows), autoFilterHeaderRow: AF },
+    { name: "cdnr", rows: headerRows(cdnrRows), autoFilterHeaderRow: AF },
+    { name: "cdnra", rows: headerRows(cdnraRows), autoFilterHeaderRow: AF },
+    { name: "cdnur", rows: headerRows(cdnurRows), autoFilterHeaderRow: AF },
+    { name: "exp", rows: headerRows(expRows), autoFilterHeaderRow: AF },
+    { name: "nil", rows: headerRows(nilRows), autoFilterHeaderRow: AF },
+    { name: "hsn_b2b", rows: headerRows(hsnB2BRows), autoFilterHeaderRow: AF },
+    { name: "hsn_b2c", rows: headerRows(hsnB2CRows), autoFilterHeaderRow: AF },
+    { name: "docs", rows: headerRows(docsRows), autoFilterHeaderRow: AF },
   ];
 }
 
