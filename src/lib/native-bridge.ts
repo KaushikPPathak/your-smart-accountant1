@@ -51,6 +51,15 @@ function safeSeg(s: string): string {
   return s.replace(/[^a-zA-Z0-9_\-. ]+/g, "_").slice(0, 80) || "Default";
 }
 
+// Sanitize a filename: strip path separators and other illegal chars so a
+// name like "ledger-Sales A/c-....xlsx" doesn't create a phantom sub-folder
+// "Sales A" (Windows treats both / and \ as separators and would fail with
+// "system cannot find the path specified").
+function safeFileName(s: string): string {
+  const cleaned = s.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim();
+  return cleaned.slice(0, 180) || "file";
+}
+
 export interface SaveNativeResult {
   ok: boolean;
   path?: string;
