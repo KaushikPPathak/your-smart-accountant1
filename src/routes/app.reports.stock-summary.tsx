@@ -165,10 +165,12 @@ function StockSummary() {
 
   const totalValue = rows.reduce((s, r2) => s + r2.stockValue, 0);
 
+  // Sold / consumed quantities are shown as negative numbers so the sign
+  // convention matches inventory ledgers ("goods leaving stock").
   const csv = (): (string | number)[][] => [
     [`Stock Summary as on ${to}`],
     ["Item", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", "Value"],
-    ...rows.map((x) => [x.name, x.hsn_code ?? "", x.unit, x.opening, x.inWindow, x.outWindow, x.closing, (x.stockValue/100).toFixed(2)]),
+    ...rows.map((x) => [x.name, x.hsn_code ?? "", x.unit, x.opening, x.inWindow, -x.outWindow, x.closing, (x.stockValue/100).toFixed(2)]),
     ["TOTAL", "", "", "", "", "", "", (totalValue/100).toFixed(2)],
   ];
 
@@ -181,7 +183,7 @@ function StockSummary() {
     { id: "unit", header: "Unit", type: "enum", width: 80, accessor: (x) => x.unit, groupable: true },
     { id: "opening", header: "Opening", type: "number", width: 110, align: "right", accessor: (x) => x.opening, aggregator: "sum" },
     { id: "inward", header: "Inward", type: "number", width: 110, align: "right", accessor: (x) => x.inWindow, aggregator: "sum" },
-    { id: "outward", header: "Outward", type: "number", width: 110, align: "right", accessor: (x) => x.outWindow, aggregator: "sum" },
+    { id: "outward", header: "Outward", type: "number", width: 110, align: "right", accessor: (x) => -x.outWindow, cell: (x) => x.outWindow ? `-${x.outWindow}` : "0", aggregator: "sum" },
     { id: "closing", header: "Closing", type: "number", width: 110, align: "right", accessor: (x) => x.closing, aggregator: "sum" },
     { id: "value", header: "Value", type: "number", width: 140, align: "right", accessor: (x) => x.stockValue / 100, cell: (x) => formatINR(x.stockValue), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
   ], []);
