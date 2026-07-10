@@ -21,6 +21,13 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import {
+  readVouchers,
+  readVoucherItemsForCompany,
+  readLedgers,
+  readItems,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/sales-register")({
   head: () => ({ meta: [{ title: "Sales Register — Reports" }] }),
