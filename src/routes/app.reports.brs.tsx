@@ -49,25 +49,62 @@ function BrsPage() {
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase.from("ledgers")
-      .select("id, name, opening_balance_paise, opening_balance_is_debit")
-      .eq("company_id", activeCompanyId)
-      .in("type", ["bank", "cash"])
-      .order("name")
-      .then(({ data }) => {
-        setLedgers((data || []) as BankLedger[]);
-        if (data && data.length && !ledgerId) setLedgerId(data[0].id);
-      });
+    withCacheFallback<BankLedger[]>(
+      async () => {
+        const { data } = await supabase.from("ledgers")
+          .select("id, name, opening_balance_paise, opening_balance_is_debit")
+          .eq("company_id", activeCompanyId)
+          .in("type", ["bank", "cash"])
+          .order("name");
+        return (data || []) as BankLedger[];
+      },
+      async () => {
+        const all = await readLedgers(activeCompanyId);
+        return (all as any[])
+          .filter((l) => l.type === "bank" || l.type === "cash")
+          .map((l) => ({
+            id: String(l.id),
+            name: String(l.name ?? ""),
+            opening_balance_paise: Number(l.opening_balance_paise || 0),
+            opening_balance_is_debit: Boolean(l.opening_balance_is_debit),
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+      },
+    ).then((data) => {
+      setLedgers(data);
+      if (data.length && !ledgerId) setLedgerId(data[0].id);
+    });
   }, [activeCompanyId, ledgerId]);
 
   const load = () => {
     if (!ledgerId || !activeCompanyId) return;
-    supabase.from("voucher_entries")
-      .select("id, debit_paise, credit_paise, cleared_date, vouchers!inner(voucher_date, voucher_number, voucher_type, reference_no, company_id)")
-      .eq("ledger_id", ledgerId)
-      .eq("vouchers.company_id", activeCompanyId)
-      .lte("vouchers.voucher_date", asOf)
-      .then(({ data }) => setEntries(sortEntriesByVoucherAsc((data || []) as unknown as Entry[])));
+    withCacheFallback<Entry[]>(
+      async () => {
+        const { data } = await supabase.from("voucher_entries")
+          .select("id, debit_paise, credit_paise, cleared_date, vouchers!inner(voucher_date, voucher_number, voucher_type, reference_no, company_id)")
+          .eq("ledger_id", ledgerId)
+          .eq("vouchers.company_id", activeCompanyId)
+          .lte("vouchers.voucher_date", asOf);
+        return (data || []) as unknown as Entry[];
+      },
+      async () => {
+        const rows = await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, to: asOf });
+        return (rows as any[]).map((e) => ({
+          id: String(e.id),
+          debit_paise: Number(e.debit_paise || 0),
+          credit_paise: Number(e.credit_paise || 0),
+          cleared_date: e.cleared_date ?? null,
+          vouchers: e.vouchers
+            ? {
+                voucher_date: String(e.vouchers.voucher_date ?? ""),
+                voucher_number: String(e.vouchers.voucher_number ?? ""),
+                voucher_type: String(e.vouchers.voucher_type ?? ""),
+                reference_no: e.vouchers.reference_no ?? null,
+              }
+            : null,
+        })) as Entry[];
+      },
+    ).then((data) => setEntries(sortEntriesByVoucherAsc(data)));
   };
   useEffect(load, [ledgerId, asOf, activeCompanyId]);
 
