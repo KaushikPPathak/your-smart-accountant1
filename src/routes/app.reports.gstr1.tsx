@@ -106,6 +106,21 @@ function GSTR1Page() {
   const onDownloadJson = () => built && downloadJson(`${fileBase}.json`, gstr1ToJson(built));
   const onDownloadExcel = () => built && downloadXlsx(`${fileBase}.xlsx`, gstr1ToXlsxSheets(built));
 
+  const exportQuarter = (iff: boolean) => {
+    if (!company) return;
+    const b = buildGstr1({
+      company,
+      from: period.from,
+      to: period.to,
+      fp: period.fp,
+      sales,
+      creditNotes: cdnotes,
+      iffOnly: iff,
+    });
+    const name = `GSTR1_${company.gstin || "GSTIN"}_${period.fp}${iff ? "_IFF_B2B_CDNR" : "_Quarterly_Full"}.xlsx`;
+    downloadXlsx(name, gstr1ToXlsxSheets(b));
+  };
+
   return (
     <div className="space-y-3">
       <Card>
