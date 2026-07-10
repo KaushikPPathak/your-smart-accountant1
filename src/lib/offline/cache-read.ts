@@ -74,14 +74,13 @@ export async function readVouchers(companyId: string, opts?: {
   to?: string;
 }) {
   let coll = offlineDb.cache_vouchers.where("company_id").equals(companyId);
-  if (opts?.voucher_type || opts?.from || opts?.to) {
-    coll = coll.filter((v) => {
-      if (opts.voucher_type && v.voucher_type !== opts.voucher_type) return false;
-      if (opts.from && v.voucher_date < opts.from) return false;
-      if (opts.to && v.voucher_date > opts.to) return false;
-      return true;
-    });
-  }
+  coll = coll.filter((v: any) => {
+    if (v?.is_deleted === true) return false;
+    if (opts?.voucher_type && v.voucher_type !== opts.voucher_type) return false;
+    if (opts?.from && v.voucher_date < opts.from) return false;
+    if (opts?.to && v.voucher_date > opts.to) return false;
+    return true;
+  });
   const rows = await coll.toArray();
   const normalized = normalizeAll(rows as any[], normalizeVoucher);
   return normalized.sort((a: any, b: any) => (a.voucher_date < b.voucher_date ? 1 : -1));
