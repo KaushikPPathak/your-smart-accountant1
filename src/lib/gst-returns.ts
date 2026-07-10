@@ -450,9 +450,11 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       ? (partyGstin ? "INTRB2B" : "INTRB2C")
       : (partyGstin ? "INTRAB2B" : "INTRAB2C");
     const cur = nilMap.get(key) ?? { sply_ty: key, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 };
-    if (v.supply_nature === "nil_rated") cur.nil_amt += v.subtotal_paise;
-    else if (v.supply_nature === "exempt") cur.expt_amt += v.subtotal_paise;
-    else if (v.supply_nature === "non_gst") cur.ngsup_amt += v.subtotal_paise;
+    // Fallback to total_paise if subtotal is missing (legacy vouchers).
+    const amt = v.subtotal_paise || v.total_paise;
+    if (v.supply_nature === "nil_rated") cur.nil_amt += amt;
+    else if (v.supply_nature === "exempt") cur.expt_amt += amt;
+    else if (v.supply_nature === "non_gst") cur.ngsup_amt += amt;
     nilMap.set(key, cur);
   };
 
@@ -545,6 +547,10 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
         }
       } else {
         for (const it of v.voucher_items) {
+          const lineTx = it.taxable_paise || 0;
+          const lineTax = it.igst_paise + it.cgst_paise + it.sgst_paise;
+          // Skip empty lines that would create a zero-value rate bucket.
+          if (lineTx === 0 && lineTax === 0) continue;
           const key = `${interstate ? "INTER" : "INTRA"}|${pos}|${it.gst_rate}`;
           const cur = b2csMap.get(key) ?? {
             sply_ty: interstate ? "INTER" : "INTRA",
@@ -553,7 +559,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
             txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0,
             typ: "OE",
           } satisfies B2CSGroup;
-          cur.txval += it.taxable_paise;
+          cur.txval += lineTx;
           cur.iamt += it.igst_paise;
           cur.camt += it.cgst_paise;
           cur.samt += it.sgst_paise;
@@ -621,7 +627,31 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
   const accumulate = (v: VoucherRow, sign: 1 | -1) => {
     const isB2B = !!(v.ledgers?.gstin && v.ledgers.gstin.trim());
     const map = isB2B ? hsnB2BMap : hsnB2CMap;
-    for (const it of v.voucher_items) {
+    const items = v.voucher_items || [];
+    // If line data missing OR every line has zero value → synthesise a single
+    // header-derived line so nil/exempt/non-GST vouchers still populate HSN.
+    const lineSum = items.reduce((s, it) => s + (it.taxable_paise || 0), 0);
+    const useHeader = items.length === 0 || lineSum === 0;
+    if (useHeader) {
+      const headerVal = v.subtotal_paise || v.total_paise;
+      if (headerVal === 0) return;
+      const first = items[0];
+      const key = `${first?.items?.hsn_code || ""}|0|${first?.items?.unit || "OTH"}`;
+      const cur = map.get(key) ?? {
+        hsn_sc: first?.items?.hsn_code || "",
+        desc: first?.items?.name || "",
+        uqc: (first?.items?.unit || "OTH").toUpperCase().slice(0, 3) + "-" + (first?.items?.unit || "OTH").toUpperCase(),
+        qty: 0, rt: 0,
+        txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0, val: 0,
+      } satisfies HSNRow;
+      cur.qty += sign * (first ? Number(first.qty) : 0);
+      cur.txval += sign * headerVal;
+      cur.val += sign * headerVal;
+      map.set(key, cur);
+      return;
+    }
+    for (const it of items) {
+      const lineTx = it.taxable_paise || 0;
       const key = `${it.items?.hsn_code || ""}|${it.gst_rate}|${it.items?.unit || "OTH"}`;
       const cur = map.get(key) ?? {
         hsn_sc: it.items?.hsn_code || "",
@@ -631,11 +661,11 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
         txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0, val: 0,
       } satisfies HSNRow;
       cur.qty += sign * Number(it.qty);
-      cur.txval += sign * it.taxable_paise;
+      cur.txval += sign * lineTx;
       cur.iamt += sign * it.igst_paise;
       cur.camt += sign * it.cgst_paise;
       cur.samt += sign * it.sgst_paise;
-      cur.val += sign * (it.taxable_paise + it.cgst_paise + it.sgst_paise + it.igst_paise);
+      cur.val += sign * (lineTx + it.cgst_paise + it.sgst_paise + it.igst_paise);
       map.set(key, cur);
     }
   };
