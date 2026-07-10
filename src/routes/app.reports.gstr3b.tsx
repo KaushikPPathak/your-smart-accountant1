@@ -37,7 +37,10 @@ function GSTR3BPage() {
   const { activeCompanyId } = useCompany();
   const today = new Date();
   const fyYear = today.getMonth() < 3 ? today.getFullYear() - 1 : today.getFullYear();
+  const [cadence, setCadence] = useState<"monthly" | "quarterly">("monthly");
   const [month, setMonth] = useState<string>(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`);
+  const [year, setYear] = useState<number>(today.getFullYear());
+  const [quarter, setQuarter] = useState<1 | 2 | 3 | 4>(((Math.floor(today.getMonth() / 3) + 1) as 1 | 2 | 3 | 4));
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [built, setBuilt] = useState<BuiltGstr3B | null>(null);
   const [inward, setInward] = useState<InwardSummaryRow[]>([]);
@@ -47,9 +50,13 @@ function GSTR3BPage() {
   const [calcOpen, setCalcOpen] = useState(false);
 
   const period = useMemo(() => {
+    if (cadence === "quarterly") {
+      const r = quarterRange(year, quarter);
+      return { ...r, fp: periodFP(r.to) };
+    }
     const r = monthRange(month);
     return { ...r, fp: periodFP(r.from) };
-  }, [month]);
+  }, [cadence, year, quarter, month]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
