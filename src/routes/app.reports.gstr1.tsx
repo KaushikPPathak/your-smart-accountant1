@@ -10,7 +10,7 @@ import { FileSpreadsheet, FileJson, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
-import { downloadXlsx } from "@/lib/exporters";
+import { exportGstr1UsingOfficialTemplate } from "@/lib/gstr1-template-export";
 import {
   buildGstr1, fetchVouchers, fetchCompanyMeta, gstr1ToJson, gstr1ToXlsxSheets,
   monthRange, quarterRange, periodFP, downloadJson, validateGstr1,
