@@ -78,9 +78,10 @@ export async function saveCompanyFileNative(
   fileName: string,
   contents: string | ArrayBuffer | Uint8Array,
 ): Promise<SaveNativeResult> {
+  const cleanName = safeFileName(fileName);
   const eb = electronBridge();
   if (eb) {
-    return eb.saveCompanyFile(company, subFolder, fileName, contents);
+    return eb.saveCompanyFile(company, subFolder, cleanName, contents);
   }
   if (hasTauri()) {
     try {
