@@ -547,6 +547,10 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
         }
       } else {
         for (const it of v.voucher_items) {
+          const lineTx = it.taxable_paise || 0;
+          const lineTax = it.igst_paise + it.cgst_paise + it.sgst_paise;
+          // Skip empty lines that would create a zero-value rate bucket.
+          if (lineTx === 0 && lineTax === 0) continue;
           const key = `${interstate ? "INTER" : "INTRA"}|${pos}|${it.gst_rate}`;
           const cur = b2csMap.get(key) ?? {
             sply_ty: interstate ? "INTER" : "INTRA",
@@ -555,7 +559,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
             txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0,
             typ: "OE",
           } satisfies B2CSGroup;
-          cur.txval += it.taxable_paise;
+          cur.txval += lineTx;
           cur.iamt += it.igst_paise;
           cur.camt += it.cgst_paise;
           cur.samt += it.sgst_paise;
