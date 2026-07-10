@@ -450,9 +450,11 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       ? (partyGstin ? "INTRB2B" : "INTRB2C")
       : (partyGstin ? "INTRAB2B" : "INTRAB2C");
     const cur = nilMap.get(key) ?? { sply_ty: key, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 };
-    if (v.supply_nature === "nil_rated") cur.nil_amt += v.subtotal_paise;
-    else if (v.supply_nature === "exempt") cur.expt_amt += v.subtotal_paise;
-    else if (v.supply_nature === "non_gst") cur.ngsup_amt += v.subtotal_paise;
+    // Fallback to total_paise if subtotal is missing (legacy vouchers).
+    const amt = v.subtotal_paise || v.total_paise;
+    if (v.supply_nature === "nil_rated") cur.nil_amt += amt;
+    else if (v.supply_nature === "exempt") cur.expt_amt += amt;
+    else if (v.supply_nature === "non_gst") cur.ngsup_amt += amt;
     nilMap.set(key, cur);
   };
 
