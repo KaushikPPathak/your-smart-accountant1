@@ -19,6 +19,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Scale } from "lucide-react";
 import { TaxAuditPanel } from "@/components/reports/TaxAuditPanel";
+import { supabase } from "@/integrations/supabase/client";
+import { readLedgers, readItems, withCacheFallback } from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
   head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
@@ -46,6 +48,8 @@ function ProfitLoss() {
   const [taxView, setTaxView] = useState(false);
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
   const [excludedClosingEntries, setExcludedClosingEntries] = useState(0);
+  const [openingStock, setOpeningStock] = useState(0);
+  const [closingStock, setClosingStock] = useState(0);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -56,6 +60,52 @@ function ProfitLoss() {
       setExcludedClosingEntries(result.excludedClosingTransferEntries);
     });
   }, [activeCompanyId, from, to]);
+
+  // Opening / Closing stock for gross-profit carry from Trading A/c.
+  useEffect(() => {
+    if (!activeCompanyId || !inventoryEnabled) return;
+    (async () => {
+      try {
+        const { ledgers, items } = await withCacheFallback(
+          async () => {
+            const [sLed, itms] = await Promise.all([
+              supabase
+                .from("ledgers")
+                .select("opening_balance_paise, opening_balance_is_debit")
+                .eq("company_id", activeCompanyId)
+                .eq("type", "stock_in_hand"),
+              supabase
+                .from("items")
+                .select("opening_stock_qty, opening_stock_rate_paise")
+                .eq("company_id", activeCompanyId),
+            ]);
+            return { ledgers: (sLed.data || []) as any[], items: (itms.data || []) as any[] };
+          },
+          async () => {
+            const [ledgers, items] = await Promise.all([readLedgers(activeCompanyId), readItems(activeCompanyId)]);
+            return {
+              ledgers: (ledgers as any[]).filter((l) => l.type === "stock_in_hand"),
+              items: items as any[],
+            };
+          },
+        );
+        const ledOp = (ledgers as any[]).reduce(
+          (s, l) => s + (l.opening_balance_is_debit ? 1 : -1) * Number(l.opening_balance_paise || 0),
+          0,
+        );
+        const itemOp = (items as any[]).reduce(
+          (s, it) => s + Math.round(Number(it.opening_stock_qty || 0) * Number(it.opening_stock_rate_paise || 0)),
+          0,
+        );
+        const stk = ledOp || itemOp;
+        setOpeningStock(stk);
+        setClosingStock(stk);
+      } catch {
+        setOpeningStock(0);
+        setClosingStock(0);
+      }
+    })();
+  }, [activeCompanyId, inventoryEnabled]);
 
   const expenseTypes = inventoryEnabled
     ? new Set(["expense_indirect"])
@@ -95,19 +145,38 @@ function ProfitLoss() {
   const exp = groupedTRows(expenseBuckets, goLedger);
   const inc = groupedTRows(incomeBuckets, goLedger);
 
-  const profit = inc.totalPaise - exp.totalPaise;
+  // Trading Gross Profit / Gross Loss carry — only when inventoryEnabled (so
+  // Trading A/c is the primary flow for Sales / Purchase / Direct Expenses).
+  // Without this the P&L stays empty when all activity is trading activity.
+  const tradingGp = useMemo(() => {
+    if (!inventoryEnabled) return 0;
+    const directIncome = balances
+      .filter((b) => b.type === "income_direct")
+      .reduce((s, b) => s + -b.closing_paise, 0);
+    const directExpense = balances
+      .filter((b) => b.type === "expense_direct")
+      .reduce((s, b) => s + b.closing_paise, 0);
+    return directIncome + closingStock - (directExpense + openingStock);
+  }, [balances, inventoryEnabled, openingStock, closingStock]);
+
+  const profit = inc.totalPaise - exp.totalPaise + tradingGp;
 
   const expenseRows: TRow[] = [...exp.rows];
-  const incomeRows: TRow[] = [...inc.rows];
+  const incomeRows: TRow[] = [];
+  if (tradingGp > 0) incomeRows.push({ label: "By Gross Profit b/d", amount: formatINR(tradingGp), emphasis: "bold" });
+  if (tradingGp < 0) expenseRows.unshift({ label: "To Gross Loss b/d", amount: formatINR(-tradingGp), emphasis: "bold" });
+  incomeRows.push(...inc.rows);
   if (profit > 0) expenseRows.push({ label: surplusLabel, amount: formatINR(profit), emphasis: "bold" });
   if (profit < 0) incomeRows.push({ label: deficitLabel, amount: formatINR(-profit), emphasis: "bold" });
 
-  const grandLeft = exp.totalPaise + Math.max(0, profit);
-  const grandRight = inc.totalPaise + Math.max(0, -profit);
+  const grandLeft = exp.totalPaise + Math.max(0, -tradingGp) + Math.max(0, profit);
+  const grandRight = inc.totalPaise + Math.max(0, tradingGp) + Math.max(0, -profit);
 
   // Exports
   const drExp = groupedExportRows(expenseBuckets, isIE ? "" : "To ");
   const crExp = groupedExportRows(incomeBuckets, isIE ? "" : "By ");
+  if (tradingGp > 0) crExp.unshift({ label: "  By Gross Profit b/d", paise: tradingGp, isSubtotal: true });
+  if (tradingGp < 0) drExp.unshift({ label: "  To Gross Loss b/d", paise: -tradingGp, isSubtotal: true });
   if (profit > 0) drExp.push({ label: `  ${surplusLabel}`, paise: profit, isSubtotal: true });
   if (profit < 0) crExp.push({ label: `  ${deficitLabel}`, paise: -profit, isSubtotal: true });
 
@@ -191,12 +260,18 @@ function ProfitLoss() {
               {
                 side: dr,
                 buckets: expenseBuckets,
-                extras: profit > 0 ? [{ group: "Result", name: surplusLabel, valuePaise: profit }] : [],
+                extras: [
+                  ...(tradingGp < 0 ? [{ group: "Trading", name: "Gross Loss b/d", valuePaise: -tradingGp }] : []),
+                  ...(profit > 0 ? [{ group: "Result", name: surplusLabel, valuePaise: profit }] : []),
+                ],
               },
               {
                 side: cr,
                 buckets: incomeBuckets,
-                extras: profit < 0 ? [{ group: "Result", name: deficitLabel, valuePaise: -profit }] : [],
+                extras: [
+                  ...(tradingGp > 0 ? [{ group: "Trading", name: "Gross Profit b/d", valuePaise: tradingGp }] : []),
+                  ...(profit < 0 ? [{ group: "Result", name: deficitLabel, valuePaise: -profit }] : []),
+                ],
               },
             ]}
           />

@@ -21,6 +21,13 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import {
+  readVouchers,
+  readVoucherItemsForCompany,
+  readLedgers,
+  readItems,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/sales-register")({
   head: () => ({ meta: [{ title: "Sales Register — Reports" }] }),
@@ -58,16 +65,68 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("vouchers")
-      .select(
-        "id, voucher_date, voucher_number, subtotal_paise, cgst_paise, sgst_paise, igst_paise, total_paise, ledgers:party_ledger_id(name, gstin), voucher_items(qty, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate, items:item_id(hsn_code, name, unit))",
-      )
-      .eq("company_id", activeCompanyId)
-      .eq("voucher_type", kind)
-      .gte("voucher_date", from)
-      .lte("voucher_date", to)
-      .then(({ data }) => setRows(sortVouchersAsc((data || []) as unknown as VRow[])));
+    (async () => {
+      const data = await withCacheFallback<VRow[]>(
+        async () => {
+          const { data } = await supabase
+            .from("vouchers")
+            .select(
+              "id, voucher_date, voucher_number, subtotal_paise, cgst_paise, sgst_paise, igst_paise, total_paise, ledgers:party_ledger_id(name, gstin), voucher_items(qty, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate, items:item_id(hsn_code, name, unit))",
+            )
+            .eq("company_id", activeCompanyId)
+            .eq("voucher_type", kind)
+            .gte("voucher_date", from)
+            .lte("voucher_date", to);
+          return (data || []) as unknown as VRow[];
+        },
+        async () => {
+          const [vouchers, allItems, ledgers, itemsMaster] = await Promise.all([
+            readVouchers(activeCompanyId, { voucher_type: kind, from, to }),
+            readVoucherItemsForCompany(activeCompanyId),
+            readLedgers(activeCompanyId),
+            readItems(activeCompanyId),
+          ]);
+          const ledgerById = new Map((ledgers as any[]).map((l) => [String(l.id), l]));
+          const itemById = new Map((itemsMaster as any[]).map((i) => [String(i.id), i]));
+          const itemsByVoucher = new Map<string, any[]>();
+          for (const it of allItems as any[]) {
+            const vid = String(it.voucher_id);
+            if (!itemsByVoucher.has(vid)) itemsByVoucher.set(vid, []);
+            itemsByVoucher.get(vid)!.push(it);
+          }
+          return (vouchers as any[]).map((v) => {
+            const party = v.party_ledger_id ? ledgerById.get(String(v.party_ledger_id)) : null;
+            const lines = (itemsByVoucher.get(String(v.id)) || []).map((li) => {
+              const master = li.item_id ? itemById.get(String(li.item_id)) : null;
+              return {
+                qty: Number(li.qty || 0),
+                taxable_paise: Number(li.taxable_paise || 0),
+                cgst_paise: Number(li.cgst_paise || 0),
+                sgst_paise: Number(li.sgst_paise || 0),
+                igst_paise: Number(li.igst_paise || 0),
+                gst_rate: Number(li.gst_rate || 0),
+                items: master
+                  ? { hsn_code: master.hsn_code ?? null, name: master.name ?? "", unit: master.unit ?? null }
+                  : null,
+              };
+            });
+            return {
+              id: String(v.id),
+              voucher_date: String(v.voucher_date),
+              voucher_number: String(v.voucher_number ?? ""),
+              subtotal_paise: Number(v.subtotal_paise || 0),
+              cgst_paise: Number(v.cgst_paise || 0),
+              sgst_paise: Number(v.sgst_paise || 0),
+              igst_paise: Number(v.igst_paise || 0),
+              total_paise: Number(v.total_paise || 0),
+              ledgers: party ? { name: party.name, gstin: party.gstin ?? null } : null,
+              voucher_items: lines,
+            } as VRow;
+          });
+        },
+      );
+      setRows(sortVouchersAsc(data));
+    })();
   }, [activeCompanyId, from, to, kind]);
 
   const totals = useMemo(

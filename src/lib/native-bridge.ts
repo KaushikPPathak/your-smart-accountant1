@@ -51,6 +51,15 @@ function safeSeg(s: string): string {
   return s.replace(/[^a-zA-Z0-9_\-. ]+/g, "_").slice(0, 80) || "Default";
 }
 
+// Sanitize a filename: strip path separators and other illegal chars so a
+// name like "ledger-Sales A/c-....xlsx" doesn't create a phantom sub-folder
+// "Sales A" (Windows treats both / and \ as separators and would fail with
+// "system cannot find the path specified").
+function safeFileName(s: string): string {
+  const cleaned = s.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim();
+  return cleaned.slice(0, 180) || "file";
+}
+
 export interface SaveNativeResult {
   ok: boolean;
   path?: string;
@@ -69,9 +78,10 @@ export async function saveCompanyFileNative(
   fileName: string,
   contents: string | ArrayBuffer | Uint8Array,
 ): Promise<SaveNativeResult> {
+  const cleanName = safeFileName(fileName);
   const eb = electronBridge();
   if (eb) {
-    return eb.saveCompanyFile(company, subFolder, fileName, contents);
+    return eb.saveCompanyFile(company, subFolder, cleanName, contents);
   }
   if (hasTauri()) {
     try {
@@ -86,7 +96,7 @@ export async function saveCompanyFileNative(
       const base = await appLocalDataDir();
       const dir = await join(base, "mirror", safeSeg(company), safeSeg(subFolder));
       await fs.mkdir(dir, { recursive: true });
-      const fullPath = await join(dir, fileName);
+      const fullPath = await join(dir, safeFileName(fileName));
       if (typeof contents === "string") {
         await fs.writeTextFile(fullPath, contents);
       } else {
