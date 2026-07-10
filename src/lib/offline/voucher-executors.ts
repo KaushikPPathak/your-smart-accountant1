@@ -454,6 +454,7 @@ export interface ItemVoucherSnap {
   interstate: boolean;
   itcClass: "inputs" | "capital_goods" | "input_services" | "ineligible" | "na";
   itcEligible: boolean;
+  supplyNature?: "taxable" | "zero_rated_wp" | "zero_rated_wop" | "nil_rated" | "exempt" | "non_gst";
   originalVoucherId: string | null;
   totals: {
     subtotal_paise: number;
