@@ -522,6 +522,38 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setLines((cur) => (cur.length === 1 ? cur : cur.filter((_, i) => i !== idx)));
   }, []);
 
+  /**
+   * Proportionally scale every line's rate so the bill grand total matches
+   * `targetRupees`. Misc, sundries and round-off are subtracted first, so the
+   * scaler only touches item lines. Used by the "Fit Grand Total" input to
+   * back-solve rates for multi-item bills.
+   */
+  const fitGrandTotal = useCallback((targetRupees: number) => {
+    if (!isFinite(targetRupees) || targetRupees <= 0) return;
+    const targetPaise = Math.round(targetRupees * 100);
+    const extrasPaise = miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise + sundriesNetPaise + roundOffPaise;
+    const targetLinesPaise = targetPaise - extrasPaise;
+    if (targetLinesPaise <= 0) {
+      toast.error("Target is less than the extras (misc / sundries) already added");
+      return;
+    }
+    const currentLinesPaise = rawTotals.total_paise;
+    if (currentLinesPaise <= 0) {
+      toast.error("Enter qty and rate on at least one line before fitting the total");
+      return;
+    }
+    const k = targetLinesPaise / currentLinesPaise;
+    setLines((cur) => cur.map((l) => {
+      const r = parseFloat(l.rate) || 0;
+      if (r <= 0) return l;
+      const scaled = r * k;
+      // Keep up to 4 decimals, strip trailing zeros safely.
+      const s = scaled.toFixed(4).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+      return { ...l, rate: s };
+    }));
+    toast.success(`Rates scaled by ×${k.toFixed(4)} to fit ₹${targetRupees.toFixed(2)}`);
+  }, [miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, sundriesNetPaise, roundOffPaise, rawTotals.total_paise]);
+
   /** Focus the Item Combo trigger of the row at `idx` (after paint). */
   const focusRowItemCombo = useCallback((idx: number) => {
     requestAnimationFrame(() => {
@@ -1105,6 +1137,30 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 </span>
               </div>
               <Row label="Grand Total" value={formatINR(totals.total_paise)} bold />
+              <div className="flex items-center gap-2 pt-1">
+                <Label className="text-[11px] text-muted-foreground shrink-0">Fit total to</Label>
+                <Input
+                  key={`fit-${savedTick}`}
+                  className="h-8 flex-1 text-right font-mono"
+                  inputMode="decimal"
+                  placeholder="e.g. 10000"
+                  title="Enter a target grand total; every line's rate is scaled proportionally so the bill sums to this amount (misc/sundries/round-off are subtracted first)."
+                  onFocus={(e) => e.currentTarget.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const v = parseFloat((e.currentTarget.value || "").replace(/[^0-9.]/g, ""));
+                      if (isFinite(v) && v > 0) fitGrandTotal(v);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const v = parseFloat((e.target.value || "").replace(/[^0-9.]/g, ""));
+                    if (isFinite(v) && v > 0 && Math.abs(Math.round(v * 100) - totals.total_paise) > 1) {
+                      fitGrandTotal(v);
+                    }
+                  }}
+                />
+              </div>
               <p className="pt-2 text-xs italic text-muted-foreground">
                 {amountInWords(totals.total_paise)}
               </p>
