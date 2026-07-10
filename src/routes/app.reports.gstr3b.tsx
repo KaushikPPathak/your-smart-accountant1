@@ -206,10 +206,10 @@ function GSTR3BPage() {
 
           <PeriodLockCard
             returnType="GSTR3B"
-            period={month}
+            period={cadence === "quarterly" ? `${year}-Q${quarter}` : month}
             periodStart={period.from}
             periodEnd={period.to}
-            periodLabel={new Date(period.from).toLocaleString("en-IN", { month: "short", year: "numeric" })}
+            periodLabel={cadence === "quarterly" ? `Q${quarter} ${year}` : new Date(period.from).toLocaleString("en-IN", { month: "short", year: "numeric" })}
           />
 
           <ManualEntryCard
