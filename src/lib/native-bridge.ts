@@ -95,7 +95,7 @@ export async function saveCompanyFileNative(
       const base = await appLocalDataDir();
       const dir = await join(base, "mirror", safeSeg(company), safeSeg(subFolder));
       await fs.mkdir(dir, { recursive: true });
-      const fullPath = await join(dir, fileName);
+      const fullPath = await join(dir, safeFileName(fileName));
       if (typeof contents === "string") {
         await fs.writeTextFile(fullPath, contents);
       } else {
