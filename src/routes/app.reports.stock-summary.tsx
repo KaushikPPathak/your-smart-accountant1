@@ -258,7 +258,7 @@ function StockSummary() {
                     <TableCell>{x.unit}</TableCell>
                     <TableCell className="text-right">{x.opening}</TableCell>
                     <TableCell className="text-right text-primary">{x.inWindow}</TableCell>
-                    <TableCell className="text-right">{x.outWindow}</TableCell>
+                    <TableCell className="text-right text-destructive">{x.outWindow ? `-${x.outWindow}` : "0"}</TableCell>
                     <TableCell className="text-right font-semibold">{x.closing}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(x.stockValue)}</TableCell>
                   </TableRow>
