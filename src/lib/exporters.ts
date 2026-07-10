@@ -189,12 +189,28 @@ export interface XlsxSheet {
   /** 0-based row index of the header row to attach an auto-filter to.
    *  Defaults to 0 (first row). Set to null to skip auto-filter for this sheet. */
   autoFilterHeaderRow?: number | null;
+  /** Optional styled-header mode. "gstn" mimics the GST Offline-Tool look —
+   *  bold merged title row, bold GSTIN/FP row, blue header with white bold text,
+   *  freeze pane below the header. */
+  styling?: "gstn";
+}
+
+// Try to load xlsx-js-style (a drop-in fork of xlsx that preserves cell styles
+// on write). Falls back to the plain xlsx package if unavailable.
+async function loadXlsxWithStyles(): Promise<typeof XLSXType> {
+  try {
+    const mod = (await import("xlsx-js-style")) as unknown as { default?: typeof XLSXType } & typeof XLSXType;
+    return (mod.default ?? mod) as typeof XLSXType;
+  } catch {
+    return await loadXlsx();
+  }
 }
 
 export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = "Reports"): void {
   void (async () => {
     const lang = getStoredLang();
-    const XLSX = await loadXlsx();
+    const anyStyled = sheets.some((s) => s.styling);
+    const XLSX = anyStyled ? await loadXlsxWithStyles() : await loadXlsx();
     const wb = XLSX.utils.book_new();
     for (const s of sheets) {
       // Localise string cells while preserving any pre-built cell objects
@@ -224,9 +240,54 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
         const end = XLSX.utils.encode_cell({ r: lastRow, c: lastCol });
         ws["!autofilter"] = { ref: `${start}:${end}` };
       }
+      // GSTN Offline-Tool visual style: blue header, bold title/GSTIN preamble,
+      // frozen pane below the header. Only applied when xlsx-js-style loaded.
+      if (s.styling === "gstn" && anyStyled && header.length > 0) {
+        const HEADER_FILL = { patternType: "solid", fgColor: { rgb: "FF305496" } };
+        const HEADER_FONT = { bold: true, color: { rgb: "FFFFFFFF" }, sz: 11, name: "Calibri" };
+        const TITLE_FONT = { bold: true, sz: 14, color: { rgb: "FF000000" }, name: "Calibri" };
+        const SUB_FONT = { bold: true, sz: 11, color: { rgb: "FF000000" }, name: "Calibri" };
+        const CENTER = { horizontal: "center", vertical: "center" } as const;
+        const BORDER_THIN = { style: "thin", color: { rgb: "FF9BB6D8" } };
+        const CELL_BORDER = { top: BORDER_THIN, bottom: BORDER_THIN, left: BORDER_THIN, right: BORDER_THIN };
+        // Style each header cell
+        for (let c = 0; c < header.length; c++) {
+          const addr = XLSX.utils.encode_cell({ r: headerRowIdx, c });
+          const cell = (ws as any)[addr];
+          if (cell) {
+            cell.s = { fill: HEADER_FILL, font: HEADER_FONT, alignment: { ...CENTER, wrapText: true }, border: CELL_BORDER };
+          }
+        }
+        // Style preamble rows (title, gstin/fp)
+        if (headerRowIdx >= 1) {
+          const titleAddr = XLSX.utils.encode_cell({ r: 0, c: 0 });
+          const t = (ws as any)[titleAddr];
+          if (t) t.s = { font: TITLE_FONT, alignment: { horizontal: "left" } };
+          // Merge the title row across all columns for a Tally/GSTN feel
+          ws["!merges"] = [
+            ...((ws["!merges"] as XLSXType.Range[] | undefined) ?? []),
+            { s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(0, header.length - 1) } },
+          ];
+        }
+        if (headerRowIdx >= 2) {
+          for (let c = 0; c < 2; c++) {
+            const addr = XLSX.utils.encode_cell({ r: 1, c });
+            const cell = (ws as any)[addr];
+            if (cell) cell.s = { font: SUB_FONT };
+          }
+        }
+        // Freeze rows above the data so headers stay visible while scrolling
+        ws["!freeze"] = { xSplit: 0, ySplit: headerRowIdx + 1 } as unknown as never;
+        (ws as any)["!views"] = [{ state: "frozen", ySplit: headerRowIdx + 1 }];
+        // Row heights: taller header
+        const rowH: XLSXType.RowInfo[] = [];
+        rowH[0] = { hpt: 22 };
+        rowH[headerRowIdx] = { hpt: 30 };
+        ws["!rows"] = rowH;
+      }
       XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
     }
-    const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+    const buf = XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: anyStyled }) as ArrayBuffer;
     await saveExport({
       subFolder,
       fileName,

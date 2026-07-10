@@ -854,20 +854,21 @@ export function gstr1ToXlsxSheets(g: BuiltGstr1): XlsxSheet[] {
 
   // Header row inside every sheet is row index 3 (rows 0-2 hold the preamble).
   const AF = 3;
+  const S = { autoFilterHeaderRow: AF, styling: "gstn" as const };
   return [
-    { name: "b2b", rows: headerRows(b2bRows), autoFilterHeaderRow: AF },
-    { name: "b2ba", rows: headerRows(b2baRows), autoFilterHeaderRow: AF },
-    { name: "b2cl", rows: headerRows(b2clRows), autoFilterHeaderRow: AF },
-    { name: "b2cla", rows: headerRows(b2claRows), autoFilterHeaderRow: AF },
-    { name: "b2cs", rows: headerRows(b2csRows), autoFilterHeaderRow: AF },
-    { name: "cdnr", rows: headerRows(cdnrRows), autoFilterHeaderRow: AF },
-    { name: "cdnra", rows: headerRows(cdnraRows), autoFilterHeaderRow: AF },
-    { name: "cdnur", rows: headerRows(cdnurRows), autoFilterHeaderRow: AF },
-    { name: "exp", rows: headerRows(expRows), autoFilterHeaderRow: AF },
-    { name: "nil", rows: headerRows(nilRows), autoFilterHeaderRow: AF },
-    { name: "hsn_b2b", rows: headerRows(hsnB2BRows), autoFilterHeaderRow: AF },
-    { name: "hsn_b2c", rows: headerRows(hsnB2CRows), autoFilterHeaderRow: AF },
-    { name: "docs", rows: headerRows(docsRows), autoFilterHeaderRow: AF },
+    { name: "b2b", rows: headerRows(b2bRows), ...S },
+    { name: "b2ba", rows: headerRows(b2baRows), ...S },
+    { name: "b2cl", rows: headerRows(b2clRows), ...S },
+    { name: "b2cla", rows: headerRows(b2claRows), ...S },
+    { name: "b2cs", rows: headerRows(b2csRows), ...S },
+    { name: "cdnr", rows: headerRows(cdnrRows), ...S },
+    { name: "cdnra", rows: headerRows(cdnraRows), ...S },
+    { name: "cdnur", rows: headerRows(cdnurRows), ...S },
+    { name: "exp", rows: headerRows(expRows), ...S },
+    { name: "nil", rows: headerRows(nilRows), ...S },
+    { name: "hsn_b2b", rows: headerRows(hsnB2BRows), ...S },
+    { name: "hsn_b2c", rows: headerRows(hsnB2CRows), ...S },
+    { name: "docs", rows: headerRows(docsRows), ...S },
   ];
 }
 
