@@ -105,7 +105,10 @@ jobs:
             const j=JSON.parse(fs.readFileSync(p,'utf8'));
             j.version='${{ needs.version.outputs.version }}';
             fs.writeFileSync(p, JSON.stringify(j,null,2));
-            console.log('Stamped', j.version);
+            const cargo='src-tauri/Cargo.toml';
+            const source=fs.readFileSync(cargo,'utf8');
+            fs.writeFileSync(cargo, source.replace(/^(version\s*=\s*)\"[^\"]+\"/m, '\$1\"' + j.version + '\"'));
+            console.log('Stamped native and bundle version', j.version);
           "
 
       - name: Install JS deps
@@ -200,7 +203,10 @@ jobs:
             const j=JSON.parse(fs.readFileSync(p,'utf8'));
             j.version='${{ needs.version.outputs.version }}';
             fs.writeFileSync(p, JSON.stringify(j,null,2));
-            console.log('Stamped', j.version);
+            const cargo='src-tauri/Cargo.toml';
+            const source=fs.readFileSync(cargo,'utf8');
+            fs.writeFileSync(cargo, source.replace(/^(version\s*=\s*)\"[^\"]+\"/m, '\$1\"' + j.version + '\"'));
+            console.log('Stamped native and bundle version', j.version);
           "
 
       - name: Install JS deps
