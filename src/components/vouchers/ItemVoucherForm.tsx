@@ -234,6 +234,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         roundOff: boolean;
         itcClass: typeof itcClass;
         itcEligible: boolean;
+        supplyNature: typeof supplyNature;
         lines: Line[];
         miscPreGst: string;
         miscPostGst: string;
@@ -246,6 +247,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       if (typeof d.roundOff === "boolean") setRoundOff(d.roundOff);
       if (d.itcClass) setItcClass(d.itcClass);
       if (typeof d.itcEligible === "boolean") setItcEligible(d.itcEligible);
+      if (d.supplyNature) setSupplyNature(d.supplyNature);
       if (Array.isArray(d.lines) && d.lines.length > 0) setLines(d.lines);
       if (typeof d.miscPreGst === "string") setMiscPreGst(d.miscPreGst);
       if (typeof d.miscPostGst === "string") setMiscPostGst(d.miscPostGst);
