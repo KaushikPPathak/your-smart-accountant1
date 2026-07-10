@@ -443,18 +443,18 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
   const exp: EXPInvoice[] = [];
   const nilMap = new Map<NilGroup["sply_ty"], NilGroup>();
 
-  const accNil = (v: VoucherRow) => {
+  const accNil = (v: VoucherRow, natureOverride?: SupplyNature) => {
     const interstate = v.is_interstate;
     const partyGstin = v.ledgers?.gstin || "";
     const key: NilGroup["sply_ty"] = interstate
       ? (partyGstin ? "INTRB2B" : "INTRB2C")
       : (partyGstin ? "INTRAB2B" : "INTRAB2C");
     const cur = nilMap.get(key) ?? { sply_ty: key, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 };
-    // Fallback to total_paise if subtotal is missing (legacy vouchers).
     const amt = v.subtotal_paise || v.total_paise;
-    if (v.supply_nature === "nil_rated") cur.nil_amt += amt;
-    else if (v.supply_nature === "exempt") cur.expt_amt += amt;
-    else if (v.supply_nature === "non_gst") cur.ngsup_amt += amt;
+    const nature = natureOverride ?? v.supply_nature;
+    if (nature === "nil_rated") cur.nil_amt += amt;
+    else if (nature === "exempt") cur.expt_amt += amt;
+    else if (nature === "non_gst") cur.ngsup_amt += amt;
     nilMap.set(key, cur);
   };
 
