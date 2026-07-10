@@ -157,6 +157,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     "inputs" | "capital_goods" | "input_services" | "ineligible" | "na"
   >(isPurchaseSide ? "inputs" : "na");
   const [itcEligible, setItcEligible] = useState<boolean>(true);
+  const [supplyNature, setSupplyNature] = useState<
+    "taxable" | "zero_rated_wp" | "zero_rated_wop" | "nil_rated" | "exempt" | "non_gst"
+  >("taxable");
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [miscPreGst, setMiscPreGst] = useState<string>("0");
   const [miscPostGst, setMiscPostGst] = useState<string>("0");
