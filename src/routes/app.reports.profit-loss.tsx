@@ -175,6 +175,8 @@ function ProfitLoss() {
   // Exports
   const drExp = groupedExportRows(expenseBuckets, isIE ? "" : "To ");
   const crExp = groupedExportRows(incomeBuckets, isIE ? "" : "By ");
+  if (tradingGp > 0) crExp.unshift({ label: "  By Gross Profit b/d", paise: tradingGp, isSubtotal: true });
+  if (tradingGp < 0) drExp.unshift({ label: "  To Gross Loss b/d", paise: -tradingGp, isSubtotal: true });
   if (profit > 0) drExp.push({ label: `  ${surplusLabel}`, paise: profit, isSubtotal: true });
   if (profit < 0) crExp.push({ label: `  ${deficitLabel}`, paise: -profit, isSubtotal: true });
 
