@@ -1137,6 +1137,30 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 </span>
               </div>
               <Row label="Grand Total" value={formatINR(totals.total_paise)} bold />
+              <div className="flex items-center gap-2 pt-1">
+                <Label className="text-[11px] text-muted-foreground shrink-0">Fit total to</Label>
+                <Input
+                  key={`fit-${savedTick}`}
+                  className="h-8 flex-1 text-right font-mono"
+                  inputMode="decimal"
+                  placeholder="e.g. 10000"
+                  title="Enter a target grand total; every line's rate is scaled proportionally so the bill sums to this amount (misc/sundries/round-off are subtracted first)."
+                  onFocus={(e) => e.currentTarget.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const v = parseFloat((e.currentTarget.value || "").replace(/[^0-9.]/g, ""));
+                      if (isFinite(v) && v > 0) fitGrandTotal(v);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const v = parseFloat((e.target.value || "").replace(/[^0-9.]/g, ""));
+                    if (isFinite(v) && v > 0 && Math.abs(Math.round(v * 100) - totals.total_paise) > 1) {
+                      fitGrandTotal(v);
+                    }
+                  }}
+                />
+              </div>
               <p className="pt-2 text-xs italic text-muted-foreground">
                 {amountInWords(totals.total_paise)}
               </p>
