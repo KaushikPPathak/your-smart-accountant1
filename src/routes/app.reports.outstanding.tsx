@@ -13,6 +13,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { sortVouchersAsc } from "@/lib/voucher-sort";
+import {
+  readVouchers,
+  readLedgers,
+  readBillAllocations,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/outstanding")({
   head: () => ({ meta: [{ title: "Bill-by-Bill Outstanding — Reports" }] }),
