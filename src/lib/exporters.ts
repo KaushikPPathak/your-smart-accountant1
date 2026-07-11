@@ -404,7 +404,17 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
       return y + 4;
     };
 
-    opts.sections.forEach((section, idx) => {
+    const totalRows = opts.sections.reduce((n, s) => n + s.body.length, 0);
+    const { showExportProgress } = await import("@/lib/export-progress");
+    let aborted = false;
+    const progress = showExportProgress(opts.fileName, totalRows, {
+      onCancel: () => { aborted = true; },
+    });
+    let rowsDone = 0;
+
+    for (let idx = 0; idx < opts.sections.length; idx++) {
+      if (aborted) return;
+      const section = opts.sections[idx];
       if (idx > 0) doc.addPage();
       let y = drawPageHeader();
       doc.setFont(FONT, "bold");
@@ -419,45 +429,63 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
       }
       const columnStyles: Record<number, { halign: "right" }> = {};
       (section.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
-      autoTable(doc, {
-        startY: y + 4,
-        head: localizeExportRows(section.head, lang),
-        body: localizeExportRows(section.body as (string | number)[][], lang),
-        foot: section.foot ? localizeExportRows(section.foot as (string | number)[][], lang) : undefined,
-        showFoot: "lastPage",
-        theme: "grid",
-        styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
-        headStyles: { font: FONT, fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
-        footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
-        columnStyles,
-        margin: { top: y + 4 },
-        didParseCell: (data) => {
-          data.cell.styles.font = FONT;
-        },
-        didDrawCell: (data) => {
-          if (section.dividerBeforeCol != null && data.column.index === section.dividerBeforeCol) {
-            doc.setLineWidth(1.6);
-            doc.setDrawColor(0, 0, 0);
-            doc.line(data.cell.x, data.cell.y, data.cell.x, data.cell.y + data.cell.height);
-            doc.setLineWidth(0.5);
-          }
-        },
-        didDrawPage: (data) => {
-          if (data.pageNumber > 1 && data.cursor && data.cursor.y < 60) {
-            drawPageHeader();
-          }
-          const pageLabel = tReportLabel("Page", lang);
-          const ofLabel = tReportLabel("of", lang);
-          const str = `${pageLabel} ${doc.getNumberOfPages()} ${ofLabel} {total_pages_count_string}`;
-          doc.setFont(FONT, "normal");
-          doc.setFontSize(8);
-          doc.setTextColor(120);
-          doc.text(str, pageW / 2, doc.internal.pageSize.getHeight() - 12, { align: "center" });
-          doc.setTextColor(0);
-        },
-      });
-    });
 
+      const sectionBody = localizeExportRows(section.body as (string | number)[][], lang);
+      const sectionHead = localizeExportRows(section.head, lang);
+      const sectionFoot = section.foot ? localizeExportRows(section.foot as (string | number)[][], lang) : undefined;
+      const chunkCount = Math.max(1, Math.ceil(sectionBody.length / PDF_ROW_CHUNK));
+      let nextY = y + 4;
+      for (let ci = 0; ci < chunkCount; ci++) {
+        if (aborted) return;
+        const slice = sectionBody.slice(ci * PDF_ROW_CHUNK, (ci + 1) * PDF_ROW_CHUNK);
+        const isFirst = ci === 0;
+        const isLast = ci === chunkCount - 1;
+        autoTable(doc, {
+          startY: nextY,
+          head: isFirst ? sectionHead : undefined,
+          body: slice,
+          foot: isLast ? sectionFoot : undefined,
+          showFoot: "lastPage",
+          theme: "grid",
+          styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
+          headStyles: { font: FONT, fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
+          footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
+          columnStyles,
+          margin: { top: y + 4 },
+          didParseCell: (data) => {
+            data.cell.styles.font = FONT;
+          },
+          didDrawCell: (data) => {
+            if (section.dividerBeforeCol != null && data.column.index === section.dividerBeforeCol) {
+              doc.setLineWidth(1.6);
+              doc.setDrawColor(0, 0, 0);
+              doc.line(data.cell.x, data.cell.y, data.cell.x, data.cell.y + data.cell.height);
+              doc.setLineWidth(0.5);
+            }
+          },
+          didDrawPage: (data) => {
+            if (data.pageNumber > 1 && data.cursor && data.cursor.y < 60) {
+              drawPageHeader();
+            }
+            const pageLabel = tReportLabel("Page", lang);
+            const ofLabel = tReportLabel("of", lang);
+            const str = `${pageLabel} ${doc.getNumberOfPages()} ${ofLabel} {total_pages_count_string}`;
+            doc.setFont(FONT, "normal");
+            doc.setFontSize(8);
+            doc.setTextColor(120);
+            doc.text(str, pageW / 2, doc.internal.pageSize.getHeight() - 12, { align: "center" });
+            doc.setTextColor(0);
+          },
+        });
+        const lastAT = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable;
+        nextY = lastAT?.finalY ?? nextY;
+        rowsDone += slice.length;
+        progress.update(rowsDone, `section ${idx + 1}/${opts.sections.length}`);
+        await yieldToUi();
+      }
+    }
+
+    if (aborted) return;
     if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
       (doc as unknown as { putTotalPages: (s: string) => void }).putTotalPages("{total_pages_count_string}");
     }
@@ -469,6 +497,7 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
       contents: buf,
       mime: "application/pdf",
     });
+    progress.done();
   })();
 }
 
