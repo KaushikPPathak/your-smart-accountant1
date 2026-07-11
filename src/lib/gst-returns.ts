@@ -458,7 +458,8 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     nilMap.set(key, cur);
   };
 
-  for (const v of sales) {
+  for (let v of sales) {
+
     let sn: SupplyNature = (v.supply_nature ?? "taxable") as SupplyNature;
 
     // Auto-classify: if user didn't explicitly mark the voucher as export/SEZ/etc.
@@ -486,6 +487,39 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       accNil(v, sn);
       continue;
     }
+
+    // Partition line items on mixed-rate invoices: 0%-rate lines with zero tax
+    // are nil-rated supplies and must land in the NIL sheet, NOT be listed as
+    // a "0%" rate row inside a B2B / B2CS invoice (that misrepresents them as
+    // zero-rated taxable supplies). The taxable portion of the same invoice
+    // still flows to B2B / B2CL / B2CS below.
+    const isNilLine = (it: VoucherRow["voucher_items"][number]) =>
+      Number(it.gst_rate || 0) === 0
+      && Number(it.igst_paise || 0) === 0
+      && Number(it.cgst_paise || 0) === 0
+      && Number(it.sgst_paise || 0) === 0;
+    const nilItems = v.voucher_items.filter(isNilLine);
+    const taxableItems = v.voucher_items.filter((it) => !isNilLine(it));
+    if (nilItems.length > 0) {
+      const nilAmt = nilItems.reduce((s, it) => s + (it.taxable_paise || 0), 0);
+      if (nilAmt > 0) {
+        const interstate = v.is_interstate;
+        const partyGstin = v.ledgers?.gstin || "";
+        const key: NilGroup["sply_ty"] = interstate
+          ? (partyGstin ? "INTRB2B" : "INTRB2C")
+          : (partyGstin ? "INTRAB2B" : "INTRAB2C");
+        const cur = nilMap.get(key) ?? { sply_ty: key, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 };
+        cur.nil_amt += nilAmt;
+        nilMap.set(key, cur);
+      }
+      // Drop the nil lines so downstream B2B/B2CS aggregators don't emit a 0%
+      // rate row. We shallow-clone the voucher to avoid mutating caller state.
+      v = { ...v, voucher_items: taxableItems };
+    }
+    // If nothing taxable remains, the entire supply was nil — done.
+    if (taxableItems.length === 0) continue;
+
+
 
     if (sn === "zero_rated_wp" || sn === "zero_rated_wop" || isExportTreatment(v.ledgers?.gst_treatment)) {
       const treatment = v.ledgers?.gst_treatment;
@@ -593,11 +627,37 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
   const cdnr: CDNRInvoice[] = [];
   const cdnra: CDNRAInvoice[] = [];
   const cdnur: CDNURInvoice[] = [];
-  for (const v of creditNotes) {
+  for (let v of creditNotes) {
     const ntty: "C" | "D" = v.voucher_type === "credit_note" ? "C" : "D";
     const pos = v.place_of_supply_code || v.ledgers?.state_code || compState;
     const partyGstin = v.ledgers?.gstin || "";
     const inv_typ = invTypeFromTreatment(v.ledgers?.gst_treatment);
+
+    // Same nil-line partition as the sales loop: strip 0%-and-zero-tax lines
+    // from CDNR / CDNUR and add their taxable value to the NIL sheet (with the
+    // sign flipped for credit notes so returns of nil-rated supplies net out).
+    const isNilLine = (it: VoucherRow["voucher_items"][number]) =>
+      Number(it.gst_rate || 0) === 0
+      && Number(it.igst_paise || 0) === 0
+      && Number(it.cgst_paise || 0) === 0
+      && Number(it.sgst_paise || 0) === 0;
+    const nilItemsCN = v.voucher_items.filter(isNilLine);
+    const taxableItemsCN = v.voucher_items.filter((it) => !isNilLine(it));
+    if (nilItemsCN.length > 0) {
+      const nilAmt = nilItemsCN.reduce((s, it) => s + (it.taxable_paise || 0), 0);
+      if (nilAmt > 0) {
+        const interstate = v.is_interstate;
+        const key: NilGroup["sply_ty"] = interstate
+          ? (partyGstin ? "INTRB2B" : "INTRB2C")
+          : (partyGstin ? "INTRAB2B" : "INTRAB2C");
+        const cur = nilMap.get(key) ?? { sply_ty: key, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 };
+        cur.nil_amt += (ntty === "C" ? -nilAmt : nilAmt);
+        nilMap.set(key, cur);
+      }
+      v = { ...v, voucher_items: taxableItemsCN };
+    }
+    if (taxableItemsCN.length === 0) continue;
+
 
     if (partyGstin) {
       const note: CDNRInvoice = {
