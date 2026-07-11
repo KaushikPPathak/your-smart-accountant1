@@ -13,9 +13,12 @@ import { formatINR } from "@/lib/money";
 import { exportGstr1UsingOfficialTemplate } from "@/lib/gstr1-template-export";
 import {
   buildGstr1, fetchVouchers, fetchCompanyMeta, gstr1ToJson,
-  monthRange, quarterRange, periodFP, downloadJson, validateGstr1,
+  gstr1ToXlsxSheets, monthRange, quarterRange, periodFP, downloadJson, validateGstr1,
   type VoucherRow, type CompanyMeta, type BuiltGstr1,
 } from "@/lib/gst-returns";
+import { downloadXlsx } from "@/lib/exporters";
+import { toast } from "sonner";
+
 import { ValidationPanel } from "@/components/reports/ValidationPanel";
 import { PeriodLockCard } from "@/components/reports/PeriodLockCard";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
