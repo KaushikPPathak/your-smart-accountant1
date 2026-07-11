@@ -276,9 +276,9 @@ function GSTR1Page() {
               INTRAB2B: "Intra-State — Registered (B2B)",
               INTRAB2C: "Intra-State — Unregistered (B2C)",
             };
-            const order: (keyof typeof nilLabels)[] = ["INTRB2B", "INTRB2C", "INTRAB2B", "INTRAB2C"];
-            const byKey = new Map(built.nil.map((n) => [n.sply_ty, n]));
-            const rows = order
+            const order = ["INTRB2B", "INTRB2C", "INTRAB2B", "INTRAB2C"] as const;
+            const byKey = new Map<string, { sply_ty: string; nil_amt: number; expt_amt: number; ngsup_amt: number }>(built.nil.map((n) => [n.sply_ty, n]));
+            const rows: (string | number)[][] = order
               .map((k) => byKey.get(k) ?? { sply_ty: k, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 })
               .filter((n) => n.nil_amt || n.expt_amt || n.ngsup_amt)
               .map((n) => [nilLabels[n.sply_ty] ?? n.sply_ty, money(n.nil_amt), money(n.expt_amt), money(n.ngsup_amt), money(n.nil_amt + n.expt_amt + n.ngsup_amt)]);
