@@ -140,7 +140,7 @@ export async function exportGstr1UsingOfficialTemplate(
   for (const n of g.cdnr) for (const it of n.itms) {
     const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
     cdnrRows.push([
-      n.ctin, "", n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos), n.rchrg, supTy,
+      n.ctin, n.recipient_name, n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos), n.rchrg, supTy,
       n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
   }
@@ -151,7 +151,7 @@ export async function exportGstr1UsingOfficialTemplate(
   for (const n of g.cdnra) for (const it of n.itms) {
     const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
     cdnraRows.push([
-      n.ctin, "", n.ont_num, n.ont_dt, n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos),
+      n.ctin, n.recipient_name, n.ont_num, n.ont_dt, n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos),
       n.rchrg, supTy, n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
   }
@@ -177,7 +177,6 @@ export async function exportGstr1UsingOfficialTemplate(
   writeRows("exp", expRows);
 
   // ── exemp (Nil rated / Exempted / Non-GST) ────────────────────
-  // The GSTN template expects the 4 fixed descriptions. Aggregate by sply_ty.
   const nilByTy = new Map<string, { nil: number; exp: number; ngs: number }>();
   for (const n of g.nil) {
     const cur = nilByTy.get(n.sply_ty) ?? { nil: 0, exp: 0, ngs: 0 };
@@ -191,17 +190,28 @@ export async function exportGstr1UsingOfficialTemplate(
   });
   writeRows("exemp", exempRows);
 
-  // ── hsn(b2b) ──────────────────────────────────────────────────
-  const hsnB2B: (string | number)[][] = g.hsn_b2b.map((h) => [
+  // ── hsn ───────────────────────────────────────────────────────
+  // Official GSTN Offline-Tool template has ONE `hsn` sheet (not separate
+  // b2b/b2c). Merge both maps into a single HSN Summary — aggregate rows
+  // that share the same (HSN + Rate + UQC) key so totals reconcile with
+  // Books HSN report + the sheet's own SUM formulas.
+  const hsnMerged = new Map<string, {
+    hsn_sc: string; desc: string; uqc: string; qty: number; rt: number;
+    txval: number; iamt: number; camt: number; samt: number; csamt: number; val: number;
+  }>();
+  const pushHsn = (h: typeof hsnMerged extends Map<string, infer V> ? V : never) => {
+    const key = `${h.hsn_sc}|${h.rt}|${h.uqc}`;
+    const cur = hsnMerged.get(key);
+    if (!cur) { hsnMerged.set(key, { ...h }); return; }
+    cur.qty += h.qty; cur.txval += h.txval; cur.iamt += h.iamt;
+    cur.camt += h.camt; cur.samt += h.samt; cur.csamt += h.csamt; cur.val += h.val;
+  };
+  for (const h of g.hsn_b2b) pushHsn({ ...h });
+  for (const h of g.hsn_b2c) pushHsn({ ...h });
+  const hsnRows: (string | number)[][] = Array.from(hsnMerged.values()).map((h) => [
     h.hsn_sc, h.desc, h.uqc, h.qty, h.val, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt,
   ]);
-  writeRows("hsn(b2b)", hsnB2B);
-
-  // ── hsn(b2c) ──────────────────────────────────────────────────
-  const hsnB2C: (string | number)[][] = g.hsn_b2c.map((h) => [
-    h.hsn_sc, h.desc, h.uqc, h.qty, h.val, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt,
-  ]);
-  writeRows("hsn(b2c)", hsnB2C);
+  writeRows("hsn", hsnRows);
 
   // ── docs ──────────────────────────────────────────────────────
   const docsRows: (string | number)[][] = g.docs.map((d) => [
