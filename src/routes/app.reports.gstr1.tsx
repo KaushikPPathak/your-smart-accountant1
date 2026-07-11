@@ -269,8 +269,29 @@ function GSTR1Page() {
           <GstSectionTable view={view} reportId="gstr1" title={`EXP (${built.exp.length}) — Exports & SEZ`} headers={["Type", "Invoice", "Date", "Port", "SB No", "SB Date", "Value"]}
             rows={built.exp.map((e) => [e.exp_typ, e.inum, e.idt, e.sbpcode || "", e.sbnum || "", e.sbdt || "", money(e.val)])} />
 
-          <GstSectionTable view={view} reportId="gstr1" title={`NIL / Exempted / Non-GST (${built.nil.length})`} headers={["Type", "Nil-rated", "Exempted", "Non-GST"]}
-            rows={built.nil.map((n) => [n.sply_ty, money(n.nil_amt), money(n.expt_amt), money(n.ngsup_amt)])} />
+          {(() => {
+            const nilLabels: Record<string, string> = {
+              INTRB2B: "Inter-State — Registered (B2B)",
+              INTRB2C: "Inter-State — Unregistered (B2C)",
+              INTRAB2B: "Intra-State — Registered (B2B)",
+              INTRAB2C: "Intra-State — Unregistered (B2C)",
+            };
+            const order: (keyof typeof nilLabels)[] = ["INTRB2B", "INTRB2C", "INTRAB2B", "INTRAB2C"];
+            const byKey = new Map(built.nil.map((n) => [n.sply_ty, n]));
+            const rows = order
+              .map((k) => byKey.get(k) ?? { sply_ty: k, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 })
+              .filter((n) => n.nil_amt || n.expt_amt || n.ngsup_amt)
+              .map((n) => [nilLabels[n.sply_ty] ?? n.sply_ty, money(n.nil_amt), money(n.expt_amt), money(n.ngsup_amt), money(n.nil_amt + n.expt_amt + n.ngsup_amt)]);
+            const tot = built.nil.reduce((a, n) => ({ nil: a.nil + n.nil_amt, ex: a.ex + n.expt_amt, ng: a.ng + n.ngsup_amt }), { nil: 0, ex: 0, ng: 0 });
+            if (rows.length) rows.push(["Total", money(tot.nil), money(tot.ex), money(tot.ng), money(tot.nil + tot.ex + tot.ng)]);
+            return (
+              <GstSectionTable view={view} reportId="gstr1"
+                title={`NIL / Exempted / Non-GST — split by inter/intra-state × registered/unregistered`}
+                headers={["Classification", "Nil-rated", "Exempted", "Non-GST", "Total"]}
+                rows={rows} />
+            );
+          })()}
+
 
           {built.b2ba.length > 0 && (
             <GstSectionTable view={view} reportId="gstr1" title={`B2BA (${built.b2ba.length}) — B2B Amendments`} headers={["GSTIN", "Orig Inv", "Orig Date", "New Inv", "New Date", "Value"]}
