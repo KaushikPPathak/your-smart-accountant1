@@ -211,15 +211,15 @@ function Gstr1JsonConverter() {
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-3 text-sm">
               <Stat label="B2B invoices" value={String(result.summary.b2bInvoices)} />
-              <Stat label="B2B taxable" value={formatINR(result.summary.b2bTaxable)} />
+              <Stat label="B2B taxable" value={formatINR(result.summary.b2bTaxable * 100)} />
               <Stat label="B2CS rows" value={String(result.summary.b2csRows)} />
-              <Stat label="B2CS taxable" value={formatINR(result.summary.b2csTaxable)} />
-              <Stat label="Nil / Exempt / Non-GST" value={formatINR(result.summary.nilTotal)} />
-              <Stat label="HSN taxable" value={formatINR(result.summary.hsnTaxable)} />
+              <Stat label="B2CS taxable" value={formatINR(result.summary.b2csTaxable * 100)} />
+              <Stat label="Nil / Exempt / Non-GST" value={formatINR(result.summary.nilTotal * 100)} />
+              <Stat label="HSN taxable" value={formatINR(result.summary.hsnTaxable * 100)} />
               <Stat label="Doc series" value={String(result.summary.docSeries)} />
               <Stat
                 label="Reco diff (B2B+B2CS+Nil − HSN)"
-                value={formatINR(result.summary.diff)}
+                value={formatINR(result.summary.diff * 100)}
                 warn={Math.abs(result.summary.diff) > 1}
               />
             </div>
