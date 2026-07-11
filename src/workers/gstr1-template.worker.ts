@@ -86,7 +86,7 @@ self.onmessage = (event: MessageEvent<ExportRequest>) => {
       files[path] = encoder.encode(replaceSheetData(decoder.decode(files[path]), rows));
     }
     const output = zipSync(files, { level: 1 });
-    self.postMessage({ ok: true, output }, [output.buffer]);
+    self.postMessage({ ok: true, output }, [output.buffer as ArrayBuffer]);
   } catch (error) {
     self.postMessage({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
