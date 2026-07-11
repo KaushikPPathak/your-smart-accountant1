@@ -269,8 +269,29 @@ function GSTR1Page() {
           <GstSectionTable view={view} reportId="gstr1" title={`EXP (${built.exp.length}) — Exports & SEZ`} headers={["Type", "Invoice", "Date", "Port", "SB No", "SB Date", "Value"]}
             rows={built.exp.map((e) => [e.exp_typ, e.inum, e.idt, e.sbpcode || "", e.sbnum || "", e.sbdt || "", money(e.val)])} />
 
-          <GstSectionTable view={view} reportId="gstr1" title={`NIL / Exempted / Non-GST (${built.nil.length})`} headers={["Type", "Nil-rated", "Exempted", "Non-GST"]}
-            rows={built.nil.map((n) => [n.sply_ty, money(n.nil_amt), money(n.expt_amt), money(n.ngsup_amt)])} />
+          {(() => {
+            const nilLabels: Record<string, string> = {
+              INTRB2B: "Inter-State — Registered (B2B)",
+              INTRB2C: "Inter-State — Unregistered (B2C)",
+              INTRAB2B: "Intra-State — Registered (B2B)",
+              INTRAB2C: "Intra-State — Unregistered (B2C)",
+            };
+            const order = ["INTRB2B", "INTRB2C", "INTRAB2B", "INTRAB2C"] as const;
+            const byKey = new Map<string, { sply_ty: string; nil_amt: number; expt_amt: number; ngsup_amt: number }>(built.nil.map((n) => [n.sply_ty, n]));
+            const rows: (string | number)[][] = order
+              .map((k) => byKey.get(k) ?? { sply_ty: k, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 })
+              .filter((n) => n.nil_amt || n.expt_amt || n.ngsup_amt)
+              .map((n) => [nilLabels[n.sply_ty] ?? n.sply_ty, money(n.nil_amt), money(n.expt_amt), money(n.ngsup_amt), money(n.nil_amt + n.expt_amt + n.ngsup_amt)]);
+            const tot = built.nil.reduce((a, n) => ({ nil: a.nil + n.nil_amt, ex: a.ex + n.expt_amt, ng: a.ng + n.ngsup_amt }), { nil: 0, ex: 0, ng: 0 });
+            if (rows.length) rows.push(["Total", money(tot.nil), money(tot.ex), money(tot.ng), money(tot.nil + tot.ex + tot.ng)]);
+            return (
+              <GstSectionTable view={view} reportId="gstr1"
+                title={`NIL / Exempted / Non-GST — split by inter/intra-state × registered/unregistered`}
+                headers={["Classification", "Nil-rated", "Exempted", "Non-GST", "Total"]}
+                rows={rows} />
+            );
+          })()}
+
 
           {built.b2ba.length > 0 && (
             <GstSectionTable view={view} reportId="gstr1" title={`B2BA (${built.b2ba.length}) — B2B Amendments`} headers={["GSTIN", "Orig Inv", "Orig Date", "New Inv", "New Date", "Value"]}
@@ -287,8 +308,46 @@ function GSTR1Page() {
           <GstSectionTable view={view} reportId="gstr1" title={`HSN — B2C (${built.hsn_b2c.length}) — Supplies to unregistered persons`} headers={["HSN", "UQC", "Qty", "Rate", "Taxable", "IGST", "CGST", "SGST", "Total"]}
             rows={built.hsn_b2c.map((h) => [h.hsn_sc, h.uqc, h.qty, `${h.rt}%`, money(h.txval), money(h.iamt), money(h.camt), money(h.samt), money(h.val)])} />
 
+          {(() => {
+            const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
+            const b2bVal = sum(built.b2b.map((x) => x.val));
+            const b2clVal = sum(built.b2cl.map((x) => x.val));
+            const b2csVal = sum(built.b2cs.map((x) => x.txval + x.iamt + x.camt + x.samt));
+            const expVal = sum(built.exp.map((x) => x.val));
+            const nilVal = sum(built.nil.map((n) => n.nil_amt + n.expt_amt + n.ngsup_amt));
+            const cdnrVal = sum(built.cdnr.map((x) => x.val));
+            const cdnurVal = sum(built.cdnur.map((x) => x.val));
+            const salesGross = b2bVal + b2clVal + b2csVal + expVal + nilVal;
+            const netSales = salesGross - cdnrVal - cdnurVal;
+            const hsnB2B = sum(built.hsn_b2b.map((h) => h.val));
+            const hsnB2C = sum(built.hsn_b2c.map((h) => h.val));
+            const hsnTotal = hsnB2B + hsnB2C;
+            const diff = netSales - hsnTotal;
+            return (
+              <GstSectionTable view={view} reportId="gstr1"
+                title={`Reconciliation — Sales (net of CN/DN) vs HSN Summary`}
+                headers={["Component", "Amount"]}
+                rows={[
+                  ["B2B", money(b2bVal)],
+                  ["B2CL", money(b2clVal)],
+                  ["B2CS", money(b2csVal)],
+                  ["EXP", money(expVal)],
+                  ["NIL / Exempt / Non-GST", money(nilVal)],
+                  ["Sub-total (outward)", money(salesGross)],
+                  ["Less: CDNR (registered)", money(-cdnrVal)],
+                  ["Less: CDNUR (unregistered)", money(-cdnurVal)],
+                  ["Net outward supplies (A)", money(netSales)],
+                  ["HSN — B2B", money(hsnB2B)],
+                  ["HSN — B2C", money(hsnB2C)],
+                  ["HSN total (B)", money(hsnTotal)],
+                  ["Difference (A − B)", money(diff)],
+                ]} />
+            );
+          })()}
+
           <GstSectionTable view={view} reportId="gstr1" title={`Documents Issued (${built.docs.length})`} headers={["Type", "From", "To", "Total", "Cancelled", "Net"]}
             rows={built.docs.map((d) => [d.doc_typ, d.from, d.to, d.totnum, d.cancel, d.net_issue])} />
+
         </>
       )}
     </div>
