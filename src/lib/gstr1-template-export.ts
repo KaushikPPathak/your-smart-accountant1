@@ -93,7 +93,7 @@ async function fetchTemplateBuffer(): Promise<ArrayBuffer> {
   let lastErr: unknown = null;
   for (const u of urls) {
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 15000);
+    const timer = setTimeout(() => ctl.abort(), 4000);
     try {
       const r = await fetch(u, { cache: "force-cache", signal: ctl.signal });
       if (r.ok) {
