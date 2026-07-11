@@ -666,6 +666,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     if (partyGstin) {
       const note: CDNRInvoice = {
         ctin: partyGstin,
+        recipient_name: v.ledgers?.name || "",
         nt_num: v.voucher_number,
         nt_dt: fmtDDMMYYYY(v.voucher_date),
         ntty,
