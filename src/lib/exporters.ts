@@ -193,6 +193,13 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
         doc.setTextColor(0);
       },
     });
+      const lastAT = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable;
+      nextY = lastAT?.finalY ?? nextY;
+      rowsDone += slice.length;
+      progress.update(rowsDone);
+      await yieldToUi();
+    }
+    if (aborted) return;
     if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
       (doc as unknown as { putTotalPages: (s: string) => void }).putTotalPages("{total_pages_count_string}");
     }
