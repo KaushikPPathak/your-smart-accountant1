@@ -107,10 +107,15 @@ function GSTR1Page() {
   const fileBase = `GSTR1_${company?.gstin || "GSTIN"}_${period.fp}${iffMode ? "_IFF" : ""}`;
 
   const runTemplateExport = async (b: BuiltGstr1, name: string) => {
+    const tId = toast.loading("Preparing GSTR-1 Excel…", {
+      description: "Downloading template & writing rows. This can take 10–60s on large periods.",
+    });
     try {
       await exportGstr1UsingOfficialTemplate(b, name);
+      toast.success("GSTR-1 Excel ready", { id: tId });
     } catch (e) {
       toast.warning("Offline-Tool template unavailable — exported plain workbook instead", {
+        id: tId,
         description: e instanceof Error ? e.message : String(e),
       });
       downloadXlsx(name, gstr1ToXlsxSheets(b));
