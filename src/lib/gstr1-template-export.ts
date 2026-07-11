@@ -118,6 +118,12 @@ async function fetchTemplateBuffer(): Promise<ArrayBuffer> {
   throw new Error(`Failed to fetch GSTR-1 template: ${String(lastErr)}`);
 }
 
+/** Fire-and-forget prefetch — call on GSTR-1 page mount so the template is
+ * cached in IndexedDB before the user clicks Export. Silent on failure. */
+export function prefetchGstr1Template(): void {
+  void fetchTemplateBuffer().catch(() => { /* ignore — export will fall back */ });
+}
+
 export async function exportGstr1UsingOfficialTemplate(
   g: BuiltGstr1,
   fileName: string,
