@@ -75,8 +75,13 @@ function HsnSummary() {
 
       const sumQty = (pred: (m: Move) => boolean) =>
         itemMoves.filter(pred).reduce((s, m) => s + Math.abs(Number(m.qty)), 0);
-      const sumValue = (pred: (m: Move) => boolean) =>
+      const sumTaxable = (pred: (m: Move) => boolean) =>
         itemMoves.filter(pred).reduce((s, m) => s + Number(m.taxable_paise || 0), 0);
+      const sumTax = (pred: (m: Move) => boolean) =>
+        itemMoves.filter(pred).reduce(
+          (s, m) => s + Number(m.cgst_paise || 0) + Number(m.sgst_paise || 0) + Number(m.igst_paise || 0),
+          0,
+        );
 
       const before = (m: Move) => !!m.vouchers && m.vouchers.voucher_date < from;
       const within = (m: Move) =>
@@ -90,9 +95,13 @@ function HsnSummary() {
       const openingValue = Math.round(openingQty * valRate);
 
       const purchaseQty = sumQty((m) => within(m) && inward(m));
-      const purchaseValue = sumValue((m) => within(m) && inward(m));
+      const purchaseValue = sumTaxable((m) => within(m) && inward(m));
+      const purchaseTax = sumTax((m) => within(m) && inward(m));
+      const purchaseInvoice = purchaseValue + purchaseTax;
       const saleQty = sumQty((m) => within(m) && outward(m));
-      const saleValue = sumValue((m) => within(m) && outward(m));
+      const saleValue = sumTaxable((m) => within(m) && outward(m));
+      const saleTax = sumTax((m) => within(m) && outward(m));
+      const saleInvoice = saleValue + saleTax;
 
       const closingQty = openingQty + purchaseQty - saleQty;
       const closingValue = Math.round(closingQty * valRate);
@@ -104,8 +113,8 @@ function HsnSummary() {
         unit: it.unit,
         gst_rate: Number(it.gst_rate) || 0,
         openingQty, openingValue,
-        purchaseQty, purchaseValue,
-        saleQty, saleValue,
+        purchaseQty, purchaseValue, purchaseTax, purchaseInvoice,
+        saleQty, saleValue, saleTax, saleInvoice,
         closingQty, closingValue,
       };
     });
@@ -117,10 +126,14 @@ function HsnSummary() {
     (a, x) => ({
       openingValue: a.openingValue + x.openingValue,
       purchaseValue: a.purchaseValue + x.purchaseValue,
+      purchaseTax: a.purchaseTax + x.purchaseTax,
+      purchaseInvoice: a.purchaseInvoice + x.purchaseInvoice,
       saleValue: a.saleValue + x.saleValue,
+      saleTax: a.saleTax + x.saleTax,
+      saleInvoice: a.saleInvoice + x.saleInvoice,
       closingValue: a.closingValue + x.closingValue,
     }),
-    { openingValue: 0, purchaseValue: 0, saleValue: 0, closingValue: 0 },
+    { openingValue: 0, purchaseValue: 0, purchaseTax: 0, purchaseInvoice: 0, saleValue: 0, saleTax: 0, saleInvoice: 0, closingValue: 0 },
   ), [rows]);
 
   const gridColumns: DGColumn<RowVm>[] = useMemo(() => [
