@@ -123,6 +123,8 @@ jobs:
           name: SmartAccountant-Windows-${{ needs.version.outputs.version }}
           path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
+          retention-days: 7
+          compression-level: 9
 
       - name: Upload Windows build log on failure
         if: failure()
@@ -133,6 +135,7 @@ jobs:
             src-tauri/target/release/build/**/output
             src-tauri/target/release/build/**/stderr
           if-no-files-found: ignore
+          retention-days: 3
 
   # ─────────────────────────────────────────────
   # Android APK — Tauri v2 mobile
@@ -231,9 +234,13 @@ jobs:
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SmartAccountant-Android
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          name: SmartAccountant-Android-${{ needs.version.outputs.version }}
+          # Only ship the universal debug APK — per-ABI splits would multiply
+          # artifact size ~4x and blow the storage quota faster.
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/debug/*.apk
           if-no-files-found: error
+          retention-days: 7
+          compression-level: 9
 
       - name: Upload Android build log on failure
         if: failure()
@@ -244,6 +251,7 @@ jobs:
             src-tauri/gen/android/app/build/outputs/logs/**
             src-tauri/gen/android/app/build/reports/**
           if-no-files-found: ignore
+          retention-days: 3
 
   # ─────────────────────────────────────────────
   # Print artifact download hint into the run summary
