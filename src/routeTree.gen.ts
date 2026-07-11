@@ -32,6 +32,7 @@ import { Route as AppBankRouteImport } from './routes/app.bank'
 import { Route as AppAssistantRouteImport } from './routes/app.assistant'
 import { Route as AppAccountGroupsRouteImport } from './routes/app.account-groups'
 import { Route as AppVouchersVoucherIdRouteImport } from './routes/app.vouchers.$voucherId'
+import { Route as AppToolsGstr1JsonRouteImport } from './routes/app.tools.gstr1-json'
 import { Route as AppSettingsTaxTemplatesRouteImport } from './routes/app.settings.tax-templates'
 import { Route as AppSettingsOpeningBillsRouteImport } from './routes/app.settings.opening-bills'
 import { Route as AppSettingsCostCentresRouteImport } from './routes/app.settings.cost-centres'
@@ -187,6 +188,11 @@ const AppVouchersVoucherIdRoute = AppVouchersVoucherIdRouteImport.update({
   id: '/$voucherId',
   path: '/$voucherId',
   getParentRoute: () => AppVouchersRoute,
+} as any)
+const AppToolsGstr1JsonRoute = AppToolsGstr1JsonRouteImport.update({
+  id: '/tools/gstr1-json',
+  path: '/tools/gstr1-json',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppSettingsTaxTemplatesRoute = AppSettingsTaxTemplatesRouteImport.update({
   id: '/tax-templates',
@@ -448,6 +454,7 @@ export interface FileRoutesByFullPath {
   '/app/settings/cost-centres': typeof AppSettingsCostCentresRoute
   '/app/settings/opening-bills': typeof AppSettingsOpeningBillsRoute
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
+  '/app/tools/gstr1-json': typeof AppToolsGstr1JsonRoute
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
@@ -512,6 +519,7 @@ export interface FileRoutesByTo {
   '/app/settings/cost-centres': typeof AppSettingsCostCentresRoute
   '/app/settings/opening-bills': typeof AppSettingsOpeningBillsRoute
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
+  '/app/tools/gstr1-json': typeof AppToolsGstr1JsonRoute
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
@@ -578,6 +586,7 @@ export interface FileRoutesById {
   '/app/settings/cost-centres': typeof AppSettingsCostCentresRoute
   '/app/settings/opening-bills': typeof AppSettingsOpeningBillsRoute
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
+  '/app/tools/gstr1-json': typeof AppToolsGstr1JsonRoute
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
@@ -645,6 +654,7 @@ export interface FileRouteTypes {
     | '/app/settings/cost-centres'
     | '/app/settings/opening-bills'
     | '/app/settings/tax-templates'
+    | '/app/tools/gstr1-json'
     | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
@@ -709,6 +719,7 @@ export interface FileRouteTypes {
     | '/app/settings/cost-centres'
     | '/app/settings/opening-bills'
     | '/app/settings/tax-templates'
+    | '/app/tools/gstr1-json'
     | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
@@ -774,6 +785,7 @@ export interface FileRouteTypes {
     | '/app/settings/cost-centres'
     | '/app/settings/opening-bills'
     | '/app/settings/tax-templates'
+    | '/app/tools/gstr1-json'
     | '/app/vouchers/$voucherId'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
@@ -958,6 +970,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/vouchers/$voucherId'
       preLoaderRoute: typeof AppVouchersVoucherIdRouteImport
       parentRoute: typeof AppVouchersRoute
+    }
+    '/app/tools/gstr1-json': {
+      id: '/app/tools/gstr1-json'
+      path: '/tools/gstr1-json'
+      fullPath: '/app/tools/gstr1-json'
+      preLoaderRoute: typeof AppToolsGstr1JsonRouteImport
+      parentRoute: typeof AppRoute
     }
     '/app/settings/tax-templates': {
       id: '/app/settings/tax-templates'
@@ -1372,6 +1391,7 @@ interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppVouchersRoute: typeof AppVouchersRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
+  AppToolsGstr1JsonRoute: typeof AppToolsGstr1JsonRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -1392,6 +1412,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRouteWithChildren,
   AppVouchersRoute: AppVouchersRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
+  AppToolsGstr1JsonRoute: AppToolsGstr1JsonRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
