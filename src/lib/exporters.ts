@@ -231,7 +231,13 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
 
     const totalRows = prepared.reduce((n, s) => n + s.rows.length, 0);
     const { showExportProgress } = await import("@/lib/export-progress");
-    const progress = showExportProgress(fileName, totalRows);
+    let activeWorker: Worker | null = null;
+    const progress = showExportProgress(fileName, totalRows, {
+      onCancel: () => {
+        try { activeWorker?.terminate(); } catch { /* ignore */ }
+        activeWorker = null;
+      },
+    });
 
     const runInWorker = async (): Promise<ArrayBuffer> =>
       await new Promise((resolve, reject) => {
