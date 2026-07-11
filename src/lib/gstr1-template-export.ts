@@ -49,8 +49,13 @@ async function fetchTemplateBuffer(): Promise<ArrayBuffer> {
   const urls = [abs, rel];
   let lastErr: unknown = null;
   for (const u of urls) {
+    // 15s timeout per URL so the export never hangs the UI on desktop when
+    // the network is offline / blocked. Falling back to a plain workbook is
+    // handled by the caller (runTemplateExport in app.reports.gstr1.tsx).
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
     try {
-      const r = await fetch(u, { cache: "force-cache" });
+      const r = await fetch(u, { cache: "force-cache", signal: ctl.signal });
       if (r.ok) {
         const b = await r.arrayBuffer();
         // Guard against Vite SPA fallback returning index.html on localhost.
@@ -65,7 +70,13 @@ async function fetchTemplateBuffer(): Promise<ArrayBuffer> {
       } else {
         lastErr = new Error(`HTTP ${r.status} for ${u}`);
       }
-    } catch (e) { lastErr = e; }
+    } catch (e) {
+      lastErr = e instanceof Error && e.name === "AbortError"
+        ? new Error(`Timed out fetching ${u} (offline?)`)
+        : e;
+    } finally {
+      clearTimeout(timer);
+    }
   }
   throw new Error(`Failed to fetch GSTR-1 template: ${String(lastErr)}`);
 }
