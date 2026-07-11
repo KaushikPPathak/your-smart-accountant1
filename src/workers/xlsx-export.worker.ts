@@ -80,7 +80,7 @@ self.addEventListener("message", async (ev: MessageEvent<WorkerRequest>) => {
 
     const wb = XLSX.utils.book_new();
 
-    for (const s of sheets) {
+    for (const s of workingSheets) {
       // Build sheet in row chunks so we can yield to the event loop and
       // report progress on very large data sets.
       const ws = XLSX.utils.aoa_to_sheet([]) as XLSXType.WorkSheet;
