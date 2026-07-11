@@ -95,7 +95,11 @@ export async function exportGstr1UsingOfficialTemplate(
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
 
-  const writeRows = (sheetName: string, rows: (string | number)[][], startRow = 5) => {
+  // Yield to the browser between sheets so the "Preparing…" toast repaints
+  // instead of the tab appearing frozen while ExcelJS chews through rows.
+  const yieldToUI = () => new Promise<void>((res) => setTimeout(res, 0));
+
+  const writeRows = async (sheetName: string, rows: (string | number)[][], startRow = 5) => {
     const ws = wb.getWorksheet(sheetName);
     if (!ws) return;
     rows.forEach((row, i) => {
@@ -103,6 +107,7 @@ export async function exportGstr1UsingOfficialTemplate(
       row.forEach((v, c) => { r.getCell(c + 1).value = v as never; });
       r.commit();
     });
+    await yieldToUI();
   };
 
   // ── b2b,sez,de ────────────────────────────────────────────────
