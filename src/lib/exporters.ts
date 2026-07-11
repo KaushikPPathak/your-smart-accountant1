@@ -274,6 +274,7 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
     try {
       buf = await runInWorker();
     } catch (err) {
+      if (progress.cancelled()) return;
       // Fallback: run on main thread. Keeps exports working if workers are
       // blocked (rare — some corporate setups strip module workers).
       console.warn("[exporters] worker fallback:", err);
@@ -286,6 +287,7 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
       buf = XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: anyStyled, compression: true }) as ArrayBuffer;
     }
 
+    if (progress.cancelled()) return;
     progress.done();
     await saveExport({
       subFolder,
