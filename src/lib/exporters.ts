@@ -210,84 +210,75 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
   void (async () => {
     const lang = getStoredLang();
     const anyStyled = sheets.some((s) => s.styling);
-    const XLSX = anyStyled ? await loadXlsxWithStyles() : await loadXlsx();
-    const wb = XLSX.utils.book_new();
-    for (const s of sheets) {
-      // Localise string cells while preserving any pre-built cell objects
+
+    // Pre-process cells (i18n + money/date promotion) on the main thread —
+    // this is cheap. Heavy SheetJS work runs in a worker so large ledger
+    // exports don't freeze the UI.
+    const prepared: XlsxSheet[] = sheets.map((s) => {
       const localized: XlsxCell[][] = s.rows.map((row) =>
         row.map((cell) =>
           typeof cell === "string" ? (localizeExportText(cell, lang) as XlsxCell) : cell,
         ),
       );
-      // Auto-promote money/date strings to typed numeric/date cells
       const promoted = promoteRows(localized as unknown[][]) as XlsxCell[][];
-      const sheetName = localizeExportText(s.name, lang);
-      const ws = XLSX.utils.aoa_to_sheet(promoted);
-      // Compute column widths from the widest of the header row and its data
-      const headerRowIdx = s.autoFilterHeaderRow ?? 0;
-      const header = promoted[headerRowIdx] ?? promoted[0] ?? [];
-      ws["!cols"] = header.map((cell) => {
-        const text = typeof cell === "string" ? cell : (cell as XLSXType.CellObject)?.v ?? "";
-        const len = String(text).length;
-        return { wch: Math.max(10, Math.min(40, len + 4)) };
+      return {
+        name: localizeExportText(s.name, lang),
+        rows: promoted,
+        autoFilterHeaderRow: s.autoFilterHeaderRow,
+        styling: s.styling,
+      };
+    });
+
+    const totalRows = prepared.reduce((n, s) => n + s.rows.length, 0);
+    const { showExportProgress } = await import("@/lib/export-progress");
+    const progress = showExportProgress(fileName, totalRows);
+
+    const runInWorker = async (): Promise<ArrayBuffer> =>
+      await new Promise((resolve, reject) => {
+        const worker = new Worker(
+          new URL("../workers/xlsx-export.worker.ts", import.meta.url),
+          { type: "module" },
+        );
+        worker.onmessage = (ev: MessageEvent<{
+          type: "progress" | "done" | "error";
+          buffer?: ArrayBuffer; message?: string;
+          rowsDone?: number; rowsTotal?: number; stage?: string;
+        }>) => {
+          const msg = ev.data;
+          if (msg.type === "progress") {
+            progress.update(msg.rowsDone ?? 0, msg.stage);
+          } else if (msg.type === "done" && msg.buffer) {
+            worker.terminate();
+            resolve(msg.buffer);
+          } else if (msg.type === "error") {
+            worker.terminate();
+            reject(new Error(msg.message ?? "Worker failed"));
+          }
+        };
+        worker.onerror = (e) => {
+          worker.terminate();
+          reject(e.error ?? new Error(e.message || "Worker crashed"));
+        };
+        worker.postMessage({ sheets: prepared, anyStyled });
       });
-      // Attach an auto-filter (drop-down arrows) to the header row so users
-      // can sort/filter every column in Excel — matches the GST Offline Tool.
-      if (s.autoFilterHeaderRow !== null && header.length > 0) {
-        const lastCol = header.length - 1;
-        const lastRow = Math.max(headerRowIdx, promoted.length - 1);
-        const start = XLSX.utils.encode_cell({ r: headerRowIdx, c: 0 });
-        const end = XLSX.utils.encode_cell({ r: lastRow, c: lastCol });
-        ws["!autofilter"] = { ref: `${start}:${end}` };
+
+    let buf: ArrayBuffer;
+    try {
+      buf = await runInWorker();
+    } catch (err) {
+      // Fallback: run on main thread. Keeps exports working if workers are
+      // blocked (rare — some corporate setups strip module workers).
+      console.warn("[exporters] worker fallback:", err);
+      const XLSX = anyStyled ? await loadXlsxWithStyles() : await loadXlsx();
+      const wb = XLSX.utils.book_new();
+      for (const s of prepared) {
+        const ws = XLSX.utils.aoa_to_sheet(s.rows as unknown[][]);
+        XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
       }
-      // GSTN Offline-Tool visual style: blue header, bold title/GSTIN preamble,
-      // frozen pane below the header. Only applied when xlsx-js-style loaded.
-      if (s.styling === "gstn" && anyStyled && header.length > 0) {
-        const HEADER_FILL = { patternType: "solid", fgColor: { rgb: "FF305496" } };
-        const HEADER_FONT = { bold: true, color: { rgb: "FFFFFFFF" }, sz: 11, name: "Calibri" };
-        const TITLE_FONT = { bold: true, sz: 14, color: { rgb: "FF000000" }, name: "Calibri" };
-        const SUB_FONT = { bold: true, sz: 11, color: { rgb: "FF000000" }, name: "Calibri" };
-        const CENTER = { horizontal: "center", vertical: "center" } as const;
-        const BORDER_THIN = { style: "thin", color: { rgb: "FF9BB6D8" } };
-        const CELL_BORDER = { top: BORDER_THIN, bottom: BORDER_THIN, left: BORDER_THIN, right: BORDER_THIN };
-        // Style each header cell
-        for (let c = 0; c < header.length; c++) {
-          const addr = XLSX.utils.encode_cell({ r: headerRowIdx, c });
-          const cell = (ws as any)[addr];
-          if (cell) {
-            cell.s = { fill: HEADER_FILL, font: HEADER_FONT, alignment: { ...CENTER, wrapText: true }, border: CELL_BORDER };
-          }
-        }
-        // Style preamble rows (title, gstin/fp)
-        if (headerRowIdx >= 1) {
-          const titleAddr = XLSX.utils.encode_cell({ r: 0, c: 0 });
-          const t = (ws as any)[titleAddr];
-          if (t) t.s = { font: TITLE_FONT, alignment: { horizontal: "left" } };
-          // Merge the title row across all columns for a Tally/GSTN feel
-          ws["!merges"] = [
-            ...((ws["!merges"] as XLSXType.Range[] | undefined) ?? []),
-            { s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(0, header.length - 1) } },
-          ];
-        }
-        if (headerRowIdx >= 2) {
-          for (let c = 0; c < 2; c++) {
-            const addr = XLSX.utils.encode_cell({ r: 1, c });
-            const cell = (ws as any)[addr];
-            if (cell) cell.s = { font: SUB_FONT };
-          }
-        }
-        // Freeze rows above the data so headers stay visible while scrolling
-        ws["!freeze"] = { xSplit: 0, ySplit: headerRowIdx + 1 } as unknown as never;
-        (ws as any)["!views"] = [{ state: "frozen", ySplit: headerRowIdx + 1 }];
-        // Row heights: taller header
-        const rowH: XLSXType.RowInfo[] = [];
-        rowH[0] = { hpt: 22 };
-        rowH[headerRowIdx] = { hpt: 30 };
-        ws["!rows"] = rowH;
-      }
-      XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+      buf = XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: anyStyled, compression: true }) as ArrayBuffer;
     }
-    const buf = XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: anyStyled }) as ArrayBuffer;
+
+    progress.done();
     await saveExport({
       subFolder,
       fileName,
@@ -296,6 +287,8 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
     });
   })();
 }
+
+
 
 
 // Convenience: paise → rupees number for sheets
