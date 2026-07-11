@@ -211,6 +211,7 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
       contents: buf,
       mime: "application/pdf",
     });
+    progress.done();
   })();
 }
 
