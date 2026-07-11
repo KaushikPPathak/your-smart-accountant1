@@ -627,11 +627,37 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
   const cdnr: CDNRInvoice[] = [];
   const cdnra: CDNRAInvoice[] = [];
   const cdnur: CDNURInvoice[] = [];
-  for (const v of creditNotes) {
+  for (let v of creditNotes) {
     const ntty: "C" | "D" = v.voucher_type === "credit_note" ? "C" : "D";
     const pos = v.place_of_supply_code || v.ledgers?.state_code || compState;
     const partyGstin = v.ledgers?.gstin || "";
     const inv_typ = invTypeFromTreatment(v.ledgers?.gst_treatment);
+
+    // Same nil-line partition as the sales loop: strip 0%-and-zero-tax lines
+    // from CDNR / CDNUR and add their taxable value to the NIL sheet (with the
+    // sign flipped for credit notes so returns of nil-rated supplies net out).
+    const isNilLine = (it: VoucherRow["voucher_items"][number]) =>
+      Number(it.gst_rate || 0) === 0
+      && Number(it.igst_paise || 0) === 0
+      && Number(it.cgst_paise || 0) === 0
+      && Number(it.sgst_paise || 0) === 0;
+    const nilItemsCN = v.voucher_items.filter(isNilLine);
+    const taxableItemsCN = v.voucher_items.filter((it) => !isNilLine(it));
+    if (nilItemsCN.length > 0) {
+      const nilAmt = nilItemsCN.reduce((s, it) => s + (it.taxable_paise || 0), 0);
+      if (nilAmt > 0) {
+        const interstate = v.is_interstate;
+        const key: NilGroup["sply_ty"] = interstate
+          ? (partyGstin ? "INTRB2B" : "INTRB2C")
+          : (partyGstin ? "INTRAB2B" : "INTRAB2C");
+        const cur = nilMap.get(key) ?? { sply_ty: key, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 };
+        cur.nil_amt += (ntty === "C" ? -nilAmt : nilAmt);
+        nilMap.set(key, cur);
+      }
+      v = { ...v, voucher_items: taxableItemsCN };
+    }
+    if (taxableItemsCN.length === 0) continue;
+
 
     if (partyGstin) {
       const note: CDNRInvoice = {
