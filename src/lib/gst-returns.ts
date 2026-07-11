@@ -698,10 +698,23 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     }
   }
 
-  const b2cs = Array.from(b2csMap.values()).map((g) => ({
-    ...g,
-    txval: r(g.txval), iamt: r(g.iamt), camt: r(g.camt), samt: r(g.samt), csamt: r(g.csamt),
-  }));
+  // Safety net: nil / zero-rated supplies must NEVER land in B2CS. If any 0%
+  // row leaked through (e.g. 1-paise rounding stub on an otherwise nil line),
+  // drop it here — the value already sits in the NIL / Exempt sheet.
+  const b2cs = Array.from(b2csMap.values())
+    .filter((g) => Number(g.rt) > 0)
+    .map((g) => ({
+      ...g,
+      txval: r(g.txval), iamt: r(g.iamt), camt: r(g.camt), samt: r(g.samt), csamt: r(g.csamt),
+    }));
+
+  // Same guard for B2B: drop any invoice whose every line is 0% with zero tax.
+  const b2bClean = b2b.filter((inv) =>
+    inv.itms.some((l) => Number(l.itm_det.rt) > 0 || (l.itm_det.iamt + l.itm_det.camt + l.itm_det.samt) > 0),
+  );
+  b2b.length = 0;
+  b2b.push(...b2bClean);
+
 
   const nil = Array.from(nilMap.values()).map((g) => ({
     ...g, nil_amt: r(g.nil_amt), expt_amt: r(g.expt_amt), ngsup_amt: r(g.ngsup_amt),
