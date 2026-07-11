@@ -131,6 +131,7 @@ export interface B2CSGroup {
 }
 export interface CDNRInvoice {
   ctin: string;
+  recipient_name: string;
   nt_num: string;
   nt_dt: string;
   ntty: "C" | "D";
