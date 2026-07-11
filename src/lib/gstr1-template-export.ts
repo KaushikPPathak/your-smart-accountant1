@@ -37,34 +37,71 @@ const NIL_DESC: Record<string, string> = {
   INTRAB2C: "Intra-State supplies to unregistered persons",
 };
 
+// In-memory + IndexedDB cache so the 7 MB official template is downloaded
+// ONCE per device. Subsequent GSTR-1 exports reuse the cached buffer and
+// complete in ~1-2 seconds instead of re-downloading + re-parsing every time.
+let TEMPLATE_MEM: ArrayBuffer | null = null;
+const IDB_NAME = "gstr1-template-cache";
+const IDB_STORE = "templates";
+const IDB_KEY = "official-v1";
+
+function idbOpen(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbGet(): Promise<ArrayBuffer | null> {
+  try {
+    const db = await idbOpen();
+    return await new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess = () => resolve((req.result as ArrayBuffer) ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+}
+async function idbPut(buf: ArrayBuffer): Promise<void> {
+  try {
+    const db = await idbOpen();
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(buf, IDB_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch { /* ignore */ }
+}
+
+function isValidXlsx(b: ArrayBuffer): boolean {
+  if (b.byteLength < 10000) return false;
+  const h = new Uint8Array(b, 0, 4);
+  return h[0] === 0x50 && h[1] === 0x4b && h[2] === 0x03 && h[3] === 0x04;
+}
+
 async function fetchTemplateBuffer(): Promise<ArrayBuffer> {
+  if (TEMPLATE_MEM && isValidXlsx(TEMPLATE_MEM)) return TEMPLATE_MEM;
+  const cached = await idbGet();
+  if (cached && isValidXlsx(cached)) { TEMPLATE_MEM = cached; return cached; }
+
   const rel = templateAsset.url;
-  // Order matters: absolute Lovable CDN URL FIRST so the export works
-  // uniformly from every host (Tauri desktop, VS Code / localhost dev,
-  // preview URL, published domain). The relative path only resolves on
-  // the deployed Lovable app itself — on localhost Vite returns its
-  // SPA index.html for `/__l5e/…`, which was silently making callers
-  // fall back to the plain (uncoloured) workbook.
   const abs = `https://your-smart-accountant1.lovable.app${rel}`;
   const urls = [abs, rel];
   let lastErr: unknown = null;
   for (const u of urls) {
-    // 15s timeout per URL so the export never hangs the UI on desktop when
-    // the network is offline / blocked. Falling back to a plain workbook is
-    // handled by the caller (runTemplateExport in app.reports.gstr1.tsx).
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 15000);
     try {
       const r = await fetch(u, { cache: "force-cache", signal: ctl.signal });
       if (r.ok) {
         const b = await r.arrayBuffer();
-        // Guard against Vite SPA fallback returning index.html on localhost.
-        // A valid xlsx starts with the ZIP magic bytes "PK\x03\x04".
-        if (b.byteLength > 10000) {
-          const head = new Uint8Array(b, 0, 4);
-          if (head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04) {
-            return b;
-          }
+        if (isValidXlsx(b)) {
+          TEMPLATE_MEM = b;
+          void idbPut(b);
+          return b;
         }
         lastErr = new Error(`Non-xlsx payload from ${u} (${b.byteLength} bytes)`);
       } else {
