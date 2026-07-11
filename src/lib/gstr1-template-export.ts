@@ -37,17 +37,38 @@ const NIL_DESC: Record<string, string> = {
   INTRAB2C: "Intra-State supplies to unregistered persons",
 };
 
+async function fetchTemplateBuffer(): Promise<ArrayBuffer> {
+  const rel = templateAsset.url;
+  const abs = `https://your-smart-accountant1.lovable.app${rel}`;
+  // Try relative first (works on the deployed Lovable app itself),
+  // then fall back to the absolute Lovable-hosted URL so the export
+  // also works when running the codebase locally (localhost dev / VS Code).
+  const urls = [rel, abs];
+  let lastErr: unknown = null;
+  for (const u of urls) {
+    try {
+      const r = await fetch(u);
+      if (r.ok) {
+        const b = await r.arrayBuffer();
+        // Guard against Vite SPA fallback returning index.html on localhost.
+        if (b.byteLength > 10000) return b;
+      }
+      lastErr = new Error(`HTTP ${r.status} for ${u}`);
+    } catch (e) { lastErr = e; }
+  }
+  throw new Error(`Failed to fetch GSTR-1 template: ${String(lastErr)}`);
+}
+
 export async function exportGstr1UsingOfficialTemplate(
   g: BuiltGstr1,
   fileName: string,
   subFolder = "Reports",
 ): Promise<void> {
-  const [{ default: ExcelJS }, res] = await Promise.all([
+  const [{ default: ExcelJS }, buf] = await Promise.all([
     import("exceljs"),
-    fetch(templateAsset.url),
+    fetchTemplateBuffer(),
   ]);
-  if (!res.ok) throw new Error(`Failed to fetch GSTR-1 template (${res.status})`);
-  const buf = await res.arrayBuffer();
+
 
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
