@@ -30,6 +30,9 @@ interface Move {
   qty: number;
   rate_paise: number;
   taxable_paise: number;
+  cgst_paise: number;
+  sgst_paise: number;
+  igst_paise: number;
   item_id: string;
   vouchers: { voucher_type: string; voucher_date: string; company_id: string } | null;
 }
@@ -55,7 +58,7 @@ function HsnSummary() {
     if (!activeCompanyId) return;
     supabase
       .from("voucher_items")
-      .select("qty, rate_paise, taxable_paise, item_id, vouchers!inner(voucher_type, voucher_date, company_id)")
+      .select("qty, rate_paise, taxable_paise, cgst_paise, sgst_paise, igst_paise, item_id, vouchers!inner(voucher_type, voucher_date, company_id)")
       .eq("vouchers.company_id", activeCompanyId)
       .lte("vouchers.voucher_date", to)
       .then(({ data }) => setMoves((data || []) as unknown as Move[]));
@@ -72,8 +75,13 @@ function HsnSummary() {
 
       const sumQty = (pred: (m: Move) => boolean) =>
         itemMoves.filter(pred).reduce((s, m) => s + Math.abs(Number(m.qty)), 0);
-      const sumValue = (pred: (m: Move) => boolean) =>
+      const sumTaxable = (pred: (m: Move) => boolean) =>
         itemMoves.filter(pred).reduce((s, m) => s + Number(m.taxable_paise || 0), 0);
+      const sumTax = (pred: (m: Move) => boolean) =>
+        itemMoves.filter(pred).reduce(
+          (s, m) => s + Number(m.cgst_paise || 0) + Number(m.sgst_paise || 0) + Number(m.igst_paise || 0),
+          0,
+        );
 
       const before = (m: Move) => !!m.vouchers && m.vouchers.voucher_date < from;
       const within = (m: Move) =>
@@ -87,9 +95,13 @@ function HsnSummary() {
       const openingValue = Math.round(openingQty * valRate);
 
       const purchaseQty = sumQty((m) => within(m) && inward(m));
-      const purchaseValue = sumValue((m) => within(m) && inward(m));
+      const purchaseValue = sumTaxable((m) => within(m) && inward(m));
+      const purchaseTax = sumTax((m) => within(m) && inward(m));
+      const purchaseInvoice = purchaseValue + purchaseTax;
       const saleQty = sumQty((m) => within(m) && outward(m));
-      const saleValue = sumValue((m) => within(m) && outward(m));
+      const saleValue = sumTaxable((m) => within(m) && outward(m));
+      const saleTax = sumTax((m) => within(m) && outward(m));
+      const saleInvoice = saleValue + saleTax;
 
       const closingQty = openingQty + purchaseQty - saleQty;
       const closingValue = Math.round(closingQty * valRate);
@@ -101,8 +113,8 @@ function HsnSummary() {
         unit: it.unit,
         gst_rate: Number(it.gst_rate) || 0,
         openingQty, openingValue,
-        purchaseQty, purchaseValue,
-        saleQty, saleValue,
+        purchaseQty, purchaseValue, purchaseTax, purchaseInvoice,
+        saleQty, saleValue, saleTax, saleInvoice,
         closingQty, closingValue,
       };
     });
@@ -114,10 +126,14 @@ function HsnSummary() {
     (a, x) => ({
       openingValue: a.openingValue + x.openingValue,
       purchaseValue: a.purchaseValue + x.purchaseValue,
+      purchaseTax: a.purchaseTax + x.purchaseTax,
+      purchaseInvoice: a.purchaseInvoice + x.purchaseInvoice,
       saleValue: a.saleValue + x.saleValue,
+      saleTax: a.saleTax + x.saleTax,
+      saleInvoice: a.saleInvoice + x.saleInvoice,
       closingValue: a.closingValue + x.closingValue,
     }),
-    { openingValue: 0, purchaseValue: 0, saleValue: 0, closingValue: 0 },
+    { openingValue: 0, purchaseValue: 0, purchaseTax: 0, purchaseInvoice: 0, saleValue: 0, saleTax: 0, saleInvoice: 0, closingValue: 0 },
   ), [rows]);
 
   const gridColumns: DGColumn<RowVm>[] = useMemo(() => [
@@ -128,18 +144,23 @@ function HsnSummary() {
     { id: "openQ", header: "Opening Qty", type: "number", width: 110, align: "right", accessor: (x) => x.openingQty, aggregator: "sum" },
     { id: "openV", header: "Opening Val", type: "number", width: 130, align: "right", accessor: (x) => x.openingValue / 100, cell: (x) => formatINR(x.openingValue), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
     { id: "purQ", header: "Purchase Qty", type: "number", width: 110, align: "right", accessor: (x) => x.purchaseQty, aggregator: "sum" },
-    { id: "purV", header: "Purchase Val", type: "number", width: 130, align: "right", accessor: (x) => x.purchaseValue / 100, cell: (x) => formatINR(x.purchaseValue), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "purV", header: "Purchase Taxable", type: "number", width: 140, align: "right", accessor: (x) => x.purchaseValue / 100, cell: (x) => formatINR(x.purchaseValue), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "purT", header: "Purchase Tax", type: "number", width: 130, align: "right", accessor: (x) => x.purchaseTax / 100, cell: (x) => formatINR(x.purchaseTax), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "purI", header: "Purchase Invoice", type: "number", width: 140, align: "right", accessor: (x) => x.purchaseInvoice / 100, cell: (x) => formatINR(x.purchaseInvoice), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
     { id: "salQ", header: "Sales Qty", type: "number", width: 110, align: "right", accessor: (x) => x.saleQty, aggregator: "sum" },
-    { id: "salV", header: "Sales Val", type: "number", width: 130, align: "right", accessor: (x) => x.saleValue / 100, cell: (x) => formatINR(x.saleValue), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "salV", header: "Sales Taxable", type: "number", width: 140, align: "right", accessor: (x) => x.saleValue / 100, cell: (x) => formatINR(x.saleValue), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "salT", header: "Sales Tax", type: "number", width: 130, align: "right", accessor: (x) => x.saleTax / 100, cell: (x) => formatINR(x.saleTax), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
+    { id: "salI", header: "Sales Invoice", type: "number", width: 140, align: "right", accessor: (x) => x.saleInvoice / 100, cell: (x) => formatINR(x.saleInvoice), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
     { id: "closQ", header: "Closing Qty", type: "number", width: 110, align: "right", accessor: (x) => x.closingQty, aggregator: "sum" },
     { id: "closV", header: "Closing Val", type: "number", width: 130, align: "right", accessor: (x) => x.closingValue / 100, cell: (x) => formatINR(x.closingValue), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
   ], []);
 
+  const p2 = (n: number) => (n / 100).toFixed(2);
   const csv = (): (string | number)[][] => [
     [`HSN-wise Stock Movement — ${from} to ${to}`],
-    ["HSN", "Item", "Unit", "GST%", "Opening Qty", "Opening Value", "Purchase Qty", "Purchase Value", "Sales Qty", "Sales Value", "Closing Qty", "Closing Value"],
-    ...rows.map((x) => [x.hsn, x.name, x.unit, x.gst_rate, x.openingQty, (x.openingValue / 100).toFixed(2), x.purchaseQty, (x.purchaseValue / 100).toFixed(2), x.saleQty, (x.saleValue / 100).toFixed(2), x.closingQty, (x.closingValue / 100).toFixed(2)]),
-    ["TOTAL", "", "", "", "", (totals.openingValue / 100).toFixed(2), "", (totals.purchaseValue / 100).toFixed(2), "", (totals.saleValue / 100).toFixed(2), "", (totals.closingValue / 100).toFixed(2)],
+    ["HSN", "Item", "Unit", "GST%", "Opening Qty", "Opening Value", "Purchase Qty", "Purchase Taxable", "Purchase Tax", "Purchase Invoice", "Sales Qty", "Sales Taxable", "Sales Tax", "Sales Invoice", "Closing Qty", "Closing Value"],
+    ...rows.map((x) => [x.hsn, x.name, x.unit, x.gst_rate, x.openingQty, p2(x.openingValue), x.purchaseQty, p2(x.purchaseValue), p2(x.purchaseTax), p2(x.purchaseInvoice), x.saleQty, p2(x.saleValue), p2(x.saleTax), p2(x.saleInvoice), x.closingQty, p2(x.closingValue)]),
+    ["TOTAL", "", "", "", "", p2(totals.openingValue), "", p2(totals.purchaseValue), p2(totals.purchaseTax), p2(totals.purchaseInvoice), "", p2(totals.saleValue), p2(totals.saleTax), p2(totals.saleInvoice), "", p2(totals.closingValue)],
   ];
 
   return (
@@ -159,20 +180,20 @@ function HsnSummary() {
                 companyName: pdfHeader.companyName,
                 companySubLine: pdfHeader.companySubLine,
                 subtitle: `${from} to ${to}`,
-                head: [["HSN", "Item", "Unit", "GST%", "Open Qty", amountHeader("Open Val"), "Pur Qty", amountHeader("Pur Val"), "Sale Qty", amountHeader("Sale Val"), "Close Qty", amountHeader("Close Val")]],
-                body: rows.map((x) => [x.hsn, x.name, x.unit, String(x.gst_rate), String(x.openingQty), r(x.openingValue).toFixed(2), String(x.purchaseQty), r(x.purchaseValue).toFixed(2), String(x.saleQty), r(x.saleValue).toFixed(2), String(x.closingQty), r(x.closingValue).toFixed(2)]),
-                foot: [["TOTAL", "", "", "", "", r(totals.openingValue).toFixed(2), "", r(totals.purchaseValue).toFixed(2), "", r(totals.saleValue).toFixed(2), "", r(totals.closingValue).toFixed(2)]],
+                head: [["HSN", "Item", "Unit", "GST%", "Open Qty", amountHeader("Open Val"), "Pur Qty", amountHeader("Pur Tax'ble"), amountHeader("Pur Tax"), amountHeader("Pur Invoice"), "Sale Qty", amountHeader("Sale Tax'ble"), amountHeader("Sale Tax"), amountHeader("Sale Invoice"), "Close Qty", amountHeader("Close Val")]],
+                body: rows.map((x) => [x.hsn, x.name, x.unit, String(x.gst_rate), String(x.openingQty), r(x.openingValue).toFixed(2), String(x.purchaseQty), r(x.purchaseValue).toFixed(2), r(x.purchaseTax).toFixed(2), r(x.purchaseInvoice).toFixed(2), String(x.saleQty), r(x.saleValue).toFixed(2), r(x.saleTax).toFixed(2), r(x.saleInvoice).toFixed(2), String(x.closingQty), r(x.closingValue).toFixed(2)]),
+                foot: [["TOTAL", "", "", "", "", r(totals.openingValue).toFixed(2), "", r(totals.purchaseValue).toFixed(2), r(totals.purchaseTax).toFixed(2), r(totals.purchaseInvoice).toFixed(2), "", r(totals.saleValue).toFixed(2), r(totals.saleTax).toFixed(2), r(totals.saleInvoice).toFixed(2), "", r(totals.closingValue).toFixed(2)]],
                 fileName: `hsn-summary-${from}-to-${to}.pdf`,
                 orientation: "l",
-                rightAlignCols: [3, 4, 5, 6, 7, 8, 9, 10, 11],
+                rightAlignCols: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
               })
             }
             onPrint={() => window.print()}
           />
           <p className="mt-2 text-xs text-muted-foreground">
-            Grouped by HSN by default. Quantity columns use voucher qty; value columns use taxable amount from vouchers,
-            while Opening &amp; Closing value use each item's standard rate (opening rate). Inward = Purchase + Sales Return + Manufacturing output; Outward = Sales + Purchase Return + Manufacturing consumption.
+            Grouped by HSN by default. Purchase/Sales columns show Taxable, Tax (CGST+SGST+IGST) and Invoice value (taxable + tax) — so totals reconcile with GSTR-1 HSN summary. Opening &amp; Closing value use each item's standard rate (opening rate). Inward = Purchase + Sales Return + Manufacturing output; Outward = Sales + Purchase Return + Manufacturing consumption.
           </p>
+
         </CardContent>
       </Card>
       <Card>
