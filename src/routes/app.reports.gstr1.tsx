@@ -10,7 +10,7 @@ import { FileSpreadsheet, FileJson, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
-import { exportGstr1UsingOfficialTemplate } from "@/lib/gstr1-template-export";
+import { exportGstr1UsingOfficialTemplate, prefetchGstr1Template } from "@/lib/gstr1-template-export";
 import {
   buildGstr1, fetchVouchers, fetchCompanyMeta, gstr1ToJson,
   gstr1ToXlsxSheets, monthRange, quarterRange, periodFP, downloadJson, validateGstr1,
@@ -41,6 +41,11 @@ function GSTR1Page() {
   const { activeCompanyId } = useCompany();
   const today = new Date();
   const fyYear = today.getMonth() < 3 ? today.getFullYear() - 1 : today.getFullYear();
+
+  // Warm the 7 MB official template cache in the background so Export is
+  // instant once the user clicks. Silent on failure — export falls back
+  // to a plain workbook if the CDN is unreachable.
+  useEffect(() => { prefetchGstr1Template(); }, []);
 
   const [cadence, setCadence] = useState<"monthly" | "quarterly">("monthly");
   const [iffMode, setIffMode] = useState(false);
