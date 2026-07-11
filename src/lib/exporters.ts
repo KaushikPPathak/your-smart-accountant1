@@ -66,6 +66,13 @@ export interface PdfTableOptions {
   dividerBeforeCol?: number;
 }
 
+// Rows per autoTable chunk. autoTable is synchronous, so we render the body
+// in chunks and yield between them (setTimeout 0) to keep the UI responsive
+// on very large ledger PDFs. Each chunk continues from the previous chunk's
+// finalY so the visible table remains contiguous across page breaks.
+const PDF_ROW_CHUNK = 500;
+const yieldToUi = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
 export function downloadPdfTable(opts: PdfTableOptions): void {
   void (async () => {
     const lang = getStoredLang();
@@ -80,6 +87,12 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     const head = localizeExportRows(opts.head, lang);
     const body = localizeExportRows(opts.body as (string | number)[][], lang);
     const foot = opts.foot ? localizeExportRows(opts.foot as (string | number)[][], lang) : undefined;
+
+    const { showExportProgress } = await import("@/lib/export-progress");
+    let aborted = false;
+    const progress = showExportProgress(opts.fileName, body.length, {
+      onCancel: () => { aborted = true; },
+    });
 
     let y = 28;
     if (opts.companyName) {
@@ -109,11 +122,44 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     const columnStyles: Record<number, { halign: "right" }> = {};
     (opts.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
 
-    autoTable(doc, {
-      startY: tableStartY,
-      head,
-      body,
-      foot,
+    const drawPageChrome = () => {
+      let hy = 28;
+      if (opts.companyName) {
+        doc.setFont(FONT, "bold");
+        doc.setFontSize(13);
+        doc.text(opts.companyName.toUpperCase(), pageW / 2, hy, { align: "center" });
+        hy += 14;
+      }
+      if (opts.companySubLine) {
+        doc.setFont(FONT, "normal");
+        doc.setFontSize(9);
+        doc.text(opts.companySubLine, pageW / 2, hy, { align: "center" });
+        hy += 12;
+      }
+      doc.setFont(FONT, "bold");
+      doc.setFontSize(12);
+      doc.text(title, pageW / 2, hy, { align: "center" });
+      if (subtitle) {
+        hy += 14;
+        doc.setFont(FONT, "normal");
+        doc.setFontSize(10);
+        doc.text(subtitle, pageW / 2, hy, { align: "center" });
+      }
+    };
+
+    const chunkCount = Math.max(1, Math.ceil(body.length / PDF_ROW_CHUNK));
+    let rowsDone = 0;
+    let nextY = tableStartY;
+    for (let ci = 0; ci < chunkCount; ci++) {
+      if (aborted) return;
+      const slice = body.slice(ci * PDF_ROW_CHUNK, (ci + 1) * PDF_ROW_CHUNK);
+      const isFirst = ci === 0;
+      const isLast = ci === chunkCount - 1;
+      autoTable(doc, {
+        startY: nextY,
+        head: isFirst ? head : undefined,
+        body: slice,
+        foot: isLast ? foot : undefined,
       showFoot: "lastPage",
       theme: "grid",
       styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
@@ -133,29 +179,8 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
           }
         },
       didDrawPage: (data) => {
-        if (data.pageNumber > 1) {
-          let hy = 28;
-          if (opts.companyName) {
-            doc.setFont(FONT, "bold");
-            doc.setFontSize(13);
-            doc.text(opts.companyName.toUpperCase(), pageW / 2, hy, { align: "center" });
-            hy += 14;
-          }
-          if (opts.companySubLine) {
-            doc.setFont(FONT, "normal");
-            doc.setFontSize(9);
-            doc.text(opts.companySubLine, pageW / 2, hy, { align: "center" });
-            hy += 12;
-          }
-          doc.setFont(FONT, "bold");
-          doc.setFontSize(12);
-          doc.text(title, pageW / 2, hy, { align: "center" });
-          if (subtitle) {
-            hy += 14;
-            doc.setFont(FONT, "normal");
-            doc.setFontSize(10);
-            doc.text(subtitle, pageW / 2, hy, { align: "center" });
-          }
+        if (data.pageNumber > 1 || !isFirst) {
+          drawPageChrome();
         }
         const pageW2 = doc.internal.pageSize.getWidth();
         const pageLabel = tReportLabel("Page", lang);
@@ -168,6 +193,13 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
         doc.setTextColor(0);
       },
     });
+      const lastAT = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable;
+      nextY = lastAT?.finalY ?? nextY;
+      rowsDone += slice.length;
+      progress.update(rowsDone);
+      await yieldToUi();
+    }
+    if (aborted) return;
     if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
       (doc as unknown as { putTotalPages: (s: string) => void }).putTotalPages("{total_pages_count_string}");
     }
@@ -179,6 +211,7 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
       contents: buf,
       mime: "application/pdf",
     });
+    progress.done();
   })();
 }
 
@@ -371,7 +404,17 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
       return y + 4;
     };
 
-    opts.sections.forEach((section, idx) => {
+    const totalRows = opts.sections.reduce((n, s) => n + s.body.length, 0);
+    const { showExportProgress } = await import("@/lib/export-progress");
+    let aborted = false;
+    const progress = showExportProgress(opts.fileName, totalRows, {
+      onCancel: () => { aborted = true; },
+    });
+    let rowsDone = 0;
+
+    for (let idx = 0; idx < opts.sections.length; idx++) {
+      if (aborted) return;
+      const section = opts.sections[idx];
       if (idx > 0) doc.addPage();
       let y = drawPageHeader();
       doc.setFont(FONT, "bold");
@@ -386,45 +429,63 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
       }
       const columnStyles: Record<number, { halign: "right" }> = {};
       (section.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
-      autoTable(doc, {
-        startY: y + 4,
-        head: localizeExportRows(section.head, lang),
-        body: localizeExportRows(section.body as (string | number)[][], lang),
-        foot: section.foot ? localizeExportRows(section.foot as (string | number)[][], lang) : undefined,
-        showFoot: "lastPage",
-        theme: "grid",
-        styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
-        headStyles: { font: FONT, fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
-        footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
-        columnStyles,
-        margin: { top: y + 4 },
-        didParseCell: (data) => {
-          data.cell.styles.font = FONT;
-        },
-        didDrawCell: (data) => {
-          if (section.dividerBeforeCol != null && data.column.index === section.dividerBeforeCol) {
-            doc.setLineWidth(1.6);
-            doc.setDrawColor(0, 0, 0);
-            doc.line(data.cell.x, data.cell.y, data.cell.x, data.cell.y + data.cell.height);
-            doc.setLineWidth(0.5);
-          }
-        },
-        didDrawPage: (data) => {
-          if (data.pageNumber > 1 && data.cursor && data.cursor.y < 60) {
-            drawPageHeader();
-          }
-          const pageLabel = tReportLabel("Page", lang);
-          const ofLabel = tReportLabel("of", lang);
-          const str = `${pageLabel} ${doc.getNumberOfPages()} ${ofLabel} {total_pages_count_string}`;
-          doc.setFont(FONT, "normal");
-          doc.setFontSize(8);
-          doc.setTextColor(120);
-          doc.text(str, pageW / 2, doc.internal.pageSize.getHeight() - 12, { align: "center" });
-          doc.setTextColor(0);
-        },
-      });
-    });
 
+      const sectionBody = localizeExportRows(section.body as (string | number)[][], lang);
+      const sectionHead = localizeExportRows(section.head, lang);
+      const sectionFoot = section.foot ? localizeExportRows(section.foot as (string | number)[][], lang) : undefined;
+      const chunkCount = Math.max(1, Math.ceil(sectionBody.length / PDF_ROW_CHUNK));
+      let nextY = y + 4;
+      for (let ci = 0; ci < chunkCount; ci++) {
+        if (aborted) return;
+        const slice = sectionBody.slice(ci * PDF_ROW_CHUNK, (ci + 1) * PDF_ROW_CHUNK);
+        const isFirst = ci === 0;
+        const isLast = ci === chunkCount - 1;
+        autoTable(doc, {
+          startY: nextY,
+          head: isFirst ? sectionHead : undefined,
+          body: slice,
+          foot: isLast ? sectionFoot : undefined,
+          showFoot: "lastPage",
+          theme: "grid",
+          styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
+          headStyles: { font: FONT, fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
+          footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
+          columnStyles,
+          margin: { top: y + 4 },
+          didParseCell: (data) => {
+            data.cell.styles.font = FONT;
+          },
+          didDrawCell: (data) => {
+            if (section.dividerBeforeCol != null && data.column.index === section.dividerBeforeCol) {
+              doc.setLineWidth(1.6);
+              doc.setDrawColor(0, 0, 0);
+              doc.line(data.cell.x, data.cell.y, data.cell.x, data.cell.y + data.cell.height);
+              doc.setLineWidth(0.5);
+            }
+          },
+          didDrawPage: (data) => {
+            if (data.pageNumber > 1 && data.cursor && data.cursor.y < 60) {
+              drawPageHeader();
+            }
+            const pageLabel = tReportLabel("Page", lang);
+            const ofLabel = tReportLabel("of", lang);
+            const str = `${pageLabel} ${doc.getNumberOfPages()} ${ofLabel} {total_pages_count_string}`;
+            doc.setFont(FONT, "normal");
+            doc.setFontSize(8);
+            doc.setTextColor(120);
+            doc.text(str, pageW / 2, doc.internal.pageSize.getHeight() - 12, { align: "center" });
+            doc.setTextColor(0);
+          },
+        });
+        const lastAT = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable;
+        nextY = lastAT?.finalY ?? nextY;
+        rowsDone += slice.length;
+        progress.update(rowsDone, `section ${idx + 1}/${opts.sections.length}`);
+        await yieldToUi();
+      }
+    }
+
+    if (aborted) return;
     if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
       (doc as unknown as { putTotalPages: (s: string) => void }).putTotalPages("{total_pages_count_string}");
     }
@@ -436,6 +497,7 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
       contents: buf,
       mime: "application/pdf",
     });
+    progress.done();
   })();
 }
 
