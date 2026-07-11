@@ -43,8 +43,33 @@ self.addEventListener("message", async (ev: MessageEvent<WorkerRequest>) => {
     const { sheets, anyStyled } = ev.data;
     const XLSX = await loadXlsx(anyStyled);
 
+    // Auto-rollover: XLSX supports up to 10,48,576 rows/sheet. Split at 5 lakh
+    // data rows to keep files responsive in Excel (matches Busy behavior).
+    const MAX_DATA_ROWS_PER_SHEET = 500_000;
+    const expandedSheets: WorkerSheet[] = [];
+    for (const s of sheets) {
+      const headerRowIdx = s.autoFilterHeaderRow ?? 0;
+      const headerRows = s.rows.slice(0, headerRowIdx + 1);
+      const dataRows = s.rows.slice(headerRowIdx + 1);
+      if (dataRows.length <= MAX_DATA_ROWS_PER_SHEET) {
+        expandedSheets.push(s);
+        continue;
+      }
+      // Split into <Name>, <Name> (2), <Name> (3)…
+      const parts = Math.ceil(dataRows.length / MAX_DATA_ROWS_PER_SHEET);
+      for (let p = 0; p < parts; p++) {
+        const slice = dataRows.slice(p * MAX_DATA_ROWS_PER_SHEET, (p + 1) * MAX_DATA_ROWS_PER_SHEET);
+        expandedSheets.push({
+          ...s,
+          name: p === 0 ? s.name : `${s.name} (${p + 1})`.slice(0, 31),
+          rows: [...headerRows, ...slice],
+        });
+      }
+    }
+    const workingSheets = expandedSheets;
+
     // Total rows for progress
-    const totalRows = sheets.reduce((s, sh) => s + sh.rows.length, 0);
+    const totalRows = workingSheets.reduce((s, sh) => s + sh.rows.length, 0);
     let rowsDone = 0;
     const emitProgress = (stage: string) => {
       (self as unknown as Worker).postMessage({
@@ -55,7 +80,7 @@ self.addEventListener("message", async (ev: MessageEvent<WorkerRequest>) => {
 
     const wb = XLSX.utils.book_new();
 
-    for (const s of sheets) {
+    for (const s of workingSheets) {
       // Build sheet in row chunks so we can yield to the event loop and
       // report progress on very large data sets.
       const ws = XLSX.utils.aoa_to_sheet([]) as XLSXType.WorkSheet;

@@ -231,7 +231,13 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
 
     const totalRows = prepared.reduce((n, s) => n + s.rows.length, 0);
     const { showExportProgress } = await import("@/lib/export-progress");
-    const progress = showExportProgress(fileName, totalRows);
+    let activeWorker: Worker | null = null;
+    const progress = showExportProgress(fileName, totalRows, {
+      onCancel: () => {
+        try { activeWorker?.terminate(); } catch { /* ignore */ }
+        activeWorker = null;
+      },
+    });
 
     const runInWorker = async (): Promise<ArrayBuffer> =>
       await new Promise((resolve, reject) => {
@@ -239,11 +245,13 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
           new URL("../workers/xlsx-export.worker.ts", import.meta.url),
           { type: "module" },
         );
+        activeWorker = worker;
         worker.onmessage = (ev: MessageEvent<{
           type: "progress" | "done" | "error";
           buffer?: ArrayBuffer; message?: string;
           rowsDone?: number; rowsTotal?: number; stage?: string;
         }>) => {
+          if (progress.cancelled()) return;
           const msg = ev.data;
           if (msg.type === "progress") {
             progress.update(msg.rowsDone ?? 0, msg.stage);
@@ -266,6 +274,7 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
     try {
       buf = await runInWorker();
     } catch (err) {
+      if (progress.cancelled()) return;
       // Fallback: run on main thread. Keeps exports working if workers are
       // blocked (rare — some corporate setups strip module workers).
       console.warn("[exporters] worker fallback:", err);
@@ -278,6 +287,7 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
       buf = XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: anyStyled, compression: true }) as ArrayBuffer;
     }
 
+    if (progress.cancelled()) return;
     progress.done();
     await saveExport({
       subFolder,
