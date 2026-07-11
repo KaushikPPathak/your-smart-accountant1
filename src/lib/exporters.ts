@@ -245,11 +245,13 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
           new URL("../workers/xlsx-export.worker.ts", import.meta.url),
           { type: "module" },
         );
+        activeWorker = worker;
         worker.onmessage = (ev: MessageEvent<{
           type: "progress" | "done" | "error";
           buffer?: ArrayBuffer; message?: string;
           rowsDone?: number; rowsTotal?: number; stage?: string;
         }>) => {
+          if (progress.cancelled()) return;
           const msg = ev.data;
           if (msg.type === "progress") {
             progress.update(msg.rowsDone ?? 0, msg.stage);
