@@ -30,6 +30,9 @@ interface Move {
   qty: number;
   rate_paise: number;
   taxable_paise: number;
+  cgst_paise: number;
+  sgst_paise: number;
+  igst_paise: number;
   item_id: string;
   vouchers: { voucher_type: string; voucher_date: string; company_id: string } | null;
 }
@@ -55,7 +58,7 @@ function HsnSummary() {
     if (!activeCompanyId) return;
     supabase
       .from("voucher_items")
-      .select("qty, rate_paise, taxable_paise, item_id, vouchers!inner(voucher_type, voucher_date, company_id)")
+      .select("qty, rate_paise, taxable_paise, cgst_paise, sgst_paise, igst_paise, item_id, vouchers!inner(voucher_type, voucher_date, company_id)")
       .eq("vouchers.company_id", activeCompanyId)
       .lte("vouchers.voucher_date", to)
       .then(({ data }) => setMoves((data || []) as unknown as Move[]));
