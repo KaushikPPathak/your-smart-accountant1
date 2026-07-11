@@ -487,6 +487,39 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       continue;
     }
 
+    // Partition line items on mixed-rate invoices: 0%-rate lines with zero tax
+    // are nil-rated supplies and must land in the NIL sheet, NOT be listed as
+    // a "0%" rate row inside a B2B / B2CS invoice (that misrepresents them as
+    // zero-rated taxable supplies). The taxable portion of the same invoice
+    // still flows to B2B / B2CL / B2CS below.
+    const isNilLine = (it: VoucherRow["voucher_items"][number]) =>
+      Number(it.gst_rate || 0) === 0
+      && Number(it.igst_paise || 0) === 0
+      && Number(it.cgst_paise || 0) === 0
+      && Number(it.sgst_paise || 0) === 0;
+    const nilItems = v.voucher_items.filter(isNilLine);
+    const taxableItems = v.voucher_items.filter((it) => !isNilLine(it));
+    if (nilItems.length > 0) {
+      const nilAmt = nilItems.reduce((s, it) => s + (it.taxable_paise || 0), 0);
+      if (nilAmt > 0) {
+        const interstate = v.is_interstate;
+        const partyGstin = v.ledgers?.gstin || "";
+        const key: NilGroup["sply_ty"] = interstate
+          ? (partyGstin ? "INTRB2B" : "INTRB2C")
+          : (partyGstin ? "INTRAB2B" : "INTRAB2C");
+        const cur = nilMap.get(key) ?? { sply_ty: key, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 };
+        cur.nil_amt += nilAmt;
+        nilMap.set(key, cur);
+      }
+      // Drop the nil lines so downstream B2B/B2CS aggregators don't emit a 0%
+      // rate row. We shallow-clone the voucher to avoid mutating caller state.
+      v = { ...v, voucher_items: taxableItems };
+    }
+    // If nothing taxable remains, the entire supply was nil — done.
+    if (taxableItems.length === 0) continue;
+
+
+
     if (sn === "zero_rated_wp" || sn === "zero_rated_wop" || isExportTreatment(v.ledgers?.gst_treatment)) {
       const treatment = v.ledgers?.gst_treatment;
       // SEZ → goes to B2B with SEWP/SEWOP (per GSTN format)
