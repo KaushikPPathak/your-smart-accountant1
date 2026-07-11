@@ -801,7 +801,11 @@ const groupByCtinB2B = <T extends { ctin: string }>(arr: T[], key: "inv" | "nt")
     ctin,
     // Recipient name is an Excel-only convenience field and is not part of
     // the GSTN JSON invoice schema.
-    [key]: list.map(({ recipient_name: _recipientName, ...row }) => row),
+    [key]: list.map((item) => {
+      const row = { ...item } as Record<string, unknown>;
+      delete row.recipient_name;
+      return row;
+    }),
   }));
 };
 
