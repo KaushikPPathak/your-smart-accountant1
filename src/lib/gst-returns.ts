@@ -707,37 +707,41 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     ...g, nil_amt: r(g.nil_amt), expt_amt: r(g.expt_amt), ngsup_amt: r(g.ngsup_amt),
   }));
 
-  // HSN summary — split B2B (party has GSTIN) and B2C (no GSTIN / unregistered)
+  // HSN summary — split B2B (party has GSTIN) and B2C (no GSTIN / unregistered).
+  // CRITICAL: HSN classification depends ONLY on whether the party is registered
+  // (GSTIN present). It is INDEPENDENT of supply nature — exempt / nil-rated /
+  // non-GST supplies to a B2B party still populate the B2B HSN map, and the
+  // same value simultaneously flows to the exempt sheet. HSN totals therefore
+  // equal Books' HSN report = taxable + exempt + nil + non-GST.
   const hsnB2BMap = new Map<string, HSNRow>();
   const hsnB2CMap = new Map<string, HSNRow>();
   const accumulate = (v: VoucherRow, sign: 1 | -1) => {
     const isB2B = !!(v.ledgers?.gstin && v.ledgers.gstin.trim());
     const map = isB2B ? hsnB2BMap : hsnB2CMap;
     const items = v.voucher_items || [];
-    // If line data missing OR every line has zero value → synthesise a single
-    // header-derived line so nil/exempt/non-GST vouchers still populate HSN.
-    const lineSum = items.reduce((s, it) => s + (it.taxable_paise || 0), 0);
-    const useHeader = items.length === 0 || lineSum === 0;
-    if (useHeader) {
+    // Line count where taxable_paise is populated. When lines exist but every
+    // taxable_paise is zero (common for exempt items where the accounting entry
+    // only fills subtotal_paise), fall back to qty * rate_paise per line so the
+    // HSN sheet still shows per-item detail (not a single collapsed row).
+    const lineTaxableSum = items.reduce((s, it) => s + (it.taxable_paise || 0), 0);
+    const needsFallback = items.length > 0 && lineTaxableSum === 0;
+    if (items.length === 0) {
       const headerVal = v.subtotal_paise || v.total_paise;
       if (headerVal === 0) return;
-      const first = items[0];
-      const key = `${first?.items?.hsn_code || ""}|0|${first?.items?.unit || "OTH"}`;
+      const key = `||0|OTH`;
       const cur = map.get(key) ?? {
-        hsn_sc: first?.items?.hsn_code || "",
-        desc: first?.items?.name || "",
-        uqc: (first?.items?.unit || "OTH").toUpperCase().slice(0, 3) + "-" + (first?.items?.unit || "OTH").toUpperCase(),
-        qty: 0, rt: 0,
-        txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0, val: 0,
+        hsn_sc: "", desc: "", uqc: "OTH-OTH",
+        qty: 0, rt: 0, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0, val: 0,
       } satisfies HSNRow;
-      cur.qty += sign * (first ? Number(first.qty) : 0);
       cur.txval += sign * headerVal;
       cur.val += sign * headerVal;
       map.set(key, cur);
       return;
     }
     for (const it of items) {
-      const lineTx = it.taxable_paise || 0;
+      const fallbackVal = needsFallback ? Math.round(Number(it.qty || 0) * Number(it.rate_paise || 0)) : 0;
+      const lineTx = it.taxable_paise || fallbackVal;
+      if (lineTx === 0 && it.igst_paise === 0 && it.cgst_paise === 0 && it.sgst_paise === 0) continue;
       const key = `${it.items?.hsn_code || ""}|${it.gst_rate}|${it.items?.unit || "OTH"}`;
       const cur = map.get(key) ?? {
         hsn_sc: it.items?.hsn_code || "",
