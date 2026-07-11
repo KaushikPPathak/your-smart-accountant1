@@ -56,6 +56,7 @@ function GSTR1Page() {
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [sales, setSales] = useState<VoucherRow[]>([]);
   const [cdnotes, setCdnotes] = useState<VoucherRow[]>([]);
+  const [templateExporting, setTemplateExporting] = useState(false);
   const { view, setView } = useReportView("gstr1");
 
   // Determine effective period
@@ -112,8 +113,10 @@ function GSTR1Page() {
   const fileBase = `GSTR1_${company?.gstin || "GSTIN"}_${period.fp}${iffMode ? "_IFF" : ""}`;
 
   const runTemplateExport = async (b: BuiltGstr1, name: string) => {
+    if (templateExporting) return;
+    setTemplateExporting(true);
     const tId = toast.loading("Preparing GSTR-1 Excel…", {
-      description: "Downloading template & writing rows. This can take 10–60s on large periods.",
+      description: "Creating the official workbook locally. The app will remain responsive.",
     });
     try {
       await exportGstr1UsingOfficialTemplate(b, name);
@@ -124,6 +127,8 @@ function GSTR1Page() {
         description: e instanceof Error ? e.message : String(e),
       });
       downloadXlsx(name, gstr1ToXlsxSheets(b));
+    } finally {
+      setTemplateExporting(false);
     }
   };
 
@@ -220,8 +225,8 @@ function GSTR1Page() {
                   <Button variant="outline" size="sm" onClick={() => built && downloadXlsx(`${fileBase}.xlsx`, gstr1ToXlsxSheets(built))} disabled={!built}>
                     <FileSpreadsheet className="mr-1 h-4 w-4" /> Excel (fast)
                   </Button>
-                  <Button variant="outline" size="sm" onClick={onDownloadExcel} disabled={!built}>
-                    <FileSpreadsheet className="mr-1 h-4 w-4" /> Offline Tool Format
+                   <Button variant="outline" size="sm" onClick={onDownloadExcel} disabled={!built || templateExporting}>
+                     <FileSpreadsheet className="mr-1 h-4 w-4" /> {templateExporting ? "Preparing…" : "Offline Tool Format"}
                   </Button>
                 </>
               )}

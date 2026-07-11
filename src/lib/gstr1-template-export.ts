@@ -8,7 +8,6 @@
 
 import type { BuiltGstr1 } from "@/lib/gst-returns";
 import { saveExport } from "@/lib/desktop-save";
-import templateAsset from "@/assets/gstr1_template.xlsx.asset.json";
 
 // Map POS state code ("07") to the master-sheet POS label ("07-Delhi").
 // The GSTN template drop-down uses the "NN-State" form; using just "07"
@@ -37,44 +36,9 @@ const NIL_DESC: Record<string, string> = {
   INTRAB2C: "Intra-State supplies to unregistered persons",
 };
 
-// In-memory + IndexedDB cache so the 7 MB official template is downloaded
-// ONCE per device. Subsequent GSTR-1 exports reuse the cached buffer and
-// complete in ~1-2 seconds instead of re-downloading + re-parsing every time.
+// The official template is bundled in /public so the installed desktop app
+// never depends on the network. Keep one in-memory copy for repeated exports.
 let TEMPLATE_MEM: ArrayBuffer | null = null;
-const IDB_NAME = "gstr1-template-cache";
-const IDB_STORE = "templates";
-const IDB_KEY = "official-v1";
-
-function idbOpen(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_NAME, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-async function idbGet(): Promise<ArrayBuffer | null> {
-  try {
-    const db = await idbOpen();
-    return await new Promise((resolve) => {
-      const tx = db.transaction(IDB_STORE, "readonly");
-      const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
-      req.onsuccess = () => resolve((req.result as ArrayBuffer) ?? null);
-      req.onerror = () => resolve(null);
-    });
-  } catch { return null; }
-}
-async function idbPut(buf: ArrayBuffer): Promise<void> {
-  try {
-    const db = await idbOpen();
-    await new Promise<void>((resolve) => {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      tx.objectStore(IDB_STORE).put(buf, IDB_KEY);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-    });
-  } catch { /* ignore */ }
-}
 
 function isValidXlsx(b: ArrayBuffer): boolean {
   if (b.byteLength < 10000) return false;
@@ -84,44 +48,43 @@ function isValidXlsx(b: ArrayBuffer): boolean {
 
 async function fetchTemplateBuffer(): Promise<ArrayBuffer> {
   if (TEMPLATE_MEM && isValidXlsx(TEMPLATE_MEM)) return TEMPLATE_MEM;
-  const cached = await idbGet();
-  if (cached && isValidXlsx(cached)) { TEMPLATE_MEM = cached; return cached; }
-
-  const rel = templateAsset.url;
-  const abs = `https://your-smart-accountant1.lovable.app${rel}`;
-  const urls = [abs, rel];
-  let lastErr: unknown = null;
-  for (const u of urls) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 4000);
-    try {
-      const r = await fetch(u, { cache: "force-cache", signal: ctl.signal });
-      if (r.ok) {
-        const b = await r.arrayBuffer();
-        if (isValidXlsx(b)) {
-          TEMPLATE_MEM = b;
-          void idbPut(b);
-          return b;
-        }
-        lastErr = new Error(`Non-xlsx payload from ${u} (${b.byteLength} bytes)`);
-      } else {
-        lastErr = new Error(`HTTP ${r.status} for ${u}`);
-      }
-    } catch (e) {
-      lastErr = e instanceof Error && e.name === "AbortError"
-        ? new Error(`Timed out fetching ${u} (offline?)`)
-        : e;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  throw new Error(`Failed to fetch GSTR-1 template: ${String(lastErr)}`);
+  const response = await fetch("/gstr1_template.xlsx", { cache: "force-cache" });
+  if (!response.ok) throw new Error(`Bundled GSTR-1 template unavailable (HTTP ${response.status})`);
+  const buffer = await response.arrayBuffer();
+  if (!isValidXlsx(buffer)) throw new Error("Bundled GSTR-1 template is invalid");
+  TEMPLATE_MEM = buffer;
+  return buffer;
 }
 
 /** Fire-and-forget prefetch — call on GSTR-1 page mount so the template is
  * cached in IndexedDB before the user clicks Export. Silent on failure. */
 export function prefetchGstr1Template(): void {
-  void fetchTemplateBuffer().catch(() => { /* ignore — export will fall back */ });
+  void fetchTemplateBuffer().catch(() => { /* export reports the error if needed */ });
+}
+
+type TemplateRows = Record<string, (string | number)[][]>;
+
+function writeTemplateInWorker(template: ArrayBuffer, sheets: TemplateRows): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL("../workers/gstr1-template.worker.ts", import.meta.url), { type: "module" });
+    const timeout = window.setTimeout(() => {
+      worker.terminate();
+      reject(new Error("Official workbook generation timed out"));
+    }, 30000);
+    worker.onmessage = (event: MessageEvent<{ ok: boolean; output?: Uint8Array; error?: string }>) => {
+      window.clearTimeout(timeout);
+      worker.terminate();
+      if (!event.data.ok || !event.data.output) reject(new Error(event.data.error || "Workbook generation failed"));
+      else resolve(event.data.output.buffer as ArrayBuffer);
+    };
+    worker.onerror = (event) => {
+      window.clearTimeout(timeout);
+      worker.terminate();
+      reject(new Error(event.message || "Workbook worker failed"));
+    };
+    const workerCopy = template.slice(0);
+    worker.postMessage({ template: workerCopy, sheets }, [workerCopy]);
+  });
 }
 
 export async function exportGstr1UsingOfficialTemplate(
@@ -129,29 +92,9 @@ export async function exportGstr1UsingOfficialTemplate(
   fileName: string,
   subFolder = "Reports",
 ): Promise<void> {
-  const [{ default: ExcelJS }, buf] = await Promise.all([
-    import("exceljs"),
-    fetchTemplateBuffer(),
-  ]);
-
-
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buf);
-
-  // Yield to the browser between sheets so the "Preparing…" toast repaints
-  // instead of the tab appearing frozen while ExcelJS chews through rows.
-  const yieldToUI = () => new Promise<void>((res) => setTimeout(res, 0));
-
-  const writeRows = async (sheetName: string, rows: (string | number)[][], startRow = 5) => {
-    const ws = wb.getWorksheet(sheetName);
-    if (!ws) return;
-    rows.forEach((row, i) => {
-      const r = ws.getRow(startRow + i);
-      row.forEach((v, c) => { r.getCell(c + 1).value = v as never; });
-      r.commit();
-    });
-    await yieldToUI();
-  };
+  const buf = await fetchTemplateBuffer();
+  const sheets: TemplateRows = {};
+  const writeRows = (sheetName: string, rows: (string | number)[][]) => { sheets[sheetName] = rows; };
 
   // ── b2b,sez,de ────────────────────────────────────────────────
   const b2bRows: (string | number)[][] = [];
@@ -162,7 +105,7 @@ export async function exportGstr1UsingOfficialTemplate(
       "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
   }
-  await writeRows("b2b,sez,de", b2bRows);
+  writeRows("b2b,sez,de", b2bRows);
 
   // ── b2ba ──────────────────────────────────────────────────────
   const b2baRows: (string | number)[][] = [];
@@ -173,26 +116,26 @@ export async function exportGstr1UsingOfficialTemplate(
       "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
   }
-  await writeRows("b2ba", b2baRows);
+  writeRows("b2ba", b2baRows);
 
   // ── b2cl ──────────────────────────────────────────────────────
   const b2clRows: (string | number)[][] = [];
   for (const inv of g.b2cl) for (const it of inv.itms) {
     b2clRows.push([inv.inum, inv.idt, inv.val, posLabel(inv.pos), "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, ""]);
   }
-  await writeRows("b2cl", b2clRows);
+  writeRows("b2cl", b2clRows);
 
   // ── b2cla ─────────────────────────────────────────────────────
   const b2claRows: (string | number)[][] = [];
   for (const inv of g.b2cla) for (const it of inv.itms) {
     b2claRows.push([inv.oinum, inv.oidt, posLabel(inv.pos), inv.inum, inv.idt, inv.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, ""]);
   }
-  await writeRows("b2cla", b2claRows);
+  writeRows("b2cla", b2claRows);
 
   // ── b2cs ──────────────────────────────────────────────────────
   const b2csRows: (string | number)[][] = [];
   for (const g2 of g.b2cs) b2csRows.push(["OE", posLabel(g2.pos), "", g2.rt, g2.txval, g2.csamt, ""]);
-  await writeRows("b2cs", b2csRows);
+  writeRows("b2cs", b2csRows);
 
   // ── cdnr ──────────────────────────────────────────────────────
   const cdnrRows: (string | number)[][] = [];
@@ -203,7 +146,7 @@ export async function exportGstr1UsingOfficialTemplate(
       n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
   }
-  await writeRows("cdnr", cdnrRows);
+  writeRows("cdnr", cdnrRows);
 
   // ── cdnra ─────────────────────────────────────────────────────
   const cdnraRows: (string | number)[][] = [];
@@ -214,14 +157,14 @@ export async function exportGstr1UsingOfficialTemplate(
       n.rchrg, supTy, n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
   }
-  await writeRows("cdnra", cdnraRows);
+  writeRows("cdnra", cdnraRows);
 
   // ── cdnur ─────────────────────────────────────────────────────
   const cdnurRows: (string | number)[][] = [];
   for (const n of g.cdnur) for (const it of n.itms) {
     cdnurRows.push([n.typ, n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos), n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt]);
   }
-  await writeRows("cdnur", cdnurRows);
+  writeRows("cdnur", cdnurRows);
 
   // ── exp ───────────────────────────────────────────────────────
   const expRows: (string | number)[][] = [];
@@ -233,7 +176,7 @@ export async function exportGstr1UsingOfficialTemplate(
       it.rt, it.txval, it.csamt,
     ]);
   }
-  await writeRows("exp", expRows);
+  writeRows("exp", expRows);
 
   // ── exemp (Nil rated / Exempted / Non-GST) ────────────────────
   const nilByTy = new Map<string, { nil: number; exp: number; ngs: number }>();
@@ -247,38 +190,22 @@ export async function exportGstr1UsingOfficialTemplate(
     const v = nilByTy.get(k) ?? { nil: 0, exp: 0, ngs: 0 };
     return [NIL_DESC[k], v.nil, v.exp, v.ngs];
   });
-  await writeRows("exemp", exempRows);
+  writeRows("exemp", exempRows);
 
   // ── hsn ───────────────────────────────────────────────────────
-  // Official GSTN Offline-Tool template has ONE `hsn` sheet (not separate
-  // b2b/b2c). Merge both maps into a single HSN Summary — aggregate rows
-  // that share the same (HSN + Rate + UQC) key so totals reconcile with
-  // Books HSN report + the sheet's own SUM formulas.
-  const hsnMerged = new Map<string, {
-    hsn_sc: string; desc: string; uqc: string; qty: number; rt: number;
-    txval: number; iamt: number; camt: number; samt: number; csamt: number; val: number;
-  }>();
-  const pushHsn = (h: typeof hsnMerged extends Map<string, infer V> ? V : never) => {
-    const key = `${h.hsn_sc}|${h.rt}|${h.uqc}`;
-    const cur = hsnMerged.get(key);
-    if (!cur) { hsnMerged.set(key, { ...h }); return; }
-    cur.qty += h.qty; cur.txval += h.txval; cur.iamt += h.iamt;
-    cur.camt += h.camt; cur.samt += h.samt; cur.csamt += h.csamt; cur.val += h.val;
-  };
-  for (const h of g.hsn_b2b) pushHsn({ ...h });
-  for (const h of g.hsn_b2c) pushHsn({ ...h });
-  const hsnRows: (string | number)[][] = Array.from(hsnMerged.values()).map((h) => [
+  const hsnRows = (items: BuiltGstr1["hsn_b2b"]): (string | number)[][] => items.map((h) => [
     h.hsn_sc, h.desc, h.uqc, h.qty, h.val, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt,
   ]);
-  await writeRows("hsn", hsnRows);
+  writeRows("hsn(b2b)", hsnRows(g.hsn_b2b));
+  writeRows("hsn(b2c)", hsnRows(g.hsn_b2c));
 
   // ── docs ──────────────────────────────────────────────────────
   const docsRows: (string | number)[][] = g.docs.map((d) => [
     d.doc_typ, d.from, d.to, d.totnum, d.cancel,
   ]);
-  await writeRows("docs", docsRows);
+  writeRows("docs", docsRows);
 
-  const out = await wb.xlsx.writeBuffer();
+  const out = await writeTemplateInWorker(buf, sheets);
   await saveExport({
     subFolder,
     fileName,
