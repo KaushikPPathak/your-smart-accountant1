@@ -216,9 +216,14 @@ function GSTR1Page() {
                   </Button>
                 </>
               ) : (
-                <Button variant="outline" size="sm" onClick={onDownloadExcel} disabled={!built}>
-                  <FileSpreadsheet className="mr-1 h-4 w-4" /> Offline Tool Excel
-                </Button>
+                <>
+                  <Button variant="outline" size="sm" onClick={() => built && downloadXlsx(`${fileBase}.xlsx`, gstr1ToXlsxSheets(built))} disabled={!built}>
+                    <FileSpreadsheet className="mr-1 h-4 w-4" /> Excel (fast)
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={onDownloadExcel} disabled={!built}>
+                    <FileSpreadsheet className="mr-1 h-4 w-4" /> Offline Tool Format
+                  </Button>
+                </>
               )}
               <Button variant="outline" size="sm" onClick={onDownloadJson} disabled={!built}>
                 <FileJson className="mr-1 h-4 w-4" /> GSTN JSON
