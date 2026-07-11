@@ -458,7 +458,8 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     nilMap.set(key, cur);
   };
 
-  for (const v of sales) {
+  for (let v of sales) {
+
     let sn: SupplyNature = (v.supply_nature ?? "taxable") as SupplyNature;
 
     // Auto-classify: if user didn't explicitly mark the voucher as export/SEZ/etc.
