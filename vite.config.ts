@@ -116,6 +116,7 @@ export default defineConfig({
         watch: { ignored: ["**/src-tauri/**"] },
       }
     : { host: "::", port: 8080 },
+  worker: { format: "es" },
   build: {
     ...sharedBuild,
     outDir: isTauri ? "dist/client" : "dist",
