@@ -39,21 +39,32 @@ const NIL_DESC: Record<string, string> = {
 
 async function fetchTemplateBuffer(): Promise<ArrayBuffer> {
   const rel = templateAsset.url;
+  // Order matters: absolute Lovable CDN URL FIRST so the export works
+  // uniformly from every host (Tauri desktop, VS Code / localhost dev,
+  // preview URL, published domain). The relative path only resolves on
+  // the deployed Lovable app itself — on localhost Vite returns its
+  // SPA index.html for `/__l5e/…`, which was silently making callers
+  // fall back to the plain (uncoloured) workbook.
   const abs = `https://your-smart-accountant1.lovable.app${rel}`;
-  // Try relative first (works on the deployed Lovable app itself),
-  // then fall back to the absolute Lovable-hosted URL so the export
-  // also works when running the codebase locally (localhost dev / VS Code).
-  const urls = [rel, abs];
+  const urls = [abs, rel];
   let lastErr: unknown = null;
   for (const u of urls) {
     try {
-      const r = await fetch(u);
+      const r = await fetch(u, { cache: "force-cache" });
       if (r.ok) {
         const b = await r.arrayBuffer();
         // Guard against Vite SPA fallback returning index.html on localhost.
-        if (b.byteLength > 10000) return b;
+        // A valid xlsx starts with the ZIP magic bytes "PK\x03\x04".
+        if (b.byteLength > 10000) {
+          const head = new Uint8Array(b, 0, 4);
+          if (head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04) {
+            return b;
+          }
+        }
+        lastErr = new Error(`Non-xlsx payload from ${u} (${b.byteLength} bytes)`);
+      } else {
+        lastErr = new Error(`HTTP ${r.status} for ${u}`);
       }
-      lastErr = new Error(`HTTP ${r.status} for ${u}`);
     } catch (e) { lastErr = e; }
   }
   throw new Error(`Failed to fetch GSTR-1 template: ${String(lastErr)}`);
