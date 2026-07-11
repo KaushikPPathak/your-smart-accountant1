@@ -94,6 +94,7 @@ export interface BuiltGstr1 {
 
 export interface B2BInvoice {
   ctin: string;
+  recipient_name: string;
   inum: string;
   idt: string;
   val: number;
@@ -527,6 +528,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       if (treatment === "sez_with_payment" || treatment === "sez_without_payment") {
         b2b.push({
           ctin: v.ledgers?.gstin || "",
+          recipient_name: v.ledgers?.name || "",
           inum: v.voucher_number,
           idt: fmtDDMMYYYY(v.voucher_date),
           val: r(v.total_paise),
@@ -570,6 +572,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       const inv_typ = invTypeFromTreatment(v.ledgers?.gst_treatment);
       const target: B2BInvoice = {
         ctin: partyGstin,
+        recipient_name: v.ledgers?.name || "",
         inum: v.voucher_number,
         idt: fmtDDMMYYYY(v.voucher_date),
         val: r(v.total_paise),
@@ -794,7 +797,12 @@ const groupByCtinB2B = <T extends { ctin: string }>(arr: T[], key: "inv" | "nt")
     list.push(x);
     m.set(x.ctin, list);
   }
-  return Array.from(m.entries()).map(([ctin, list]) => ({ ctin, [key]: list }));
+  return Array.from(m.entries()).map(([ctin, list]) => ({
+    ctin,
+    // Recipient name is an Excel-only convenience field and is not part of
+    // the GSTN JSON invoice schema.
+    [key]: list.map(({ recipient_name: _recipientName, ...row }) => row),
+  }));
 };
 
 export function gstr1ToJson(g: BuiltGstr1): Record<string, unknown> {
@@ -865,16 +873,16 @@ export function gstr1ToXlsxSheets(g: BuiltGstr1): XlsxSheet[] {
   ];
 
   const b2bRows: (string | number)[][] = [
-    ["GSTIN/UIN of Recipient", "Invoice Number", "Invoice date", "Invoice Value", "Place Of Supply", "Reverse Charge", "Applicable % of Tax Rate", "Invoice Type", "E-Commerce GSTIN", "Rate", "Taxable Value", "Cess Amount"],
+    ["GSTIN/UIN of Recipient", "Receiver Name", "Invoice Number", "Invoice date", "Invoice Value", "Place Of Supply", "Reverse Charge", "Applicable % of Tax Rate", "Invoice Type", "E-Commerce GSTIN", "Rate", "Taxable Value", "Cess Amount"],
   ];
   for (const inv of g.b2b) for (const it of inv.itms)
-    b2bRows.push([inv.ctin, inv.inum, inv.idt, inv.val, inv.pos, inv.rchrg, "", inv.inv_typ, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt]);
+    b2bRows.push([inv.ctin, inv.recipient_name, inv.inum, inv.idt, inv.val, inv.pos, inv.rchrg, "", inv.inv_typ, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt]);
 
   const b2baRows: (string | number)[][] = [
-    ["GSTIN/UIN of Recipient", "Original Invoice Number", "Original Invoice date", "Revised Invoice Number", "Revised Invoice date", "Invoice Value", "Place Of Supply", "Reverse Charge", "Invoice Type", "Rate", "Taxable Value", "Cess Amount"],
+    ["GSTIN/UIN of Recipient", "Receiver Name", "Original Invoice Number", "Original Invoice date", "Revised Invoice Number", "Revised Invoice date", "Invoice Value", "Place Of Supply", "Reverse Charge", "Invoice Type", "Rate", "Taxable Value", "Cess Amount"],
   ];
   for (const inv of g.b2ba) for (const it of inv.itms)
-    b2baRows.push([inv.ctin, inv.oinum, inv.oidt, inv.inum, inv.idt, inv.val, inv.pos, inv.rchrg, inv.inv_typ, it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt]);
+    b2baRows.push([inv.ctin, inv.recipient_name, inv.oinum, inv.oidt, inv.inum, inv.idt, inv.val, inv.pos, inv.rchrg, inv.inv_typ, it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt]);
 
   const b2clRows: (string | number)[][] = [
     ["Invoice Number", "Invoice date", "Invoice Value", "Place Of Supply", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount", "E-Commerce GSTIN"],

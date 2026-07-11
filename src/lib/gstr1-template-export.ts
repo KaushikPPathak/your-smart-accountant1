@@ -98,7 +98,7 @@ export async function exportGstr1UsingOfficialTemplate(
   const b2bRows: (string | number)[][] = [];
   for (const inv of g.b2b) for (const it of inv.itms) {
     b2bRows.push([
-      inv.ctin, "", inv.inum, inv.idt, inv.val, posLabel(inv.pos),
+      inv.ctin, inv.recipient_name, inv.inum, inv.idt, inv.val, posLabel(inv.pos),
       inv.rchrg, "", inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
       "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
@@ -109,7 +109,7 @@ export async function exportGstr1UsingOfficialTemplate(
   const b2baRows: (string | number)[][] = [];
   for (const inv of g.b2ba) for (const it of inv.itms) {
     b2baRows.push([
-      inv.ctin, "", inv.oinum, inv.oidt, inv.inum, inv.idt, inv.val,
+      inv.ctin, inv.recipient_name, inv.oinum, inv.oidt, inv.inum, inv.idt, inv.val,
       posLabel(inv.pos), inv.rchrg, "", inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
       "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
