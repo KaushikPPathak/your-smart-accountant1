@@ -66,6 +66,13 @@ export interface PdfTableOptions {
   dividerBeforeCol?: number;
 }
 
+// Rows per autoTable chunk. autoTable is synchronous, so we render the body
+// in chunks and yield between them (setTimeout 0) to keep the UI responsive
+// on very large ledger PDFs. Each chunk continues from the previous chunk's
+// finalY so the visible table remains contiguous across page breaks.
+const PDF_ROW_CHUNK = 500;
+const yieldToUi = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
 export function downloadPdfTable(opts: PdfTableOptions): void {
   void (async () => {
     const lang = getStoredLang();
@@ -80,6 +87,12 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     const head = localizeExportRows(opts.head, lang);
     const body = localizeExportRows(opts.body as (string | number)[][], lang);
     const foot = opts.foot ? localizeExportRows(opts.foot as (string | number)[][], lang) : undefined;
+
+    const { showExportProgress } = await import("@/lib/export-progress");
+    let aborted = false;
+    const progress = showExportProgress(opts.fileName, body.length, {
+      onCancel: () => { aborted = true; },
+    });
 
     let y = 28;
     if (opts.companyName) {
@@ -109,11 +122,44 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     const columnStyles: Record<number, { halign: "right" }> = {};
     (opts.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
 
-    autoTable(doc, {
-      startY: tableStartY,
-      head,
-      body,
-      foot,
+    const drawPageChrome = () => {
+      let hy = 28;
+      if (opts.companyName) {
+        doc.setFont(FONT, "bold");
+        doc.setFontSize(13);
+        doc.text(opts.companyName.toUpperCase(), pageW / 2, hy, { align: "center" });
+        hy += 14;
+      }
+      if (opts.companySubLine) {
+        doc.setFont(FONT, "normal");
+        doc.setFontSize(9);
+        doc.text(opts.companySubLine, pageW / 2, hy, { align: "center" });
+        hy += 12;
+      }
+      doc.setFont(FONT, "bold");
+      doc.setFontSize(12);
+      doc.text(title, pageW / 2, hy, { align: "center" });
+      if (subtitle) {
+        hy += 14;
+        doc.setFont(FONT, "normal");
+        doc.setFontSize(10);
+        doc.text(subtitle, pageW / 2, hy, { align: "center" });
+      }
+    };
+
+    const chunkCount = Math.max(1, Math.ceil(body.length / PDF_ROW_CHUNK));
+    let rowsDone = 0;
+    let nextY = tableStartY;
+    for (let ci = 0; ci < chunkCount; ci++) {
+      if (aborted) return;
+      const slice = body.slice(ci * PDF_ROW_CHUNK, (ci + 1) * PDF_ROW_CHUNK);
+      const isFirst = ci === 0;
+      const isLast = ci === chunkCount - 1;
+      autoTable(doc, {
+        startY: nextY,
+        head: isFirst ? head : undefined,
+        body: slice,
+        foot: isLast ? foot : undefined,
       showFoot: "lastPage",
       theme: "grid",
       styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
@@ -133,29 +179,8 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
           }
         },
       didDrawPage: (data) => {
-        if (data.pageNumber > 1) {
-          let hy = 28;
-          if (opts.companyName) {
-            doc.setFont(FONT, "bold");
-            doc.setFontSize(13);
-            doc.text(opts.companyName.toUpperCase(), pageW / 2, hy, { align: "center" });
-            hy += 14;
-          }
-          if (opts.companySubLine) {
-            doc.setFont(FONT, "normal");
-            doc.setFontSize(9);
-            doc.text(opts.companySubLine, pageW / 2, hy, { align: "center" });
-            hy += 12;
-          }
-          doc.setFont(FONT, "bold");
-          doc.setFontSize(12);
-          doc.text(title, pageW / 2, hy, { align: "center" });
-          if (subtitle) {
-            hy += 14;
-            doc.setFont(FONT, "normal");
-            doc.setFontSize(10);
-            doc.text(subtitle, pageW / 2, hy, { align: "center" });
-          }
+        if (data.pageNumber > 1 || !isFirst) {
+          drawPageChrome();
         }
         const pageW2 = doc.internal.pageSize.getWidth();
         const pageLabel = tReportLabel("Page", lang);
