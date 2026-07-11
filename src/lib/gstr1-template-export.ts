@@ -95,7 +95,11 @@ export async function exportGstr1UsingOfficialTemplate(
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
 
-  const writeRows = (sheetName: string, rows: (string | number)[][], startRow = 5) => {
+  // Yield to the browser between sheets so the "Preparing…" toast repaints
+  // instead of the tab appearing frozen while ExcelJS chews through rows.
+  const yieldToUI = () => new Promise<void>((res) => setTimeout(res, 0));
+
+  const writeRows = async (sheetName: string, rows: (string | number)[][], startRow = 5) => {
     const ws = wb.getWorksheet(sheetName);
     if (!ws) return;
     rows.forEach((row, i) => {
@@ -103,6 +107,7 @@ export async function exportGstr1UsingOfficialTemplate(
       row.forEach((v, c) => { r.getCell(c + 1).value = v as never; });
       r.commit();
     });
+    await yieldToUI();
   };
 
   // ── b2b,sez,de ────────────────────────────────────────────────
@@ -114,7 +119,7 @@ export async function exportGstr1UsingOfficialTemplate(
       "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
   }
-  writeRows("b2b,sez,de", b2bRows);
+  await writeRows("b2b,sez,de", b2bRows);
 
   // ── b2ba ──────────────────────────────────────────────────────
   const b2baRows: (string | number)[][] = [];
@@ -125,26 +130,26 @@ export async function exportGstr1UsingOfficialTemplate(
       "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
   }
-  writeRows("b2ba", b2baRows);
+  await writeRows("b2ba", b2baRows);
 
   // ── b2cl ──────────────────────────────────────────────────────
   const b2clRows: (string | number)[][] = [];
   for (const inv of g.b2cl) for (const it of inv.itms) {
     b2clRows.push([inv.inum, inv.idt, inv.val, posLabel(inv.pos), "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, ""]);
   }
-  writeRows("b2cl", b2clRows);
+  await writeRows("b2cl", b2clRows);
 
   // ── b2cla ─────────────────────────────────────────────────────
   const b2claRows: (string | number)[][] = [];
   for (const inv of g.b2cla) for (const it of inv.itms) {
     b2claRows.push([inv.oinum, inv.oidt, posLabel(inv.pos), inv.inum, inv.idt, inv.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, ""]);
   }
-  writeRows("b2cla", b2claRows);
+  await writeRows("b2cla", b2claRows);
 
   // ── b2cs ──────────────────────────────────────────────────────
   const b2csRows: (string | number)[][] = [];
   for (const g2 of g.b2cs) b2csRows.push(["OE", posLabel(g2.pos), "", g2.rt, g2.txval, g2.csamt, ""]);
-  writeRows("b2cs", b2csRows);
+  await writeRows("b2cs", b2csRows);
 
   // ── cdnr ──────────────────────────────────────────────────────
   const cdnrRows: (string | number)[][] = [];
@@ -155,7 +160,7 @@ export async function exportGstr1UsingOfficialTemplate(
       n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
   }
-  writeRows("cdnr", cdnrRows);
+  await writeRows("cdnr", cdnrRows);
 
   // ── cdnra ─────────────────────────────────────────────────────
   const cdnraRows: (string | number)[][] = [];
@@ -166,14 +171,14 @@ export async function exportGstr1UsingOfficialTemplate(
       n.rchrg, supTy, n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
     ]);
   }
-  writeRows("cdnra", cdnraRows);
+  await writeRows("cdnra", cdnraRows);
 
   // ── cdnur ─────────────────────────────────────────────────────
   const cdnurRows: (string | number)[][] = [];
   for (const n of g.cdnur) for (const it of n.itms) {
     cdnurRows.push([n.typ, n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos), n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt]);
   }
-  writeRows("cdnur", cdnurRows);
+  await writeRows("cdnur", cdnurRows);
 
   // ── exp ───────────────────────────────────────────────────────
   const expRows: (string | number)[][] = [];
@@ -185,7 +190,7 @@ export async function exportGstr1UsingOfficialTemplate(
       it.rt, it.txval, it.csamt,
     ]);
   }
-  writeRows("exp", expRows);
+  await writeRows("exp", expRows);
 
   // ── exemp (Nil rated / Exempted / Non-GST) ────────────────────
   const nilByTy = new Map<string, { nil: number; exp: number; ngs: number }>();
@@ -199,7 +204,7 @@ export async function exportGstr1UsingOfficialTemplate(
     const v = nilByTy.get(k) ?? { nil: 0, exp: 0, ngs: 0 };
     return [NIL_DESC[k], v.nil, v.exp, v.ngs];
   });
-  writeRows("exemp", exempRows);
+  await writeRows("exemp", exempRows);
 
   // ── hsn ───────────────────────────────────────────────────────
   // Official GSTN Offline-Tool template has ONE `hsn` sheet (not separate
@@ -222,13 +227,13 @@ export async function exportGstr1UsingOfficialTemplate(
   const hsnRows: (string | number)[][] = Array.from(hsnMerged.values()).map((h) => [
     h.hsn_sc, h.desc, h.uqc, h.qty, h.val, h.rt, h.txval, h.iamt, h.camt, h.samt, h.csamt,
   ]);
-  writeRows("hsn", hsnRows);
+  await writeRows("hsn", hsnRows);
 
   // ── docs ──────────────────────────────────────────────────────
   const docsRows: (string | number)[][] = g.docs.map((d) => [
     d.doc_typ, d.from, d.to, d.totnum, d.cancel,
   ]);
-  writeRows("docs", docsRows);
+  await writeRows("docs", docsRows);
 
   const out = await wb.xlsx.writeBuffer();
   await saveExport({
