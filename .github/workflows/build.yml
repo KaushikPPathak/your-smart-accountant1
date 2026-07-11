@@ -123,6 +123,8 @@ jobs:
           name: SmartAccountant-Windows-${{ needs.version.outputs.version }}
           path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
+          retention-days: 7
+          compression-level: 9
 
       - name: Upload Windows build log on failure
         if: failure()
@@ -133,6 +135,7 @@ jobs:
             src-tauri/target/release/build/**/output
             src-tauri/target/release/build/**/stderr
           if-no-files-found: ignore
+          retention-days: 3
 
   # ─────────────────────────────────────────────
   # Android APK — Tauri v2 mobile
