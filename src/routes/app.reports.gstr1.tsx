@@ -42,6 +42,11 @@ function GSTR1Page() {
   const today = new Date();
   const fyYear = today.getMonth() < 3 ? today.getFullYear() - 1 : today.getFullYear();
 
+  // Warm the 7 MB official template cache in the background so Export is
+  // instant once the user clicks. Silent on failure — export falls back
+  // to a plain workbook if the CDN is unreachable.
+  useEffect(() => { prefetchGstr1Template(); }, []);
+
   const [cadence, setCadence] = useState<"monthly" | "quarterly">("monthly");
   const [iffMode, setIffMode] = useState(false);
   const [year, setYear] = useState<number>(today.getFullYear());
