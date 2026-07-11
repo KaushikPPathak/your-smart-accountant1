@@ -459,16 +459,27 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
   };
 
   for (const v of sales) {
-    let sn = v.supply_nature;
+    let sn: SupplyNature = (v.supply_nature ?? "taxable") as SupplyNature;
 
-    // Auto-classify: if user didn't mark supply_nature but every line is 0% GST
-    // with zero tax, treat the whole voucher as nil-rated so it lands in the
-    // GSTR-1 "nil / exempt / non-GST" sheet instead of B2B / B2CS.
-    if (sn === "taxable" && v.voucher_items.length > 0) {
+    // Auto-classify: if user didn't explicitly mark the voucher as export/SEZ/etc.
+    // AND every line is 0% GST with zero tax, treat the whole voucher as
+    // nil-rated so it lands in the GSTR-1 "nil / exempt / non-GST" sheet
+    // instead of B2B / B2CS. We also fire this for null/undefined supply_nature
+    // (the Supabase read path can return null) and for the default "taxable".
+    const isUnclassified = !sn || sn === "taxable";
+    if (isUnclassified && v.voucher_items.length > 0) {
       const allZero = v.voucher_items.every(
-        (it) => (it.gst_rate || 0) === 0 && (it.cgst_paise || 0) === 0 && (it.sgst_paise || 0) === 0 && (it.igst_paise || 0) === 0,
+        (it) => Number(it.gst_rate || 0) === 0
+          && Number(it.cgst_paise || 0) === 0
+          && Number(it.sgst_paise || 0) === 0
+          && Number(it.igst_paise || 0) === 0,
       );
-      if (allZero) sn = "nil_rated";
+      // Also treat voucher-level zero tax as a safety net for older rows
+      // where item-level tax fields may not have been backfilled.
+      const voucherZeroTax = (v.cgst_paise || 0) === 0
+        && (v.sgst_paise || 0) === 0
+        && (v.igst_paise || 0) === 0;
+      if (allZero && voucherZeroTax) sn = "nil_rated";
     }
 
     if (sn === "nil_rated" || sn === "exempt" || sn === "non_gst") {
