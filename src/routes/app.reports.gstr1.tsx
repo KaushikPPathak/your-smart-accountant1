@@ -13,9 +13,12 @@ import { formatINR } from "@/lib/money";
 import { exportGstr1UsingOfficialTemplate } from "@/lib/gstr1-template-export";
 import {
   buildGstr1, fetchVouchers, fetchCompanyMeta, gstr1ToJson,
-  monthRange, quarterRange, periodFP, downloadJson, validateGstr1,
+  gstr1ToXlsxSheets, monthRange, quarterRange, periodFP, downloadJson, validateGstr1,
   type VoucherRow, type CompanyMeta, type BuiltGstr1,
 } from "@/lib/gst-returns";
+import { downloadXlsx } from "@/lib/exporters";
+import { toast } from "sonner";
+
 import { ValidationPanel } from "@/components/reports/ValidationPanel";
 import { PeriodLockCard } from "@/components/reports/PeriodLockCard";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
@@ -103,8 +106,19 @@ function GSTR1Page() {
 
   const fileBase = `GSTR1_${company?.gstin || "GSTIN"}_${period.fp}${iffMode ? "_IFF" : ""}`;
 
+  const runTemplateExport = async (b: BuiltGstr1, name: string) => {
+    try {
+      await exportGstr1UsingOfficialTemplate(b, name);
+    } catch (e) {
+      toast.warning("Offline-Tool template unavailable — exported plain workbook instead", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+      downloadXlsx(name, gstr1ToXlsxSheets(b));
+    }
+  };
+
   const onDownloadJson = () => built && downloadJson(`${fileBase}.json`, gstr1ToJson(built));
-  const onDownloadExcel = () => { void (built && exportGstr1UsingOfficialTemplate(built, `${fileBase}.xlsx`)); };
+  const onDownloadExcel = () => { if (built) void runTemplateExport(built, `${fileBase}.xlsx`); };
 
   const exportQuarter = (iff: boolean) => {
     if (!company) return;
@@ -118,8 +132,9 @@ function GSTR1Page() {
       iffOnly: iff,
     });
     const name = `GSTR1_${company.gstin || "GSTIN"}_${period.fp}${iff ? "_IFF_B2B_CDNR" : "_Quarterly_Full"}.xlsx`;
-    void exportGstr1UsingOfficialTemplate(b, name);
+    void runTemplateExport(b, name);
   };
+
 
   return (
     <div className="space-y-3">
