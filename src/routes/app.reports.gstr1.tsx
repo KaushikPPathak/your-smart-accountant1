@@ -308,8 +308,46 @@ function GSTR1Page() {
           <GstSectionTable view={view} reportId="gstr1" title={`HSN — B2C (${built.hsn_b2c.length}) — Supplies to unregistered persons`} headers={["HSN", "UQC", "Qty", "Rate", "Taxable", "IGST", "CGST", "SGST", "Total"]}
             rows={built.hsn_b2c.map((h) => [h.hsn_sc, h.uqc, h.qty, `${h.rt}%`, money(h.txval), money(h.iamt), money(h.camt), money(h.samt), money(h.val)])} />
 
+          {(() => {
+            const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
+            const b2bVal = sum(built.b2b.map((x) => x.val));
+            const b2clVal = sum(built.b2cl.map((x) => x.val));
+            const b2csVal = sum(built.b2cs.map((x) => x.txval + x.iamt + x.camt + x.samt));
+            const expVal = sum(built.exp.map((x) => x.val));
+            const nilVal = sum(built.nil.map((n) => n.nil_amt + n.expt_amt + n.ngsup_amt));
+            const cdnrVal = sum(built.cdnr.map((x) => x.val));
+            const cdnurVal = sum(built.cdnur.map((x) => x.val));
+            const salesGross = b2bVal + b2clVal + b2csVal + expVal + nilVal;
+            const netSales = salesGross - cdnrVal - cdnurVal;
+            const hsnB2B = sum(built.hsn_b2b.map((h) => h.val));
+            const hsnB2C = sum(built.hsn_b2c.map((h) => h.val));
+            const hsnTotal = hsnB2B + hsnB2C;
+            const diff = netSales - hsnTotal;
+            return (
+              <GstSectionTable view={view} reportId="gstr1"
+                title={`Reconciliation — Sales (net of CN/DN) vs HSN Summary`}
+                headers={["Component", "Amount"]}
+                rows={[
+                  ["B2B", money(b2bVal)],
+                  ["B2CL", money(b2clVal)],
+                  ["B2CS", money(b2csVal)],
+                  ["EXP", money(expVal)],
+                  ["NIL / Exempt / Non-GST", money(nilVal)],
+                  ["Sub-total (outward)", money(salesGross)],
+                  ["Less: CDNR (registered)", money(-cdnrVal)],
+                  ["Less: CDNUR (unregistered)", money(-cdnurVal)],
+                  ["Net outward supplies (A)", money(netSales)],
+                  ["HSN — B2B", money(hsnB2B)],
+                  ["HSN — B2C", money(hsnB2C)],
+                  ["HSN total (B)", money(hsnTotal)],
+                  ["Difference (A − B)", money(diff)],
+                ]} />
+            );
+          })()}
+
           <GstSectionTable view={view} reportId="gstr1" title={`Documents Issued (${built.docs.length})`} headers={["Type", "From", "To", "Total", "Cancelled", "Net"]}
             rows={built.docs.map((d) => [d.doc_typ, d.from, d.to, d.totnum, d.cancel, d.net_issue])} />
+
         </>
       )}
     </div>
