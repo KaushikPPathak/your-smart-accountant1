@@ -63,11 +63,14 @@ export function prefetchGstr1Template(): void {
 }
 
 type TemplateRows = Record<string, (string | number)[][]>;
-// Row-3 total cells that must dedup a repeated invoice-value column.
-// Invoice Value is a property of the invoice, not the rate row — we repeat
-// it on every rate line for user clarity but the row-3 total must count
-// each invoice once, keyed by its unique invoice number column.
-export type DedupTotalConfig = { valCol: string; invCol: string };
+// Row-3 "Total Invoice/Note Value" cell override. Invoice Value is a
+// property of the invoice, not the rate row — we repeat it on every rate
+// line for readability (Display Layer) but the row-3 total (Summary Layer)
+// must count each invoice ONCE. We precompute the deduped total in TS
+// from the source BuiltGstr1 (which is already invoice-level, so no
+// duplicates possible) and write it as a literal number. No formula, no
+// COUNTIF, no chance of Excel/LibreOffice failing to recalc.
+export type DedupTotalConfig = { valCol: string; total: number };
 type DedupTotals = Record<string, DedupTotalConfig>;
 
 function writeTemplateInWorker(
