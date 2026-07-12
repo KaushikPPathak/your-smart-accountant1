@@ -122,9 +122,17 @@ function GSTR1Page() {
       await exportGstr1UsingOfficialTemplate(b, name);
       toast.success("GSTR-1 Excel ready", { id: tId });
     } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.startsWith("GSTR-1 reconciliation failed:")) {
+        toast.error("GSTR-1 export blocked — totals do not tally", {
+          id: tId,
+          description: message,
+        });
+        return;
+      }
       toast.warning("Offline-Tool template unavailable — exported plain workbook instead", {
         id: tId,
-        description: e instanceof Error ? e.message : String(e),
+        description: message,
       });
       downloadXlsx(name, gstr1ToXlsxSheets(b));
     } finally {

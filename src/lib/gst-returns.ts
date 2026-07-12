@@ -425,10 +425,6 @@ const lineFromVoucherItems = (items: VoucherRow["voucher_items"]): TaxLine[] => 
 
 const roundRupees = (value: number): number => Number(value.toFixed(2));
 const taxLineTaxable = (lines: TaxLine[]): number => lines.reduce((sum, line) => sum + line.itm_det.txval, 0);
-const taxLineGross = (lines: TaxLine[]): number => lines.reduce(
-  (sum, line) => sum + line.itm_det.txval + line.itm_det.iamt + line.itm_det.camt + line.itm_det.samt + line.itm_det.csamt,
-  0,
-);
 const nilGroupValue = (group: NilGroup): number => group.nil_amt + group.expt_amt + group.ngsup_amt;
 const noteSign = (note: { ntty: "C" | "D" }): 1 | -1 => note.ntty === "C" ? -1 : 1;
 
