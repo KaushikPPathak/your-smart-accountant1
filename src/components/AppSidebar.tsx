@@ -82,6 +82,7 @@ const SECTIONS: NavSection[] = [
       { title: "Dashboard", url: "/app", icon: LayoutDashboard, i18nKey: "nav.dashboard" },
       { title: "Companies", url: "/app/companies", icon: Building2, i18nKey: "nav.companies" },
       { title: "Company Settings", url: "/app/settings", icon: Settings, i18nKey: "nav.companySettings" },
+      { title: "License", url: "/app/settings/license", icon: Settings },
     ],
   },
   {

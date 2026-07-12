@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# License minting private key — NEVER commit
+tools/license-mint/private.key
+

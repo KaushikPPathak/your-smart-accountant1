@@ -35,6 +35,8 @@ import { BackupNudgeBanner } from "@/components/BackupNudgeBanner";
 import { DataOwnershipDialog } from "@/components/DataOwnershipDialog";
 import { UpdateRecoveryBanner } from "@/components/UpdateRecoveryBanner";
 import { InstallAppButton } from "@/components/InstallAppButton";
+import { LicenseNagBanner } from "@/components/LicenseNagBanner";
+import { getLicenseState, isReadOnlyLocked } from "@/lib/license/state";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
@@ -244,6 +246,28 @@ function AppLayout() {
     }
   }, [bootstrapping, companyLoading, memberships.length, activeCompanyId, onCompaniesPage, navigate]);
 
+  // Read-only lock once the 30-day trial ends and no valid license is
+  // installed: block voucher creation and the e-invoice screen; reports
+  // remain fully readable (watermarked on export).
+  useEffect(() => {
+    const p = location.pathname;
+    const isProtected = p.startsWith("/app/vouchers/new/") || p === "/app/einvoice";
+    if (!isProtected) return;
+    let cancelled = false;
+    (async () => {
+      const st = await getLicenseState();
+      if (cancelled) return;
+      if (isReadOnlyLocked(st)) {
+        toast.error("Trial ended — enter a license key to keep creating vouchers.");
+        navigate({ to: "/app/settings/license" });
+      } else if (st.mode === "licensed" && st.plan === "basic" && p === "/app/einvoice") {
+        toast.error("E-Invoice requires the Pro plan.");
+        navigate({ to: "/app/settings/license" });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [location.pathname, navigate]);
+
   if (bootstrapping || companyLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
@@ -322,6 +346,7 @@ function AppLayout() {
               </Button>
             </div>
           </header>
+          <LicenseNagBanner />
           <UpdateRecoveryBanner />
           <BackupNudgeBanner />
           <AccountGroupsProvider>

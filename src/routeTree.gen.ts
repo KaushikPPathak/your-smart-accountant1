@@ -35,6 +35,7 @@ import { Route as AppVouchersVoucherIdRouteImport } from './routes/app.vouchers.
 import { Route as AppToolsGstr1JsonRouteImport } from './routes/app.tools.gstr1-json'
 import { Route as AppSettingsTaxTemplatesRouteImport } from './routes/app.settings.tax-templates'
 import { Route as AppSettingsOpeningBillsRouteImport } from './routes/app.settings.opening-bills'
+import { Route as AppSettingsLicenseRouteImport } from './routes/app.settings.license'
 import { Route as AppSettingsCostCentresRouteImport } from './routes/app.settings.cost-centres'
 import { Route as AppReportsTrialBalanceRouteImport } from './routes/app.reports.trial-balance'
 import { Route as AppReportsTradingRouteImport } from './routes/app.reports.trading'
@@ -202,6 +203,11 @@ const AppSettingsTaxTemplatesRoute = AppSettingsTaxTemplatesRouteImport.update({
 const AppSettingsOpeningBillsRoute = AppSettingsOpeningBillsRouteImport.update({
   id: '/opening-bills',
   path: '/opening-bills',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsLicenseRoute = AppSettingsLicenseRouteImport.update({
+  id: '/license',
+  path: '/license',
   getParentRoute: () => AppSettingsRoute,
 } as any)
 const AppSettingsCostCentresRoute = AppSettingsCostCentresRouteImport.update({
@@ -452,6 +458,7 @@ export interface FileRoutesByFullPath {
   '/app/reports/trading': typeof AppReportsTradingRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
   '/app/settings/cost-centres': typeof AppSettingsCostCentresRoute
+  '/app/settings/license': typeof AppSettingsLicenseRoute
   '/app/settings/opening-bills': typeof AppSettingsOpeningBillsRoute
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
   '/app/tools/gstr1-json': typeof AppToolsGstr1JsonRoute
@@ -517,6 +524,7 @@ export interface FileRoutesByTo {
   '/app/reports/trading': typeof AppReportsTradingRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
   '/app/settings/cost-centres': typeof AppSettingsCostCentresRoute
+  '/app/settings/license': typeof AppSettingsLicenseRoute
   '/app/settings/opening-bills': typeof AppSettingsOpeningBillsRoute
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
   '/app/tools/gstr1-json': typeof AppToolsGstr1JsonRoute
@@ -584,6 +592,7 @@ export interface FileRoutesById {
   '/app/reports/trading': typeof AppReportsTradingRoute
   '/app/reports/trial-balance': typeof AppReportsTrialBalanceRoute
   '/app/settings/cost-centres': typeof AppSettingsCostCentresRoute
+  '/app/settings/license': typeof AppSettingsLicenseRoute
   '/app/settings/opening-bills': typeof AppSettingsOpeningBillsRoute
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
   '/app/tools/gstr1-json': typeof AppToolsGstr1JsonRoute
@@ -652,6 +661,7 @@ export interface FileRouteTypes {
     | '/app/reports/trading'
     | '/app/reports/trial-balance'
     | '/app/settings/cost-centres'
+    | '/app/settings/license'
     | '/app/settings/opening-bills'
     | '/app/settings/tax-templates'
     | '/app/tools/gstr1-json'
@@ -717,6 +727,7 @@ export interface FileRouteTypes {
     | '/app/reports/trading'
     | '/app/reports/trial-balance'
     | '/app/settings/cost-centres'
+    | '/app/settings/license'
     | '/app/settings/opening-bills'
     | '/app/settings/tax-templates'
     | '/app/tools/gstr1-json'
@@ -783,6 +794,7 @@ export interface FileRouteTypes {
     | '/app/reports/trading'
     | '/app/reports/trial-balance'
     | '/app/settings/cost-centres'
+    | '/app/settings/license'
     | '/app/settings/opening-bills'
     | '/app/settings/tax-templates'
     | '/app/tools/gstr1-json'
@@ -990,6 +1002,13 @@ declare module '@tanstack/react-router' {
       path: '/opening-bills'
       fullPath: '/app/settings/opening-bills'
       preLoaderRoute: typeof AppSettingsOpeningBillsRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/app/settings/license': {
+      id: '/app/settings/license'
+      path: '/license'
+      fullPath: '/app/settings/license'
+      preLoaderRoute: typeof AppSettingsLicenseRouteImport
       parentRoute: typeof AppSettingsRoute
     }
     '/app/settings/cost-centres': {
@@ -1325,12 +1344,14 @@ const AppReportsRouteWithChildren = AppReportsRoute._addFileChildren(
 
 interface AppSettingsRouteChildren {
   AppSettingsCostCentresRoute: typeof AppSettingsCostCentresRoute
+  AppSettingsLicenseRoute: typeof AppSettingsLicenseRoute
   AppSettingsOpeningBillsRoute: typeof AppSettingsOpeningBillsRoute
   AppSettingsTaxTemplatesRoute: typeof AppSettingsTaxTemplatesRoute
 }
 
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsCostCentresRoute: AppSettingsCostCentresRoute,
+  AppSettingsLicenseRoute: AppSettingsLicenseRoute,
   AppSettingsOpeningBillsRoute: AppSettingsOpeningBillsRoute,
   AppSettingsTaxTemplatesRoute: AppSettingsTaxTemplatesRoute,
 }

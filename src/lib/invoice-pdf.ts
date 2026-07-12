@@ -469,6 +469,8 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
   void formatINR;
 
   const fileName = `${TYPE_TITLE[v.voucher_type] || "invoice"}-${v.voucher_number}.pdf`;
+  const { stampWatermarkIfUnlicensed } = await import("./license/pdf-watermark");
+  await stampWatermarkIfUnlicensed(doc);
   const buf = doc.output("arraybuffer");
   await saveExport({
     subFolder: "Invoices",
