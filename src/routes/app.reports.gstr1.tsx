@@ -140,7 +140,16 @@ function GSTR1Page() {
     }
   };
 
-  const onDownloadJson = () => built && downloadJson(`${fileBase}.json`, gstr1ToJson(built));
+  const onDownloadJson = () => {
+    if (!built) return;
+    try {
+      downloadJson(`${fileBase}.json`, gstr1ToJson(built));
+    } catch (e) {
+      toast.error("GSTR-1 export blocked — totals do not tally", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
   const onDownloadExcel = () => { if (built) void runTemplateExport(built, `${fileBase}.xlsx`); };
 
   const exportQuarter = (iff: boolean) => {

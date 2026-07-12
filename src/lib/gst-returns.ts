@@ -964,6 +964,7 @@ const groupByCtinB2B = <T extends { ctin: string }>(arr: T[], key: "inv" | "nt")
 };
 
 export function gstr1ToJson(g: BuiltGstr1): Record<string, unknown> {
+  assertGstr1Reconciled(g);
   const out: Record<string, unknown> = {
     gstin: g.meta.gstin,
     fp: g.meta.fp,
@@ -1023,6 +1024,7 @@ export function gstr1ToJson(g: BuiltGstr1): Record<string, unknown> {
 // ───────────────────── GSTR-1 → Offline-Tool xlsx sheets ─────────────────────
 
 export function gstr1ToXlsxSheets(g: BuiltGstr1): XlsxSheet[] {
+  assertGstr1Reconciled(g);
   const headerRows = (extra: (string | number)[][]): (string | number)[][] => [
     ["Summary For GSTR-1"],
     [`GSTIN of Supplier: ${g.meta.gstin}`, `FP: ${g.meta.fp}`],
