@@ -73,7 +73,9 @@ export interface CompanyMeta {
   gstin: string | null;
   state_code: string | null;
   name: string;
+  annual_turnover_paise?: number;
 }
+
 
 export interface BuiltGstr1 {
   meta: { gstin: string; fp: string; from: string; to: string };
