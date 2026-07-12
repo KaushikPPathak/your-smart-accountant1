@@ -893,32 +893,6 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
   const hsn_b2b = finalizeHsn(hsnB2BMap);
   const hsn_b2c = finalizeHsn(hsnB2CMap);
 
-  // GSTN cross-validates document tables against the B2B/B2C HSN summaries.
-  // Allocate any voucher-rounding or legacy-line residual to the first HSN row
-  // so both Total Value and Taxable Value agree exactly to two decimals.
-  const reconciliationBase: Gstr1ReconciliationData = {
-    b2b, b2ba, b2cl, b2cla, b2cs, cdnr, cdnra, cdnur, exp, nil, hsn_b2b, hsn_b2c,
-  };
-  const beforeReconciliation = getGstr1Reconciliation(reconciliationBase);
-  const alignHsn = (
-    rows: HSNRow[],
-    documentTaxable: number,
-    hsnTaxable: number,
-    documentValue: number,
-    hsnValue: number,
-  ) => {
-    const taxableDelta = roundRupees(documentTaxable - hsnTaxable);
-    const valueDelta = roundRupees(documentValue - hsnValue);
-    if (taxableDelta === 0 && valueDelta === 0) return;
-    if (rows.length === 0) {
-      rows.push({ hsn_sc: "", desc: "", uqc: "OTH-OTH", qty: 0, rt: 0, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0, val: 0 });
-    }
-    rows[0].txval = roundRupees(rows[0].txval + taxableDelta);
-    rows[0].val = roundRupees(rows[0].val + valueDelta);
-  };
-  alignHsn(hsn_b2b, beforeReconciliation.b2b.documentTaxable, beforeReconciliation.b2b.hsnTaxable, beforeReconciliation.b2b.documentValue, beforeReconciliation.b2b.hsnValue);
-  alignHsn(hsn_b2c, beforeReconciliation.b2c.documentTaxable, beforeReconciliation.b2c.hsnTaxable, beforeReconciliation.b2c.documentValue, beforeReconciliation.b2c.hsnValue);
-
   const docs: DocSummary[] = [];
   const buildDocFor = (label: string, nums: string[]) => {
     if (!nums.length) return;
