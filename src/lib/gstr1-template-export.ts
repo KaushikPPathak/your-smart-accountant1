@@ -63,8 +63,18 @@ export function prefetchGstr1Template(): void {
 }
 
 type TemplateRows = Record<string, (string | number)[][]>;
+// Row-3 total cells that must dedup a repeated invoice-value column.
+// Invoice Value is a property of the invoice, not the rate row — we repeat
+// it on every rate line for user clarity but the row-3 total must count
+// each invoice once, keyed by its unique invoice number column.
+export type DedupTotalConfig = { valCol: string; invCol: string };
+type DedupTotals = Record<string, DedupTotalConfig>;
 
-function writeTemplateInWorker(template: ArrayBuffer, sheets: TemplateRows): Promise<ArrayBuffer> {
+function writeTemplateInWorker(
+  template: ArrayBuffer,
+  sheets: TemplateRows,
+  dedupTotals: DedupTotals,
+): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("../workers/gstr1-template.worker.ts", import.meta.url), { type: "module" });
     const timeout = window.setTimeout(() => {
@@ -83,7 +93,7 @@ function writeTemplateInWorker(template: ArrayBuffer, sheets: TemplateRows): Pro
       reject(new Error(event.message || "Workbook worker failed"));
     };
     const workerCopy = template.slice(0);
-    worker.postMessage({ template: workerCopy, sheets }, [workerCopy]);
+    worker.postMessage({ template: workerCopy, sheets, dedupTotals }, [workerCopy]);
   });
 }
 
