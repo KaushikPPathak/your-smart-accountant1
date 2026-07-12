@@ -294,7 +294,9 @@ export function convertGstr1Xlsx(
   if (b2b.length) out.b2b = b2b;
   if (b2cs.length) out.b2cs = b2cs;
   if (nilRows.length) out.nil = { inv: nilRows };
-  if (hsnSections.hsn_b2b.length || hsnSections.hsn_b2c.length) out.hsn = hsnSections;
+  if (hsnSections.hsn_b2b.length || hsnSections.hsn_b2c.length) {
+    out.hsn = { data: hsnData, ...hsnSections };
+  }
   if (docGroup.size) {
     out.doc_issue = {
       doc_det: Array.from(docGroup.keys())
