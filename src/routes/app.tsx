@@ -35,6 +35,8 @@ import { BackupNudgeBanner } from "@/components/BackupNudgeBanner";
 import { DataOwnershipDialog } from "@/components/DataOwnershipDialog";
 import { UpdateRecoveryBanner } from "@/components/UpdateRecoveryBanner";
 import { InstallAppButton } from "@/components/InstallAppButton";
+import { LicenseNagBanner } from "@/components/LicenseNagBanner";
+import { getLicenseState, isReadOnlyLocked } from "@/lib/license/state";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
