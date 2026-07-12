@@ -281,7 +281,7 @@ export function convertGstr1Xlsx(
   const out: Record<string, unknown> = {
     gstin: opts.gstin,
     fp: opts.fp,
-    version: "GST3.2.4",
+    version: opts.version ?? GSTR1_SCHEMA_VERSION,
     hash: "hash",
   };
   if (b2b.length) out.b2b = b2b;
