@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileJson, Upload, Download, CheckCircle2, AlertTriangle } from "lucide-react";
+import { FileJson, Upload, Download, CheckCircle2, AlertTriangle, Lock } from "lucide-react";
 import { toast } from "sonner";
 import {
   convertGstr1Xlsx,
@@ -15,6 +15,8 @@ import {
   type ConvertResult,
 } from "@/lib/gstr1-xlsx-to-json";
 import { formatINR } from "@/lib/money";
+import { useLicenseState } from "@/lib/license/hook";
+import { hasFeature } from "@/lib/license/state";
 
 export const Route = createFileRoute("/app/tools/gstr1-json")({
   head: () => ({ meta: [{ title: "GSTR-1 JSON Converter" }] }),
