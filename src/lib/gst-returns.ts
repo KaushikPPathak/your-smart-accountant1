@@ -353,13 +353,14 @@ export async function fetchCompanyMeta(companyId: string): Promise<CompanyMeta> 
     async () => {
       const { data } = await supabase
         .from("companies")
-        .select("name, gstin, state_code")
+        .select("name, gstin, state_code, annual_turnover_paise")
         .eq("id", companyId)
         .maybeSingle();
       return {
         name: data?.name ?? "",
         gstin: data?.gstin ?? null,
         state_code: data?.state_code ?? null,
+        annual_turnover_paise: Number((data as { annual_turnover_paise?: number } | null)?.annual_turnover_paise ?? 0),
       };
     },
     async () => {
@@ -369,10 +370,12 @@ export async function fetchCompanyMeta(companyId: string): Promise<CompanyMeta> 
         name: c?.name ?? "",
         gstin: c?.gstin ?? null,
         state_code: c?.state_code ?? null,
+        annual_turnover_paise: Number(c?.annual_turnover_paise ?? 0),
       };
     },
   );
 }
+
 
 export interface InwardSummaryRow {
   ty: "GST" | "NONGST";
