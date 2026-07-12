@@ -133,6 +133,20 @@ self.onmessage = (event: MessageEvent<ExportRequest>) => {
       files[wbPath] = encoder.encode(wb);
     }
     delete files["xl/calcChain.xml"];
+    // Purge dangling references to calcChain from the package manifest and
+    // workbook relationships — otherwise Excel warns about a missing part.
+    const ctPath = "[Content_Types].xml";
+    if (files[ctPath]) {
+      const ct = decoder.decode(files[ctPath])
+        .replace(/<Override\b[^>]*\bPartName="\/xl\/calcChain\.xml"[^>]*\/>/g, "");
+      files[ctPath] = encoder.encode(ct);
+    }
+    const relsPath = "xl/_rels/workbook.xml.rels";
+    if (files[relsPath]) {
+      const rels = decoder.decode(files[relsPath])
+        .replace(/<Relationship\b[^>]*\bTarget="calcChain\.xml"[^>]*\/>/g, "");
+      files[relsPath] = encoder.encode(rels);
+    }
     const output = zipSync(files, { level: 1 });
     self.postMessage({ ok: true, output }, [output.buffer as ArrayBuffer]);
   } catch (error) {
