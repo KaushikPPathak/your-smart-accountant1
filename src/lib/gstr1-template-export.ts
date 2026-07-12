@@ -110,25 +110,23 @@ export async function exportGstr1UsingOfficialTemplate(
   const writeRows = (sheetName: string, rows: (string | number)[][]) => { sheets[sheetName] = rows; };
 
   // ── b2b,sez,de ────────────────────────────────────────────────
-  // Template row-3 formulas: A3/C3 use SUMPRODUCT+COUNTIF (dedup safely on
-  // repeated GSTIN / Invoice#); E3 "Total Invoice Value" is a plain SUM, so
-  // Invoice Value MUST appear only on the FIRST rate line of a multi-rate
-  // invoice — otherwise it gets counted once per rate line. All other
-  // identifying columns are repeated on every rate line so the sheet reads
-  // cleanly (no visually blank rows).
+  // Invoice Value is a property of the INVOICE and is repeated on every
+  // rate row so the sheet is readable and users don't hand-fill blanks.
+  // The template's E3 "Total Invoice Value" cell is rewritten by the worker
+  // into a dedup SUMPRODUCT/COUNTIF over the invoice-number column so each
+  // invoice is counted once regardless of how many rate lines it spans.
   const b2bRows: (string | number)[][] = [];
   for (const inv of g.b2b) {
-    inv.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of inv.itms) {
       b2bRows.push([
         inv.ctin, inv.recipient_name,
         inv.inum, inv.idt,
-        first ? inv.val : "", posLabel(inv.pos),
+        inv.val, posLabel(inv.pos),
         inv.rchrg, "",
         inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
         "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    });
+    }
   }
   writeRows("b2b,sez,de", b2bRows);
 
@@ -163,18 +161,17 @@ export async function exportGstr1UsingOfficialTemplate(
   writeRows("b2cl", b2clRows);
 
   // ── b2cla ─────────────────────────────────────────────────────
-  // F3 (Invoice Value) is plain SUM → emit val only on first rate line.
+  // F3 dedup rewritten by worker (keyed on new invoice number in col D).
   const b2claRows: (string | number)[][] = [];
   for (const inv of g.b2cla) {
-    inv.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of inv.itms) {
       b2claRows.push([
-        first ? inv.oinum : "", first ? inv.oidt : "", first ? posLabel(inv.pos) : "",
-        first ? inv.inum : "", first ? inv.idt : "",
-        first ? inv.val : "", "",
+        inv.oinum, inv.oidt, posLabel(inv.pos),
+        inv.inum, inv.idt,
+        inv.val, "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, "",
       ]);
-    });
+    }
   }
   writeRows("b2cla", b2claRows);
 
@@ -184,75 +181,73 @@ export async function exportGstr1UsingOfficialTemplate(
   writeRows("b2cs", b2csRows);
 
   // ── cdnr ──────────────────────────────────────────────────────
-  // I3 (Note Value) is plain SUM → emit note header + val only on first rate line.
+  // I3 (Note Value) dedup rewritten by worker on the note-number column.
   const cdnrRows: (string | number)[][] = [];
   for (const n of g.cdnr) {
-    n.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of n.itms) {
       const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
       cdnrRows.push([
-        first ? n.ctin : "", first ? n.recipient_name : "",
-        first ? n.nt_num : "", first ? n.nt_dt : "",
-        first ? n.ntty : "", first ? posLabel(n.pos) : "",
-        first ? n.rchrg : "", supTy,
-        first ? n.val : "", "",
+        n.ctin, n.recipient_name,
+        n.nt_num, n.nt_dt,
+        n.ntty, posLabel(n.pos),
+        n.rchrg, supTy,
+        n.val, "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    });
+    }
   }
   writeRows("cdnr", cdnrRows);
 
   // ── cdnra ─────────────────────────────────────────────────────
-  // K3 (Note Value) is plain SUM → emit note header + val only on first rate line.
+  // K3 (Note Value) dedup rewritten by worker on the revised note-number column.
   const cdnraRows: (string | number)[][] = [];
   for (const n of g.cdnra) {
-    n.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of n.itms) {
       const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
       cdnraRows.push([
-        first ? n.ctin : "", first ? n.recipient_name : "",
-        first ? n.ont_num : "", first ? n.ont_dt : "",
-        first ? n.nt_num : "", first ? n.nt_dt : "",
-        first ? n.ntty : "", first ? posLabel(n.pos) : "",
-        first ? n.rchrg : "", supTy,
-        first ? n.val : "", "",
+        n.ctin, n.recipient_name,
+        n.ont_num, n.ont_dt,
+        n.nt_num, n.nt_dt,
+        n.ntty, posLabel(n.pos),
+        n.rchrg, supTy,
+        n.val, "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    });
+    }
   }
   writeRows("cdnra", cdnraRows);
 
   // ── cdnur ─────────────────────────────────────────────────────
-  // F3 (Note Value) is plain SUM → emit note header + val only on first rate line.
+  // F3 (Note Value) dedup rewritten by worker on the note-number column.
   const cdnurRows: (string | number)[][] = [];
   for (const n of g.cdnur) {
-    n.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of n.itms) {
       cdnurRows.push([
-        first ? n.typ : "", first ? n.nt_num : "", first ? n.nt_dt : "",
-        first ? n.ntty : "", first ? posLabel(n.pos) : "",
-        first ? n.val : "", "",
+        n.typ, n.nt_num, n.nt_dt,
+        n.ntty, posLabel(n.pos),
+        n.val, "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    });
+    }
   }
   writeRows("cdnur", cdnurRows);
 
 
   // ── exp ───────────────────────────────────────────────────────
+  // D3 (Invoice Value) dedup rewritten by worker on the invoice-number column.
   const expRows: (string | number)[][] = [];
   for (const e of g.exp) {
-    e.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of e.itms) {
       expRows.push([
-        first ? (e.exp_typ === "WPAY" ? "WPAY" : "WOPAY") : "",
-        first ? e.inum : "", first ? e.idt : "", first ? e.val : "",
-        first ? (e.sbpcode || "") : "", first ? (e.sbnum || "") : "", first ? (e.sbdt || "") : "",
+        e.exp_typ === "WPAY" ? "WPAY" : "WOPAY",
+        e.inum, e.idt, e.val,
+        e.sbpcode || "", e.sbnum || "", e.sbdt || "",
         it.rt, it.txval, it.csamt,
       ]);
-    });
+    }
   }
   writeRows("exp", expRows);
+
 
 
   // ── exemp (Nil rated / Exempted / Non-GST) ────────────────────
