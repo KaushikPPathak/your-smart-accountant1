@@ -238,11 +238,18 @@ function Gstr1JsonConverter() {
               </Alert>
             )}
 
-            <div className="flex gap-2">
-              <Button onClick={download}>
-                <Download className="mr-2 h-4 w-4" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={download} disabled={!canDownload} title={canDownload ? "" : "Requires a Pro license"}>
+                {canDownload ? <Download className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
                 Download GSTN JSON
               </Button>
+              {!canDownload && (
+                <span className="text-xs text-muted-foreground">
+                  Pro feature —{" "}
+                  <Link to="/app/settings/license" className="underline">enter a license key</Link>
+                  {" "}to unlock.
+                </span>
+              )}
             </div>
 
             <details className="rounded-md border p-3">
