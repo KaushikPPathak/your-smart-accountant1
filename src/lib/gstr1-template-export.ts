@@ -280,16 +280,19 @@ export async function exportGstr1UsingOfficialTemplate(
   ]);
   writeRows("docs", docsRows);
 
-  // Row-3 "Total Invoice/Note Value" cells that must dedup a repeated
-  // invoice-number column. Columns are 1-letter Excel refs matching the
-  // template's row-4 header layout.
+  // Precomputed row-3 "Total Invoice/Note Value" numbers. Source is the
+  // invoice-level BuiltGstr1 (each entry is one unique invoice/note), so
+  // summing .val here is the correct deduped total regardless of how many
+  // rate rows the invoice was split into on the sheet.
+  const sumVal = <T extends { val: number }>(arr: T[]): number =>
+    arr.reduce((acc, x) => acc + (Number.isFinite(x.val) ? x.val : 0), 0);
   const dedupTotals: DedupTotals = {
-    "b2b,sez,de": { valCol: "E",  invCol: "C" },  // Invoice Value / Invoice Number
-    "b2cla":      { valCol: "F",  invCol: "D" },  // Invoice Value / Revised Invoice Number
-    "cdnr":       { valCol: "I",  invCol: "C" },  // Note Value / Note Number
-    "cdnra":      { valCol: "K",  invCol: "E" },  // Note Value / Revised Note Number
-    "cdnur":      { valCol: "F",  invCol: "B" },  // Note Value / Note Number
-    "exp":        { valCol: "D",  invCol: "B" },  // Invoice Value / Invoice Number
+    "b2b,sez,de": { valCol: "E", total: sumVal(g.b2b) },
+    "b2cla":      { valCol: "F", total: sumVal(g.b2cla) },
+    "cdnr":       { valCol: "I", total: sumVal(g.cdnr) },
+    "cdnra":      { valCol: "K", total: sumVal(g.cdnra) },
+    "cdnur":      { valCol: "F", total: sumVal(g.cdnur) },
+    "exp":        { valCol: "D", total: sumVal(g.exp) },
   };
   const out = await writeTemplateInWorker(buf, sheets, dedupTotals);
   await saveExport({
