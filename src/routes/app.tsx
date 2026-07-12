@@ -324,6 +324,7 @@ function AppLayout() {
               </Button>
             </div>
           </header>
+          <LicenseNagBanner />
           <UpdateRecoveryBanner />
           <BackupNudgeBanner />
           <AccountGroupsProvider>
