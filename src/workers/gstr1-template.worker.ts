@@ -2,7 +2,7 @@ import { unzipSync, zipSync } from "fflate";
 
 type CellValue = string | number;
 type SheetRows = Record<string, CellValue[][]>;
-type DedupTotalConfig = { valCol: string; invCol: string };
+type DedupTotalConfig = { valCol: string; total: number };
 type DedupTotals = Record<string, DedupTotalConfig>;
 
 interface ExportRequest {
