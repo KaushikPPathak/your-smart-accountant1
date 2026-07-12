@@ -100,21 +100,22 @@ export async function exportGstr1UsingOfficialTemplate(
   const writeRows = (sheetName: string, rows: (string | number)[][]) => { sheets[sheetName] = rows; };
 
   // ── b2b,sez,de ────────────────────────────────────────────────
-  // Template row-3 formulas: A3/C3 use SUMPRODUCT+COUNTIF (dedup, safely
-  // ignores blanks); E3 "Total Invoice Value" is a plain SUM. So for
-  // multi-rate invoices we MUST emit header fields (incl. Invoice Value)
-  // only on the FIRST rate line and blank them on subsequent rate lines,
-  // otherwise the invoice value gets counted once per rate line.
+  // Template row-3 formulas: A3/C3 use SUMPRODUCT+COUNTIF (dedup safely on
+  // repeated GSTIN / Invoice#); E3 "Total Invoice Value" is a plain SUM, so
+  // Invoice Value MUST appear only on the FIRST rate line of a multi-rate
+  // invoice — otherwise it gets counted once per rate line. All other
+  // identifying columns are repeated on every rate line so the sheet reads
+  // cleanly (no visually blank rows).
   const b2bRows: (string | number)[][] = [];
   for (const inv of g.b2b) {
     inv.itms.forEach((it, idx) => {
       const first = idx === 0;
       b2bRows.push([
-        first ? inv.ctin : "", first ? inv.recipient_name : "",
-        first ? inv.inum : "", first ? inv.idt : "",
-        first ? inv.val : "", first ? posLabel(inv.pos) : "",
-        first ? inv.rchrg : "", "",
-        first ? (inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ) : "",
+        inv.ctin, inv.recipient_name,
+        inv.inum, inv.idt,
+        first ? inv.val : "", posLabel(inv.pos),
+        inv.rchrg, "",
+        inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
         "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
     });
