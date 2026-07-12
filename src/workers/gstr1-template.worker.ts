@@ -110,21 +110,20 @@ self.onmessage = (event: MessageEvent<ExportRequest>) => {
       xml = xml.replace(cellRe, newCell);
       files[path] = encoder.encode(xml);
     }
-    // Force Excel to recompute the row-3 SUM/SUMPRODUCT totals on open; otherwise
-    // the template's cached <v>0</v> values show as 0.00 until the user hits F9.
-
+    // Row-3 totals are already written as literal numbers above, so we do
+    // NOT force a full recalculation on open. Forcing fullCalcOnLoad +
+    // forceFullCalc against the GSTN template (which has thousands of
+    // pre-populated summary formulas across every sheet) makes Excel /
+    // LibreOffice take minutes to open the file and can surface transient
+    // formula errors on rows the user hasn't filled. Leave the template's
+    // original calc settings intact so Excel uses the cached results.
     const wbPath = "xl/workbook.xml";
     if (files[wbPath]) {
       let wb = decoder.decode(files[wbPath]);
-      if (/<calcPr\b[^/]*\/>/.test(wb)) {
-        wb = wb.replace(/<calcPr\b([^/]*)\/>/, (_m, attrs) => {
-          const cleaned = attrs.replace(/\s*fullCalcOnLoad="[^"]*"/, "").replace(/\s*forceFullCalc="[^"]*"/, "");
-          return `<calcPr${cleaned} fullCalcOnLoad="1" forceFullCalc="1"/>`;
-        });
-      } else {
-        wb = wb.replace("</workbook>", `<calcPr fullCalcOnLoad="1" forceFullCalc="1"/></workbook>`);
-      }
-      files[wbPath] = encoder.encode(wb);
+      const stripped = wb
+        .replace(/\s*fullCalcOnLoad="[^"]*"/g, "")
+        .replace(/\s*forceFullCalc="[^"]*"/g, "");
+      if (stripped !== wb) files[wbPath] = encoder.encode(stripped);
     }
     const output = zipSync(files, { level: 1 });
     self.postMessage({ ok: true, output }, [output.buffer as ArrayBuffer]);
