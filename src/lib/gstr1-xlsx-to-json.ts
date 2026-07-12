@@ -235,6 +235,13 @@ export function convertGstr1Xlsx(
     }
     hsnSections[key] = Array.from(merged.values()).map((row, i) => ({ ...row, num: i + 1 }));
   }
+  // Legacy combined `data` array — the GSTN portal's HSN summary UI reads
+  // from `hsn.data`. Without this, `hsn_b2b`/`hsn_b2c` alone upload silently
+  // but the portal shows an empty HSN summary. Emit all three for safety.
+  const hsnData = [...hsnSections.hsn_b2b, ...hsnSections.hsn_b2c].map((row, i) => ({
+    ...row,
+    num: i + 1,
+  }));
 
   // ---- NIL / Exempt / Non-GST ----
   const nilRows: any[] = [];
@@ -287,7 +294,9 @@ export function convertGstr1Xlsx(
   if (b2b.length) out.b2b = b2b;
   if (b2cs.length) out.b2cs = b2cs;
   if (nilRows.length) out.nil = { inv: nilRows };
-  if (hsnSections.hsn_b2b.length || hsnSections.hsn_b2c.length) out.hsn = hsnSections;
+  if (hsnSections.hsn_b2b.length || hsnSections.hsn_b2c.length) {
+    out.hsn = { data: hsnData, ...hsnSections };
+  }
   if (docGroup.size) {
     out.doc_issue = {
       doc_det: Array.from(docGroup.keys())
