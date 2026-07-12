@@ -6,7 +6,7 @@
 // advances, e-commerce operator) are left blank but still delivered so the
 // workbook matches the GSTN template shape 1-for-1.
 
-import type { BuiltGstr1 } from "@/lib/gst-returns";
+import { assertGstr1Reconciled, type BuiltGstr1 } from "@/lib/gst-returns";
 import { saveExport } from "@/lib/desktop-save";
 
 // Map POS state code ("07") to the master-sheet POS label ("07-Delhi").
@@ -92,6 +92,9 @@ export async function exportGstr1UsingOfficialTemplate(
   fileName: string,
   subFolder = "Reports",
 ): Promise<void> {
+  // Never produce a workbook GSTN will reject because document-wise and HSN
+  // B2B/B2C Total Value or Taxable Value summaries do not tally.
+  assertGstr1Reconciled(g);
   const buf = await fetchTemplateBuffer();
   const sheets: TemplateRows = {};
   const writeRows = (sheetName: string, rows: (string | number)[][]) => { sheets[sheetName] = rows; };
