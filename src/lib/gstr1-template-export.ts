@@ -97,71 +97,67 @@ export async function exportGstr1UsingOfficialTemplate(
   const writeRows = (sheetName: string, rows: (string | number)[][]) => { sheets[sheetName] = rows; };
 
   // ── b2b,sez,de ────────────────────────────────────────────────
-  // Industry convention (Tally / Busy / ClearTax exports): every rate line
-  // repeats the invoice header fields so each row is self-contained and
-  // human-readable. Only "Invoice Value" is kept on the FIRST rate line —
-  // the template's Total Invoice Value uses a plain SUM(E:E), so repeating
-  // it would double-count multi-rate invoices.
+  // GSTN Offline-Tool convention: every rate line is a self-contained row
+  // repeating ALL invoice header fields INCLUDING Invoice Value. The
+  // template's row-3 totals use SUMPRODUCT(value / COUNTIF(invoice_no, ...))
+  // to auto-deduplicate, so blanking the invoice value on rate-2 lines
+  // makes the header total UNDER-count (value / n_rate_lines). Repeat it.
   const b2bRows: (string | number)[][] = [];
   for (const inv of g.b2b) {
-    inv.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of inv.itms) {
       b2bRows.push([
         inv.ctin, inv.recipient_name,
         inv.inum, inv.idt,
-        first ? inv.val : "", posLabel(inv.pos),
+        inv.val, posLabel(inv.pos),
         inv.rchrg, "",
         inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
         "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    });
+    }
   }
   writeRows("b2b,sez,de", b2bRows);
 
   // ── b2ba ──────────────────────────────────────────────────────
   const b2baRows: (string | number)[][] = [];
   for (const inv of g.b2ba) {
-    inv.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of inv.itms) {
       b2baRows.push([
         inv.ctin, inv.recipient_name,
         inv.oinum, inv.oidt,
         inv.inum, inv.idt,
-        first ? inv.val : "", posLabel(inv.pos),
+        inv.val, posLabel(inv.pos),
         inv.rchrg, "",
         inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
         "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    });
+    }
   }
   writeRows("b2ba", b2baRows);
 
   // ── b2cl ──────────────────────────────────────────────────────
   const b2clRows: (string | number)[][] = [];
   for (const inv of g.b2cl) {
-    inv.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of inv.itms) {
       b2clRows.push([
         inv.inum, inv.idt,
-        first ? inv.val : "", posLabel(inv.pos),
+        inv.val, posLabel(inv.pos),
         "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, "",
       ]);
-    });
+    }
   }
   writeRows("b2cl", b2clRows);
 
   // ── b2cla ─────────────────────────────────────────────────────
   const b2claRows: (string | number)[][] = [];
   for (const inv of g.b2cla) {
-    inv.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of inv.itms) {
       b2claRows.push([
         inv.oinum, inv.oidt, posLabel(inv.pos),
         inv.inum, inv.idt,
-        first ? inv.val : "", "",
+        inv.val, "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, "",
       ]);
-    });
+    }
   }
   writeRows("b2cla", b2claRows);
 
@@ -173,26 +169,24 @@ export async function exportGstr1UsingOfficialTemplate(
   // ── cdnr ──────────────────────────────────────────────────────
   const cdnrRows: (string | number)[][] = [];
   for (const n of g.cdnr) {
-    n.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of n.itms) {
       const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
       cdnrRows.push([
         n.ctin, n.recipient_name,
         n.nt_num, n.nt_dt,
         n.ntty, posLabel(n.pos),
         n.rchrg, supTy,
-        first ? n.val : "", "",
+        n.val, "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    });
+    }
   }
   writeRows("cdnr", cdnrRows);
 
   // ── cdnra ─────────────────────────────────────────────────────
   const cdnraRows: (string | number)[][] = [];
   for (const n of g.cdnra) {
-    n.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of n.itms) {
       const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
       cdnraRows.push([
         n.ctin, n.recipient_name,
@@ -200,25 +194,24 @@ export async function exportGstr1UsingOfficialTemplate(
         n.nt_num, n.nt_dt,
         n.ntty, posLabel(n.pos),
         n.rchrg, supTy,
-        first ? n.val : "", "",
+        n.val, "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    });
+    }
   }
   writeRows("cdnra", cdnraRows);
 
   // ── cdnur ─────────────────────────────────────────────────────
   const cdnurRows: (string | number)[][] = [];
   for (const n of g.cdnur) {
-    n.itms.forEach((it, idx) => {
-      const first = idx === 0;
+    for (const it of n.itms) {
       cdnurRows.push([
         n.typ, n.nt_num, n.nt_dt,
         n.ntty, posLabel(n.pos),
-        first ? n.val : "", "",
+        n.val, "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    });
+    }
   }
   writeRows("cdnur", cdnurRows);
 
