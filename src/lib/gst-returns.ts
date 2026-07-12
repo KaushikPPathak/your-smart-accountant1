@@ -901,7 +901,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
   const docs: DocSummary[] = [];
   const buildDocFor = (label: string, nums: string[]) => {
     if (!nums.length) return;
-    const sorted = [...nums].sort();
+    const sorted = [...nums].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
     docs.push({
       doc_typ: label,
       from: sorted[0],
