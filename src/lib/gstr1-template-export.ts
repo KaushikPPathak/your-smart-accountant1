@@ -277,7 +277,18 @@ export async function exportGstr1UsingOfficialTemplate(
   ]);
   writeRows("docs", docsRows);
 
-  const out = await writeTemplateInWorker(buf, sheets);
+  // Row-3 "Total Invoice/Note Value" cells that must dedup a repeated
+  // invoice-number column. Columns are 1-letter Excel refs matching the
+  // template's row-4 header layout.
+  const dedupTotals: DedupTotals = {
+    "b2b,sez,de": { valCol: "E",  invCol: "C" },  // Invoice Value / Invoice Number
+    "b2cla":      { valCol: "F",  invCol: "D" },  // Invoice Value / Revised Invoice Number
+    "cdnr":       { valCol: "I",  invCol: "C" },  // Note Value / Note Number
+    "cdnra":      { valCol: "K",  invCol: "E" },  // Note Value / Revised Note Number
+    "cdnur":      { valCol: "F",  invCol: "B" },  // Note Value / Note Number
+    "exp":        { valCol: "D",  invCol: "B" },  // Invoice Value / Invoice Number
+  };
+  const out = await writeTemplateInWorker(buf, sheets, dedupTotals);
   await saveExport({
     subFolder,
     fileName,
