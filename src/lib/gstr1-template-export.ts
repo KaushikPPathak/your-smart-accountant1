@@ -63,11 +63,14 @@ export function prefetchGstr1Template(): void {
 }
 
 type TemplateRows = Record<string, (string | number)[][]>;
-// Row-3 total cells that must dedup a repeated invoice-value column.
-// Invoice Value is a property of the invoice, not the rate row — we repeat
-// it on every rate line for user clarity but the row-3 total must count
-// each invoice once, keyed by its unique invoice number column.
-export type DedupTotalConfig = { valCol: string; invCol: string };
+// Row-3 "Total Invoice/Note Value" cell override. Invoice Value is a
+// property of the invoice, not the rate row — we repeat it on every rate
+// line for readability (Display Layer) but the row-3 total (Summary Layer)
+// must count each invoice ONCE. We precompute the deduped total in TS
+// from the source BuiltGstr1 (which is already invoice-level, so no
+// duplicates possible) and write it as a literal number. No formula, no
+// COUNTIF, no chance of Excel/LibreOffice failing to recalc.
+export type DedupTotalConfig = { valCol: string; total: number };
 type DedupTotals = Record<string, DedupTotalConfig>;
 
 function writeTemplateInWorker(
@@ -277,16 +280,19 @@ export async function exportGstr1UsingOfficialTemplate(
   ]);
   writeRows("docs", docsRows);
 
-  // Row-3 "Total Invoice/Note Value" cells that must dedup a repeated
-  // invoice-number column. Columns are 1-letter Excel refs matching the
-  // template's row-4 header layout.
+  // Precomputed row-3 "Total Invoice/Note Value" numbers. Source is the
+  // invoice-level BuiltGstr1 (each entry is one unique invoice/note), so
+  // summing .val here is the correct deduped total regardless of how many
+  // rate rows the invoice was split into on the sheet.
+  const sumVal = <T extends { val: number }>(arr: T[]): number =>
+    arr.reduce((acc, x) => acc + (Number.isFinite(x.val) ? x.val : 0), 0);
   const dedupTotals: DedupTotals = {
-    "b2b,sez,de": { valCol: "E",  invCol: "C" },  // Invoice Value / Invoice Number
-    "b2cla":      { valCol: "F",  invCol: "D" },  // Invoice Value / Revised Invoice Number
-    "cdnr":       { valCol: "I",  invCol: "C" },  // Note Value / Note Number
-    "cdnra":      { valCol: "K",  invCol: "E" },  // Note Value / Revised Note Number
-    "cdnur":      { valCol: "F",  invCol: "B" },  // Note Value / Note Number
-    "exp":        { valCol: "D",  invCol: "B" },  // Invoice Value / Invoice Number
+    "b2b,sez,de": { valCol: "E", total: sumVal(g.b2b) },
+    "b2cla":      { valCol: "F", total: sumVal(g.b2cla) },
+    "cdnr":       { valCol: "I", total: sumVal(g.cdnr) },
+    "cdnra":      { valCol: "K", total: sumVal(g.cdnra) },
+    "cdnur":      { valCol: "F", total: sumVal(g.cdnur) },
+    "exp":        { valCol: "D", total: sumVal(g.exp) },
   };
   const out = await writeTemplateInWorker(buf, sheets, dedupTotals);
   await saveExport({
