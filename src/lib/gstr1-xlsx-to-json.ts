@@ -87,9 +87,19 @@ const readRows = (wb: XLSX.WorkBook, sheetName: string): unknown[][] => {
   return rows.filter((r) => Array.isArray(r) && r.some((c) => !isBlank(c)));
 };
 
+/**
+ * Current GSTR-1 JSON schema version accepted by the GSTN portal.
+ * Bumped from GST3.2.4 → GST3.2.6 for the Table-12 HSN B2B/B2C split
+ * (Apr–Jul 2025 advisories). Older values cause the portal to accept only
+ * the `hsn` section and silently drop b2b / b2cs / nil / doc_issue.
+ */
+export const GSTR1_SCHEMA_VERSION = "GST3.2.6";
+
 export interface ConvertOptions {
   gstin: string;
   fp: string; // MMYYYY, e.g. "062026"
+  /** Override the schema version string emitted in the JSON. */
+  version?: string;
 }
 
 export interface ConvertResult {
