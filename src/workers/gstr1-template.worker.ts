@@ -85,6 +85,21 @@ self.onmessage = (event: MessageEvent<ExportRequest>) => {
       if (!path || !files[path]) throw new Error(`Official sheet not found: ${name}`);
       files[path] = encoder.encode(replaceSheetData(decoder.decode(files[path]), rows));
     }
+    // Force Excel to recompute the row-3 SUM/SUMPRODUCT totals on open; otherwise
+    // the template's cached <v>0</v> values show as 0.00 until the user hits F9.
+    const wbPath = "xl/workbook.xml";
+    if (files[wbPath]) {
+      let wb = decoder.decode(files[wbPath]);
+      if (/<calcPr\b[^/]*\/>/.test(wb)) {
+        wb = wb.replace(/<calcPr\b([^/]*)\/>/, (_m, attrs) => {
+          const cleaned = attrs.replace(/\s*fullCalcOnLoad="[^"]*"/, "").replace(/\s*forceFullCalc="[^"]*"/, "");
+          return `<calcPr${cleaned} fullCalcOnLoad="1" forceFullCalc="1"/>`;
+        });
+      } else {
+        wb = wb.replace("</workbook>", `<calcPr fullCalcOnLoad="1" forceFullCalc="1"/></workbook>`);
+      }
+      files[wbPath] = encoder.encode(wb);
+    }
     const output = zipSync(files, { level: 1 });
     self.postMessage({ ok: true, output }, [output.buffer as ArrayBuffer]);
   } catch (error) {
