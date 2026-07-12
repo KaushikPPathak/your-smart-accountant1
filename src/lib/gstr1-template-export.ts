@@ -149,16 +149,18 @@ export async function exportGstr1UsingOfficialTemplate(
   writeRows("b2cl", b2clRows);
 
   // ── b2cla ─────────────────────────────────────────────────────
+  // F3 (Invoice Value) is plain SUM → emit val only on first rate line.
   const b2claRows: (string | number)[][] = [];
   for (const inv of g.b2cla) {
-    for (const it of inv.itms) {
+    inv.itms.forEach((it, idx) => {
+      const first = idx === 0;
       b2claRows.push([
-        inv.oinum, inv.oidt, posLabel(inv.pos),
-        inv.inum, inv.idt,
-        inv.val, "",
+        first ? inv.oinum : "", first ? inv.oidt : "", first ? posLabel(inv.pos) : "",
+        first ? inv.inum : "", first ? inv.idt : "",
+        first ? inv.val : "", "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, "",
       ]);
-    }
+    });
   }
   writeRows("b2cla", b2claRows);
 
@@ -168,51 +170,57 @@ export async function exportGstr1UsingOfficialTemplate(
   writeRows("b2cs", b2csRows);
 
   // ── cdnr ──────────────────────────────────────────────────────
+  // I3 (Note Value) is plain SUM → emit note header + val only on first rate line.
   const cdnrRows: (string | number)[][] = [];
   for (const n of g.cdnr) {
-    for (const it of n.itms) {
+    n.itms.forEach((it, idx) => {
+      const first = idx === 0;
       const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
       cdnrRows.push([
-        n.ctin, n.recipient_name,
-        n.nt_num, n.nt_dt,
-        n.ntty, posLabel(n.pos),
-        n.rchrg, supTy,
-        n.val, "",
+        first ? n.ctin : "", first ? n.recipient_name : "",
+        first ? n.nt_num : "", first ? n.nt_dt : "",
+        first ? n.ntty : "", first ? posLabel(n.pos) : "",
+        first ? n.rchrg : "", supTy,
+        first ? n.val : "", "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    }
+    });
   }
   writeRows("cdnr", cdnrRows);
 
   // ── cdnra ─────────────────────────────────────────────────────
+  // K3 (Note Value) is plain SUM → emit note header + val only on first rate line.
   const cdnraRows: (string | number)[][] = [];
   for (const n of g.cdnra) {
-    for (const it of n.itms) {
+    n.itms.forEach((it, idx) => {
+      const first = idx === 0;
       const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
       cdnraRows.push([
-        n.ctin, n.recipient_name,
-        n.ont_num, n.ont_dt,
-        n.nt_num, n.nt_dt,
-        n.ntty, posLabel(n.pos),
-        n.rchrg, supTy,
-        n.val, "",
+        first ? n.ctin : "", first ? n.recipient_name : "",
+        first ? n.ont_num : "", first ? n.ont_dt : "",
+        first ? n.nt_num : "", first ? n.nt_dt : "",
+        first ? n.ntty : "", first ? posLabel(n.pos) : "",
+        first ? n.rchrg : "", supTy,
+        first ? n.val : "", "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    }
+    });
   }
   writeRows("cdnra", cdnraRows);
 
   // ── cdnur ─────────────────────────────────────────────────────
+  // F3 (Note Value) is plain SUM → emit note header + val only on first rate line.
   const cdnurRows: (string | number)[][] = [];
   for (const n of g.cdnur) {
-    for (const it of n.itms) {
+    n.itms.forEach((it, idx) => {
+      const first = idx === 0;
       cdnurRows.push([
-        n.typ, n.nt_num, n.nt_dt,
-        n.ntty, posLabel(n.pos),
-        n.val, "",
+        first ? n.typ : "", first ? n.nt_num : "", first ? n.nt_dt : "",
+        first ? n.ntty : "", first ? posLabel(n.pos) : "",
+        first ? n.val : "", "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
-    }
+    });
   }
   writeRows("cdnur", cdnurRows);
 
