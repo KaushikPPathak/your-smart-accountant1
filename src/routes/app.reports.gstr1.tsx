@@ -140,8 +140,10 @@ function GSTR1Page() {
     }
   };
 
+  const validationOpts = { annualTurnoverPaise: company?.annual_turnover_paise ?? 0 };
   const preExportHsnErrors = (b: BuiltGstr1): string[] =>
-    validateGstr1(b).filter((i) => i.level === "error" && i.section.startsWith("hsn")).map((i) => i.message);
+    validateGstr1(b, validationOpts).filter((i) => i.level === "error" && i.section.startsWith("hsn")).map((i) => i.message);
+
 
   const onDownloadJson = () => {
     if (!built) return;
@@ -284,7 +286,7 @@ function GSTR1Page() {
 
       {built && (
         <>
-          <ValidationPanel issues={validateGstr1(built)} />
+          <ValidationPanel issues={validateGstr1(built, validationOpts)} />
 
           <PeriodLockCard
             returnType="GSTR1"

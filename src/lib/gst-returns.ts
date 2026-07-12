@@ -73,7 +73,9 @@ export interface CompanyMeta {
   gstin: string | null;
   state_code: string | null;
   name: string;
+  annual_turnover_paise?: number;
 }
+
 
 export interface BuiltGstr1 {
   meta: { gstin: string; fp: string; from: string; to: string };
@@ -351,13 +353,14 @@ export async function fetchCompanyMeta(companyId: string): Promise<CompanyMeta> 
     async () => {
       const { data } = await supabase
         .from("companies")
-        .select("name, gstin, state_code")
+        .select("name, gstin, state_code, annual_turnover_paise")
         .eq("id", companyId)
         .maybeSingle();
       return {
         name: data?.name ?? "",
         gstin: data?.gstin ?? null,
         state_code: data?.state_code ?? null,
+        annual_turnover_paise: Number((data as { annual_turnover_paise?: number } | null)?.annual_turnover_paise ?? 0),
       };
     },
     async () => {
@@ -367,10 +370,12 @@ export async function fetchCompanyMeta(companyId: string): Promise<CompanyMeta> 
         name: c?.name ?? "",
         gstin: c?.gstin ?? null,
         state_code: c?.state_code ?? null,
+        annual_turnover_paise: Number(c?.annual_turnover_paise ?? 0),
       };
     },
   );
 }
+
 
 export interface InwardSummaryRow {
   ty: "GST" | "NONGST";
@@ -869,15 +874,22 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       const fallbackVal = needsFallback ? Math.round(Number(it.qty || 0) * Number(it.rate_paise || 0)) : 0;
       const lineTx = it.taxable_paise || fallbackVal;
       if (lineTx === 0 && it.igst_paise === 0 && it.cgst_paise === 0 && it.sgst_paise === 0) continue;
-      const key = `${it.items?.hsn_code || ""}|${it.gst_rate}|${it.items?.unit || "OTH"}`;
+      const hsnCode = (it.items?.hsn_code || "").trim();
+      const isService = hsnCode.startsWith("99");
+      // Services (SAC 99xx) have no unit of measure — GSTN portal mandates
+      // UQC "NA" and rejects any quantity value. Force both here so the
+      // GSTR-1 sheet is portal-clean regardless of the item's stored unit.
+      const rawUnit = (it.items?.unit || "OTH").toUpperCase();
+      const uqcVal = isService ? "NA" : (rawUnit.slice(0, 3) + "-" + rawUnit);
+      const key = `${hsnCode}|${it.gst_rate}|${isService ? "NA" : (it.items?.unit || "OTH")}`;
       const cur = map.get(key) ?? {
-        hsn_sc: it.items?.hsn_code || "",
+        hsn_sc: hsnCode,
         desc: it.items?.name || "",
-        uqc: (it.items?.unit || "OTH").toUpperCase().slice(0, 3) + "-" + (it.items?.unit || "OTH").toUpperCase(),
+        uqc: uqcVal,
         qty: 0, rt: it.gst_rate,
         txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0, val: 0,
       } satisfies HSNRow;
-      cur.qty += sign * Number(it.qty);
+      if (!isService) cur.qty += sign * Number(it.qty);
       cur.txval += sign * lineTx;
       cur.iamt += sign * it.igst_paise;
       cur.camt += sign * it.cgst_paise;
@@ -885,6 +897,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       cur.val += sign * (lineTx + it.cgst_paise + it.sgst_paise + it.igst_paise);
       map.set(key, cur);
     }
+
   };
   for (const v of sales) accumulate(v, 1);
   if (!iffOnly) for (const v of creditNotes) accumulate(v, v.voucher_type === "credit_note" ? -1 : 1);
@@ -1481,24 +1494,37 @@ const VALID_UQC = new Set([
 
 /**
  * Structural HSN validation. Catches the shape errors the GSTN portal
- * rejects (`RET191349` — "The HSN code entered is not valid"):
- *   • Goods: 4, 6, or 8 numeric digits; must NOT start with 99 (that's SAC).
- *   • Services (SAC): 6 digits starting with 99.
- * We can't validate every code against the full CBIC master here, but
- * catching the structural class covers the majority of portal rejects.
+ * rejects (`RET191349` — "The HSN code entered is not valid").
+ *
+ * CBIC turnover rule (Notification 78/2020-CT):
+ *   • Aggregate turnover ≤ ₹5 crore in previous FY → 4-digit HSN/SAC allowed.
+ *   • Aggregate turnover  > ₹5 crore                → 6-digit HSN/SAC mandatory.
+ * 8-digit is always accepted; services always start with 99.
  */
-function hsnCodeIssue(hsn: string): string | null {
+function hsnCodeIssue(hsn: string, minDigits: 4 | 6): string | null {
   const h = String(hsn ?? "").trim();
+  if (!h) return null;
   if (!/^[0-9]+$/.test(h)) return `HSN "${h}" must be numeric`;
+  const allowedLens = minDigits === 6 ? [6, 8] : [4, 6, 8];
   if (h.startsWith("99")) {
-    if (h.length !== 6) return `SAC "${h}" must be 6 digits (service codes)`;
+    if (!allowedLens.includes(h.length)) {
+      return minDigits === 6
+        ? `SAC "${h}" must be 6 or 8 digits (turnover above ₹5 crore requires 6-digit HSN/SAC)`
+        : `SAC "${h}" must be 4, 6, or 8 digits`;
+    }
     return null;
   }
-  if (![4, 6, 8].includes(h.length)) return `HSN "${h}" must be 4, 6, or 8 digits`;
+  if (!allowedLens.includes(h.length)) {
+    return minDigits === 6
+      ? `HSN "${h}" must be 6 or 8 digits (turnover above ₹5 crore requires 6-digit HSN)`
+      : `HSN "${h}" must be 4, 6, or 8 digits`;
+  }
   return null;
 }
 
 
+// ₹5 crore in paise = 5,00,00,000 × 100
+const TURNOVER_6DIGIT_THRESHOLD_PAISE = 5_00_00_000 * 100;
 
 export interface ValidationIssue {
   level: "error" | "warning";
@@ -1506,8 +1532,15 @@ export interface ValidationIssue {
   message: string;
 }
 
-export function validateGstr1(g: BuiltGstr1): ValidationIssue[] {
+export interface Gstr1ValidationOptions {
+  /** Company's aggregate annual turnover in paise (previous FY). */
+  annualTurnoverPaise?: number;
+}
+
+export function validateGstr1(g: BuiltGstr1, opts: Gstr1ValidationOptions = {}): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const minDigits: 4 | 6 =
+    (opts.annualTurnoverPaise ?? 0) > TURNOVER_6DIGIT_THRESHOLD_PAISE ? 6 : 4;
   if (!GSTIN_RE.test(g.meta.gstin)) issues.push({ level: "error", section: "meta", message: `Invalid supplier GSTIN: ${g.meta.gstin}` });
   if (!FP_RE.test(g.meta.fp)) issues.push({ level: "error", section: "meta", message: `Invalid period (FP) format: ${g.meta.fp}` });
 
@@ -1543,7 +1576,7 @@ export function validateGstr1(g: BuiltGstr1): ValidationIssue[] {
     for (const h of rows) {
       const hsnCode = String(h.hsn_sc ?? "").trim();
       const uqc = String(h.uqc ?? "").trim().toUpperCase();
-      const codeErr = hsnCodeIssue(hsnCode);
+      const codeErr = hsnCodeIssue(hsnCode, minDigits);
       if (codeErr && !seenHsn.has(hsnCode)) {
         seenHsn.add(hsnCode);
         issues.push({ level: "error", section, message: `${codeErr} — fix the item master before filing` });
@@ -1558,7 +1591,7 @@ export function validateGstr1(g: BuiltGstr1): ValidationIssue[] {
             message: `Service SAC ${hsnCode} must use UQC "NA" (found "${uqc}") — services have no unit of measure`,
           });
         }
-      } else if (uqc && !VALID_UQC.has(uqc)) {
+      } else if (!hsnCode.startsWith("99") && uqc && !VALID_UQC.has(uqc)) {
         const key = `uqc|${uqc}`;
         if (!seenUqc.has(key)) {
           seenUqc.add(key);
@@ -1570,6 +1603,7 @@ export function validateGstr1(g: BuiltGstr1): ValidationIssue[] {
 
   return issues;
 }
+
 
 export function validateGstr3B(b: BuiltGstr3B): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
