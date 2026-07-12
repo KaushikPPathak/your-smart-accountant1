@@ -1533,6 +1533,41 @@ export function validateGstr1(g: BuiltGstr1): ValidationIssue[] {
   for (const n of g.cdnr) {
     if (!GSTIN_RE.test(n.ctin)) issues.push({ level: "error", section: "cdnr", message: `${n.nt_num}: invalid recipient GSTIN` });
   }
+
+  // HSN / SAC / UQC structural validation — blocks the portal's
+  // RET191349 ("HSN not valid") and RET191353 ("UQC not valid") errors
+  // before the JSON is even generated.
+  const seenHsn = new Set<string>();
+  const seenUqc = new Set<string>();
+  for (const [section, rows] of [["hsn_b2b", g.hsn_b2b], ["hsn_b2c", g.hsn_b2c]] as const) {
+    for (const h of rows) {
+      const hsnCode = String(h.hsn_sc ?? "").trim();
+      const uqc = String(h.uqc ?? "").trim().toUpperCase();
+      const codeErr = hsnCodeIssue(hsnCode);
+      if (codeErr && !seenHsn.has(hsnCode)) {
+        seenHsn.add(hsnCode);
+        issues.push({ level: "error", section, message: `${codeErr} — fix the item master before filing` });
+      }
+      if (hsnCode.startsWith("99") && uqc !== "NA") {
+        const key = `${hsnCode}|${uqc}`;
+        if (!seenUqc.has(key)) {
+          seenUqc.add(key);
+          issues.push({
+            level: "error",
+            section,
+            message: `Service SAC ${hsnCode} must use UQC "NA" (found "${uqc}") — services have no unit of measure`,
+          });
+        }
+      } else if (uqc && !VALID_UQC.has(uqc)) {
+        const key = `uqc|${uqc}`;
+        if (!seenUqc.has(key)) {
+          seenUqc.add(key);
+          issues.push({ level: "error", section, message: `UQC "${uqc}" is not in the GSTN master — use one of NOS, PCS, KGS, LTR, NA, etc.` });
+        }
+      }
+    }
+  }
+
   return issues;
 }
 
