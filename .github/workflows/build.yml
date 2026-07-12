@@ -1,7 +1,7 @@
-name: Build & Deploy
+name: Build Windows Installers
 
-# Runs once a day at 08:00 IST (02:30 UTC) and on-demand from the Actions tab.
-# Also runs on version tags (v*) to attach the Windows installer to a Release.
+# Builds Tauri Windows installers (NSIS .exe + WiX .msi).
+# Runs daily, on-demand, or when a version tag is pushed.
 on:
   schedule:
     - cron: "30 2 * * *"
@@ -12,54 +12,8 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
 
 jobs:
-  # ------------------------------------------------------------------
-  # 1. Web build → GitHub Pages
-  # ------------------------------------------------------------------
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build
-        run: bun run build
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-  # ------------------------------------------------------------------
-  # 2. Native Windows build → Tauri NSIS .exe installer
-  # ------------------------------------------------------------------
   windows:
     runs-on: windows-latest
     steps:
@@ -89,20 +43,27 @@ jobs:
           $v = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           echo "version=$v" >> $env:GITHUB_OUTPUT
 
-      - name: Build Tauri (NSIS .exe)
-        run: bunx tauri build --bundles nsis
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ""
+      - name: Build Tauri (NSIS .exe + WiX .msi)
+        run: bunx tauri build --bundles nsis msi
 
-      - name: Upload Windows installer artifact
+      - name: Upload NSIS installer (.exe)
         uses: actions/upload-artifact@v4
         with:
-          name: SmartAccountant-Windows-${{ steps.ver.outputs.version }}
+          name: SmartAccountant-Windows-NSIS-${{ steps.ver.outputs.version }}
           path: src-tauri/target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
 
-      - name: Attach installer to Release (on tag)
+      - name: Upload MSI installer (.msi)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartAccountant-Windows-MSI-${{ steps.ver.outputs.version }}
+          path: src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+
+      - name: Attach installers to Release (on tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: src-tauri/target/release/bundle/nsis/*-setup.exe
+          files: |
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/bundle/msi/*.msi
