@@ -97,38 +97,71 @@ export async function exportGstr1UsingOfficialTemplate(
   const writeRows = (sheetName: string, rows: (string | number)[][]) => { sheets[sheetName] = rows; };
 
   // ── b2b,sez,de ────────────────────────────────────────────────
+  // GSTN template convention: on invoices with multiple tax-rate lines, the
+  // invoice-level fields (GSTIN, name, invoice no, date, value, POS, rchrg,
+  // inv_typ) go on the FIRST rate line ONLY; subsequent rate lines carry only
+  // the rate + taxable + cess. Otherwise the "Total Invoice Value" SUM in row 3
+  // double-counts every additional rate line.
   const b2bRows: (string | number)[][] = [];
-  for (const inv of g.b2b) for (const it of inv.itms) {
-    b2bRows.push([
-      inv.ctin, inv.recipient_name, inv.inum, inv.idt, inv.val, posLabel(inv.pos),
-      inv.rchrg, "", inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
-      "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
-    ]);
+  for (const inv of g.b2b) {
+    inv.itms.forEach((it, idx) => {
+      const first = idx === 0;
+      b2bRows.push([
+        first ? inv.ctin : "", first ? inv.recipient_name : "",
+        first ? inv.inum : "", first ? inv.idt : "",
+        first ? inv.val : "", first ? posLabel(inv.pos) : "",
+        first ? inv.rchrg : "", "",
+        first ? (inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ) : "",
+        "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
+      ]);
+    });
   }
   writeRows("b2b,sez,de", b2bRows);
 
   // ── b2ba ──────────────────────────────────────────────────────
   const b2baRows: (string | number)[][] = [];
-  for (const inv of g.b2ba) for (const it of inv.itms) {
-    b2baRows.push([
-      inv.ctin, inv.recipient_name, inv.oinum, inv.oidt, inv.inum, inv.idt, inv.val,
-      posLabel(inv.pos), inv.rchrg, "", inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
-      "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
-    ]);
+  for (const inv of g.b2ba) {
+    inv.itms.forEach((it, idx) => {
+      const first = idx === 0;
+      b2baRows.push([
+        first ? inv.ctin : "", first ? inv.recipient_name : "",
+        first ? inv.oinum : "", first ? inv.oidt : "",
+        first ? inv.inum : "", first ? inv.idt : "",
+        first ? inv.val : "", first ? posLabel(inv.pos) : "",
+        first ? inv.rchrg : "", "",
+        first ? (inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ) : "",
+        "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
+      ]);
+    });
   }
   writeRows("b2ba", b2baRows);
 
   // ── b2cl ──────────────────────────────────────────────────────
   const b2clRows: (string | number)[][] = [];
-  for (const inv of g.b2cl) for (const it of inv.itms) {
-    b2clRows.push([inv.inum, inv.idt, inv.val, posLabel(inv.pos), "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, ""]);
+  for (const inv of g.b2cl) {
+    inv.itms.forEach((it, idx) => {
+      const first = idx === 0;
+      b2clRows.push([
+        first ? inv.inum : "", first ? inv.idt : "",
+        first ? inv.val : "", first ? posLabel(inv.pos) : "",
+        "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, "",
+      ]);
+    });
   }
   writeRows("b2cl", b2clRows);
 
   // ── b2cla ─────────────────────────────────────────────────────
   const b2claRows: (string | number)[][] = [];
-  for (const inv of g.b2cla) for (const it of inv.itms) {
-    b2claRows.push([inv.oinum, inv.oidt, posLabel(inv.pos), inv.inum, inv.idt, inv.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, ""]);
+  for (const inv of g.b2cla) {
+    inv.itms.forEach((it, idx) => {
+      const first = idx === 0;
+      b2claRows.push([
+        first ? inv.oinum : "", first ? inv.oidt : "", first ? posLabel(inv.pos) : "",
+        first ? inv.inum : "", first ? inv.idt : "",
+        first ? inv.val : "", "",
+        it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, "",
+      ]);
+    });
   }
   writeRows("b2cla", b2claRows);
 
@@ -139,44 +172,71 @@ export async function exportGstr1UsingOfficialTemplate(
 
   // ── cdnr ──────────────────────────────────────────────────────
   const cdnrRows: (string | number)[][] = [];
-  for (const n of g.cdnr) for (const it of n.itms) {
-    const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
-    cdnrRows.push([
-      n.ctin, n.recipient_name, n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos), n.rchrg, supTy,
-      n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
-    ]);
+  for (const n of g.cdnr) {
+    n.itms.forEach((it, idx) => {
+      const first = idx === 0;
+      const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
+      cdnrRows.push([
+        first ? n.ctin : "", first ? n.recipient_name : "",
+        first ? n.nt_num : "", first ? n.nt_dt : "",
+        first ? n.ntty : "", first ? posLabel(n.pos) : "",
+        first ? n.rchrg : "", first ? supTy : "",
+        first ? n.val : "", "",
+        it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
+      ]);
+    });
   }
   writeRows("cdnr", cdnrRows);
 
   // ── cdnra ─────────────────────────────────────────────────────
   const cdnraRows: (string | number)[][] = [];
-  for (const n of g.cdnra) for (const it of n.itms) {
-    const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
-    cdnraRows.push([
-      n.ctin, n.recipient_name, n.ont_num, n.ont_dt, n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos),
-      n.rchrg, supTy, n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
-    ]);
+  for (const n of g.cdnra) {
+    n.itms.forEach((it, idx) => {
+      const first = idx === 0;
+      const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
+      cdnraRows.push([
+        first ? n.ctin : "", first ? n.recipient_name : "",
+        first ? n.ont_num : "", first ? n.ont_dt : "",
+        first ? n.nt_num : "", first ? n.nt_dt : "",
+        first ? n.ntty : "", first ? posLabel(n.pos) : "",
+        first ? n.rchrg : "", first ? supTy : "",
+        first ? n.val : "", "",
+        it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
+      ]);
+    });
   }
   writeRows("cdnra", cdnraRows);
 
   // ── cdnur ─────────────────────────────────────────────────────
   const cdnurRows: (string | number)[][] = [];
-  for (const n of g.cdnur) for (const it of n.itms) {
-    cdnurRows.push([n.typ, n.nt_num, n.nt_dt, n.ntty, posLabel(n.pos), n.val, "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt]);
+  for (const n of g.cdnur) {
+    n.itms.forEach((it, idx) => {
+      const first = idx === 0;
+      cdnurRows.push([
+        first ? n.typ : "", first ? n.nt_num : "", first ? n.nt_dt : "",
+        first ? n.ntty : "", first ? posLabel(n.pos) : "",
+        first ? n.val : "", "",
+        it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
+      ]);
+    });
   }
   writeRows("cdnur", cdnurRows);
 
   // ── exp ───────────────────────────────────────────────────────
   const expRows: (string | number)[][] = [];
-  for (const e of g.exp) for (const it of e.itms) {
-    expRows.push([
-      e.exp_typ === "WPAY" ? "WPAY" : "WOPAY",
-      e.inum, e.idt, e.val,
-      e.sbpcode || "", e.sbnum || "", e.sbdt || "",
-      it.rt, it.txval, it.csamt,
-    ]);
+  for (const e of g.exp) {
+    e.itms.forEach((it, idx) => {
+      const first = idx === 0;
+      expRows.push([
+        first ? (e.exp_typ === "WPAY" ? "WPAY" : "WOPAY") : "",
+        first ? e.inum : "", first ? e.idt : "", first ? e.val : "",
+        first ? (e.sbpcode || "") : "", first ? (e.sbnum || "") : "", first ? (e.sbdt || "") : "",
+        it.rt, it.txval, it.csamt,
+      ]);
+    });
   }
   writeRows("exp", expRows);
+
 
   // ── exemp (Nil rated / Exempted / Non-GST) ────────────────────
   const nilByTy = new Map<string, { nil: number; exp: number; ngs: number }>();
