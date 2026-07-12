@@ -294,29 +294,47 @@ function VoucherEditPage() {
     }
     setSaving(true);
     try {
+      // -----------------------------------------------------------------
+      // LOCAL-FIRST WRITE PATH
+      // -----------------------------------------------------------------
+      // This app stores all business data on-device (see local-only-mode).
+      // Previously save() called Supabase directly, so a JWT expiry (30-day
+      // refresh window) surfaced as "Failed to save" even though the data
+      // lives locally. Write to the offline cache first — the cloud push
+      // is best-effort and never blocks the user's edit.
+      const { offlineDb } = await import("@/lib/offline/db");
+      const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+      const { isOnlineNow } = await import("@/lib/offline/online-status");
+      const stamp = new Date().toISOString();
+
+      let itemRows: Record<string, unknown>[] = [];
+      let entryRows: Record<string, unknown>[] = [];
+      let headerPatch: Record<string, unknown> = {
+        voucher_date: voucher.voucher_date,
+        reference_no: voucher.reference_no,
+        narration: voucher.narration,
+        updated_at: stamp,
+      };
+
       if (isItemKind) {
-        // Update voucher header + totals
-        const { error: vErr } = await supabase.from("vouchers").update({
-          voucher_date: voucher.voucher_date,
-          reference_no: voucher.reference_no,
-          narration: voucher.narration,
+        headerPatch = {
+          ...headerPatch,
           subtotal_paise: totals.subtotal_paise,
           cgst_paise: totals.cgst_paise,
           sgst_paise: totals.sgst_paise,
           igst_paise: totals.igst_paise,
           total_paise: totals.total_paise,
-        }).eq("id", voucher.id);
-        if (vErr) throw vErr;
+        };
 
-        // Replace voucher_items
-        await supabase.from("voucher_items").delete().eq("voucher_id", voucher.id);
-        const newItems = itemLines
+        itemRows = itemLines
           .map((l, i) => {
             if (!l.item_id) return null;
             const c = computed[i];
             if (c.total_paise <= 0) return null;
             return {
+              id: l.id ?? crypto.randomUUID(),
               voucher_id: voucher.id,
+              company_id: voucher.company_id,
               item_id: l.item_id,
               line_no: i + 1,
               description: l.description || null,
@@ -329,27 +347,17 @@ function VoucherEditPage() {
               cgst_paise: c.cgst_paise,
               sgst_paise: c.sgst_paise,
               igst_paise: c.igst_paise,
+              updated_at: stamp,
             };
           })
-          .filter(Boolean) as object[];
-        if (newItems.length) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: iErr } = await supabase.from("voucher_items").insert(newItems as any);
-          if (iErr) throw iErr;
-        }
+          .filter(Boolean) as Record<string, unknown>[];
 
-        // Rebuild postings
         if (voucher.party_ledger_id) {
-          await supabase.from("voucher_entries").delete().eq("voucher_id", voucher.id);
           const itcClass = (voucher as { itc_class?: "inputs" | "capital_goods" | "input_services" | "ineligible" | "na" }).itc_class;
           let capitalItems: { name: string; taxable_paise: number; cgst_paise: number; sgst_paise: number; igst_paise: number }[] | undefined;
           if (itcClass === "capital_goods") {
-            const itemIds = itemLines.map((l) => l.item_id).filter(Boolean) as string[];
             const nameById = new Map<string, string>();
-            if (itemIds.length) {
-              const { data: its } = await supabase.from("items").select("id, name").in("id", itemIds);
-              for (const it of (its || []) as { id: string; name: string }[]) nameById.set(it.id, it.name);
-            }
+            for (const it of items) nameById.set(it.id, it.name);
             capitalItems = itemLines
               .map((l, i) => {
                 const c = computed[i];
@@ -369,58 +377,85 @@ function VoucherEditPage() {
             voucher.voucher_type as ItemKind,
             voucher.party_ledger_id,
             totals,
-            {
-              itcClass,
-              itcEligible: (voucher as { itc_eligible?: boolean }).itc_eligible,
-              capitalItems,
-            },
+            { itcClass, itcEligible: (voucher as { itc_eligible?: boolean }).itc_eligible, capitalItems },
           );
-          const entryRows = postings.map((p) => ({
+          entryRows = postings.map((p) => ({
+            id: crypto.randomUUID(),
             voucher_id: voucher.id,
+            company_id: voucher.company_id,
             ledger_id: p.ledger_id,
             debit_paise: p.debit_paise,
             credit_paise: p.credit_paise,
             line_no: p.line_no,
+            updated_at: stamp,
           }));
-          const { error: eErr } = await supabase.from("voucher_entries").insert(entryRows);
-          if (eErr) throw eErr;
         }
       } else if (isEntryKind) {
-        // Validate Dr = Cr
         if (Math.abs(entryTotals.dr - entryTotals.cr) > 0.001) {
           toast.error(`Debit (${entryTotals.dr.toFixed(2)}) must equal Credit (${entryTotals.cr.toFixed(2)})`);
           setSaving(false);
           return;
         }
         const totalP = rupeesToPaise(entryTotals.dr);
-        const { error: vErr } = await supabase.from("vouchers").update({
-          voucher_date: voucher.voucher_date,
-          reference_no: voucher.reference_no,
-          narration: voucher.narration,
-          subtotal_paise: totalP,
-          total_paise: totalP,
-        }).eq("id", voucher.id);
-        if (vErr) throw vErr;
+        headerPatch = { ...headerPatch, subtotal_paise: totalP, total_paise: totalP };
 
-        await supabase.from("voucher_entries").delete().eq("voucher_id", voucher.id);
         const rows = entryLines
           .filter((l) => l.ledger_id && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
           .map((l, i) => ({
+            id: l.id ?? crypto.randomUUID(),
             voucher_id: voucher.id,
+            company_id: voucher.company_id,
             ledger_id: l.ledger_id,
             line_no: i + 1,
             debit_paise: rupeesToPaise(parseFloat(l.debit) || 0),
             credit_paise: rupeesToPaise(parseFloat(l.credit) || 0),
             narration: l.narration || null,
+            updated_at: stamp,
           }));
         if (rows.length < 2) {
           toast.error("At least two lines required");
           setSaving(false);
           return;
         }
-        const { error: eErr } = await supabase.from("voucher_entries").insert(rows);
-        if (eErr) throw eErr;
+        entryRows = rows;
       }
+
+      // 1) Local cache write — always succeeds, offline or online.
+      await offlineDb.transaction(
+        "rw",
+        offlineDb.cache_vouchers,
+        offlineDb.cache_voucher_items,
+        offlineDb.cache_voucher_entries,
+        async () => {
+          const existing = await offlineDb.cache_vouchers.where("id").equals(voucher.id).first();
+          await offlineDb.cache_vouchers.put({ ...(existing ?? {}), ...voucher, ...headerPatch });
+          await offlineDb.cache_voucher_items.where("voucher_id").equals(voucher.id).delete();
+          await offlineDb.cache_voucher_entries.where("voucher_id").equals(voucher.id).delete();
+          if (itemRows.length) await offlineDb.cache_voucher_items.bulkPut(itemRows);
+          if (entryRows.length) await offlineDb.cache_voucher_entries.bulkPut(entryRows);
+        },
+      );
+
+      // 2) Cloud push — best-effort. Never surface JWT/network errors to the
+      //    user; the outbox and next login will reconcile.
+      if (!isLocalOnlyMode() && isOnlineNow()) {
+        try {
+          await supabase.from("vouchers").update(headerPatch as never).eq("id", voucher.id);
+          await supabase.from("voucher_items").delete().eq("voucher_id", voucher.id);
+          await supabase.from("voucher_entries").delete().eq("voucher_id", voucher.id);
+          if (itemRows.length) {
+            const cloudItems = itemRows.map(({ company_id: _c, updated_at: _u, ...rest }) => rest);
+            await supabase.from("voucher_items").insert(cloudItems as never);
+          }
+          if (entryRows.length) {
+            const cloudEntries = entryRows.map(({ company_id: _c, updated_at: _u, ...rest }) => rest);
+            await supabase.from("voucher_entries").insert(cloudEntries as never);
+          }
+        } catch (cloudErr) {
+          console.warn("Cloud push failed (kept locally):", cloudErr);
+        }
+      }
+
       toast.success("Voucher updated");
       load();
     } catch (e) {
@@ -433,18 +468,50 @@ function VoucherEditPage() {
   async function del() {
     if (!voucher || !canDelete) return;
     if (!confirm(`Delete ${voucher.voucher_number}? This cannot be undone.`)) return;
-    await supabase.from("voucher_entries").delete().eq("voucher_id", voucher.id);
-    await supabase.from("voucher_items").delete().eq("voucher_id", voucher.id);
-    // Soft delete the parent so multi-device delta sync can propagate it.
-    const { error } = await supabase.from("vouchers")
-      .update({ deleted_at: new Date().toISOString() } as never)
-      .eq("id", voucher.id);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      // Local-first delete — never blocked by JWT expiry or network.
+      const { offlineDb } = await import("@/lib/offline/db");
+      const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+      const { isOnlineNow } = await import("@/lib/offline/online-status");
+      const stamp = new Date().toISOString();
+
+      await offlineDb.transaction(
+        "rw",
+        offlineDb.cache_vouchers,
+        offlineDb.cache_voucher_items,
+        offlineDb.cache_voucher_entries,
+        async () => {
+          await offlineDb.cache_voucher_items.where("voucher_id").equals(voucher.id).delete();
+          await offlineDb.cache_voucher_entries.where("voucher_id").equals(voucher.id).delete();
+          const existing = await offlineDb.cache_vouchers.where("id").equals(voucher.id).first();
+          if (existing) {
+            await offlineDb.cache_vouchers.put({
+              ...(existing as Record<string, unknown>),
+              deleted_at: stamp,
+              is_deleted: true,
+              updated_at: stamp,
+            });
+          }
+        },
+      );
+
+      if (!isLocalOnlyMode() && isOnlineNow()) {
+        try {
+          await supabase.from("voucher_entries").delete().eq("voucher_id", voucher.id);
+          await supabase.from("voucher_items").delete().eq("voucher_id", voucher.id);
+          await supabase.from("vouchers")
+            .update({ deleted_at: stamp } as never)
+            .eq("id", voucher.id);
+        } catch (cloudErr) {
+          console.warn("Cloud delete failed (kept locally):", cloudErr);
+        }
+      }
+
+      toast.success("Deleted");
+      goBackFromVoucher(() => navigate({ to: "/app/vouchers" }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete");
     }
-    toast.success("Deleted");
-    goBackFromVoucher(() => navigate({ to: "/app/vouchers" }));
   }
 
   if (loading || !voucher) {
