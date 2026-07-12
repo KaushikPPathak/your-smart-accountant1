@@ -196,6 +196,16 @@ export interface DocSummary {
   net_issue: number;
 }
 
+type Gstr1ReconciliationData = Pick<
+  BuiltGstr1,
+  "b2b" | "b2ba" | "b2cl" | "b2cla" | "b2cs" | "cdnr" | "cdnra" | "cdnur" | "exp" | "nil" | "hsn_b2b" | "hsn_b2c"
+>;
+
+export interface Gstr1ReconciliationResult {
+  b2b: { documentValue: number; hsnValue: number; documentTaxable: number; hsnTaxable: number };
+  b2c: { documentValue: number; hsnValue: number; documentTaxable: number; hsnTaxable: number };
+}
+
 // ───────────────────── Date helpers ─────────────────────
 
 export const fmtDDMMYYYY = (iso: string): string => {
@@ -413,6 +423,73 @@ const lineFromVoucherItems = (items: VoucherRow["voucher_items"]): TaxLine[] => 
   }));
 };
 
+const roundRupees = (value: number): number => Number(value.toFixed(2));
+const taxLineTaxable = (lines: TaxLine[]): number => lines.reduce((sum, line) => sum + line.itm_det.txval, 0);
+const taxLineGross = (lines: TaxLine[]): number => lines.reduce(
+  (sum, line) => sum + line.itm_det.txval + line.itm_det.iamt + line.itm_det.camt + line.itm_det.samt + line.itm_det.csamt,
+  0,
+);
+const nilGroupValue = (group: NilGroup): number => group.nil_amt + group.expt_amt + group.ngsup_amt;
+const noteSign = (note: { ntty: "C" | "D" }): 1 | -1 => note.ntty === "C" ? -1 : 1;
+
+export function getGstr1Reconciliation(g: Gstr1ReconciliationData): Gstr1ReconciliationResult {
+  const registeredNil = g.nil.filter((row) => row.sply_ty.endsWith("B2B")).reduce((sum, row) => sum + nilGroupValue(row), 0);
+  const unregisteredNil = g.nil.filter((row) => row.sply_ty.endsWith("B2C")).reduce((sum, row) => sum + nilGroupValue(row), 0);
+  const registeredInvoices = [...g.b2b, ...g.b2ba];
+  const unregisteredInvoices = [...g.b2cl, ...g.b2cla];
+  const registeredNotes = [...g.cdnr, ...g.cdnra];
+
+  const b2bDocumentTaxable = registeredInvoices.reduce((sum, inv) => sum + taxLineTaxable(inv.itms), 0)
+    + registeredNil
+    + registeredNotes.reduce((sum, note) => sum + noteSign(note) * taxLineTaxable(note.itms), 0);
+  const b2bDocumentValue = registeredInvoices.reduce((sum, inv) => sum + inv.val, 0)
+    + registeredNil
+    + registeredNotes.reduce((sum, note) => sum + noteSign(note) * note.val, 0);
+
+  const b2csTaxable = g.b2cs.reduce((sum, row) => sum + row.txval, 0);
+  const b2csValue = g.b2cs.reduce(
+    (sum, row) => sum + row.txval + row.iamt + row.camt + row.samt + row.csamt,
+    0,
+  );
+  const b2cDocumentTaxable = unregisteredInvoices.reduce((sum, inv) => sum + taxLineTaxable(inv.itms), 0)
+    + b2csTaxable
+    + g.exp.reduce((sum, inv) => sum + inv.itms.reduce((lineSum, line) => lineSum + line.txval, 0), 0)
+    + unregisteredNil
+    + g.cdnur.reduce((sum, note) => sum + noteSign(note) * taxLineTaxable(note.itms), 0);
+  const b2cDocumentValue = unregisteredInvoices.reduce((sum, inv) => sum + inv.val, 0)
+    + b2csValue
+    + g.exp.reduce((sum, inv) => sum + inv.val, 0)
+    + unregisteredNil
+    + g.cdnur.reduce((sum, note) => sum + noteSign(note) * note.val, 0);
+
+  return {
+    b2b: {
+      documentValue: roundRupees(b2bDocumentValue),
+      hsnValue: roundRupees(g.hsn_b2b.reduce((sum, row) => sum + row.val, 0)),
+      documentTaxable: roundRupees(b2bDocumentTaxable),
+      hsnTaxable: roundRupees(g.hsn_b2b.reduce((sum, row) => sum + row.txval, 0)),
+    },
+    b2c: {
+      documentValue: roundRupees(b2cDocumentValue),
+      hsnValue: roundRupees(g.hsn_b2c.reduce((sum, row) => sum + row.val, 0)),
+      documentTaxable: roundRupees(b2cDocumentTaxable),
+      hsnTaxable: roundRupees(g.hsn_b2c.reduce((sum, row) => sum + row.txval, 0)),
+    },
+  };
+}
+
+export function assertGstr1Reconciled(g: Gstr1ReconciliationData): void {
+  const result = getGstr1Reconciliation(g);
+  const mismatches = (["b2b", "b2c"] as const).flatMap((category) => {
+    const row = result[category];
+    return [
+      ...(row.documentValue === row.hsnValue ? [] : [`${category.toUpperCase()} total value ${row.documentValue} ≠ HSN ${row.hsnValue}`]),
+      ...(row.documentTaxable === row.hsnTaxable ? [] : [`${category.toUpperCase()} taxable value ${row.documentTaxable} ≠ HSN ${row.hsnTaxable}`]),
+    ];
+  });
+  if (mismatches.length) throw new Error(`GSTR-1 reconciliation failed: ${mismatches.join("; ")}`);
+}
+
 const invTypeFromTreatment = (t: GstTreatment | undefined): "R" | "SEWP" | "SEWOP" | "DE" => {
   if (t === "sez_with_payment") return "SEWP";
   if (t === "sez_without_payment") return "SEWOP";
@@ -445,7 +522,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
   const exp: EXPInvoice[] = [];
   const nilMap = new Map<NilGroup["sply_ty"], NilGroup>();
 
-  const accNil = (v: VoucherRow, natureOverride?: SupplyNature) => {
+  const accNil = (v: VoucherRow, natureOverride?: SupplyNature, sign: 1 | -1 = 1) => {
     const interstate = v.is_interstate;
     const partyGstin = v.ledgers?.gstin || "";
     const key: NilGroup["sply_ty"] = interstate
@@ -454,9 +531,9 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     const cur = nilMap.get(key) ?? { sply_ty: key, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 };
     const amt = v.subtotal_paise || v.total_paise;
     const nature = natureOverride ?? v.supply_nature;
-    if (nature === "nil_rated") cur.nil_amt += amt;
-    else if (nature === "exempt") cur.expt_amt += amt;
-    else if (nature === "non_gst") cur.ngsup_amt += amt;
+    if (nature === "nil_rated") cur.nil_amt += sign * amt;
+    else if (nature === "exempt") cur.expt_amt += sign * amt;
+    else if (nature === "non_gst") cur.ngsup_amt += sign * amt;
     nilMap.set(key, cur);
   };
 
@@ -500,10 +577,15 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       && Number(it.igst_paise || 0) === 0
       && Number(it.cgst_paise || 0) === 0
       && Number(it.sgst_paise || 0) === 0;
-    const nilItems = v.voucher_items.filter(isNilLine);
-    const taxableItems = v.voucher_items.filter((it) => !isNilLine(it));
+    const partitionNilLines = sn !== "zero_rated_wp"
+      && sn !== "zero_rated_wop"
+      && !isExportTreatment(v.ledgers?.gst_treatment);
+    const nilItems = partitionNilLines ? v.voucher_items.filter(isNilLine) : [];
+    const taxableItems = partitionNilLines ? v.voucher_items.filter((it) => !isNilLine(it)) : v.voucher_items;
+    let separatedNilPaise = 0;
     if (nilItems.length > 0) {
       const nilAmt = nilItems.reduce((s, it) => s + (it.taxable_paise || 0), 0);
+      separatedNilPaise = nilAmt;
       if (nilAmt > 0) {
         const interstate = v.is_interstate;
         const partyGstin = v.ledgers?.gstin || "";
@@ -532,7 +614,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
           recipient_name: v.ledgers?.name || "",
           inum: v.voucher_number,
           idt: fmtDDMMYYYY(v.voucher_date),
-          val: r(v.total_paise),
+          val: r(v.total_paise - separatedNilPaise),
           pos: (v.place_of_supply_code || v.ledgers?.state_code || "").padStart(2, "0"),
           rchrg: "N",
           inv_typ: invTypeFromTreatment(treatment),
@@ -556,7 +638,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
         exp_typ,
         inum: v.voucher_number,
         idt: fmtDDMMYYYY(v.voucher_date),
-        val: r(v.total_paise),
+        val: r(v.total_paise - separatedNilPaise),
         sbpcode: v.port_code || undefined,
         sbnum: v.shipping_bill_no || undefined,
         sbdt: v.shipping_bill_date ? fmtDDMMYYYY(v.shipping_bill_date) : undefined,
@@ -576,7 +658,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
         recipient_name: v.ledgers?.name || "",
         inum: v.voucher_number,
         idt: fmtDDMMYYYY(v.voucher_date),
-        val: r(v.total_paise),
+        val: r(v.total_paise - separatedNilPaise),
         pos: (pos || "").padStart(2, "0"),
         rchrg: "N",
         inv_typ,
@@ -595,7 +677,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
         const target: B2CLInvoice = {
           inum: v.voucher_number,
           idt: fmtDDMMYYYY(v.voucher_date),
-          val: r(v.total_paise),
+          val: r(v.total_paise - separatedNilPaise),
           pos: (pos || "").padStart(2, "0"),
           itms: lineFromVoucherItems(v.voucher_items),
         };
@@ -637,6 +719,12 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     const partyGstin = v.ledgers?.gstin || "";
     const inv_typ = invTypeFromTreatment(v.ledgers?.gst_treatment);
 
+    const noteNature = (v.supply_nature ?? "taxable") as SupplyNature;
+    if (noteNature === "nil_rated" || noteNature === "exempt" || noteNature === "non_gst") {
+      accNil(v, noteNature, ntty === "C" ? -1 : 1);
+      continue;
+    }
+
     // Same nil-line partition as the sales loop: strip 0%-and-zero-tax lines
     // from CDNR / CDNUR and add their taxable value to the NIL sheet (with the
     // sign flipped for credit notes so returns of nil-rated supplies net out).
@@ -645,10 +733,15 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       && Number(it.igst_paise || 0) === 0
       && Number(it.cgst_paise || 0) === 0
       && Number(it.sgst_paise || 0) === 0;
-    const nilItemsCN = v.voucher_items.filter(isNilLine);
-    const taxableItemsCN = v.voucher_items.filter((it) => !isNilLine(it));
+    const partitionNilLines = noteNature !== "zero_rated_wp"
+      && noteNature !== "zero_rated_wop"
+      && !isExportTreatment(v.ledgers?.gst_treatment);
+    const nilItemsCN = partitionNilLines ? v.voucher_items.filter(isNilLine) : [];
+    const taxableItemsCN = partitionNilLines ? v.voucher_items.filter((it) => !isNilLine(it)) : v.voucher_items;
+    let separatedNilPaise = 0;
     if (nilItemsCN.length > 0) {
       const nilAmt = nilItemsCN.reduce((s, it) => s + (it.taxable_paise || 0), 0);
+      separatedNilPaise = nilAmt;
       if (nilAmt > 0) {
         const interstate = v.is_interstate;
         const key: NilGroup["sply_ty"] = interstate
@@ -670,7 +763,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
         nt_num: v.voucher_number,
         nt_dt: fmtDDMMYYYY(v.voucher_date),
         ntty,
-        val: r(v.total_paise),
+        val: r(v.total_paise - separatedNilPaise),
         pos: (pos || "").padStart(2, "0"),
         rchrg: "N",
         inv_typ,
@@ -690,10 +783,30 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
           nt_num: v.voucher_number,
           nt_dt: fmtDDMMYYYY(v.voucher_date),
           ntty,
-          val: r(v.total_paise),
+          val: r(v.total_paise - separatedNilPaise),
           pos: (pos || "").padStart(2, "0"),
           itms: lineFromVoucherItems(v.voucher_items),
         });
+      } else {
+        const sign = ntty === "C" ? -1 : 1;
+        for (const it of v.voucher_items) {
+          const lineTx = it.taxable_paise || 0;
+          const lineTax = it.igst_paise + it.cgst_paise + it.sgst_paise;
+          if (lineTx === 0 && lineTax === 0) continue;
+          const key = `${v.is_interstate ? "INTER" : "INTRA"}|${pos}|${it.gst_rate}`;
+          const cur = b2csMap.get(key) ?? {
+            sply_ty: v.is_interstate ? "INTER" : "INTRA",
+            pos: (pos || "").padStart(2, "0"),
+            rt: it.gst_rate,
+            txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0,
+            typ: "OE",
+          } satisfies B2CSGroup;
+          cur.txval += sign * lineTx;
+          cur.iamt += sign * it.igst_paise;
+          cur.camt += sign * it.cgst_paise;
+          cur.samt += sign * it.sgst_paise;
+          b2csMap.set(key, cur);
+        }
       }
     }
   }
@@ -783,6 +896,32 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     }));
   const hsn_b2b = finalizeHsn(hsnB2BMap);
   const hsn_b2c = finalizeHsn(hsnB2CMap);
+
+  // GSTN cross-validates document tables against the B2B/B2C HSN summaries.
+  // Allocate any voucher-rounding or legacy-line residual to the first HSN row
+  // so both Total Value and Taxable Value agree exactly to two decimals.
+  const reconciliationBase: Gstr1ReconciliationData = {
+    b2b, b2ba, b2cl, b2cla, b2cs, cdnr, cdnra, cdnur, exp, nil, hsn_b2b, hsn_b2c,
+  };
+  const beforeReconciliation = getGstr1Reconciliation(reconciliationBase);
+  const alignHsn = (
+    rows: HSNRow[],
+    documentTaxable: number,
+    hsnTaxable: number,
+    documentValue: number,
+    hsnValue: number,
+  ) => {
+    const taxableDelta = roundRupees(documentTaxable - hsnTaxable);
+    const valueDelta = roundRupees(documentValue - hsnValue);
+    if (taxableDelta === 0 && valueDelta === 0) return;
+    if (rows.length === 0) {
+      rows.push({ hsn_sc: "", desc: "", uqc: "OTH-OTH", qty: 0, rt: 0, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0, val: 0 });
+    }
+    rows[0].txval = roundRupees(rows[0].txval + taxableDelta);
+    rows[0].val = roundRupees(rows[0].val + valueDelta);
+  };
+  alignHsn(hsn_b2b, beforeReconciliation.b2b.documentTaxable, beforeReconciliation.b2b.hsnTaxable, beforeReconciliation.b2b.documentValue, beforeReconciliation.b2b.hsnValue);
+  alignHsn(hsn_b2c, beforeReconciliation.b2c.documentTaxable, beforeReconciliation.b2c.hsnTaxable, beforeReconciliation.b2c.documentValue, beforeReconciliation.b2c.hsnValue);
 
   const docs: DocSummary[] = [];
   const buildDocFor = (label: string, nums: string[]) => {
