@@ -140,8 +140,18 @@ function GSTR1Page() {
     }
   };
 
+  const preExportHsnErrors = (b: BuiltGstr1): string[] =>
+    validateGstr1(b).filter((i) => i.level === "error" && i.section.startsWith("hsn")).map((i) => i.message);
+
   const onDownloadJson = () => {
     if (!built) return;
+    const hsnErrs = preExportHsnErrors(built);
+    if (hsnErrs.length) {
+      toast.error("GSTR-1 export blocked — fix HSN/UQC errors first", {
+        description: `${hsnErrs.length} row(s) will be rejected by the portal. See the Validation panel above.`,
+      });
+      return;
+    }
     try {
       downloadJson(`${fileBase}.json`, gstr1ToJson(built));
     } catch (e) {
@@ -150,7 +160,17 @@ function GSTR1Page() {
       });
     }
   };
-  const onDownloadExcel = () => { if (built) void runTemplateExport(built, `${fileBase}.xlsx`); };
+  const onDownloadExcel = () => {
+    if (!built) return;
+    const hsnErrs = preExportHsnErrors(built);
+    if (hsnErrs.length) {
+      toast.error("GSTR-1 export blocked — fix HSN/UQC errors first", {
+        description: `${hsnErrs.length} row(s) will be rejected by the portal. See the Validation panel above.`,
+      });
+      return;
+    }
+    void runTemplateExport(built, `${fileBase}.xlsx`);
+  };
 
   const exportQuarter = (iff: boolean) => {
     if (!company) return;
