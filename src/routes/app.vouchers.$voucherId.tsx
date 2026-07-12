@@ -440,7 +440,7 @@ function VoucherEditPage() {
       //    user; the outbox and next login will reconcile.
       if (!isLocalOnlyMode() && isOnlineNow()) {
         try {
-          await supabase.from("vouchers").update(headerPatch).eq("id", voucher.id);
+          await supabase.from("vouchers").update(headerPatch as never).eq("id", voucher.id);
           await supabase.from("voucher_items").delete().eq("voucher_id", voucher.id);
           await supabase.from("voucher_entries").delete().eq("voucher_id", voucher.id);
           if (itemRows.length) {
