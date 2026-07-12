@@ -89,8 +89,36 @@ self.onmessage = (event: MessageEvent<ExportRequest>) => {
       if (!path || !files[path]) throw new Error(`Official sheet not found: ${name}`);
       files[path] = encoder.encode(replaceSheetData(decoder.decode(files[path]), rows));
     }
+    // Rewrite row-3 "Total Invoice/Note Value" cells for sheets that split
+    // one invoice into multiple GST-rate rows. We repeat the invoice value
+    // on every rate row (so users don't hand-fill blanks and double-count),
+    // and replace the template's plain SUM formula with a dedup formula that
+    // divides each row's value by how many rate rows share its invoice number
+    // — so the total counts each invoice exactly once.
+    const dedupTotals = event.data.dedupTotals ?? {};
+    for (const [sheetName, cfg] of Object.entries(dedupTotals)) {
+      const path = targets.get(sheetName);
+      if (!path || !files[path]) continue;
+      const rows = event.data.sheets[sheetName] ?? [];
+      if (rows.length === 0) continue;
+      const last = rows.length + 4;
+      const valRange = `${cfg.valCol}5:${cfg.valCol}${last}`;
+      const invRange = `${cfg.invCol}5:${cfg.invCol}${last}`;
+      // IFERROR guards against blank invoice-number cells (COUNTIF→0 → div/0).
+      const formula = `SUMPRODUCT(IFERROR(${valRange}/COUNTIF(${invRange},${invRange}),0))`;
+      const cellRef = `${cfg.valCol}3`;
+      let xml = decoder.decode(files[path]);
+      const cellRe = new RegExp(`<c\\s+r="${cellRef}"[^>]*>[\\s\\S]*?<\\/c>`);
+      const match = xml.match(cellRe);
+      if (!match) continue;
+      const styleAttr = match[0].match(/\ss="[^"]+"/)?.[0] ?? "";
+      const newCell = `<c r="${cellRef}"${styleAttr}><f>${formula}</f></c>`;
+      xml = xml.replace(cellRe, newCell);
+      files[path] = encoder.encode(xml);
+    }
     // Force Excel to recompute the row-3 SUM/SUMPRODUCT totals on open; otherwise
     // the template's cached <v>0</v> values show as 0.00 until the user hits F9.
+
     const wbPath = "xl/workbook.xml";
     if (files[wbPath]) {
       let wb = decoder.decode(files[wbPath]);
