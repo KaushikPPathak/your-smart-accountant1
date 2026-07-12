@@ -1470,6 +1470,36 @@ const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 const POS_RE = /^[0-9]{2}$/;
 const FP_RE = /^[0-9]{6}$/;
 
+// GSTN's valid UQC master (Unit Quantity Codes). Any value outside this
+// list is rejected by the portal with "The UQC entered is not valid".
+const VALID_UQC = new Set([
+  "BAG","BAL","BDL","BKL","BOU","BOX","BTL","BUN","CAN","CBM","CCM","CMS",
+  "CTN","DOZ","DRM","GGK","GMS","GRS","GYD","KGS","KLR","KME","LTR","MLT",
+  "MTR","MTS","NOS","OTH","PAC","PCS","PRS","QTL","ROL","SET","SQF","SQM",
+  "TBS","TGM","THD","TON","TUB","UGS","UNT","YDS","NA",
+]);
+
+/**
+ * Structural HSN validation. Catches the shape errors the GSTN portal
+ * rejects (`RET191349` — "The HSN code entered is not valid"):
+ *   • Goods: 4, 6, or 8 numeric digits; must NOT start with 99 (that's SAC).
+ *   • Services (SAC): 6 digits starting with 99.
+ * We can't validate every code against the full CBIC master here, but
+ * catching the structural class covers the majority of portal rejects.
+ */
+function hsnCodeIssue(hsn: string): string | null {
+  const h = String(hsn ?? "").trim();
+  if (!/^[0-9]+$/.test(h)) return `HSN "${h}" must be numeric`;
+  if (h.startsWith("99")) {
+    if (h.length !== 6) return `SAC "${h}" must be 6 digits (service codes)`;
+    return null;
+  }
+  if (![4, 6, 8].includes(h.length)) return `HSN "${h}" must be 4, 6, or 8 digits`;
+  return null;
+}
+
+
+
 export interface ValidationIssue {
   level: "error" | "warning";
   section: string;
