@@ -42,6 +42,8 @@ function Gstr1JsonConverter() {
   const [result, setResult] = useState<ConvertResult | null>(null);
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const license = useLicenseState();
+  const canDownload = hasFeature(license, "gstr1_json");
 
   const computeFp = useCallback((): string => {
     if (cadence === "monthly") return fpFromMonth(`${year}-${month}`);
