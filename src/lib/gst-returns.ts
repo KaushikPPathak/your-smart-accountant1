@@ -874,15 +874,22 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       const fallbackVal = needsFallback ? Math.round(Number(it.qty || 0) * Number(it.rate_paise || 0)) : 0;
       const lineTx = it.taxable_paise || fallbackVal;
       if (lineTx === 0 && it.igst_paise === 0 && it.cgst_paise === 0 && it.sgst_paise === 0) continue;
-      const key = `${it.items?.hsn_code || ""}|${it.gst_rate}|${it.items?.unit || "OTH"}`;
+      const hsnCode = (it.items?.hsn_code || "").trim();
+      const isService = hsnCode.startsWith("99");
+      // Services (SAC 99xx) have no unit of measure — GSTN portal mandates
+      // UQC "NA" and rejects any quantity value. Force both here so the
+      // GSTR-1 sheet is portal-clean regardless of the item's stored unit.
+      const rawUnit = (it.items?.unit || "OTH").toUpperCase();
+      const uqcVal = isService ? "NA" : (rawUnit.slice(0, 3) + "-" + rawUnit);
+      const key = `${hsnCode}|${it.gst_rate}|${isService ? "NA" : (it.items?.unit || "OTH")}`;
       const cur = map.get(key) ?? {
-        hsn_sc: it.items?.hsn_code || "",
+        hsn_sc: hsnCode,
         desc: it.items?.name || "",
-        uqc: (it.items?.unit || "OTH").toUpperCase().slice(0, 3) + "-" + (it.items?.unit || "OTH").toUpperCase(),
+        uqc: uqcVal,
         qty: 0, rt: it.gst_rate,
         txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0, val: 0,
       } satisfies HSNRow;
-      cur.qty += sign * Number(it.qty);
+      if (!isService) cur.qty += sign * Number(it.qty);
       cur.txval += sign * lineTx;
       cur.iamt += sign * it.igst_paise;
       cur.camt += sign * it.cgst_paise;
@@ -890,6 +897,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       cur.val += sign * (lineTx + it.cgst_paise + it.sgst_paise + it.igst_paise);
       map.set(key, cur);
     }
+
   };
   for (const v of sales) accumulate(v, 1);
   if (!iffOnly) for (const v of creditNotes) accumulate(v, v.voucher_type === "credit_note" ? -1 : 1);
