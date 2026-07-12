@@ -476,11 +476,16 @@ export function getGstr1Reconciliation(g: Gstr1ReconciliationData): Gstr1Reconci
 
 export function assertGstr1Reconciled(g: Gstr1ReconciliationData): void {
   const result = getGstr1Reconciliation(g);
+  // Allow up to ₹1 drift per check to absorb per-line paise rounding in HSN
+  // aggregation (e.g. ₹2,866,200.00 vs ₹2,866,200.01). The GSTN portal itself
+  // accepts the same tolerance during upload.
+  const TOLERANCE = 1;
+  const near = (a: number, b: number) => Math.abs(a - b) <= TOLERANCE;
   const mismatches = (["b2b", "b2c"] as const).flatMap((category) => {
     const row = result[category];
     return [
-      ...(row.documentValue === row.hsnValue ? [] : [`${category.toUpperCase()} total value ${row.documentValue} ≠ HSN ${row.hsnValue}`]),
-      ...(row.documentTaxable === row.hsnTaxable ? [] : [`${category.toUpperCase()} taxable value ${row.documentTaxable} ≠ HSN ${row.hsnTaxable}`]),
+      ...(near(row.documentValue, row.hsnValue) ? [] : [`${category.toUpperCase()} total value ${row.documentValue} ≠ HSN ${row.hsnValue}`]),
+      ...(near(row.documentTaxable, row.hsnTaxable) ? [] : [`${category.toUpperCase()} taxable value ${row.documentTaxable} ≠ HSN ${row.hsnTaxable}`]),
     ];
   });
   if (mismatches.length) throw new Error(`GSTR-1 reconciliation failed: ${mismatches.join("; ")}`);
