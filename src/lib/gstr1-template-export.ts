@@ -97,21 +97,21 @@ export async function exportGstr1UsingOfficialTemplate(
   const writeRows = (sheetName: string, rows: (string | number)[][]) => { sheets[sheetName] = rows; };
 
   // ── b2b,sez,de ────────────────────────────────────────────────
-  // GSTN template convention: on invoices with multiple tax-rate lines, the
-  // invoice-level fields (GSTIN, name, invoice no, date, value, POS, rchrg,
-  // inv_typ) go on the FIRST rate line ONLY; subsequent rate lines carry only
-  // the rate + taxable + cess. Otherwise the "Total Invoice Value" SUM in row 3
-  // double-counts every additional rate line.
+  // Industry convention (Tally / Busy / ClearTax exports): every rate line
+  // repeats the invoice header fields so each row is self-contained and
+  // human-readable. Only "Invoice Value" is kept on the FIRST rate line —
+  // the template's Total Invoice Value uses a plain SUM(E:E), so repeating
+  // it would double-count multi-rate invoices.
   const b2bRows: (string | number)[][] = [];
   for (const inv of g.b2b) {
     inv.itms.forEach((it, idx) => {
       const first = idx === 0;
       b2bRows.push([
-        first ? inv.ctin : "", first ? inv.recipient_name : "",
-        first ? inv.inum : "", first ? inv.idt : "",
-        first ? inv.val : "", first ? posLabel(inv.pos) : "",
-        first ? inv.rchrg : "", "",
-        first ? (inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ) : "",
+        inv.ctin, inv.recipient_name,
+        inv.inum, inv.idt,
+        first ? inv.val : "", posLabel(inv.pos),
+        inv.rchrg, "",
+        inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
         "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
     });
@@ -124,12 +124,12 @@ export async function exportGstr1UsingOfficialTemplate(
     inv.itms.forEach((it, idx) => {
       const first = idx === 0;
       b2baRows.push([
-        first ? inv.ctin : "", first ? inv.recipient_name : "",
-        first ? inv.oinum : "", first ? inv.oidt : "",
-        first ? inv.inum : "", first ? inv.idt : "",
-        first ? inv.val : "", first ? posLabel(inv.pos) : "",
-        first ? inv.rchrg : "", "",
-        first ? (inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ) : "",
+        inv.ctin, inv.recipient_name,
+        inv.oinum, inv.oidt,
+        inv.inum, inv.idt,
+        first ? inv.val : "", posLabel(inv.pos),
+        inv.rchrg, "",
+        inv.inv_typ === "R" ? "Regular B2B" : inv.inv_typ,
         "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
     });
@@ -142,8 +142,8 @@ export async function exportGstr1UsingOfficialTemplate(
     inv.itms.forEach((it, idx) => {
       const first = idx === 0;
       b2clRows.push([
-        first ? inv.inum : "", first ? inv.idt : "",
-        first ? inv.val : "", first ? posLabel(inv.pos) : "",
+        inv.inum, inv.idt,
+        first ? inv.val : "", posLabel(inv.pos),
         "", it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, "",
       ]);
     });
@@ -156,8 +156,8 @@ export async function exportGstr1UsingOfficialTemplate(
     inv.itms.forEach((it, idx) => {
       const first = idx === 0;
       b2claRows.push([
-        first ? inv.oinum : "", first ? inv.oidt : "", first ? posLabel(inv.pos) : "",
-        first ? inv.inum : "", first ? inv.idt : "",
+        inv.oinum, inv.oidt, posLabel(inv.pos),
+        inv.inum, inv.idt,
         first ? inv.val : "", "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt, "",
       ]);
@@ -177,10 +177,10 @@ export async function exportGstr1UsingOfficialTemplate(
       const first = idx === 0;
       const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
       cdnrRows.push([
-        first ? n.ctin : "", first ? n.recipient_name : "",
-        first ? n.nt_num : "", first ? n.nt_dt : "",
-        first ? n.ntty : "", first ? posLabel(n.pos) : "",
-        first ? n.rchrg : "", first ? supTy : "",
+        n.ctin, n.recipient_name,
+        n.nt_num, n.nt_dt,
+        n.ntty, posLabel(n.pos),
+        n.rchrg, supTy,
         first ? n.val : "", "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
@@ -195,11 +195,11 @@ export async function exportGstr1UsingOfficialTemplate(
       const first = idx === 0;
       const supTy = it.itm_det.iamt > 0 ? "Inter State" : "Intra State";
       cdnraRows.push([
-        first ? n.ctin : "", first ? n.recipient_name : "",
-        first ? n.ont_num : "", first ? n.ont_dt : "",
-        first ? n.nt_num : "", first ? n.nt_dt : "",
-        first ? n.ntty : "", first ? posLabel(n.pos) : "",
-        first ? n.rchrg : "", first ? supTy : "",
+        n.ctin, n.recipient_name,
+        n.ont_num, n.ont_dt,
+        n.nt_num, n.nt_dt,
+        n.ntty, posLabel(n.pos),
+        n.rchrg, supTy,
         first ? n.val : "", "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
@@ -213,14 +213,15 @@ export async function exportGstr1UsingOfficialTemplate(
     n.itms.forEach((it, idx) => {
       const first = idx === 0;
       cdnurRows.push([
-        first ? n.typ : "", first ? n.nt_num : "", first ? n.nt_dt : "",
-        first ? n.ntty : "", first ? posLabel(n.pos) : "",
+        n.typ, n.nt_num, n.nt_dt,
+        n.ntty, posLabel(n.pos),
         first ? n.val : "", "",
         it.itm_det.rt, it.itm_det.txval, it.itm_det.csamt,
       ]);
     });
   }
   writeRows("cdnur", cdnurRows);
+
 
   // ── exp ───────────────────────────────────────────────────────
   const expRows: (string | number)[][] = [];
