@@ -110,21 +110,29 @@ self.onmessage = (event: MessageEvent<ExportRequest>) => {
       xml = xml.replace(cellRe, newCell);
       files[path] = encoder.encode(xml);
     }
-    // Row-3 totals are already written as literal numbers above, so we do
-    // NOT force a full recalculation on open. Forcing fullCalcOnLoad +
-    // forceFullCalc against the GSTN template (which has thousands of
-    // pre-populated summary formulas across every sheet) makes Excel /
-    // LibreOffice take minutes to open the file and can surface transient
-    // formula errors on rows the user hasn't filled. Leave the template's
-    // original calc settings intact so Excel uses the cached results.
+    // Calc settings:
+    //  • Sheets like b2cl/b2cs/exemp/hsn(b2b)/hsn(b2c) still rely on the
+    //    template's SUMIF header totals — those must recalc on open, else
+    //    the cached zeros from the empty template show up.
+    //  • forceFullCalc="1" (perpetual full recalc after every edit) is what
+    //    made Excel hang for minutes; strip only that.
+    //  • fullCalcOnLoad="1" runs recalc ONCE on open — keep it (or add it)
+    //    so headers reflect the injected data rows.
+    //  • Drop xl/calcChain.xml so Excel rebuilds the dependency chain from
+    //    scratch; leaving the template's stale chain (referencing cells we
+    //    overwrote) is what triggers Excel's "we found a problem" repair.
     const wbPath = "xl/workbook.xml";
     if (files[wbPath]) {
       let wb = decoder.decode(files[wbPath]);
-      const stripped = wb
-        .replace(/\s*fullCalcOnLoad="[^"]*"/g, "")
-        .replace(/\s*forceFullCalc="[^"]*"/g, "");
-      if (stripped !== wb) files[wbPath] = encoder.encode(stripped);
+      wb = wb.replace(/\s*forceFullCalc="[^"]*"/g, "");
+      if (/<calcPr\b[^>]*\bfullCalcOnLoad="[^"]*"/.test(wb)) {
+        wb = wb.replace(/(<calcPr\b[^>]*\bfullCalcOnLoad=")[^"]*(")/, '$11$2');
+      } else if (/<calcPr\b/.test(wb)) {
+        wb = wb.replace(/<calcPr\b([^>]*)\/>/, '<calcPr$1 fullCalcOnLoad="1"/>');
+      }
+      files[wbPath] = encoder.encode(wb);
     }
+    delete files["xl/calcChain.xml"];
     const output = zipSync(files, { level: 1 });
     self.postMessage({ ok: true, output }, [output.buffer as ArrayBuffer]);
   } catch (error) {
