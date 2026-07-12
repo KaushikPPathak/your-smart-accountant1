@@ -286,7 +286,7 @@ function GSTR1Page() {
 
       {built && (
         <>
-          <ValidationPanel issues={validateGstr1(built)} />
+          <ValidationPanel issues={validateGstr1(built, validationOpts)} />
 
           <PeriodLockCard
             returnType="GSTR1"
