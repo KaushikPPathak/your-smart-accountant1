@@ -39,6 +39,20 @@ export function showExportProgress(
   const showToast = totalRows >= 5_000;
   const startedAt = Date.now();
   let isCancelled = false;
+  // Always show the animated overlay — even for tiny exports — so the
+  // "export" moment always feels polished.
+  const overlay: OverlayHandle = openExportOverlay({
+    fileName,
+    total: totalRows,
+    stage: "preparing",
+    onCancel: opts.onCancel
+      ? () => {
+          isCancelled = true;
+          try { opts.onCancel?.(); } catch { /* ignore */ }
+          overlay.fail("Cancelled");
+        }
+      : undefined,
+  });
 
   const buildDescription = (rowsDone: number, stage?: string): string => {
     const pct = totalRows > 0 ? Math.floor((rowsDone / totalRows) * 100) : 0;
