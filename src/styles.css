@@ -289,7 +289,94 @@
     background: var(--dot, var(--accent));
     box-shadow: 0 0 0 2px oklch(1 0 0 / 0.15);
   }
+
+  /* Busy-style horizontal top bar (brand | menus | company) */
+  .busy-topbar {
+    display: flex;
+    align-items: stretch;
+    background: var(--sidebar);
+    color: var(--sidebar-foreground);
+    border-bottom: 1px solid var(--sidebar-border);
+    min-height: 56px;
+  }
+  .busy-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0 1rem;
+    background: oklch(0 0 0 / 0.15);
+    border-right: 1px solid var(--sidebar-border);
+    color: var(--sidebar-foreground);
+    text-decoration: none;
+    min-width: 170px;
+  }
+  .busy-brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px; height: 34px;
+    border-radius: 6px;
+    background: var(--accent);
+    color: var(--accent-foreground);
+    font-weight: 700;
+    font-size: 1.1rem;
+    font-family: var(--font-display);
+  }
+  .busy-brand-name {
+    display: flex; flex-direction: column;
+    line-height: 1.05;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+  }
+  .busy-menus {
+    display: flex; align-items: stretch;
+    flex: 1;
+    padding: 0 0.4rem;
+    overflow-x: auto;
+  }
+  .busy-menu {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0 0.9rem;
+    font-size: 0.86rem;
+    font-weight: 500;
+    color: oklch(0.95 0.01 240 / 0.9);
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  }
+  .busy-menu:hover,
+  .busy-menu[data-state="open"] {
+    background: oklch(1 0 0 / 0.08);
+    color: #fff;
+  }
+  .busy-menu-active {
+    color: #fff;
+    border-bottom-color: var(--accent);
+  }
+  .busy-company {
+    display: flex; align-items: center; gap: 0.35rem;
+    padding: 0 1rem;
+    border-left: 1px solid var(--sidebar-border);
+    background: oklch(0 0 0 / 0.12);
+    color: var(--sidebar-foreground);
+    font-weight: 600;
+    font-size: 0.92rem;
+    max-width: 260px;
+  }
+  .busy-company-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
+
 
 
 /* ============================================================
