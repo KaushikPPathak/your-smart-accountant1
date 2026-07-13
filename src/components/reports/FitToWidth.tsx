@@ -1,4 +1,5 @@
 import * as React from "react";
+import { cn } from "@/lib/utils";
 
 /**
  * FitToWidth — scales its child down (never up) so it fits within the
@@ -59,11 +60,12 @@ export function FitToWidth({
   return (
     <div
       ref={outerRef}
-      className={className}
+      className={cn("fit-to-width-outer", className)}
       style={{ width: "100%", overflow: "hidden", height: innerH ?? undefined }}
     >
       <div
         ref={innerRef}
+        className="fit-to-width-inner"
         style={{
           transform: `scale(${scale})`,
           transformOrigin: "top left",
