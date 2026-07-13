@@ -1,7 +1,9 @@
 // Busy-style progress toast for large report exports. Shows elapsed time,
 // rows/percent and a working Cancel button that terminates the underlying
 // worker. Uses sonner (already used throughout the app) for consistent UX.
+// Also drives the animated ExportShowcase overlay for a delightful visual.
 import { toast } from "sonner";
+import { openExportOverlay, type OverlayHandle } from "@/lib/export-overlay-store";
 
 export interface ExportProgress {
   update(rowsDone: number, stage?: string): void;
@@ -37,6 +39,20 @@ export function showExportProgress(
   const showToast = totalRows >= 5_000;
   const startedAt = Date.now();
   let isCancelled = false;
+  // Always show the animated overlay — even for tiny exports — so the
+  // "export" moment always feels polished.
+  const overlay: OverlayHandle = openExportOverlay({
+    fileName,
+    total: totalRows,
+    stage: "preparing",
+    onCancel: opts.onCancel
+      ? () => {
+          isCancelled = true;
+          try { opts.onCancel?.(); } catch { /* ignore */ }
+          overlay.fail("Cancelled");
+        }
+      : undefined,
+  });
 
   const buildDescription = (rowsDone: number, stage?: string): string => {
     const pct = totalRows > 0 ? Math.floor((rowsDone / totalRows) * 100) : 0;
@@ -71,11 +87,14 @@ export function showExportProgress(
   return {
     cancelled() { return isCancelled; },
     update(rowsDone: number, stage?: string) {
-      if (!showToast || id === undefined || isCancelled) return;
+      if (isCancelled) return;
       const pct = totalRows > 0 ? Math.floor((rowsDone / totalRows) * 100) : 0;
       if (pct === lastPercent && stage === lastStage) return;
       lastPercent = pct;
       lastStage = stage ?? "";
+      // Update the animated overlay every tick.
+      overlay.update({ done: rowsDone, stage });
+      if (!showToast || id === undefined) return;
       toast.loading(`Exporting ${fileName}…`, {
         id,
         description: buildDescription(rowsDone, stage),
@@ -86,6 +105,7 @@ export function showExportProgress(
               onClick: () => {
                 isCancelled = true;
                 try { opts.onCancel?.(); } catch { /* ignore */ }
+                overlay.fail("Cancelled");
                 toast.error(`Export cancelled: ${fileName}`, { id, duration: 3000 });
               },
             }
@@ -93,8 +113,9 @@ export function showExportProgress(
       });
     },
     done() {
-      if (!showToast || id === undefined) return;
       if (isCancelled) return;
+      overlay.done();
+      if (!showToast || id === undefined) return;
       const elapsed = fmtElapsed(Date.now() - startedAt);
       toast.success(`${fileName} ready`, {
         id,
@@ -104,6 +125,7 @@ export function showExportProgress(
     },
     fail(message?: string) {
       if (isCancelled) return;
+      overlay.fail(message);
       if (!showToast || id === undefined) {
         toast.error(`Export failed: ${fileName}`, { description: message });
         return;

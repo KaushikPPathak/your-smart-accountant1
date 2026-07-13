@@ -7,6 +7,7 @@ import { I18nProvider } from "@/lib/i18n";
 import { CurrencyProvider } from "@/lib/currency";
 import { DateFormatProvider } from "@/lib/date-format";
 import { Toaster } from "@/components/ui/sonner";
+import { ExportShowcase } from "@/components/export/ExportShowcase";
 import { isUnlocked } from "@/lib/staff-session";
 import { BrainProvider } from "@/brain/BrainProvider";
 import { isDesktopRuntime } from "@/lib/native-bridge";
@@ -60,6 +61,7 @@ function RootComponent() {
                   </WebGate>
                 </BrainProvider>
                 <Toaster richColors position="top-right" />
+                <ExportShowcase />
               </CompanyProvider>
             </AuthProvider>
           </DateFormatProvider>
