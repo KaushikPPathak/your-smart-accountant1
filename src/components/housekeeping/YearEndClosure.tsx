@@ -148,6 +148,80 @@ async function ensureLedger(
   return created as { id: string; name: string };
 }
 
+// Narration prefixes we generate when posting year-end closure journals.
+// Kept in sync with the `narration` strings in buildPreview / postClosure.
+const CLOSURE_NARRATION_MARKERS = [
+  "Closing stock as on",
+  "Direct incomes & expenses for FY",
+  "Indirect incomes/expenses & Gross Profit transferred",
+  "Net Profit for FY",
+  "Net Loss for FY",
+];
+
+function narrationLooksLikeClosure(narration: string | null | undefined): boolean {
+  const n = String(narration ?? "").trim();
+  if (!n) return false;
+  return CLOSURE_NARRATION_MARKERS.some((m) => n.startsWith(m));
+}
+
+async function findExistingClosureVoucherIds(
+  companyId: string,
+  fyStart: string,
+  fyEnd: string,
+): Promise<string[]> {
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) {
+    const { offlineDb } = await import("@/lib/offline/db");
+    const rows = await offlineDb.cache_vouchers.where("company_id").equals(companyId).toArray();
+    return (rows as any[])
+      .filter(
+        (v) =>
+          v?.is_deleted !== true &&
+          v?.voucher_type === "journal" &&
+          String(v?.voucher_date ?? "") >= fyStart &&
+          String(v?.voucher_date ?? "") <= fyEnd &&
+          narrationLooksLikeClosure(v?.narration),
+      )
+      .map((v) => String(v.id));
+  }
+  const { data } = await supabase
+    .from("vouchers")
+    .select("id, narration")
+    .eq("company_id", companyId)
+    .eq("voucher_type", "journal")
+    .gte("voucher_date", fyStart)
+    .lte("voucher_date", fyEnd);
+  return (data ?? [])
+    .filter((v: any) => narrationLooksLikeClosure(v.narration))
+    .map((v: any) => String(v.id));
+}
+
+async function deleteVouchersEverywhere(companyId: string, voucherIds: string[]): Promise<void> {
+  if (voucherIds.length === 0) return;
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  const localOnly = isLocalOnlyMode();
+  const { offlineDb } = await import("@/lib/offline/db");
+  // Local cache — hard delete children, mark parents deleted (tombstone) so
+  // any future sync also removes them from cloud if the user flips modes.
+  await offlineDb.cache_voucher_entries.where("voucher_id").anyOf(voucherIds).delete();
+  await offlineDb.cache_voucher_items.where("voucher_id").anyOf(voucherIds).delete();
+  const now = new Date().toISOString();
+  for (const id of voucherIds) {
+    const row = await offlineDb.cache_vouchers.get(id);
+    if (row) {
+      await offlineDb.cache_vouchers.put({ ...row, is_deleted: true, is_synced: !localOnly, updated_at: now });
+    }
+  }
+  // Actually remove locally so day-book / reports stop showing them.
+  await offlineDb.cache_vouchers.where("id").anyOf(voucherIds).delete();
+  if (!localOnly) {
+    await supabase.from("voucher_entries").delete().in("voucher_id", voucherIds);
+    await supabase.from("voucher_items").delete().in("voucher_id", voucherIds);
+    await supabase.from("vouchers").delete().in("id", voucherIds);
+  }
+  void companyId;
+}
+
 
 export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClosureProps) {
   const fy = useMemo(() => fyDefault(fyStartHint), [fyStartHint]);
@@ -160,6 +234,9 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [history, setHistory] = useState<ClosingRunRow[]>([]);
   const [reverseTarget, setReverseTarget] = useState<ClosingRunRow | null>(null);
+  const [existingClosureVoucherIds, setExistingClosureVoucherIds] = useState<string[]>([]);
+  const [undoOpen, setUndoOpen] = useState(false);
+  const [undoing, setUndoing] = useState(false);
 
   const loadHistory = async () => {
     if (!companyId) return;
@@ -415,7 +492,20 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
       }
 
       if (previewSteps.length === 0) {
-        toast.info("No income/expense balances or closing stock to close for this period.");
+        // Books look already closed for this period — offer an Undo action
+        // instead of a dead-end message. Detect closure journals we posted
+        // ourselves by narration markers.
+        const ids = await findExistingClosureVoucherIds(companyId, fyStart, fyEnd);
+        setExistingClosureVoucherIds(ids);
+        if (ids.length > 0) {
+          toast.info(
+            `Books already closed for this period (${ids.length} closure journal${ids.length > 1 ? "s" : ""} found). Use "Undo year-end closure" to reverse.`,
+          );
+        } else {
+          toast.info("No income/expense balances or closing stock to close for this period.");
+        }
+      } else {
+        setExistingClosureVoucherIds([]);
       }
       // Avoid unused var lint on byId — kept for future per-ledger lookups.
       void byId;
@@ -577,6 +667,26 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
     }
   };
 
+  const undoClosure = async () => {
+    if (!companyId || existingClosureVoucherIds.length === 0) return;
+    setUndoing(true);
+    try {
+      await deleteVouchersEverywhere(companyId, existingClosureVoucherIds);
+      toast.success(
+        `Undone — deleted ${existingClosureVoucherIds.length} closure journal${existingClosureVoucherIds.length > 1 ? "s" : ""}.`,
+      );
+      setExistingClosureVoucherIds([]);
+      setSteps(null);
+      setUndoOpen(false);
+      await loadHistory();
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Failed to undo closure");
+    } finally {
+      setUndoing(false);
+    }
+  };
+
   if (!companyId) {
     return (
       <Card>
@@ -630,6 +740,16 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
           {steps && steps.length > 0 && (
             <Button variant="default" onClick={() => setConfirmOpen(true)} disabled={posting || disabled}>
               <ShieldCheck className="mr-1 h-4 w-4" /> Post {steps.length} Journal{steps.length > 1 ? "s" : ""}
+            </Button>
+          )}
+          {existingClosureVoucherIds.length > 0 && (
+            <Button
+              variant="destructive"
+              onClick={() => setUndoOpen(true)}
+              disabled={undoing || disabled}
+            >
+              <RotateCcw className="mr-1 h-4 w-4" />
+              Undo year-end closure ({existingClosureVoucherIds.length})
             </Button>
           )}
           {disabled && <Badge variant="outline">Admin only</Badge>}
@@ -739,6 +859,27 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => reverseTarget && reverseRun(reverseTarget)}>
               Reverse closure
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={undoOpen} onOpenChange={(o) => !undoing && setUndoOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Undo year-end closure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete {existingClosureVoucherIds.length} closure journal
+              {existingClosureVoucherIds.length > 1 ? "s" : ""} posted for FY <strong>{fyStart}</strong> to <strong>{fyEnd}</strong>
+              {" "}(Closing Stock, Trading A/c, Profit &amp; Loss A/c and Capital A/c transfers).
+              Income and expense balances will reappear so you can re-run the closure with corrected figures.
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={undoing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={undoClosure} disabled={undoing}>
+              {undoing ? "Undoing…" : "Delete closure journals"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
