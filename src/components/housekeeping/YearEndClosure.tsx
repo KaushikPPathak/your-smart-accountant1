@@ -160,6 +160,9 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [history, setHistory] = useState<ClosingRunRow[]>([]);
   const [reverseTarget, setReverseTarget] = useState<ClosingRunRow | null>(null);
+  const [existingClosureVoucherIds, setExistingClosureVoucherIds] = useState<string[]>([]);
+  const [undoOpen, setUndoOpen] = useState(false);
+  const [undoing, setUndoing] = useState(false);
 
   const loadHistory = async () => {
     if (!companyId) return;
