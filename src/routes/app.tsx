@@ -2,12 +2,7 @@ import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tansta
 import { useEffect, useState } from "react";
 import { Lock, Building2, HardDriveDownload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  SidebarProvider,
-  SidebarTrigger,
-  SidebarInset,
-} from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
+import { TopMenuBar } from "@/components/TopMenuBar";
 import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
