@@ -418,7 +418,20 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
       }
 
       if (previewSteps.length === 0) {
-        toast.info("No income/expense balances or closing stock to close for this period.");
+        // Books look already closed for this period — offer an Undo action
+        // instead of a dead-end message. Detect closure journals we posted
+        // ourselves by narration markers.
+        const ids = await findExistingClosureVoucherIds(companyId, fyStart, fyEnd);
+        setExistingClosureVoucherIds(ids);
+        if (ids.length > 0) {
+          toast.info(
+            `Books already closed for this period (${ids.length} closure journal${ids.length > 1 ? "s" : ""} found). Use "Undo year-end closure" to reverse.`,
+          );
+        } else {
+          toast.info("No income/expense balances or closing stock to close for this period.");
+        }
+      } else {
+        setExistingClosureVoucherIds([]);
       }
       // Avoid unused var lint on byId — kept for future per-ledger lookups.
       void byId;
