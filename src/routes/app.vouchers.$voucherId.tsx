@@ -521,6 +521,41 @@ function VoucherEditPage() {
   const printable = ["sales", "purchase", "credit_note", "debit_note"].includes(voucher.voucher_type);
   const requiresEwb = voucher.voucher_type === "sales" && voucher.total_paise > 5_000_000;
 
+  const printEntryVoucher = async () => {
+    if (!voucher) return;
+    const { downloadPdfTable } = await import("@/lib/exporters");
+    const ledgerName = (id: string) => ledgers.find((l) => l.id === id)?.name ?? "—";
+    const rows = entryLines
+      .filter((l) => l.ledger_id && (parseFloat(l.debit || "0") || parseFloat(l.credit || "0")))
+      .map((l) => {
+        const d = parseFloat(l.debit || "0") || 0;
+        const c = parseFloat(l.credit || "0") || 0;
+        return [
+          d > 0 ? "Dr" : "Cr",
+          ledgerName(l.ledger_id),
+          l.narration ?? "",
+          d ? d.toFixed(2) : "",
+          c ? c.toFixed(2) : "",
+        ];
+      });
+    const totDr = entryLines.reduce((s, l) => s + (parseFloat(l.debit || "0") || 0), 0);
+    const totCr = entryLines.reduce((s, l) => s + (parseFloat(l.credit || "0") || 0), 0);
+    const companyName = activeMembership?.companies?.name ?? "";
+    const label = voucher.voucher_type.charAt(0).toUpperCase() + voucher.voucher_type.slice(1);
+    downloadPdfTable({
+      title: `${label} Voucher · ${voucher.voucher_number}`,
+      companyName,
+      subtitle: `Date: ${voucher.voucher_date}${voucher.reference_no ? `  ·  Ref: ${voucher.reference_no}` : ""}${voucher.narration ? `\nNarration: ${voucher.narration}` : ""}`,
+      head: [["Dr/Cr", "Ledger", "Narration", "Debit (₹)", "Credit (₹)"]],
+      body: rows,
+      foot: [["", "Total", "", totDr.toFixed(2), totCr.toFixed(2)]],
+      fileName: `${voucher.voucher_type}-${voucher.voucher_number}.pdf`,
+      orientation: "p",
+      rightAlignCols: [3, 4],
+      subFolder: "Vouchers",
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
