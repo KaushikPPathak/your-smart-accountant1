@@ -87,11 +87,14 @@ export function showExportProgress(
   return {
     cancelled() { return isCancelled; },
     update(rowsDone: number, stage?: string) {
-      if (!showToast || id === undefined || isCancelled) return;
+      if (isCancelled) return;
       const pct = totalRows > 0 ? Math.floor((rowsDone / totalRows) * 100) : 0;
       if (pct === lastPercent && stage === lastStage) return;
       lastPercent = pct;
       lastStage = stage ?? "";
+      // Update the animated overlay every tick.
+      overlay.update({ done: rowsDone, stage });
+      if (!showToast || id === undefined) return;
       toast.loading(`Exporting ${fileName}…`, {
         id,
         description: buildDescription(rowsDone, stage),
@@ -102,6 +105,7 @@ export function showExportProgress(
               onClick: () => {
                 isCancelled = true;
                 try { opts.onCancel?.(); } catch { /* ignore */ }
+                overlay.fail("Cancelled");
                 toast.error(`Export cancelled: ${fileName}`, { id, duration: 3000 });
               },
             }
@@ -109,8 +113,9 @@ export function showExportProgress(
       });
     },
     done() {
-      if (!showToast || id === undefined) return;
       if (isCancelled) return;
+      overlay.done();
+      if (!showToast || id === undefined) return;
       const elapsed = fmtElapsed(Date.now() - startedAt);
       toast.success(`${fileName} ready`, {
         id,
@@ -120,6 +125,7 @@ export function showExportProgress(
     },
     fail(message?: string) {
       if (isCancelled) return;
+      overlay.fail(message);
       if (!showToast || id === undefined) {
         toast.error(`Export failed: ${fileName}`, { description: message });
         return;
