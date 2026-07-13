@@ -58,6 +58,10 @@ interface Member {
 }
 
 function SettingsPage() {
+  const location = useLocation();
+  if (location.pathname !== "/app/settings" && location.pathname !== "/app/settings/") {
+    return <Outlet />;
+  }
   const { activeCompanyId, activeMembership, memberships, refresh: refreshCompanies } = useCompany();
   const { t } = useI18n();
   const navigate = useNavigate();
