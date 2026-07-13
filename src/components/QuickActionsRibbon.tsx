@@ -57,12 +57,12 @@ export function QuickActionsRibbon() {
   }, [showHotkeys]);
 
   return (
-    <div className="hidden md:block border-b border-border bg-muted/30 print:hidden">
-      <div className="flex items-center gap-1 overflow-x-auto px-4 py-1">
+    <div className="busy-menubar hidden md:block print:hidden">
+      <div className="flex items-center gap-1 overflow-x-auto px-4 py-1.5">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="mr-2 flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+          className="mr-2 flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/70 hover:bg-white/10 hover:text-white"
           title={open ? "Collapse Quick Entry" : "Expand Quick Entry"}
           aria-expanded={open}
         >
@@ -79,18 +79,16 @@ export function QuickActionsRibbon() {
             <Link
               key={a.to}
               to={a.to}
-              className={cn(
-                "group flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-all duration-150",
-                active
-                  ? "bg-accent text-accent-foreground shadow-sm"
-                  : "text-foreground/80 hover:bg-accent/60 hover:text-accent-foreground active:scale-95",
-              )}
+              data-active={active}
+              className="busy-menu-item"
+              style={{ ["--dot" as string]: a.dot }}
               title={`${label} (${a.hotkey})`}
             >
+              <span className="busy-menu-dot" />
               <a.icon className="h-3.5 w-3.5" />
               <span>{label}</span>
               {showHotkeys && (
-                <kbd className="ml-1 rounded border border-border bg-background px-1 text-[9px] font-mono text-muted-foreground">
+                <kbd className="ml-1 rounded border border-white/25 bg-white/10 px-1 text-[9px] font-mono text-white/80">
                   {a.hotkey}
                 </kbd>
               )}
@@ -102,7 +100,7 @@ export function QuickActionsRibbon() {
           <button
             type="button"
             onClick={() => setShowHotkeys((v) => !v)}
-            className="ml-auto rounded-md px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+            className="ml-auto rounded px-2 py-1 text-[10px] text-white/70 hover:bg-white/10 hover:text-white"
             title="Toggle keyboard shortcut hints"
           >
             {showHotkeys ? "Hide keys" : "Show keys"}
