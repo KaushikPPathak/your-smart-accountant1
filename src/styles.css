@@ -306,7 +306,7 @@
     align-items: center;
     gap: 0.6rem;
     padding: 0 1rem;
-    background: oklch(0 0 0 / 0.15);
+    background: oklch(0.75 0.13 80); /* base amber */
     border-right: 1px solid var(--sidebar-border);
     color: var(--sidebar-foreground);
     text-decoration: none;
@@ -318,8 +318,8 @@
     justify-content: center;
     width: 34px; height: 34px;
     border-radius: 6px;
-    background: var(--accent);
-    color: var(--accent-foreground);
+    background: oklch(0.62 0.14 78); /* darker gold */
+    color: oklch(0.99 0 0);
     font-weight: 700;
     font-size: 1.1rem;
     font-family: var(--font-display);
@@ -331,6 +331,7 @@
     font-weight: 600;
     font-size: 0.95rem;
     letter-spacing: -0.01em;
+    color: oklch(0.22 0.05 70);
   }
   .busy-menus {
     display: flex; align-items: stretch;
@@ -344,8 +345,8 @@
     gap: 0.3rem;
     padding: 0 0.9rem;
     font-size: 0.86rem;
-    font-weight: 500;
-    color: oklch(0.95 0.01 240 / 0.9);
+    font-weight: 600;
+    color: oklch(0.22 0.05 70);
     background: transparent;
     border: 0;
     border-bottom: 2px solid transparent;
@@ -355,19 +356,24 @@
   }
   .busy-menu:hover,
   .busy-menu[data-state="open"] {
-    background: oklch(1 0 0 / 0.08);
-    color: #fff;
+    background: oklch(0.62 0.14 78); /* 20% darker */
+    color: oklch(0.99 0 0);
   }
   .busy-menu-active {
-    color: #fff;
-    border-bottom-color: var(--accent);
+    color: oklch(0.22 0.05 70);
+    border-bottom-color: oklch(0.62 0.14 78);
+  }
+  .busy-menu-active:hover,
+  .busy-menu-active[data-state="open"] {
+    color: oklch(0.99 0 0);
+    border-bottom-color: oklch(0.45 0.12 75);
   }
   .busy-company {
     display: flex; align-items: center; gap: 0.35rem;
     padding: 0 1rem;
     border-left: 1px solid var(--sidebar-border);
-    background: oklch(0 0 0 / 0.12);
-    color: var(--sidebar-foreground);
+    background: oklch(0.75 0.13 80); /* base amber */
+    color: oklch(0.22 0.05 70);
     font-weight: 600;
     font-size: 0.92rem;
     max-width: 260px;
