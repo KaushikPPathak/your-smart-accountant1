@@ -110,14 +110,16 @@
   --shadow-card: 0 1px 2px oklch(0.20 0.05 250 / 0.06), 0 4px 14px -6px oklch(0.20 0.05 250 / 0.12);
   --shadow-elevated: 0 12px 36px -14px oklch(0.20 0.05 250 / 0.35);
 
-  --sidebar: oklch(0.22 0.05 250);
-  --sidebar-foreground: oklch(0.94 0.01 240);
-  --sidebar-primary: oklch(0.62 0.10 215);
+  /* Amber gold theme: base = button color (#E0A82E ≈ oklch(0.75 0.13 80)),
+     top bar = 20% lighter, open/hover = 20% darker */
+  --sidebar: oklch(0.83 0.11 82);                 /* top bar bg — 20% lighter */
+  --sidebar-foreground: oklch(0.22 0.05 70);      /* dark ink on gold */
+  --sidebar-primary: oklch(0.62 0.14 78);         /* darker gold */
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.30 0.06 250);
-  --sidebar-accent-foreground: oklch(0.98 0.01 240);
-  --sidebar-border: oklch(0.32 0.06 250);
-  --sidebar-ring: oklch(0.62 0.10 215);
+  --sidebar-accent: oklch(0.62 0.14 78);          /* open/hover — 20% darker */
+  --sidebar-accent-foreground: oklch(0.99 0 0);
+  --sidebar-border: oklch(0.62 0.14 78 / 0.55);
+  --sidebar-ring: oklch(0.62 0.14 78);
 }
 
 .dark {
