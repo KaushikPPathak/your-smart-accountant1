@@ -44,12 +44,14 @@ export function DataLocationCard() {
           adding one-click backup to your own cloud account shortly.
         </div>
         <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-          <strong>Version updates are safe.</strong> The WebView data folder is
-          pinned to a fixed path (<code>%LOCALAPPDATA%\com.smartaccountant.app\EBWebView\</code>)
-          and the installer is configured to leave <code>%LOCALAPPDATA%\com.smartaccountant.app\</code>
-          untouched on upgrade and uninstall. On every launch we also verify the
-          local database is intact and warn you if it looks unexpectedly empty
-          after an update.
+          <strong>Version updates are safe.</strong> Your exports, backups and
+          GST files are saved to a short, easy-to-find folder on this PC:
+          <code className="mx-1">C:\smartaccountant\&lt;Company&gt;\...</code>
+          (or <code>~/smartaccountant/</code> on macOS/Linux). The app&apos;s
+          internal database is pinned to a fixed system location and the
+          installer leaves both folders untouched on upgrade/uninstall. On
+          every launch we verify the local database is intact and warn you if
+          it looks unexpectedly empty after an update.
         </div>
         <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
           <strong>Your data stays forever.</strong> Snapshots and backups on
