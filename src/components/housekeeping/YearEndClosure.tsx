@@ -667,6 +667,26 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
     }
   };
 
+  const undoClosure = async () => {
+    if (!companyId || existingClosureVoucherIds.length === 0) return;
+    setUndoing(true);
+    try {
+      await deleteVouchersEverywhere(companyId, existingClosureVoucherIds);
+      toast.success(
+        `Undone — deleted ${existingClosureVoucherIds.length} closure journal${existingClosureVoucherIds.length > 1 ? "s" : ""}.`,
+      );
+      setExistingClosureVoucherIds([]);
+      setSteps(null);
+      setUndoOpen(false);
+      await loadHistory();
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Failed to undo closure");
+    } finally {
+      setUndoing(false);
+    }
+  };
+
   if (!companyId) {
     return (
       <Card>
