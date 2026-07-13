@@ -388,6 +388,21 @@
     page-break-after: avoid;
     break-after: avoid;
   }
+  /* Neutralize the FitToWidth scale transform + fixed height + overflow
+     clipping when printing, otherwise landscape reports (Cash & Bank,
+     Ledger, Trial Balance, etc.) render as a blank page in the browser's
+     print preview because the on-screen scale (e.g. 0.6) is applied to the
+     inner container and the outer wrapper's measured pixel height clips
+     everything below the first few rows. */
+  .report-print-root .fit-to-width-outer {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .report-print-root .fit-to-width-inner {
+    transform: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
 }
 
 /* Gujarati script support for on-screen and browser-print views.
