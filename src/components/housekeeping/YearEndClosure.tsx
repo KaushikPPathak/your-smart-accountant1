@@ -863,6 +863,27 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={undoOpen} onOpenChange={(o) => !undoing && setUndoOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Undo year-end closure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete {existingClosureVoucherIds.length} closure journal
+              {existingClosureVoucherIds.length > 1 ? "s" : ""} posted for FY <strong>{fyStart}</strong> to <strong>{fyEnd}</strong>
+              {" "}(Closing Stock, Trading A/c, Profit &amp; Loss A/c and Capital A/c transfers).
+              Income and expense balances will reappear so you can re-run the closure with corrected figures.
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={undoing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={undoClosure} disabled={undoing}>
+              {undoing ? "Undoing…" : "Delete closure journals"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
