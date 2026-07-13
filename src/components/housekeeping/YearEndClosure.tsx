@@ -148,6 +148,80 @@ async function ensureLedger(
   return created as { id: string; name: string };
 }
 
+// Narration prefixes we generate when posting year-end closure journals.
+// Kept in sync with the `narration` strings in buildPreview / postClosure.
+const CLOSURE_NARRATION_MARKERS = [
+  "Closing stock as on",
+  "Direct incomes & expenses for FY",
+  "Indirect incomes/expenses & Gross Profit transferred",
+  "Net Profit for FY",
+  "Net Loss for FY",
+];
+
+function narrationLooksLikeClosure(narration: string | null | undefined): boolean {
+  const n = String(narration ?? "").trim();
+  if (!n) return false;
+  return CLOSURE_NARRATION_MARKERS.some((m) => n.startsWith(m));
+}
+
+async function findExistingClosureVoucherIds(
+  companyId: string,
+  fyStart: string,
+  fyEnd: string,
+): Promise<string[]> {
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) {
+    const { offlineDb } = await import("@/lib/offline/db");
+    const rows = await offlineDb.cache_vouchers.where("company_id").equals(companyId).toArray();
+    return (rows as any[])
+      .filter(
+        (v) =>
+          v?.is_deleted !== true &&
+          v?.voucher_type === "journal" &&
+          String(v?.voucher_date ?? "") >= fyStart &&
+          String(v?.voucher_date ?? "") <= fyEnd &&
+          narrationLooksLikeClosure(v?.narration),
+      )
+      .map((v) => String(v.id));
+  }
+  const { data } = await supabase
+    .from("vouchers")
+    .select("id, narration")
+    .eq("company_id", companyId)
+    .eq("voucher_type", "journal")
+    .gte("voucher_date", fyStart)
+    .lte("voucher_date", fyEnd);
+  return (data ?? [])
+    .filter((v: any) => narrationLooksLikeClosure(v.narration))
+    .map((v: any) => String(v.id));
+}
+
+async function deleteVouchersEverywhere(companyId: string, voucherIds: string[]): Promise<void> {
+  if (voucherIds.length === 0) return;
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  const localOnly = isLocalOnlyMode();
+  const { offlineDb } = await import("@/lib/offline/db");
+  // Local cache — hard delete children, mark parents deleted (tombstone) so
+  // any future sync also removes them from cloud if the user flips modes.
+  await offlineDb.cache_voucher_entries.where("voucher_id").anyOf(voucherIds).delete();
+  await offlineDb.cache_voucher_items.where("voucher_id").anyOf(voucherIds).delete();
+  const now = new Date().toISOString();
+  for (const id of voucherIds) {
+    const row = await offlineDb.cache_vouchers.get(id);
+    if (row) {
+      await offlineDb.cache_vouchers.put({ ...row, is_deleted: true, is_synced: !localOnly, updated_at: now });
+    }
+  }
+  // Actually remove locally so day-book / reports stop showing them.
+  await offlineDb.cache_vouchers.where("id").anyOf(voucherIds).delete();
+  if (!localOnly) {
+    await supabase.from("voucher_entries").delete().in("voucher_id", voucherIds);
+    await supabase.from("voucher_items").delete().in("voucher_id", voucherIds);
+    await supabase.from("vouchers").delete().in("id", voucherIds);
+  }
+  void companyId;
+}
+
 
 export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClosureProps) {
   const fy = useMemo(() => fyDefault(fyStartHint), [fyStartHint]);
