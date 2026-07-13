@@ -61,6 +61,7 @@ function RootComponent() {
                   </WebGate>
                 </BrainProvider>
                 <Toaster richColors position="top-right" />
+                <ExportShowcase />
               </CompanyProvider>
             </AuthProvider>
           </DateFormatProvider>
