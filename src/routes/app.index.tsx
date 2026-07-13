@@ -213,10 +213,10 @@ function Dashboard() {
 
   const stats = useMemo(
     () => [
-      { label: "Sales (this month)", value: formatINR(salesMTD), icon: TrendingUp, color: "text-success" },
-      { label: "Receivables", value: formatINR(receivables), icon: Users, color: "text-primary" },
-      { label: "Payables", value: formatINR(payables), icon: ReceiptText, color: "text-warning" },
-      { label: "Stock value", value: formatINR(stockValue), icon: Package, color: "text-accent" },
+      { label: "Sales (this month)", value: formatINR(salesMTD), icon: TrendingUp, cls: "kpi-sales" },
+      { label: "Receivables", value: formatINR(receivables), icon: Users, cls: "kpi-receipt" },
+      { label: "Payables", value: formatINR(payables), icon: ReceiptText, cls: "kpi-payment" },
+      { label: "Stock value", value: formatINR(stockValue), icon: Package, cls: "kpi-master" },
     ],
     [salesMTD, receivables, payables, stockValue],
   );
@@ -252,19 +252,18 @@ function Dashboard() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (
-          <Card key={s.label}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div key={s.label} className={`kpi-card ${s.cls}`}>
+            <div className="flex items-center justify-between pb-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {s.label}
-              </CardTitle>
-              <s.icon className={`h-4 w-4 ${s.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="num text-2xl font-semibold">{s.value}</div>
-            </CardContent>
-          </Card>
+              </span>
+              <s.icon className="kpi-icon h-4 w-4" />
+            </div>
+            <div className="num text-2xl font-semibold">{s.value}</div>
+          </div>
         ))}
       </div>
+
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
