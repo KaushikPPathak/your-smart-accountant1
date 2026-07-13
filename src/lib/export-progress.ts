@@ -1,7 +1,9 @@
 // Busy-style progress toast for large report exports. Shows elapsed time,
 // rows/percent and a working Cancel button that terminates the underlying
 // worker. Uses sonner (already used throughout the app) for consistent UX.
+// Also drives the animated ExportShowcase overlay for a delightful visual.
 import { toast } from "sonner";
+import { openExportOverlay, type OverlayHandle } from "@/lib/export-overlay-store";
 
 export interface ExportProgress {
   update(rowsDone: number, stage?: string): void;
