@@ -446,12 +446,17 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
         ? await ensureLedger(companyId, "Closing Stock", "stock_in_hand")
         : null;
 
-      // Find/create capital ledger — use local cache in local-only mode.
+      // Find/create capital ledger — MUST exclude the "Profit & Loss A/c"
+      // system ledger, which is itself stored with type="capital".
       let capitalLg: { id: string; name: string } | null = null;
       if (localOnly) {
         const localLedgers = await readLedgers(companyId);
         const cap = (localLedgers as any[]).find(
-          (l) => l.type === "capital" && l.id !== plLg.id && !l.is_deleted,
+          (l) =>
+            l.type === "capital" &&
+            l.id !== plLg.id &&
+            String(l.name ?? "").trim().toLowerCase() !== "profit & loss a/c" &&
+            !l.is_deleted,
         );
         if (cap) capitalLg = { id: String(cap.id), name: String(cap.name) };
       } else {
@@ -461,6 +466,7 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
           .eq("company_id", companyId)
           .eq("type", "capital")
           .neq("id", plLg.id)
+          .neq("name", "Profit & Loss A/c")
           .limit(1)
           .maybeSingle()).data as { id: string; name: string } | null;
       }
