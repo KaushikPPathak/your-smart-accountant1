@@ -742,6 +742,16 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
               <ShieldCheck className="mr-1 h-4 w-4" /> Post {steps.length} Journal{steps.length > 1 ? "s" : ""}
             </Button>
           )}
+          {existingClosureVoucherIds.length > 0 && (
+            <Button
+              variant="destructive"
+              onClick={() => setUndoOpen(true)}
+              disabled={undoing || disabled}
+            >
+              <RotateCcw className="mr-1 h-4 w-4" />
+              Undo year-end closure ({existingClosureVoucherIds.length})
+            </Button>
+          )}
           {disabled && <Badge variant="outline">Admin only</Badge>}
         </div>
 
