@@ -37,8 +37,15 @@ import { ReleaseChannelPicker } from "@/components/settings/ReleaseChannelPicker
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({ meta: [{ title: "Settings — Your Mehtaji" }] }),
-  component: SettingsPage,
+  component: SettingsRouteComponent,
 });
+
+function SettingsRouteComponent() {
+  const location = useLocation();
+  const p = location.pathname.replace(/\/$/, "");
+  if (p !== "/app/settings") return <Outlet />;
+  return <SettingsPage />;
+}
 
 interface Settings {
   invoice_prefix: string;
@@ -58,10 +65,6 @@ interface Member {
 }
 
 function SettingsPage() {
-  const location = useLocation();
-  if (location.pathname !== "/app/settings" && location.pathname !== "/app/settings/") {
-    return <Outlet />;
-  }
   const { activeCompanyId, activeMembership, memberships, refresh: refreshCompanies } = useCompany();
   const { t } = useI18n();
   const navigate = useNavigate();
