@@ -85,16 +85,24 @@ export async function saveCompanyFileNative(
   }
   if (hasTauri()) {
     try {
-      // IMPORTANT: use appLocalDataDir() (= %LOCALAPPDATA%\<identifier>\ on Windows),
-      // NOT appDataDir() (= %APPDATA%\<identifier>\ Roaming). %LOCALAPPDATA% lives
-      // outside Program Files and is therefore NEVER touched by the NSIS / MSI
-      // installer when the user upgrades the .exe.
-      const [{ appLocalDataDir, join }, fs] = await Promise.all([
+      // User-facing exports/backups go under a SHORT, memorable root
+      //   C:\smartaccountant\<Company>\<subFolder>\<file>       (Windows)
+      //   ~/smartaccountant/<Company>/<subFolder>/<file>        (macOS/Linux)
+      // The frozen WebView IndexedDB profile at
+      //   %LOCALAPPDATA%\com.smartaccountant.app\EBWebView\
+      // is a DIFFERENT path and is unaffected by this change.
+      const [{ appLocalDataDir, join }, fs, { getShortDataRoot }] = await Promise.all([
         import("@tauri-apps/api/path"),
         import("@tauri-apps/plugin-fs"),
+        import("./short-data-root"),
       ]);
-      const base = await appLocalDataDir();
-      const dir = await join(base, "mirror", safeSeg(company), safeSeg(subFolder));
+      let base = await getShortDataRoot();
+      if (!base) {
+        // Fallback: legacy %LOCALAPPDATA%\...\mirror\ location.
+        const appBase = await appLocalDataDir();
+        base = await join(appBase, "mirror");
+      }
+      const dir = await join(base, safeSeg(company), safeSeg(subFolder));
       await fs.mkdir(dir, { recursive: true });
       const fullPath = await join(dir, safeFileName(fileName));
       if (typeof contents === "string") {
