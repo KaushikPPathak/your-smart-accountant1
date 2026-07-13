@@ -224,6 +224,74 @@
   }
 }
 
+/* ------------------------------------------------------------
+   KPI card — flat + colored accent bar on the left.
+   Use as: <div class="kpi-card kpi-sales">…</div>
+------------------------------------------------------------ */
+@layer components {
+  .kpi-card {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1rem 1rem 1.15rem;
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    transition: transform 120ms ease, box-shadow 160ms ease;
+  }
+  .kpi-card::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: var(--kpi-accent, var(--primary));
+  }
+  .kpi-card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-elevated);
+  }
+  .kpi-card .kpi-icon {
+    color: var(--kpi-accent, var(--primary));
+  }
+  .kpi-sales    { --kpi-accent: var(--cat-sales); }
+  .kpi-purchase { --kpi-accent: var(--cat-purchase); }
+  .kpi-receipt  { --kpi-accent: var(--cat-receipt); }
+  .kpi-payment  { --kpi-accent: var(--cat-payment); }
+  .kpi-report   { --kpi-accent: var(--cat-report); }
+  .kpi-master   { --kpi-accent: var(--cat-master); }
+
+  /* Busy-style top menu bar */
+  .busy-menubar {
+    background: var(--gradient-brand);
+    color: var(--sidebar-foreground);
+    border-bottom: 1px solid var(--sidebar-border);
+  }
+  .busy-menubar .busy-menu-item {
+    color: oklch(0.94 0.01 240 / 0.85);
+    border-radius: 4px;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .busy-menubar .busy-menu-item:hover {
+    background: oklch(1 0 0 / 0.12);
+    color: #fff;
+  }
+  .busy-menubar .busy-menu-item[data-active="true"] {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+  .busy-menubar .busy-menu-item .busy-menu-dot {
+    width: 6px; height: 6px; border-radius: 999px;
+    background: var(--dot, var(--accent));
+    box-shadow: 0 0 0 2px oklch(1 0 0 / 0.15);
+  }
+}
+
+
 /* ============================================================
    Print rules — Reporting Module
    When a `.report-print-root` element is present in the page,
