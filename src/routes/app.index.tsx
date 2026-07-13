@@ -213,10 +213,10 @@ function Dashboard() {
 
   const stats = useMemo(
     () => [
-      { label: "Sales (this month)", value: formatINR(salesMTD), icon: TrendingUp, color: "text-success" },
-      { label: "Receivables", value: formatINR(receivables), icon: Users, color: "text-primary" },
-      { label: "Payables", value: formatINR(payables), icon: ReceiptText, color: "text-warning" },
-      { label: "Stock value", value: formatINR(stockValue), icon: Package, color: "text-accent" },
+      { label: "Sales (this month)", value: formatINR(salesMTD), icon: TrendingUp, cls: "kpi-sales" },
+      { label: "Receivables", value: formatINR(receivables), icon: Users, cls: "kpi-receipt" },
+      { label: "Payables", value: formatINR(payables), icon: ReceiptText, cls: "kpi-payment" },
+      { label: "Stock value", value: formatINR(stockValue), icon: Package, cls: "kpi-master" },
     ],
     [salesMTD, receivables, payables, stockValue],
   );
