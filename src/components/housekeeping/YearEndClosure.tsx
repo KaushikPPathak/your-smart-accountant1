@@ -28,6 +28,12 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR, rupeesToPaise } from "@/lib/money";
 import type { LedgerTypeValue } from "@/lib/constants";
+import {
+  readLedgers,
+  readVouchers,
+  readVoucherEntriesForCompany,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 interface YearEndClosureProps {
   companyId: string | null;
@@ -155,22 +161,60 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
     try {
       const closingStockPaise = rupeesToPaise(parseFloat(closingStockRupees) || 0);
 
-      const { data: ledgersRaw, error: lErr } = await supabase
-        .from("ledgers")
-        .select("id, name, type, opening_balance_paise, opening_balance_is_debit")
-        .eq("company_id", companyId);
-      if (lErr) throw lErr;
-      const ledgers = (ledgersRaw || []) as LedgerRow[];
+      const { ledgers, entries } = await withCacheFallback(
+        async () => {
+          const { data: ledgersRaw, error: lErr } = await supabase
+            .from("ledgers")
+            .select("id, name, type, opening_balance_paise, opening_balance_is_debit")
+            .eq("company_id", companyId);
+          if (lErr) throw lErr;
+          const { data: entriesRaw, error: eErr } = await supabase
+            .from("voucher_entries")
+            .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
+            .eq("vouchers.company_id", companyId)
+            .gte("vouchers.voucher_date", fyStart)
+            .lte("vouchers.voucher_date", fyEnd);
+          if (eErr) throw eErr;
+          return {
+            ledgers: (ledgersRaw || []) as LedgerRow[],
+            entries: (entriesRaw || []) as unknown as EntryRow[],
+          };
+        },
+        async () => {
+          const [lg, vch, ent] = await Promise.all([
+            readLedgers(companyId),
+            readVouchers(companyId),
+            readVoucherEntriesForCompany(companyId),
+          ]);
+          const voucherById = new Map(
+            (vch as any[]).map((v) => [String(v.id), String(v.voucher_date ?? v.date ?? "")]),
+          );
+          const entries: EntryRow[] = (ent as any[])
+            .map((e) => {
+              const vd = voucherById.get(String(e.voucher_id));
+              if (!vd || vd < fyStart || vd > fyEnd) return null;
+              return {
+                ledger_id: String(e.ledger_id),
+                debit_paise: Number(e.debit_paise || 0),
+                credit_paise: Number(e.credit_paise || 0),
+                vouchers: { voucher_date: vd, company_id: companyId },
+              } as EntryRow;
+            })
+            .filter((x): x is EntryRow => x !== null);
+          return {
+            ledgers: (lg as any[]).map((l) => ({
+              id: String(l.id),
+              name: String(l.name),
+              type: String(l.type),
+              opening_balance_paise: Number(l.opening_balance_paise || 0),
+              opening_balance_is_debit: !!l.opening_balance_is_debit,
+            })) as LedgerRow[],
+            entries,
+          };
+        },
+      );
       const byId = new Map(ledgers.map((l) => [l.id, l]));
 
-      const { data: entriesRaw, error: eErr } = await supabase
-        .from("voucher_entries")
-        .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-        .eq("vouchers.company_id", companyId)
-        .gte("vouchers.voucher_date", fyStart)
-        .lte("vouchers.voucher_date", fyEnd);
-      if (eErr) throw eErr;
-      const entries = (entriesRaw || []) as unknown as EntryRow[];
 
       // Closing balance per ledger within FY (signed: +Dr / -Cr).
       // For income/expense ledgers, opening balance is normally zero, so we
