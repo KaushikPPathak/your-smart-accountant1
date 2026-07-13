@@ -373,22 +373,31 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
       }
 
       // STEP 4 — Transfer Net Profit/Loss to Capital
-      // Pick first capital ledger; we'll let user know if none.
-      const capitalLedger = ledgers.find((l) => l.type === "capital");
+      // IMPORTANT: do NOT resolve the capital ledger here. The "Profit & Loss A/c"
+      // system ledger is itself created with type="capital" (a Tally-style
+      // convention), so `ledgers.find(l => l.type === "capital")` can return
+      // the P&L ledger itself — which would post Dr P&L / Cr P&L and never
+      // transfer the net profit to the owner's Capital account.
+      // Use the `__capital__` placeholder and let `postClosure` pick the
+      // real capital ledger (it already excludes the P&L ledger by id).
+      const capitalLedger = ledgers.find(
+        (l) => l.type === "capital" && l.name.trim().toLowerCase() !== "profit & loss a/c",
+      );
+      const capitalDisplayName = capitalLedger?.name ?? "Capital A/c";
       if (npPaise !== 0) {
         const capLines: JournalLine[] = [];
         if (npPaise > 0) {
           capLines.push({ ledger_id: "__pl__", ledger_name: "Profit & Loss A/c", debit_paise: npPaise, credit_paise: 0 });
           capLines.push({
-            ledger_id: capitalLedger?.id ?? "__capital__",
-            ledger_name: capitalLedger?.name ?? "Capital A/c",
+            ledger_id: "__capital__",
+            ledger_name: capitalDisplayName,
             debit_paise: 0,
             credit_paise: npPaise,
           });
         } else {
           capLines.push({
-            ledger_id: capitalLedger?.id ?? "__capital__",
-            ledger_name: capitalLedger?.name ?? "Capital A/c",
+            ledger_id: "__capital__",
+            ledger_name: capitalDisplayName,
             debit_paise: -npPaise,
             credit_paise: 0,
           });
@@ -437,12 +446,17 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
         ? await ensureLedger(companyId, "Closing Stock", "stock_in_hand")
         : null;
 
-      // Find/create capital ledger — use local cache in local-only mode.
+      // Find/create capital ledger — MUST exclude the "Profit & Loss A/c"
+      // system ledger, which is itself stored with type="capital".
       let capitalLg: { id: string; name: string } | null = null;
       if (localOnly) {
         const localLedgers = await readLedgers(companyId);
         const cap = (localLedgers as any[]).find(
-          (l) => l.type === "capital" && l.id !== plLg.id && !l.is_deleted,
+          (l) =>
+            l.type === "capital" &&
+            l.id !== plLg.id &&
+            String(l.name ?? "").trim().toLowerCase() !== "profit & loss a/c" &&
+            !l.is_deleted,
         );
         if (cap) capitalLg = { id: String(cap.id), name: String(cap.name) };
       } else {
@@ -452,6 +466,7 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
           .eq("company_id", companyId)
           .eq("type", "capital")
           .neq("id", plLg.id)
+          .neq("name", "Profit & Loss A/c")
           .limit(1)
           .maybeSingle()).data as { id: string; name: string } | null;
       }
