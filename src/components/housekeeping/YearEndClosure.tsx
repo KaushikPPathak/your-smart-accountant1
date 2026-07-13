@@ -28,6 +28,12 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR, rupeesToPaise } from "@/lib/money";
 import type { LedgerTypeValue } from "@/lib/constants";
+import {
+  readLedgers,
+  readVouchers,
+  readVoucherEntriesForCompany,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 interface YearEndClosureProps {
   companyId: string | null;
