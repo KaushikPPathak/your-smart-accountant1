@@ -424,8 +424,11 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
     setPosting(true);
     try {
       const closingStockPaise = rupeesToPaise(parseFloat(closingStockRupees) || 0);
+      const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+      const localOnly = isLocalOnlyMode();
+
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not signed in");
+      if (!localOnly && !user) throw new Error("Not signed in");
 
       // Ensure required system ledgers
       const tradingLg = await ensureLedger(companyId, "Trading A/c", "income_direct");
@@ -434,15 +437,24 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
         ? await ensureLedger(companyId, "Closing Stock", "stock_in_hand")
         : null;
 
-      // Find/create capital ledger if needed
-      let capitalLg = (await supabase
-        .from("ledgers")
-        .select("id, name")
-        .eq("company_id", companyId)
-        .eq("type", "capital")
-        .neq("id", plLg.id)
-        .limit(1)
-        .maybeSingle()).data as { id: string; name: string } | null;
+      // Find/create capital ledger — use local cache in local-only mode.
+      let capitalLg: { id: string; name: string } | null = null;
+      if (localOnly) {
+        const localLedgers = await readLedgers(companyId);
+        const cap = (localLedgers as any[]).find(
+          (l) => l.type === "capital" && l.id !== plLg.id && !l.is_deleted,
+        );
+        if (cap) capitalLg = { id: String(cap.id), name: String(cap.name) };
+      } else {
+        capitalLg = (await supabase
+          .from("ledgers")
+          .select("id, name")
+          .eq("company_id", companyId)
+          .eq("type", "capital")
+          .neq("id", plLg.id)
+          .limit(1)
+          .maybeSingle()).data as { id: string; name: string } | null;
+      }
       if (!capitalLg) capitalLg = await ensureLedger(companyId, "Capital A/c", "capital");
 
       const resolveLedgerId = (placeholder: string): string => {
@@ -463,6 +475,8 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
         return order[a.key] - order[b.key];
       });
 
+      const { runEntryVoucherCreate } = await import("@/lib/offline/voucher-executors");
+
       for (const step of ordered) {
         const totalDr = step.lines.reduce((s, l) => s + l.debit_paise, 0);
         const totalCr = step.lines.reduce((s, l) => s + l.credit_paise, 0);
@@ -470,56 +484,44 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
           throw new Error(`${step.title}: Debit/Credit mismatch (${totalDr} vs ${totalCr})`);
         }
 
-        const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
-          _company_id: companyId,
-          _type: "journal",
+        // Route through the offline voucher executor so local-only mode
+        // writes to IndexedDB (cache_vouchers / cache_voucher_entries) and
+        // cloud mode goes through save_voucher_atomic. This keeps year-end
+        // closure working regardless of network / local-only setting.
+        await runEntryVoucherCreate({
+          companyId,
+          voucherType: "journal",
+          voucherDate: fyEnd,
+          partyLedgerId: null,
+          refNo: "",
+          narration: step.narration,
+          total: totalDr,
+          entries: step.lines.map((l, i) => ({
+            ledger_id: resolveLedgerId(l.ledger_id),
+            debit_paise: l.debit_paise,
+            credit_paise: l.credit_paise,
+            narration: null,
+            line_no: i + 1,
+          })),
         });
-        if (numErr) throw numErr;
-
-        const { data: vData, error: vErr } = await supabase
-          .from("vouchers")
-          .insert({
-            company_id: companyId,
-            created_by: user.id,
-            voucher_type: "journal",
-            voucher_number: numData as string,
-            voucher_date: fyEnd,
-            narration: step.narration,
-            subtotal_paise: totalDr,
-            total_paise: totalDr,
-            is_interstate: false,
-          })
-          .select("id")
-          .single();
-        if (vErr) throw vErr;
-
-        const entries = step.lines.map((l, i) => ({
-          voucher_id: vData.id,
-          ledger_id: resolveLedgerId(l.ledger_id),
-          line_no: i + 1,
-          debit_paise: l.debit_paise,
-          credit_paise: l.credit_paise,
-          narration: null,
-        }));
-        const { error: eErr } = await supabase.from("voucher_entries").insert(entries);
-        if (eErr) throw eErr;
-
-        createdIds[step.key] = vData.id;
       }
 
-      const { error: rErr } = await supabase.from("closing_runs").insert({
-        company_id: companyId,
-        fy_start: fyStart,
-        fy_end: fyEnd,
-        closing_stock_paise: closingStockPaise,
-        trading_voucher_id: createdIds.trading,
-        pl_voucher_id: createdIds.pl,
-        capital_voucher_id: createdIds.capital,
-        closing_stock_voucher_id: createdIds.closing_stock,
-        status: "completed",
-        performed_by: user.id,
-      });
-      if (rErr) throw rErr;
+      // closing_runs is a cloud-only audit table; skip in local-only mode.
+      if (!localOnly && user) {
+        const { error: rErr } = await supabase.from("closing_runs").insert({
+          company_id: companyId,
+          fy_start: fyStart,
+          fy_end: fyEnd,
+          closing_stock_paise: closingStockPaise,
+          trading_voucher_id: createdIds.trading,
+          pl_voucher_id: createdIds.pl,
+          capital_voucher_id: createdIds.capital,
+          closing_stock_voucher_id: createdIds.closing_stock,
+          status: "completed",
+          performed_by: user.id,
+        });
+        if (rErr) throw rErr;
+      }
 
       toast.success("Year-end closure posted as Journal vouchers.");
       setSteps(null);
@@ -532,6 +534,7 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
       setPosting(false);
     }
   };
+
 
   const reverseRun = async (run: ClosingRunRow) => {
     if (!companyId) return;
