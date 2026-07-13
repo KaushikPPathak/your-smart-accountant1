@@ -107,6 +107,31 @@ async function ensureLedger(
   name: string,
   type: LedgerTypeValue,
 ): Promise<{ id: string; name: string }> {
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) {
+    const { offlineDb } = await import("@/lib/offline/db");
+    const rows = await offlineDb.cache_ledgers.where("company_id").equals(companyId).toArray();
+    const existing = (rows as any[]).find(
+      (r) => r.is_deleted !== true && String(r.name ?? "").trim().toLowerCase() === name.toLowerCase(),
+    );
+    if (existing?.id) return { id: existing.id, name: existing.name };
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await offlineDb.cache_ledgers.put({
+      id,
+      company_id: companyId,
+      name,
+      type,
+      gst_treatment: "regular",
+      opening_balance_paise: 0,
+      opening_balance_is_debit: true,
+      is_active: true,
+      is_synced: true,
+      is_deleted: false,
+      updated_at: now,
+    });
+    return { id, name };
+  }
   const { data: existing } = await supabase
     .from("ledgers")
     .select("id, name")
@@ -122,6 +147,7 @@ async function ensureLedger(
   if (error) throw error;
   return created as { id: string; name: string };
 }
+
 
 export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClosureProps) {
   const fy = useMemo(() => fyDefault(fyStartHint), [fyStartHint]);
