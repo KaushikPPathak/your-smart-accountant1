@@ -534,7 +534,8 @@ function VoucherEditPage() {
             </h1>
             <p className="text-xs text-muted-foreground">
               {partyName && <>Party: <strong>{partyName}</strong> · </>}
-              {voucher.is_interstate ? "Interstate (IGST)" : "Intrastate (CGST/SGST)"}
+              {["sales", "purchase", "credit_note", "debit_note"].includes(voucher.voucher_type) &&
+                (voucher.is_interstate ? "Interstate (IGST)" : "Intrastate (CGST/SGST)")}
               {requiresEwb && <Badge variant="destructive" className="ml-2">EWB needed</Badge>}
             </p>
           </div>
