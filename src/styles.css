@@ -321,7 +321,7 @@
     background: var(--sidebar);
     color: var(--sidebar-foreground);
     border-bottom: 1px solid var(--sidebar-border);
-    min-height: 56px;
+    min-height: 0;
   }
   .busy-brand {
     display: flex;
