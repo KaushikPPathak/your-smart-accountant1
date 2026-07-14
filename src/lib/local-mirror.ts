@@ -37,6 +37,10 @@ export interface MirrorResult {
   jsonFile: string;
   desktopJsonPath?: string;
   isDesktop: boolean;
+  /** When set, the user-picked folder was unreachable and we fell back to the legacy default location. */
+  fallbackReason?: string;
+  /** When fallbackReason is set, this is the folder path the user had picked (now unreachable). */
+  attemptedFolder?: string;
 }
 
 const LAST_MIRROR_KEY = "ym_last_local_mirror:";
