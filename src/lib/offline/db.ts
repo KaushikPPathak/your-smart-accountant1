@@ -177,6 +177,25 @@ class OfflineDatabase extends Dexie {
       cache_cost_centres: "id, company_id, name, is_active, updated_at",
       cache_cost_categories: "id, company_id, name, is_active, updated_at",
     });
+    // v8 — Performance: compound indexes for the hot read paths.
+    // No data migration needed; Dexie only adds indexes to the existing
+    // object stores. Existing queries keep working unchanged; new code
+    // can opt into these compound keys for range scans.
+    //   cache_vouchers:
+    //     [company_id+voucher_date]              — Day Book, date-range reports
+    //     [company_id+voucher_type+voucher_date] — Sales/Purchase Register
+    //     [company_id+party_id+voucher_date]     — Party ledger / statement
+    //   cache_voucher_entries:
+    //     [company_id+ledger_id]                 — Ledger balance, Trial Balance
+    this.version(8).stores({
+      cache_vouchers:
+        "id, company_id, updated_at, voucher_date, party_id, voucher_type, " +
+        "[company_id+voucher_date], " +
+        "[company_id+voucher_type+voucher_date], " +
+        "[company_id+party_id+voucher_date]",
+      cache_voucher_entries:
+        "id, voucher_id, company_id, ledger_id, [company_id+ledger_id]",
+    });
   }
 }
 
