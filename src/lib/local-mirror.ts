@@ -7,7 +7,8 @@
 
 import { buildCompanyBackup } from "./backup";
 import { isDesktopRuntime, saveCompanyFileNative, writeAbsoluteFileNative } from "./native-bridge";
-import { getBackupFolder } from "./backup-location";
+import { getBackupFolder, setBackupFolder } from "./backup-location";
+import { getShortDataRoot } from "./short-data-root";
 
 function safeName(s: string | null | undefined): string {
   return (s ?? "company").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 60) || "company";
