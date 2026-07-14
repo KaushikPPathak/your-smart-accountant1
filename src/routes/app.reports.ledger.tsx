@@ -274,7 +274,13 @@ function LedgerStatement() {
           if (error) throw error;
           return (data || []) as { debit_paise: number; credit_paise: number }[];
         },
-        async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, before: effFrom })) as { debit_paise: number; credit_paise: number }[],
+        async () => {
+          try {
+            return (await readLedgerEntriesFast(activeCompanyId, ledgerId, { before: effFrom })) as { debit_paise: number; credit_paise: number }[];
+          } catch {
+            return (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, before: effFrom })) as { debit_paise: number; credit_paise: number }[];
+          }
+        },
       );
       if (cancelled) return;
       const movement = prior.reduce(
