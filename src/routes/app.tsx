@@ -320,25 +320,27 @@ function AppLayout() {
   return (
     <div className="flex min-h-screen w-full flex-col">
       <TopMenuBar rightExtras={backupExtras} onLock={onLock} />
-      <div className="sticky top-0 z-20 flex h-11 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur">
-        <div className="ml-auto flex items-center gap-2">
-          <InstallAppButton />
-        </div>
-      </div>
 
-      
       <UpdateRecoveryBanner />
       <BackupNudgeBanner />
       <AccountGroupsProvider>
         <MastersProvider>
           <FocusHintsProvider>
-            <QuickActionsRibbon />
+            <div className="sticky top-0 z-20 flex items-center border-b border-border">
+              <div className="flex-1 min-w-0">
+                <QuickActionsRibbon />
+              </div>
+              <div className="flex items-center gap-2 px-4 bg-background/95 backdrop-blur self-stretch border-l border-border">
+                <InstallAppButton />
+              </div>
+            </div>
             <main className="min-w-0 flex-1 overflow-x-hidden p-4 md:p-6">
               <Outlet />
             </main>
             <StatusBar onOpenHelp={() => setHelpOpen(true)} onOpenTray={() => setTrayOpen(true)} />
             <PendingSavesTray forceOpen={trayOpen} onClose={() => setTrayOpen(false)} />
           </FocusHintsProvider>
+
         </MastersProvider>
       </AccountGroupsProvider>
       <KeyboardCheatSheet open={helpOpen} onOpenChange={setHelpOpen} />
