@@ -298,8 +298,8 @@ function AppLayout() {
     <div className="flex min-h-screen w-full flex-col">
       <TopMenuBar />
       <div className="sticky top-0 z-20 flex h-11 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur">
-        <CompanySwitcher />
         <div className="ml-auto flex items-center gap-2">
+
           <InstallAppButton />
           <LanguageSwitcher compact />
           <CurrencySwitcher compact />
