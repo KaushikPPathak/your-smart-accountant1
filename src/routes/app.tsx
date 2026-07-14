@@ -310,13 +310,11 @@ function AppLayout() {
         onBackupNow={isTrial ? onBackupNow : undefined}
         backupBusy={savingMirror}
         backupLabel={lastSaveAt ? `Backup now (last: ${new Date(lastSaveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "Backup now"}
-        quickPanel={
-          <div className="flex items-center w-full">
-            <div className="flex-1 min-w-0"><QuickActionsRibbon /></div>
-            <div className="flex items-center gap-2 px-2"><InstallAppButton /></div>
-          </div>
-        }
       />
+      <div className="flex items-center border-b border-border bg-background">
+        <div className="flex-1 min-w-0"><QuickActionsRibbon /></div>
+        <div className="flex items-center gap-2 px-2 self-stretch border-l border-border"><InstallAppButton /></div>
+      </div>
 
       <UpdateRecoveryBanner />
       <BackupNudgeBanner />
