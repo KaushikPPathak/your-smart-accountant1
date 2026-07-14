@@ -75,6 +75,8 @@ export async function writeLocalMirror(
     const chosen = getBackupFolder(companyId);
     const companySeg = safeName(companyName);
     let j1, j2;
+    let fallbackReason: string | undefined;
+    let attemptedFolder: string | undefined;
     if (chosen) {
       // Write into the user-picked folder: <chosen>/<Company>/backups + /latest
       const base = `${chosen.replace(/[\\/]+$/, "")}/${companySeg}`;
@@ -82,6 +84,17 @@ export async function writeLocalMirror(
         writeAbsoluteFileNative(base, "backups", jsonFile, jsonStr),
         writeAbsoluteFileNative(base, "latest", latestJson, jsonStr),
       ]);
+      // If the chosen folder is unreachable (drive missing, path deleted, permissions),
+      // don't fail the backup — fall back to the legacy default location and let the
+      // caller surface a warning so the user can re-pick a folder.
+      if (!j1.ok || !j2.ok) {
+        fallbackReason = j1.error || j2.error || "Unknown error";
+        attemptedFolder = chosen;
+        [j1, j2] = await Promise.all([
+          saveCompanyFileNative(companyName, "backups", jsonFile, jsonStr),
+          saveCompanyFileNative(companyName, "latest", latestJson, jsonStr),
+        ]);
+      }
     } else {
       // Fallback: legacy %LOCALAPPDATA%\...\mirror\<Company>\... location.
       [j1, j2] = await Promise.all([
@@ -98,6 +111,8 @@ export async function writeLocalMirror(
       jsonFile,
       desktopJsonPath: j1.path,
       isDesktop: true,
+      fallbackReason,
+      attemptedFolder,
     };
   }
 
