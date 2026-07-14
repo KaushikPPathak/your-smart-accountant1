@@ -63,22 +63,18 @@ interface TopMenu {
 }
 
 // Reorganised into Busy-style top menus: File / Masters / Transactions / Reports / Utilities / Print / Administration
-const MENUS: TopMenu[] = [
+const FILE_GROUPS: NavGroup[] = [
   {
-    key: "file",
-    label: "File",
-    icon: Briefcase,
-    groups: [
-      {
-        label: "Company",
-        items: [
-          { title: "Dashboard", url: "/app", icon: LayoutDashboard, i18nKey: "nav.dashboard" },
-          { title: "Companies", url: "/app/companies", icon: Building2, i18nKey: "nav.companies" },
-          { title: "Company Settings", url: "/app/settings", icon: Settings, i18nKey: "nav.companySettings" },
-        ],
-      },
+    label: "Company",
+    items: [
+      { title: "Dashboard", url: "/app", icon: LayoutDashboard, i18nKey: "nav.dashboard" },
+      { title: "Companies", url: "/app/companies", icon: Building2, i18nKey: "nav.companies" },
+      { title: "Company Settings", url: "/app/settings", icon: Settings, i18nKey: "nav.companySettings" },
     ],
   },
+];
+
+const MENUS: TopMenu[] = [
   {
     key: "masters",
     label: "Masters",
