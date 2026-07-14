@@ -43,6 +43,7 @@ import {
 import { useCompany } from "@/lib/company-context";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { CompanySwitcher } from "@/components/CompanySwitcher";
 
 interface NavItem { title: string; url: string; icon: LucideIcon; i18nKey?: string }
 interface NavGroup { label: string; items: NavItem[] }
@@ -245,7 +246,7 @@ export function TopMenuBar() {
       ),
     );
 
-  const companyName = activeMembership?.companies?.name ?? "Select Company";
+  
 
   return (
     <div className="busy-topbar print:hidden">
@@ -273,7 +274,7 @@ export function TopMenuBar() {
                   <ChevronDown className="h-3 w-3 opacity-70" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[240px]">
+              <DropdownMenuContent align="start" className="busy-menu-dropdown min-w-[240px]">
                 {m.groups.map((g, gi) => (
                   <div key={g.label}>
                     {gi > 0 && <DropdownMenuSeparator />}
@@ -298,11 +299,11 @@ export function TopMenuBar() {
         })}
       </nav>
 
-      {/* Company name at right */}
+      {/* Company switcher at right (moved from second-line header) */}
       <div className="busy-company">
-        <span className="busy-company-name">{companyName}</span>
-        <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+        <CompanySwitcher />
       </div>
+
     </div>
   );
 }

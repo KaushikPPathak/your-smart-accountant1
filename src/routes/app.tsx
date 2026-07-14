@@ -1,10 +1,9 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Lock, Building2, HardDriveDownload, Loader2 } from "lucide-react";
+import { Lock, HardDriveDownload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { TopMenuBar } from "@/components/TopMenuBar";
 import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
-import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { CurrencySwitcher } from "@/components/CurrencySwitcher";
 import { DateFormatSwitcher } from "@/components/DateFormatSwitcher";
@@ -298,8 +297,8 @@ function AppLayout() {
     <div className="flex min-h-screen w-full flex-col">
       <TopMenuBar />
       <div className="sticky top-0 z-20 flex h-11 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur">
-        <CompanySwitcher />
         <div className="ml-auto flex items-center gap-2">
+
           <InstallAppButton />
           <LanguageSwitcher compact />
           <CurrencySwitcher compact />
@@ -324,12 +323,8 @@ function AppLayout() {
               )}
             </>
           )}
-          {activeMembership && (
-            <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:inline-flex">
-              <Building2 className="h-3.5 w-3.5" />
-              {activeMembership.companies.name}
-            </span>
-          )}
+          {/* Company name intentionally removed — now shown as dropdown in top bar */}
+
           <Button variant="ghost" size="sm" onClick={onLock} className="gap-2" title="Lock & return to company picker">
             <Lock className="h-4 w-4" />
             <span className="hidden sm:inline text-sm">{t("common.lock")}</span>

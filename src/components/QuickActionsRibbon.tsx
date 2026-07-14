@@ -62,7 +62,7 @@ export function QuickActionsRibbon() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="mr-2 flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/70 hover:bg-white/10 hover:text-white"
+          className="mr-2 flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--amber-ink)]/80 hover:bg-[color:var(--amber-dark)]/20 hover:text-[color:var(--amber-ink)]"
           title={open ? "Collapse Quick Entry" : "Expand Quick Entry"}
           aria-expanded={open}
         >
@@ -88,7 +88,7 @@ export function QuickActionsRibbon() {
               <a.icon className="h-3.5 w-3.5" />
               <span>{label}</span>
               {showHotkeys && (
-                <kbd className="ml-1 rounded border border-white/25 bg-white/10 px-1 text-[9px] font-mono text-white/80">
+                <kbd className="ml-1 rounded border border-[color:var(--amber-ink)]/25 bg-[color:var(--amber-ink)]/10 px-1 text-[9px] font-mono text-[color:var(--amber-ink)]/80">
                   {a.hotkey}
                 </kbd>
               )}
@@ -100,7 +100,7 @@ export function QuickActionsRibbon() {
           <button
             type="button"
             onClick={() => setShowHotkeys((v) => !v)}
-            className="ml-auto rounded px-2 py-1 text-[10px] text-white/70 hover:bg-white/10 hover:text-white"
+            className="ml-auto rounded px-2 py-1 text-[10px] text-[color:var(--amber-ink)]/70 hover:bg-[color:var(--amber-dark)]/20 hover:text-[color:var(--amber-ink)]"
             title="Toggle keyboard shortcut hints"
           >
             {showHotkeys ? "Hide keys" : "Show keys"}
