@@ -457,9 +457,15 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
       // transfer the net profit to the owner's Capital account.
       // Use the `__capital__` placeholder and let `postClosure` pick the
       // real capital ledger (it already excludes the P&L ledger by id).
-      const capitalLedger = ledgers.find(
+      const isReserveName = (n: string) => /reserve|surplus|retained\s+earning/i.test(n);
+      const isCapitalName = (n: string) => /\bcapital\b|\bproprietor\b|\bowner'?s?\s+equity\b|\bpartner'?s?\s+capital\b/i.test(n);
+      const capitalCandidates = ledgers.filter(
         (l) => l.type === "capital" && l.name.trim().toLowerCase() !== "profit & loss a/c",
       );
+      const capitalLedger =
+        capitalCandidates.find((l) => isCapitalName(l.name) && !isReserveName(l.name)) ??
+        capitalCandidates.find((l) => !isReserveName(l.name)) ??
+        capitalCandidates[0];
       const capitalDisplayName = capitalLedger?.name ?? "Capital A/c";
       if (npPaise !== 0) {
         const capLines: JournalLine[] = [];
