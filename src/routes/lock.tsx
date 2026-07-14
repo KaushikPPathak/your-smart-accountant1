@@ -296,15 +296,28 @@ function LockScreen() {
   const showDropdown = !typingManually && userOptions.length > 0;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md rounded-2xl border bg-card p-6 shadow-sm">
+    <div
+      className="flex min-h-screen items-center justify-center px-4"
+      style={{ background: "var(--amber-light)", color: "var(--amber-ink)" }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl p-6 shadow-lg"
+        style={{
+          background: "var(--amber-pale)",
+          border: "1px solid color-mix(in oklab, var(--amber-dark) 45%, transparent)",
+          color: "var(--amber-ink)",
+        }}
+      >
         <div className="mb-6 flex items-center gap-3">
-          <div className="rounded-lg bg-primary/10 p-2 text-primary">
+          <div
+            className="rounded-lg p-2"
+            style={{ background: "var(--amber-dark)", color: "var(--amber-onDark)" }}
+          >
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold">Smart Accountant</h1>
-            <p className="text-xs text-muted-foreground">Sign in to manage your books</p>
+            <h1 className="text-lg font-semibold" style={{ color: "var(--amber-ink)" }}>Smart Accountant</h1>
+            <p className="text-xs" style={{ color: "color-mix(in oklab, var(--amber-ink) 65%, transparent)" }}>Sign in to manage your books</p>
           </div>
         </div>
 
