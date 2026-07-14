@@ -66,34 +66,34 @@
    teal accent for CTAs, and category chip colors on KPI cards. */
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.985 0.005 240);
-  --foreground: oklch(0.22 0.03 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.03 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.03 250);
-  --primary: oklch(0.36 0.08 250);
-  --primary-foreground: oklch(0.985 0.005 240);
-  --secondary: oklch(0.955 0.015 240);
-  --secondary-foreground: oklch(0.32 0.05 250);
-  --muted: oklch(0.955 0.012 240);
-  --muted-foreground: oklch(0.48 0.03 250);
-  --accent: oklch(0.62 0.10 215);
-  --accent-foreground: oklch(0.99 0 0);
+  --background: oklch(0.985 0.015 84);
+  --foreground: oklch(0.22 0.05 70);
+  --card: oklch(0.995 0.008 84);
+  --card-foreground: oklch(0.22 0.05 70);
+  --popover: oklch(0.97 0.03 84);
+  --popover-foreground: oklch(0.22 0.05 70);
+  --primary: oklch(0.58 0.14 76);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.05 84);
+  --secondary-foreground: oklch(0.28 0.06 72);
+  --muted: oklch(0.95 0.04 84);
+  --muted-foreground: oklch(0.45 0.05 74);
+  --accent: oklch(0.75 0.13 80);
+  --accent-foreground: oklch(0.22 0.05 70);
   --destructive: oklch(0.58 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
   --success: oklch(0.62 0.14 155);
   --success-foreground: oklch(0.99 0 0);
   --warning: oklch(0.78 0.15 75);
   --warning-foreground: oklch(0.22 0.06 60);
-  --border: oklch(0.90 0.012 240);
-  --input: oklch(0.92 0.012 240);
-  --ring: oklch(0.55 0.12 235);
-  --chart-1: oklch(0.45 0.14 245);
-  --chart-2: oklch(0.62 0.10 215);
-  --chart-3: oklch(0.72 0.15 75);
-  --chart-4: oklch(0.62 0.14 155);
-  --chart-5: oklch(0.58 0.20 25);
+  --border: oklch(0.82 0.06 80);
+  --input: oklch(0.88 0.05 82);
+  --ring: oklch(0.58 0.14 76);
+  --chart-1: oklch(0.58 0.14 76);
+  --chart-2: oklch(0.72 0.15 75);
+  --chart-3: oklch(0.62 0.14 155);
+  --chart-4: oklch(0.55 0.14 240);
+  --chart-5: oklch(0.55 0.16 30);
 
   /* Category colors used for KPI accent bars & top-menu chips */
   --cat-sales: oklch(0.62 0.14 155);
@@ -101,14 +101,14 @@
   --cat-receipt: oklch(0.55 0.14 240);
   --cat-payment: oklch(0.55 0.14 300);
   --cat-report: oklch(0.62 0.10 215);
-  --cat-master: oklch(0.55 0.10 265);
+  --cat-master: oklch(0.58 0.14 76);
 
-  --gradient-brand: linear-gradient(135deg, oklch(0.20 0.05 250), oklch(0.36 0.08 250));
-  --gradient-accent: linear-gradient(135deg, oklch(0.36 0.08 250), oklch(0.62 0.10 215));
-  --gradient-hero: radial-gradient(1200px 600px at 15% 0%, oklch(0.90 0.03 240 / 0.7), transparent 60%),
-    radial-gradient(800px 500px at 95% 10%, oklch(0.62 0.10 215 / 0.18), transparent 65%);
-  --shadow-card: 0 1px 2px oklch(0.20 0.05 250 / 0.06), 0 4px 14px -6px oklch(0.20 0.05 250 / 0.12);
-  --shadow-elevated: 0 12px 36px -14px oklch(0.20 0.05 250 / 0.35);
+  --gradient-brand: linear-gradient(135deg, oklch(0.58 0.14 76), oklch(0.75 0.13 80));
+  --gradient-accent: linear-gradient(135deg, oklch(0.75 0.13 80), oklch(0.86 0.10 82));
+  --gradient-hero: radial-gradient(1200px 600px at 15% 0%, oklch(0.90 0.08 82 / 0.7), transparent 60%),
+    radial-gradient(800px 500px at 95% 10%, oklch(0.58 0.14 76 / 0.18), transparent 65%);
+  --shadow-card: 0 1px 2px oklch(0.22 0.05 70 / 0.08), 0 4px 14px -6px oklch(0.22 0.05 70 / 0.14);
+  --shadow-elevated: 0 12px 36px -14px oklch(0.22 0.05 70 / 0.35);
 
   /* Amber gold palette — single source of truth.
      --amber-base  : button color (#E0A82E ≈ oklch 0.75 0.13 80)
