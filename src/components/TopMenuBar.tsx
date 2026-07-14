@@ -30,6 +30,7 @@ import {
   CalendarClock,
   Sparkles,
   Briefcase,
+  Lock,
   type LucideIcon,
 } from "lucide-react";
 import {
