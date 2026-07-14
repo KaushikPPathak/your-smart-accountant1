@@ -577,6 +577,7 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
           candidates[0];
         if (pick) capitalLg = { id: String(pick.id), name: String(pick.name) };
       }
+      if (capitalLg && isReserveName(capitalLg.name)) capitalLg = null;
       if (!capitalLg) capitalLg = await ensureLedger(companyId, "Capital A/c", "capital");
 
       const resolveLedgerId = (placeholder: string): string => {
