@@ -31,6 +31,7 @@ import {
   Sparkles,
   Briefcase,
   Lock,
+  HardDriveDownload,
   type LucideIcon,
 } from "lucide-react";
 import {
