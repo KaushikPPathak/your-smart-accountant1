@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { HardDriveDownload, Loader2 } from "lucide-react";
+// (icons for backup button moved into TopMenuBar Administration menu)
 import { toast } from "sonner";
 import { TopMenuBar } from "@/components/TopMenuBar";
 import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
@@ -296,44 +296,33 @@ function AppLayout() {
     navigate({ to: "/" });
   };
 
-  const backupExtras = isTrial ? (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onBackupNow}
-        disabled={savingMirror}
-        className="gap-1.5"
-        title={lastSaveAt ? `Last local save: ${new Date(lastSaveAt).toLocaleString()}` : "Save a JSON + Excel copy to your PC now"}
-      >
-        {savingMirror ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <HardDriveDownload className="h-3.5 w-3.5" />}
-        <span className="hidden sm:inline text-xs">{savingMirror ? "Saving…" : "Backup now"}</span>
-      </Button>
-      {lastSaveAt && !savingMirror && (
-        <span className="hidden text-[10px] text-muted-foreground md:inline" title={new Date(lastSaveAt).toLocaleString()}>
-          Saved {new Date(lastSaveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </span>
-      )}
-    </>
+  const backupExtras = isTrial && lastSaveAt && !savingMirror ? (
+    <span className="hidden text-[10px] text-muted-foreground md:inline" title={new Date(lastSaveAt).toLocaleString()}>
+      Saved {new Date(lastSaveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+    </span>
   ) : null;
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <TopMenuBar rightExtras={backupExtras} onLock={onLock} />
+      <TopMenuBar
+        rightExtras={backupExtras}
+        onLock={onLock}
+        onBackupNow={isTrial ? onBackupNow : undefined}
+        backupBusy={savingMirror}
+        backupLabel={lastSaveAt ? `Backup now (last: ${new Date(lastSaveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "Backup now"}
+        quickPanel={
+          <div className="flex items-center w-full">
+            <div className="flex-1 min-w-0"><QuickActionsRibbon /></div>
+            <div className="flex items-center gap-2 px-2"><InstallAppButton /></div>
+          </div>
+        }
+      />
 
       <UpdateRecoveryBanner />
       <BackupNudgeBanner />
       <AccountGroupsProvider>
         <MastersProvider>
           <FocusHintsProvider>
-            <div className="sticky top-0 z-20 flex items-center border-b border-border">
-              <div className="flex-1 min-w-0">
-                <QuickActionsRibbon />
-              </div>
-              <div className="flex items-center gap-2 px-4 bg-background/95 backdrop-blur self-stretch border-l border-border">
-                <InstallAppButton />
-              </div>
-            </div>
             <main className="min-w-0 flex-1 overflow-x-hidden p-4 md:p-6">
               <Outlet />
             </main>
@@ -348,4 +337,5 @@ function AppLayout() {
     </div>
   );
 }
+
 

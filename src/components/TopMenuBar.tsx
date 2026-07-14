@@ -31,6 +31,7 @@ import {
   Sparkles,
   Briefcase,
   Lock,
+  HardDriveDownload,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -216,7 +217,7 @@ const INVENTORY_URLS = new Set([
   "/app/reports/trading",
 ]);
 
-export function TopMenuBar({ rightExtras, onLock }: { rightExtras?: ReactNode; onLock?: () => void }) {
+export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backupLabel, quickPanel }: { rightExtras?: ReactNode; onLock?: () => void; onBackupNow?: () => void; backupBusy?: boolean; backupLabel?: string; quickPanel?: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { activeMembership } = useCompany();
@@ -351,6 +352,16 @@ export function TopMenuBar({ rightExtras, onLock }: { rightExtras?: ReactNode; o
                     <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Session
                     </DropdownMenuLabel>
+                    {onBackupNow && (
+                      <DropdownMenuItem
+                        onSelect={(e) => { e.preventDefault(); onBackupNow(); }}
+                        className="gap-2"
+                        disabled={backupBusy}
+                      >
+                        <HardDriveDownload className="h-4 w-4 text-muted-foreground" />
+                        <span>{backupBusy ? "Saving backup…" : (backupLabel || "Backup now")}</span>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       onSelect={() => onLock?.()}
                       className="gap-2"
@@ -430,7 +441,11 @@ export function TopMenuBar({ rightExtras, onLock }: { rightExtras?: ReactNode; o
         })}
       </nav>
 
-      {/* Right-side extras (e.g. Backup now) + Company switcher */}
+      {quickPanel && (
+        <div className="flex items-center min-w-0 flex-shrink">{quickPanel}</div>
+      )}
+
+      {/* Right-side extras + Company switcher */}
       <div className="busy-company gap-2">
         {rightExtras}
         <CompanySwitcher />
