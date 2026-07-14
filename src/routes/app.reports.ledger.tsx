@@ -24,6 +24,62 @@ import { FileText, Eye, FileType2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { readLedgers, readVoucherEntriesWithVouchers, withCacheFallback } from "@/lib/offline/cache-read";
+import { offlineDb } from "@/lib/offline/db";
+
+/**
+ * Step 2c — zero-risk fast path for Ledger Statement.
+ *
+ * Uses the v8 compound index [company_id+ledger_id] on cache_voucher_entries
+ * to fetch only entries for the selected ledger, then loads just the
+ * referenced vouchers (by id) and applies date filters. This avoids scanning
+ * every entry + every voucher for the company.
+ *
+ * On ANY failure it throws; caller falls back to readVoucherEntriesWithVouchers.
+ */
+async function readLedgerEntriesFast(
+  companyId: string,
+  ledgerId: string,
+  opts: { from?: string; to?: string; before?: string },
+): Promise<any[]> {
+  const entries = await offlineDb.cache_voucher_entries
+    .where("[company_id+ledger_id]")
+    .equals([companyId, ledgerId])
+    .toArray();
+  const liveEntries = (entries as any[]).filter((e) => e?.is_deleted !== true);
+  const voucherIds = Array.from(new Set(liveEntries.map((e) => String(e.voucher_id))));
+  if (voucherIds.length === 0) return [];
+  const vouchers: any[] = [];
+  for (let i = 0; i < voucherIds.length; i += 500) {
+    const chunk = voucherIds.slice(i, i + 500);
+    const rows = await offlineDb.cache_vouchers.where("id").anyOf(chunk).toArray();
+    for (const v of rows as any[]) {
+      if (v?.is_deleted !== true) vouchers.push(v);
+    }
+  }
+  const voucherById = new Map(vouchers.map((v) => [String(v.id), v]));
+  return liveEntries
+    .map((e) => {
+      const v = voucherById.get(String(e.voucher_id));
+      if (!v) return null;
+      const voucherDate = String(v.voucher_date ?? v.date ?? "");
+      if (opts.from && voucherDate < opts.from) return null;
+      if (opts.to && voucherDate > opts.to) return null;
+      if (opts.before && voucherDate >= opts.before) return null;
+      return {
+        ...e,
+        vouchers: {
+          id: String(v.id),
+          voucher_date: voucherDate,
+          voucher_number: String(v.voucher_number ?? ""),
+          voucher_type: String(v.voucher_type ?? ""),
+          narration: v.narration ?? null,
+          reference_no: v.reference_no ?? null,
+          company_id: companyId,
+        },
+      };
+    })
+    .filter(Boolean) as any[];
+}
 
 type ViewMode = "columnar" | "horizontal" | "grid";
 type LedgerSearch = { ledgerId?: string; from?: string; to?: string; view?: ViewMode };
@@ -182,7 +238,13 @@ function LedgerStatement() {
             if (error) throw error;
             return (ent || []) as unknown as EntryRow[];
           },
-          async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, from: f, to: t })) as EntryRow[],
+          async () => {
+            try {
+              return (await readLedgerEntriesFast(activeCompanyId, ledgerId, { from: f, to: t })) as EntryRow[];
+            } catch {
+              return (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, from: f, to: t })) as EntryRow[];
+            }
+          },
         );
       };
       let list = await fetchEntries(effFrom, effTo);
@@ -212,7 +274,13 @@ function LedgerStatement() {
           if (error) throw error;
           return (data || []) as { debit_paise: number; credit_paise: number }[];
         },
-        async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, before: effFrom })) as { debit_paise: number; credit_paise: number }[],
+        async () => {
+          try {
+            return (await readLedgerEntriesFast(activeCompanyId, ledgerId, { before: effFrom })) as { debit_paise: number; credit_paise: number }[];
+          } catch {
+            return (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, before: effFrom })) as { debit_paise: number; credit_paise: number }[];
+          }
+        },
       );
       if (cancelled) return;
       const movement = prior.reduce(
