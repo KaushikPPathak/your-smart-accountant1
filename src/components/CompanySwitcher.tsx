@@ -80,14 +80,14 @@ export function CompanySwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9 gap-2 min-w-[180px] justify-between">
-          <div className="flex items-center gap-2 truncate">
-            <Building2 className="h-4 w-4 text-muted-foreground" />
+        <Button variant="outline" size="sm" className="h-9 gap-2 min-w-[240px] max-w-[360px] justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="truncate text-sm font-medium">
               {activeMembership?.companies.name ?? t("company.noneShort")}
             </span>
           </div>
-          <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[260px]">
