@@ -111,10 +111,16 @@ function DayBook() {
         return (data || []) as unknown as Row[];
       },
       async () => {
-        const [vouchers, ledgers] = await Promise.all([
-          readVouchers(activeCompanyId, { from, to }),
-          readLedgers(activeCompanyId),
-        ]);
+        // Fast path: compound-index range scan (v8). Falls through to
+        // the original readVouchers() on ANY failure, so results are
+        // always correct.
+        let vouchers: any[];
+        try {
+          vouchers = await readVouchersByDateFast(activeCompanyId, from, to);
+        } catch {
+          vouchers = await readVouchers(activeCompanyId, { from, to });
+        }
+        const ledgers = await readLedgers(activeCompanyId);
         const ledgerNames = new Map((ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]));
         return (vouchers as any[]).map((v) => ({
           id: String(v.id),
