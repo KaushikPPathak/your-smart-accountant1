@@ -246,7 +246,7 @@ export function TopMenuBar() {
       ),
     );
 
-  const companyName = activeMembership?.companies?.name ?? "Select Company";
+  
 
   return (
     <div className="busy-topbar print:hidden">
