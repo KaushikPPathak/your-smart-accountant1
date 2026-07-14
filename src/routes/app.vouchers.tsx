@@ -98,7 +98,7 @@ function VouchersHub() {
       ]);
       const ledgerById = new Map<string, { name: string }>();
       for (const l of ledgers as any[]) ledgerById.set(l.id, { name: l.name });
-      const rows = (vchs as any[]).slice(0, 500).map((v) => ({
+      const rows = (vchs as any[]).map((v) => ({
         id: v.id,
         voucher_date: v.voucher_date,
         voucher_number: v.voucher_number,
