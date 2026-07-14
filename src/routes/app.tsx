@@ -1,10 +1,9 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Lock, Building2, HardDriveDownload, Loader2 } from "lucide-react";
+import { Lock, HardDriveDownload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { TopMenuBar } from "@/components/TopMenuBar";
 import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
-import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { CurrencySwitcher } from "@/components/CurrencySwitcher";
 import { DateFormatSwitcher } from "@/components/DateFormatSwitcher";
