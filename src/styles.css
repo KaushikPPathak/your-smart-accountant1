@@ -116,11 +116,12 @@
      --amber-dark  : ~20% darker — open/hover / accents
      --amber-ink   : dark text on gold surfaces
      --amber-onDark: light text on dark-gold surfaces */
-  --amber-base:  oklch(0.75 0.13 80);
-  --amber-light: oklch(0.86 0.10 82);
-  --amber-dark:  oklch(0.58 0.14 76);
-  --amber-ink:   oklch(0.22 0.05 70);
-  --amber-onDark: oklch(0.99 0 0);
+ --amber-base:  oklch(0.75 0.13 80);
+ --amber-light: oklch(0.86 0.10 82);
+ --amber-pale:  oklch(0.95 0.05 84); /* ~40% lighter than header — for dropdowns */
+ --amber-dark:  oklch(0.58 0.14 76);
+ --amber-ink:   oklch(0.22 0.05 70);
+ --amber-onDark: oklch(0.99 0 0);
 
   --sidebar: var(--amber-light);
   --sidebar-foreground: var(--amber-ink);
