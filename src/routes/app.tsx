@@ -319,14 +319,10 @@ function AppLayout() {
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <TopMenuBar rightExtras={backupExtras} />
+      <TopMenuBar rightExtras={backupExtras} onLock={onLock} />
       <div className="sticky top-0 z-20 flex h-11 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur">
         <div className="ml-auto flex items-center gap-2">
           <InstallAppButton />
-          <Button variant="ghost" size="sm" onClick={onLock} className="gap-2" title="Lock & return to company picker">
-            <Lock className="h-4 w-4" />
-            <span className="hidden sm:inline text-sm">{t("common.lock")}</span>
-          </Button>
         </div>
       </div>
 
