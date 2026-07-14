@@ -7,7 +7,8 @@
 
 import { buildCompanyBackup } from "./backup";
 import { isDesktopRuntime, saveCompanyFileNative, writeAbsoluteFileNative } from "./native-bridge";
-import { getBackupFolder } from "./backup-location";
+import { getBackupFolder, setBackupFolder } from "./backup-location";
+import { getShortDataRoot } from "./short-data-root";
 
 function safeName(s: string | null | undefined): string {
   return (s ?? "company").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 60) || "company";
@@ -72,7 +73,18 @@ export async function writeLocalMirror(
   const jsonStr = JSON.stringify(backup, null, 2);
 
   if (isDesktopRuntime()) {
-    const chosen = getBackupFolder(companyId);
+    // If the user hasn't picked a backup folder yet, default to the short
+    // data root (C:\smartaccountant on Windows, ~/smartaccountant elsewhere)
+    // — the same easy-to-find root used for report exports. This is
+    // remembered so the Backup & Restore UI shows the location clearly.
+    let chosen = getBackupFolder(companyId);
+    if (!chosen) {
+      const shortRoot = await getShortDataRoot();
+      if (shortRoot) {
+        chosen = shortRoot;
+        setBackupFolder(companyId, shortRoot);
+      }
+    }
     const companySeg = safeName(companyName);
     let j1, j2;
     let fallbackReason: string | undefined;
@@ -85,18 +97,29 @@ export async function writeLocalMirror(
         writeAbsoluteFileNative(base, "latest", latestJson, jsonStr),
       ]);
       // If the chosen folder is unreachable (drive missing, path deleted, permissions),
-      // don't fail the backup — fall back to the legacy default location and let the
-      // caller surface a warning so the user can re-pick a folder.
+      // fall back to the short data root, update the stored setting so future
+      // backups don't keep tripping the missing drive, and surface a warning.
       if (!j1.ok || !j2.ok) {
         fallbackReason = j1.error || j2.error || "Unknown error";
         attemptedFolder = chosen;
-        [j1, j2] = await Promise.all([
-          saveCompanyFileNative(companyName, "backups", jsonFile, jsonStr),
-          saveCompanyFileNative(companyName, "latest", latestJson, jsonStr),
-        ]);
+        const shortRoot = await getShortDataRoot();
+        if (shortRoot && shortRoot !== chosen) {
+          const base2 = `${shortRoot.replace(/[\\/]+$/, "")}/${companySeg}`;
+          [j1, j2] = await Promise.all([
+            writeAbsoluteFileNative(base2, "backups", jsonFile, jsonStr),
+            writeAbsoluteFileNative(base2, "latest", latestJson, jsonStr),
+          ]);
+          if (j1.ok && j2.ok) setBackupFolder(companyId, shortRoot);
+        }
+        if (!j1.ok || !j2.ok) {
+          [j1, j2] = await Promise.all([
+            saveCompanyFileNative(companyName, "backups", jsonFile, jsonStr),
+            saveCompanyFileNative(companyName, "latest", latestJson, jsonStr),
+          ]);
+        }
       }
     } else {
-      // Fallback: legacy %LOCALAPPDATA%\...\mirror\<Company>\... location.
+      // Last-resort fallback: legacy %LOCALAPPDATA%\...\mirror\<Company>\... location.
       [j1, j2] = await Promise.all([
         saveCompanyFileNative(companyName, "backups", jsonFile, jsonStr),
         saveCompanyFileNative(companyName, "latest", latestJson, jsonStr),
