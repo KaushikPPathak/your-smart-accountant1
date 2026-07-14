@@ -406,8 +406,10 @@
     color: var(--amber-ink);
     font-weight: 600;
     font-size: 0.92rem;
-    max-width: 260px;
+    min-width: 380px;
+    max-width: 520px;
   }
+
   .busy-company-name {
     white-space: nowrap;
     overflow: hidden;
