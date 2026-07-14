@@ -441,9 +441,6 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
         })}
       </nav>
 
-      {quickPanel && (
-        <div className="flex items-center min-w-0 flex-shrink">{quickPanel}</div>
-      )}
 
       {/* Right-side extras + Company switcher */}
       <div className="busy-company gap-2">
