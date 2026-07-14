@@ -238,7 +238,13 @@ function LedgerStatement() {
             if (error) throw error;
             return (ent || []) as unknown as EntryRow[];
           },
-          async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, from: f, to: t })) as EntryRow[],
+          async () => {
+            try {
+              return (await readLedgerEntriesFast(activeCompanyId, ledgerId, { from: f, to: t })) as EntryRow[];
+            } catch {
+              return (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, from: f, to: t })) as EntryRow[];
+            }
+          },
         );
       };
       let list = await fetchEntries(effFrom, effTo);
