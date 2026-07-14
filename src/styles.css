@@ -281,7 +281,7 @@
   .busy-menubar .busy-menu-item {
     color: color-mix(in oklab, var(--amber-ink) 85%, transparent);
     border-radius: 6px;
-    padding: 0.3rem 0.65rem;
+    padding: 0.15rem 0.55rem;
     font-size: 0.78rem;
     font-weight: 600;
     display: inline-flex;

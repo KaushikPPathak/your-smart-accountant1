@@ -59,7 +59,7 @@ export function QuickActionsRibbon() {
   return (
     <div className="busy-menubar hidden md:block print:hidden">
       <div
-        className="flex items-center gap-1 overflow-x-auto px-4 py-1.5"
+        className="flex items-center gap-1 overflow-x-auto px-4 py-0.5 leading-none"
         onKeyDown={(e) => {
           const key = e.key;
           if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Home" && key !== "End") return;
