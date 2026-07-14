@@ -352,6 +352,16 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                     <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Session
                     </DropdownMenuLabel>
+                    {onBackupNow && (
+                      <DropdownMenuItem
+                        onSelect={(e) => { e.preventDefault(); onBackupNow(); }}
+                        className="gap-2"
+                        disabled={backupBusy}
+                      >
+                        <HardDriveDownload className="h-4 w-4 text-muted-foreground" />
+                        <span>{backupBusy ? "Saving backup…" : (backupLabel || "Backup now")}</span>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       onSelect={() => onLock?.()}
                       className="gap-2"
