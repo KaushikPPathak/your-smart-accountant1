@@ -349,6 +349,18 @@ export function TopMenuBar({ rightExtras, onLock }: { rightExtras?: ReactNode; o
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Session
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onSelect={() => onLock?.()}
+                      className="gap-2"
+                      disabled={!onLock}
+                    >
+                      <Lock className="h-4 w-4 text-muted-foreground" />
+                      <span>{t("common.lock") === "common.lock" ? "Lock workspace" : t("common.lock")}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Preferences
                     </DropdownMenuLabel>
                     <DropdownMenuSub>
