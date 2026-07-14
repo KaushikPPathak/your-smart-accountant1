@@ -324,12 +324,8 @@ function AppLayout() {
               )}
             </>
           )}
-          {activeMembership && (
-            <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:inline-flex">
-              <Building2 className="h-3.5 w-3.5" />
-              {activeMembership.companies.name}
-            </span>
-          )}
+          {/* Company name intentionally removed — now shown as dropdown in top bar */}
+
           <Button variant="ghost" size="sm" onClick={onLock} className="gap-2" title="Lock & return to company picker">
             <Lock className="h-4 w-4" />
             <span className="hidden sm:inline text-sm">{t("common.lock")}</span>
