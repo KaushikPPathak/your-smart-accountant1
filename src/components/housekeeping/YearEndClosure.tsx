@@ -544,27 +544,38 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
 
       // Find/create capital ledger — MUST exclude the "Profit & Loss A/c"
       // system ledger, which is itself stored with type="capital".
+      const isReserveName = (n: string) => /reserve|surplus|retained\s+earning/i.test(n);
+      const isCapitalName = (n: string) =>
+        /\bcapital\b|\bproprietor\b|\bowner'?s?\s+equity\b|\bpartner'?s?\s+capital\b/i.test(n);
       let capitalLg: { id: string; name: string } | null = null;
       if (localOnly) {
         const localLedgers = await readLedgers(companyId);
-        const cap = (localLedgers as any[]).find(
+        const candidates = (localLedgers as any[]).filter(
           (l) =>
             l.type === "capital" &&
             l.id !== plLg.id &&
             String(l.name ?? "").trim().toLowerCase() !== "profit & loss a/c" &&
             !l.is_deleted,
         );
-        if (cap) capitalLg = { id: String(cap.id), name: String(cap.name) };
+        const pick =
+          candidates.find((l) => isCapitalName(String(l.name)) && !isReserveName(String(l.name))) ??
+          candidates.find((l) => !isReserveName(String(l.name))) ??
+          candidates[0];
+        if (pick) capitalLg = { id: String(pick.id), name: String(pick.name) };
       } else {
-        capitalLg = (await supabase
+        const { data: rows } = await supabase
           .from("ledgers")
           .select("id, name")
           .eq("company_id", companyId)
           .eq("type", "capital")
           .neq("id", plLg.id)
-          .neq("name", "Profit & Loss A/c")
-          .limit(1)
-          .maybeSingle()).data as { id: string; name: string } | null;
+          .neq("name", "Profit & Loss A/c");
+        const candidates = (rows ?? []) as { id: string; name: string }[];
+        const pick =
+          candidates.find((l) => isCapitalName(l.name) && !isReserveName(l.name)) ??
+          candidates.find((l) => !isReserveName(l.name)) ??
+          candidates[0];
+        if (pick) capitalLg = { id: String(pick.id), name: String(pick.name) };
       }
       if (!capitalLg) capitalLg = await ensureLedger(companyId, "Capital A/c", "capital");
 
