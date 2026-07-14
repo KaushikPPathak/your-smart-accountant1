@@ -219,7 +219,7 @@ const INVENTORY_URLS = new Set([
   "/app/reports/trading",
 ]);
 
-export function TopMenuBar({ rightExtras }: { rightExtras?: React.ReactNode }) {
+export function TopMenuBar({ rightExtras }: { rightExtras?: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { activeMembership } = useCompany();
