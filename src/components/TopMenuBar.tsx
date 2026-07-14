@@ -274,7 +274,7 @@ export function TopMenuBar() {
                   <ChevronDown className="h-3 w-3 opacity-70" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[240px]">
+              <DropdownMenuContent align="start" className="busy-menu-dropdown min-w-[240px]">
                 {m.groups.map((g, gi) => (
                   <div key={g.label}>
                     {gi > 0 && <DropdownMenuSeparator />}
