@@ -16,6 +16,40 @@ import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { readLedgers, readVoucherEntriesWithVouchers, withCacheFallback } from "@/lib/offline/cache-read";
+import { offlineDb } from "@/lib/offline/db";
+
+/**
+ * Zero-risk fast path for Trial Balance entries.
+ * Uses v8 compound index [company_id+voucher_date] on cache_vouchers to
+ * limit vouchers to those on/before `to`, then fetches their entries in
+ * chunks. Any failure (index missing, Dexie mid-upgrade, etc.) throws and
+ * the caller falls back to readVoucherEntriesWithVouchers.
+ */
+async function readEntriesUpToDateFast(companyId: string, to: string): Promise<Entry[]> {
+  const vouchers = await offlineDb.cache_vouchers
+    .where("[company_id+voucher_date]")
+    .between([companyId, ""], [companyId, to], true, true)
+    .toArray();
+  const live = (vouchers as any[]).filter((v) => v?.is_deleted !== true);
+  const ids = live.map((v) => String(v.id));
+  const voucherById = new Map(live.map((v) => [String(v.id), v]));
+  const out: Entry[] = [];
+  for (let i = 0; i < ids.length; i += 500) {
+    const chunk = ids.slice(i, i + 500);
+    const rows = await offlineDb.cache_voucher_entries.where("voucher_id").anyOf(chunk).toArray();
+    for (const e of rows as any[]) {
+      const v = voucherById.get(String(e.voucher_id));
+      if (!v) continue;
+      out.push({
+        ledger_id: String(e.ledger_id),
+        debit_paise: Number(e.debit_paise ?? 0),
+        credit_paise: Number(e.credit_paise ?? 0),
+        vouchers: { voucher_date: String(v.voucher_date ?? "") },
+      });
+    }
+  }
+  return out;
+}
 
 export const Route = createFileRoute("/app/reports/trial-balance")({
   head: () => ({ meta: [{ title: "Trial Balance — Reports" }] }),
