@@ -464,8 +464,7 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
       );
       const capitalLedger =
         capitalCandidates.find((l) => isCapitalName(l.name) && !isReserveName(l.name)) ??
-        capitalCandidates.find((l) => !isReserveName(l.name)) ??
-        capitalCandidates[0];
+        capitalCandidates.find((l) => !isReserveName(l.name));
       const capitalDisplayName = capitalLedger?.name ?? "Capital A/c";
       if (npPaise !== 0) {
         const capLines: JournalLine[] = [];
