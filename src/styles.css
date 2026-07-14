@@ -274,7 +274,7 @@
 
   /* Busy-style top menu bar */
   .busy-menubar {
-    background: var(--amber-base); /* header colour, ~20% darker than top bar */
+    background: var(--amber-light); /* ~20% lighter than header */
     color: var(--amber-ink);
     border-bottom: 1px solid color-mix(in oklab, var(--amber-dark) 45%, transparent);
   }

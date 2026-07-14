@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -37,11 +37,18 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCompany } from "@/lib/company-context";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, LANGUAGES, type LangCode } from "@/lib/i18n";
+import { useCurrency, CURRENCIES } from "@/lib/currency";
+import { useDateFormat, DATE_FORMATS, type DateFormatCode } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 
@@ -212,11 +219,13 @@ const INVENTORY_URLS = new Set([
   "/app/reports/trading",
 ]);
 
-export function TopMenuBar() {
+export function TopMenuBar({ rightExtras }: { rightExtras?: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { activeMembership } = useCompany();
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
+  const { code: currencyCode, setCode: setCurrencyCode } = useCurrency();
+  const { code: dateCode, setCode: setDateCode } = useDateFormat();
 
   const gstEnabled = Boolean(activeMembership?.companies?.gst_registered) || Boolean(activeMembership?.companies?.gstin);
   const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
@@ -246,8 +255,6 @@ export function TopMenuBar() {
       ),
     );
 
-  
-
   return (
     <div className="busy-topbar print:hidden">
       {/* Brand block */}
@@ -263,6 +270,7 @@ export function TopMenuBar() {
       <nav className="busy-menus">
         {visible.map((m) => {
           const active = isMenuActive(m);
+          const isAdmin = m.key === "administration";
           return (
             <DropdownMenu key={m.key}>
               <DropdownMenuTrigger asChild>
@@ -293,17 +301,86 @@ export function TopMenuBar() {
                     ))}
                   </div>
                 ))}
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Preferences
+                    </DropdownMenuLabel>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="gap-2">
+                        <span>Language</span>
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {LANGUAGES.find((l) => l.code === lang)?.native ?? lang}
+                        </span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="busy-menu-dropdown max-h-[320px] overflow-y-auto">
+                        <DropdownMenuRadioGroup value={lang} onValueChange={(v) => setLang(v as LangCode)}>
+                          {LANGUAGES.map((l) => (
+                            <DropdownMenuRadioItem key={l.code} value={l.code}>
+                              <span className="flex items-center gap-2">
+                                <span>{l.native}</span>
+                                <span className="text-xs text-muted-foreground">({l.label})</span>
+                              </span>
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="gap-2">
+                        <span>Currency</span>
+                        <span className="ml-auto text-xs text-muted-foreground">{currencyCode}</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="busy-menu-dropdown max-h-[320px] overflow-y-auto">
+                        <DropdownMenuRadioGroup value={currencyCode} onValueChange={setCurrencyCode}>
+                          {CURRENCIES.map((c) => (
+                            <DropdownMenuRadioItem key={c.code} value={c.code}>
+                              <span className="flex items-center gap-2">
+                                <span className="font-mono text-xs text-muted-foreground">{c.symbol}</span>
+                                <span>{c.code}</span>
+                                <span className="hidden text-xs text-muted-foreground sm:inline">— {c.name}</span>
+                              </span>
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="gap-2">
+                        <span>Date format</span>
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {DATE_FORMATS.find((f) => f.code === dateCode)?.sample ?? dateCode}
+                        </span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="busy-menu-dropdown max-h-[320px] overflow-y-auto">
+                        <DropdownMenuRadioGroup value={dateCode} onValueChange={(v) => setDateCode(v as DateFormatCode)}>
+                          {DATE_FORMATS.map((f) => (
+                            <DropdownMenuRadioItem key={f.code} value={f.code}>
+                              <span className="flex items-center gap-2">
+                                <span>{f.label}</span>
+                                <span className="text-xs text-muted-foreground">— {f.sample}</span>
+                              </span>
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           );
         })}
       </nav>
 
-      {/* Company switcher at right (moved from second-line header) */}
-      <div className="busy-company">
+      {/* Right-side extras (e.g. Backup now) + Company switcher */}
+      <div className="busy-company gap-2">
+        {rightExtras}
         <CompanySwitcher />
       </div>
 
     </div>
   );
 }
+

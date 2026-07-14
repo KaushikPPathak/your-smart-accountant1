@@ -4,9 +4,6 @@ import { Lock, HardDriveDownload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { TopMenuBar } from "@/components/TopMenuBar";
 import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { CurrencySwitcher } from "@/components/CurrencySwitcher";
-import { DateFormatSwitcher } from "@/components/DateFormatSwitcher";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
@@ -299,44 +296,40 @@ function AppLayout() {
     navigate({ to: "/" });
   };
 
+  const backupExtras = isTrial ? (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onBackupNow}
+        disabled={savingMirror}
+        className="gap-1.5"
+        title={lastSaveAt ? `Last local save: ${new Date(lastSaveAt).toLocaleString()}` : "Save a JSON + Excel copy to your PC now"}
+      >
+        {savingMirror ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <HardDriveDownload className="h-3.5 w-3.5" />}
+        <span className="hidden sm:inline text-xs">{savingMirror ? "Saving…" : "Backup now"}</span>
+      </Button>
+      {lastSaveAt && !savingMirror && (
+        <span className="hidden text-[10px] text-muted-foreground md:inline" title={new Date(lastSaveAt).toLocaleString()}>
+          Saved {new Date(lastSaveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        </span>
+      )}
+    </>
+  ) : null;
+
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <TopMenuBar />
+      <TopMenuBar rightExtras={backupExtras} />
       <div className="sticky top-0 z-20 flex h-11 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur">
         <div className="ml-auto flex items-center gap-2">
-
           <InstallAppButton />
-          <LanguageSwitcher compact />
-          <CurrencySwitcher compact />
-          <DateFormatSwitcher compact />
-          {isTrial && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onBackupNow}
-                disabled={savingMirror}
-                className="gap-1.5"
-                title={lastSaveAt ? `Last local save: ${new Date(lastSaveAt).toLocaleString()}` : "Save a JSON + Excel copy to your PC now"}
-              >
-                {savingMirror ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <HardDriveDownload className="h-3.5 w-3.5" />}
-                <span className="hidden sm:inline text-xs">{savingMirror ? "Saving…" : "Backup now"}</span>
-              </Button>
-              {lastSaveAt && !savingMirror && (
-                <span className="hidden text-[10px] text-muted-foreground md:inline" title={new Date(lastSaveAt).toLocaleString()}>
-                  Saved {new Date(lastSaveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </span>
-              )}
-            </>
-          )}
-          {/* Company name intentionally removed — now shown as dropdown in top bar */}
-
           <Button variant="ghost" size="sm" onClick={onLock} className="gap-2" title="Lock & return to company picker">
             <Lock className="h-4 w-4" />
             <span className="hidden sm:inline text-sm">{t("common.lock")}</span>
           </Button>
         </div>
       </div>
+
       
       <UpdateRecoveryBanner />
       <BackupNudgeBanner />
