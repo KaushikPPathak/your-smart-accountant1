@@ -18,6 +18,36 @@ import { BookOpen, LayoutGrid, Columns2 } from "lucide-react";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { Button } from "@/components/ui/button";
 import { readLedgers, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
+import { offlineDb } from "@/lib/offline/db";
+import { normalizeVoucher } from "@/lib/offline/cache-normalizers";
+
+/**
+ * Step 2a — zero-risk fast path for Day Book.
+ *
+ * Uses the v8 compound index [company_id+voucher_date] to range-scan
+ * vouchers directly instead of loading every voucher for the company
+ * and filtering in JS. If the index is unavailable for any reason
+ * (browser mid-upgrade, older cache, unexpected error) we silently
+ * throw and the caller falls back to the original readVouchers path.
+ * Correctness is unchanged either way — only speed differs.
+ */
+async function readVouchersByDateFast(
+  companyId: string,
+  from: string,
+  to: string,
+): Promise<any[]> {
+  const rows = await offlineDb.cache_vouchers
+    .where("[company_id+voucher_date]")
+    .between([companyId, from], [companyId, to], true, true)
+    .toArray();
+  const live = (rows as any[]).filter((v) => v?.is_deleted !== true);
+  const normalized = live.map((v) => {
+    try { return normalizeVoucher(v); } catch { return v; }
+  });
+  return normalized.sort((a: any, b: any) =>
+    (a.voucher_date < b.voucher_date ? 1 : -1),
+  );
+}
 
 export const Route = createFileRoute("/app/reports/day-book")({
   head: () => ({ meta: [{ title: "Day Book — Reports" }] }),
@@ -81,10 +111,16 @@ function DayBook() {
         return (data || []) as unknown as Row[];
       },
       async () => {
-        const [vouchers, ledgers] = await Promise.all([
-          readVouchers(activeCompanyId, { from, to }),
-          readLedgers(activeCompanyId),
-        ]);
+        // Fast path: compound-index range scan (v8). Falls through to
+        // the original readVouchers() on ANY failure, so results are
+        // always correct.
+        let vouchers: any[];
+        try {
+          vouchers = await readVouchersByDateFast(activeCompanyId, from, to);
+        } catch {
+          vouchers = await readVouchers(activeCompanyId, { from, to });
+        }
+        const ledgers = await readLedgers(activeCompanyId);
         const ledgerNames = new Map((ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]));
         return (vouchers as any[]).map((v) => ({
           id: String(v.id),
