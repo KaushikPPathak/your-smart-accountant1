@@ -28,6 +28,33 @@ import {
   readItems,
   withCacheFallback,
 } from "@/lib/offline/cache-read";
+import { offlineDb } from "@/lib/offline/db";
+import { normalizeVoucher } from "@/lib/offline/cache-normalizers";
+
+/**
+ * Step 2b — zero-risk fast path for Sales/Purchase Register.
+ *
+ * Uses the v8 compound index [company_id+voucher_type+voucher_date] to
+ * range-scan vouchers of a single type in a date window directly, instead
+ * of loading every voucher for the company and filtering in JS. On ANY
+ * failure it throws so the caller falls back to readVouchers() — results
+ * are always correct, only speed differs.
+ */
+async function readVouchersByTypeDateFast(
+  companyId: string,
+  voucherType: string,
+  from: string,
+  to: string,
+): Promise<any[]> {
+  const rows = await offlineDb.cache_vouchers
+    .where("[company_id+voucher_type+voucher_date]")
+    .between([companyId, voucherType, from], [companyId, voucherType, to], true, true)
+    .toArray();
+  const live = (rows as any[]).filter((v) => v?.is_deleted !== true);
+  return live.map((v) => {
+    try { return normalizeVoucher(v); } catch { return v; }
+  });
+}
 
 export const Route = createFileRoute("/app/reports/sales-register")({
   head: () => ({ meta: [{ title: "Sales Register — Reports" }] }),
@@ -80,8 +107,16 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
           return (data || []) as unknown as VRow[];
         },
         async () => {
+          let vouchersFast: any[] | null = null;
+          try {
+            vouchersFast = await readVouchersByTypeDateFast(activeCompanyId, kind, from, to);
+          } catch {
+            vouchersFast = null;
+          }
           const [vouchers, allItems, ledgers, itemsMaster] = await Promise.all([
-            readVouchers(activeCompanyId, { voucher_type: kind, from, to }),
+            vouchersFast
+              ? Promise.resolve(vouchersFast)
+              : readVouchers(activeCompanyId, { voucher_type: kind, from, to }),
             readVoucherItemsForCompany(activeCompanyId),
             readLedgers(activeCompanyId),
             readItems(activeCompanyId),
