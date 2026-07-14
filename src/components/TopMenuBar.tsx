@@ -253,14 +253,35 @@ export function TopMenuBar({ rightExtras }: { rightExtras?: ReactNode }) {
 
   return (
     <div className="busy-topbar print:hidden">
-      {/* Brand block */}
-      <Link to="/app" className="busy-brand" title="Dashboard">
-        <span className="busy-brand-mark">म</span>
-        <span className="busy-brand-name">
-          <span>Your</span>
-          <span>Mehtaji</span>
-        </span>
-      </Link>
+      {/* Brand block — acts as the File menu */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="busy-brand busy-menu" title="File">
+            <span className="busy-brand-mark">म</span>
+            <span className="busy-brand-name">
+              <span>Your</span>
+              <span>Mehtaji</span>
+            </span>
+            <ChevronDown className="h-3 w-3 opacity-70" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="busy-menu-dropdown min-w-[240px]">
+          {FILE_GROUPS.map((g, gi) => (
+            <div key={g.label}>
+              {gi > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {g.label}
+              </DropdownMenuLabel>
+              {g.items.map((i) => (
+                <DropdownMenuItem key={i.url} onSelect={() => navigate({ to: i.url })} className="gap-2">
+                  <i.icon className="h-4 w-4 text-muted-foreground" />
+                  <span>{tt(i)}</span>
+                </DropdownMenuItem>
+              ))}
+            </div>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Menu items */}
       <nav
