@@ -217,7 +217,7 @@ const INVENTORY_URLS = new Set([
   "/app/reports/trading",
 ]);
 
-export function TopMenuBar({ rightExtras, onLock }: { rightExtras?: ReactNode; onLock?: () => void }) {
+export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backupLabel, quickPanel }: { rightExtras?: ReactNode; onLock?: () => void; onBackupNow?: () => void; backupBusy?: boolean; backupLabel?: string; quickPanel?: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { activeMembership } = useCompany();
