@@ -1,70 +1,38 @@
-# Step 2 — Use the new compound indexes (zero-risk rollout)
-
 ## Goal
-Make the hot read paths actually use the v8 compound indexes we added in Step 1, without touching any business logic and without any chance of breaking an existing screen.
+Remove the hidden 500-row cap on the Vouchers list without any risk to existing screens. Virtualization is already in place via `DataGrid`, so we only need to feed it the full result set — safely.
 
-## Zero-risk strategy
-Three rules, applied to every change:
+## Zero-risk rules (same as Step 2)
+1. No changes to voucher save/edit/delete, sync, backup, or any business logic.
+2. Every new path is wrapped in try/catch and falls back to the current behaviour on any failure.
+3. One file changed, verified before moving on.
 
-1. **Never modify an existing query in place.** Add a new fast-path helper next to it. The old query stays as the fallback.
-2. **Wrap every fast path in try/catch.** If the index isn't ready yet (e.g. Dexie still upgrading on first load, or a very old browser), we silently fall through to the original query. User sees correct data either way — just slightly slower on that one call.
-3. **One call site per step, verified before moving on.** No bulk rewrite.
+## Changes (all inside `src/routes/app.vouchers.tsx`)
 
-## Order of work (one small step per turn, you approve each)
+### 1. Cache path
+Replace `.slice(0, 500)` with the full array. The cache read already filters by `voucher_type + from + to`, and `readVouchers` sorts by date desc — so removing the slice just lets more rows through. `DataGrid` virtualizes them.
 
-### Step 2a — Day Book (safest, most isolated)
-- File: `src/routes/app.reports.day-book.tsx` (read-only report, no writes)
-- Add fast path using `[company_id+voucher_date]` range query
-- Keep existing query as fallback inside try/catch
-- Verify: open Day Book, confirm same row count and totals as before
-- If anything looks off: fallback triggers automatically, no user impact
+### 2. Cloud path
+Replace the single `.limit(500)` call with a paged fetch:
+- Use Supabase `.range(offset, offset + pageSize - 1)` in a loop.
+- `pageSize = 1000`, stop when a page returns fewer than `pageSize` rows or when we hit a safety ceiling (e.g. 50k rows) — configurable constant.
+- Wrap the whole loop in the existing try/catch; on ANY error we already fall back to `loadFromCache()`, unchanged.
 
-### Step 2b — Sales Register
-- File: `src/routes/app.reports.sales-register.tsx`
-- Uses `[company_id+voucher_type+voucher_date]`
-- Same pattern: new helper, try/catch, fallback
-
-### Step 2c — Purchase Register
-- File: `src/routes/app.reports.purchase-register.tsx`
-- Same index as 2b, same pattern
-
-### Step 2d — Party Ledger
-- File: `src/routes/app.reports.ledger.tsx`
-- Uses `[company_id+party_id+voucher_date]`
-
-### Step 2e — Trial Balance / ledger balance
-- Files: `src/routes/app.reports.trial-balance.tsx` and related
-- Uses `[company_id+ledger_id]` on voucher_entries
+### 3. Guardrails
+- If the fetch takes > N ms or exceeds the safety ceiling, log a `console.warn` and stop — user still sees a virtualized list of what was loaded.
+- The date filters (`from` / `to`) already default to the current financial year via the toolbar, so in practice the paged fetch rarely exceeds one page.
 
 ## What will NOT change
-- No schema changes (Step 1 already covered that)
-- No changes to voucher save/edit/delete paths
-- No changes to sync, backup, restore, outbox
-- No changes to any UI component
-- No changes to totals, formulas, GST logic, or invariants
-- Existing stress test (`stress-10k.test.ts`) must stay green after each sub-step
+- No schema, no RLS, no indexes (Step 1 already covered index needs).
+- No changes to `DataGrid`, `ReportToolbar`, filters, search, or export.
+- No changes to totals, formulas, or invariants.
+- Stress test (`stress-10k.test.ts`) must stay green.
 
-## Technical detail (safe to skip)
-Each fast path is roughly:
-```ts
-try {
-  const rows = await db.cache_vouchers
-    .where('[company_id+voucher_date]')
-    .between([companyId, fromDate], [companyId, toDate], true, true)
-    .toArray();
-  if (rows.length >= 0) return rows;  // success — use fast path
-} catch {
-  // index unavailable — silent fallback
-}
-// original query, unchanged
-return await db.cache_vouchers.where('company_id').equals(companyId).toArray();
-```
-The old `.where('company_id').equals(...).toArray()` remains present and untouched.
+## Verification
+1. Build passes.
+2. Stress test passes.
+3. Open Vouchers list on a company with > 500 vouchers in the current FY and confirm the count in the grid footer matches the DB count (`select count(*) from vouchers where company_id=... and voucher_date between ...`).
+4. Scroll to the bottom — virtualization keeps it smooth.
+5. Change filters (type / date / search) and confirm results update as before.
 
-## Verification per sub-step
-1. Build passes
-2. Stress test passes (`bunx vitest run src/test/stress-10k.test.ts`)
-3. You open the affected screen once and confirm numbers match what you saw before
-
-## Start point
-Begin with **Step 2a (Day Book)** only. Nothing else touched. If it looks good on your side, we do 2b next turn.
+## Rollback
+Single-file change. If anything looks off, restore the two capped lines (`.limit(500)` and `.slice(0, 500)`) — no other file is touched.

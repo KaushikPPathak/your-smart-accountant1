@@ -98,7 +98,7 @@ function VouchersHub() {
       ]);
       const ledgerById = new Map<string, { name: string }>();
       for (const l of ledgers as any[]) ledgerById.set(l.id, { name: l.name });
-      const rows = (vchs as any[]).slice(0, 500).map((v) => ({
+      const rows = (vchs as any[]).map((v) => ({
         id: v.id,
         voucher_date: v.voucher_date,
         voucher_number: v.voucher_number,
@@ -122,22 +122,36 @@ function VouchersHub() {
     }
 
     try {
-      let q = supabase
-        .from("vouchers")
-        .select("id, voucher_date, voucher_number, voucher_type, total_paise, party_ledger_id, reference_no, ledgers:party_ledger_id(name)")
-        .eq("company_id", activeCompanyId)
-        .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (type !== "all") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        q = q.eq("voucher_type", type as any);
+      // Paged fetch — replaces the previous hard cap of 500 rows.
+      // Any failure inside the loop throws out to the existing catch
+      // block, which falls back to loadFromCache() unchanged.
+      const PAGE_SIZE = 1000;
+      const SAFETY_CEILING = 50_000;
+      const all: VoucherRow[] = [];
+      for (let offset = 0; offset < SAFETY_CEILING; offset += PAGE_SIZE) {
+        let q = supabase
+          .from("vouchers")
+          .select("id, voucher_date, voucher_number, voucher_type, total_paise, party_ledger_id, reference_no, ledgers:party_ledger_id(name)")
+          .eq("company_id", activeCompanyId)
+          .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false })
+          .order("created_at", { ascending: false })
+          .range(offset, offset + PAGE_SIZE - 1);
+        if (type !== "all") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          q = q.eq("voucher_type", type as any);
+        }
+        if (from) q = q.gte("voucher_date", from);
+        if (to) q = q.lte("voucher_date", to);
+        const { data, error } = await q;
+        if (error) throw error;
+        const page = (data as unknown as VoucherRow[]) || [];
+        all.push(...page);
+        if (page.length < PAGE_SIZE) break;
       }
-      if (from) q = q.gte("voucher_date", from);
-      if (to) q = q.lte("voucher_date", to);
-      const { data, error } = await q;
-      if (error) throw error;
-      setRows((data as unknown as VoucherRow[]) || []);
+      if (all.length >= SAFETY_CEILING) {
+        console.warn(`Vouchers list hit safety ceiling of ${SAFETY_CEILING} rows; narrow the date range to see more.`);
+      }
+      setRows(all);
     } catch (err) {
       console.error(err);
       try { await loadFromCache(); } catch { setRows([]); }
