@@ -107,8 +107,16 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
           return (data || []) as unknown as VRow[];
         },
         async () => {
+          let vouchersFast: any[] | null = null;
+          try {
+            vouchersFast = await readVouchersByTypeDateFast(activeCompanyId, kind, from, to);
+          } catch {
+            vouchersFast = null;
+          }
           const [vouchers, allItems, ledgers, itemsMaster] = await Promise.all([
-            readVouchers(activeCompanyId, { voucher_type: kind, from, to }),
+            vouchersFast
+              ? Promise.resolve(vouchersFast)
+              : readVouchers(activeCompanyId, { voucher_type: kind, from, to }),
             readVoucherItemsForCompany(activeCompanyId),
             readLedgers(activeCompanyId),
             readItems(activeCompanyId),
