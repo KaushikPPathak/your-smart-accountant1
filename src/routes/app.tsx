@@ -29,7 +29,7 @@ import { BackupNudgeBanner } from "@/components/BackupNudgeBanner";
 import { DataOwnershipDialog } from "@/components/DataOwnershipDialog";
 import { UpdateRecoveryBanner } from "@/components/UpdateRecoveryBanner";
 import { InstallAppButton } from "@/components/InstallAppButton";
-import { LicenseNagBanner } from "@/components/LicenseNagBanner";
+
 import { getLicenseState, isReadOnlyLocked } from "@/lib/license/state";
 
 export const Route = createFileRoute("/app")({
@@ -62,7 +62,13 @@ function AppLayout() {
     if (!activeCompanyId || !activeMembership) return;
     setSavingMirror(true);
     try {
-      await writeLocalMirror(activeCompanyId, activeMembership.companies.name, partyCode);
+      const res = await writeLocalMirror(activeCompanyId, activeMembership.companies.name, partyCode);
+      if (res.fallbackReason) {
+        toast.warning("Backup folder unavailable — saved to default location", {
+          description: `${res.attemptedFolder ?? "your chosen folder"} could not be reached (${res.fallbackReason}). Pick a new folder in Administration → Backup & Restore.`,
+          duration: 10000,
+        });
+      }
       setLastSaveTick((n) => n + 1);
     } catch (e) {
       toast.error((e as Error).message || "Local save failed");
@@ -331,7 +337,7 @@ function AppLayout() {
           </Button>
         </div>
       </div>
-      <LicenseNagBanner />
+      
       <UpdateRecoveryBanner />
       <BackupNudgeBanner />
       <AccountGroupsProvider>
