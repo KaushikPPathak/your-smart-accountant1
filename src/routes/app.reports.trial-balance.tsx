@@ -117,7 +117,13 @@ function TrialBalance() {
         if (error) throw error;
         return (data || []) as unknown as Entry[];
       },
-      async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { to })) as Entry[],
+      async () => {
+        try {
+          return await readEntriesUpToDateFast(activeCompanyId, to);
+        } catch {
+          return (await readVoucherEntriesWithVouchers(activeCompanyId, { to })) as Entry[];
+        }
+      },
     ).then((rows) => { if (!cancelled) setEntries(rows); });
     return () => { cancelled = true; };
   }, [activeCompanyId, to]);
