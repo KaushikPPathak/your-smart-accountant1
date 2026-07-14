@@ -299,11 +299,11 @@ export function TopMenuBar() {
         })}
       </nav>
 
-      {/* Company name at right */}
+      {/* Company switcher at right (moved from second-line header) */}
       <div className="busy-company">
-        <span className="busy-company-name">{companyName}</span>
-        <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+        <CompanySwitcher />
       </div>
+
     </div>
   );
 }
