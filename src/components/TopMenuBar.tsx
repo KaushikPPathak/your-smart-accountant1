@@ -43,6 +43,7 @@ import {
 import { useCompany } from "@/lib/company-context";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { CompanySwitcher } from "@/components/CompanySwitcher";
 
 interface NavItem { title: string; url: string; icon: LucideIcon; i18nKey?: string }
 interface NavGroup { label: string; items: NavItem[] }
