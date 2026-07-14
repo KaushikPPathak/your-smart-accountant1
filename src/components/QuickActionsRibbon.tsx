@@ -58,7 +58,25 @@ export function QuickActionsRibbon() {
 
   return (
     <div className="busy-menubar hidden md:block print:hidden">
-      <div className="flex items-center gap-1 overflow-x-auto px-4 py-1.5">
+      <div
+        className="flex items-center gap-1 overflow-x-auto px-4 py-1.5"
+        onKeyDown={(e) => {
+          const key = e.key;
+          if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Home" && key !== "End") return;
+          const root = e.currentTarget;
+          const items = Array.from(root.querySelectorAll<HTMLElement>('a.busy-menu-item, button'));
+          const active = document.activeElement as HTMLElement | null;
+          const idx = active ? items.indexOf(active) : -1;
+          if (idx === -1) return;
+          e.preventDefault();
+          let next = idx;
+          if (key === "ArrowRight") next = (idx + 1) % items.length;
+          else if (key === "ArrowLeft") next = (idx - 1 + items.length) % items.length;
+          else if (key === "Home") next = 0;
+          else if (key === "End") next = items.length - 1;
+          items[next]?.focus();
+        }}
+      >
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
