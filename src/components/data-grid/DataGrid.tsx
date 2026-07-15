@@ -53,6 +53,7 @@ export function DataGrid<T>({
 }: DataGridProps<T>) {
   const { state, setState, reset, views, saveView, applyView, deleteView, setDefaultView } = useGridState(reportId);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Reorder columns: pinned-left first, then the rest. Hidden columns stripped.
