@@ -59,9 +59,24 @@ interface NavGroup { label: string; items: NavItem[] }
 interface TopMenu {
   key: string;
   label: string;
+  /** Single letter used as Alt+key access key. Must be lowercase and unique. */
+  accessKey: string;
   icon: LucideIcon;
   groups: NavGroup[];
   requiresGst?: boolean;
+}
+
+/** Render a menu label with the access-key letter underlined. */
+function labelWithAccessKey(label: string, key: string) {
+  const idx = label.toLowerCase().indexOf(key.toLowerCase());
+  if (idx < 0) return <>{label}</>;
+  return (
+    <>
+      {label.slice(0, idx)}
+      <u className="underline decoration-1 underline-offset-2">{label[idx]}</u>
+      {label.slice(idx + 1)}
+    </>
+  );
 }
 
 // Reorganised into Busy-style top menus: File / Masters / Transactions / Reports / Utilities / Print / Administration
