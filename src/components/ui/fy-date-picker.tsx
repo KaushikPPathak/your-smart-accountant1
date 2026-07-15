@@ -226,16 +226,21 @@ export function FyDatePicker({
         autoFocus={autoFocus}
         ref={inputRef}
         onFocus={(e) => {
-          // Select pre-filled text only on the FIRST focus per mount so
-          // typing ddmm overwrites the previous date. Any later focus event
-          // (e.g. a re-render while the user is mid-type) MUST NOT re-select,
-          // or the next keystroke would replace the just-typed digit.
-          if (focusSelectedRef.current) return;
-          focusSelectedRef.current = true;
-          try { e.currentTarget.select(); } catch { /* noop */ }
+          // Every time the field gains focus, select the full value so the
+          // user can just type DDMM and overwrite. `onFocus` only fires on a
+          // genuine focus transition — React re-renders while typing do NOT
+          // re-trigger it, so this is safe against the "one digit accepted"
+          // regression.
+          const el = e.currentTarget;
+          requestAnimationFrame(() => {
+            try { el.select(); } catch { /* noop */ }
+          });
         }}
         onChange={(e) => handleChange(e.target.value)}
-        onBlur={(e) => commitText(e.target.value)}
+        onBlur={(e) => {
+          focusSelectedRef.current = false;
+          commitText(e.target.value);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
