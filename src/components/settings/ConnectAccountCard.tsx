@@ -25,8 +25,10 @@ export function ConnectAccountCard() {
   void tick;
 
   const staff = getActiveStaff();
-  const isLocalOnly = !!staff && staff.id.startsWith("dev-") || !isLocalProfileLinked() && hasLocalDeviceProfile();
-  const isLinked = isLocalProfileLinked() && staff && !staff.id.startsWith("dev-");
+  const staffIsDevice = !!staff && staff.id.startsWith("dev-");
+  const isLinked = !!staff && !staffIsDevice && isLocalProfileLinked();
+  const isLocalOnly = !isLinked && (staffIsDevice || hasLocalDeviceProfile());
+  void isLocalOnly;
 
   return (
     <Card id="connect-account">
