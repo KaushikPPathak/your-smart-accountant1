@@ -297,7 +297,42 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
 
 
   const update = useCallback((i: number, patch: Partial<Line>) => {
-    startTransition(() => setLines((cur) => cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l))));
+    startTransition(() =>
+      setLines((cur) => {
+        // Apply the user's patch first.
+        let next = cur.map((l, idx) => (idx === i ? { ...l, ...patch } : l));
+
+        // Auto-mirror: after committing a debit/credit, if the voucher is now
+        // out of balance, fill the opposite side on the first empty counterpart
+        // row so the user only has to pick the ledger. Skip when the user
+        // themselves is clearing the field.
+        const touchedAmount =
+          Object.prototype.hasOwnProperty.call(patch, "debit") ||
+          Object.prototype.hasOwnProperty.call(patch, "credit");
+        if (touchedAmount) {
+          const totalD = next.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
+          const totalC = next.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
+          const diff = +(totalD - totalC).toFixed(2);
+          if (diff !== 0) {
+            const emptyIdx = next.findIndex(
+              (l, idx) =>
+                idx !== i &&
+                !parseFloat(l.debit) &&
+                !parseFloat(l.credit),
+            );
+            if (emptyIdx >= 0) {
+              const amt = Math.abs(diff).toFixed(2);
+              next = next.map((l, idx) =>
+                idx === emptyIdx
+                  ? { ...l, debit: diff < 0 ? amt : "", credit: diff > 0 ? amt : "" }
+                  : l,
+              );
+            }
+          }
+        }
+        return next;
+      }),
+    );
   }, []);
   const add = useCallback(() => setLines((cur) => [...cur, blank()]), []);
   const remove = useCallback((i: number) => {
