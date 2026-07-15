@@ -61,12 +61,15 @@ function EntryRowImpl(props: Props) {
   const nRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (dRef.current) dRef.current.value = row.debit ?? "";
-    if (cRef.current) cRef.current.value = row.credit ?? "";
-    if (aRef.current) aRef.current.value = row.amount ?? "";
-    if (nRef.current) nRef.current.value = row.narration ?? "";
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [row.id]);
+    // Sync uncontrolled inputs when props change, but never stomp the field
+    // the user is currently typing in. Lets auto-mirror (debit → credit on
+    // the counterpart row) reflect in the DOM.
+    const active = document.activeElement;
+    if (dRef.current && active !== dRef.current) dRef.current.value = row.debit ?? "";
+    if (cRef.current && active !== cRef.current) cRef.current.value = row.credit ?? "";
+    if (aRef.current && active !== aRef.current) aRef.current.value = row.amount ?? "";
+    if (nRef.current && active !== nRef.current) nRef.current.value = row.narration ?? "";
+  }, [row.id, row.debit, row.credit, row.amount, row.narration]);
 
   return (
     <TableRow onFocusCapture={handleFocus} onBlurCapture={handleBlur} onClick={() => onFocusRow(idx)}>
