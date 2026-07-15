@@ -46,13 +46,17 @@ function WelcomeScreen() {
     return () => { cancelled = true; };
   }, []);
 
+  const safeEnsure = () => {
+    try { ensureLocalDeviceProfile(); } catch (err) { console.warn("ensureLocalDeviceProfile failed:", err); }
+  };
+
   const onCreateNew = () => {
-    ensureLocalDeviceProfile();
+    safeEnsure();
     navigate({ to: "/app/companies", search: { new: 1 } as never });
   };
 
   const onOpenExisting = () => {
-    ensureLocalDeviceProfile();
+    safeEnsure();
     navigate({ to: "/" });
   };
 
