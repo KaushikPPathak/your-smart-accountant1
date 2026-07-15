@@ -135,7 +135,7 @@ function WelcomeScreen() {
 
           {/* Restore Backup */}
           <button
-            onClick={() => { ensureLocalDeviceProfile(); setRestoreOpen(true); }}
+            onClick={() => { safeEnsure(); setRestoreOpen(true); }}
             className={`group flex items-center gap-4 rounded-2xl border border-border/60 bg-card/80 p-4 text-left backdrop-blur transition-all hover:-translate-y-0.5 hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40 ${hasExisting ? "" : "sm:col-span-2"}`}
           >
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
