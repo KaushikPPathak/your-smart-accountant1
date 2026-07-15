@@ -39,6 +39,9 @@ import { companyFormSchema as schema } from "@/lib/schemas/company";
 import { EntityMembersEditor } from "@/components/companies/EntityMembersEditor";
 import { CURRENCIES } from "@/lib/currency";
 import { DATE_FORMATS } from "@/lib/date-format";
+import { isCompanyUnlocked, markCompanyUnlocked } from "@/lib/tech-user";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { isOnlineNow } from "@/lib/offline/online-status";
 
 export const Route = createFileRoute("/app/companies")({
   head: () => ({ meta: [{ title: "Companies — Your Mehtaji" }] }),
@@ -361,9 +364,41 @@ function CompaniesPage() {
     setForm((f) => ({ ...f, state_code: code, state: state?.name ?? f.state }));
   };
 
-  const openMembershipCompany = (companyId: string) => {
+  const openMembershipCompany = async (companyId: string) => {
+    // If already unlocked, go straight in.
+    if (isCompanyUnlocked(companyId)) {
+      setActiveCompanyId(companyId);
+      navigate({ to: "/app" });
+      return;
+    }
+
+    // Check if this company needs a password (local-first, cloud fallback).
+    let hasPassword = false;
+    try {
+      const { offlineDb } = await import("@/lib/offline/db");
+      const local = await offlineDb.companies.get(companyId).catch(() => null);
+      if (local) {
+        hasPassword = Boolean(local.has_password);
+      } else if (!isLocalOnlyMode() && isOnlineNow()) {
+        const { data } = await supabase
+          .from("companies_picker")
+          .select("has_password")
+          .eq("id", companyId)
+          .maybeSingle();
+        hasPassword = Boolean(data?.has_password);
+      }
+    } catch { /* best-effort */ }
+
+    if (!hasPassword) {
+      markCompanyUnlocked(companyId);
+      setActiveCompanyId(companyId);
+      navigate({ to: "/app" });
+      return;
+    }
+
+    // Needs password — bounce to start screen where the password dialog lives.
     setActiveCompanyId(companyId);
-    navigate({ to: "/app" });
+    navigate({ to: "/" });
   };
 
   return (
