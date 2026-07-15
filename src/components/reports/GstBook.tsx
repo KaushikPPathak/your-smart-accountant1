@@ -20,6 +20,14 @@ import { sortVouchersAsc } from "@/lib/voucher-sort";
 import type { Database } from "@/integrations/supabase/types";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import {
+  readVouchers,
+  readVoucherItemsForCompany,
+  readVoucherEntriesForCompany,
+  readLedgers,
+  readItems,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 type VoucherType = Database["public"]["Enums"]["voucher_type"];
 
