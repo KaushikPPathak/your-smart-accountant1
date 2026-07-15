@@ -94,6 +94,7 @@ const FILE_GROUPS: NavGroup[] = [
 const MENUS: TopMenu[] = [
   {
     key: "masters",
+    accessKey: "m",
     label: "Masters",
     icon: Layers,
     groups: [
@@ -110,6 +111,7 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "transactions",
+    accessKey: "t",
     label: "Transactions",
     icon: ArrowLeftRight,
     groups: [
@@ -131,6 +133,7 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "reports",
+    accessKey: "r",
     label: "Reports",
     icon: FileBarChart,
     groups: [
@@ -169,6 +172,7 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "utilities",
+    accessKey: "u",
     label: "Utilities",
     icon: Wrench,
     groups: [
@@ -187,6 +191,7 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "print",
+    accessKey: "p",
     label: "Print",
     icon: Printer,
     groups: [
@@ -200,6 +205,7 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "administration",
+    accessKey: "a",
     label: "Administration",
     icon: ShieldCheck,
     groups: [
