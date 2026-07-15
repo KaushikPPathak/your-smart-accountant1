@@ -244,6 +244,10 @@ export function FyDatePicker({
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
+            // Stop the form-level useEnterAsTab from also advancing —
+            // otherwise a single Enter jumps TWO fields (date advance +
+            // form advance).
+            e.stopPropagation();
             commitText((e.target as HTMLInputElement).value, { advance: true });
           }
         }}
