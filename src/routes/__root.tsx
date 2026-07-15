@@ -105,24 +105,30 @@ function LockGate({ children }: { children: React.ReactNode }) {
     // re-establish the hidden device profile and continue — never bounce
     // them to the sign-in screen.
     void (async () => {
-      const { hasLocalDeviceProfile, ensureLocalDeviceProfile } = await import(
-        "@/lib/local-device-profile"
-      );
-      if (hasLocalDeviceProfile()) {
-        ensureLocalDeviceProfile();
-        return;
-      }
-      // Returning cloud-account user? Send them to /lock so they can
-      // log in. Otherwise show the local-first welcome screen.
       try {
-        const { listCachedAccounts } = await import("@/lib/offline/creds-cache");
-        const cached = await listCachedAccounts();
-        if (cached && cached.length > 0) {
-          navigate({ to: "/lock" });
+        const { hasLocalDeviceProfile, ensureLocalDeviceProfile } = await import(
+          "@/lib/local-device-profile"
+        );
+        if (hasLocalDeviceProfile()) {
+          try { ensureLocalDeviceProfile(); } catch { /* ignore */ }
           return;
         }
-      } catch { /* ignore */ }
-      navigate({ to: "/welcome" });
+        // Returning cloud-account user? Send them to /lock so they can
+        // log in. Otherwise show the local-first welcome screen.
+        try {
+          const { listCachedAccounts } = await import("@/lib/offline/creds-cache");
+          const cached = await listCachedAccounts();
+          if (cached && cached.length > 0) {
+            navigate({ to: "/lock" });
+            return;
+          }
+        } catch { /* ignore */ }
+        navigate({ to: "/welcome" });
+      } catch (err) {
+        // Last-ditch fallback: never leave the user stuck on a blank screen.
+        console.warn("LockGate boot failed, falling back to /welcome:", err);
+        try { navigate({ to: "/welcome" }); } catch { /* ignore */ }
+      }
     })();
   }, [loading, location.pathname, navigate]);
 
