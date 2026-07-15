@@ -117,6 +117,7 @@ export function Combo({
               setQuery(e.key);
               setOpen(true);
               e.preventDefault();
+              e.stopPropagation();
             }
           }}
           className={cn(
