@@ -39,6 +39,9 @@ import { companyFormSchema as schema } from "@/lib/schemas/company";
 import { EntityMembersEditor } from "@/components/companies/EntityMembersEditor";
 import { CURRENCIES } from "@/lib/currency";
 import { DATE_FORMATS } from "@/lib/date-format";
+import { isCompanyUnlocked, markCompanyUnlocked } from "@/lib/tech-user";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { isOnlineNow } from "@/lib/offline/online-status";
 
 export const Route = createFileRoute("/app/companies")({
   head: () => ({ meta: [{ title: "Companies — Your Mehtaji" }] }),
