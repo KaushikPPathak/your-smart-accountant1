@@ -366,8 +366,10 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                 <button
                   type="button"
                   className={cn("busy-menu", active && "busy-menu-active")}
+                  data-access-key={m.accessKey}
+                  title={`${m.label} (Alt+${m.accessKey.toUpperCase()})`}
                 >
-                  {m.label}
+                  {labelWithAccessKey(m.label, m.accessKey)}
                   <ChevronDown className="h-3 w-3 opacity-70" />
                 </button>
               </DropdownMenuTrigger>
