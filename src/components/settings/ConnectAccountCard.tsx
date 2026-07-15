@@ -82,7 +82,7 @@ export function ConnectAccountCard() {
             <p className="text-[11px] text-muted-foreground">
               Your existing local companies will be linked to the new account automatically. No data is lost.
             </p>
-            {isLocalOnly && <span className="sr-only">Local mode active</span>}
+            
           </>
         )}
       </CardContent>
