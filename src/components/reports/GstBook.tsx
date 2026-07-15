@@ -20,6 +20,14 @@ import { sortVouchersAsc } from "@/lib/voucher-sort";
 import type { Database } from "@/integrations/supabase/types";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import {
+  readVouchers,
+  readVoucherItemsForCompany,
+  readVoucherEntriesForCompany,
+  readLedgers,
+  readItems,
+  withCacheFallback,
+} from "@/lib/offline/cache-read";
 
 type VoucherType = Database["public"]["Enums"]["voucher_type"];
 
@@ -59,21 +67,6 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
   useEffect(() => {
     if (!activeCompanyId) return;
     (async () => {
-      const { data } = await supabase
-        .from("vouchers")
-        .select(
-          "id, voucher_date, voucher_number, vendor_invoice_no, vendor_invoice_date, place_of_supply_code, is_interstate, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, ledgers:party_ledger_id(name, gstin, state, state_code), voucher_entries(ledger_id, ledgers:ledger_id(type)), voucher_items(id, qty, items:item_id(unit))",
-        )
-        .eq("company_id", activeCompanyId)
-        .in("voucher_type", types)
-        .gte("voucher_date", from)
-        .lte("voucher_date", to)
-        .order("voucher_date", { ascending: true })
-        .order("voucher_number", { ascending: true });
-      // GST Sales/Purchase Book = goods only (trading stock).
-      // Per GST law & accounting principles: capital goods (fixed_asset) and
-      // GST-bearing expenses (expense_indirect) are tracked separately and
-      // surface only in GSTR-3B / GSTR-9 ITC tables — never in the books here.
       const goodsTypes =
         kind === "sales"
           ? new Set(["income_direct"])
@@ -82,11 +75,89 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
         voucher_entries?: { ledgers: { type: string } | null }[];
         voucher_items?: { id: string; qty: number; items: { unit: string | null } | null }[];
       };
-      const filtered = ((data || []) as unknown as Row2[]).filter((v) => {
-        // Must have at least one inventory line (goods).
+      const data = await withCacheFallback<Row2[]>(
+        async () => {
+          const { data } = await supabase
+            .from("vouchers")
+            .select(
+              "id, voucher_date, voucher_number, vendor_invoice_no, vendor_invoice_date, place_of_supply_code, is_interstate, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, ledgers:party_ledger_id(name, gstin, state, state_code), voucher_entries(ledger_id, ledgers:ledger_id(type)), voucher_items(id, qty, items:item_id(unit))",
+            )
+            .eq("company_id", activeCompanyId)
+            .in("voucher_type", types)
+            .gte("voucher_date", from)
+            .lte("voucher_date", to)
+            .order("voucher_date", { ascending: true })
+            .order("voucher_number", { ascending: true });
+          return (data || []) as unknown as Row2[];
+        },
+        async () => {
+          const [vouchers, allItems, allEntries, ledgers, itemsMaster] = await Promise.all([
+            readVouchers(activeCompanyId, { from, to }),
+            readVoucherItemsForCompany(activeCompanyId),
+            readVoucherEntriesForCompany(activeCompanyId),
+            readLedgers(activeCompanyId),
+            readItems(activeCompanyId),
+          ]);
+          const ledgerById = new Map((ledgers as any[]).map((l) => [String(l.id), l]));
+          const itemById = new Map((itemsMaster as any[]).map((i) => [String(i.id), i]));
+          const itemsByVoucher = new Map<string, any[]>();
+          for (const it of allItems as any[]) {
+            const vid = String(it.voucher_id);
+            (itemsByVoucher.get(vid) ?? itemsByVoucher.set(vid, []).get(vid)!).push(it);
+          }
+          const entriesByVoucher = new Map<string, any[]>();
+          for (const e of allEntries as any[]) {
+            const vid = String(e.voucher_id);
+            (entriesByVoucher.get(vid) ?? entriesByVoucher.set(vid, []).get(vid)!).push(e);
+          }
+          const typeSet = new Set<string>(types as unknown as string[]);
+          return (vouchers as any[])
+            .filter((v) => typeSet.has(String(v.voucher_type)))
+            .map((v) => {
+              const party = v.party_ledger_id ? ledgerById.get(String(v.party_ledger_id)) : null;
+              const items = (itemsByVoucher.get(String(v.id)) || []).map((li) => {
+                const master = li.item_id ? itemById.get(String(li.item_id)) : null;
+                return {
+                  id: String(li.id),
+                  qty: Number(li.qty || 0),
+                  items: master ? { unit: master.unit ?? null } : null,
+                };
+              });
+              const entries = (entriesByVoucher.get(String(v.id)) || []).map((e) => {
+                const led = e.ledger_id ? ledgerById.get(String(e.ledger_id)) : null;
+                return { ledgers: led ? { type: String(led.type) } : null };
+              });
+              return {
+                id: String(v.id),
+                voucher_date: String(v.voucher_date),
+                voucher_number: String(v.voucher_number ?? ""),
+                vendor_invoice_no: v.vendor_invoice_no ?? null,
+                vendor_invoice_date: v.vendor_invoice_date ?? null,
+                place_of_supply_code: v.place_of_supply_code ?? null,
+                is_interstate: Boolean(v.is_interstate),
+                subtotal_paise: Number(v.subtotal_paise || 0),
+                cgst_paise: Number(v.cgst_paise || 0),
+                sgst_paise: Number(v.sgst_paise || 0),
+                igst_paise: Number(v.igst_paise || 0),
+                round_off_paise: Number(v.round_off_paise || 0),
+                total_paise: Number(v.total_paise || 0),
+                ledgers: party
+                  ? {
+                      name: party.name,
+                      gstin: party.gstin ?? null,
+                      state: party.state ?? null,
+                      state_code: party.state_code ?? null,
+                    }
+                  : null,
+                voucher_entries: entries,
+                voucher_items: items,
+              } as Row2;
+            });
+        },
+      );
+      // GST Sales/Purchase Book = goods only (trading stock).
+      const filtered = (data || []).filter((v) => {
         if (!v.voucher_items || v.voucher_items.length === 0) return false;
-        // At least one posting must hit a goods account (Sales/Purchase A/c
-        // or stock); pure capital-goods / expense vouchers are excluded.
         return (v.voucher_entries || []).some((e) => e.ledgers && goodsTypes.has(e.ledgers.type));
       });
       setRows(sortVouchersAsc(filtered as Row[]));
