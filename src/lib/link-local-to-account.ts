@@ -22,13 +22,18 @@ export async function linkLocalCompaniesToAccount(newAccountId: string): Promise
     const mod = await import("@/lib/offline/db");
     const db = mod.default || mod.offlineDb;
 
-    const rows: Array<{ id: string; account_id?: string | null }> = await db.companies.toArray().catch(() => []);
+    const rows: Array<{ id: string; account_id?: string | null }> =
+      await db.companies.toArray().catch(() => [] as Array<{ id: string; account_id?: string | null }>);
     for (const row of rows) {
+      if (!row?.id) continue;
       const owner = row.account_id ?? null;
       if (owner === newAccountId) continue;
       if (owner === null || LOCAL_OWNERS.has(owner)) {
-        await db.companies.update(row.id, { account_id: newAccountId }).catch(() => undefined);
-        moved += 1;
+        try {
+          const updated = await db.companies.update(row.id, { account_id: newAccountId });
+          // Dexie returns 1 on success, 0 when no row matched. Stub returns undefined.
+          if (updated === 1 || updated === undefined) moved += 1;
+        } catch { /* skip this row, keep going */ }
       }
     }
   } catch (err) {

@@ -25,8 +25,10 @@ export function ConnectAccountCard() {
   void tick;
 
   const staff = getActiveStaff();
-  const isLocalOnly = !!staff && staff.id.startsWith("dev-") || !isLocalProfileLinked() && hasLocalDeviceProfile();
-  const isLinked = isLocalProfileLinked() && staff && !staff.id.startsWith("dev-");
+  const staffIsDevice = !!staff && staff.id.startsWith("dev-");
+  const isLinked = !!staff && !staffIsDevice && isLocalProfileLinked();
+  const isLocalOnly = !isLinked && (staffIsDevice || hasLocalDeviceProfile());
+  void isLocalOnly;
 
   return (
     <Card id="connect-account">
@@ -80,7 +82,7 @@ export function ConnectAccountCard() {
             <p className="text-[11px] text-muted-foreground">
               Your existing local companies will be linked to the new account automatically. No data is lost.
             </p>
-            {isLocalOnly && <span className="sr-only">Local mode active</span>}
+            
           </>
         )}
       </CardContent>

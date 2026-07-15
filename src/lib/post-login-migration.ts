@@ -42,14 +42,21 @@ export async function runPostLoginMigration(
     moved = res.moved;
   } catch (err) {
     console.warn("Local company migration failed:", err);
-    toast.error("Couldn't link local companies", {
+    // Never block the user on this — surface a non-blocking notice and
+    // keep them moving. Their local data is untouched.
+    toast.message("Signed in", {
       id: toastId,
-      description: err instanceof Error ? err.message : "Please try again from Settings → Connect account.",
+      description:
+        "You're in. We couldn't fully link your local companies just now — you can retry from Settings → Connect account.",
+      duration: 6000,
     });
     return { moved: 0, cloudBackupReady: false, lastBackupAt: null };
   }
 
-  const lastBackupAt = getLastUserCloudBackup();
+  let lastBackupAt: string | null = null;
+  try {
+    lastBackupAt = getLastUserCloudBackup();
+  } catch { /* ignore */ }
   const cloudBackupReady = !!lastBackupAt;
 
   // Compose a single, clear "you're all set" toast summarising what
@@ -59,8 +66,12 @@ export async function runPostLoginMigration(
       ? "No local companies needed migrating."
       : `Linked ${moved} local ${moved === 1 ? "company" : "companies"} to your account.`;
 
+  let backupWhen = "";
+  if (cloudBackupReady && lastBackupAt) {
+    try { backupWhen = new Date(lastBackupAt).toLocaleString(); } catch { backupWhen = ""; }
+  }
   const backupMsg = cloudBackupReady
-    ? `Cloud backup is ready. Last backup: ${new Date(lastBackupAt!).toLocaleString()}.`
+    ? `Cloud backup is ready${backupWhen ? `. Last backup: ${backupWhen}` : ""}.`
     : "Cloud backup is not configured yet. Set it up from Settings → Cloud backup.";
 
   toast.success(`Welcome, ${who}`, {
