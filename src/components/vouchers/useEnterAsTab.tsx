@@ -19,8 +19,26 @@ export function useEnterAsTab(onLast?: () => void) {
     // <button role="combobox"> and should advance like a field once a value
     // is selected (popover closed). Submit/icon buttons fall through.
     if (tag === "BUTTON" && t.getAttribute("role") !== "combobox") return;
-    // Radix Select trigger has role=combobox; Enter opens it — leave alone unless closed
-    if (t.getAttribute("role") === "combobox" && t.getAttribute("aria-expanded") === "true") return;
+    // Radix Select / Combo trigger has role=combobox.
+    //  - Expanded → let it handle Enter (pick option).
+    //  - Closed but NO value selected yet → open it instead of skipping past.
+    //    This prevents a double-Enter after the date field from jumping over
+    //    an empty bank/party combo.
+    if (t.getAttribute("role") === "combobox") {
+      if (t.getAttribute("aria-expanded") === "true") return;
+      const hasValue =
+        (t.getAttribute("data-has-value") === "true") ||
+        !!t.getAttribute("data-value") ||
+        // Fallback: consider it "empty" if it exposes an aria-label that still
+        // matches the placeholder pattern. Safer default is to open when we
+        // can't confirm a value is set.
+        false;
+      if (!hasValue) {
+        e.preventDefault();
+        t.click();
+        return;
+      }
+    }
 
     const root = ref.current;
     if (!root) return;

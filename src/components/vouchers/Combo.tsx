@@ -102,6 +102,7 @@ export function Combo({
           type="button"
           role="combobox"
           aria-expanded={open}
+          data-has-value={selected ? "true" : "false"}
           disabled={disabled}
           onKeyDown={(e) => {
             // Alt+C creates new from anywhere on the trigger
