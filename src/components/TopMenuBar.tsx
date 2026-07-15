@@ -274,12 +274,35 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       ),
     );
 
+  // Alt+letter — focus & open the matching top-level menu (File=F plus each menu's accessKey).
+  const menubarRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const k = e.key.toLowerCase();
+      if (k.length !== 1 || !/[a-z]/.test(k)) return;
+      const target = e.target as HTMLElement | null;
+      // Don't hijack Alt+key while typing in a field.
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      const root = menubarRef.current;
+      if (!root) return;
+      const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>("button.busy-menu"));
+      const btn = buttons.find((b) => (b.dataset.accessKey || "").toLowerCase() === k);
+      if (!btn) return;
+      e.preventDefault();
+      btn.focus();
+      if (btn.getAttribute("aria-expanded") !== "true") btn.click();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
-    <div className="busy-topbar print:hidden">
+    <div ref={menubarRef} className="busy-topbar print:hidden">
       {/* Brand block — acts as the File menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="busy-brand busy-menu" title="File">
+          <button type="button" className="busy-brand busy-menu" title="File (Alt+F)" data-access-key="f">
             <span className="busy-brand-mark">म</span>
             <span className="busy-brand-name">
               <span>Your</span>
