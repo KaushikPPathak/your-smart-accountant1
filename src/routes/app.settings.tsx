@@ -366,6 +366,8 @@ function SettingsPage() {
 
       <DataLocationCard />
       <CloudBackupCard />
+      <ConnectAccountCard />
+
 
       <Card>
         <CardHeader><CardTitle className="text-base">Release channel</CardTitle></CardHeader>
