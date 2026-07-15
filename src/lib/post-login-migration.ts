@@ -66,8 +66,12 @@ export async function runPostLoginMigration(
       ? "No local companies needed migrating."
       : `Linked ${moved} local ${moved === 1 ? "company" : "companies"} to your account.`;
 
+  let backupWhen = "";
+  if (cloudBackupReady && lastBackupAt) {
+    try { backupWhen = new Date(lastBackupAt).toLocaleString(); } catch { backupWhen = ""; }
+  }
   const backupMsg = cloudBackupReady
-    ? `Cloud backup is ready. Last backup: ${new Date(lastBackupAt!).toLocaleString()}.`
+    ? `Cloud backup is ready${backupWhen ? `. Last backup: ${backupWhen}` : ""}.`
     : "Cloud backup is not configured yet. Set it up from Settings → Cloud backup.";
 
   toast.success(`Welcome, ${who}`, {
