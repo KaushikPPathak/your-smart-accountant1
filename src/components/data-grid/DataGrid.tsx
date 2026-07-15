@@ -435,15 +435,17 @@ export function DataGrid<T>({
                   </div>
                 );
               }
+              const isFocused = vi.index === focusedIndex;
               return (
                 <div
                   key={vi.key}
                   className={cn(
                     "absolute left-0 right-0 grid border-b text-sm",
                     onRowClick && "cursor-pointer hover:bg-muted/50",
+                    isFocused && "bg-primary/10 ring-1 ring-inset ring-primary/40",
                   )}
                   style={{ top, height: rowH, gridTemplateColumns: gridTemplate }}
-                  onClick={onRowClick ? () => onRowClick(item.row) : undefined}
+                  onClick={onRowClick ? () => { setFocusedIndex(vi.index); onRowClick(item.row); } : () => setFocusedIndex(vi.index)}
                 >
                   {visibleColumns.map((c, idx) => {
                     const isPinned = idx < pinnedCount;
