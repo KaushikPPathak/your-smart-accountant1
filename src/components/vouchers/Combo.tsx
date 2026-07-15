@@ -146,6 +146,13 @@ export function Combo({
               e.stopPropagation();
               setOpen(false);
               onCreate(query);
+              return;
+            }
+            // Enter inside the popover picks the highlighted item. Combo
+            // already advances focus itself after selection — stop bubbling
+            // so the outer useEnterAsTab does not advance a second time.
+            if (e.key === "Enter") {
+              e.stopPropagation();
             }
           }}
         >
