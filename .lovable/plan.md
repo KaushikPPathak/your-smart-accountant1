@@ -1,38 +1,108 @@
 ## Goal
-Remove the hidden 500-row cap on the Vouchers list without any risk to existing screens. Virtualization is already in place via `DataGrid`, so we only need to feed it the full result set — safely.
 
-## Zero-risk rules (same as Step 2)
-1. No changes to voucher save/edit/delete, sync, backup, or any business logic.
-2. Every new path is wrapped in try/catch and falls back to the current behaviour on any failure.
-3. One file changed, verified before moving on.
+Make the first-launch experience local-first. No sign-in wall. The user lands on a simple choice screen, can create a company immediately, and everything is stored on disk (IndexedDB + Tauri SQLite). An account is optional and only needed for cloud backup / multi-device / recovery.
 
-## Changes (all inside `src/routes/app.vouchers.tsx`)
+## New first-launch screen (`/welcome`)
 
-### 1. Cache path
-Replace `.slice(0, 500)` with the full array. The cache read already filters by `voucher_type + from + to`, and `readVouchers` sorts by date desc — so removing the slice just lets more rows through. `DataGrid` virtualizes them.
+A new route `src/routes/welcome.tsx` with four options:
 
-### 2. Cloud path
-Replace the single `.limit(500)` call with a paged fetch:
-- Use Supabase `.range(offset, offset + pageSize - 1)` in a loop.
-- `pageSize = 1000`, stop when a page returns fewer than `pageSize` rows or when we hit a safety ceiling (e.g. 50k rows) — configurable constant.
-- Wrap the whole loop in the existing try/catch; on ANY error we already fall back to `loadFromCache()`, unchanged.
+1. **Create New Company** (primary, large button)
+2. **Open Existing Company** — only shown if local companies already exist on this device
+3. **Restore Backup** — opens existing `RestoreFromFileDialog`
+4. **Sign In** — small secondary link at the bottom, routes to `/lock`
 
-### 3. Guardrails
-- If the fetch takes > N ms or exceeds the safety ceiling, log a `console.warn` and stop — user still sees a virtualized list of what was loaded.
-- The date filters (`from` / `to`) already default to the current financial year via the toolbar, so in practice the paged fetch rarely exceeds one page.
+No email/password required for options 1–3.
 
-## What will NOT change
-- No schema, no RLS, no indexes (Step 1 already covered index needs).
-- No changes to `DataGrid`, `ReportToolbar`, filters, search, or export.
-- No changes to totals, formulas, or invariants.
-- Stress test (`stress-10k.test.ts`) must stay green.
+## Silent local device profile
 
-## Verification
-1. Build passes.
-2. Stress test passes.
-3. Open Vouchers list on a company with > 500 vouchers in the current FY and confirm the count in the grid footer matches the DB count (`select count(*) from vouchers where company_id=... and voucher_date between ...`).
-4. Scroll to the bottom — virtualization keeps it smooth.
-5. Change filters (type / date / search) and confirm results update as before.
+New helper `src/lib/local-device-profile.ts`:
 
-## Rollback
-Single-file change. If anything looks off, restore the two capped lines (`.limit(500)` and `.slice(0, 500)`) — no other file is touched.
+- `ensureLocalDeviceProfile()` — idempotent. If no staff session and no account exists locally, create a hidden profile:
+  - `id`: stable device UUID stored in localStorage (`ym_local_device_id`)
+  - `name`: "This device"
+  - `role`: `admin`
+  - `username`: `local-device`
+  - No password, no cloud row.
+- Calls `markUnlocked(...)` so `LockGate` in `__root.tsx` stops redirecting to `/lock`.
+- Sets `isLocalOnlyMode(true)` (already the default).
+- Persists a flag `ym_local_profile_ready = "1"` so we know onboarding is done.
+
+No user-visible term "Guest". UI copy just says "Local mode" / "Stored on this computer".
+
+## Routing changes
+
+`src/routes/__root.tsx` — `LockGate`:
+- Add `/welcome` to `LOCK_EXEMPT_PATHS`.
+- On boot, if `!isUnlocked()`:
+  - If `ym_local_profile_ready === "1"` → silently re-`ensureLocalDeviceProfile()` and continue (no lock screen).
+  - Else if any cloud accounts exist locally (`listCachedAccounts()` returns rows) → go to `/lock` (existing behavior for returning cloud users).
+  - Else → go to `/welcome`.
+
+`src/routes/index.tsx`:
+- If no companies exist AND no local profile yet → redirect to `/welcome`.
+- Otherwise unchanged (still the company picker).
+
+## "Create New Company" flow
+
+Button on `/welcome`:
+1. `await ensureLocalDeviceProfile()`
+2. `navigate({ to: "/app/companies", search: { new: 1 } })`
+
+`app.companies.tsx` new-company dialog already works locally via IndexedDB — no changes needed to the create logic itself.
+
+After the very first company is created, show a one-time non-intrusive toast + a persistent dismissible banner (`BackupNudgeBanner` already exists — extend it to also show when `ym_local_profile_ready === "1"` and no account is connected). Copy:
+
+> Your books are stored only on this computer. Create a backup or connect an account to keep them safe.
+
+Buttons: **Create backup** (opens existing backup dialog) · **Connect account** (routes to `/app/settings#connect-account`) · **Dismiss**.
+
+## Settings — "Connect Account" section
+
+Add a new card in `src/routes/app.settings.tsx` (id `connect-account`):
+
+- **State A — no account linked:**
+  - Explains benefits: cloud backup, multi-device sync, password recovery.
+  - Buttons: **Sign in** and **Create account**, both route to `/lock` with a `?linkLocal=1` query param.
+- **State B — account linked:**
+  - Shows the linked username + role.
+  - **Sign out** button (keeps local data intact).
+
+## Local → account migration
+
+New helper `src/lib/link-local-to-account.ts`:
+
+- Called from `/lock` after successful login/signup when `linkLocal=1` is present.
+- Reads all `offlineDb.companies` + `cache_companies` rows whose `account_id === "local-user"` or is the local device id, and:
+  - Updates `account_id` to the newly-authenticated `user_id` (IndexedDB only — local-only mode remains on).
+  - Enqueues a one-shot outbox item per company + its cache rows so that if the user later toggles cloud sync ON, the data will upload. When local-only mode stays ON (default), the outbox stays paused and nothing leaves the device.
+- Sets `ym_local_profile_ready` to `"linked"`.
+- Zero data loss — all local rows are preserved; only the owning-account pointer changes.
+
+## Compatibility notes
+
+- Authentication code paths (`/lock`, `staff-session`, `creds-cache`) are untouched — they still work for users who choose Sign In or Create Account.
+- Licensing (`src/lib/license/*`) reads machine id, not user id → unaffected.
+- Future sync: local-only mode remains the master switch. Nothing in this change turns cloud sync on automatically. The account, when linked, is purely an identity + optional backup destination.
+- No changes to Supabase schema, RLS, or migrations.
+
+## Files touched
+
+Create:
+- `src/routes/welcome.tsx`
+- `src/lib/local-device-profile.ts`
+- `src/lib/link-local-to-account.ts`
+
+Edit:
+- `src/routes/__root.tsx` — LockGate branching
+- `src/routes/index.tsx` — redirect to `/welcome` when empty
+- `src/routes/lock.tsx` — read `linkLocal` search param, call `linkLocalToAccount()` after auth success
+- `src/routes/app.settings.tsx` — add Connect Account card
+- `src/components/BackupNudgeBanner.tsx` — extend trigger to also fire for local-profile-only users
+
+## Out of scope
+
+- Actual cloud sync toggle UI (deferred; local-only stays on).
+- Per-company migration checklist (auto-attach chosen previously).
+- Aggressive backup nudge modal (banner-only chosen previously).
+
+Confirm and I will implement.

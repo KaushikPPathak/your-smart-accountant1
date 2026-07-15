@@ -34,6 +34,7 @@ import { StaffPinPanel } from "@/components/StaffPinPanel";
 import { DataLocationCard } from "@/components/settings/DataLocationCard";
 import { CloudBackupCard } from "@/components/settings/CloudBackupCard";
 import { ReleaseChannelPicker } from "@/components/settings/ReleaseChannelPicker";
+import { ConnectAccountCard } from "@/components/settings/ConnectAccountCard";
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({ meta: [{ title: "Settings — Your Mehtaji" }] }),
@@ -366,6 +367,8 @@ function SettingsPage() {
 
       <DataLocationCard />
       <CloudBackupCard />
+      <ConnectAccountCard />
+
 
       <Card>
         <CardHeader><CardTitle className="text-base">Release channel</CardTitle></CardHeader>

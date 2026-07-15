@@ -207,6 +207,11 @@ function LockScreen() {
           }
 
           markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole, username: loginUser.trim() });
+          try {
+            const { linkLocalCompaniesToAccount } = await import("@/lib/link-local-to-account");
+            const res = await linkLocalCompaniesToAccount(row.id);
+            if (res.moved > 0) toast.success(`Linked ${res.moved} local company${res.moved === 1 ? "" : "ies"} to this account`);
+          } catch { /* ignore */ }
           toast.success(`Welcome, ${row.name}`);
           navigate({ to: (consumeReturnTo() ?? "/app") as never });
           return;
@@ -222,6 +227,10 @@ function LockScreen() {
       const local = await verifyOfflineLogin(loginUser.trim(), loginPass);
       if (local) {
         markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole, username: loginUser.trim() });
+        try {
+          const { linkLocalCompaniesToAccount } = await import("@/lib/link-local-to-account");
+          await linkLocalCompaniesToAccount(local.id);
+        } catch { /* ignore */ }
         toast.success(`Welcome, ${local.name}`);
         navigate({ to: (consumeReturnTo() ?? "/app") as never });
         return;
@@ -271,6 +280,11 @@ function LockScreen() {
 
       toast.success("Account created successfully!");
       markUnlocked({ id: newId as string, name: suName.trim(), role: "admin", username: suUser.trim() });
+      try {
+        const { linkLocalCompaniesToAccount } = await import("@/lib/link-local-to-account");
+        const res = await linkLocalCompaniesToAccount(newId as string);
+        if (res.moved > 0) toast.success(`Linked ${res.moved} local company${res.moved === 1 ? "" : "ies"} to this account`);
+      } catch { /* ignore */ }
       navigate({ to: (consumeReturnTo() ?? "/app") as never });
     } catch (e) {
       console.error("Signup failed:", e);

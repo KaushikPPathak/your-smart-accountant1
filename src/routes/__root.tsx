@@ -87,8 +87,9 @@ function WebGate({ children }: { children: React.ReactNode }) {
 
 // Routes reachable without unlocking — the offline diagnostic assistant is
 // intentionally exempt so users can troubleshoot sign-in / sync issues before
-// they get past the lock screen.
-const LOCK_EXEMPT_PATHS = new Set(["/lock", "/assistant"]);
+// they get past the lock screen. `/welcome` is the local-first first-launch
+// landing so it must also bypass the lock gate.
+const LOCK_EXEMPT_PATHS = new Set(["/lock", "/assistant", "/welcome"]);
 
 function LockGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -98,7 +99,31 @@ function LockGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (LOCK_EXEMPT_PATHS.has(location.pathname)) return;
-    if (!isUnlocked()) navigate({ to: "/lock" });
+    if (isUnlocked()) return;
+
+    // Local-first: if the user already onboarded in local mode, silently
+    // re-establish the hidden device profile and continue — never bounce
+    // them to the sign-in screen.
+    void (async () => {
+      const { hasLocalDeviceProfile, ensureLocalDeviceProfile } = await import(
+        "@/lib/local-device-profile"
+      );
+      if (hasLocalDeviceProfile()) {
+        ensureLocalDeviceProfile();
+        return;
+      }
+      // Returning cloud-account user? Send them to /lock so they can
+      // log in. Otherwise show the local-first welcome screen.
+      try {
+        const { listCachedAccounts } = await import("@/lib/offline/creds-cache");
+        const cached = await listCachedAccounts();
+        if (cached && cached.length > 0) {
+          navigate({ to: "/lock" });
+          return;
+        }
+      } catch { /* ignore */ }
+      navigate({ to: "/welcome" });
+    })();
   }, [loading, location.pathname, navigate]);
 
   return <>{children}</>;

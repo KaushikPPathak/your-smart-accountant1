@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as OauthCallbackRouteImport } from './routes/oauth-callback'
 import { Route as LockRouteImport } from './routes/lock'
 import { Route as AssistantRouteImport } from './routes/assistant'
@@ -75,6 +76,11 @@ import { Route as AppVouchersNewDelivery_noteRouteImport } from './routes/app.vo
 import { Route as AppVouchersNewDebit_noteRouteImport } from './routes/app.vouchers.new.debit_note'
 import { Route as AppVouchersNewCredit_noteRouteImport } from './routes/app.vouchers.new.credit_note'
 
+const WelcomeRoute = WelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OauthCallbackRoute = OauthCallbackRouteImport.update({
   id: '/oauth-callback',
   path: '/oauth-callback',
@@ -414,6 +420,7 @@ export interface FileRoutesByFullPath {
   '/assistant': typeof AssistantRoute
   '/lock': typeof LockRoute
   '/oauth-callback': typeof OauthCallbackRoute
+  '/welcome': typeof WelcomeRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
@@ -480,6 +487,7 @@ export interface FileRoutesByTo {
   '/assistant': typeof AssistantRoute
   '/lock': typeof LockRoute
   '/oauth-callback': typeof OauthCallbackRoute
+  '/welcome': typeof WelcomeRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
@@ -548,6 +556,7 @@ export interface FileRoutesById {
   '/assistant': typeof AssistantRoute
   '/lock': typeof LockRoute
   '/oauth-callback': typeof OauthCallbackRoute
+  '/welcome': typeof WelcomeRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
   '/app/bank': typeof AppBankRoute
@@ -617,6 +626,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/lock'
     | '/oauth-callback'
+    | '/welcome'
     | '/app/account-groups'
     | '/app/assistant'
     | '/app/bank'
@@ -683,6 +693,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/lock'
     | '/oauth-callback'
+    | '/welcome'
     | '/app/account-groups'
     | '/app/assistant'
     | '/app/bank'
@@ -750,6 +761,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/lock'
     | '/oauth-callback'
+    | '/welcome'
     | '/app/account-groups'
     | '/app/assistant'
     | '/app/bank'
@@ -818,10 +830,18 @@ export interface RootRouteChildren {
   AssistantRoute: typeof AssistantRoute
   LockRoute: typeof LockRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
+  WelcomeRoute: typeof WelcomeRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/welcome': {
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/oauth-callback': {
       id: '/oauth-callback'
       path: '/oauth-callback'
@@ -1444,6 +1464,7 @@ const rootRouteChildren: RootRouteChildren = {
   AssistantRoute: AssistantRoute,
   LockRoute: LockRoute,
   OauthCallbackRoute: OauthCallbackRoute,
+  WelcomeRoute: WelcomeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
