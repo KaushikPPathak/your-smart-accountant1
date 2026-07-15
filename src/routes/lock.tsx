@@ -208,11 +208,9 @@ function LockScreen() {
 
           markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole, username: loginUser.trim() });
           try {
-            const { linkLocalCompaniesToAccount } = await import("@/lib/link-local-to-account");
-            const res = await linkLocalCompaniesToAccount(row.id);
-            if (res.moved > 0) toast.success(`Linked ${res.moved} local company${res.moved === 1 ? "" : "ies"} to this account`);
+            const { runPostLoginMigration } = await import("@/lib/post-login-migration");
+            await runPostLoginMigration(row.id, row.name);
           } catch { /* ignore */ }
-          toast.success(`Welcome, ${row.name}`);
           navigate({ to: (consumeReturnTo() ?? "/app") as never });
           return;
         } catch (cloudErr) {
@@ -228,10 +226,9 @@ function LockScreen() {
       if (local) {
         markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole, username: loginUser.trim() });
         try {
-          const { linkLocalCompaniesToAccount } = await import("@/lib/link-local-to-account");
-          await linkLocalCompaniesToAccount(local.id);
+          const { runPostLoginMigration } = await import("@/lib/post-login-migration");
+          await runPostLoginMigration(local.id, local.name);
         } catch { /* ignore */ }
-        toast.success(`Welcome, ${local.name}`);
         navigate({ to: (consumeReturnTo() ?? "/app") as never });
         return;
       }
@@ -278,12 +275,10 @@ function LockScreen() {
 
       if (error) throw error;
 
-      toast.success("Account created successfully!");
       markUnlocked({ id: newId as string, name: suName.trim(), role: "admin", username: suUser.trim() });
       try {
-        const { linkLocalCompaniesToAccount } = await import("@/lib/link-local-to-account");
-        const res = await linkLocalCompaniesToAccount(newId as string);
-        if (res.moved > 0) toast.success(`Linked ${res.moved} local company${res.moved === 1 ? "" : "ies"} to this account`);
+        const { runPostLoginMigration } = await import("@/lib/post-login-migration");
+        await runPostLoginMigration(newId as string, suName.trim());
       } catch { /* ignore */ }
       navigate({ to: (consumeReturnTo() ?? "/app") as never });
     } catch (e) {
