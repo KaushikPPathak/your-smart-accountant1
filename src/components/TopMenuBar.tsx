@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -59,9 +59,24 @@ interface NavGroup { label: string; items: NavItem[] }
 interface TopMenu {
   key: string;
   label: string;
+  /** Single letter used as Alt+key access key. Must be lowercase and unique. */
+  accessKey: string;
   icon: LucideIcon;
   groups: NavGroup[];
   requiresGst?: boolean;
+}
+
+/** Render a menu label with the access-key letter underlined. */
+function labelWithAccessKey(label: string, key: string) {
+  const idx = label.toLowerCase().indexOf(key.toLowerCase());
+  if (idx < 0) return <>{label}</>;
+  return (
+    <>
+      {label.slice(0, idx)}
+      <u className="underline decoration-1 underline-offset-2">{label[idx]}</u>
+      {label.slice(idx + 1)}
+    </>
+  );
 }
 
 // Reorganised into Busy-style top menus: File / Masters / Transactions / Reports / Utilities / Print / Administration
@@ -79,6 +94,7 @@ const FILE_GROUPS: NavGroup[] = [
 const MENUS: TopMenu[] = [
   {
     key: "masters",
+    accessKey: "m",
     label: "Masters",
     icon: Layers,
     groups: [
@@ -95,6 +111,7 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "transactions",
+    accessKey: "t",
     label: "Transactions",
     icon: ArrowLeftRight,
     groups: [
@@ -116,6 +133,7 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "reports",
+    accessKey: "r",
     label: "Reports",
     icon: FileBarChart,
     groups: [
@@ -154,6 +172,7 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "utilities",
+    accessKey: "u",
     label: "Utilities",
     icon: Wrench,
     groups: [
@@ -172,6 +191,7 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "print",
+    accessKey: "p",
     label: "Print",
     icon: Printer,
     groups: [
@@ -185,6 +205,7 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "administration",
+    accessKey: "a",
     label: "Administration",
     icon: ShieldCheck,
     groups: [
@@ -253,12 +274,35 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       ),
     );
 
+  // Alt+letter — focus & open the matching top-level menu (File=F plus each menu's accessKey).
+  const menubarRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const k = e.key.toLowerCase();
+      if (k.length !== 1 || !/[a-z]/.test(k)) return;
+      const target = e.target as HTMLElement | null;
+      // Don't hijack Alt+key while typing in a field.
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      const root = menubarRef.current;
+      if (!root) return;
+      const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>("button.busy-menu"));
+      const btn = buttons.find((b) => (b.dataset.accessKey || "").toLowerCase() === k);
+      if (!btn) return;
+      e.preventDefault();
+      btn.focus();
+      if (btn.getAttribute("aria-expanded") !== "true") btn.click();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
-    <div className="busy-topbar print:hidden">
+    <div ref={menubarRef} className="busy-topbar print:hidden">
       {/* Brand block — acts as the File menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="busy-brand busy-menu" title="File">
+          <button type="button" className="busy-brand busy-menu" title="File (Alt+F)" data-access-key="f">
             <span className="busy-brand-mark">म</span>
             <span className="busy-brand-name">
               <span>Your</span>
@@ -322,8 +366,10 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                 <button
                   type="button"
                   className={cn("busy-menu", active && "busy-menu-active")}
+                  data-access-key={m.accessKey}
+                  title={`${m.label} (Alt+${m.accessKey.toUpperCase()})`}
                 >
-                  {m.label}
+                  {labelWithAccessKey(m.label, m.accessKey)}
                   <ChevronDown className="h-3 w-3 opacity-70" />
                 </button>
               </DropdownMenuTrigger>
