@@ -129,6 +129,17 @@ function StartScreen() {
 
         const cachedCompanies = formatCachedCompanies(Array.from(merged.values()));
         const displayCached = localOnly ? await dedupeLocal(cachedCompanies) : cachedCompanies;
+
+        // Local-first: brand-new device with zero companies and no local
+        // profile yet — send the user to the welcome/onboarding screen.
+        if (displayCached.length === 0 && localOnly) {
+          const { hasLocalDeviceProfile } = await import("@/lib/local-device-profile");
+          if (!hasLocalDeviceProfile()) {
+            if (!cancelled) navigate({ to: "/welcome" });
+            return;
+          }
+        }
+
         if (displayCached.length > 0 && !cancelled) {
           setCompanies(displayCached);
           setLoading(false);
