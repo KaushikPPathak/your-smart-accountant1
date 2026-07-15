@@ -364,8 +364,37 @@ export function DataGrid<T>({
         {/* Body (virtualized) */}
         <div
           ref={parentRef}
-          className="relative overflow-auto"
+          className="relative overflow-auto outline-none"
           style={{ height }}
+          tabIndex={0}
+          role="grid"
+          aria-rowcount={renderRows.length}
+          onFocus={() => {
+            if (focusedIndex < 0 && renderRows.length > 0) setFocusedIndex(0);
+          }}
+          onKeyDown={(e) => {
+            if (renderRows.length === 0) return;
+            const last = renderRows.length - 1;
+            const pageSize = Math.max(1, Math.floor(height / rowH) - 1);
+            let next = focusedIndex;
+            if (e.key === "ArrowDown") next = Math.min(last, (focusedIndex < 0 ? 0 : focusedIndex + 1));
+            else if (e.key === "ArrowUp") next = Math.max(0, (focusedIndex < 0 ? 0 : focusedIndex - 1));
+            else if (e.key === "Home") next = 0;
+            else if (e.key === "End") next = last;
+            else if (e.key === "PageDown") next = Math.min(last, (focusedIndex < 0 ? 0 : focusedIndex) + pageSize);
+            else if (e.key === "PageUp") next = Math.max(0, (focusedIndex < 0 ? 0 : focusedIndex) - pageSize);
+            else if (e.key === "Enter" || e.key === " ") {
+              const cur = renderRows[focusedIndex];
+              if (cur?.kind === "group") { toggleGroup(cur.key); e.preventDefault(); return; }
+              if (cur?.kind === "row" && onRowClick) { onRowClick(cur.row); e.preventDefault(); return; }
+              return;
+            } else {
+              return;
+            }
+            e.preventDefault();
+            setFocusedIndex(next);
+            virtualizer.scrollToIndex(next, { align: "auto" });
+          }}
         >
           {loading && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 text-sm text-muted-foreground">
