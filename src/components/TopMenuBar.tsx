@@ -414,7 +414,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                       disabled={!onLock}
                     >
                       <Lock className="h-4 w-4 text-muted-foreground" />
-                      <span>{t("common.lock") === "common.lock" ? "Lock workspace" : t("common.lock")}</span>
+                      <span>Exit</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
