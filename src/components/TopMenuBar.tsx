@@ -403,6 +403,12 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                   type="button"
                   className={cn("busy-menu", active && "busy-menu-active")}
                   data-access-key={m.accessKey}
+                  data-menu-key={m.key}
+                  id={`${menubarId}-menu-${m.key}`}
+                  role="menuitem"
+                  aria-haspopup="menu"
+                  tabIndex={focusedMenuKey === m.key ? 0 : -1}
+                  onFocus={() => setFocusedMenuKey(m.key)}
                   title={`${m.label} (Alt+${m.accessKey.toUpperCase()})`}
                 >
                   {labelWithAccessKey(m.label, m.accessKey)}
