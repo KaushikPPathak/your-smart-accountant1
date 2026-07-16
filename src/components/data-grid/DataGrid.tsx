@@ -237,27 +237,33 @@ export function DataGrid<T>({
     window.addEventListener("pointerup", onUp);
   }, [colWidth, setState]);
 
-  // Keyboard shortcuts
+  // Push a "grid" scope while this grid is mounted so grid shortcuts win
+  // over global bindings and stack cleanly under a report toolbar (which
+  // pushes a "report" scope). Deepest scope wins in the engine.
+  const kb = useOptionalKeyboard();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const inField =
-        target &&
-        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
-      if (e.key === "/" && !inField) {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if (e.key === "Escape" && target === searchInputRef.current) {
-        setState((s) => ({ ...s, search: "" }));
-        searchInputRef.current?.blur();
-      } else if (e.key === "R" && e.shiftKey && !inField) {
-        e.preventDefault();
-        reset();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [reset, setState]);
+    if (!kb) return;
+    return kb.pushScope("grid");
+  }, [kb]);
+
+  // Focus the global search input. Uses `allowInField` so Escape from inside
+  // the search input can be routed through the engine below.
+  useShortcut("/", (e) => {
+    e.preventDefault();
+    searchInputRef.current?.focus();
+  }, { scope: "grid", description: "Focus global search" });
+
+  useShortcut("Escape", (e) => {
+    if (document.activeElement !== searchInputRef.current) return;
+    e.preventDefault();
+    setState((s) => ({ ...s, search: "" }));
+    searchInputRef.current?.blur();
+  }, { scope: "grid", allowInField: true, description: "Clear search & blur" });
+
+  useShortcut("Shift+R", (e) => {
+    e.preventDefault();
+    reset();
+  }, { scope: "grid", description: "Reset grid view" });
 
   return (
     <div ref={containerRef} className={cn("flex flex-col gap-2", className)}>
