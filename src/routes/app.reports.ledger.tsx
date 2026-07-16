@@ -154,11 +154,9 @@ function LedgerStatement() {
   useEffect(() => { setShowBack(hasLedgerOrigin()); }, []);
 
   // Esc returns to the originating screen (Alt+L launcher or drill-down).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const tgt = e.target as HTMLElement | null;
-      if (tgt && /^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName)) return;
+  useShortcut(
+    "Escape",
+    (e) => {
       if (hasLedgerOrigin()) {
         e.preventDefault();
         goBackFromLedger(() => navigate({ to: "/app/reports" }));
@@ -171,10 +169,10 @@ function LedgerStatement() {
         e.preventDefault();
         window.history.back();
       }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
+    },
+    { scope: "report", description: "Back to previous report" },
+  );
+
 
   useEffect(() => {
     if (!activeCompanyId) return;
