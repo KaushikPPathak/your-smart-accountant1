@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useShortcut } from "@/lib/keyboard";
 
 interface Props {
   open: boolean;
@@ -15,19 +16,28 @@ export function AcceptConfirm({ open, onOpenChange, onAccept, title = "Accept th
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => yesRef.current?.focus(), 0);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "y" || e.key === "Y") {
-        e.preventDefault();
-        onOpenChange(false);
-        onAccept();
-      } else if (e.key === "n" || e.key === "N") {
-        e.preventDefault();
-        onOpenChange(false);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => { clearTimeout(t); window.removeEventListener("keydown", onKey); };
-  }, [open, onAccept, onOpenChange]);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  // Y accepts, N cancels — only while the confirm is open. Scoped to "dialog"
+  // and allowed inside fields so the confirm works no matter where focus is.
+  useShortcut(
+    "y",
+    (e) => {
+      e.preventDefault();
+      onOpenChange(false);
+      onAccept();
+    },
+    { scope: "dialog", allowInField: true, enabled: open, description: "Accept" },
+  );
+  useShortcut(
+    "n",
+    (e) => {
+      e.preventDefault();
+      onOpenChange(false);
+    },
+    { scope: "dialog", allowInField: true, enabled: open, description: "Cancel" },
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
