@@ -179,19 +179,45 @@ function AppLayout() {
         setHelpOpen(true);
         return;
       }
-      // Esc on a voucher entry page → back to vouchers list
-      if (e.key === "Escape" && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      // Stage-based Escape:
+      //  1. Inside a form field → blur the field (so a second Esc escalates).
+      //  2. Inside an open dialog/dropdown → let Radix/native close it.
+      //  3. On a voucher entry page → back to vouchers list.
+      //  4. Elsewhere in the app → move focus to the top menu.
+      //  5. On the top menu → TopMenuBar handler shows the exit confirmation.
+      if (e.key === "Escape" && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         const target = e.target as HTMLElement | null;
-        const inField = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
-        const inDialog = target?.closest('[role="dialog"]');
-        if (!inDialog && location.pathname.startsWith("/app/vouchers/new/")) {
-          if (!inField) {
-            e.preventDefault();
-            navigate({ to: "/app/vouchers" });
-            return;
-          }
-          // If inside a field, blur it first so a second Esc exits
-          (target as HTMLElement | null)?.blur?.();
+        const inField =
+          !!target &&
+          (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
+        const openOverlay = document.querySelector(
+          '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-radix-popper-content-wrapper]',
+        );
+        // Stage 2: let overlays close themselves
+        if (openOverlay) return;
+        // Stage 1: blur field first
+        if (inField) {
+          e.preventDefault();
+          target?.blur?.();
+          return;
+        }
+        // Stage 5 pre-check: if focus is already on the top menu, let
+        // TopMenuBar's own handler show the exit confirmation.
+        const onMenubar = target?.closest?.(".busy-topbar");
+        if (onMenubar) return;
+        // Stage 3: voucher entry → back to list
+        if (location.pathname.startsWith("/app/vouchers/new/")) {
+          e.preventDefault();
+          navigate({ to: "/app/vouchers" });
+          return;
+        }
+        // Stage 4: not on menubar → focus the first top-menu trigger
+        const firstTrigger = document.querySelector<HTMLElement>(
+          ".busy-topbar button.busy-menu",
+        );
+        if (firstTrigger) {
+          e.preventDefault();
+          firstTrigger.focus();
           return;
         }
       }
