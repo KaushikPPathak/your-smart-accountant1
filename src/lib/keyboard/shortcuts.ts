@@ -24,7 +24,9 @@ export function parseCombo(combo: string): ParsedCombo {
       else if (p === "meta" || p === "cmd" || p === "command") mods.meta = true;
       else if (p === "shift") mods.shift = true;
     } else {
-      key = p;
+      // Normalize a few named keys so callers can write "Ctrl+Space" etc.
+      if (p === "space" || p === "spacebar") key = " ";
+      else key = p;
     }
   }
   return { key, ...mods };
