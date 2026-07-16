@@ -26,7 +26,7 @@ import { BackupNudgeBanner } from "@/components/BackupNudgeBanner";
 import { DataOwnershipDialog } from "@/components/DataOwnershipDialog";
 import { UpdateRecoveryBanner } from "@/components/UpdateRecoveryBanner";
 import { InstallAppButton } from "@/components/InstallAppButton";
-import { KeyboardProvider } from "@/lib/keyboard";
+import { KeyboardProvider, useShortcut } from "@/lib/keyboard";
 
 import { getLicenseState, isReadOnlyLocked } from "@/lib/license/state";
 
@@ -162,87 +162,48 @@ function AppLayout() {
   // tech user. We just wait for that to finish before rendering.
 
 
-  // Global Busy-style hotkeys for new vouchers + Alt+L = jump to Ledger
+  // Stage-based Escape handling — inherently sequential and context-aware,
+  // so it stays as a raw window listener rather than a single-combo binding.
   useEffect(() => {
-    const map: Record<string, string> = {
-      s: "/app/vouchers/new/sales",
-      p: "/app/vouchers/new/purchase",
-      r: "/app/vouchers/new/receipt",
-      y: "/app/vouchers/new/payment",
-      c: "/app/vouchers/new/credit_note",
-      d: "/app/vouchers/new/debit_note",
-      j: "/app/vouchers/new/journal",
-    };
     const onKey = (e: KeyboardEvent) => {
-      // F1: keyboard cheatsheet (always)
-      if (e.key === "F1") {
-        e.preventDefault();
-        setHelpOpen(true);
-        return;
-      }
-      // Stage-based Escape:
-      //  1. Inside a form field → blur the field (so a second Esc escalates).
-      //  2. Inside an open dialog/dropdown → let Radix/native close it.
-      //  3. On a voucher entry page → back to vouchers list.
-      //  4. Elsewhere in the app → move focus to the top menu.
-      //  5. On the top menu → TopMenuBar handler shows the exit confirmation.
-      if (e.key === "Escape" && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-        const target = e.target as HTMLElement | null;
-        const inField =
-          !!target &&
-          (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
-        const openOverlay = document.querySelector(
-          '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-radix-popper-content-wrapper]',
-        );
-        // Stage 2: let overlays close themselves
-        if (openOverlay) return;
-        // Stage 1: blur field first
-        if (inField) {
-          e.preventDefault();
-          target?.blur?.();
-          return;
-        }
-        // Stage 5 pre-check: if focus is already on the top menu, let
-        // TopMenuBar's own handler show the exit confirmation.
-        const onMenubar = target?.closest?.(".busy-topbar");
-        if (onMenubar) return;
-        // Stage 3: voucher entry → back to list
-        if (location.pathname.startsWith("/app/vouchers/new/")) {
-          e.preventDefault();
-          navigate({ to: "/app/vouchers" });
-          return;
-        }
-        // Stage 4: not on menubar → focus the first top-menu trigger
-        const firstTrigger = document.querySelector<HTMLElement>(
-          ".busy-topbar button.busy-menu",
-        );
-        if (firstTrigger) {
-          e.preventDefault();
-          firstTrigger.focus();
-          return;
-        }
-      }
-      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.key !== "Escape" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       const target = e.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-      if (e.key.toLowerCase() === "l") {
+      const inField =
+        !!target &&
+        (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
+      const openOverlay = document.querySelector(
+        '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-radix-popper-content-wrapper]',
+      );
+      // Stage 2: let overlays close themselves
+      if (openOverlay) return;
+      // Stage 1: blur field first
+      if (inField) {
         e.preventDefault();
-        // Remember where we came from so Esc on the Ledger report returns here.
-        try {
-          sessionStorage.setItem("ledgerReturnTo", location.pathname);
-        } catch { /* ignore */ }
-        navigate({ to: "/app/reports/ledger" });
+        target?.blur?.();
         return;
       }
-      const dest = map[e.key.toLowerCase()];
-      if (dest) {
+      // Stage 5 pre-check: TopMenuBar handles its own Esc
+      const onMenubar = target?.closest?.(".busy-topbar");
+      if (onMenubar) return;
+      // Stage 3: voucher entry → back to list
+      if (location.pathname.startsWith("/app/vouchers/new/")) {
         e.preventDefault();
-        navigate({ to: dest });
+        navigate({ to: "/app/vouchers" });
+        return;
+      }
+      // Stage 4: focus the first top-menu trigger
+      const firstTrigger = document.querySelector<HTMLElement>(
+        ".busy-topbar button.busy-menu",
+      );
+      if (firstTrigger) {
+        e.preventDefault();
+        firstTrigger.focus();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [navigate, location.pathname]);
+
 
   const onCompaniesPage = location.pathname.startsWith("/app/companies");
 
@@ -331,6 +292,7 @@ function AppLayout() {
 
   return (
     <KeyboardProvider>
+      <GlobalShortcuts onOpenHelp={() => setHelpOpen(true)} />
       <div className="flex min-h-screen w-full flex-col">
         <TopMenuBar
           rightExtras={backupExtras}
@@ -364,5 +326,62 @@ function AppLayout() {
     </KeyboardProvider>
   );
 }
+
+// -----------------------------------------------------------------------------
+// Global shortcuts (mounted inside <KeyboardProvider>): F1 help, Alt+L ledger,
+// and Alt+<letter> voucher creation. Kept as a child so useShortcut can access
+// the provider context.
+// -----------------------------------------------------------------------------
+const VOUCHER_MAP: Record<string, string> = {
+  s: "/app/vouchers/new/sales",
+  p: "/app/vouchers/new/purchase",
+  r: "/app/vouchers/new/receipt",
+  y: "/app/vouchers/new/payment",
+  c: "/app/vouchers/new/credit_note",
+  d: "/app/vouchers/new/debit_note",
+  j: "/app/vouchers/new/journal",
+};
+
+function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useShortcut(
+    "F1",
+    (e) => {
+      e.preventDefault();
+      onOpenHelp();
+    },
+    { scope: "global", allowInField: true, description: "Show keyboard shortcuts" },
+  );
+
+  useShortcut(
+    "Alt+l",
+    (e) => {
+      e.preventDefault();
+      try {
+        sessionStorage.setItem("ledgerReturnTo", location.pathname);
+      } catch { /* ignore */ }
+      navigate({ to: "/app/reports/ledger" });
+    },
+    { scope: "global", description: "Jump to Ledger report" },
+  );
+
+  for (const [key, dest] of Object.entries(VOUCHER_MAP)) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useShortcut(
+      `Alt+${key}`,
+      (e) => {
+        e.preventDefault();
+        navigate({ to: dest });
+      },
+      { scope: "global", description: `New voucher (${dest.split("/").pop()})` },
+    );
+  }
+
+  return null;
+}
+
+
 
 
