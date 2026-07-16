@@ -4,6 +4,7 @@ import { sortEntriesByVoucherAsc } from "@/lib/voucher-sort";
 import { narrationOf } from "@/lib/voucher-text";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useShortcut } from "@/lib/keyboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -153,11 +154,9 @@ function LedgerStatement() {
   useEffect(() => { setShowBack(hasLedgerOrigin()); }, []);
 
   // Esc returns to the originating screen (Alt+L launcher or drill-down).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const tgt = e.target as HTMLElement | null;
-      if (tgt && /^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName)) return;
+  useShortcut(
+    "Escape",
+    (e) => {
       if (hasLedgerOrigin()) {
         e.preventDefault();
         goBackFromLedger(() => navigate({ to: "/app/reports" }));
@@ -170,10 +169,10 @@ function LedgerStatement() {
         e.preventDefault();
         window.history.back();
       }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
+    },
+    { scope: "report", description: "Back to previous report" },
+  );
+
 
   useEffect(() => {
     if (!activeCompanyId) return;
