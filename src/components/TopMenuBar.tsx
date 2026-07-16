@@ -572,6 +572,27 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
         <CompanySwitcher />
       </div>
 
+      <AlertDialog open={exitConfirmOpen} onOpenChange={setExitConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Exit application?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will lock the session and return you to the start screen. Any unsaved work in open forms may be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel autoFocus>Stay</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setExitConfirmOpen(false);
+                onLock?.();
+              }}
+            >
+              Exit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
