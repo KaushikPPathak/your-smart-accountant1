@@ -82,19 +82,24 @@ export function CommandBrainProvider({ children }: { children: React.ReactNode }
     }
   }, [open, loadHistory]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.code === "Space") {
-        e.preventDefault();
-        setOpen((o) => !o);
-      } else if (e.key === "Escape" && open) {
-        closePalette();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, closePalette]);
+  // Ctrl+Space toggles the palette (global). Esc closes it while open (allowed
+  // inside inputs since the palette's own input has focus).
+  useShortcut(
+    " ",
+    (e) => {
+      e.preventDefault();
+      setOpen((o) => !o);
+    },
+    { scope: "global", allowInField: true, description: "Toggle command palette" },
+  );
+  useShortcut(
+    "Escape",
+    (e) => {
+      e.preventDefault();
+      closePalette();
+    },
+    { scope: "global", allowInField: true, enabled: open, description: "Close command palette" },
+  );
 
   const logCommand = useCallback(async (text: string, action: string) => {
     if (!isTauriRuntime()) return;
