@@ -476,11 +476,16 @@ export function AssistantChat() {
 
   function runAction(a: AssistantAction) {
     if (a.kind === "navigate" && a.to) {
-      if (a.to.includes("?") && typeof window !== "undefined") {
-        window.location.href = a.to;
-      } else {
-        navigate({ to: a.to });
+      // Split path + query so TanStack Router can navigate client-side.
+      // Using window.location.href here broke inside the Tauri desktop
+      // shell (blank white screen) because the browser resolved the
+      // relative URL against the file:// origin.
+      const [path, qs] = a.to.split("?");
+      const search: Record<string, string> = {};
+      if (qs) {
+        for (const [k, v] of new URLSearchParams(qs)) search[k] = v;
       }
+      navigate({ to: path, search: search as never });
       toast.success(`Opening ${a.label}`);
     } else if (a.kind === "set-theme" && a.theme) {
       setTheme(a.theme);
