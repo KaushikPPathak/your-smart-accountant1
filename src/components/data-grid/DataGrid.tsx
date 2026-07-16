@@ -9,6 +9,7 @@ import { useGridState } from "./useGridState";
 import { computeAggregates, deriveEnumValues, processRows, type FlatRow } from "./grid-engine";
 import { PivotPanel } from "./PivotPanel";
 import { usePivot } from "./usePivot";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import type { DGColumn, GridState, PivotStatePersisted } from "./types";
 
 export interface DataGridProps<T> {
