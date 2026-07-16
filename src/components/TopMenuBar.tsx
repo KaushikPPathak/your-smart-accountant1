@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -276,6 +276,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
   // Alt+letter — focus & open the matching top-level menu (File=F plus each menu's accessKey).
   const menubarRef = useRef<HTMLDivElement | null>(null);
+  const menubarId = useId();
+  // Roving tabindex + aria-activedescendant tracking for the menubar.
+  const [focusedMenuKey, setFocusedMenuKey] = useState<string>("file");
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -291,6 +294,8 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       if (!btn) return;
       e.preventDefault();
       btn.focus();
+      const key = btn.dataset.menuKey;
+      if (key) setFocusedMenuKey(key);
       if (btn.getAttribute("aria-expanded") !== "true") btn.click();
     };
     window.addEventListener("keydown", onKey);
@@ -318,11 +323,22 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   }, []);
 
   return (
-    <div ref={menubarRef} className="busy-topbar print:hidden">
+    <div ref={menubarRef} className="busy-topbar print:hidden" role="menubar" aria-label="Application menu" aria-activedescendant={`${menubarId}-menu-${focusedMenuKey}`}>
       {/* Brand block — acts as the File menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="busy-brand busy-menu" title="File (Alt+F)" data-access-key="f">
+          <button
+            type="button"
+            className="busy-brand busy-menu"
+            title="File (Alt+F)"
+            data-access-key="f"
+            data-menu-key="file"
+            id={`${menubarId}-menu-file`}
+            role="menuitem"
+            aria-haspopup="menu"
+            tabIndex={focusedMenuKey === "file" ? 0 : -1}
+            onFocus={() => setFocusedMenuKey("file")}
+          >
             <span className="busy-brand-mark">म</span>
             <span className="busy-brand-name">
               <span>Your</span>
@@ -370,12 +386,15 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           const wasOpen = active?.getAttribute("aria-expanded") === "true";
           const nextBtn = triggers[nextIdx];
           nextBtn.focus();
+          const nextKey = nextBtn.dataset.menuKey;
+          if (nextKey) setFocusedMenuKey(nextKey);
           if (wasOpen) {
             // Close current then open next to mimic native menubar behavior
             active?.click();
             setTimeout(() => nextBtn.click(), 0);
           }
         }}
+        aria-label="Primary menus"
       >
         {visible.map((m) => {
           const active = isMenuActive(m);
@@ -387,6 +406,12 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                   type="button"
                   className={cn("busy-menu", active && "busy-menu-active")}
                   data-access-key={m.accessKey}
+                  data-menu-key={m.key}
+                  id={`${menubarId}-menu-${m.key}`}
+                  role="menuitem"
+                  aria-haspopup="menu"
+                  tabIndex={focusedMenuKey === m.key ? 0 : -1}
+                  onFocus={() => setFocusedMenuKey(m.key)}
                   title={`${m.label} (Alt+${m.accessKey.toUpperCase()})`}
                 >
                   {labelWithAccessKey(m.label, m.accessKey)}
