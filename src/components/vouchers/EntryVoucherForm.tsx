@@ -21,6 +21,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR, rupeesToPaise } from "@/lib/money";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { useEnterAsTab } from "./useEnterAsTab";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
