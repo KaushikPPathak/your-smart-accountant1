@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, Check } from "lucide-react";
 import { useSaveStatus, useFailureCount } from "@/lib/save-status";
 import { useCurrentHints } from "./FocusHints";
+import { BalanceStrip } from "./BalanceStrip";
 import { cn } from "@/lib/utils";
 
 interface Props {
