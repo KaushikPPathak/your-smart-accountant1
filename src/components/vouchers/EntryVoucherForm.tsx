@@ -593,7 +593,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           >
             <X className="mr-1 h-4 w-4" /> Cancel
           </Button>
-          <Button data-assistant-save onClick={save} disabled={saving || !canWrite || !balanced || locked || taxTemplateBlocksSave}>
+          <Button data-assistant-save data-primary-action="true" onClick={save} disabled={saving || !canWrite || !balanced || locked || taxTemplateBlocksSave}>
             <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
           </Button>
         </div>
