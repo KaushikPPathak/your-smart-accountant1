@@ -936,6 +936,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onCreate={() => setLedgerDlg({ open: true, editId: null })}
                   createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
                 />
+                {partyId && (
+                  <div className="pt-1">
+                    <LedgerBalanceChip ledgerId={partyId} prefix="Bal" />
+                  </div>
+                )}
                 {partyLedger && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground">
                     {(() => {
