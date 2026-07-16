@@ -386,12 +386,15 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           const wasOpen = active?.getAttribute("aria-expanded") === "true";
           const nextBtn = triggers[nextIdx];
           nextBtn.focus();
+          const nextKey = nextBtn.dataset.menuKey;
+          if (nextKey) setFocusedMenuKey(nextKey);
           if (wasOpen) {
             // Close current then open next to mimic native menubar behavior
             active?.click();
             setTimeout(() => nextBtn.click(), 0);
           }
         }}
+        aria-label="Primary menus"
       >
         {visible.map((m) => {
           const active = isMenuActive(m);
