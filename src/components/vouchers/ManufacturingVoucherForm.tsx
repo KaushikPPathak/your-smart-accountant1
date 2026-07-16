@@ -648,7 +648,7 @@ export function ManufacturingVoucherForm() {
           >
             Cancel
           </Button>
-          <Button onClick={save} disabled={saving} className="gap-1">
+          <Button onClick={save} disabled={saving} className="gap-1" data-primary-action="true">
             <Save className="h-4 w-4" /> Save (Ctrl+S)
           </Button>
         </div>
