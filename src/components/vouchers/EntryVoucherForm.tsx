@@ -243,6 +243,18 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     setLedgerBalances({});
   }, [date]);
 
+  // Publish current voucher context so the status-bar balance strip stays in
+  // sync while the user works on this form.
+  const partyIdForStrip = isSimple ? (simpleLines[0]?.ledger_id ?? null) : null;
+  useEffect(() => {
+    setVoucherContext({
+      partyLedgerId: partyIdForStrip || null,
+      cashBankLedgerId: cashBankId || null,
+      label: voucherType,
+    });
+    return () => clearVoucherContext();
+  }, [partyIdForStrip, cashBankId, voucherType]);
+
   const deferredLines = useDeferredValue(lines);
   const deferredSimple = useDeferredValue(simpleLines);
   const totalDr = useMemo(
