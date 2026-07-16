@@ -41,6 +41,8 @@ import { DraftRecoveredBanner } from "./DraftRecoveredBanner";
 import { useTaxTemplates } from "@/hooks/useVoucherMasters";
 import type { Resolution, TaxTemplate } from "@/lib/voucher-resolver";
 import { AutoTaxChip } from "./AutoTaxChip";
+import { LedgerBalanceChip } from "./LedgerBalanceChip";
+import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-store";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
