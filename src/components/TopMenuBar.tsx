@@ -323,11 +323,22 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   }, []);
 
   return (
-    <div ref={menubarRef} className="busy-topbar print:hidden">
+    <div ref={menubarRef} className="busy-topbar print:hidden" role="menubar" aria-label="Application menu" aria-activedescendant={`${menubarId}-menu-${focusedMenuKey}`}>
       {/* Brand block — acts as the File menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="busy-brand busy-menu" title="File (Alt+F)" data-access-key="f">
+          <button
+            type="button"
+            className="busy-brand busy-menu"
+            title="File (Alt+F)"
+            data-access-key="f"
+            data-menu-key="file"
+            id={`${menubarId}-menu-file`}
+            role="menuitem"
+            aria-haspopup="menu"
+            tabIndex={focusedMenuKey === "file" ? 0 : -1}
+            onFocus={() => setFocusedMenuKey("file")}
+          >
             <span className="busy-brand-mark">म</span>
             <span className="busy-brand-name">
               <span>Your</span>
