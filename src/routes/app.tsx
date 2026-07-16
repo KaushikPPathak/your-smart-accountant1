@@ -19,6 +19,7 @@ import { isDesktopRuntime } from "@/lib/native-bridge";
 import { AccountGroupsProvider } from "@/lib/account-groups-runtime";
 import { KeyboardCheatSheet } from "@/components/vouchers/KeyboardCheatSheet";
 import { MastersProvider } from "@/lib/masters-cache";
+import { BalancesProvider } from "@/lib/balances-cache";
 import { PendingSavesTray } from "@/components/fast-form/PendingSavesTray";
 import { FocusHintsProvider } from "@/components/fast-form/FocusHints";
 import { StatusBar } from "@/components/fast-form/StatusBar";
