@@ -297,6 +297,26 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // ArrowDown on a closed top-menu trigger jumps focus to the quick-entry ribbon.
+  // Runs in capture so we intercept before Radix opens the dropdown.
+  useEffect(() => {
+    const root = menubarRef.current;
+    if (!root) return;
+    const onKeyCapture = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowDown" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (!target || !target.classList.contains("busy-menu")) return;
+      if (target.getAttribute("aria-expanded") === "true") return;
+      const ribbonItem = document.querySelector<HTMLElement>('.busy-menubar a.busy-menu-item, .busy-menubar button');
+      if (!ribbonItem) return;
+      e.preventDefault();
+      e.stopPropagation();
+      ribbonItem.focus();
+    };
+    root.addEventListener("keydown", onKeyCapture, true);
+    return () => root.removeEventListener("keydown", onKeyCapture, true);
+  }, []);
+
   return (
     <div ref={menubarRef} className="busy-topbar print:hidden">
       {/* Brand block — acts as the File menu */}
