@@ -6,6 +6,8 @@ import { format } from "date-fns";
 import * as React from "react";
 import { useI18n } from "@/lib/i18n";
 import { tReportText } from "@/lib/report-i18n-rules";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
+
 
 interface Props {
   from: string;
@@ -34,7 +36,36 @@ export function ReportToolbar({
 }: Props) {
   const { lang } = useI18n();
   const tt = (s: string) => tReportText(s, lang);
+
+  // Push a "report" scope while this toolbar is mounted so report-scoped
+  // shortcuts win over global bindings on report screens.
+  const kb = useOptionalKeyboard();
+  React.useEffect(() => {
+    if (!kb) return;
+    return kb.pushScope("report");
+  }, [kb]);
+
+  // Centralized report shortcuts. Never fire while typing in date pickers /
+  // filter inputs (allowInField defaults to false).
+  useShortcut("Ctrl+P", (e) => {
+    if (!onPrint) return;
+    e.preventDefault();
+    onPrint();
+  }, { scope: "report", description: "Print report" });
+  useShortcut("Ctrl+E", (e) => {
+    const fn = onExportXlsx ?? onExportCsv ?? onExportPdf;
+    if (!fn) return;
+    e.preventDefault();
+    fn();
+  }, { scope: "report", description: "Export report" });
+  useShortcut("Ctrl+Shift+E", (e) => {
+    if (!onExportCsv) return;
+    e.preventDefault();
+    onExportCsv();
+  }, { scope: "report", description: "Export CSV" });
+
   return (
+
     <div className="flex flex-wrap items-end gap-3 print:hidden">
       {!hideDates && (
         <>
