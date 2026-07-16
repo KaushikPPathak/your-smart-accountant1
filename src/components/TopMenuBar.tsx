@@ -349,7 +349,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       if (!onLock) return;
       e.preventDefault();
       e.stopPropagation();
-      onLock();
+      setExitConfirmOpen(true);
     };
     root.addEventListener("keydown", onEsc);
     return () => root.removeEventListener("keydown", onEsc);
