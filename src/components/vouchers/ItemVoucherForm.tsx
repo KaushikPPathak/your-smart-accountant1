@@ -34,6 +34,7 @@ import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/g
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { useEnterAsTab } from "./useEnterAsTab";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
