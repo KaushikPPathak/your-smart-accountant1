@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Command, Search, History } from "lucide-react";
 import { isTauriRuntime, safeBrainExec, safeBrainSelect } from "./SqliteBrain";
 import { useSpeedBrain } from "./SpeedBrain";
+import { useShortcut } from "@/lib/keyboard";
 
 interface CommandHistoryRow {
   id: number;
