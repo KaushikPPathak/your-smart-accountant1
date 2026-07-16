@@ -62,6 +62,10 @@ export function QuickActionsRibbon() {
     <div className="busy-menubar hidden md:block print:hidden">
       <div
         className="flex items-center gap-1 overflow-x-auto px-4 py-0.5 leading-none"
+        role="toolbar"
+        aria-label={t("ribbon.quickEntry")}
+        aria-orientation="horizontal"
+        aria-activedescendant={focusedId}
         onKeyDown={(e) => {
           const key = e.key;
           if (key === "ArrowUp") {
@@ -84,19 +88,25 @@ export function QuickActionsRibbon() {
           else if (key === "ArrowLeft") next = (idx - 1 + items.length) % items.length;
           else if (key === "Home") next = 0;
           else if (key === "End") next = items.length - 1;
-          items[next]?.focus();
+          const nextEl = items[next];
+          nextEl?.focus();
+          if (nextEl?.id) setFocusedId(nextEl.id);
         }}
       >
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
+          id={`${ribbonId}-toggle`}
           className="mr-2 flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--amber-ink)]/80 hover:bg-[color:var(--amber-dark)]/20 hover:text-[color:var(--amber-ink)]"
           title={open ? "Collapse Quick Entry" : "Expand Quick Entry"}
           aria-expanded={open}
+          aria-label={open ? "Collapse quick entry ribbon" : "Expand quick entry ribbon"}
+          tabIndex={focusedId === `${ribbonId}-toggle` ? 0 : -1}
+          onFocus={() => setFocusedId(`${ribbonId}-toggle`)}
         >
-          <Zap className="h-3 w-3" />
+          <Zap className="h-3 w-3" aria-hidden="true" />
           <span>{t("ribbon.quickEntry")}</span>
-          {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          {open ? <ChevronUp className="h-3 w-3" aria-hidden="true" /> : <ChevronDown className="h-3 w-3" aria-hidden="true" />}
         </button>
 
         {open && ACTIONS.map((a) => {
