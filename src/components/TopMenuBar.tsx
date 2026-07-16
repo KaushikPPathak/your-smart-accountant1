@@ -53,6 +53,16 @@ import { useCurrency, CURRENCIES } from "@/lib/currency";
 import { useDateFormat, DATE_FORMATS, type DateFormatCode } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface NavItem { title: string; url: string; icon: LucideIcon; i18nKey?: string }
 interface NavGroup { label: string; items: NavItem[] }
@@ -279,6 +289,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   const menubarId = useId();
   // Roving tabindex + aria-activedescendant tracking for the menubar.
   const [focusedMenuKey, setFocusedMenuKey] = useState<string>("file");
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -338,7 +349,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       if (!onLock) return;
       e.preventDefault();
       e.stopPropagation();
-      onLock();
+      setExitConfirmOpen(true);
     };
     root.addEventListener("keydown", onEsc);
     return () => root.removeEventListener("keydown", onEsc);
@@ -561,6 +572,27 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
         <CompanySwitcher />
       </div>
 
+      <AlertDialog open={exitConfirmOpen} onOpenChange={setExitConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Exit application?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will lock the session and return you to the start screen. Any unsaved work in open forms may be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel autoFocus>Stay</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setExitConfirmOpen(false);
+                onLock?.();
+              }}
+            >
+              Exit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
