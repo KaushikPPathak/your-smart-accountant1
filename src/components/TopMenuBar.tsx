@@ -63,7 +63,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useFocusScope } from "@/lib/keyboard";
+import { useFocusScope, useOptionalKeyboard } from "@/lib/keyboard";
 
 
 interface NavItem { title: string; url: string; icon: LucideIcon; i18nKey?: string }
