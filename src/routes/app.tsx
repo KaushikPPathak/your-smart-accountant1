@@ -201,6 +201,10 @@ function AppLayout() {
           target?.blur?.();
           return;
         }
+        // Stage 5 pre-check: if focus is already on the top menu, let
+        // TopMenuBar's own handler show the exit confirmation.
+        const onMenubar = target?.closest?.(".busy-topbar");
+        if (onMenubar) return;
         // Stage 3: voucher entry → back to list
         if (location.pathname.startsWith("/app/vouchers/new/")) {
           e.preventDefault();
@@ -208,18 +212,14 @@ function AppLayout() {
           return;
         }
         // Stage 4: not on menubar → focus the first top-menu trigger
-        const onMenubar = target?.closest?.(".busy-topbar");
-        if (!onMenubar) {
-          const firstTrigger = document.querySelector<HTMLElement>(
-            ".busy-topbar button.busy-menu",
-          );
-          if (firstTrigger) {
-            e.preventDefault();
-            firstTrigger.focus();
-            return;
-          }
+        const firstTrigger = document.querySelector<HTMLElement>(
+          ".busy-topbar button.busy-menu",
+        );
+        if (firstTrigger) {
+          e.preventDefault();
+          firstTrigger.focus();
+          return;
         }
-        // Stage 5: handled by TopMenuBar's own escape listener.
       }
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       const target = e.target as HTMLElement | null;
