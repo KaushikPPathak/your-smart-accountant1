@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useShortcut } from "@/lib/keyboard";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 
 interface Props {
   open: boolean;
@@ -13,11 +13,13 @@ interface Props {
 
 export function AcceptConfirm({ open, onOpenChange, onAccept, title = "Accept this voucher?", description = "Press Y or Enter to accept · N or Esc to cancel" }: Props) {
   const yesRef = useRef<HTMLButtonElement | null>(null);
+  const kb = useOptionalKeyboard();
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => yesRef.current?.focus(), 0);
-    return () => clearTimeout(t);
-  }, [open]);
+    const popScope = kb?.pushScope("dialog");
+    return () => { clearTimeout(t); popScope?.(); };
+  }, [open, kb]);
 
   // Y accepts, N cancels — only while the confirm is open. Scoped to "dialog"
   // and allowed inside fields so the confirm works no matter where focus is.
