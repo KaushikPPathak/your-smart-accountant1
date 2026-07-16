@@ -1,108 +1,93 @@
-## Goal
+# Centralized Keyboard Navigation Engine
 
-Make the first-launch experience local-first. No sign-in wall. The user lands on a simple choice screen, can create a company immediately, and everything is stored on disk (IndexedDB + Tauri SQLite). An account is optional and only needed for cloud backup / multi-device / recovery.
+Goal: one shared engine that owns focus order, shortcuts, and popup focus across every accounting screen, so the app is fully usable and fast from the keyboard alone. Mouse still works; browser Tab behavior is replaced by our own deterministic order.
 
-## New first-launch screen (`/welcome`)
+## What exists today
 
-A new route `src/routes/welcome.tsx` with four options:
+- `src/components/fast-form/useFocusManager.tsx` — per-form focus manager (already used by voucher rows).
+- `src/components/fast-form/FocusHints.tsx` — hint provider for the current field.
+- `src/components/TopMenuBar.tsx` + `QuickActionsRibbon.tsx` — roving tabindex + Alt-shortcuts + Escape stages (just implemented).
+- `src/routes/app.tsx` — global Alt-hotkeys (S/P/R/Y/C/D/J/L), F1 cheatsheet, staged Escape.
+- Individual voucher pages wire their own Enter handling.
 
-1. **Create New Company** (primary, large button)
-2. **Open Existing Company** — only shown if local companies already exist on this device
-3. **Restore Backup** — opens existing `RestoreFromFileDialog`
-4. **Sign In** — small secondary link at the bottom, routes to `/lock`
+Problem: each screen re-implements Enter/Arrow/Tab handling. There is no single registry, no global shortcut context, and no reliable focus restoration after dialogs.
 
-No email/password required for options 1–3.
+## Deliverable
 
-## Silent local device profile
+A `src/lib/keyboard/` module that every screen opts into:
 
-New helper `src/lib/local-device-profile.ts`:
+```
+src/lib/keyboard/
+  KeyboardProvider.tsx    # top-level context, mounts global listener
+  focusRegistry.ts        # registers/orders focusable nodes per scope
+  useFocusable.ts         # hook: register a node, get ref + handlers
+  useFocusScope.ts        # hook: create/enter a scope (form, dialog, grid)
+  useShortcut.ts          # hook: bind a shortcut, scoped + context-aware
+  shortcuts.ts            # shortcut parsing + match ("Alt+S", "Ctrl+Enter")
+  focusRestore.ts         # push/pop focus stack across dialogs
+  types.ts
+```
 
-- `ensureLocalDeviceProfile()` — idempotent. If no staff session and no account exists locally, create a hidden profile:
-  - `id`: stable device UUID stored in localStorage (`ym_local_device_id`)
-  - `name`: "This device"
-  - `role`: `admin`
-  - `username`: `local-device`
-  - No password, no cloud row.
-- Calls `markUnlocked(...)` so `LockGate` in `__root.tsx` stops redirecting to `/lock`.
-- Sets `isLocalOnlyMode(true)` (already the default).
-- Persists a flag `ym_local_profile_ready = "1"` so we know onboarding is done.
+### Behavior contract
 
-No user-visible term "Guest". UI copy just says "Local mode" / "Stored on this computer".
+1. Enter
+   - On an input: move to next registered field in the scope.
+   - On a combobox/select: open dropdown; if open, confirm highlighted option then move next.
+   - On the last field of a form: does NOT submit; instead focuses the primary action button. A second Enter on that button submits.
+   - Shift+Enter = previous field.
+2. Arrow keys
+   - Vertical scopes (grids, menus, lists): Up/Down move within scope.
+   - Horizontal scopes (menubar, ribbon, tabs): Left/Right move within scope.
+   - Never leak to browser scroll while a scope is active.
+3. Tab
+   - Intercepted at scope root. Same as Enter-next / Shift+Tab = previous, but never leaves the scope. Only Ctrl+Tab or an explicit "exit scope" shortcut moves between scopes.
+4. Escape — keeps the staged behavior already implemented (field blur → close overlay → leave page → focus menubar → exit confirm).
+5. Shortcuts
+   - Registered with a scope tag (`global`, `voucher`, `report`, `grid`, `dialog`).
+   - Only the deepest active scope's shortcuts fire; `global` always fires unless a dialog claims the key.
+   - Ignored while typing in a plain text field unless marked `allowInField: true`.
+6. Focus restore
+   - Opening any dialog pushes the current active element; closing pops and restores it on the next microtask (after React commit) so re-renders don't steal focus.
+7. No focus jumps after re-render
+   - Registry stores logical field IDs, not DOM refs alone. If the current focused ID re-mounts, we re-focus it after commit via a `useLayoutEffect` in the provider.
 
-## Routing changes
+### Integration plan (phased, each phase ships working)
 
-`src/routes/__root.tsx` — `LockGate`:
-- Add `/welcome` to `LOCK_EXEMPT_PATHS`.
-- On boot, if `!isUnlocked()`:
-  - If `ym_local_profile_ready === "1"` → silently re-`ensureLocalDeviceProfile()` and continue (no lock screen).
-  - Else if any cloud accounts exist locally (`listCachedAccounts()` returns rows) → go to `/lock` (existing behavior for returning cloud users).
-  - Else → go to `/welcome`.
+Phase 1 - Engine + provider
+  - Add the `src/lib/keyboard/` module above.
+  - Mount `<KeyboardProvider>` inside `src/routes/app.tsx` around `<Outlet />`.
+  - Migrate existing global Alt-hotkeys and staged Escape from `app.tsx` into `useShortcut` calls, without behavior change.
 
-`src/routes/index.tsx`:
-- If no companies exist AND no local profile yet → redirect to `/welcome`.
-- Otherwise unchanged (still the company picker).
+Phase 2 - Menubar + ribbon
+  - Rewrite `TopMenuBar` and `QuickActionsRibbon` roving-tabindex logic to use `useFocusScope({ orientation: "horizontal" })`. Removes ~120 lines of hand-rolled arrow handling.
 
-## "Create New Company" flow
+Phase 3 - Voucher entry forms
+  - Replace `useFocusManager` internals with a thin adapter over the new engine so existing voucher screens keep working while gaining Enter-to-next, Shift+Enter-back, and predictable re-mount focus.
+  - Wire the "last field -> primary button, second Enter submits" rule in the voucher form shell.
 
-Button on `/welcome`:
-1. `await ensureLocalDeviceProfile()`
-2. `navigate({ to: "/app/companies", search: { new: 1 } })`
+Phase 4 - Reports & grids
+  - Wrap `DataGrid` in a `useFocusScope({ orientation: "grid" })` so Up/Down/Left/Right/Home/End/PageUp/PageDown are consistent across every report.
+  - Register report toolbar shortcuts (`Ctrl+P` print, `Ctrl+E` export, `Ctrl+F` filter) through `useShortcut` with scope `report`.
 
-`app.companies.tsx` new-company dialog already works locally via IndexedDB — no changes needed to the create logic itself.
+Phase 5 - Dialogs
+  - Ensure every shadcn dialog opens inside a new focus scope and pops the focus stack on close. shadcn/Radix already restores focus; we add the registry push so re-renders during close don't lose it.
 
-After the very first company is created, show a one-time non-intrusive toast + a persistent dismissible banner (`BackupNudgeBanner` already exists — extend it to also show when `ym_local_profile_ready === "1"` and no account is connected). Copy:
+### Out of scope for this pass
 
-> Your books are stored only on this computer. Create a backup or connect an account to keep them safe.
+- Chording sequences (Ctrl+K then S). Can be added later on top of `useShortcut`.
+- Rebinding UI. Shortcuts stay hard-coded for now.
 
-Buttons: **Create backup** (opens existing backup dialog) · **Connect account** (routes to `/app/settings#connect-account`) · **Dismiss**.
+### Acceptance checks
 
-## Settings — "Connect Account" section
+- Tab on any voucher form moves through fields in the order they are registered, never to browser chrome, never to hidden fields.
+- Enter on a party picker opens the dropdown; Enter again picks the highlighted party and jumps to the next field.
+- Opening and closing any dialog returns focus to the exact control that opened it, even if the parent list re-rendered.
+- Alt+S/P/R/Y/C/D/J/L still open the right vouchers from anywhere except while typing in a field.
+- Escape still follows the 5 stages defined earlier.
+- No screen relies on native Tab order for correctness.
 
-Add a new card in `src/routes/app.settings.tsx` (id `connect-account`):
+## Scope of this plan
 
-- **State A — no account linked:**
-  - Explains benefits: cloud backup, multi-device sync, password recovery.
-  - Buttons: **Sign in** and **Create account**, both route to `/lock` with a `?linkLocal=1` query param.
-- **State B — account linked:**
-  - Shows the linked username + role.
-  - **Sign out** button (keeps local data intact).
+Phase 1 and Phase 2 in the first implementation pass (engine + menubar/ribbon migration). Phases 3-5 land in follow-up passes so we can verify each accounting screen behaves identically before and after migration.
 
-## Local → account migration
-
-New helper `src/lib/link-local-to-account.ts`:
-
-- Called from `/lock` after successful login/signup when `linkLocal=1` is present.
-- Reads all `offlineDb.companies` + `cache_companies` rows whose `account_id === "local-user"` or is the local device id, and:
-  - Updates `account_id` to the newly-authenticated `user_id` (IndexedDB only — local-only mode remains on).
-  - Enqueues a one-shot outbox item per company + its cache rows so that if the user later toggles cloud sync ON, the data will upload. When local-only mode stays ON (default), the outbox stays paused and nothing leaves the device.
-- Sets `ym_local_profile_ready` to `"linked"`.
-- Zero data loss — all local rows are preserved; only the owning-account pointer changes.
-
-## Compatibility notes
-
-- Authentication code paths (`/lock`, `staff-session`, `creds-cache`) are untouched — they still work for users who choose Sign In or Create Account.
-- Licensing (`src/lib/license/*`) reads machine id, not user id → unaffected.
-- Future sync: local-only mode remains the master switch. Nothing in this change turns cloud sync on automatically. The account, when linked, is purely an identity + optional backup destination.
-- No changes to Supabase schema, RLS, or migrations.
-
-## Files touched
-
-Create:
-- `src/routes/welcome.tsx`
-- `src/lib/local-device-profile.ts`
-- `src/lib/link-local-to-account.ts`
-
-Edit:
-- `src/routes/__root.tsx` — LockGate branching
-- `src/routes/index.tsx` — redirect to `/welcome` when empty
-- `src/routes/lock.tsx` — read `linkLocal` search param, call `linkLocalToAccount()` after auth success
-- `src/routes/app.settings.tsx` — add Connect Account card
-- `src/components/BackupNudgeBanner.tsx` — extend trigger to also fire for local-profile-only users
-
-## Out of scope
-
-- Actual cloud sync toggle UI (deferred; local-only stays on).
-- Per-company migration checklist (auto-attach chosen previously).
-- Aggressive backup nudge modal (banner-only chosen previously).
-
-Confirm and I will implement.
+Reply "go" to start Phase 1+2, or tell me which phase to prioritize.
