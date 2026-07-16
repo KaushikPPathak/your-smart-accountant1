@@ -113,17 +113,24 @@ export function QuickActionsRibbon() {
           const active = location.pathname === a.to;
           const translated = t(a.i18nKey);
           const label = translated === a.i18nKey ? a.label : translated;
+          const itemId = `${ribbonId}-item-${a.to}`;
           return (
             <Link
               key={a.to}
               to={a.to}
+              id={itemId}
               data-active={active}
               className="busy-menu-item"
+              role="button"
+              aria-label={`${label} (${a.hotkey})`}
+              aria-current={active ? "page" : undefined}
+              tabIndex={focusedId === itemId ? 0 : -1}
+              onFocus={() => setFocusedId(itemId)}
               style={{ ["--dot" as string]: a.dot }}
               title={`${label} (${a.hotkey})`}
             >
-              <span className="busy-menu-dot" />
-              <a.icon className="h-3.5 w-3.5" />
+              <span className="busy-menu-dot" aria-hidden="true" />
+              <a.icon className="h-3.5 w-3.5" aria-hidden="true" />
               <span>{label}</span>
               {showHotkeys && (
                 <kbd className="ml-1 rounded border border-[color:var(--amber-ink)]/25 bg-[color:var(--amber-ink)]/10 px-1 text-[9px] font-mono text-[color:var(--amber-ink)]/80">
@@ -138,8 +145,12 @@ export function QuickActionsRibbon() {
           <button
             type="button"
             onClick={() => setShowHotkeys((v) => !v)}
+            id={`${ribbonId}-hotkeys`}
             className="ml-auto rounded px-2 py-1 text-[10px] text-[color:var(--amber-ink)]/70 hover:bg-[color:var(--amber-dark)]/20 hover:text-[color:var(--amber-ink)]"
             title="Toggle keyboard shortcut hints"
+            aria-pressed={showHotkeys}
+            tabIndex={focusedId === `${ribbonId}-hotkeys` ? 0 : -1}
+            onFocus={() => setFocusedId(`${ribbonId}-hotkeys`)}
           >
             {showHotkeys ? "Hide keys" : "Show keys"}
           </button>
