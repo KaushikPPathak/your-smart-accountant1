@@ -9,6 +9,7 @@ import { tReportText } from "@/lib/report-i18n-rules";
 import { FitToWidth } from "./FitToWidth";
 import { Button } from "@/components/ui/button";
 import { Maximize2, Minimize2 } from "lucide-react";
+import { useShortcut } from "@/lib/keyboard";
 
 /**
  * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
