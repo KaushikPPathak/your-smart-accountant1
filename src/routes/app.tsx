@@ -19,6 +19,7 @@ import { isDesktopRuntime } from "@/lib/native-bridge";
 import { AccountGroupsProvider } from "@/lib/account-groups-runtime";
 import { KeyboardCheatSheet } from "@/components/vouchers/KeyboardCheatSheet";
 import { MastersProvider } from "@/lib/masters-cache";
+import { BalancesProvider } from "@/lib/balances-cache";
 import { PendingSavesTray } from "@/components/fast-form/PendingSavesTray";
 import { FocusHintsProvider } from "@/components/fast-form/FocusHints";
 import { StatusBar } from "@/components/fast-form/StatusBar";
@@ -310,14 +311,15 @@ function AppLayout() {
         <BackupNudgeBanner />
         <AccountGroupsProvider>
           <MastersProvider>
-            <FocusHintsProvider>
-              <main className="min-w-0 flex-1 overflow-x-hidden p-4 md:p-6">
-                <Outlet />
-              </main>
-              <StatusBar onOpenHelp={() => setHelpOpen(true)} onOpenTray={() => setTrayOpen(true)} />
-              <PendingSavesTray forceOpen={trayOpen} onClose={() => setTrayOpen(false)} />
-            </FocusHintsProvider>
-
+            <BalancesProvider>
+              <FocusHintsProvider>
+                <main className="min-w-0 flex-1 overflow-x-hidden p-4 md:p-6">
+                  <Outlet />
+                </main>
+                <StatusBar onOpenHelp={() => setHelpOpen(true)} onOpenTray={() => setTrayOpen(true)} />
+                <PendingSavesTray forceOpen={trayOpen} onClose={() => setTrayOpen(false)} />
+              </FocusHintsProvider>
+            </BalancesProvider>
           </MastersProvider>
         </AccountGroupsProvider>
         <KeyboardCheatSheet open={helpOpen} onOpenChange={setHelpOpen} />

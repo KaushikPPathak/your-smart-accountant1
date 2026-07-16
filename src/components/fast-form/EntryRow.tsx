@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Combo } from "@/components/vouchers/Combo";
-import { formatINR } from "@/lib/money";
+import { LedgerBalanceChip } from "@/components/vouchers/LedgerBalanceChip";
 import { useFocusHints } from "./FocusHints";
 
 export interface EntryRowData {
@@ -94,11 +94,9 @@ function EntryRowImpl(props: Props) {
             </Button>
           )}
         </div>
-        {row.ledger_id && balance && (
-          <div className="mt-1 inline-flex items-center gap-1 rounded border bg-muted/40 px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
-            <span>Bal:</span>
-            <span>{formatINR(Math.abs(balance.paise))}</span>
-            <span>{balance.paise >= 0 ? "Dr" : "Cr"}</span>
+        {row.ledger_id && (
+          <div className="mt-1">
+            <LedgerBalanceChip ledgerId={row.ledger_id} prefix="Bal" compact />
           </div>
         )}
       </TableCell>

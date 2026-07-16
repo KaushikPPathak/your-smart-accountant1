@@ -58,6 +58,8 @@ import { HSN_MASTER_DATASET } from "@/lib/hsn/seedHsnData";
 import { useTaxTemplates } from "@/hooks/useVoucherMasters";
 import { useCostCentres } from "@/hooks/useCostCentres";
 import { resolveTaxTemplate } from "@/lib/voucher-resolver";
+import { LedgerBalanceChip } from "./LedgerBalanceChip";
+import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-store";
 import { AutoTaxChip } from "./AutoTaxChip";
 import { SundryStrip } from "./SundryStrip";
 import { netSundryPaise } from "@/lib/sundries";
@@ -145,6 +147,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const defaultDate = useDefaultFyDate();
   const [date, setDate] = useState(defaultDate);
   const [partyId, setPartyId] = useState("");
+  // Publish party context so the app status-bar balance strip mirrors it.
+  useEffect(() => {
+    setVoucherContext({ partyLedgerId: partyId || null, cashBankLedgerId: null, label: voucherType });
+    return () => clearVoucherContext();
+  }, [partyId, voucherType]);
   const [refNo, setRefNo] = useState("");
   const [originalVoucherId, setOriginalVoucherId] = useState<string | null>(null);
   const [originalInvoices, setOriginalInvoices] = useState<
@@ -929,6 +936,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onCreate={() => setLedgerDlg({ open: true, editId: null })}
                   createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
                 />
+                {partyId && (
+                  <div className="pt-1">
+                    <LedgerBalanceChip ledgerId={partyId} prefix="Bal" />
+                  </div>
+                )}
                 {partyLedger && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground">
                     {(() => {

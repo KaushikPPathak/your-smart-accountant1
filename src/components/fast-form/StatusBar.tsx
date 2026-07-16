@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, Check } from "lucide-react";
 import { useSaveStatus, useFailureCount } from "@/lib/save-status";
 import { useCurrentHints } from "./FocusHints";
+import { BalanceStrip } from "./BalanceStrip";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -62,13 +63,16 @@ export function StatusBar({ onOpenHelp, onOpenTray }: Props) {
           })
         )}
       </div>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onOpenHelp(); }}
-        className="shrink-0 rounded border bg-background px-2 py-0.5 hover:bg-accent text-foreground"
-      >
-        <kbd className="font-mono">F1</kbd> Keyboard help
-      </button>
+      <div className="flex items-center gap-2">
+        <BalanceStrip />
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenHelp(); }}
+          className="shrink-0 rounded border bg-background px-2 py-0.5 hover:bg-accent text-foreground"
+        >
+          <kbd className="font-mono">F1</kbd> Keyboard help
+        </button>
+      </div>
     </div>
   );
 }

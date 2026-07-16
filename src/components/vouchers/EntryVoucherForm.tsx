@@ -41,6 +41,8 @@ import { DraftRecoveredBanner } from "./DraftRecoveredBanner";
 import { useTaxTemplates } from "@/hooks/useVoucherMasters";
 import type { Resolution, TaxTemplate } from "@/lib/voucher-resolver";
 import { AutoTaxChip } from "./AutoTaxChip";
+import { LedgerBalanceChip } from "./LedgerBalanceChip";
+import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-store";
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -240,6 +242,18 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   useEffect(() => {
     setLedgerBalances({});
   }, [date]);
+
+  // Publish current voucher context so the status-bar balance strip stays in
+  // sync while the user works on this form.
+  const partyIdForStrip = isSimple ? (simpleLines[0]?.ledger_id ?? null) : null;
+  useEffect(() => {
+    setVoucherContext({
+      partyLedgerId: partyIdForStrip || null,
+      cashBankLedgerId: cashBankId || null,
+      label: voucherType,
+    });
+    return () => clearVoucherContext();
+  }, [partyIdForStrip, cashBankId, voucherType]);
 
   const deferredLines = useDeferredValue(lines);
   const deferredSimple = useDeferredValue(simpleLines);
@@ -660,10 +674,8 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                 onCreate={() => setLedgerDlg({ open: true, editId: null, lineIdx: null })}
                 createLabel="New Cash/Bank ledger"
               />
-              {cashBankId && ledgerBalances[cashBankId] && (
-                <div className="text-[11px] font-mono text-muted-foreground">
-                  Bal: {formatINR(Math.abs(ledgerBalances[cashBankId].paise))} {ledgerBalances[cashBankId].paise >= 0 ? "Dr" : "Cr"}
-                </div>
+              {cashBankId && (
+                <LedgerBalanceChip ledgerId={cashBankId} prefix="Bal" compact />
               )}
             </div>
           )}
