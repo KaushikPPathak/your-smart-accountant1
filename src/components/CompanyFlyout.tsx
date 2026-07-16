@@ -4,6 +4,7 @@ import { Building2, Plus, ChevronLeft, ChevronRight, Check, Settings, Pencil } f
 
 import { useCompany, type CompanyMembership } from "@/lib/company-context";
 import { useI18n } from "@/lib/i18n";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 
 // Compute the FY label (e.g. "2025-26") from a YYYY-MM-DD start string + offset (years).
 function fyLabel(fyStart: string, offset: number) {
