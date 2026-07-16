@@ -4,6 +4,7 @@ import { sortEntriesByVoucherAsc } from "@/lib/voucher-sort";
 import { narrationOf } from "@/lib/voucher-text";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useShortcut } from "@/lib/keyboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
