@@ -499,43 +499,63 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
 
   const save = useCallback(() => { void performSave(); }, [performSave]);
 
+  // Push "voucher" scope while this form is mounted.
+  const kb = useOptionalKeyboard();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        if (!saving) save();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
-        e.preventDefault();
-        const last = recallNarration(voucherType);
-        if (last) { setNarration(last); toast.message("Narration recalled"); }
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
-        e.preventDefault();
-        if (isSimple) { if (simpleLines.length > 1) removeSimple(focusedLine); }
-        else if (lines.length > 2) remove(focusedLine);
-      } else if (e.key === "F3") {
-        e.preventDefault();
-        const lid = lines[focusedLine]?.ledger_id ?? null;
-        if (e.shiftKey) {
-          if (lid) setLedgerDlg({ open: true, editId: lid, lineIdx: focusedLine });
-          else toast.info("Pick a ledger on a line first to edit");
-        } else {
-          setLedgerDlg({ open: true, editId: null, lineIdx: focusedLine });
-        }
-      } else if (e.key === "Escape") {
-        // Guarded cancel: only prompt when there's real content to lose.
-        const dirty = !isDraftEmpty(draftSnap);
-        if (dirty) {
-          e.preventDefault();
-          const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
-          if (!ok) return;
-          clearVoucherDraft(draftKey);
-        }
-        navigate({ to: "/app/vouchers" });
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [save, navigate, saving, lines, focusedLine, voucherType, isSimple, simpleLines, remove, removeSimple, draftKey, draftSnap, isDraftEmpty]);
+    if (!kb) return;
+    return kb.pushScope("voucher");
+  }, [kb]);
+
+  // Save (Ctrl+S / Cmd+S).
+  const saveHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    if (!saving) save();
+  }, [save, saving]);
+  useShortcut("Ctrl+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+  useShortcut("Meta+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+
+  // Ctrl+R — recall last narration for this voucher type.
+  const recallHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    const last = recallNarration(voucherType);
+    if (last) { setNarration(last); toast.message("Narration recalled"); }
+  }, [voucherType]);
+  useShortcut("Ctrl+r", recallHandler, { scope: "voucher", allowInField: true, description: "Recall last narration" });
+  useShortcut("Meta+r", recallHandler, { scope: "voucher", allowInField: true, description: "Recall last narration" });
+
+  // Ctrl+D — delete focused line.
+  const deleteLineHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    if (isSimple) { if (simpleLines.length > 1) removeSimple(focusedLine); }
+    else if (lines.length > 2) remove(focusedLine);
+  }, [isSimple, simpleLines.length, lines.length, focusedLine, remove, removeSimple]);
+  useShortcut("Ctrl+d", deleteLineHandler, { scope: "voucher", allowInField: true, description: "Delete focused line" });
+  useShortcut("Meta+d", deleteLineHandler, { scope: "voucher", allowInField: true, description: "Delete focused line" });
+
+  // F3 / Shift+F3 — new ledger / edit ledger on focused line.
+  useShortcut("F3", (e) => {
+    e.preventDefault();
+    setLedgerDlg({ open: true, editId: null, lineIdx: focusedLine });
+  }, { scope: "voucher", allowInField: true, description: "New ledger" });
+  useShortcut("Shift+F3", (e) => {
+    e.preventDefault();
+    const lid = lines[focusedLine]?.ledger_id ?? null;
+    if (lid) setLedgerDlg({ open: true, editId: lid, lineIdx: focusedLine });
+    else toast.info("Pick a ledger on a line first to edit");
+  }, { scope: "voucher", allowInField: true, description: "Edit ledger on focused line" });
+
+  // Escape — guarded cancel.
+  useShortcut("Escape", (e) => {
+    const dirty = !isDraftEmpty(draftSnap);
+    if (dirty) {
+      e.preventDefault();
+      const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
+      if (!ok) return;
+      clearVoucherDraft(draftKey);
+    }
+    navigate({ to: "/app/vouchers" });
+  }, { scope: "voucher", allowInField: true, description: "Cancel and return" });
+
 
   const onLedgerSaved = (lg: QuickLedger) => {
     upsertCachedLedger({
