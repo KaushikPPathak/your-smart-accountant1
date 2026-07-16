@@ -85,7 +85,7 @@ export function CommandBrainProvider({ children }: { children: React.ReactNode }
   // Ctrl+Space toggles the palette (global). Esc closes it while open (allowed
   // inside inputs since the palette's own input has focus).
   useShortcut(
-    " ",
+    "Ctrl+Space",
     (e) => {
       e.preventDefault();
       setOpen((o) => !o);
