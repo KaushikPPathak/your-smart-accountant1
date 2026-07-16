@@ -292,6 +292,7 @@ function AppLayout() {
 
   return (
     <KeyboardProvider>
+      <GlobalShortcuts onOpenHelp={() => setHelpOpen(true)} />
       <div className="flex min-h-screen w-full flex-col">
         <TopMenuBar
           rightExtras={backupExtras}
@@ -325,5 +326,68 @@ function AppLayout() {
     </KeyboardProvider>
   );
 }
+
+// -----------------------------------------------------------------------------
+// Global shortcuts (mounted inside <KeyboardProvider>): F1 help, Alt+L ledger,
+// and Alt+<letter> voucher creation. Kept as a child so useShortcut can access
+// the provider context.
+// -----------------------------------------------------------------------------
+const VOUCHER_MAP: Record<string, string> = {
+  s: "/app/vouchers/new/sales",
+  p: "/app/vouchers/new/purchase",
+  r: "/app/vouchers/new/receipt",
+  y: "/app/vouchers/new/payment",
+  c: "/app/vouchers/new/credit_note",
+  d: "/app/vouchers/new/debit_note",
+  j: "/app/vouchers/new/journal",
+};
+
+function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useShortcut({
+    id: "app.help",
+    combo: "F1",
+    scope: "global",
+    allowInField: true,
+    description: "Show keyboard shortcuts",
+    handler: (e) => {
+      e.preventDefault();
+      onOpenHelp();
+    },
+  });
+
+  useShortcut({
+    id: "app.ledger",
+    combo: "Alt+l",
+    scope: "global",
+    description: "Jump to Ledger report",
+    handler: (e) => {
+      e.preventDefault();
+      try {
+        sessionStorage.setItem("ledgerReturnTo", location.pathname);
+      } catch { /* ignore */ }
+      navigate({ to: "/app/reports/ledger" });
+    },
+  });
+
+  for (const [key, dest] of Object.entries(VOUCHER_MAP)) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useShortcut({
+      id: `app.voucher.${key}`,
+      combo: `Alt+${key}`,
+      scope: "global",
+      description: `New voucher (${dest.split("/").pop()})`,
+      handler: (e) => {
+        e.preventDefault();
+        navigate({ to: dest });
+      },
+    });
+  }
+
+  return null;
+}
+
 
 
