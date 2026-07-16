@@ -69,13 +69,13 @@ interface TopMenu {
 /** Render a menu label with the access-key letter underlined. */
 function labelWithAccessKey(label: string, key: string) {
   const idx = label.toLowerCase().indexOf(key.toLowerCase());
-  if (idx < 0) return <>{label}</>;
+  if (idx < 0) return <span>{label}</span>;
   return (
-    <>
+    <span>
       {label.slice(0, idx)}
       <u className="underline decoration-1 underline-offset-2">{label[idx]}</u>
       {label.slice(idx + 1)}
-    </>
+    </span>
   );
 }
 
