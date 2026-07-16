@@ -855,7 +855,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             </Button>
             <Button
               data-assistant-save
+              data-primary-action="true"
               onClick={save}
+
               disabled={saving || !canWrite || locked || taxTemplateBlocksSave}
               title={taxTemplateBlocksSave ? "Pick a tax template to enable Save" : undefined}
             >
