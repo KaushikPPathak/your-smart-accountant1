@@ -346,48 +346,42 @@ function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  useShortcut({
-    id: "app.help",
-    combo: "F1",
-    scope: "global",
-    allowInField: true,
-    description: "Show keyboard shortcuts",
-    handler: (e) => {
+  useShortcut(
+    "F1",
+    (e) => {
       e.preventDefault();
       onOpenHelp();
     },
-  });
+    { scope: "global", allowInField: true, description: "Show keyboard shortcuts" },
+  );
 
-  useShortcut({
-    id: "app.ledger",
-    combo: "Alt+l",
-    scope: "global",
-    description: "Jump to Ledger report",
-    handler: (e) => {
+  useShortcut(
+    "Alt+l",
+    (e) => {
       e.preventDefault();
       try {
         sessionStorage.setItem("ledgerReturnTo", location.pathname);
       } catch { /* ignore */ }
       navigate({ to: "/app/reports/ledger" });
     },
-  });
+    { scope: "global", description: "Jump to Ledger report" },
+  );
 
   for (const [key, dest] of Object.entries(VOUCHER_MAP)) {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    useShortcut({
-      id: `app.voucher.${key}`,
-      combo: `Alt+${key}`,
-      scope: "global",
-      description: `New voucher (${dest.split("/").pop()})`,
-      handler: (e) => {
+    useShortcut(
+      `Alt+${key}`,
+      (e) => {
         e.preventDefault();
         navigate({ to: dest });
       },
-    });
+      { scope: "global", description: `New voucher (${dest.split("/").pop()})` },
+    );
   }
 
   return null;
 }
+
 
 
 
