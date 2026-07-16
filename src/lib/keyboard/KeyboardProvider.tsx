@@ -17,6 +17,8 @@ interface KeyboardCtx {
   /** Snapshot current focus; call the returned fn later to restore it after
    *  React commits (queueMicrotask). Use around dialogs / route transitions. */
   saveFocus: () => () => void;
+  /** Snapshot of currently-registered bindings, for cheat-sheet UIs. */
+  listBindings: () => ShortcutBinding[];
 }
 
 const Ctx = createContext<KeyboardCtx | null>(null);
