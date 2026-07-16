@@ -405,35 +405,28 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
       {/* Menu items */}
       <nav
+        ref={menusNavRef}
         className="busy-menus"
         onKeyDown={(e) => {
           const key = e.key;
           if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Home" && key !== "End") return;
-          const root = e.currentTarget;
-          const triggers = Array.from(root.querySelectorAll<HTMLButtonElement>('button.busy-menu'));
-          if (triggers.length === 0) return;
-          const active = document.activeElement as HTMLElement | null;
-          let idx = active ? triggers.indexOf(active as HTMLButtonElement) : -1;
-          if (idx === -1) return;
-          e.preventDefault();
-          let nextIdx = idx;
-          if (key === "ArrowRight") nextIdx = (idx + 1) % triggers.length;
-          else if (key === "ArrowLeft") nextIdx = (idx - 1 + triggers.length) % triggers.length;
-          else if (key === "Home") nextIdx = 0;
-          else if (key === "End") nextIdx = triggers.length - 1;
-          const wasOpen = active?.getAttribute("aria-expanded") === "true";
-          const nextBtn = triggers[nextIdx];
-          nextBtn.focus();
+          const prevActive = document.activeElement as HTMLElement | null;
+          const wasOpen = prevActive?.getAttribute("aria-expanded") === "true";
+          menusScope.onKeyDown(e);
+          if (!e.defaultPrevented) return;
+          const nextBtn = document.activeElement as HTMLButtonElement | null;
+          if (!nextBtn) return;
           const nextKey = nextBtn.dataset.menuKey;
           if (nextKey) setFocusedMenuKey(nextKey);
-          if (wasOpen) {
+          if (wasOpen && prevActive && prevActive !== nextBtn) {
             // Close current then open next to mimic native menubar behavior
-            active?.click();
+            prevActive.click();
             setTimeout(() => nextBtn.click(), 0);
           }
         }}
         aria-label="Primary menus"
       >
+
         {visible.map((m) => {
           const active = isMenuActive(m);
           const isAdmin = m.key === "administration";
