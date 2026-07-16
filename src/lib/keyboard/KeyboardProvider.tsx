@@ -83,9 +83,20 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const listBindings = useCallback<KeyboardCtx["listBindings"]>(() => {
+    return Array.from(bindingsRef.current.values()).map((b) => ({
+      id: b.id,
+      combo: b.combo,
+      scope: b.scope,
+      allowInField: b.allowInField,
+      handler: b.handler,
+      description: b.description,
+    }));
+  }, []);
+
   const value = useMemo(
-    () => ({ register, pushScope, saveFocus }),
-    [register, pushScope, saveFocus],
+    () => ({ register, pushScope, saveFocus, listBindings }),
+    [register, pushScope, saveFocus, listBindings],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
