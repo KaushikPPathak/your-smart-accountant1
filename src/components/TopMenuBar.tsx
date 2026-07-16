@@ -288,9 +288,12 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
   // Alt+letter — focus & open the matching top-level menu (File=F plus each menu's accessKey).
   const menubarRef = useRef<HTMLDivElement | null>(null);
+  const menusNavRef = useRef<HTMLElement | null>(null);
+  const menusScope = useFocusScope(menusNavRef, { orientation: "horizontal", loop: true, itemSelector: 'button.busy-menu' });
   const menubarId = useId();
   // Roving tabindex + aria-activedescendant tracking for the menubar.
   const [focusedMenuKey, setFocusedMenuKey] = useState<string>("file");
+
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
