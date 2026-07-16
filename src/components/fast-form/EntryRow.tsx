@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Combo } from "@/components/vouchers/Combo";
-import { formatINR } from "@/lib/money";
+import { LedgerBalanceChip } from "@/components/vouchers/LedgerBalanceChip";
 import { useFocusHints } from "./FocusHints";
 
 export interface EntryRowData {
