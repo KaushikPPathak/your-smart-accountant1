@@ -590,6 +590,14 @@ export function ManufacturingVoucherForm() {
     void performSave();
   }, [performSave]);
 
+  // Push the "voucher" scope while this form is mounted so scoped shortcuts
+  // resolve. Global shortcuts still work as usual.
+  const kb = useOptionalKeyboard();
+  useEffect(() => {
+    if (!kb) return;
+    return kb.pushScope("voucher");
+  }, [kb]);
+
   // Save shortcuts (Ctrl+S / Cmd+S / Alt+S). Fire even while typing.
   const saveHandler = useCallback((e: KeyboardEvent) => {
     e.preventDefault();
