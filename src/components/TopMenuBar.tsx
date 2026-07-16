@@ -295,28 +295,39 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   const [focusedMenuKey, setFocusedMenuKey] = useState<string>("file");
 
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+
+  // Alt+letter → focus & open the matching top-level menu. Registered through
+  // the centralized keyboard engine so it appears in the cheat sheet and
+  // respects the global typing-target guard (allowInField defaults to false).
+  const kb = useOptionalKeyboard();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      const k = e.key.toLowerCase();
-      if (k.length !== 1 || !/[a-z]/.test(k)) return;
-      const target = e.target as HTMLElement | null;
-      // Don't hijack Alt+key while typing in a field.
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
-      const root = menubarRef.current;
-      if (!root) return;
-      const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>("button.busy-menu"));
-      const btn = buttons.find((b) => (b.dataset.accessKey || "").toLowerCase() === k);
-      if (!btn) return;
-      e.preventDefault();
-      btn.focus();
-      const key = btn.dataset.menuKey;
-      if (key) setFocusedMenuKey(key);
-      if (btn.getAttribute("aria-expanded") !== "true") btn.click();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+    if (!kb) return;
+    const accessKeys: Array<{ key: string; menuKey: string; label: string }> = [
+      { key: "f", menuKey: "file", label: "Open File menu" },
+      ...visible.map((m) => ({ key: m.accessKey, menuKey: m.key, label: `Open ${m.label} menu` })),
+    ];
+    const unsubs = accessKeys.map(({ key, menuKey, label }) =>
+      kb.register({
+        id: `topmenubar-alt-${key}`,
+        combo: `Alt+${key}`,
+        scope: "global",
+        description: label,
+        handler: (e) => {
+          const root = menubarRef.current;
+          if (!root) return;
+          const btn = root.querySelector<HTMLButtonElement>(
+            `button.busy-menu[data-access-key="${key}"]`,
+          );
+          if (!btn) return;
+          e.preventDefault();
+          btn.focus();
+          setFocusedMenuKey(menuKey);
+          if (btn.getAttribute("aria-expanded") !== "true") btn.click();
+        },
+      }),
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [kb, visible]);
 
   // ArrowDown on a closed top-menu trigger jumps focus to the quick-entry ribbon.
   // Runs in capture so we intercept before Radix opens the dropdown.
