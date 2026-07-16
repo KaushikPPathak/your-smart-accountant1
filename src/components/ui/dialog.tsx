@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useAutoFocusRestore } from "@/lib/keyboard/useAutoFocusRestore";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -33,34 +34,13 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
-  // Auto focus restoration: remember the element that had focus when the
-  // dialog opened, and return focus there when it closes — regardless of
-  // whether the dialog was opened via a trigger or programmatically.
-  const savedFocusRef = React.useRef<HTMLElement | null>(null);
+  const focusHandlers = useAutoFocusRestore(onOpenAutoFocus, onCloseAutoFocus);
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         ref={ref}
-        onOpenAutoFocus={(e) => {
-          const el = document.activeElement as HTMLElement | null;
-          // Ignore body / null / elements inside another (previously opened) dialog.
-          if (el && el !== document.body) savedFocusRef.current = el;
-          onOpenAutoFocus?.(e);
-        }}
-        onCloseAutoFocus={(e) => {
-          onCloseAutoFocus?.(e);
-          if (e.defaultPrevented) return;
-          const el = savedFocusRef.current;
-          if (el && document.contains(el)) {
-            e.preventDefault();
-            // Wait one microtask so React commits any state updates that
-            // followed the close (nav, re-renders) before we move focus.
-            queueMicrotask(() => {
-              try { el.focus({ preventScroll: true }); } catch { /* ignore */ }
-            });
-          }
-        }}
+        {...focusHandlers}
         className={cn(
           "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
           className,
