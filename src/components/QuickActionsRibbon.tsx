@@ -1,5 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useFocusScope } from "@/lib/keyboard";
+
 import {
   TrendingUp,
   TrendingDown,
