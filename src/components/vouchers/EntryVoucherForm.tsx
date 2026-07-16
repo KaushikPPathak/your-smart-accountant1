@@ -662,10 +662,8 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                 onCreate={() => setLedgerDlg({ open: true, editId: null, lineIdx: null })}
                 createLabel="New Cash/Bank ledger"
               />
-              {cashBankId && ledgerBalances[cashBankId] && (
-                <div className="text-[11px] font-mono text-muted-foreground">
-                  Bal: {formatINR(Math.abs(ledgerBalances[cashBankId].paise))} {ledgerBalances[cashBankId].paise >= 0 ? "Dr" : "Cr"}
-                </div>
+              {cashBankId && (
+                <LedgerBalanceChip ledgerId={cashBankId} prefix="Bal" compact />
               )}
             </div>
           )}
