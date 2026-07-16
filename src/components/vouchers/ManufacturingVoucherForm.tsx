@@ -22,6 +22,7 @@ import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise } from "@/lib/money";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { useEnterAsTab } from "./useEnterAsTab";
+import { useShortcut } from "@/lib/keyboard";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
 import { BomTemplateDialog } from "./BomTemplateDialog";
