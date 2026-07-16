@@ -4,6 +4,7 @@ import { Building2, Plus, ChevronLeft, ChevronRight, Check, Settings, Pencil } f
 
 import { useCompany, type CompanyMembership } from "@/lib/company-context";
 import { useI18n } from "@/lib/i18n";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 
 // Compute the FY label (e.g. "2025-26") from a YYYY-MM-DD start string + offset (years).
 function fyLabel(fyStart: string, offset: number) {
@@ -109,8 +110,12 @@ export function CompanyFlyout() {
     setView("menu");
   };
 
+  // Push a "dialog" scope while the flyout is open so scoped shortcuts (Esc)
+  // fire and other scopes are correctly suppressed.
+  const kb = useOptionalKeyboard();
   useEffect(() => {
     if (!open) return;
+    const pop = kb?.pushScope("dialog");
 
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
@@ -123,20 +128,24 @@ export function CompanyFlyout() {
       close();
     };
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        close();
-        triggerRef.current?.focus();
-      }
-    };
-
     document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
+      pop?.();
     };
-  }, [open]);
+  }, [open, kb]);
+
+  // Escape closes the flyout and returns focus to the trigger.
+  useShortcut(
+    "Escape",
+    (e) => {
+      e.preventDefault();
+      close();
+      triggerRef.current?.focus();
+    },
+    { scope: "dialog", allowInField: true, enabled: open, description: "Close company flyout" },
+  );
+
 
   const onNew = () => {
     close();
