@@ -53,6 +53,16 @@ import { useCurrency, CURRENCIES } from "@/lib/currency";
 import { useDateFormat, DATE_FORMATS, type DateFormatCode } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface NavItem { title: string; url: string; icon: LucideIcon; i18nKey?: string }
 interface NavGroup { label: string; items: NavItem[] }
