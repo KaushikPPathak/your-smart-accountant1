@@ -6,6 +6,8 @@ import { format } from "date-fns";
 import * as React from "react";
 import { useI18n } from "@/lib/i18n";
 import { tReportText } from "@/lib/report-i18n-rules";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
+
 
 interface Props {
   from: string;
