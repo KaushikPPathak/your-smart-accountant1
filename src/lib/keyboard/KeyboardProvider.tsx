@@ -17,6 +17,8 @@ interface KeyboardCtx {
   /** Snapshot current focus; call the returned fn later to restore it after
    *  React commits (queueMicrotask). Use around dialogs / route transitions. */
   saveFocus: () => () => void;
+  /** Snapshot of currently-registered bindings, for cheat-sheet UIs. */
+  listBindings: () => ShortcutBinding[];
 }
 
 const Ctx = createContext<KeyboardCtx | null>(null);
@@ -81,9 +83,20 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const listBindings = useCallback<KeyboardCtx["listBindings"]>(() => {
+    return Array.from(bindingsRef.current.values()).map((b) => ({
+      id: b.id,
+      combo: b.combo,
+      scope: b.scope,
+      allowInField: b.allowInField,
+      handler: b.handler,
+      description: b.description,
+    }));
+  }, []);
+
   const value = useMemo(
-    () => ({ register, pushScope, saveFocus }),
-    [register, pushScope, saveFocus],
+    () => ({ register, pushScope, saveFocus, listBindings }),
+    [register, pushScope, saveFocus, listBindings],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
