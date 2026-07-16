@@ -171,13 +171,18 @@ export function BalancesProvider({ children }: { children: ReactNode }) {
     void reload();
   }, [reload]);
 
-  // Refresh whenever a voucher is saved (save-status broadcasts via window
-  // custom event — see refreshBalances() below, called from voucher-executors
-  // downstream. For now poll on visibility to keep it simple.)
+  // Refresh whenever any save completes (save-status broadcasts through
+  // `markSaved`). This covers voucher CRUD, master edits, etc.
+  const { lastSavedAt } = useSaveStatus();
   useEffect(() => {
-    const onSaved = () => {
-      void reload();
-    };
+    if (!lastSavedAt || !activeCompanyId) return;
+    void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastSavedAt]);
+
+  // External nudge (e.g. inline optimistic updates outside the save queue).
+  useEffect(() => {
+    const onSaved = () => { void reload(); };
     window.addEventListener("ym:voucher-saved", onSaved);
     return () => window.removeEventListener("ym:voucher-saved", onSaved);
   }, [reload]);
