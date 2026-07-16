@@ -147,6 +147,11 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const defaultDate = useDefaultFyDate();
   const [date, setDate] = useState(defaultDate);
   const [partyId, setPartyId] = useState("");
+  // Publish party context so the app status-bar balance strip mirrors it.
+  useEffect(() => {
+    setVoucherContext({ partyLedgerId: partyId || null, cashBankLedgerId: null, label: voucherType });
+    return () => clearVoucherContext();
+  }, [partyId, voucherType]);
   const [refNo, setRefNo] = useState("");
   const [originalVoucherId, setOriginalVoucherId] = useState<string | null>(null);
   const [originalInvoices, setOriginalInvoices] = useState<
