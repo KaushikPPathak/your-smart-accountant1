@@ -58,6 +58,8 @@ import { HSN_MASTER_DATASET } from "@/lib/hsn/seedHsnData";
 import { useTaxTemplates } from "@/hooks/useVoucherMasters";
 import { useCostCentres } from "@/hooks/useCostCentres";
 import { resolveTaxTemplate } from "@/lib/voucher-resolver";
+import { LedgerBalanceChip } from "./LedgerBalanceChip";
+import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-store";
 import { AutoTaxChip } from "./AutoTaxChip";
 import { SundryStrip } from "./SundryStrip";
 import { netSundryPaise } from "@/lib/sundries";
