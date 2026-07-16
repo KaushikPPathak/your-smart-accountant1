@@ -34,6 +34,7 @@ import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/g
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { useEnterAsTab } from "./useEnterAsTab";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
@@ -750,48 +751,64 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     void performSave();
   }, [performSave]);
 
-  // Hotkeys: Ctrl+S save (stay & start next), F3 new ledger, Shift+F3 edit party, F4 new item, Shift+F4 edit item on focused line
+  // Push "voucher" scope while this form is mounted.
+  const kb = useOptionalKeyboard();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (
-        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") ||
-        (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "s")
-      ) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!saving) save();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") {
-        e.preventDefault();
-        const last = recallNarration(voucherType);
-        if (last) {
-          setNarration(last);
-          toast.message("Narration recalled");
-        }
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
-        e.preventDefault();
-        if (lines.length > 1) removeLine(focusedLine);
-      } else if (e.key === "F3") {
-        e.preventDefault();
-        if (e.shiftKey) {
-          if (partyId) setLedgerDlg({ open: true, editId: partyId });
-          else toast.info("Select a party first to edit");
-        } else {
-          setLedgerDlg({ open: true, editId: null });
-        }
-      } else if (e.key === "F4") {
-        e.preventDefault();
-        const itemId = lines[focusedLine]?.item_id ?? null;
-        if (e.shiftKey) {
-          if (itemId) setItemDlg({ open: true, editId: itemId, lineIdx: focusedLine });
-          else toast.info("Pick an item on a line first to edit");
-        } else {
-          setItemDlg({ open: true, editId: null, lineIdx: focusedLine });
-        }
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [save, navigate, saving, partyId, lines, focusedLine, voucherType, removeLine]);
+    if (!kb) return;
+    return kb.pushScope("voucher");
+  }, [kb]);
+
+  // Save (Ctrl+S / Cmd+S / Alt+S).
+  const saveHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!saving) save();
+  }, [save, saving]);
+  useShortcut("Ctrl+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+  useShortcut("Meta+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+  useShortcut("Alt+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+
+  // Ctrl+R — recall last narration.
+  const recallHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    const last = recallNarration(voucherType);
+    if (last) { setNarration(last); toast.message("Narration recalled"); }
+  }, [voucherType]);
+  useShortcut("Ctrl+r", recallHandler, { scope: "voucher", allowInField: true, description: "Recall last narration" });
+  useShortcut("Meta+r", recallHandler, { scope: "voucher", allowInField: true, description: "Recall last narration" });
+
+  // Ctrl+D — delete focused line.
+  const deleteHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    if (lines.length > 1) removeLine(focusedLine);
+  }, [lines.length, focusedLine, removeLine]);
+  useShortcut("Ctrl+d", deleteHandler, { scope: "voucher", allowInField: true, description: "Delete focused line" });
+  useShortcut("Meta+d", deleteHandler, { scope: "voucher", allowInField: true, description: "Delete focused line" });
+
+  // F3 / Shift+F3 — new party / edit party.
+  useShortcut("F3", (e) => {
+    e.preventDefault();
+    setLedgerDlg({ open: true, editId: null });
+  }, { scope: "voucher", allowInField: true, description: "New ledger" });
+  useShortcut("Shift+F3", (e) => {
+    e.preventDefault();
+    if (partyId) setLedgerDlg({ open: true, editId: partyId });
+    else toast.info("Select a party first to edit");
+  }, { scope: "voucher", allowInField: true, description: "Edit selected party" });
+
+  // F4 / Shift+F4 — new item / edit item on focused line.
+  useShortcut("F4", (e) => {
+    e.preventDefault();
+    setItemDlg({ open: true, editId: null, lineIdx: focusedLine });
+  }, { scope: "voucher", allowInField: true, description: "New item" });
+  useShortcut("Shift+F4", (e) => {
+    e.preventDefault();
+    const itemId = lines[focusedLine]?.item_id ?? null;
+    if (itemId) setItemDlg({ open: true, editId: itemId, lineIdx: focusedLine });
+    else toast.info("Pick an item on a line first to edit");
+  }, { scope: "voucher", allowInField: true, description: "Edit item on focused line" });
+
+
 
   const onLedgerSaved = (lg: QuickLedger) => {
     upsertCachedLedger({
