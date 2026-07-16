@@ -62,6 +62,14 @@ export function QuickActionsRibbon() {
         className="flex items-center gap-1 overflow-x-auto px-4 py-0.5 leading-none"
         onKeyDown={(e) => {
           const key = e.key;
+          if (key === "ArrowUp") {
+            const topBtn = document.querySelector<HTMLButtonElement>('.busy-topbar button.busy-menu');
+            if (topBtn) {
+              e.preventDefault();
+              topBtn.focus();
+            }
+            return;
+          }
           if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Home" && key !== "End") return;
           const root = e.currentTarget;
           const items = Array.from(root.querySelectorAll<HTMLElement>('a.busy-menu-item, button'));
