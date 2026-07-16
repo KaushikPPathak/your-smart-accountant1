@@ -9,6 +9,7 @@ import { tReportText } from "@/lib/report-i18n-rules";
 import { FitToWidth } from "./FitToWidth";
 import { Button } from "@/components/ui/button";
 import { Maximize2, Minimize2 } from "lucide-react";
+import { useShortcut } from "@/lib/keyboard";
 
 /**
  * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
@@ -160,33 +161,35 @@ export function ReportViewer({
     [onExportPdf, doWord, company, localizedHeading, localizedTitle, orientation],
   );
 
-  // Global Ctrl+P / Cmd+P → open picker. While picker is open, P/D/W pick.
+  // Global Ctrl+P / Cmd+P → open picker. While picker is open, P/D/W/V pick.
+  // Honour explicit opt-out and the GST-route exception list.
+  const [pathname, setPathname] = React.useState(() =>
+    typeof window === "undefined" ? "" : window.location.pathname,
+  );
   React.useEffect(() => {
-    // Honour explicit opt-out and the GST-route exception list. In both
-    // cases we leave Ctrl+P alone so the browser's native dialog runs.
-    if (disablePrintShortcut) return;
-    if (typeof window !== "undefined" && isPrintPickerExcludedPath(window.location.pathname)) return;
-    const onKey = (e: KeyboardEvent) => {
-      // Open picker
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "p") {
-        e.preventDefault();
-        setPickerOpen(true);
-        return;
-      }
-      // Quick keys while open
-      if (!pickerOpen) return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const tgt = e.target as HTMLElement | null;
-      if (tgt && /^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName)) return;
-      const k = e.key.toLowerCase();
-      if (k === "p") { e.preventDefault(); handlePick("system"); }
-      else if (k === "d") { e.preventDefault(); handlePick("pdf"); }
-      else if (k === "w") { e.preventDefault(); handlePick("word"); }
-      else if (k === "v") { e.preventDefault(); handlePick("preview"); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [pickerOpen, handlePick, disablePrintShortcut]);
+    if (typeof window === "undefined") return;
+    const update = () => setPathname(window.location.pathname);
+    window.addEventListener("popstate", update);
+    return () => window.removeEventListener("popstate", update);
+  }, []);
+  const shortcutsEnabled = !disablePrintShortcut && !isPrintPickerExcludedPath(pathname);
+
+  useShortcut("Ctrl+p", (e) => { e.preventDefault(); setPickerOpen(true); },
+    { scope: "global", allowInField: true, enabled: shortcutsEnabled, description: "Print / export report" });
+  useShortcut("Meta+p", (e) => { e.preventDefault(); setPickerOpen(true); },
+    { scope: "global", allowInField: true, enabled: shortcutsEnabled, description: "Print / export report" });
+
+  // Quick-pick keys while the picker is open. Use "dialog" scope so they only
+  // fire when the picker (which pushes dialog scope) is active.
+  useShortcut("p", (e) => { e.preventDefault(); handlePick("system"); },
+    { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "System print" });
+  useShortcut("d", (e) => { e.preventDefault(); handlePick("pdf"); },
+    { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "PDF export" });
+  useShortcut("w", (e) => { e.preventDefault(); handlePick("word"); },
+    { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "Word export" });
+  useShortcut("v", (e) => { e.preventDefault(); handlePick("preview"); },
+    { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "Print preview" });
+
 
   const [autoFit, setAutoFit] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return true;
