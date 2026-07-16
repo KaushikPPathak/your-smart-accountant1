@@ -22,6 +22,7 @@ import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise } from "@/lib/money";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { useEnterAsTab } from "./useEnterAsTab";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
 import { BomTemplateDialog } from "./BomTemplateDialog";
@@ -589,31 +590,40 @@ export function ManufacturingVoucherForm() {
     void performSave();
   }, [performSave]);
 
+  // Push the "voucher" scope while this form is mounted so scoped shortcuts
+  // resolve. Global shortcuts still work as usual.
+  const kb = useOptionalKeyboard();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const isSave =
-        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") ||
-        (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "s");
-      if (isSave) {
+    if (!kb) return;
+    return kb.pushScope("voucher");
+  }, [kb]);
+
+  // Save shortcuts (Ctrl+S / Cmd+S / Alt+S). Fire even while typing.
+  const saveHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!saving) save();
+  }, [save, saving]);
+  useShortcut("Ctrl+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+  useShortcut("Meta+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+  useShortcut("Alt+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+
+  // Escape: confirm-discard when dirty, then leave the form.
+  useShortcut(
+    "Escape",
+    (e) => {
+      const dirty = !isDraftEmpty(draftSnap);
+      if (dirty) {
         e.preventDefault();
-        e.stopPropagation();
-        if (!saving) save();
-        return;
+        const ok = window.confirm("Discard this manufacturing entry? Unsaved changes will be lost.");
+        if (!ok) return;
+        clearVoucherDraft(draftKey);
       }
-      if (e.key === "Escape") {
-        const dirty = !isDraftEmpty(draftSnap);
-        if (dirty) {
-          e.preventDefault();
-          const ok = window.confirm("Discard this manufacturing entry? Unsaved changes will be lost.");
-          if (!ok) return;
-          clearVoucherDraft(draftKey);
-        }
-        navigate({ to: "/app/vouchers" });
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [save, saving, isDraftEmpty, draftSnap, draftKey, navigate]);
+      navigate({ to: "/app/vouchers" });
+    },
+    { scope: "voucher", allowInField: true, description: "Cancel and return" },
+  );
+
 
   const enterTab = useEnterAsTab(() => {
     if (!saving) save();
