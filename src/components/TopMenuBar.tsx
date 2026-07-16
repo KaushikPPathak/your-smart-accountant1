@@ -276,6 +276,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
   // Alt+letter — focus & open the matching top-level menu (File=F plus each menu's accessKey).
   const menubarRef = useRef<HTMLDivElement | null>(null);
+  const menubarId = useId();
+  // Roving tabindex + aria-activedescendant tracking for the menubar.
+  const [focusedMenuKey, setFocusedMenuKey] = useState<string>("file");
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -291,6 +294,8 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       if (!btn) return;
       e.preventDefault();
       btn.focus();
+      const key = btn.dataset.menuKey;
+      if (key) setFocusedMenuKey(key);
       if (btn.getAttribute("aria-expanded") !== "true") btn.click();
     };
     window.addEventListener("keydown", onKey);
