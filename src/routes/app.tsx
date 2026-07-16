@@ -26,6 +26,7 @@ import { BackupNudgeBanner } from "@/components/BackupNudgeBanner";
 import { DataOwnershipDialog } from "@/components/DataOwnershipDialog";
 import { UpdateRecoveryBanner } from "@/components/UpdateRecoveryBanner";
 import { InstallAppButton } from "@/components/InstallAppButton";
+import { KeyboardProvider } from "@/lib/keyboard";
 
 import { getLicenseState, isReadOnlyLocked } from "@/lib/license/state";
 
