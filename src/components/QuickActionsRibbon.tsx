@@ -42,12 +42,14 @@ const HOTKEY_KEY = "ym_quickribbon_hotkeys";
 export function QuickActionsRibbon() {
   const location = useLocation();
   const { t } = useI18n();
+  const ribbonId = useId();
   const [open, setOpen] = useState<boolean>(() => {
     try { return localStorage.getItem(STORAGE_KEY) !== "0"; } catch { return true; }
   });
   const [showHotkeys, setShowHotkeys] = useState<boolean>(() => {
     try { return localStorage.getItem(HOTKEY_KEY) === "1"; } catch { return false; }
   });
+  const [focusedId, setFocusedId] = useState<string>(`${ribbonId}-toggle`);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, open ? "1" : "0"); } catch { /* ignore */ }
