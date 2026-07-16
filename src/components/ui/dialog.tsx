@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useAutoFocusRestore } from "@/lib/keyboard/useAutoFocusRestore";
 
 const Dialog = DialogPrimitive.Root;
 
