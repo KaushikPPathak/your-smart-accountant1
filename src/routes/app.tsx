@@ -330,36 +330,38 @@ function AppLayout() {
   ) : null;
 
   return (
-    <div className="flex min-h-screen w-full flex-col">
-      <TopMenuBar
-        rightExtras={backupExtras}
-        onLock={onLock}
-        onBackupNow={isTrial ? onBackupNow : undefined}
-        backupBusy={savingMirror}
-        backupLabel={lastSaveAt ? `Backup now (last: ${new Date(lastSaveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "Backup now"}
-      />
-      <div className="flex items-center border-b border-border bg-background">
-        <div className="flex-1 min-w-0"><QuickActionsRibbon /></div>
-        <div className="flex items-center gap-2 px-2 self-stretch border-l border-border"><InstallAppButton /></div>
+    <KeyboardProvider>
+      <div className="flex min-h-screen w-full flex-col">
+        <TopMenuBar
+          rightExtras={backupExtras}
+          onLock={onLock}
+          onBackupNow={isTrial ? onBackupNow : undefined}
+          backupBusy={savingMirror}
+          backupLabel={lastSaveAt ? `Backup now (last: ${new Date(lastSaveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "Backup now"}
+        />
+        <div className="flex items-center border-b border-border bg-background">
+          <div className="flex-1 min-w-0"><QuickActionsRibbon /></div>
+          <div className="flex items-center gap-2 px-2 self-stretch border-l border-border"><InstallAppButton /></div>
+        </div>
+
+        <UpdateRecoveryBanner />
+        <BackupNudgeBanner />
+        <AccountGroupsProvider>
+          <MastersProvider>
+            <FocusHintsProvider>
+              <main className="min-w-0 flex-1 overflow-x-hidden p-4 md:p-6">
+                <Outlet />
+              </main>
+              <StatusBar onOpenHelp={() => setHelpOpen(true)} onOpenTray={() => setTrayOpen(true)} />
+              <PendingSavesTray forceOpen={trayOpen} onClose={() => setTrayOpen(false)} />
+            </FocusHintsProvider>
+
+          </MastersProvider>
+        </AccountGroupsProvider>
+        <KeyboardCheatSheet open={helpOpen} onOpenChange={setHelpOpen} />
+        <DataOwnershipDialog />
       </div>
-
-      <UpdateRecoveryBanner />
-      <BackupNudgeBanner />
-      <AccountGroupsProvider>
-        <MastersProvider>
-          <FocusHintsProvider>
-            <main className="min-w-0 flex-1 overflow-x-hidden p-4 md:p-6">
-              <Outlet />
-            </main>
-            <StatusBar onOpenHelp={() => setHelpOpen(true)} onOpenTray={() => setTrayOpen(true)} />
-            <PendingSavesTray forceOpen={trayOpen} onClose={() => setTrayOpen(false)} />
-          </FocusHintsProvider>
-
-        </MastersProvider>
-      </AccountGroupsProvider>
-      <KeyboardCheatSheet open={helpOpen} onOpenChange={setHelpOpen} />
-      <DataOwnershipDialog />
-    </div>
+    </KeyboardProvider>
   );
 }
 
