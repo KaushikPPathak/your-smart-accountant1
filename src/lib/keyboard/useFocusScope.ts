@@ -20,9 +20,10 @@ interface Options {
  * by the global engine and by form-specific handlers.
  */
 export function useFocusScope<T extends HTMLElement>(
-  ref: RefObject<T>,
+  ref: RefObject<T | null>,
   opts: Options = {},
 ) {
+
   const orientation = opts.orientation ?? "horizontal";
   const loop = opts.loop ?? true;
   const selector = opts.itemSelector ?? '[data-focus-item="true"]';

@@ -1,5 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useFocusScope } from "@/lib/keyboard";
+
 import {
   TrendingUp,
   TrendingDown,
@@ -50,6 +52,8 @@ export function QuickActionsRibbon() {
     try { return localStorage.getItem(HOTKEY_KEY) === "1"; } catch { return false; }
   });
   const [focusedId, setFocusedId] = useState<string>(`${ribbonId}-toggle`);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const scope = useFocusScope(toolbarRef, { orientation: "horizontal", loop: true });
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, open ? "1" : "0"); } catch { /* ignore */ }
@@ -61,14 +65,14 @@ export function QuickActionsRibbon() {
   return (
     <div className="busy-menubar hidden md:block print:hidden">
       <div
+        ref={toolbarRef}
         className="flex items-center gap-1 overflow-x-auto px-4 py-0.5 leading-none"
         role="toolbar"
         aria-label={t("ribbon.quickEntry")}
         aria-orientation="horizontal"
         aria-activedescendant={focusedId}
         onKeyDown={(e) => {
-          const key = e.key;
-          if (key === "ArrowUp") {
+          if (e.key === "ArrowUp") {
             const topBtn = document.querySelector<HTMLButtonElement>('.busy-topbar button.busy-menu');
             if (topBtn) {
               e.preventDefault();
@@ -76,23 +80,14 @@ export function QuickActionsRibbon() {
             }
             return;
           }
-          if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Home" && key !== "End") return;
-          const root = e.currentTarget;
-          const items = Array.from(root.querySelectorAll<HTMLElement>('a.busy-menu-item, button'));
-          const active = document.activeElement as HTMLElement | null;
-          const idx = active ? items.indexOf(active) : -1;
-          if (idx === -1) return;
-          e.preventDefault();
-          let next = idx;
-          if (key === "ArrowRight") next = (idx + 1) % items.length;
-          else if (key === "ArrowLeft") next = (idx - 1 + items.length) % items.length;
-          else if (key === "Home") next = 0;
-          else if (key === "End") next = items.length - 1;
-          const nextEl = items[next];
-          nextEl?.focus();
-          if (nextEl?.id) setFocusedId(nextEl.id);
+          scope.onKeyDown(e);
+          if (e.defaultPrevented) {
+            const active = document.activeElement as HTMLElement | null;
+            if (active?.id) setFocusedId(active.id);
+          }
         }}
       >
+
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
