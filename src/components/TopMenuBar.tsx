@@ -322,6 +322,28 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     return () => root.removeEventListener("keydown", onKeyCapture, true);
   }, []);
 
+  // Escape on a focused top-menu trigger (no menu open) → exit the app.
+  // When a dropdown IS open, Radix handles Escape (closes menu, returns focus to trigger).
+  // A second Escape then reaches this handler and triggers exit.
+  useEffect(() => {
+    const root = menubarRef.current;
+    if (!root) return;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (!target || !target.classList.contains("busy-menu")) return;
+      // If any dropdown is still open, let Radix close it first.
+      if (target.getAttribute("aria-expanded") === "true") return;
+      if (document.querySelector('[data-radix-popper-content-wrapper]')) return;
+      if (!onLock) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onLock();
+    };
+    root.addEventListener("keydown", onEsc);
+    return () => root.removeEventListener("keydown", onEsc);
+  }, [onLock]);
+
   return (
     <div ref={menubarRef} className="busy-topbar print:hidden" role="menubar" aria-label="Application menu" aria-activedescendant={`${menubarId}-menu-${focusedMenuKey}`}>
       {/* Brand block — acts as the File menu */}
