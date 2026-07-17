@@ -7,6 +7,7 @@ async function prepareDesktopRuntime(page: Page) {
       configurable: true,
     });
     localStorage.setItem('ym_local_profile_ready', '1');
+    localStorage.setItem('ym_data_ownership_ack_v1', '1');
     sessionStorage.setItem('ym_unlocked', '1');
   });
 }
@@ -46,8 +47,14 @@ export async function setupRealWorkspace(page: Page) {
   await page.evaluate(() => {
     localStorage.setItem('ym_active_company_id', 'test-company-123');
     localStorage.setItem('ym_quickribbon_open', '1');
+    sessionStorage.setItem('ym_unlocked_test-company-123', '1');
   });
   await page.goto('/app');
+  const pickerTile = page.getByRole('button', { name: /Test Business Corp/i });
+  if (await pickerTile.isVisible().catch(() => false)) {
+    await pickerTile.focus();
+    await page.keyboard.press('Enter');
+  }
   await page.waitForSelector('nav[aria-label="Primary menus"]');
 }
 

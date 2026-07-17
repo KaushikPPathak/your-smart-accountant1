@@ -1,6 +1,5 @@
 import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,18 +20,6 @@ export function CompanySwitcher() {
   const { memberships, activeMembership, setActiveCompanyId } = useCompany();
   const { t } = useI18n();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const contentRef = useRef<HTMLDivElement | null>(null);
-
-  const openFromArrow = (direction: "first" | "last") => {
-    setOpen(true);
-    requestAnimationFrame(() => {
-      const items = contentRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]');
-      const item = direction === "first" ? items?.[0] : items?.[items.length - 1];
-      item?.focus({ preventScroll: true });
-    });
-  };
-
   const handleCompanyPick = async (companyId: string) => {
     if (isCompanyUnlocked(companyId)) {
       setActiveCompanyId(companyId);
@@ -90,7 +77,7 @@ export function CompanySwitcher() {
   };
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
@@ -98,12 +85,6 @@ export function CompanySwitcher() {
           className="h-9 gap-2 min-w-[240px] max-w-[360px] justify-between"
           data-company-switcher-trigger="true"
           aria-label={`Switch company: ${activeMembership?.companies.name ?? t("company.noneShort")}`}
-          onKeyDownCapture={(event) => {
-            if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-            event.preventDefault();
-            event.stopPropagation();
-            openFromArrow(event.key === "ArrowDown" ? "first" : "last");
-          }}
         >
           <div className="flex items-center gap-2 min-w-0">
             <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -115,7 +96,6 @@ export function CompanySwitcher() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        ref={contentRef}
         align="start"
         className="w-[260px]"
         data-company-switcher-menu="true"

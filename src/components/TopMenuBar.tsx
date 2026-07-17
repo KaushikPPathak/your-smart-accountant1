@@ -294,17 +294,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
 
-  const handleMenuTriggerKeyDown = (
-    event: ReactKeyboardEvent<HTMLButtonElement>,
-    menuKey: string,
-  ) => {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      event.stopPropagation();
-      setOpenMenuKey(menuKey);
-      return;
-    }
-
+  const handleMenuTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     const triggers = Array.from(
       menubarRef.current?.querySelectorAll<HTMLButtonElement>("button.busy-menu") ?? [],
@@ -357,9 +347,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     return () => unsubs.forEach((u) => u());
   }, [kb, visible, setOpenMenuKey]);
 
-  // Keep top-menu keyboard behavior deterministic even when nested controls
-  // or global listeners share the same menubar: horizontal keys move between
-  // triggers, while vertical keys always open the focused dropdown.
+  // Radix owns vertical trigger keys so opening and item autofocus happen in
+  // the same event. Horizontal movement is explicit because the triggers are
+  // split by the visual navigation wrapper.
 
   // Escape on a focused top-menu trigger (no menu open) → exit the app.
   // When a dropdown IS open, Radix handles Escape (closes menu, returns focus to trigger).
@@ -401,7 +391,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
             data-access-key="f"
             data-menu-key="file"
             id={`${menubarId}-menu-file`}
-            onKeyDownCapture={(event) => handleMenuTriggerKeyDown(event, "file")}
+            onKeyDown={(event) => handleMenuTriggerKeyDown(event)}
           >
             <span className="busy-brand-mark">म</span>
             <span className="busy-brand-name">
@@ -448,7 +438,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                   data-menu-key={m.key}
                   id={`${menubarId}-menu-${m.key}`}
                   title={`${m.label} (Alt+${m.accessKey.toUpperCase()})`}
-                  onKeyDownCapture={(event) => handleMenuTriggerKeyDown(event, m.key)}
+                  onKeyDown={(event) => handleMenuTriggerKeyDown(event)}
                 >
                   {labelWithAccessKey(m.label, m.accessKey)}
                   <ChevronDown className="h-3 w-3 opacity-70" />
