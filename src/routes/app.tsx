@@ -213,13 +213,15 @@ function AppLayout() {
   // field autofocus; this only runs when focus is still on the document body.
   useEffect(() => {
     if (bootstrapping || companyLoading) return;
+    // Radix Menubar Root is a <div role="menubar"> — not focusable. Focus the
+    // first trigger button instead (roving tabindex owns the rest).
     const frame = requestAnimationFrame(() => {
       const active = document.activeElement;
       if (active && active !== document.body && active !== document.documentElement) return;
-      const menubar = workspaceRef.current?.querySelector<HTMLElement>(
-        '.busy-topbar[role="menubar"]',
+      const firstTrigger = workspaceRef.current?.querySelector<HTMLElement>(
+        '.busy-topbar button.busy-menu',
       );
-      menubar?.focus({ preventScroll: true });
+      firstTrigger?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(frame);
   }, [bootstrapping, companyLoading]);
