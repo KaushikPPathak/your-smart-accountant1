@@ -391,8 +391,6 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
             data-access-key="f"
             data-menu-key="file"
             id={`${menubarId}-menu-file`}
-            role="menuitem"
-            aria-haspopup="menu"
           >
             <span className="busy-brand-mark">म</span>
             <span className="busy-brand-name">
@@ -438,8 +436,6 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                   data-access-key={m.accessKey}
                   data-menu-key={m.key}
                   id={`${menubarId}-menu-${m.key}`}
-                  role="menuitem"
-                  aria-haspopup="menu"
                   title={`${m.label} (Alt+${m.accessKey.toUpperCase()})`}
                 >
                   {labelWithAccessKey(m.label, m.accessKey)}
