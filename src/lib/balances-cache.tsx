@@ -87,12 +87,25 @@ interface Ctx {
 }
 const BalancesCtx = createContext<Ctx>({ ready: false, reload: async () => undefined });
 
-async function computeAll(companyId: string) {
+// Yield to the browser after processing this many rows so keydown / paint
+// events keep flowing during a large recompute.
+const CHUNK_SIZE = 2000;
+const yieldToBrowser = () =>
+  new Promise<void>((r) => {
+    const ric = (globalThis as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void;
+    }).requestIdleCallback;
+    if (ric) ric(() => r(), { timeout: 50 });
+    else setTimeout(r, 0);
+  });
+
+async function computeAll(companyId: string, isCancelled: () => boolean) {
   const [ledgers, vouchers, entries] = await Promise.all([
     readLedgers(companyId),
     readVouchers(companyId),
     readVoucherEntriesForCompany(companyId),
   ]);
+  if (isCancelled()) return null;
   const voucherById = new Map(
     (vouchers as any[]).map((v) => [String(v.id), v]),
   );
@@ -106,7 +119,13 @@ async function computeAll(companyId: string) {
     });
   }
   const recent = new Map<string, LedgerRecentEntry[]>();
-  for (const e of entries as any[]) {
+  const arr = entries as any[];
+  for (let i = 0; i < arr.length; i++) {
+    if (i > 0 && i % CHUNK_SIZE === 0) {
+      await yieldToBrowser();
+      if (isCancelled()) return null;
+    }
+    const e = arr[i];
     const ledgerId = String(e.ledger_id ?? "");
     if (!ledgerId) continue;
     const debit = Number(e.debit_paise ?? 0);
@@ -140,8 +159,11 @@ export function BalancesProvider({ children }: { children: ReactNode }) {
   const { activeCompanyId } = useCompany();
   const [ready, setReady] = useState(false);
   const tokenRef = useRef(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runningRef = useRef(false);
+  const pendingRef = useRef(false);
 
-  const reload = useCallback(async () => {
+  const runReload = useCallback(async () => {
     const cid = activeCompanyId;
     const token = ++tokenRef.current;
     if (!cid) {
@@ -152,8 +174,15 @@ export function BalancesProvider({ children }: { children: ReactNode }) {
       setReady(false);
       return;
     }
+    if (runningRef.current) {
+      pendingRef.current = true;
+      return;
+    }
+    runningRef.current = true;
     try {
-      const { bal, recent } = await computeAll(cid);
+      const result = await computeAll(cid, () => token !== tokenRef.current);
+      if (!result) return;
+      const { bal, recent } = result;
       if (token !== tokenRef.current) return;
       balances.clear();
       recentByLedger.clear();
@@ -164,11 +193,30 @@ export function BalancesProvider({ children }: { children: ReactNode }) {
       setReady(true);
     } catch (e) {
       console.error("[balances-cache] load failed", e);
+    } finally {
+      runningRef.current = false;
+      if (pendingRef.current) {
+        pendingRef.current = false;
+        setTimeout(() => { void runReload(); }, 0);
+      }
     }
   }, [activeCompanyId]);
 
+  const reload = useCallback(async () => {
+    // Debounce all triggers (initial mount, save events) so bursts of saves
+    // collapse into a single recompute and never contend with keydown work.
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      void runReload();
+    }, 500);
+  }, [runReload]);
+
   useEffect(() => {
     void reload();
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [reload]);
 
   // Refresh whenever any save completes (save-status broadcasts through
