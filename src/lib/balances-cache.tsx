@@ -69,6 +69,43 @@ export function getRecentLedgerEntries(id: string, limit = 10): LedgerRecentEntr
   return list.slice(0, limit);
 }
 
+/**
+ * Load mini-ledger rows only when the user opens a balance popover. Keeping
+ * voucher metadata off the startup path prevents large books from competing
+ * with keyboard input while preserving the last-10 view on demand.
+ */
+export async function loadRecentLedgerEntries(
+  id: string,
+  limit = 10,
+): Promise<LedgerRecentEntry[]> {
+  const [entries, vouchers] = await Promise.all([
+    offlineDb.cache_voucher_entries.where("ledger_id").equals(id).toArray(),
+    offlineDb.cache_vouchers.toArray(),
+  ]);
+  const voucherById = new Map<string, any>();
+  for (const v of vouchers as any[]) {
+    if (v?.is_deleted !== true) voucherById.set(String(v.id), v);
+  }
+  const result: LedgerRecentEntry[] = [];
+  for (const e of entries as any[]) {
+    const v = voucherById.get(String(e.voucher_id));
+    if (!v) continue;
+    result.push({
+      voucher_id: String(v.id),
+      voucher_number: v.voucher_number ?? null,
+      voucher_date: String(v.voucher_date ?? v.date ?? ""),
+      voucher_type: v.voucher_type ?? null,
+      narration: v.narration ?? null,
+      debit_paise: Number(e.debit_paise ?? 0),
+      credit_paise: Number(e.credit_paise ?? 0),
+    });
+  }
+  result.sort((a, b) => (a.voucher_date < b.voucher_date ? 1 : -1));
+  const recent = result.slice(0, Math.max(limit, 25));
+  recentByLedger.set(id, recent);
+  return recent.slice(0, limit);
+}
+
 export function useBalancesVersion(): number {
   return useSyncExternalStore(subscribe, getVersion, getVersion);
 }

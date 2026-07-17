@@ -3,7 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { formatINR } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import {
-  getRecentLedgerEntries,
+  loadRecentLedgerEntries,
   useLedgerBalance,
   type LedgerRecentEntry,
 } from "@/lib/balances-cache";
@@ -47,7 +47,11 @@ export function LedgerBalanceChip({ ledgerId, prefix, className, compact }: Prop
 
   React.useEffect(() => {
     if (!open || !ledgerId) return;
-    setRecent(getRecentLedgerEntries(ledgerId, 10));
+    let cancelled = false;
+    void loadRecentLedgerEntries(ledgerId, 10).then((rows) => {
+      if (!cancelled) setRecent(rows);
+    });
+    return () => { cancelled = true; };
   }, [open, ledgerId]);
 
   if (!ledgerId || !balance) return null;
