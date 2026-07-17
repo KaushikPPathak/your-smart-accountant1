@@ -78,9 +78,17 @@ export async function loadRecentLedgerEntries(
   id: string,
   limit = 10,
 ): Promise<LedgerRecentEntry[]> {
+  const companyId = currentCompanyId;
   const [entries, vouchers] = await Promise.all([
-    offlineDb.cache_voucher_entries.where("ledger_id").equals(id).toArray(),
-    offlineDb.cache_vouchers.toArray(),
+    companyId
+      ? offlineDb.cache_voucher_entries
+          .where("[company_id+ledger_id]")
+          .equals([companyId, id])
+          .toArray()
+      : Promise.resolve([]),
+    companyId
+      ? offlineDb.cache_vouchers.where("company_id").equals(companyId).toArray()
+      : Promise.resolve([]),
   ]);
   const voucherById = new Map<string, any>();
   for (const v of vouchers as any[]) {
