@@ -115,6 +115,7 @@ export function QuickActionsRibbon() {
               key={a.to}
               to={a.to}
               id={itemId}
+              data-focus-item="true"
               data-active={active}
               className="busy-menu-item"
               role="button"
