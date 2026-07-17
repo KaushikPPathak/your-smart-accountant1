@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -294,6 +294,37 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
 
+  const handleMenuTriggerKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    menuKey: string,
+  ) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      event.stopPropagation();
+      setOpenMenuKey(menuKey);
+      return;
+    }
+
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const triggers = Array.from(
+      menubarRef.current?.querySelectorAll<HTMLButtonElement>("button.busy-menu") ?? [],
+    );
+    const currentIndex = triggers.indexOf(event.currentTarget);
+    if (currentIndex < 0 || triggers.length === 0) return;
+
+    let nextIndex = currentIndex;
+    if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = triggers.length - 1;
+    else if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % triggers.length;
+    else nextIndex = (currentIndex - 1 + triggers.length) % triggers.length;
+
+    event.preventDefault();
+    event.stopPropagation();
+    const next = triggers[nextIndex];
+    next.focus({ preventScroll: true });
+    if (openMenuKey) setOpenMenuKey(next.dataset.menuKey ?? "");
+  };
+
   // Alt+letter → focus & open the matching top-level menu. Registered through
   // the centralized keyboard engine so it appears in the cheat sheet and
   // respects the global typing-target guard (allowInField defaults to false).
@@ -326,9 +357,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     return () => unsubs.forEach((u) => u());
   }, [kb, visible, setOpenMenuKey]);
 
-  // Radix Menubar owns Left/Right/Home/End navigation, and ArrowDown/Enter/Space
-  // to open a menu. We intentionally do NOT intercept ArrowDown on triggers —
-  // doing so prevents dropdowns from opening via keyboard.
+  // Keep top-menu keyboard behavior deterministic even when nested controls
+  // or global listeners share the same menubar: horizontal keys move between
+  // triggers, while vertical keys always open the focused dropdown.
 
   // Escape on a focused top-menu trigger (no menu open) → exit the app.
   // When a dropdown IS open, Radix handles Escape (closes menu, returns focus to trigger).
@@ -370,6 +401,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
             data-access-key="f"
             data-menu-key="file"
             id={`${menubarId}-menu-file`}
+            onKeyDownCapture={(event) => handleMenuTriggerKeyDown(event, "file")}
           >
             <span className="busy-brand-mark">म</span>
             <span className="busy-brand-name">
@@ -416,6 +448,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                   data-menu-key={m.key}
                   id={`${menubarId}-menu-${m.key}`}
                   title={`${m.label} (Alt+${m.accessKey.toUpperCase()})`}
+                  onKeyDownCapture={(event) => handleMenuTriggerKeyDown(event, m.key)}
                 >
                   {labelWithAccessKey(m.label, m.accessKey)}
                   <ChevronDown className="h-3 w-3 opacity-70" />

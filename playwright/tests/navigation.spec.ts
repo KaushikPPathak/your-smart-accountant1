@@ -120,6 +120,28 @@ test.describe('Keyboard navigation — top menu bar', () => {
     await page.keyboard.press('Escape');
     await expect(fileMenu).toBeFocused();
   });
+
+  test('ArrowDown reliably opens the focused top menu', async ({ page }) => {
+    const transactions = page.locator('button[data-menu-key="transactions"]');
+    await transactions.focus();
+    await page.keyboard.press('ArrowDown');
+
+    await expect(transactions).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('menuitem', { name: /All Vouchers/i })).toBeFocused();
+  });
+
+  test('ArrowDown opens the company switcher and arrows navigate its clients', async ({ page }) => {
+    const switcher = page.locator('[data-company-switcher-trigger="true"]');
+    await switcher.focus();
+    await page.keyboard.press('ArrowDown');
+
+    const companyMenu = page.locator('[data-company-switcher-menu="true"]');
+    await expect(companyMenu).toBeVisible();
+    await expect(companyMenu.getByRole('menuitem', { name: /Test Business Corp/i })).toBeFocused();
+
+    await page.keyboard.press('ArrowDown');
+    await expect(companyMenu.getByRole('menuitem', { name: /Second Business Corp/i })).toBeFocused();
+  });
 });
 
 test.describe('Keyboard navigation — quick actions ribbon', () => {

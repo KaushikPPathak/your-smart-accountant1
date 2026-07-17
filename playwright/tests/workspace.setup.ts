@@ -39,7 +39,10 @@ async function seedCompanies(page: Page, companies: Array<{ id: string; name: st
 export async function setupRealWorkspace(page: Page) {
   await prepareDesktopRuntime(page);
   await page.goto('/');
-  await seedCompanies(page, [{ id: 'test-company-123', name: 'Test Business Corp' }]);
+  await seedCompanies(page, [
+    { id: 'test-company-123', name: 'Test Business Corp' },
+    { id: 'test-company-456', name: 'Second Business Corp' },
+  ]);
   await page.evaluate(() => {
     localStorage.setItem('ym_active_company_id', 'test-company-123');
     localStorage.setItem('ym_quickribbon_open', '1');
