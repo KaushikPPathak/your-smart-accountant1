@@ -7,6 +7,7 @@ async function prepareDesktopRuntime(page: Page) {
       configurable: true,
     });
     localStorage.setItem('ym_local_profile_ready', '1');
+    localStorage.setItem('ym_data_ownership_ack_v1', '1');
     sessionStorage.setItem('ym_unlocked', '1');
   });
 }
