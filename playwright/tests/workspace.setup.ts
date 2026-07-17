@@ -49,6 +49,11 @@ export async function setupRealWorkspace(page: Page) {
     sessionStorage.setItem('ym_unlocked_test-company-123', '1');
   });
   await page.goto('/app');
+  const pickerTile = page.getByRole('button', { name: /Test Business Corp/i });
+  if (await pickerTile.isVisible().catch(() => false)) {
+    await pickerTile.focus();
+    await page.keyboard.press('Enter');
+  }
   await page.waitForSelector('nav[aria-label="Primary menus"]');
 }
 
