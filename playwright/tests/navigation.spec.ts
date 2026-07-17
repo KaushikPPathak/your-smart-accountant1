@@ -122,8 +122,14 @@ test.describe('Keyboard navigation — top menu bar', () => {
   });
 
   test('ArrowDown reliably opens the focused top menu', async ({ page }) => {
+    // Exercise the real cold-start keyboard path: no hover, click, or
+    // programmatic focus on the target trigger.
+    const fileMenu = page.locator('button[data-menu-key="file"]');
     const transactions = page.locator('button[data-menu-key="transactions"]');
-    await transactions.focus();
+    await expect(fileMenu).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await expect(transactions).toBeFocused();
     await page.keyboard.press('ArrowDown');
 
     await expect(transactions).toHaveAttribute('aria-expanded', 'true');
@@ -131,8 +137,14 @@ test.describe('Keyboard navigation — top menu bar', () => {
   });
 
   test('ArrowDown opens the company switcher and arrows navigate its clients', async ({ page }) => {
+    // Reach the switcher through the keyboard alone, before any pointer event.
+    const administration = page.locator('button[data-menu-key="administration"]');
+    await expect(page.locator('button[data-menu-key="file"]')).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(administration).toBeFocused();
+    await page.keyboard.press('Tab');
     const switcher = page.locator('[data-company-switcher-trigger="true"]');
-    await switcher.focus();
+    await expect(switcher).toBeFocused();
     await page.keyboard.press('ArrowDown');
 
     const companyMenu = page.locator('[data-company-switcher-menu="true"]');
