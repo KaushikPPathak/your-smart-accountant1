@@ -143,6 +143,7 @@ export function QuickActionsRibbon() {
             type="button"
             onClick={() => setShowHotkeys((v) => !v)}
             id={`${ribbonId}-hotkeys`}
+            data-focus-item="true"
             className="ml-auto rounded px-2 py-1 text-[10px] text-[color:var(--amber-ink)]/70 hover:bg-[color:var(--amber-dark)]/20 hover:text-[color:var(--amber-ink)]"
             title="Toggle keyboard shortcut hints"
             aria-pressed={showHotkeys}
