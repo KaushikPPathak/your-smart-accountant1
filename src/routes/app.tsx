@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 // (icons for backup button moved into TopMenuBar Administration menu)
 import { toast } from "sonner";
 import { TopMenuBar } from "@/components/TopMenuBar";
@@ -47,6 +47,7 @@ function AppLayout() {
   const [lastSaveTick, setLastSaveTick] = useState(0); // forces re-render after save
   const [helpOpen, setHelpOpen] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
 
   const isTrial = activeMembership?.companies?.mode === "trial_local";
   const lastSaveAt = activeCompanyId ? getLastLocalMirror(activeCompanyId) : null;
@@ -96,9 +97,12 @@ function AppLayout() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [isTrial, activeCompanyId, activeMembership, partyCode]);
 
-  // Run one-time desktop data migrations + daily safety snapshot (safe no-op on web).
+  // Run one-time desktop data migrations + daily safety snapshot in the
+  // background. The workspace chrome must paint and accept keyboard input
+  // immediately; none of these maintenance jobs is required to navigate it.
   useEffect(() => {
     let cancelled = false;
+    setBootstrapping(false);
     (async () => {
       try {
         // Record version transition + detect unexpectedly-empty DB. Runs on
@@ -150,9 +154,7 @@ function AppLayout() {
             }
           }
         }
-      } finally {
-        if (!cancelled) setBootstrapping(false);
-      }
+      } finally { /* maintenance never gates first paint */ }
     })();
     return () => {
       cancelled = true;
@@ -204,6 +206,23 @@ function AppLayout() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [navigate, location.pathname]);
+
+  // Desktop-style startup focus: once the workspace replaces the loading
+  // screen, make the menu immediately keyboard-ready without requiring a
+  // preliminary mouse click or Tab. Voucher screens keep their deliberate
+  // field autofocus; this only runs when focus is still on the document body.
+  useEffect(() => {
+    if (bootstrapping || companyLoading) return;
+    const frame = requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== document.documentElement) return;
+      const menubar = workspaceRef.current?.querySelector<HTMLElement>(
+        '.busy-topbar[role="menubar"]',
+      );
+      menubar?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [bootstrapping, companyLoading]);
 
 
   const onCompaniesPage = location.pathname.startsWith("/app/companies");
@@ -294,7 +313,7 @@ function AppLayout() {
   return (
     <KeyboardProvider>
       <GlobalShortcuts onOpenHelp={() => setHelpOpen(true)} />
-      <div className="flex min-h-screen w-full flex-col">
+      <div ref={workspaceRef} className="flex min-h-screen w-full flex-col">
         <TopMenuBar
           rightExtras={backupExtras}
           onLock={onLock}

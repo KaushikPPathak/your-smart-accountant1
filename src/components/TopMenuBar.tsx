@@ -35,18 +35,19 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Menubar,
+  MenubarContent,
+  MenubarItem,
+  MenubarLabel,
+  MenubarMenu,
+  MenubarRadioGroup,
+  MenubarRadioItem,
+  MenubarSeparator,
+  MenubarSub,
+  MenubarSubContent,
+  MenubarSubTrigger,
+  MenubarTrigger,
+} from "@/components/ui/menubar";
 import { useCompany } from "@/lib/company-context";
 import { useI18n, LANGUAGES, type LangCode } from "@/lib/i18n";
 import { useCurrency, CURRENCIES } from "@/lib/currency";
@@ -289,8 +290,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   // Alt+letter — focus & open the matching top-level menu (File=F plus each menu's accessKey).
   const menubarRef = useRef<HTMLDivElement | null>(null);
   const menubarId = useId();
-  // Roving tabindex + aria-activedescendant tracking for the menubar.
-  const [focusedMenuKey, setFocusedMenuKey] = useState<string>("file");
+  const [openMenuKey, setOpenMenuKey] = useState("");
 
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
 
@@ -319,17 +319,15 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           if (!btn) return;
           e.preventDefault();
           btn.focus();
-          setFocusedMenuKey(menuKey);
-          if (btn.getAttribute("aria-expanded") !== "true") btn.click();
+          setOpenMenuKey(menuKey);
         },
       }),
     );
     return () => unsubs.forEach((u) => u());
-  }, [kb, visible]);
+  }, [kb, visible, setOpenMenuKey]);
 
-  // Native-style top-menu navigation. This lives on the complete menubar (not
-  // only the <nav>) so the Your Mehtaji/File trigger participates too. Capture
-  // phase keeps Radix from consuming arrows before focus can move sideways.
+  // The real Radix Menubar below owns Left/Right/Home/End navigation and open
+  // menu switching. Keep only the product-specific closed-menu Down action.
   useEffect(() => {
     const root = menubarRef.current;
     if (!root) return;
@@ -348,24 +346,6 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
         return;
       }
 
-      const isForward = e.key === "ArrowRight" || (e.key === "Tab" && !e.shiftKey);
-      const isBackward = e.key === "ArrowLeft" || (e.key === "Tab" && e.shiftKey);
-      if (!isForward && !isBackward && e.key !== "Home" && e.key !== "End") return;
-
-      const triggers = Array.from(root.querySelectorAll<HTMLButtonElement>("button.busy-menu"));
-      const current = triggers.indexOf(target as HTMLButtonElement);
-      if (current < 0 || triggers.length === 0) return;
-
-      let next = current;
-      if (e.key === "Home") next = 0;
-      else if (e.key === "End") next = triggers.length - 1;
-      else next = (current + (isForward ? 1 : -1) + triggers.length) % triggers.length;
-
-      const nextTrigger = triggers[next];
-      e.preventDefault();
-      e.stopPropagation();
-      setFocusedMenuKey(nextTrigger.dataset.menuKey ?? "file");
-      nextTrigger.focus();
     };
     root.addEventListener("keydown", onKeyCapture, true);
     return () => root.removeEventListener("keydown", onKeyCapture, true);
@@ -394,10 +374,16 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   }, [onLock]);
 
   return (
-    <div ref={menubarRef} className="busy-topbar print:hidden" role="menubar" aria-label="Application menu" aria-activedescendant={`${menubarId}-menu-${focusedMenuKey}`}>
+    <Menubar
+      ref={menubarRef}
+      value={openMenuKey}
+      onValueChange={setOpenMenuKey}
+      className="busy-topbar print:hidden h-auto space-x-0 rounded-none border-x-0 border-t-0 p-0 shadow-none"
+      aria-label="Application menu"
+    >
       {/* Brand block — acts as the File menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+      <MenubarMenu value="file">
+        <MenubarTrigger asChild>
           <button
             type="button"
             className="busy-brand busy-menu"
@@ -407,8 +393,6 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
             id={`${menubarId}-menu-file`}
             role="menuitem"
             aria-haspopup="menu"
-            tabIndex={focusedMenuKey === "file" ? 0 : -1}
-            onFocus={() => setFocusedMenuKey("file")}
           >
             <span className="busy-brand-mark">म</span>
             <span className="busy-brand-name">
@@ -417,24 +401,24 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
             </span>
             <ChevronDown className="h-3 w-3 opacity-70" />
           </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="busy-menu-dropdown min-w-[240px]">
+        </MenubarTrigger>
+        <MenubarContent align="start" className="busy-menu-dropdown min-w-[240px]">
           {FILE_GROUPS.map((g, gi) => (
             <div key={g.label}>
-              {gi > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {gi > 0 && <MenubarSeparator />}
+              <MenubarLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 {g.label}
-              </DropdownMenuLabel>
+              </MenubarLabel>
               {g.items.map((i) => (
-                <DropdownMenuItem key={i.url} onSelect={() => navigate({ to: i.url })} className="gap-2">
+                <MenubarItem key={i.url} onSelect={() => navigate({ to: i.url })} className="gap-2">
                   <i.icon className="h-4 w-4 text-muted-foreground" />
                   <span>{tt(i)}</span>
-                </DropdownMenuItem>
+                </MenubarItem>
               ))}
             </div>
           ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </MenubarContent>
+      </MenubarMenu>
 
       {/* Menu items */}
       <nav
@@ -446,8 +430,8 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           const active = isMenuActive(m);
           const isAdmin = m.key === "administration";
           return (
-            <DropdownMenu key={m.key}>
-              <DropdownMenuTrigger asChild>
+            <MenubarMenu key={m.key} value={m.key}>
+              <MenubarTrigger asChild>
                 <button
                   type="button"
                   className={cn("busy-menu", active && "busy-menu-active")}
@@ -456,124 +440,122 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                   id={`${menubarId}-menu-${m.key}`}
                   role="menuitem"
                   aria-haspopup="menu"
-                  tabIndex={focusedMenuKey === m.key ? 0 : -1}
-                  onFocus={() => setFocusedMenuKey(m.key)}
                   title={`${m.label} (Alt+${m.accessKey.toUpperCase()})`}
                 >
                   {labelWithAccessKey(m.label, m.accessKey)}
                   <ChevronDown className="h-3 w-3 opacity-70" />
                 </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="busy-menu-dropdown min-w-[240px]">
+              </MenubarTrigger>
+              <MenubarContent align="start" className="busy-menu-dropdown min-w-[240px]">
                 {m.groups.map((g, gi) => (
                   <div key={g.label}>
-                    {gi > 0 && <DropdownMenuSeparator />}
-                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {gi > 0 && <MenubarSeparator />}
+                    <MenubarLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       {g.label}
-                    </DropdownMenuLabel>
+                    </MenubarLabel>
                     {g.items.map((i) => (
-                      <DropdownMenuItem
+                      <MenubarItem
                         key={i.url}
                         onSelect={() => navigate({ to: i.url })}
                         className="gap-2"
                       >
                         <i.icon className="h-4 w-4 text-muted-foreground" />
                         <span>{tt(i)}</span>
-                      </DropdownMenuItem>
+                      </MenubarItem>
                     ))}
                   </div>
                 ))}
                 {isAdmin && (
                   <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <MenubarSeparator />
+                    <MenubarLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Session
-                    </DropdownMenuLabel>
+                    </MenubarLabel>
                     {onBackupNow && (
-                      <DropdownMenuItem
+                      <MenubarItem
                         onSelect={(e) => { e.preventDefault(); onBackupNow(); }}
                         className="gap-2"
                         disabled={backupBusy}
                       >
                         <HardDriveDownload className="h-4 w-4 text-muted-foreground" />
                         <span>{backupBusy ? "Saving backup…" : (backupLabel || "Backup now")}</span>
-                      </DropdownMenuItem>
+                      </MenubarItem>
                     )}
-                    <DropdownMenuItem
+                    <MenubarItem
                       onSelect={() => onLock?.()}
                       className="gap-2"
                       disabled={!onLock}
                     >
                       <Lock className="h-4 w-4 text-muted-foreground" />
                       <span>Exit</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    </MenubarItem>
+                    <MenubarSeparator />
+                    <MenubarLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Preferences
-                    </DropdownMenuLabel>
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="gap-2">
+                    </MenubarLabel>
+                    <MenubarSub>
+                      <MenubarSubTrigger className="gap-2">
                         <span>Language</span>
                         <span className="ml-auto text-xs text-muted-foreground">
                           {LANGUAGES.find((l) => l.code === lang)?.native ?? lang}
                         </span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent className="busy-menu-dropdown max-h-[320px] overflow-y-auto">
-                        <DropdownMenuRadioGroup value={lang} onValueChange={(v) => setLang(v as LangCode)}>
+                      </MenubarSubTrigger>
+                      <MenubarSubContent className="busy-menu-dropdown max-h-[320px] overflow-y-auto">
+                        <MenubarRadioGroup value={lang} onValueChange={(v) => setLang(v as LangCode)}>
                           {LANGUAGES.map((l) => (
-                            <DropdownMenuRadioItem key={l.code} value={l.code}>
+                            <MenubarRadioItem key={l.code} value={l.code}>
                               <span className="flex items-center gap-2">
                                 <span>{l.native}</span>
                                 <span className="text-xs text-muted-foreground">({l.label})</span>
                               </span>
-                            </DropdownMenuRadioItem>
+                            </MenubarRadioItem>
                           ))}
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="gap-2">
+                        </MenubarRadioGroup>
+                      </MenubarSubContent>
+                    </MenubarSub>
+                    <MenubarSub>
+                      <MenubarSubTrigger className="gap-2">
                         <span>Currency</span>
                         <span className="ml-auto text-xs text-muted-foreground">{currencyCode}</span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent className="busy-menu-dropdown max-h-[320px] overflow-y-auto">
-                        <DropdownMenuRadioGroup value={currencyCode} onValueChange={setCurrencyCode}>
+                      </MenubarSubTrigger>
+                      <MenubarSubContent className="busy-menu-dropdown max-h-[320px] overflow-y-auto">
+                        <MenubarRadioGroup value={currencyCode} onValueChange={setCurrencyCode}>
                           {CURRENCIES.map((c) => (
-                            <DropdownMenuRadioItem key={c.code} value={c.code}>
+                            <MenubarRadioItem key={c.code} value={c.code}>
                               <span className="flex items-center gap-2">
                                 <span className="font-mono text-xs text-muted-foreground">{c.symbol}</span>
                                 <span>{c.code}</span>
                                 <span className="hidden text-xs text-muted-foreground sm:inline">— {c.name}</span>
                               </span>
-                            </DropdownMenuRadioItem>
+                            </MenubarRadioItem>
                           ))}
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="gap-2">
+                        </MenubarRadioGroup>
+                      </MenubarSubContent>
+                    </MenubarSub>
+                    <MenubarSub>
+                      <MenubarSubTrigger className="gap-2">
                         <span>Date format</span>
                         <span className="ml-auto text-xs text-muted-foreground">
                           {DATE_FORMATS.find((f) => f.code === dateCode)?.sample ?? dateCode}
                         </span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent className="busy-menu-dropdown max-h-[320px] overflow-y-auto">
-                        <DropdownMenuRadioGroup value={dateCode} onValueChange={(v) => setDateCode(v as DateFormatCode)}>
+                      </MenubarSubTrigger>
+                      <MenubarSubContent className="busy-menu-dropdown max-h-[320px] overflow-y-auto">
+                        <MenubarRadioGroup value={dateCode} onValueChange={(v) => setDateCode(v as DateFormatCode)}>
                           {DATE_FORMATS.map((f) => (
-                            <DropdownMenuRadioItem key={f.code} value={f.code}>
+                            <MenubarRadioItem key={f.code} value={f.code}>
                               <span className="flex items-center gap-2">
                                 <span>{f.label}</span>
                                 <span className="text-xs text-muted-foreground">— {f.sample}</span>
                               </span>
-                            </DropdownMenuRadioItem>
+                            </MenubarRadioItem>
                           ))}
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
+                        </MenubarRadioGroup>
+                      </MenubarSubContent>
+                    </MenubarSub>
                   </>
                 )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </MenubarContent>
+            </MenubarMenu>
           );
         })}
       </nav>
@@ -606,7 +588,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Menubar>
   );
 }
 

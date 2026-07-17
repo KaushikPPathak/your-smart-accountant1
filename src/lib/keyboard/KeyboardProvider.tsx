@@ -64,20 +64,21 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       const typing = isTypingTarget(e.target);
 
       // Try the active scope's bindings first, then fall back to global.
-      const bindings = Array.from(bindingsRef.current.values());
-      const ordered = [
-        ...bindings.filter((b) => b.scope === activeScope && b.scope !== "global"),
-        ...bindings.filter((b) => b.scope === "global"),
-      ];
-
-      for (const b of ordered) {
-        if (typing && !b.allowInField) continue;
-        if (!matchCombo(e, b.parsed)) continue;
-        b.handler(e);
-        // The handler decides whether to keep propagating by calling
-        // preventDefault(). If it did, we stop trying further bindings.
-        if (e.defaultPrevented) return;
-      }
+      // One allocation-free pass for the active scope, then one for global.
+      // This listener runs on every keystroke, so avoid rebuilding/filtering
+      // arrays on the input hot path.
+      const tryScope = (scope: ShortcutScope) => {
+        for (const b of bindingsRef.current.values()) {
+          if (b.scope !== scope) continue;
+          if (typing && !b.allowInField) continue;
+          if (!matchCombo(e, b.parsed)) continue;
+          b.handler(e);
+          if (e.defaultPrevented) return true;
+        }
+        return false;
+      };
+      if (activeScope !== "global" && tryScope(activeScope)) return;
+      if (tryScope("global")) return;
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
