@@ -326,30 +326,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     return () => unsubs.forEach((u) => u());
   }, [kb, visible, setOpenMenuKey]);
 
-  // The real Radix Menubar below owns Left/Right/Home/End navigation and open
-  // menu switching. Keep only the product-specific closed-menu Down action.
-  useEffect(() => {
-    const root = menubarRef.current;
-    if (!root) return;
-    const onKeyCapture = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target || !target.classList.contains("busy-menu")) return;
-      if (e.altKey || e.ctrlKey || e.metaKey) return;
-
-      if (e.key === "ArrowDown") {
-        if (e.shiftKey || target.getAttribute("aria-expanded") === "true") return;
-        const ribbonItem = document.querySelector<HTMLElement>('.busy-menubar a.busy-menu-item, .busy-menubar button');
-        if (!ribbonItem) return;
-        e.preventDefault();
-        e.stopPropagation();
-        ribbonItem.focus();
-        return;
-      }
-
-    };
-    root.addEventListener("keydown", onKeyCapture, true);
-    return () => root.removeEventListener("keydown", onKeyCapture, true);
-  }, []);
+  // Radix Menubar owns Left/Right/Home/End navigation, and ArrowDown/Enter/Space
+  // to open a menu. We intentionally do NOT intercept ArrowDown on triggers —
+  // doing so prevents dropdowns from opening via keyboard.
 
   // Escape on a focused top-menu trigger (no menu open) → exit the app.
   // When a dropdown IS open, Radix handles Escape (closes menu, returns focus to trigger).
