@@ -231,16 +231,17 @@ function StartScreen() {
     else if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % items.length;
     else if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + items.length) % items.length;
     else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-      const currentRect = current.getBoundingClientRect();
-      const currentX = currentRect.left + currentRect.width / 2;
-      const currentY = currentRect.top + currentRect.height / 2;
+      // offset* reflects the grid's stable layout. getBoundingClientRect()
+      // includes the tile's entrance transform and made very early key presses
+      // occasionally choose the wrong row while the animation was running.
+      const currentX = current.offsetLeft + current.offsetWidth / 2;
+      const currentY = current.offsetTop + current.offsetHeight / 2;
       const movingDown = event.key === "ArrowDown";
 
       const candidates = items
         .map((item, index) => {
-          const rect = item.getBoundingClientRect();
-          const x = rect.left + rect.width / 2;
-          const y = rect.top + rect.height / 2;
+          const x = item.offsetLeft + item.offsetWidth / 2;
+          const y = item.offsetTop + item.offsetHeight / 2;
           const primary = movingDown ? y - currentY : currentY - y;
           return { index, primary, cross: Math.abs(x - currentX) };
         })
@@ -255,11 +256,10 @@ function StartScreen() {
       } else {
         // Wrap vertically to the opposite edge, keeping the closest column.
         const rects = items.map((item, index) => {
-          const rect = item.getBoundingClientRect();
           return {
             index,
-            x: rect.left + rect.width / 2,
-            y: rect.top + rect.height / 2,
+            x: item.offsetLeft + item.offsetWidth / 2,
+            y: item.offsetTop + item.offsetHeight / 2,
           };
         });
         const edgeY = movingDown
