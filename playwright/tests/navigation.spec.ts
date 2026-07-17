@@ -128,6 +128,7 @@ test.describe('Keyboard navigation — top menu bar', () => {
     const transactions = page.locator('button[data-menu-key="transactions"]');
     await expect(fileMenu).toBeFocused();
     await page.keyboard.press('ArrowRight');
+    await expect(page.locator('button[data-menu-key="masters"]')).toBeFocused();
     await page.keyboard.press('ArrowRight');
     await expect(transactions).toBeFocused();
     await page.keyboard.press('ArrowDown');
