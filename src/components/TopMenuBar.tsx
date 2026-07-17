@@ -357,9 +357,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     return () => unsubs.forEach((u) => u());
   }, [kb, visible, setOpenMenuKey]);
 
-  // Radix Menubar owns Left/Right/Home/End navigation, and ArrowDown/Enter/Space
-  // to open a menu. We intentionally do NOT intercept ArrowDown on triggers —
-  // doing so prevents dropdowns from opening via keyboard.
+  // Keep top-menu keyboard behavior deterministic even when nested controls
+  // or global listeners share the same menubar: horizontal keys move between
+  // triggers, while vertical keys always open the focused dropdown.
 
   // Escape on a focused top-menu trigger (no menu open) → exit the app.
   // When a dropdown IS open, Radix handles Escape (closes menu, returns focus to trigger).
