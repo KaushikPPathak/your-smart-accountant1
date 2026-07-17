@@ -92,6 +92,7 @@ export function QuickActionsRibbon() {
           type="button"
           onClick={() => setOpen((v) => !v)}
           id={`${ribbonId}-toggle`}
+          data-focus-item="true"
           className="mr-2 flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--amber-ink)]/80 hover:bg-[color:var(--amber-dark)]/20 hover:text-[color:var(--amber-ink)]"
           title={open ? "Collapse Quick Entry" : "Expand Quick Entry"}
           aria-expanded={open}
@@ -114,6 +115,7 @@ export function QuickActionsRibbon() {
               key={a.to}
               to={a.to}
               id={itemId}
+              data-focus-item="true"
               data-active={active}
               className="busy-menu-item"
               role="button"
@@ -141,6 +143,7 @@ export function QuickActionsRibbon() {
             type="button"
             onClick={() => setShowHotkeys((v) => !v)}
             id={`${ribbonId}-hotkeys`}
+            data-focus-item="true"
             className="ml-auto rounded px-2 py-1 text-[10px] text-[color:var(--amber-ink)]/70 hover:bg-[color:var(--amber-dark)]/20 hover:text-[color:var(--amber-ink)]"
             title="Toggle keyboard shortcut hints"
             aria-pressed={showHotkeys}
