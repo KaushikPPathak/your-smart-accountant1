@@ -391,8 +391,6 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
             data-access-key="f"
             data-menu-key="file"
             id={`${menubarId}-menu-file`}
-            role="menuitem"
-            aria-haspopup="menu"
           >
             <span className="busy-brand-mark">म</span>
             <span className="busy-brand-name">
