@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupRealWorkspace } from './workspace.setup';
+import { setupCompanyPicker, setupRealWorkspace } from './workspace.setup';
 
 /**
  * End-to-end keyboard navigation tests.
@@ -177,5 +177,52 @@ test.describe('Keyboard navigation — quick actions ribbon', () => {
 
     await page.keyboard.press('Home');
     await expect(ribbonToggle).toBeFocused();
+  });
+});
+
+test.describe('Keyboard navigation — company picker', () => {
+  test.beforeEach(async ({ page }) => {
+    await setupCompanyPicker(page);
+  });
+
+  test('focuses the first company without requiring Tab or mouse', async ({ page }) => {
+    await expect(page.locator('[data-company-index="0"]')).toBeFocused();
+  });
+
+  test('arrow keys move through the visual company grid and wrap', async ({ page }) => {
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('[data-company-index="1"]')).toBeFocused();
+
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('[data-company-index="4"]')).toBeFocused();
+
+    await page.keyboard.press('ArrowUp');
+    await expect(page.locator('[data-company-index="1"]')).toBeFocused();
+
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.locator('[data-company-index="0"]')).toBeFocused();
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.locator('[data-company-index="4"]')).toBeFocused();
+  });
+
+  test('Home and End jump to the first and last company', async ({ page }) => {
+    await page.keyboard.press('End');
+    await expect(page.locator('[data-company-index="4"]')).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(page.locator('[data-company-index="0"]')).toBeFocused();
+  });
+
+  test('Tab and Shift+Tab leave the company grid normally', async ({ page }) => {
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.getByRole('button', { name: /New company/i })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('[data-company-index="0"]')).toBeFocused();
+  });
+
+  test('Enter opens the focused company', async ({ page }) => {
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('ym_active_company_id'))).toBe('company-2');
+    await expect(page).toHaveURL(/\/app/);
   });
 });

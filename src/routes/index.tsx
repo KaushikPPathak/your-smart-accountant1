@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { toast } from "sonner";
 import { Building2, Lock, Plus, Unlock, LogOut as ExitIcon, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,8 @@ function StartScreen() {
   const [pendingCompany, setPendingCompany] = useState<PickerCompany | null>(null);
   const [pwd, setPwd] = useState("");
   const [verifying, setVerifying] = useState(false);
+  const [focusedCompanyIndex, setFocusedCompanyIndex] = useState(0);
+  const companyGridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -197,6 +199,85 @@ function StartScreen() {
       cancelled = true;
     };
   }, [authLoading, session?.user?.id]);
+
+  // The company picker is the primary task on this screen. Once its local
+  // data is ready, put focus on the first company so desktop users can start
+  // navigating immediately instead of having to Tab through the header.
+  useEffect(() => {
+    if (loading || companies.length === 0 || pendingCompany) return;
+    const frame = requestAnimationFrame(() => {
+      const active = document.activeElement as HTMLElement | null;
+      const pageHasNoFocusedControl = !active || active === document.body || active === document.documentElement;
+      if (!pageHasNoFocusedControl) return;
+      const first = companyGridRef.current?.querySelector<HTMLElement>('[data-company-index="0"]');
+      first?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [loading, companies.length, pendingCompany]);
+
+  const handleCompanyGridKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const current = (event.target as HTMLElement).closest<HTMLElement>("[data-company-index]");
+    if (!current || !companyGridRef.current?.contains(current)) return;
+
+    const items = Array.from(
+      companyGridRef.current.querySelectorAll<HTMLElement>("[data-company-index]"),
+    ).filter((item) => !item.hasAttribute("disabled"));
+    const currentIndex = items.indexOf(current);
+    if (currentIndex < 0 || items.length < 2) return;
+
+    let nextIndex = currentIndex;
+    if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = items.length - 1;
+    else if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % items.length;
+    else if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + items.length) % items.length;
+    else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      const currentRect = current.getBoundingClientRect();
+      const currentX = currentRect.left + currentRect.width / 2;
+      const currentY = currentRect.top + currentRect.height / 2;
+      const movingDown = event.key === "ArrowDown";
+
+      const candidates = items
+        .map((item, index) => {
+          const rect = item.getBoundingClientRect();
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          const primary = movingDown ? y - currentY : currentY - y;
+          return { index, primary, cross: Math.abs(x - currentX) };
+        })
+        .filter(({ primary }) => primary > 1)
+        .sort((a, b) => a.primary - b.primary || a.cross - b.cross);
+
+      if (candidates.length > 0) {
+        const nearestRow = candidates[0].primary;
+        nextIndex = candidates
+          .filter(({ primary }) => Math.abs(primary - nearestRow) < 2)
+          .sort((a, b) => a.cross - b.cross)[0].index;
+      } else {
+        // Wrap vertically to the opposite edge, keeping the closest column.
+        const rects = items.map((item, index) => {
+          const rect = item.getBoundingClientRect();
+          return {
+            index,
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+          };
+        });
+        const edgeY = movingDown
+          ? Math.min(...rects.map(({ y }) => y))
+          : Math.max(...rects.map(({ y }) => y));
+        nextIndex = rects
+          .filter(({ y }) => Math.abs(y - edgeY) < 2)
+          .sort((a, b) => Math.abs(a.x - currentX) - Math.abs(b.x - currentX))[0].index;
+      }
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    setFocusedCompanyIndex(nextIndex);
+    items[nextIndex]?.focus();
+  };
 
   const openCompany = async (c: PickerCompany) => {
     const cl = getCompanyLang(c.id);
@@ -377,10 +458,20 @@ function StartScreen() {
             </Button>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div
+            ref={companyGridRef}
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            role="group"
+            aria-label="Companies"
+            onKeyDown={handleCompanyGridKeyDown}
+          >
             {companies.map((c, i) => (
               <button
                 key={c.id}
+                type="button"
+                data-company-index={i}
+                tabIndex={i === Math.min(focusedCompanyIndex, companies.length - 1) ? 0 : -1}
+                onFocus={() => setFocusedCompanyIndex(i)}
                 onClick={() => openCompany(c)}
                 className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border/60 bg-card/80 p-4 text-left backdrop-blur transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-elevated focus:outline-none focus:ring-2 focus:ring-primary/40 animate-in fade-in slide-in-from-bottom-2"
                 style={{ animationDelay: `${i * 40}ms`, animationFillMode: "both" }}
