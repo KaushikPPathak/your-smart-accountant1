@@ -46,6 +46,7 @@ export async function setupRealWorkspace(page: Page) {
   await page.evaluate(() => {
     localStorage.setItem('ym_active_company_id', 'test-company-123');
     localStorage.setItem('ym_quickribbon_open', '1');
+    sessionStorage.setItem('ym_unlocked_test-company-123', '1');
   });
   await page.goto('/app');
   await page.waitForSelector('nav[aria-label="Primary menus"]');
