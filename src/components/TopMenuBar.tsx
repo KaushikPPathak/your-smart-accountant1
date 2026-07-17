@@ -63,7 +63,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useFocusScope, useOptionalKeyboard } from "@/lib/keyboard";
+import { useOptionalKeyboard } from "@/lib/keyboard";
 
 
 interface NavItem { title: string; url: string; icon: LucideIcon; i18nKey?: string }
@@ -288,8 +288,6 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
   // Alt+letter — focus & open the matching top-level menu (File=F plus each menu's accessKey).
   const menubarRef = useRef<HTMLDivElement | null>(null);
-  const menusNavRef = useRef<HTMLElement | null>(null);
-  const menusScope = useFocusScope(menusNavRef, { orientation: "horizontal", loop: true, itemSelector: 'button.busy-menu' });
   const menubarId = useId();
   // Roving tabindex + aria-activedescendant tracking for the menubar.
   const [focusedMenuKey, setFocusedMenuKey] = useState<string>("file");
@@ -329,21 +327,45 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     return () => unsubs.forEach((u) => u());
   }, [kb, visible]);
 
-  // ArrowDown on a closed top-menu trigger jumps focus to the quick-entry ribbon.
-  // Runs in capture so we intercept before Radix opens the dropdown.
+  // Native-style top-menu navigation. This lives on the complete menubar (not
+  // only the <nav>) so the Your Mehtaji/File trigger participates too. Capture
+  // phase keeps Radix from consuming arrows before focus can move sideways.
   useEffect(() => {
     const root = menubarRef.current;
     if (!root) return;
     const onKeyCapture = (e: KeyboardEvent) => {
-      if (e.key !== "ArrowDown" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       const target = e.target as HTMLElement | null;
       if (!target || !target.classList.contains("busy-menu")) return;
-      if (target.getAttribute("aria-expanded") === "true") return;
-      const ribbonItem = document.querySelector<HTMLElement>('.busy-menubar a.busy-menu-item, .busy-menubar button');
-      if (!ribbonItem) return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+
+      if (e.key === "ArrowDown") {
+        if (e.shiftKey || target.getAttribute("aria-expanded") === "true") return;
+        const ribbonItem = document.querySelector<HTMLElement>('.busy-menubar a.busy-menu-item, .busy-menubar button');
+        if (!ribbonItem) return;
+        e.preventDefault();
+        e.stopPropagation();
+        ribbonItem.focus();
+        return;
+      }
+
+      const isForward = e.key === "ArrowRight" || (e.key === "Tab" && !e.shiftKey);
+      const isBackward = e.key === "ArrowLeft" || (e.key === "Tab" && e.shiftKey);
+      if (!isForward && !isBackward && e.key !== "Home" && e.key !== "End") return;
+
+      const triggers = Array.from(root.querySelectorAll<HTMLButtonElement>("button.busy-menu"));
+      const current = triggers.indexOf(target as HTMLButtonElement);
+      if (current < 0 || triggers.length === 0) return;
+
+      let next = current;
+      if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = triggers.length - 1;
+      else next = (current + (isForward ? 1 : -1) + triggers.length) % triggers.length;
+
+      const nextTrigger = triggers[next];
       e.preventDefault();
       e.stopPropagation();
-      ribbonItem.focus();
+      setFocusedMenuKey(nextTrigger.dataset.menuKey ?? "file");
+      nextTrigger.focus();
     };
     root.addEventListener("keydown", onKeyCapture, true);
     return () => root.removeEventListener("keydown", onKeyCapture, true);
@@ -416,25 +438,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
       {/* Menu items */}
       <nav
-        ref={menusNavRef}
         className="busy-menus"
-        onKeyDown={(e) => {
-          const key = e.key;
-          if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Home" && key !== "End") return;
-          const prevActive = document.activeElement as HTMLElement | null;
-          const wasOpen = prevActive?.getAttribute("aria-expanded") === "true";
-          menusScope.onKeyDown(e);
-          if (!e.defaultPrevented) return;
-          const nextBtn = document.activeElement as HTMLButtonElement | null;
-          if (!nextBtn) return;
-          const nextKey = nextBtn.dataset.menuKey;
-          if (nextKey) setFocusedMenuKey(nextKey);
-          if (wasOpen && prevActive && prevActive !== nextBtn) {
-            // Close current then open next to mimic native menubar behavior
-            prevActive.click();
-            setTimeout(() => nextBtn.click(), 0);
-          }
-        }}
         aria-label="Primary menus"
       >
 
