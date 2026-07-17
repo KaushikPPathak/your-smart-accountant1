@@ -21,11 +21,8 @@ import {
 } from "react";
 import { useCompany } from "./company-context";
 import { useSaveStatus } from "./save-status";
-import {
-  readLedgers,
-  readVouchers,
-  readVoucherEntriesForCompany,
-} from "./offline/cache-read";
+import { readLedgers } from "./offline/cache-read";
+import { offlineDb } from "./offline/db";
 
 export interface LedgerBalance {
   paise: number; // signed: +Dr, -Cr
@@ -72,6 +69,51 @@ export function getRecentLedgerEntries(id: string, limit = 10): LedgerRecentEntr
   return list.slice(0, limit);
 }
 
+/**
+ * Load mini-ledger rows only when the user opens a balance popover. Keeping
+ * voucher metadata off the startup path prevents large books from competing
+ * with keyboard input while preserving the last-10 view on demand.
+ */
+export async function loadRecentLedgerEntries(
+  id: string,
+  limit = 10,
+): Promise<LedgerRecentEntry[]> {
+  const companyId = currentCompanyId;
+  const [entries, vouchers] = await Promise.all([
+    companyId
+      ? offlineDb.cache_voucher_entries
+          .where("[company_id+ledger_id]")
+          .equals([companyId, id])
+          .toArray()
+      : Promise.resolve([]),
+    companyId
+      ? offlineDb.cache_vouchers.where("company_id").equals(companyId).toArray()
+      : Promise.resolve([]),
+  ]);
+  const voucherById = new Map<string, any>();
+  for (const v of vouchers as any[]) {
+    if (v?.is_deleted !== true) voucherById.set(String(v.id), v);
+  }
+  const result: LedgerRecentEntry[] = [];
+  for (const e of entries as any[]) {
+    const v = voucherById.get(String(e.voucher_id));
+    if (!v) continue;
+    result.push({
+      voucher_id: String(v.id),
+      voucher_number: v.voucher_number ?? null,
+      voucher_date: String(v.voucher_date ?? v.date ?? ""),
+      voucher_type: v.voucher_type ?? null,
+      narration: v.narration ?? null,
+      debit_paise: Number(e.debit_paise ?? 0),
+      credit_paise: Number(e.credit_paise ?? 0),
+    });
+  }
+  result.sort((a, b) => (a.voucher_date < b.voucher_date ? 1 : -1));
+  const recent = result.slice(0, Math.max(limit, 25));
+  recentByLedger.set(id, recent);
+  return recent.slice(0, limit);
+}
+
 export function useBalancesVersion(): number {
   return useSyncExternalStore(subscribe, getVersion, getVersion);
 }
@@ -87,28 +129,12 @@ interface Ctx {
 }
 const BalancesCtx = createContext<Ctx>({ ready: false, reload: async () => undefined });
 
-// Yield to the browser after processing this many rows so keydown / paint
-// events keep flowing during a large recompute.
-const CHUNK_SIZE = 2000;
-const yieldToBrowser = () =>
-  new Promise<void>((r) => {
-    const ric = (globalThis as unknown as {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void;
-    }).requestIdleCallback;
-    if (ric) ric(() => r(), { timeout: 50 });
-    else setTimeout(r, 0);
-  });
-
 async function computeAll(companyId: string, isCancelled: () => boolean) {
-  const [ledgers, vouchers, entries] = await Promise.all([
+  const [ledgers, entries] = await Promise.all([
     readLedgers(companyId),
-    readVouchers(companyId),
-    readVoucherEntriesForCompany(companyId),
+    offlineDb.cache_voucher_entries.where("company_id").equals(companyId).toArray(),
   ]);
   if (isCancelled()) return null;
-  const voucherById = new Map(
-    (vouchers as any[]).map((v) => [String(v.id), v]),
-  );
   const bal = new Map<string, LedgerBalance>();
   for (const l of ledgers as any[]) {
     const ob = (l.opening_balance_is_debit ? 1 : -1) * Number(l.opening_balance_paise ?? 0);
@@ -118,13 +144,8 @@ async function computeAll(companyId: string, isCancelled: () => boolean) {
       type: String(l.type ?? ""),
     });
   }
-  const recent = new Map<string, LedgerRecentEntry[]>();
   const arr = entries as any[];
   for (let i = 0; i < arr.length; i++) {
-    if (i > 0 && i % CHUNK_SIZE === 0) {
-      await yieldToBrowser();
-      if (isCancelled()) return null;
-    }
     const e = arr[i];
     const ledgerId = String(e.ledger_id ?? "");
     if (!ledgerId) continue;
@@ -132,27 +153,9 @@ async function computeAll(companyId: string, isCancelled: () => boolean) {
     const credit = Number(e.credit_paise ?? 0);
     const cur = bal.get(ledgerId);
     if (cur) cur.paise += debit - credit;
-    const v = voucherById.get(String(e.voucher_id));
-    if (!v) continue;
-    const entry: LedgerRecentEntry = {
-      voucher_id: String(v.id),
-      voucher_number: v.voucher_number ?? null,
-      voucher_date: String(v.voucher_date ?? v.date ?? ""),
-      voucher_type: v.voucher_type ?? null,
-      narration: v.narration ?? null,
-      debit_paise: debit,
-      credit_paise: credit,
-    };
-    const list = recent.get(ledgerId);
-    if (list) list.push(entry);
-    else recent.set(ledgerId, [entry]);
   }
-  // Sort recents desc by date; keep at most 25 in memory (chip shows 10).
-  for (const [k, list] of recent) {
-    list.sort((a, b) => (a.voucher_date < b.voucher_date ? 1 : -1));
-    if (list.length > 25) recent.set(k, list.slice(0, 25));
-  }
-  return { bal, recent };
+  if (isCancelled()) return null;
+  return { bal };
 }
 
 export function BalancesProvider({ children }: { children: ReactNode }) {
@@ -182,12 +185,10 @@ export function BalancesProvider({ children }: { children: ReactNode }) {
     try {
       const result = await computeAll(cid, () => token !== tokenRef.current);
       if (!result) return;
-      const { bal, recent } = result;
+      const { bal } = result;
       if (token !== tokenRef.current) return;
       balances.clear();
-      recentByLedger.clear();
       for (const [k, v] of bal) balances.set(k, v);
-      for (const [k, v] of recent) recentByLedger.set(k, v);
       currentCompanyId = cid;
       bump();
       setReady(true);
