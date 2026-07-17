@@ -75,6 +75,10 @@ function StartScreen() {
   const [verifying, setVerifying] = useState(false);
   const [focusedCompanyIndex, setFocusedCompanyIndex] = useState(0);
   const companyGridRef = useRef<HTMLDivElement>(null);
+  // In local-only mode the company list does not depend on cloud identity.
+  // Keeping this dependency stable prevents a background auth handshake from
+  // replacing the grid with its loading state and throwing keyboard focus away.
+  const companyOwnerKey = isLocalOnlyMode() ? "local-device" : session?.user?.id;
 
   useEffect(() => {
     if (authLoading) return;
@@ -198,7 +202,7 @@ function StartScreen() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, session?.user?.id]);
+  }, [authLoading, companyOwnerKey]);
 
   // The company picker is the primary task on this screen. Once its local
   // data is ready, put focus on the first company so desktop users can start
