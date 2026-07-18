@@ -192,7 +192,7 @@ function AppLayout() {
 
 
 
-  const onCompaniesPage = location.pathname.startsWith("/app/companies");
+  
 
   // Gate: every page under /app requires a chosen + unlocked company
   // (except /app/companies, which is reachable when the user clicked "+ New company").
