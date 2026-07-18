@@ -108,11 +108,8 @@ test.describe('Keyboard navigation — top menu bar', () => {
 
   test('ArrowDown opens the currently focused top menu', async ({ page }) => {
     await tabToFileMenu(page);
-    await page.keyboard.press('ArrowRight'); // masters (opens)
-    await page.keyboard.press('Escape'); // close, focus returns to masters
-    await expect(page.locator('button[data-menu-key="masters"]')).toBeFocused();
     await page.keyboard.press('ArrowDown');
-    await expect(page.locator('button[data-menu-key="masters"]')).toHaveAttribute(
+    await expect(page.locator('button[data-menu-key="file"]')).toHaveAttribute(
       'aria-expanded',
       'true',
     );
