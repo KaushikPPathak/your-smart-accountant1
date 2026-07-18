@@ -169,10 +169,25 @@ function AppLayout() {
   // so this component no longer attaches its own window keydown listener.
 
 
-  // Startup focus: intentionally NOT programmatically focused. The menubar
-  // owns roving tabIndex, so a single Tab lands on the first trigger. This
-  // keeps the keyboard model honest — no hidden .focus() calls, exactly what
-  // the cold-start Playwright test exercises.
+  // Startup focus: after the workspace mounts (company chosen + unlocked),
+  // move focus to the first top-menu trigger so the user can immediately drive
+  // the menubar with arrow keys — no initial Tab press required. We only do
+  // this when focus is still on <body> (i.e. the user hasn't already clicked
+  // or tabbed somewhere), so we never steal focus mid-interaction.
+  useEffect(() => {
+    if (bootstrapping || companyLoading) return;
+    if (!activeCompanyId) return;
+    if (onCompaniesPage) return;
+    const id = window.setTimeout(() => {
+      const active = document.activeElement as HTMLElement | null;
+      if (active && active !== document.body && active.tagName !== "MAIN") return;
+      const firstTrigger = document.querySelector<HTMLElement>(
+        ".busy-topbar button.busy-menu",
+      );
+      firstTrigger?.focus();
+    }, 50);
+    return () => window.clearTimeout(id);
+  }, [bootstrapping, companyLoading, activeCompanyId, onCompaniesPage]);
 
 
 
