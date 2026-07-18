@@ -37,6 +37,14 @@ async function seedCompanies(page: Page, companies: Array<{ id: string; name: st
   }, companies);
 }
 
+/**
+ * Honest cold-start of the real workspace: seed IndexedDB, click the picker
+ * tile once (mouse is allowed for setup), then RELOAD so focus starts on
+ * document.body — no residual click focus, no programmatic .focus() masking.
+ *
+ * After this returns, the calling test must drive everything via
+ * page.keyboard.press() only.
+ */
 export async function setupRealWorkspace(page: Page) {
   await prepareDesktopRuntime(page);
   await page.goto('/');
@@ -50,11 +58,13 @@ export async function setupRealWorkspace(page: Page) {
     sessionStorage.setItem('ym_unlocked_test-company-123', '1');
   });
   await page.goto('/app');
+  // Company picker renders at root — click to unlock the workspace.
   const pickerTile = page.getByRole('button', { name: /Test Business Corp/i });
-  if (await pickerTile.isVisible().catch(() => false)) {
-    await pickerTile.focus();
-    await page.keyboard.press('Enter');
-  }
+  await pickerTile.waitFor({ state: 'visible' });
+  await pickerTile.click();
+  await page.waitForSelector('nav[aria-label="Primary menus"]');
+  // Reload to reach honest cold-start focus state (body, nothing focused).
+  await page.reload();
   await page.waitForSelector('nav[aria-label="Primary menus"]');
 }
 

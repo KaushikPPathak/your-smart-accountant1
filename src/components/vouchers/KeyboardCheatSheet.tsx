@@ -13,6 +13,20 @@ const STATIC_ROWS: Array<{ combo: string; description: string; scope: ShortcutSc
   { combo: "Esc", description: "Cancel · close overlay · go back (staged)", scope: "global" },
   { combo: "Type any letter in a picker", description: "Open dropdown and start filtering", scope: "voucher" },
   { combo: "Alt+C (in picker)", description: "Create new ledger / item from inside the picker", scope: "voucher" },
+  // Menubar access keys — owned by Radix Menubar (not the useShortcut engine),
+  // so they never register in the live binding list. Documented here so users
+  // can still discover them from the cheat sheet.
+  { combo: "Tab", description: "Move focus to the top menu bar", scope: "menubar" },
+  { combo: "← / →", description: "Move between top menus", scope: "menubar" },
+  { combo: "↓ / Enter / Space", description: "Open the focused top menu", scope: "menubar" },
+  { combo: "Home / End", description: "First / last top menu", scope: "menubar" },
+  { combo: "Alt+F", description: "Open File menu", scope: "menubar" },
+  { combo: "Alt+M", description: "Open Masters menu", scope: "menubar" },
+  { combo: "Alt+T", description: "Open Transactions menu", scope: "menubar" },
+  { combo: "Alt+R", description: "Open Reports menu", scope: "menubar" },
+  { combo: "Alt+U", description: "Open Utilities menu", scope: "menubar" },
+  { combo: "Alt+A", description: "Open Administration menu", scope: "menubar" },
+  { combo: "F6", description: "Move between report toolbar and grid", scope: "report" },
 ];
 
 const SCOPE_ORDER: ShortcutScope[] = ["global", "menubar", "voucher", "report", "grid", "dialog"];

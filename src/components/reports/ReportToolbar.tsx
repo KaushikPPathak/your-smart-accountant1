@@ -64,9 +64,41 @@ export function ReportToolbar({
     onExportCsv();
   }, { scope: "report", description: "Export CSV" });
 
+  // F6 bridge — toggle focus between this toolbar and the report's data grid.
+  // Standard WAI pattern for moving between "regions" on complex screens.
+  const toolbarRef = React.useRef<HTMLDivElement | null>(null);
+  useShortcut(
+    "F6",
+    (e) => {
+      const active = document.activeElement as HTMLElement | null;
+      const inGrid = active?.closest('[role="grid"]') != null;
+      const inToolbar = toolbarRef.current?.contains(active) ?? false;
+      if (inToolbar || (!inGrid && !inToolbar)) {
+        // Toolbar → Grid (or nowhere → Grid).
+        const grid = document.querySelector<HTMLElement>('[role="grid"]');
+        const firstCell =
+          grid?.querySelector<HTMLElement>('[role="row"] [role="gridcell"], [role="row"] button, [role="row"] a') ??
+          grid;
+        if (firstCell) {
+          e.preventDefault();
+          firstCell.focus();
+        }
+        return;
+      }
+      // Grid → Toolbar.
+      const firstBtn = toolbarRef.current?.querySelector<HTMLElement>('button, [href], input');
+      if (firstBtn) {
+        e.preventDefault();
+        firstBtn.focus();
+      }
+    },
+    { scope: "report", allowInField: true, description: "Move between toolbar and grid" },
+  );
+
   return (
 
-    <div className="flex flex-wrap items-end gap-3 print:hidden">
+    <div ref={toolbarRef} className="flex flex-wrap items-end gap-3 print:hidden">
+
       {!hideDates && (
         <>
           <div className="space-y-1">
