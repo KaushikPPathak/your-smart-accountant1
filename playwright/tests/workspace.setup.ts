@@ -58,10 +58,10 @@ export async function setupRealWorkspace(page: Page) {
     sessionStorage.setItem('ym_unlocked_test-company-123', '1');
   });
   await page.goto('/app');
+  // Company picker renders at root — click to unlock the workspace.
   const pickerTile = page.getByRole('button', { name: /Test Business Corp/i });
-  if (await pickerTile.isVisible().catch(() => false)) {
-    await pickerTile.click();
-  }
+  await pickerTile.waitFor({ state: 'visible' });
+  await pickerTile.click();
   await page.waitForSelector('nav[aria-label="Primary menus"]');
   // Reload to reach honest cold-start focus state (body, nothing focused).
   await page.reload();
