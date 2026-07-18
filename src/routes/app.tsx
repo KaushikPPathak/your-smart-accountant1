@@ -340,6 +340,46 @@ function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
     { scope: "global", allowInField: true, description: "Show keyboard shortcuts" },
   );
 
+  // Staged Escape (single owner). Ordered stages:
+  //   1. Field focused (input/textarea/select/contentEditable) → blur.
+  //   2. Any Radix overlay open → let Radix close it first (no-op here).
+  //   3. Focus already on the menubar → let TopMenuBar's own Escape binding
+  //      handle the exit-confirm dialog.
+  //   4. On a voucher entry route → navigate back to the voucher list.
+  //   5. Anywhere else → focus the first top-menu trigger.
+  useShortcut(
+    "Escape",
+    (e) => {
+      const target = e.target as HTMLElement | null;
+      const inField =
+        !!target &&
+        (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
+      const openOverlay = document.querySelector(
+        '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-radix-popper-content-wrapper]',
+      );
+      if (openOverlay) return;
+      if (inField) {
+        e.preventDefault();
+        target?.blur?.();
+        return;
+      }
+      if (target?.closest?.(".busy-topbar")) return;
+      if (location.pathname.startsWith("/app/vouchers/new/")) {
+        e.preventDefault();
+        navigate({ to: "/app/vouchers" });
+        return;
+      }
+      const firstTrigger = document.querySelector<HTMLElement>(
+        ".busy-topbar button.busy-menu",
+      );
+      if (firstTrigger) {
+        e.preventDefault();
+        firstTrigger.focus();
+      }
+    },
+    { scope: "global", allowInField: true, description: "Escape / back" },
+  );
+
   useShortcut(
     "Alt+l",
     (e) => {
@@ -351,6 +391,7 @@ function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
     },
     { scope: "global", description: "Jump to Ledger report" },
   );
+
 
   for (const [key, dest] of Object.entries(VOUCHER_MAP)) {
     // eslint-disable-next-line react-hooks/rules-of-hooks
