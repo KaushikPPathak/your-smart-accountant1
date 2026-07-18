@@ -14,9 +14,20 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          // Sandbox ships chromium build 1194 at this fixed path; the version
+          // packaged with @playwright/test expects a newer build that isn't
+          // available offline. Pointing at the installed binary avoids the
+          // "run npx playwright install" trap.
+          executablePath: '/chromium-1194/chrome-linux/chrome',
+          args: ['--no-sandbox'],
+        },
+      },
     },
   ],
+
   webServer: {
     command: 'bun run dev',
     url: 'http://localhost:8080',
