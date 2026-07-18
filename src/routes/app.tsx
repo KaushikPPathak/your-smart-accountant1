@@ -389,17 +389,6 @@ function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
   );
 
 
-  for (const [key, dest] of Object.entries(VOUCHER_MAP)) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useShortcut(
-      `Alt+${key}`,
-      (e) => {
-        e.preventDefault();
-        navigate({ to: dest });
-      },
-      { scope: "global", description: `New voucher (${dest.split("/").pop()})` },
-    );
-  }
 
   return null;
 }
