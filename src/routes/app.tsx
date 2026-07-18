@@ -169,24 +169,12 @@ function AppLayout() {
   // so this component no longer attaches its own window keydown listener.
 
 
-  // Desktop-style startup focus: once the workspace replaces the loading
-  // screen, make the menu immediately keyboard-ready without requiring a
-  // preliminary mouse click or Tab. Voucher screens keep their deliberate
-  // field autofocus; this only runs when focus is still on the document body.
-  useEffect(() => {
-    if (bootstrapping || companyLoading) return;
-    // Radix Menubar Root is a <div role="menubar"> — not focusable. Focus the
-    // first trigger button instead (roving tabindex owns the rest).
-    const frame = requestAnimationFrame(() => {
-      const active = document.activeElement;
-      if (active && active !== document.body && active !== document.documentElement) return;
-      const firstTrigger = workspaceRef.current?.querySelector<HTMLElement>(
-        '.busy-topbar button.busy-menu',
-      );
-      firstTrigger?.focus({ preventScroll: true });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [bootstrapping, companyLoading]);
+  // Startup focus: intentionally NOT programmatically focused. The menubar
+  // owns roving tabIndex, so a single Tab lands on the first trigger. This
+  // keeps the keyboard model honest — no hidden .focus() calls, exactly what
+  // the cold-start Playwright test exercises.
+
+
 
 
   const onCompaniesPage = location.pathname.startsWith("/app/companies");
