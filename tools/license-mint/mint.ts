@@ -2,10 +2,8 @@
 //
 // Two modes:
 //
-// 1) Interactive (just run with no args — recommended):
+// 1) Interactive (recommended):
 //      bun run tools/license-mint/mint.ts
-//    You'll be prompted for name, email, plan, devices, expiry (DD-MM-YYYY),
-//    then asked "Generate? (Y/N)" before the key is minted.
 //
 // 2) Flags (scriptable):
 //      bun run tools/license-mint/mint.ts \
@@ -13,19 +11,38 @@
 //        --email ramesh@example.com \
 //        --devices 2 \
 //        --plan pro \
-//        --expires 2027-07-12          (ISO YYYY-MM-DD)
+//        --expires 2027-07-12
 //
-// Prints the license key on its own line. Send it to the buyer.
+// Every minted license is archived under tools/license-mint/licenses/
+// as both a JSON record and a human-readable .txt backup.
+// The license key is also copied to the Windows clipboard when available.
 
 import * as ed from "@noble/ed25519";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
+import { spawn } from "node:child_process";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PRIVATE_KEY_PATH = join(HERE, "private.key");
+const LICENSES_DIR = join(HERE, "licenses");
+
+// ── Colors ─────────────────────────────────────────────────────────────────
+const useColor = stdout.isTTY;
+const c = {
+  reset: useColor ? "\x1b[0m" : "",
+  green: useColor ? "\x1b[32m" : "",
+  yellow: useColor ? "\x1b[33m" : "",
+  red: useColor ? "\x1b[31m" : "",
+  cyan: useColor ? "\x1b[36m" : "",
+  bold: useColor ? "\x1b[1m" : "",
+};
+const ok = (s: string) => console.log(`${c.green}${s}${c.reset}`);
+const warn = (s: string) => console.log(`${c.yellow}${s}${c.reset}`);
+const err = (s: string) => console.error(`${c.red}${s}${c.reset}`);
+const info = (s: string) => console.log(`${c.cyan}${s}${c.reset}`);
 
 type Plan = "basic" | "pro" | "lifetime";
 
@@ -34,7 +51,7 @@ interface Args {
   email: string;
   devices: number;
   plan: Plan;
-  expires?: string; // ISO YYYY-MM-DD
+  expires?: string;
   id?: string;
 }
 
@@ -61,7 +78,6 @@ function normalisePlan(p: string): Plan {
   return plan;
 }
 
-/** Accepts DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD. Returns ISO YYYY-MM-DD. */
 function normaliseExpiry(input: string): string {
   const s = input.trim();
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
@@ -105,38 +121,6 @@ function validateArgs(raw: {
   };
 }
 
-async function promptInteractive(): Promise<Args | null> {
-  const rl = createInterface({ input: stdin, output: stdout });
-  try {
-    const name = (await rl.question("Customer Name: ")).trim();
-    const email = (await rl.question("Email: ")).trim();
-    const planRaw = (await rl.question("Plan [pro]: ")).trim() || "pro";
-    const plan = normalisePlan(planRaw);
-    const devicesRaw = (await rl.question("Devices [1]: ")).trim() || "1";
-    let expires: string | undefined;
-    if (plan !== "lifetime") {
-      const exp = (await rl.question("Expiry (DD-MM-YYYY): ")).trim();
-      expires = normaliseExpiry(exp);
-    }
-    const args = validateArgs({ name, email, devices: devicesRaw, plan, expires });
-
-    console.log("\n── Review ─────────────────────────────────────────────────────");
-    console.log(`  Customer : ${args.name} <${args.email}>`);
-    console.log(`  Plan     : ${args.plan}`);
-    console.log(`  Devices  : ${args.devices}`);
-    console.log(`  Expires  : ${args.expires ?? "never (lifetime)"}`);
-    console.log("───────────────────────────────────────────────────────────────");
-    const confirm = (await rl.question("Generate? (Y/N): ")).trim().toLowerCase();
-    if (confirm !== "y" && confirm !== "yes") {
-      console.log("Aborted. No key generated.");
-      return null;
-    }
-    return args;
-  } finally {
-    rl.close();
-  }
-}
-
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.trim();
   const out = new Uint8Array(clean.length / 2);
@@ -158,10 +142,119 @@ function newLicenseId(): string {
   return `L-${stamp}-${rand}`;
 }
 
+function slugify(s: string): string {
+  return s.trim().replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "customer";
+}
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function nowStamp(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function uniqueFilePath(dir: string, base: string, ext: string): string {
+  let candidate = join(dir, `${base}${ext}`);
+  let n = 2;
+  while (existsSync(candidate)) {
+    candidate = join(dir, `${base}_${n}${ext}`);
+    n++;
+  }
+  return candidate;
+}
+
+function findDuplicate(args: Args): string | null {
+  if (!existsSync(LICENSES_DIR)) return null;
+  const files = readdirSync(LICENSES_DIR).filter((f) => f.endsWith(".json"));
+  for (const f of files) {
+    try {
+      const rec = JSON.parse(readFileSync(join(LICENSES_DIR, f), "utf8"));
+      if (
+        String(rec.customerName ?? "").trim().toLowerCase() === args.name.toLowerCase() &&
+        String(rec.email ?? "").trim().toLowerCase() === args.email.toLowerCase() &&
+        String(rec.plan ?? "").toLowerCase() === args.plan &&
+        String(rec.expiry ?? "") === (args.expires ?? "")
+      ) {
+        return f;
+      }
+    } catch {
+      // ignore corrupt file
+    }
+  }
+  return null;
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  const isWin = process.platform === "win32";
+  const isMac = process.platform === "darwin";
+  const cmd = isWin ? "clip" : isMac ? "pbcopy" : "xclip";
+  const args = isWin ? [] : isMac ? [] : ["-selection", "clipboard"];
+  return new Promise((resolve) => {
+    try {
+      const p = spawn(cmd, args, { stdio: ["pipe", "ignore", "ignore"] });
+      p.on("error", () => resolve(false));
+      p.on("close", (code) => resolve(code === 0));
+      p.stdin.end(text);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+async function promptInteractive(): Promise<Args | null> {
+  const rl = createInterface({ input: stdin, output: stdout });
+  try {
+    info("── New License ─────────────────────────────────────────────");
+    const name = (await rl.question("Customer Name : ")).trim();
+    const email = (await rl.question("Email         : ")).trim();
+    const planRaw = (await rl.question("Plan [pro]    : ")).trim() || "pro";
+    const plan = normalisePlan(planRaw);
+    const devicesRaw = (await rl.question("Devices [1]   : ")).trim() || "1";
+    let expires: string | undefined;
+    if (plan !== "lifetime") {
+      const exp = (await rl.question("Expiry (DD-MM-YYYY): ")).trim();
+      expires = normaliseExpiry(exp);
+    }
+    const args = validateArgs({ name, email, devices: devicesRaw, plan, expires });
+
+    // Duplicate check
+    const dup = findDuplicate(args);
+    if (dup) {
+      warn(`\nA license already exists for this customer (${dup}).`);
+      const again = (await rl.question("Generate another one anyway? (Y/N): ")).trim().toLowerCase();
+      if (again !== "y" && again !== "yes") {
+        info("Aborted. No key generated.");
+        return null;
+      }
+    }
+
+    console.log("\n----------------------------------------");
+    console.log(`Customer : ${args.name}`);
+    console.log(`Email    : ${args.email}`);
+    console.log(`Plan     : ${args.plan}`);
+    console.log(`Devices  : ${args.devices}`);
+    console.log(`Expiry   : ${args.expires ?? "never (lifetime)"}`);
+    console.log("");
+    const confirm = (await rl.question("Generate License? (Y/N): ")).trim().toLowerCase();
+    console.log("----------------------------------------");
+    if (confirm !== "y" && confirm !== "yes") {
+      info("Aborted. No key generated.");
+      return null;
+    }
+    return args;
+  } finally {
+    rl.close();
+  }
+}
+
 async function main() {
   if (!existsSync(PRIVATE_KEY_PATH)) {
-    console.error(`\nprivate.key not found at ${PRIVATE_KEY_PATH}`);
-    console.error(`Run: bun run tools/license-mint/keygen.ts\n`);
+    err(`\nprivate.key not found at ${PRIVATE_KEY_PATH}`);
+    err(`Run: bun run tools/license-mint/keygen.ts\n`);
     process.exit(1);
   }
 
@@ -169,11 +262,12 @@ async function main() {
   let args: Args | null;
 
   if (Object.keys(flagArgs).length === 0) {
-    // Interactive
     args = await promptInteractive();
     if (!args) return;
   } else {
     args = validateArgs(flagArgs);
+    const dup = findDuplicate(args);
+    if (dup) warn(`Warning: a license already exists for this customer (${dup}). Proceeding (flag mode).`);
   }
 
   const priv = hexToBytes(readFileSync(PRIVATE_KEY_PATH, "utf8"));
@@ -195,18 +289,73 @@ async function main() {
   const prefix = "SMAC-" + args.plan.toUpperCase();
   const key = `${prefix}-${payloadB64}.${sigB64}`;
 
-  console.log("\n── License minted ─────────────────────────────────────────────");
-  console.log(`  Customer : ${args.name} <${args.email}>`);
-  console.log(`  Plan     : ${args.plan}`);
-  console.log(`  Devices  : ${args.devices}`);
-  console.log(`  Expires  : ${args.expires ?? "never (lifetime)"}`);
-  console.log(`  ID       : ${payload.id}`);
-  console.log("───────────────────────────────────────────────────────────────");
-  console.log("\n" + key + "\n");
-  console.log("Send the line above to the buyer. They paste it into Settings → License.\n");
+  // Archive
+  if (!existsSync(LICENSES_DIR)) mkdirSync(LICENSES_DIR, { recursive: true });
+  const base = `${slugify(args.name)}_${todayIso()}`;
+  const jsonPath = uniqueFilePath(LICENSES_DIR, base, ".json");
+  const txtBase = jsonPath.replace(/\.json$/, "");
+  const txtPath = `${txtBase}.txt`;
+
+  const record = {
+    customerName: args.name,
+    email: args.email,
+    plan: args.plan,
+    devices: args.devices,
+    expiry: args.expires ?? "",
+    generatedAt: nowStamp(),
+    license: key,
+  };
+  writeFileSync(jsonPath, JSON.stringify(record, null, 2), "utf8");
+
+  const txt = [
+    "Smart Accountant License",
+    "",
+    "Customer:",
+    args.name,
+    "",
+    "Email:",
+    args.email,
+    "",
+    "Plan:",
+    args.plan.toUpperCase(),
+    "",
+    "Devices:",
+    String(args.devices),
+    "",
+    "Expiry:",
+    args.expires ?? "never (lifetime)",
+    "",
+    "Generated:",
+    record.generatedAt,
+    "",
+    "License:",
+    "",
+    key,
+    "",
+  ].join("\n");
+  writeFileSync(txtPath, txt, "utf8");
+
+  // Clipboard
+  const clipOk = await copyToClipboard(key);
+
+  // Output
+  console.log("");
+  ok("========================================");
+  ok("LICENSE GENERATED SUCCESSFULLY");
+  console.log("");
+  console.log(`Customer : ${args.name}`);
+  console.log(`License  : ${key}`);
+  console.log("");
+  ok("========================================");
+  console.log("");
+  info(`Archived : ${jsonPath}`);
+  info(`Backup   : ${txtPath}`);
+  if (clipOk) ok("✓ License copied to clipboard.");
+  else warn("Clipboard unavailable — copy the key above manually.");
+  console.log("");
 }
 
 main().catch((e) => {
-  console.error(String(e?.message ?? e));
+  err(`\nError: ${String(e?.message ?? e)}\n`);
   process.exit(1);
 });
