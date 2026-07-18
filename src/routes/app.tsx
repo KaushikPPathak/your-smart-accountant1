@@ -165,66 +165,16 @@ function AppLayout() {
   // tech user. We just wait for that to finish before rendering.
 
 
-  // Stage-based Escape handling — inherently sequential and context-aware,
-  // so it stays as a raw window listener rather than a single-combo binding.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      const target = e.target as HTMLElement | null;
-      const inField =
-        !!target &&
-        (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
-      const openOverlay = document.querySelector(
-        '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-radix-popper-content-wrapper]',
-      );
-      // Stage 2: let overlays close themselves
-      if (openOverlay) return;
-      // Stage 1: blur field first
-      if (inField) {
-        e.preventDefault();
-        target?.blur?.();
-        return;
-      }
-      // Stage 5 pre-check: TopMenuBar handles its own Esc
-      const onMenubar = target?.closest?.(".busy-topbar");
-      if (onMenubar) return;
-      // Stage 3: voucher entry → back to list
-      if (location.pathname.startsWith("/app/vouchers/new/")) {
-        e.preventDefault();
-        navigate({ to: "/app/vouchers" });
-        return;
-      }
-      // Stage 4: focus the first top-menu trigger
-      const firstTrigger = document.querySelector<HTMLElement>(
-        ".busy-topbar button.busy-menu",
-      );
-      if (firstTrigger) {
-        e.preventDefault();
-        firstTrigger.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [navigate, location.pathname]);
+  // Staged Escape is now handled inside <GlobalShortcuts /> via useShortcut,
+  // so this component no longer attaches its own window keydown listener.
 
-  // Desktop-style startup focus: once the workspace replaces the loading
-  // screen, make the menu immediately keyboard-ready without requiring a
-  // preliminary mouse click or Tab. Voucher screens keep their deliberate
-  // field autofocus; this only runs when focus is still on the document body.
-  useEffect(() => {
-    if (bootstrapping || companyLoading) return;
-    // Radix Menubar Root is a <div role="menubar"> — not focusable. Focus the
-    // first trigger button instead (roving tabindex owns the rest).
-    const frame = requestAnimationFrame(() => {
-      const active = document.activeElement;
-      if (active && active !== document.body && active !== document.documentElement) return;
-      const firstTrigger = workspaceRef.current?.querySelector<HTMLElement>(
-        '.busy-topbar button.busy-menu',
-      );
-      firstTrigger?.focus({ preventScroll: true });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [bootstrapping, companyLoading]);
+
+  // Startup focus: intentionally NOT programmatically focused. The menubar
+  // owns roving tabIndex, so a single Tab lands on the first trigger. This
+  // keeps the keyboard model honest — no hidden .focus() calls, exactly what
+  // the cold-start Playwright test exercises.
+
+
 
 
   const onCompaniesPage = location.pathname.startsWith("/app/companies");
@@ -351,19 +301,15 @@ function AppLayout() {
 }
 
 // -----------------------------------------------------------------------------
-// Global shortcuts (mounted inside <KeyboardProvider>): F1 help, Alt+L ledger,
-// and Alt+<letter> voucher creation. Kept as a child so useShortcut can access
-// the provider context.
+// Global shortcuts (mounted inside <KeyboardProvider>): F1 help, staged Escape,
+// Alt+L ledger. Kept as a child so useShortcut can access the provider context.
+//
+// Note: Alt+<letter> voucher shortcuts used to live here but were removed —
+// they conflicted with TopMenuBar's Alt+<letter> menu access keys (Alt+P for
+// Print vs Purchase, Alt+R for Reports vs Receipt). The top menus already
+// expose those voucher shortcuts via Transactions.
 // -----------------------------------------------------------------------------
-const VOUCHER_MAP: Record<string, string> = {
-  s: "/app/vouchers/new/sales",
-  p: "/app/vouchers/new/purchase",
-  r: "/app/vouchers/new/receipt",
-  y: "/app/vouchers/new/payment",
-  c: "/app/vouchers/new/credit_note",
-  d: "/app/vouchers/new/debit_note",
-  j: "/app/vouchers/new/journal",
-};
+
 
 function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
   const navigate = useNavigate();
@@ -378,6 +324,46 @@ function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
     { scope: "global", allowInField: true, description: "Show keyboard shortcuts" },
   );
 
+  // Staged Escape (single owner). Ordered stages:
+  //   1. Field focused (input/textarea/select/contentEditable) → blur.
+  //   2. Any Radix overlay open → let Radix close it first (no-op here).
+  //   3. Focus already on the menubar → let TopMenuBar's own Escape binding
+  //      handle the exit-confirm dialog.
+  //   4. On a voucher entry route → navigate back to the voucher list.
+  //   5. Anywhere else → focus the first top-menu trigger.
+  useShortcut(
+    "Escape",
+    (e) => {
+      const target = e.target as HTMLElement | null;
+      const inField =
+        !!target &&
+        (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
+      const openOverlay = document.querySelector(
+        '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-radix-popper-content-wrapper]',
+      );
+      if (openOverlay) return;
+      if (inField) {
+        e.preventDefault();
+        target?.blur?.();
+        return;
+      }
+      if (target?.closest?.(".busy-topbar")) return;
+      if (location.pathname.startsWith("/app/vouchers/new/")) {
+        e.preventDefault();
+        navigate({ to: "/app/vouchers" });
+        return;
+      }
+      const firstTrigger = document.querySelector<HTMLElement>(
+        ".busy-topbar button.busy-menu",
+      );
+      if (firstTrigger) {
+        e.preventDefault();
+        firstTrigger.focus();
+      }
+    },
+    { scope: "global", allowInField: true, description: "Escape / back" },
+  );
+
   useShortcut(
     "Alt+l",
     (e) => {
@@ -390,17 +376,7 @@ function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
     { scope: "global", description: "Jump to Ledger report" },
   );
 
-  for (const [key, dest] of Object.entries(VOUCHER_MAP)) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useShortcut(
-      `Alt+${key}`,
-      (e) => {
-        e.preventDefault();
-        navigate({ to: dest });
-      },
-      { scope: "global", description: `New voucher (${dest.split("/").pop()})` },
-    );
-  }
+
 
   return null;
 }
