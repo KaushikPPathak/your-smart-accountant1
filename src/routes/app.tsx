@@ -313,19 +313,15 @@ function AppLayout() {
 }
 
 // -----------------------------------------------------------------------------
-// Global shortcuts (mounted inside <KeyboardProvider>): F1 help, Alt+L ledger,
-// and Alt+<letter> voucher creation. Kept as a child so useShortcut can access
-// the provider context.
+// Global shortcuts (mounted inside <KeyboardProvider>): F1 help, staged Escape,
+// Alt+L ledger. Kept as a child so useShortcut can access the provider context.
+//
+// Note: Alt+<letter> voucher shortcuts used to live here but were removed —
+// they conflicted with TopMenuBar's Alt+<letter> menu access keys (Alt+P for
+// Print vs Purchase, Alt+R for Reports vs Receipt). The top menus already
+// expose those voucher shortcuts via Transactions.
 // -----------------------------------------------------------------------------
-const VOUCHER_MAP: Record<string, string> = {
-  s: "/app/vouchers/new/sales",
-  p: "/app/vouchers/new/purchase",
-  r: "/app/vouchers/new/receipt",
-  y: "/app/vouchers/new/payment",
-  c: "/app/vouchers/new/credit_note",
-  d: "/app/vouchers/new/debit_note",
-  j: "/app/vouchers/new/journal",
-};
+
 
 function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
   const navigate = useNavigate();
