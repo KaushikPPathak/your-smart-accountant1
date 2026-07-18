@@ -465,7 +465,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                   data-menu-key={m.key}
                   id={`${menubarId}-menu-${m.key}`}
                   title={`${m.label} (Alt+${m.accessKey.toUpperCase()})`}
-                  onKeyDown={(event) => handleMenuTriggerKeyDown(event)}
+                  onMouseEnter={openOnHover(m.key)}
                 >
                   {labelWithAccessKey(m.label, m.accessKey)}
                   <ChevronDown className="h-3 w-3 opacity-70" />
