@@ -288,33 +288,65 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       ),
     );
 
-  // Alt+letter — focus & open the matching top-level menu (File=F plus each menu's accessKey).
+  // ---------------------------------------------------------------------------
+  // Keyboard behaviour — SINGLE OWNER.
+  //
+  // Radix Menubar owns: Tab exit, Arrow focus movement between triggers,
+  // Enter/Space/ArrowDown to open a trigger, Arrow keys inside open menus,
+  // and Escape to close an open dropdown (which restores trigger focus).
+  //
+  // We enhance ONLY two things:
+  //   1. Hover any trigger  → its menu opens (onMouseEnter).
+  //   2. Focus a trigger via ArrowLeft/ArrowRight  → its menu opens too
+  //      (so the user never has to press Enter to see the dropdown).
+  //
+  // Everything is routed through `openMenuKey` (the controlled `value` of
+  // <Menubar>). No custom keydown listeners, no capture-phase handlers,
+  // no roving tabindex of ours.
+  // ---------------------------------------------------------------------------
   const menubarRef = useRef<HTMLDivElement | null>(null);
   const menubarId = useId();
   const [openMenuKey, setOpenMenuKey] = useState("");
 
+  // Suppress auto-open for the very first focus that lands on the menubar at
+  // startup (Tab-in / programmatic startup focus). After that first focus,
+  // any subsequent trigger focus is user-initiated arrow navigation, and we
+  // open the menu automatically.
+  const suppressNextFocusOpenRef = useRef(true);
+  useEffect(() => {
+    const root = menubarRef.current;
+    if (!root) return;
+    const onFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || !target.classList.contains("busy-menu")) return;
+      if (suppressNextFocusOpenRef.current) {
+        suppressNextFocusOpenRef.current = false;
+        return;
+      }
+      const key = target.dataset.menuKey;
+      if (key) setOpenMenuKey(key);
+    };
+    root.addEventListener("focusin", onFocusIn);
+    return () => root.removeEventListener("focusin", onFocusIn);
+  }, []);
+
+  // When the whole menubar loses focus, arm the suppression again so the
+  // next re-entry (e.g. Tab back in after visiting a form) doesn't auto-open.
+  useEffect(() => {
+    const root = menubarRef.current;
+    if (!root) return;
+    const onFocusOut = (e: FocusEvent) => {
+      const next = e.relatedTarget as HTMLElement | null;
+      if (next && root.contains(next)) return;
+      suppressNextFocusOpenRef.current = true;
+    };
+    root.addEventListener("focusout", onFocusOut);
+    return () => root.removeEventListener("focusout", onFocusOut);
+  }, []);
+
+  const openOnHover = useCallback((key: string) => () => setOpenMenuKey(key), []);
+
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
-
-  const handleMenuTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    const triggers = Array.from(
-      menubarRef.current?.querySelectorAll<HTMLButtonElement>("button.busy-menu") ?? [],
-    );
-    const currentIndex = triggers.indexOf(event.currentTarget);
-    if (currentIndex < 0 || triggers.length === 0) return;
-
-    let nextIndex = currentIndex;
-    if (event.key === "Home") nextIndex = 0;
-    else if (event.key === "End") nextIndex = triggers.length - 1;
-    else if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % triggers.length;
-    else nextIndex = (currentIndex - 1 + triggers.length) % triggers.length;
-
-    event.preventDefault();
-    event.stopPropagation();
-    const next = triggers[nextIndex];
-    next.focus({ preventScroll: true });
-    if (openMenuKey) setOpenMenuKey(next.dataset.menuKey ?? "");
-  };
 
   // Alt+letter → focus & open the matching top-level menu. Registered through
   // the centralized keyboard engine so it appears in the cheat sheet and
@@ -340,39 +372,32 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           );
           if (!btn) return;
           e.preventDefault();
+          suppressNextFocusOpenRef.current = false;
           btn.focus();
           setOpenMenuKey(menuKey);
         },
       }),
     );
     return () => unsubs.forEach((u) => u());
-  }, [kb, visible, setOpenMenuKey]);
+  }, [kb, visible]);
 
-  // Radix owns vertical trigger keys so opening and item autofocus happen in
-  // the same event. Horizontal movement is explicit because the triggers are
-  // split by the visual navigation wrapper.
-
-  // Escape on a focused top-menu trigger (no menu open) → exit the app.
-  // When a dropdown IS open, Radix handles Escape (closes menu, returns focus to trigger).
-  // A second Escape then reaches this handler and triggers exit.
-  useEffect(() => {
-    const root = menubarRef.current;
-    if (!root) return;
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      const target = e.target as HTMLElement | null;
-      if (!target || !target.classList.contains("busy-menu")) return;
-      // If any dropdown is still open, let Radix close it first.
-      if (target.getAttribute("aria-expanded") === "true") return;
-      if (document.querySelector('[data-radix-popper-content-wrapper]')) return;
+  // Escape on a focused menubar trigger (no dropdown open) → confirm exit.
+  // Radix owns the "close open dropdown" Escape; only after the dropdown is
+  // gone does focus land back on the trigger, and the NEXT Escape reaches us.
+  useShortcut(
+    "Escape",
+    (e) => {
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !active.classList.contains("busy-menu")) return;
+      if (active.getAttribute("aria-expanded") === "true") return;
+      if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
       if (!onLock) return;
       e.preventDefault();
-      e.stopPropagation();
       setExitConfirmOpen(true);
-    };
-    root.addEventListener("keydown", onEsc);
-    return () => root.removeEventListener("keydown", onEsc);
-  }, [onLock]);
+    },
+    { scope: "global", allowInField: true, description: "Exit application" },
+  );
+
 
   return (
     <Menubar
