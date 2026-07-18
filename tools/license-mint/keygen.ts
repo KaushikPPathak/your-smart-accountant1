@@ -6,6 +6,21 @@
 // Writes:
 //   tools/license-mint/private.key   (KEEP SECRET — DO NOT COMMIT)
 //   src/lib/license/public-key.ts    (safe to commit; baked into the app)
+//
+// ─────────────────────────────────────────────────────────────────────
+// ROTATING KEYS (emergency only — e.g. private.key was leaked/stolen):
+//   This script NEVER overwrites an existing private.key on its own.
+//   To force a brand-new keypair (which invalidates EVERY license ever
+//   issued and requires re-minting for all legitimate customers):
+//     1. Manually delete tools/license-mint/private.key
+//     2. Run this script again → fresh keypair is generated
+//     3. Rebuild the app (bun run tauri build)
+//     4. Re-mint and re-send keys to all your customers
+//   In normal use you should NEVER need to do this. Keep private.key
+//   safe (USB backup) and this script is idempotent — safe to re-run
+//   before every build.
+// ─────────────────────────────────────────────────────────────────────
+
 
 import * as ed from "@noble/ed25519";
 import { existsSync, writeFileSync, readFileSync } from "node:fs";
