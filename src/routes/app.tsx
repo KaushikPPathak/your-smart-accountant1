@@ -165,47 +165,9 @@ function AppLayout() {
   // tech user. We just wait for that to finish before rendering.
 
 
-  // Stage-based Escape handling — inherently sequential and context-aware,
-  // so it stays as a raw window listener rather than a single-combo binding.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      const target = e.target as HTMLElement | null;
-      const inField =
-        !!target &&
-        (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
-      const openOverlay = document.querySelector(
-        '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-radix-popper-content-wrapper]',
-      );
-      // Stage 2: let overlays close themselves
-      if (openOverlay) return;
-      // Stage 1: blur field first
-      if (inField) {
-        e.preventDefault();
-        target?.blur?.();
-        return;
-      }
-      // Stage 5 pre-check: TopMenuBar handles its own Esc
-      const onMenubar = target?.closest?.(".busy-topbar");
-      if (onMenubar) return;
-      // Stage 3: voucher entry → back to list
-      if (location.pathname.startsWith("/app/vouchers/new/")) {
-        e.preventDefault();
-        navigate({ to: "/app/vouchers" });
-        return;
-      }
-      // Stage 4: focus the first top-menu trigger
-      const firstTrigger = document.querySelector<HTMLElement>(
-        ".busy-topbar button.busy-menu",
-      );
-      if (firstTrigger) {
-        e.preventDefault();
-        firstTrigger.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [navigate, location.pathname]);
+  // Staged Escape is now handled inside <GlobalShortcuts /> via useShortcut,
+  // so this component no longer attaches its own window keydown listener.
+
 
   // Desktop-style startup focus: once the workspace replaces the loading
   // screen, make the menu immediately keyboard-ready without requiring a
