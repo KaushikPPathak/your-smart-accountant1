@@ -65,7 +65,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useOptionalKeyboard } from "@/lib/keyboard";
+import { useOptionalKeyboard, useShortcut } from "@/lib/keyboard";
 
 
 interface NavItem { title: string; url: string; icon: LucideIcon; i18nKey?: string }
