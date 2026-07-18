@@ -168,6 +168,7 @@ function AppLayout() {
   // Staged Escape is now handled inside <GlobalShortcuts /> via useShortcut,
   // so this component no longer attaches its own window keydown listener.
 
+  const onCompaniesPage = location.pathname.startsWith("/app/companies");
 
   // Startup focus: after the workspace mounts (company chosen + unlocked),
   // move focus to the first top-menu trigger so the user can immediately drive
