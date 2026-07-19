@@ -114,7 +114,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
           if (res.error) toast.error(`GSTIN verify: ${res.error}`);
           return;
         }
-        setName((prev) => (prev.trim() ? prev : (res.legalName || res.tradeName || prev)));
+        setName((prev) => (prev.trim() ? prev : toTitleCaseOnType(res.legalName || res.tradeName || prev)));
         if (res.principalPlaceOfBusiness) {
           setAddress((prev) => (prev.trim() ? prev : res.principalPlaceOfBusiness ?? prev));
         }
