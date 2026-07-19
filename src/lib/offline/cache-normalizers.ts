@@ -38,7 +38,11 @@ export function normalizeCompany<T extends AnyRow>(row: T | null | undefined): T
   if (out.entity_status == null) out.entity_status = "individual";
   if (out.currency_code == null) out.currency_code = "INR";
   if (out.date_format == null) out.date_format = "dd-mm-yyyy";
-  if (out.mode == null) out.mode = "normal";
+  // Local-only mode is the default posture of this app — every company keeps
+  // a continuous local copy on the PC. Default missing `mode` to "trial_local"
+  // so the "Trial books" tick survives fresh installs and cloud snapshots
+  // that predate the column. Users who explicitly set mode="normal" keep it.
+  if (out.mode == null) out.mode = "trial_local";
   if (out.annual_turnover_paise == null) out.annual_turnover_paise = 0;
   if (out.share_capital_paise == null) out.share_capital_paise = 0;
   if (out.corpus_fund_paise == null) out.corpus_fund_paise = 0;
