@@ -321,7 +321,14 @@ function CompaniesPage() {
     try {
       if (editingId) {
         const { error } = await supabase.from("companies").update(payload).eq("id", editingId);
-        if (error) { setSubmitting(false); toast.error(error.message); return; }
+        // Ignore cloud error for local-only / restored companies; still mirror locally.
+        if (error && !isLocalOnlyMode()) { setSubmitting(false); toast.error(error.message); return; }
+        try {
+          const { offlineDb } = await import("@/lib/offline/db");
+          const existing = (await offlineDb.cache_companies.get(editingId)) || { id: editingId };
+          await offlineDb.cache_companies.put({ ...existing, ...payload, id: editingId, updated_at: new Date().toISOString() });
+          await offlineDb.companies.put({ id: editingId, name: payload.name, has_password: (existing as any).has_password ?? false });
+        } catch { /* non-fatal */ }
         savedId = editingId;
         toast.success("Company updated");
       } else {
