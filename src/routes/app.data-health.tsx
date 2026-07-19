@@ -190,15 +190,21 @@ function DataHealthPage() {
                 {rows.map((r) => {
                   const liveTotal = r.live.ledgers + r.live.items + r.live.vouchers;
                   const manifestTotal = r.manifest ? totalRows(r.manifest) : 0;
+                  const isDup = dupNames.has(r.companyName.trim().replace(/\s+/g, " ").toLowerCase());
                   let status: { label: string; icon: ReactElement; tone: string };
                   if (!r.manifest) status = { label: "No baseline yet", icon: <HelpCircle className="h-3.5 w-3.5" />, tone: "bg-muted text-muted-foreground" };
                   else if (manifestTotal === 0) status = { label: "Empty (never had data)", icon: <HelpCircle className="h-3.5 w-3.5" />, tone: "bg-muted text-muted-foreground" };
+                  else if (liveTotal > manifestTotal * 1.1) status = { label: "Manifest stale — snapshot not caught up", icon: <AlertTriangle className="h-3.5 w-3.5" />, tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400" };
                   else if (liveTotal >= manifestTotal * 0.9) status = { label: "Healthy", icon: <CheckCircle2 className="h-3.5 w-3.5" />, tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" };
                   else if (liveTotal === 0) status = { label: "Empty — recovery pending", icon: <AlertTriangle className="h-3.5 w-3.5" />, tone: "bg-destructive/15 text-destructive" };
                   else status = { label: "Shrunk — recovery pending", icon: <AlertTriangle className="h-3.5 w-3.5" />, tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400" };
                   return (
                     <tr key={r.companyId} className="border-b last:border-0">
-                      <td className="px-4 py-2 font-medium">{r.companyName}</td>
+                      <td className="px-4 py-2 font-medium">
+                        {r.companyName}
+                        {isDup && <Badge variant="outline" className="ml-2 border-amber-500/50 text-amber-700 dark:text-amber-400">duplicate</Badge>}
+                        <div className="text-[10px] font-normal text-muted-foreground">{r.companyId.slice(0, 8)}…</div>
+                      </td>
                       <td className="px-4 py-2 tabular-nums">
                         L {r.live.ledgers} · I {r.live.items} · V {r.live.vouchers}
                       </td>
