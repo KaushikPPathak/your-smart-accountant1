@@ -378,6 +378,18 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
   { code: "998873", desc: "Job work related to manufacturing of goods", cgst: 6, sgst: 6, igst: 12 },
 ];
 
+// Merge primary + extended, deduplicating by code (primary takes precedence).
+const _seen = new Set<string>();
+export const HSN_MASTER_DATASET: HsnSeedItem[] = [
+  ...HSN_PRIMARY_DATASET,
+  ...HSN_EXTENDED_DATASET,
+].filter((item) => {
+  const key = item.code.toUpperCase();
+  if (_seen.has(key)) return false;
+  _seen.add(key);
+  return true;
+});
+
 export async function ensureHsnSeed(): Promise<void> {
   try {
     const check = await safeBrainSelect<{ count: number }>(
