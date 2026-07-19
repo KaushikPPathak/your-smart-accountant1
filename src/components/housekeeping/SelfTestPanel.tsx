@@ -43,7 +43,7 @@ interface Check {
 const INITIAL: Omit<Check, "status" | "message">[] = [
   { key: "auth", label: "Authenticated session" },
   { key: "company", label: "Active company selected" },
-  { key: "db_ping", label: "Database connectivity" },
+  { key: "db_ping", label: "Cloud reachability (auth only)" },
   { key: "tables", label: "Core tables readable" },
   { key: "settings", label: "Company settings row present" },
   { key: "ledgers", label: "Has at least one ledger" },
