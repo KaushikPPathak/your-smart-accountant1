@@ -163,7 +163,7 @@ function voucherFingerprint(row: Record<string, unknown>): string {
     row.voucher_date ?? row.date ?? "",
     String(row.voucher_type ?? row.type ?? "").toLocaleLowerCase(),
     String(row.voucher_number ?? row.number ?? "").trim(),
-    Number(row.total_amount ?? row.amount ?? row.grand_total ?? 0),
+    Number(row.total_amount_paise ?? row.total_paise ?? row.total_amount ?? row.amount ?? row.grand_total ?? 0),
   ]);
 }
 
