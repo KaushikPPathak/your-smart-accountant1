@@ -55,6 +55,7 @@ import { useCurrency, CURRENCIES } from "@/lib/currency";
 import { useDateFormat, DATE_FORMATS, type DateFormatCode } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
+import { BackupNowButton } from "@/components/BackupNowButton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -592,6 +593,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       <div className="busy-company gap-2">
         {rightExtras}
         <CompanySwitcher />
+        <BackupNowButton />
       </div>
 
       <AlertDialog open={exitConfirmOpen} onOpenChange={setExitConfirmOpen}>
