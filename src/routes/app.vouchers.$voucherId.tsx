@@ -522,12 +522,11 @@ function VoucherEditPage() {
     if (!kb) return;
     return kb.pushScope("voucher");
   }, [kb]);
+  const saveRef = useRef(save);
+  saveRef.current = save;
   const saveHandler = useCallback((e: KeyboardEvent) => {
     e.preventDefault();
-    if (!saving && canWrite) void save();
-    // `save` is a stable closure inside the component; we intentionally don't
-    // list it as a dep — it captures the latest state via React on each render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!saving && canWrite) void saveRef.current();
   }, [saving, canWrite]);
   useShortcut("Ctrl+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
   useShortcut("Meta+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
