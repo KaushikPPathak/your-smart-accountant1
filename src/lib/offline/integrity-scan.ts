@@ -167,7 +167,7 @@ export async function runIntegrityScan(
     { table: "Companies", issue: "gst_registered=false but GSTIN present", count: counts.companyGstinNoFlag },
     { table: "Companies", issue: "missing state_code", count: counts.companyNoState },
     { table: "Companies", issue: "missing financial_year_start", count: counts.companyNoFy },
-    { table: "Ledgers", issue: "missing group_id", count: counts.ledgerNoGroup },
+    { table: "Ledgers", issue: "missing type (account group)", count: counts.ledgerNoGroup },
     { table: "Ledgers", issue: "GSTIN present but no gst_treatment", count: counts.ledgerGstinNoTreatment },
     { table: "Items", issue: "missing hsn_code", count: counts.itemNoHsn },
     { table: "Items", issue: "gst_rate is null/undefined", count: counts.itemNoRate },
