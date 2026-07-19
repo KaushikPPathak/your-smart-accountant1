@@ -99,7 +99,7 @@ const empty: FormState = {
   gst_filing_frequency: "monthly",
   inventory_enabled: true,
   annual_turnover_lakhs: "",
-  trial_local: false,
+  trial_local: true,
   currency_code: "INR",
   date_format: "dd-mm-yyyy",
 };
