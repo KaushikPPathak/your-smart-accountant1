@@ -147,7 +147,8 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "reports",
-    accessKey: "r",
+    accessKey: "e",
+
     label: "Reports",
     icon: FileBarChart,
     groups: [
