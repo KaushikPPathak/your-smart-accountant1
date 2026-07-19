@@ -330,7 +330,7 @@ function AppLayout() {
 // -----------------------------------------------------------------------------
 
 
-function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
+function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; onOpenCalc: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -341,6 +341,15 @@ function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
       onOpenHelp();
     },
     { scope: "global", allowInField: true, description: "Show keyboard shortcuts" },
+  );
+
+  useShortcut(
+    "Ctrl+Alt+c",
+    (e) => {
+      e.preventDefault();
+      onOpenCalc();
+    },
+    { scope: "global", allowInField: true, description: "Open calculator" },
   );
 
   // Staged Escape (single owner). Ordered stages:
