@@ -196,7 +196,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
             <Input 
               autoFocus 
               value={name} 
-              onChange={(e) => setName(e.target.value)} 
+              onChange={(e) => setName(toTitleCaseOnType(e.target.value))} 
               className="border-slate-200 focus-visible:ring-indigo-500"
             />
           </div>
