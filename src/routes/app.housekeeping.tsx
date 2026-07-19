@@ -214,6 +214,9 @@ function HousekeepingPage() {
         <TabsContent value="merge">
           <MergeLedgersTool companyId={activeCompanyId} disabled={!isAdmin} />
         </TabsContent>
+        <TabsContent value="merge_companies">
+          <MergeCompaniesTool disabled={!isAdmin} />
+        </TabsContent>
         <TabsContent value="renumber">
           <RenumberVouchersTool companyId={activeCompanyId} disabled={!isAdmin} />
         </TabsContent>
