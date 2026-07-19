@@ -1,13 +1,14 @@
 import type { ReactElement } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
-import { ShieldCheck, RefreshCw, AlertTriangle, CheckCircle2, HelpCircle, HardDriveDownload } from "lucide-react";
+import { ShieldCheck, RefreshCw, AlertTriangle, CheckCircle2, HelpCircle, HardDriveDownload, Merge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useCompany } from "@/lib/company-context";
 import { getAllIntegrity, countLive, totalRows, type IntegrityEntry } from "@/lib/integrity";
 import { runAutoRestore, getAutoRestoreEvents, type AutoRestoreOutcome } from "@/lib/auto-restore";
+import { getSnapshotEvents, type SnapshotRunEvent } from "@/lib/snapshot-diagnostics";
 import { toast } from "sonner";
 import { FieldIntegrityPanel } from "@/components/data-health/FieldIntegrityPanel";
 
