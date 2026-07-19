@@ -16,6 +16,7 @@ import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { offlineDb } from "@/lib/offline/db";
 import { lookupGstinViaSetu } from "@/lib/setu";
 import { validateGSTIN } from "@/utils/gstinValidator";
+import { toTitleCaseOnType } from "@/lib/text-case";
 
 export interface QuickLedger {
   id: string;
@@ -113,7 +114,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
           if (res.error) toast.error(`GSTIN verify: ${res.error}`);
           return;
         }
-        setName((prev) => (prev.trim() ? prev : (res.legalName || res.tradeName || prev)));
+        setName((prev) => (prev.trim() ? prev : toTitleCaseOnType(res.legalName || res.tradeName || prev)));
         if (res.principalPlaceOfBusiness) {
           setAddress((prev) => (prev.trim() ? prev : res.principalPlaceOfBusiness ?? prev));
         }
@@ -195,7 +196,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
             <Input 
               autoFocus 
               value={name} 
-              onChange={(e) => setName(e.target.value)} 
+              onChange={(e) => setName(toTitleCaseOnType(e.target.value))} 
               className="border-slate-200 focus-visible:ring-indigo-500"
             />
           </div>
@@ -233,7 +234,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                   onDataFetched={(parsedParty) => {
                     if (parsedParty?.gstin) {
                       setGstin(parsedParty.gstin.toUpperCase().trim());
-                      setName(parsedParty.legalName);
+                      setName(toTitleCaseOnType(parsedParty.legalName));
                       toast.success(`Successfully Synced: ${parsedParty.legalName}`, {
                         className: "bg-emerald-50 border-emerald-200 text-emerald-800 font-medium"
                       });
