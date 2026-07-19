@@ -243,7 +243,8 @@ function CompaniesPage() {
       gst_filing_frequency: (data.gst_filing_frequency ?? "monthly") as "monthly" | "quarterly" | "iff",
       inventory_enabled: data.inventory_enabled ?? true,
       annual_turnover_lakhs: data.annual_turnover_paise ? String(data.annual_turnover_paise / 100 / 100000) : "",
-      trial_local: (data as { mode?: string }).mode === "trial_local",
+      // Missing mode = treat as trial_local (app is local-only by default).
+      trial_local: ((data as { mode?: string }).mode ?? "trial_local") === "trial_local",
       currency_code: ((data as { currency_code?: string }).currency_code) ?? "INR",
       date_format: (((data as { date_format?: FormState["date_format"] }).date_format) ?? "dd-mm-yyyy"),
     });
