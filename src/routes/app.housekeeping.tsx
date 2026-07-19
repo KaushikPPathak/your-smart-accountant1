@@ -49,6 +49,7 @@ import { FinancialYearTransferWizard } from "@/components/housekeeping/Financial
 import { YearEndLockToggle } from "@/components/housekeeping/YearEndLockToggle";
 import { MergeCompaniesTool } from "@/components/housekeeping/MergeCompaniesTool";
 import { RecoveryWizard } from "@/components/housekeeping/RecoveryWizard";
+import { DeleteCompanyTool } from "@/components/housekeeping/DeleteCompanyTool";
 
 import { SelfTestPanel } from "@/components/housekeeping/SelfTestPanel";
 import { ImportHistoryPanel } from "@/components/housekeeping/ImportHistoryPanel";
@@ -151,6 +152,9 @@ function HousekeepingPage() {
           <TabsTrigger value="recovery">
             <Sparkles className="mr-1 h-3.5 w-3.5" /> Recovery Wizard
           </TabsTrigger>
+          <TabsTrigger value="delete_company">
+            <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete Company
+          </TabsTrigger>
           <TabsTrigger value="renumber">
             <Hash className="mr-1 h-3.5 w-3.5" /> Renumber
           </TabsTrigger>
@@ -224,6 +228,9 @@ function HousekeepingPage() {
         </TabsContent>
         <TabsContent value="recovery">
           <RecoveryWizard disabled={!isAdmin} />
+        </TabsContent>
+        <TabsContent value="delete_company">
+          <DeleteCompanyTool disabled={!isAdmin} />
         </TabsContent>
         <TabsContent value="renumber">
           <RenumberVouchersTool companyId={activeCompanyId} disabled={!isAdmin} />
