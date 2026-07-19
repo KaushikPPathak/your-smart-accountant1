@@ -108,6 +108,20 @@ function CashBankBook() {
     if (!ledgerId && cashBankLedgers[0]) setLedgerId(cashBankLedgers[0].id);
   }, [ledgerId, cashBankLedgers]);
 
+  // Mirror the current selection into the URL so that going back from a
+  // drilled voucher restores the same ledger + date range (the report
+  // component re-mounts on back nav and reads its initial state from the
+  // URL search params).
+  useEffect(() => {
+    if (!ledgerId) return;
+    if (search.ledgerId === ledgerId && search.from === from && search.to === to) return;
+    void navigate({
+      to: "/app/reports/cash-bank",
+      search: { ledgerId, from, to },
+      replace: true,
+    });
+  }, [ledgerId, from, to, search.ledgerId, search.from, search.to, navigate]);
+
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [siblings, setSiblings] = useState<Map<string, SiblingRow[]>>(new Map());
   const [opening, setOpening] = useState(0);
