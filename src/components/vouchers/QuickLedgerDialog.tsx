@@ -16,6 +16,7 @@ import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { offlineDb } from "@/lib/offline/db";
 import { lookupGstinViaSetu } from "@/lib/setu";
 import { validateGSTIN } from "@/utils/gstinValidator";
+import { toTitleCaseOnType } from "@/lib/text-case";
 
 export interface QuickLedger {
   id: string;
