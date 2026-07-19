@@ -76,24 +76,35 @@ export async function runIntegrityScan(
   };
 
   // 1) Companies (single row lookup — no batching needed).
+  // The scanner previously flagged "missing state_code" whenever the cached
+  // company row lacked it, but state_code is also stored on
+  // cache_company_settings and can be reliably derived from the GSTIN prefix.
+  // Only flag when NONE of those sources produce a state code.
   const companies: any[] = await offlineDb.cache_companies
     .filter((r: any) => r?.id === companyId)
     .toArray()
     .catch(() => []);
+  const settingsRow: any = await offlineDb.cache_company_settings
+    .where("company_id").equals(companyId).first().catch(() => null);
   for (const c of companies) {
     if (c?.gstin && !c?.gst_registered) counts.companyGstinNoFlag++;
-    if (!c?.state_code) counts.companyNoState++;
-    if (!c?.financial_year_start) counts.companyNoFy++;
+    const gstinPrefix = (c?.gstin ?? settingsRow?.gstin ?? "").toString().slice(0, 2);
+    const hasState = !!(c?.state_code || settingsRow?.state_code || (gstinPrefix && /^\d{2}$/.test(gstinPrefix)));
+    if (!hasState) counts.companyNoState++;
+    if (!c?.financial_year_start && !settingsRow?.financial_year_start) counts.companyNoFy++;
   }
 
   // 2) Ledgers — build the active-id set as we go (needed for entry check).
+  // NOTE: this app groups ledgers by `type` (+ optional `subgroup_id`), not
+  // by a `group_id` column. Older scans flagged "missing group_id" on every
+  // ledger and produced false alarms during backup, so we now check `type`.
   const activeLedgerIds = new Set<string>();
   await scanTableBatched<any>(
     offlineDb.cache_ledgers,
     companyId,
     (l) => {
       if (l?.is_deleted !== true) activeLedgerIds.add(String(l.id));
-      if (!l?.group_id) counts.ledgerNoGroup++;
+      if (!l?.type) counts.ledgerNoGroup++;
       if (l?.gstin && !l?.gst_treatment) counts.ledgerGstinNoTreatment++;
     },
     "Ledgers",
