@@ -114,6 +114,60 @@ function DataHealthPage() {
           <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} /> Verify all now
         </Button>
       </div>
+
+      {failingSnap && (
+        <Card className="border-destructive/60 bg-destructive/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base text-destructive">
+              <AlertTriangle className="h-4 w-4" /> Snapshot writes are failing
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p>
+              The app could not write today&apos;s safety snapshot to disk for at least one company.
+              Until this is fixed, silent recovery has nothing to fall back on if IndexedDB is cleared.
+            </p>
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">Show last 10 snapshot events</summary>
+              <ul className="mt-2 space-y-1">
+                {snapEvents.slice(0, 10).map((e, i) => (
+                  <li key={i} className="rounded border border-border/60 bg-background/60 px-2 py-1">
+                    <span className="font-medium">{e.companyName ?? "—"}</span>{" "}
+                    <span className="uppercase tracking-wide">{e.status}</span>
+                    {e.rows != null && <> · {e.rows} rows</>}
+                    {e.target && <div className="truncate text-muted-foreground">{e.target}</div>}
+                    {e.error && <div className="text-destructive">{e.error}</div>}
+                    <div className="text-muted-foreground">{new Date(e.atIso).toLocaleString()}</div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </CardContent>
+        </Card>
+      )}
+
+      {dupNames.size > 0 && (
+        <Card className="border-amber-500/60 bg-amber-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base text-amber-700 dark:text-amber-400">
+              <Merge className="h-4 w-4" /> Duplicate company detected
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p>
+              Two local company records share the same name ({Array.from(dupNames).join(", ")}).
+              This usually means a fresh install created a second record while the original still held your books.
+              Use <b>Housekeeping → Merge Companies</b> to consolidate them into one.
+            </p>
+            <Button asChild size="sm" variant="outline" className="gap-2">
+              <Link to="/app/housekeeping" search={{ tab: "merge_companies" } as never}>
+                <Merge className="h-4 w-4" /> Open Merge Companies
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <FieldIntegrityPanel companyId={activeCompanyId} />
 
       <Card>
