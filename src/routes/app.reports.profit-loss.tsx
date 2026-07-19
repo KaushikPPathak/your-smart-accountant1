@@ -235,9 +235,7 @@ function ProfitLoss() {
           <p className="mt-2 text-xs text-muted-foreground">
             {isIE
               ? <>Income &amp; Expenditure for the period — surplus/deficit transfers to the <strong>Corpus / General Fund</strong>.</>
-              : inventoryEnabled
-                ? <>Indirect Income &amp; Indirect Expenses only. Sales / Purchase / Direct Expenses (e.g. Factory Wages) flow through the <strong>Trading Account</strong> as Gross Profit / Loss.</>
-                : <>All Income &amp; Expenses for the period (Direct + Indirect). Enable Inventory in Company settings to split Sales / Purchases / Direct Expenses into a separate <strong>Trading Account</strong>.</>}
+              : <>Indirect Income &amp; Indirect Expenses only. Sales / Purchase / Direct Income / Direct Expenses (e.g. Job Work Income, Factory Wages) flow through the <strong>Trading Account</strong> — its Gross Profit / Loss is carried here as b/d.</>}
           </p>
           {excludedClosingEntries > 0 && (
             <p className="mt-1 text-xs text-muted-foreground">
