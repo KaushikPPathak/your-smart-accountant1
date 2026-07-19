@@ -192,7 +192,10 @@ function multisetContains(
  * This prevents an older but larger backup from deleting newer work.
  */
 export function isBackupSafeSuperset(candidate: CompanyBackup, live: CompanyBackup): boolean {
-  if ((candidate.vouchers?.length ?? 0) <= (live.vouchers?.length ?? 0)) return false;
+  const candidateCounts = [candidate.vouchers?.length ?? 0, candidate.ledgers?.length ?? 0, candidate.items?.length ?? 0];
+  const liveCounts = [live.vouchers?.length ?? 0, live.ledgers?.length ?? 0, live.items?.length ?? 0];
+  if (candidateCounts.some((count, index) => count < liveCounts[index])) return false;
+  if (!candidateCounts.some((count, index) => count > liveCounts[index])) return false;
   const byName = (row: Record<string, unknown>) => normalizedIdentity(row.name);
   return (
     multisetContains(candidate.vouchers ?? [], live.vouchers ?? [], voucherFingerprint) &&
