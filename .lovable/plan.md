@@ -1,93 +1,81 @@
-# Centralized Keyboard Navigation Engine
 
-Goal: one shared engine that owns focus order, shortcuts, and popup focus across every accounting screen, so the app is fully usable and fast from the keyboard alone. Mouse still works; browser Tab behavior is replaced by our own deterministic order.
+# Recovery + root-cause fix for the 25/02/2026 vs 31/03/2026 issue
 
-## What exists today
+## What actually happened (confirmed from your screenshots)
 
-- `src/components/fast-form/useFocusManager.tsx` — per-form focus manager (already used by voucher rows).
-- `src/components/fast-form/FocusHints.tsx` — hint provider for the current field.
-- `src/components/TopMenuBar.tsx` + `QuickActionsRibbon.tsx` — roving tabindex + Alt-shortcuts + Escape stages (just implemented).
-- `src/routes/app.tsx` — global Alt-hotkeys (S/P/R/Y/C/D/J/L), F1 cheatsheet, staged Escape.
-- Individual voucher pages wire their own Enter handling.
+1. **Snapshots folder does not exist on disk.** `C:\Users\Kaushik\AppData\Local\com.smartaccountant.app\snapshots` returns "Windows cannot find". `runAutoSnapshotOnce()` catches every error silently, so the app kept marking companies "Healthy" (manifest-only) while writing nothing to disk. Auto-restore then correctly reported *"no-snapshot, 48 vouchers missing (expected 73)"*.
+2. **Two local companies both named "Shri Montu Ramanath Das".** Data Health shows `L16·V138` (manifest V138) and `L15·V131` (manifest V99 — meaning 32 vouchers were added *after* the last manifest snapshot). Your Feb 26 → Mar 31 entries are in one of these two ids; the picker probably keeps opening the other one, so the UI looks like data ends on 25/02/2026.
+3. Auto-dedupe was designed to only delete duplicates with **zero** business rows, so both survived and coexisted quietly.
 
-Problem: each screen re-implements Enter/Arrow/Tab handling. There is no single registry, no global shortcut context, and no reliable focus restoration after dialogs.
+Nothing has been deleted. Recovery is a merge, not a rebuild.
 
-## Deliverable
+## Part 1 — Recover your books today
 
-A `src/lib/keyboard/` module that every screen opts into:
+Add a new **Housekeeping → Merge duplicate companies** screen:
 
-```
-src/lib/keyboard/
-  KeyboardProvider.tsx    # top-level context, mounts global listener
-  focusRegistry.ts        # registers/orders focusable nodes per scope
-  useFocusable.ts         # hook: register a node, get ref + handlers
-  useFocusScope.ts        # hook: create/enter a scope (form, dialog, grid)
-  useShortcut.ts          # hook: bind a shortcut, scoped + context-aware
-  shortcuts.ts            # shortcut parsing + match ("Alt+S", "Ctrl+Enter")
-  focusRestore.ts         # push/pop focus stack across dialogs
-  types.ts
-```
+- Lists company pairs with the same normalised name.
+- For the selected pair, shows a side-by-side breakdown: voucher-count per month, earliest/latest voucher date, ledger counts, item counts.
+- You pick the "keep" id (the one with the correct Party master history — usually the older one) and the "merge from" id.
+- On confirm, it:
+  1. Takes a **safety snapshot** of BOTH company payloads to `%LOCALAPPDATA%\com.smartaccountant.app\snapshots\<today>\pre-merge_<name>_<id>.json` for each side (so this operation itself is reversible).
+  2. Re-parents vouchers, voucher_entries, voucher_items, bill_allocations, einvoice_details, export_details, period_locks from the "merge from" id to the "keep" id.
+  3. For ledgers/items with the same name in both, keeps the "keep" side and rewrites references from the loser side to it. For names that exist only on the loser side, re-parents them.
+  4. Deletes the now-empty loser row from `companies` and `cache_companies`.
+  5. Refreshes the integrity manifest for the survivor.
+- After merge, the survivor should read `V ≈ 138 + (131 − overlap)` and the date range should extend to 31/03/2026.
 
-### Behavior contract
+I will NOT auto-merge on startup. This is user-driven and shows a preview screen first — the exact opposite of the silent path that got us here.
 
-1. Enter
-   - On an input: move to next registered field in the scope.
-   - On a combobox/select: open dropdown; if open, confirm highlighted option then move next.
-   - On the last field of a form: does NOT submit; instead focuses the primary action button. A second Enter on that button submits.
-   - Shift+Enter = previous field.
-2. Arrow keys
-   - Vertical scopes (grids, menus, lists): Up/Down move within scope.
-   - Horizontal scopes (menubar, ribbon, tabs): Left/Right move within scope.
-   - Never leak to browser scroll while a scope is active.
-3. Tab
-   - Intercepted at scope root. Same as Enter-next / Shift+Tab = previous, but never leaves the scope. Only Ctrl+Tab or an explicit "exit scope" shortcut moves between scopes.
-4. Escape — keeps the staged behavior already implemented (field blur → close overlay → leave page → focus menubar → exit confirm).
-5. Shortcuts
-   - Registered with a scope tag (`global`, `voucher`, `report`, `grid`, `dialog`).
-   - Only the deepest active scope's shortcuts fire; `global` always fires unless a dialog claims the key.
-   - Ignored while typing in a plain text field unless marked `allowInField: true`.
-6. Focus restore
-   - Opening any dialog pushes the current active element; closing pops and restores it on the next microtask (after React commit) so re-renders don't steal focus.
-7. No focus jumps after re-render
-   - Registry stores logical field IDs, not DOM refs alone. If the current focused ID re-mounts, we re-focus it after commit via a `useLayoutEffect` in the provider.
+## Part 2 — Stop silently failing to write snapshots
 
-### Integration plan (phased, each phase ships working)
+Two fixes:
 
-Phase 1 - Engine + provider
-  - Add the `src/lib/keyboard/` module above.
-  - Mount `<KeyboardProvider>` inside `src/routes/app.tsx` around `<Outlet />`.
-  - Migrate existing global Alt-hotkeys and staged Escape from `app.tsx` into `useShortcut` calls, without behavior change.
+1. `runAutoSnapshotOnce()` currently wraps the whole per-company block in `try { … } catch { /* silent */ }`. Change it so that any **directory-creation or file-write failure** is (a) recorded to the auto-restore events log, (b) surfaced in Data Health as a red **"Snapshot write failing"** badge on every row, and (c) shown as a one-time toast on launch. The daily gate (`RUN_KEY`) is not set until at least one company writes successfully.
+2. Before the first write of the day, actively `mkdir` the `snapshots/<YYYY-MM-DD>` path via the Tauri fs plugin and verify it exists. If creation fails (permissions, antivirus, disk full), report the exact OS error to the user instead of turning the failure into "Healthy".
 
-Phase 2 - Menubar + ribbon
-  - Rewrite `TopMenuBar` and `QuickActionsRibbon` roving-tabindex logic to use `useFocusScope({ orientation: "horizontal" })`. Removes ~120 lines of hand-rolled arrow handling.
+## Part 3 — Stop the duplicate-company creation
 
-Phase 3 - Voucher entry forms
-  - Replace `useFocusManager` internals with a thin adapter over the new engine so existing voucher screens keep working while gaining Enter-to-next, Shift+Enter-back, and predictable re-mount focus.
-  - Wire the "last field -> primary button, second Enter submits" rule in the voucher form shell.
+Root cause of the two "Shri Montu Ramanath Das" rows: after fresh install with no snapshot on disk, opening the create-company flow doesn't check whether a local company with the same normalised name already exists.
 
-Phase 4 - Reports & grids
-  - Wrap `DataGrid` in a `useFocusScope({ orientation: "grid" })` so Up/Down/Left/Right/Home/End/PageUp/PageDown are consistent across every report.
-  - Register report toolbar shortcuts (`Ctrl+P` print, `Ctrl+E` export, `Ctrl+F` filter) through `useShortcut` with scope `report`.
+Add a guard in the "Create company" path:
+- Normalise the entered name (trim + collapse whitespace + lowercase).
+- Query `cache_companies` and `companies` for any existing row with the same normalised name.
+- If a match is found, block creation and offer three options: **Open existing**, **Merge into existing after opening**, or **Create anyway (with distinct suffix)**. Never silently create a second row with an identical name.
 
-Phase 5 - Dialogs
-  - Ensure every shadcn dialog opens inside a new focus scope and pops the focus stack on close. shadcn/Radix already restores focus; we add the registry push so re-renders during close don't lose it.
+Also strengthen `dedupeLocalCompaniesOnce()`: if two rows share a name AND both have business rows, don't delete — but do publish an event that the Data Health screen surfaces as a **"Duplicate name — needs merge"** amber row with a direct link to the merge screen.
 
-### Out of scope for this pass
+## Part 4 — Make Data Health honest
 
-- Chording sequences (Ctrl+K then S). Can be added later on top of `useShortcut`.
-- Rebinding UI. Shortcuts stay hard-coded for now.
+- Row status downgrades to amber when **the manifest count is stale relative to live** (your V131 vs manifest V99 case) instead of showing "Healthy".
+- Row status downgrades to red when **no snapshot file exists on disk** for that company, regardless of manifest.
+- Duplicate-name rows are grouped together with a "Merge these" action.
 
-### Acceptance checks
+## Part 5 — Verify before shipping
 
-- Tab on any voucher form moves through fields in the order they are registered, never to browser chrome, never to hidden fields.
-- Enter on a party picker opens the dropdown; Enter again picks the highlighted party and jumps to the next field.
-- Opening and closing any dialog returns focus to the exact control that opened it, even if the parent list re-rendered.
-- Alt+S/P/R/Y/C/D/J/L still open the right vouchers from anywhere except while typing in a field.
-- Escape still follows the 5 stages defined earlier.
-- No screen relies on native Tab order for correctness.
+- Vitest: merge algorithm on a synthetic pair of companies (overlapping ledgers, non-overlapping vouchers) preserves every voucher and every posting; totals balance before and after.
+- Vitest: `runAutoSnapshotOnce()` bubbles up a specific error state when the target directory can't be created.
+- Playwright: create-company guard rejects a duplicate name and offers the "Open existing" path.
 
-## Scope of this plan
+## What I will not do
 
-Phase 1 and Phase 2 in the first implementation pass (engine + menubar/ribbon migration). Phases 3-5 land in follow-up passes so we can verify each accounting screen behaves identically before and after migration.
+- I will not auto-merge your two companies without you approving the preview.
+- I will not delete either duplicate row until vouchers have been safely re-parented and both sides have a fresh snapshot on disk.
+- I will not change your Tauri identifier / WiX upgrade code / WebView profile path (the frozen-identity constraint).
 
-Reply "go" to start Phase 1+2, or tell me which phase to prioritize.
+## Technical notes
+
+- New file: `src/routes/app.housekeeping.merge-companies.tsx` + `src/lib/merge-companies.ts` (pure logic, unit-tested).
+- New file: `src/lib/snapshot-diagnostics.ts` recording per-run write outcomes into `offlineDb.meta` under `snapshot_run_events`.
+- Modified: `src/lib/auto-snapshot.ts` (explicit mkdir + error propagation), `src/components/data-health/FieldIntegrityPanel.tsx` (new columns and badges), `src/routes/app.companies.tsx` (duplicate-name guard on create).
+- Migration of duplicates uses Dexie transactions across `cache_vouchers`, `cache_voucher_entries`, `cache_voucher_items`, `cache_bill_allocations`, `cache_einvoice_details`, `cache_voucher_export_details`, `cache_period_locks`, `cache_ledgers`, `cache_items`.
+- No server / RLS changes — this is all local IndexedDB and local disk.
+
+## Order of implementation
+
+1. Merge tool (Part 1) — you can recover today.
+2. Snapshot honesty + directory guarantee (Part 2) — prevents the next incident.
+3. Duplicate-name creation guard (Part 3).
+4. Data Health status changes (Part 4).
+5. Tests (Part 5).
+
+Approve this and I'll start with Part 1 so you can run the merge tonight.
