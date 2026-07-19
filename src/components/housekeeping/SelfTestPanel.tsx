@@ -155,41 +155,35 @@ export function SelfTestPanel({ companyId }: { companyId: string | null }) {
         return { status: "ok", message: `All ${names.length} core tables readable` };
       });
 
-      // 5. Settings row
+      // 5. Settings row  (local IndexedDB — this is a local-first app)
       await mark("settings", async () => {
-        const { count, error } = await supabase
-          .from("company_settings")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", companyId);
-        if (error) return { status: "error", message: error.message };
-        return (count ?? 0) > 0
+        const { offlineDb } = await import("@/lib/offline/db");
+        const rows = await offlineDb.cache_company_settings
+          .where("company_id").equals(companyId).toArray().catch(() => []);
+        return rows.length > 0
           ? { status: "ok", message: "Settings row present" }
           : { status: "warn", message: "Settings row missing — open Settings once" };
       });
 
-      // 6. Ledgers
+      // 6. Ledgers  (local)
       await mark("ledgers", async () => {
-        const { count, error } = await supabase
-          .from("ledgers")
-          .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId);
-        if (error) return { status: "error", message: error.message };
-        if (!count || count === 0)
+        const { offlineDb } = await import("@/lib/offline/db");
+        const rows = await offlineDb.cache_ledgers
+          .where("company_id").equals(companyId).toArray().catch(() => []);
+        if (rows.length === 0)
           return { status: "warn", message: "No ledgers yet — create one or import opening balances" };
-        return { status: "ok", message: `${count} ledger${count === 1 ? "" : "s"}` };
+        return { status: "ok", message: `${rows.length} ledger${rows.length === 1 ? "" : "s"}` };
       });
 
-      // 7. Cash / bank ledger
+      // 7. Cash / bank ledger  (local)
       await mark("cash_bank", async () => {
-        const { count, error } = await supabase
-          .from("ledgers")
-          .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId)
-          .in("type", ["cash", "bank"]);
-        if (error) return { status: "error", message: error.message };
-        if (!count || count === 0)
+        const { offlineDb } = await import("@/lib/offline/db");
+        const rows = await offlineDb.cache_ledgers
+          .where("company_id").equals(companyId).toArray().catch(() => []);
+        const cb = rows.filter((r: any) => r?.type === "cash" || r?.type === "bank");
+        if (cb.length === 0)
           return { status: "warn", message: "No Cash/Bank ledger — receipts & payments need one" };
-        return { status: "ok", message: `${count} cash / bank ledger${count === 1 ? "" : "s"}` };
+        return { status: "ok", message: `${cb.length} cash / bank ledger${cb.length === 1 ? "" : "s"}` };
       });
 
       // 8. Storage bucket
