@@ -613,7 +613,7 @@ function SettingsPage() {
         </CardContent>
       </Card>
 
-      {isAdmin && (
+      {isAdmin && activeMembership?.companies.gst_registered && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
