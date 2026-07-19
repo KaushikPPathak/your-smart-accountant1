@@ -234,7 +234,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                   onDataFetched={(parsedParty) => {
                     if (parsedParty?.gstin) {
                       setGstin(parsedParty.gstin.toUpperCase().trim());
-                      setName(parsedParty.legalName);
+                      setName(toTitleCaseOnType(parsedParty.legalName));
                       toast.success(`Successfully Synced: ${parsedParty.legalName}`, {
                         className: "bg-emerald-50 border-emerald-200 text-emerald-800 font-medium"
                       });
