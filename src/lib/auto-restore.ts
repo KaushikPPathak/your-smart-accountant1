@@ -53,7 +53,7 @@ async function listSnapshotsForCompany(companyName: string): Promise<SnapshotCan
       import("@tauri-apps/api/path"),
       import("@tauri-apps/plugin-fs"),
     ]);
-    const target = safeName(companyName);
+    const target = safeName(companyName).toLocaleLowerCase();
     const out: SnapshotCandidate[] = [];
     const addJsonFiles = async (dir: string, dateName: string) => {
       let entries: { name?: string }[] = [];
@@ -64,10 +64,11 @@ async function listSnapshotsForCompany(companyName: string): Promise<SnapshotCan
       for (const e of entries) {
         if (!e.name || !e.name.endsWith(".json")) continue;
         const base = e.name.replace(/\.json$/, "");
+        const foldedBase = base.toLocaleLowerCase();
         // Include normal, pre-delete and pre-merge snapshots. Those safety
         // files deliberately prefix the company name, so startsWith() alone
         // made the most valuable recovery files invisible.
-        if (base === target || base.includes(target)) {
+        if (foldedBase === target || foldedBase.includes(target)) {
           out.push({ absPath: await join(dir, e.name), dateFolder: dateName, fileName: e.name });
         }
       }

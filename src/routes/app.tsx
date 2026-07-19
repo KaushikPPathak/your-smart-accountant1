@@ -140,6 +140,12 @@ function AppLayout() {
                     : `Restored ${restored.length} companies from local safety snapshots`,
                   { description: "Your books were reloaded automatically from your on-device backup." },
                 );
+                // Remount the entire accounting workspace once so every
+                // report and book sees the restored IndexedDB state, including
+                // screens that loaded before recovery finished and do not use
+                // the shared masters/balance caches. The next boot is a no-op
+                // because the live counts now match the integrity manifest.
+                window.setTimeout(() => window.location.reload(), 500);
               }
             } catch { /* silent — banner remains as fallback */ }
 
