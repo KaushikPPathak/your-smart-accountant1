@@ -143,6 +143,9 @@ function HousekeepingPage() {
           <TabsTrigger value="merge">
             <Merge className="mr-1 h-3.5 w-3.5" /> Merge Ledgers
           </TabsTrigger>
+          <TabsTrigger value="merge_companies">
+            <Merge className="mr-1 h-3.5 w-3.5" /> Merge Companies
+          </TabsTrigger>
           <TabsTrigger value="renumber">
             <Hash className="mr-1 h-3.5 w-3.5" /> Renumber
           </TabsTrigger>
