@@ -88,9 +88,16 @@ export async function runIntegrityScan(
     .where("company_id").equals(companyId).first().catch(() => null);
   for (const c of companies) {
     if (c?.gstin && !c?.gst_registered) counts.companyGstinNoFlag++;
-    const gstinPrefix = (c?.gstin ?? settingsRow?.gstin ?? "").toString().slice(0, 2);
-    const hasState = !!(c?.state_code || settingsRow?.state_code || (gstinPrefix && /^\d{2}$/.test(gstinPrefix)));
-    if (!hasState) counts.companyNoState++;
+    // Only GST-registered companies actually need a state_code for return
+    // filing. Non-GST companies (individuals, small traders, non-business
+    // income) don't file GSTR-* and shouldn't be flagged — this was a
+    // spurious warning before backup for the vast majority of users.
+    const isGstRegistered = !!(c?.gst_registered || c?.gstin || settingsRow?.gstin);
+    if (isGstRegistered) {
+      const gstinPrefix = (c?.gstin ?? settingsRow?.gstin ?? "").toString().slice(0, 2);
+      const hasState = !!(c?.state_code || settingsRow?.state_code || (gstinPrefix && /^\d{2}$/.test(gstinPrefix)));
+      if (!hasState) counts.companyNoState++;
+    }
     if (!c?.financial_year_start && !settingsRow?.financial_year_start) counts.companyNoFy++;
   }
 
