@@ -111,16 +111,20 @@ export function SelfTestPanel({ companyId }: { companyId: string | null }) {
         : { status: "error", message: "No company selected" },
     );
 
-    // 3. DB ping (lightweight head request on a small table)
+    // 3. Cloud reachability (auth-only; business data is local so latency
+    // here does NOT affect books. We only flag hard failures.)
     await mark("db_ping", async () => {
       const { ms, value } = await timed(
         supabase.from("companies").select("id", { count: "exact", head: true }),
       );
       if (value.error) return { status: "error", message: value.error.message, ms };
-      const level = ms < 400 ? "ok" : ms < 1500 ? "warn" : "error";
+      const note =
+        ms < 800 ? "" :
+        ms < 2000 ? " (slow — cloud only, books are local)" :
+        " (slow cloud link — does not affect local books)";
       return {
-        status: level,
-        message: `Round-trip ${ms} ms${level === "warn" ? " (slow)" : level === "error" ? " (very slow)" : ""}`,
+        status: "ok",
+        message: `Cloud reachable · round-trip ${ms} ms${note}`,
         ms,
       };
     });
