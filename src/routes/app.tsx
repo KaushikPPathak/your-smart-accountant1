@@ -28,6 +28,7 @@ import { DataOwnershipDialog } from "@/components/DataOwnershipDialog";
 import { UpdateRecoveryBanner } from "@/components/UpdateRecoveryBanner";
 import { InstallAppButton } from "@/components/InstallAppButton";
 import { KeyboardProvider, useShortcut } from "@/lib/keyboard";
+import { CalculatorDialog } from "@/components/CalculatorDialog";
 
 import { getLicenseState, isReadOnlyLocked } from "@/lib/license/state";
 
@@ -46,6 +47,7 @@ function AppLayout() {
   const [savingMirror, setSavingMirror] = useState(false);
   const [lastSaveTick, setLastSaveTick] = useState(0); // forces re-render after save
   const [helpOpen, setHelpOpen] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
 
@@ -280,7 +282,7 @@ function AppLayout() {
 
   return (
     <KeyboardProvider>
-      <GlobalShortcuts onOpenHelp={() => setHelpOpen(true)} />
+      <GlobalShortcuts onOpenHelp={() => setHelpOpen(true)} onOpenCalc={() => setCalcOpen(true)} />
       <div ref={workspaceRef} className="flex min-h-screen w-full flex-col">
         <TopMenuBar
           rightExtras={backupExtras}
@@ -310,6 +312,7 @@ function AppLayout() {
           </MastersProvider>
         </AccountGroupsProvider>
         <KeyboardCheatSheet open={helpOpen} onOpenChange={setHelpOpen} />
+        <CalculatorDialog open={calcOpen} onOpenChange={setCalcOpen} />
         <DataOwnershipDialog />
       </div>
     </KeyboardProvider>
@@ -327,7 +330,7 @@ function AppLayout() {
 // -----------------------------------------------------------------------------
 
 
-function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
+function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; onOpenCalc: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -338,6 +341,15 @@ function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
       onOpenHelp();
     },
     { scope: "global", allowInField: true, description: "Show keyboard shortcuts" },
+  );
+
+  useShortcut(
+    "Ctrl+Alt+c",
+    (e) => {
+      e.preventDefault();
+      onOpenCalc();
+    },
+    { scope: "global", allowInField: true, description: "Open calculator" },
   );
 
   // Staged Escape (single owner). Ordered stages:
