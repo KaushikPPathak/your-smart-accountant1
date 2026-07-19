@@ -49,6 +49,7 @@ import { FinancialYearTransferWizard } from "@/components/housekeeping/Financial
 import { YearEndLockToggle } from "@/components/housekeeping/YearEndLockToggle";
 import { MergeCompaniesTool } from "@/components/housekeeping/MergeCompaniesTool";
 import { RecoveryWizard } from "@/components/housekeeping/RecoveryWizard";
+import { DeleteCompanyTool } from "@/components/housekeeping/DeleteCompanyTool";
 
 import { SelfTestPanel } from "@/components/housekeeping/SelfTestPanel";
 import { ImportHistoryPanel } from "@/components/housekeeping/ImportHistoryPanel";
