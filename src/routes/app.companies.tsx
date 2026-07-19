@@ -313,7 +313,7 @@ function CompaniesPage() {
       gst_filing_frequency: parsed.data.gst_registered ? parsed.data.gst_filing_frequency : "monthly",
       inventory_enabled: parsed.data.inventory_enabled,
       annual_turnover_paise: Math.round((parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) * 100000 * 100),
-      mode: parsed.data.trial_local ? "trial_local" : "normal",
+      mode: "trial_local",
       currency_code: parsed.data.currency_code || "INR",
       date_format: parsed.data.date_format || "dd-mm-yyyy",
     };
