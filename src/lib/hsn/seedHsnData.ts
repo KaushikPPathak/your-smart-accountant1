@@ -1,4 +1,5 @@
 import { safeBrainExec, safeBrainSelect } from "@/brain/SqliteBrain";
+import { HSN_EXTENDED_DATASET } from "./hsnExtendedData";
 
 export interface HsnSeedItem {
   code: string;
@@ -11,7 +12,10 @@ export interface HsnSeedItem {
 // Comprehensive HSN/SAC master dataset — common Indian trade & service codes.
 // Covers Chapters 04, 07, 08, 10, 15, 17, 19, 20, 22, 30, 33, 39, 40, 44, 48, 49,
 // 52, 54, 61, 62, 63, 64, 69, 72, 73, 84, 85, 87, 90, 94, 95 and key SAC ranges.
-export const HSN_MASTER_DATASET: HsnSeedItem[] = [
+// A large supplement in `hsnExtendedData.ts` fills the remaining chapters so the
+// autocomplete surfaces most common Indian trade/service codes.
+const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
+
   // === Chapter 04 — Dairy ===
   { code: "0401", desc: "Fresh milk and cream, not concentrated", cgst: 0, sgst: 0, igst: 0 },
   { code: "0406", desc: "Cheese and curd", cgst: 6, sgst: 6, igst: 12 },
@@ -373,6 +377,18 @@ export const HSN_MASTER_DATASET: HsnSeedItem[] = [
   { code: "998821", desc: "Textile manufacturing services (job work)", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "998873", desc: "Job work related to manufacturing of goods", cgst: 6, sgst: 6, igst: 12 },
 ];
+
+// Merge primary + extended, deduplicating by code (primary takes precedence).
+const _seen = new Set<string>();
+export const HSN_MASTER_DATASET: HsnSeedItem[] = [
+  ...HSN_PRIMARY_DATASET,
+  ...HSN_EXTENDED_DATASET,
+].filter((item) => {
+  const key = item.code.toUpperCase();
+  if (_seen.has(key)) return false;
+  _seen.add(key);
+  return true;
+});
 
 export async function ensureHsnSeed(): Promise<void> {
   try {
