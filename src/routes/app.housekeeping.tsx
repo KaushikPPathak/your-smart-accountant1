@@ -39,6 +39,7 @@ import {
   CalendarCheck,
   ShieldCheck,
   Activity,
+  Sparkles,
 } from "lucide-react";
 import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceImport";
 import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport";
@@ -47,6 +48,7 @@ import { YearEndClosure } from "@/components/housekeeping/YearEndClosure";
 import { FinancialYearTransferWizard } from "@/components/housekeeping/FinancialYearTransferWizard";
 import { YearEndLockToggle } from "@/components/housekeeping/YearEndLockToggle";
 import { MergeCompaniesTool } from "@/components/housekeeping/MergeCompaniesTool";
+import { RecoveryWizard } from "@/components/housekeeping/RecoveryWizard";
 
 import { SelfTestPanel } from "@/components/housekeeping/SelfTestPanel";
 import { ImportHistoryPanel } from "@/components/housekeeping/ImportHistoryPanel";
@@ -146,6 +148,9 @@ function HousekeepingPage() {
           <TabsTrigger value="merge_companies">
             <Merge className="mr-1 h-3.5 w-3.5" /> Merge Companies
           </TabsTrigger>
+          <TabsTrigger value="recovery">
+            <Sparkles className="mr-1 h-3.5 w-3.5" /> Recovery Wizard
+          </TabsTrigger>
           <TabsTrigger value="renumber">
             <Hash className="mr-1 h-3.5 w-3.5" /> Renumber
           </TabsTrigger>
@@ -216,6 +221,9 @@ function HousekeepingPage() {
         </TabsContent>
         <TabsContent value="merge_companies">
           <MergeCompaniesTool disabled={!isAdmin} />
+        </TabsContent>
+        <TabsContent value="recovery">
+          <RecoveryWizard disabled={!isAdmin} />
         </TabsContent>
         <TabsContent value="renumber">
           <RenumberVouchersTool companyId={activeCompanyId} disabled={!isAdmin} />
