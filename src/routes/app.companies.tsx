@@ -313,7 +313,7 @@ function CompaniesPage() {
       gst_filing_frequency: parsed.data.gst_registered ? parsed.data.gst_filing_frequency : "monthly",
       inventory_enabled: parsed.data.inventory_enabled,
       annual_turnover_paise: Math.round((parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) * 100000 * 100),
-      mode: parsed.data.trial_local ? "trial_local" : "normal",
+      mode: "trial_local",
       currency_code: parsed.data.currency_code || "INR",
       date_format: parsed.data.date_format || "dd-mm-yyyy",
     };
@@ -645,25 +645,17 @@ function CompaniesPage() {
                   </div>
                 </div>
                 </div>
-                <div className="space-y-1.5 md:col-span-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
-                  <label className="flex cursor-pointer items-start gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={form.trial_local}
-                      onChange={(e) => setForm({ ...form, trial_local: e.target.checked })}
-                    />
-                    <div>
-                      <div className="font-semibold">Trial books — keep a continuous local copy on this PC</div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Marks this company as <strong>Trial / Local-only</strong>. Each time you close the
-                        app (or click <em>Backup now</em>) a JSON + Excel snapshot is saved to your hard
-                        disk under <code>Documents/YourMehtaji/Exports/&lt;Company&gt;/</code>. In a normal
-                        browser tab the snapshots download to your Downloads folder.
-                      </p>
-                    </div>
-                  </label>
+                <div className="space-y-1.5 md:col-span-2 rounded-md border border-blue-500/40 bg-blue-500/5 p-3 text-sm">
+                  <div className="font-semibold">Local-only books on this PC</div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Every company in Smart Accountant is stored <strong>only on this computer</strong>.
+                    Each time you close the app (or click <em>Backup now</em>) a JSON + Excel snapshot
+                    is saved to your hard disk under
+                    <code className="mx-1">Documents/YourMehtaji/Exports/&lt;Company&gt;/</code>.
+                    In a normal browser tab the snapshots download to your Downloads folder.
+                  </p>
                 </div>
+
                 <div className="space-y-1.5">
                   <Label>GSTIN</Label>
                   <div className="flex items-center gap-1">
@@ -871,11 +863,8 @@ function CompaniesPage() {
                           UNREG.
                         </span>
                       )}
-                      {m.companies.mode === "trial_local" && (
-                        <span className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400">
-                          TRIAL
-                        </span>
-                      )}
+                      {/* All companies are local-only by default — no TRIAL badge needed. */}
+
                     </div>
 
                     {/* Metadata rows */}
