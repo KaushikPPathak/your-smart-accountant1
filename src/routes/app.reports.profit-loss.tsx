@@ -147,10 +147,11 @@ function ProfitLoss() {
   const exp = groupedTRows(expenseBuckets, goLedger);
   const inc = groupedTRows(incomeBuckets, goLedger);
 
-  // Trading Gross Profit / Gross Loss carry — only when the Trading A/c is
-  // the primary flow (inventoryEnabled AND stock ledgers exist).
+  // Trading Gross Profit / Gross Loss carry — whenever Inventory is enabled,
+  // the Trading A/c is the source of truth for direct income/expense and its
+  // net result flows here as Gross Profit / Loss b/d.
   const tradingGp = useMemo(() => {
-    if (!inventoryEnabled || !hasStock) return 0;
+    if (!inventoryEnabled) return 0;
     const directIncome = balances
       .filter((b) => b.type === "income_direct")
       .reduce((s, b) => s + -b.closing_paise, 0);
@@ -158,8 +159,8 @@ function ProfitLoss() {
       .filter((b) => b.type === "expense_direct")
       .reduce((s, b) => s + b.closing_paise, 0);
     return directIncome + closingStock - (directExpense + openingStock);
-  }, [balances, inventoryEnabled, hasStock, openingStock, closingStock]);
-  void forcePLDirect;
+  }, [balances, inventoryEnabled, openingStock, closingStock]);
+  void hasStock;
 
   const profit = inc.totalPaise - exp.totalPaise + tradingGp;
 
