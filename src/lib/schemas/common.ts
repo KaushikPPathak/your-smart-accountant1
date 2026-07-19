@@ -24,7 +24,11 @@ export const optionalEmail = z
   .optional()
   .or(z.literal(""));
 
-export const uuid = z.string().uuid("Invalid id");
+// Local-first app: IDs are opaque handles that may come from IndexedDB,
+// imports, merges, or older backups (not always canonical UUIDs). Accept
+// any non-empty trimmed string — strict UUID checking here blocks legitimate
+// restored/imported data entry with a confusing "Invalid id" toast.
+export const uuid = z.string().trim().min(1, "Invalid id");
 
 export type ValidationResult<T> =
   | { ok: true; data: T }
