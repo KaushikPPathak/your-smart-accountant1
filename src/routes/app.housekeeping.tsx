@@ -229,6 +229,9 @@ function HousekeepingPage() {
         <TabsContent value="recovery">
           <RecoveryWizard disabled={!isAdmin} />
         </TabsContent>
+        <TabsContent value="delete_company">
+          <DeleteCompanyTool disabled={!isAdmin} />
+        </TabsContent>
         <TabsContent value="renumber">
           <RenumberVouchersTool companyId={activeCompanyId} disabled={!isAdmin} />
         </TabsContent>
