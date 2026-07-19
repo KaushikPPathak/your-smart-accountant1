@@ -232,9 +232,14 @@ export function BalancesProvider({ children }: { children: ReactNode }) {
   // External nudge (e.g. inline optimistic updates outside the save queue).
   useEffect(() => {
     const onSaved = () => { void reload(); };
+    const onRestored = () => { void runReload(); };
     window.addEventListener("ym:voucher-saved", onSaved);
-    return () => window.removeEventListener("ym:voucher-saved", onSaved);
-  }, [reload]);
+    window.addEventListener("ym:local-data-restored", onRestored);
+    return () => {
+      window.removeEventListener("ym:voucher-saved", onSaved);
+      window.removeEventListener("ym:local-data-restored", onRestored);
+    };
+  }, [reload, runReload]);
 
   return <BalancesCtx.Provider value={{ ready, reload }}>{children}</BalancesCtx.Provider>;
 }

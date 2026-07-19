@@ -161,6 +161,12 @@ export function MastersProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void reload(); }, [reload]);
 
   useEffect(() => {
+    const onRestored = () => { void reload(); };
+    window.addEventListener("ym:local-data-restored", onRestored);
+    return () => window.removeEventListener("ym:local-data-restored", onRestored);
+  }, [reload]);
+
+  useEffect(() => {
     if (!activeCompanyId) return;
     if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     const ch = supabase.channel(`masters-${activeCompanyId}`)

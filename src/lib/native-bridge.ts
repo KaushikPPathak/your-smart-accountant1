@@ -304,7 +304,18 @@ export async function writeAbsoluteFileNative(
       import("@tauri-apps/api/path"),
       import("@tauri-apps/plugin-fs"),
     ]);
-    const dir = subFolder ? await join(absDir, safeSeg(subFolder)) : absDir;
+    // `subFolder` may intentionally contain several safe path segments
+    // (for example `snapshots/2026-07-19`). Sanitising the whole string used
+    // to turn that into one flattened directory named
+    // `snapshots_2026-07-19`, while readers correctly looked under
+    // `snapshots/2026-07-19`. Split first, then sanitise each segment so path
+    // traversal is still impossible and the writer/reader contract agrees.
+    const segments = subFolder
+      .split(/[\\/]+/)
+      .map((segment) => segment.trim())
+      .filter((segment) => segment && segment !== "." && segment !== "..")
+      .map(safeSeg);
+    const dir = segments.length ? await join(absDir, ...segments) : absDir;
     await fs.mkdir(dir, { recursive: true });
     const fullPath = await join(dir, fileName);
     if (typeof contents === "string") {

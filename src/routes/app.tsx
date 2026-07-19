@@ -129,12 +129,23 @@ function AppLayout() {
               const outcomes = await runAutoRestore(list);
               const restored = outcomes.filter((o) => o.status === "restored");
               if (restored.length > 0) {
+                // Providers mount outside this maintenance effect, so refresh
+                // their in-memory views after IndexedDB has been replaced.
+                // Without this, the disk restore succeeded but reports could
+                // continue showing the pre-restore rows until app restart.
+                window.dispatchEvent(new CustomEvent("ym:local-data-restored"));
                 toast.success(
                   restored.length === 1
                     ? `Restored ${restored[0].companyName} from local safety snapshot`
                     : `Restored ${restored.length} companies from local safety snapshots`,
                   { description: "Your books were reloaded automatically from your on-device backup." },
                 );
+                // Remount the entire accounting workspace once so every
+                // report and book sees the restored IndexedDB state, including
+                // screens that loaded before recovery finished and do not use
+                // the shared masters/balance caches. The next boot is a no-op
+                // because the live counts now match the integrity manifest.
+                window.setTimeout(() => window.location.reload(), 500);
               }
             } catch { /* silent — banner remains as fallback */ }
 
