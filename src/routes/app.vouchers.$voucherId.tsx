@@ -515,6 +515,23 @@ function VoucherEditPage() {
     }
   }
 
+  // Push "voucher" scope + wire Ctrl+S / Cmd+S to save. Without this, the
+  // edit page had no keyboard save at all — users had to click the button.
+  const kb = useOptionalKeyboard();
+  useEffect(() => {
+    if (!kb) return;
+    return kb.pushScope("voucher");
+  }, [kb]);
+  const saveHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    if (!saving && canWrite) void save();
+    // `save` is a stable closure inside the component; we intentionally don't
+    // list it as a dep — it captures the latest state via React on each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saving, canWrite]);
+  useShortcut("Ctrl+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+  useShortcut("Meta+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+
   if (loading || !voucher) {
     return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   }
