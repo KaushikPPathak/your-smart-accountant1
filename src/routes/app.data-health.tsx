@@ -39,6 +39,7 @@ function DataHealthPage() {
   const { memberships, activeCompanyId } = useCompany();
   const [rows, setRows] = useState<Row[]>([]);
   const [events, setEvents] = useState<AutoRestoreOutcome[]>([]);
+  const [snapEvents, setSnapEvents] = useState<SnapshotRunEvent[]>([]);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -52,9 +53,31 @@ function DataHealthPage() {
     }
     setRows(list);
     setEvents(await getAutoRestoreEvents());
+    setSnapEvents(await getSnapshotEvents());
   }, [memberships]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  // Detect duplicate normalised names among the memberships — these need the
+  // Housekeeping → Merge Companies tool to consolidate.
+  const dupNames = new Set<string>();
+  const seen = new Map<string, number>();
+  for (const r of rows) {
+    const n = r.companyName.trim().replace(/\s+/g, " ").toLowerCase();
+    if (!n) continue;
+    seen.set(n, (seen.get(n) ?? 0) + 1);
+  }
+  for (const [n, c] of seen) if (c > 1) dupNames.add(n);
+
+  // "Snapshot writes failing" — newest event per company is a failure.
+  const failingSnap = (() => {
+    const perCompany = new Map<string, SnapshotRunEvent>();
+    for (const e of snapEvents) {
+      const k = e.companyId ?? "_";
+      if (!perCompany.has(k)) perCompany.set(k, e);
+    }
+    return Array.from(perCompany.values()).some((e) => e.status === "write-failed" || e.status === "no-paths");
+  })();
 
   const onVerifyNow = async () => {
     setBusy(true);
