@@ -23,7 +23,7 @@ const STATIC_ROWS: Array<{ combo: string; description: string; scope: ShortcutSc
   { combo: "Alt+F", description: "Open File menu", scope: "menubar" },
   { combo: "Alt+M", description: "Open Masters menu", scope: "menubar" },
   { combo: "Alt+T", description: "Open Transactions menu", scope: "menubar" },
-  { combo: "Alt+R", description: "Open Reports menu", scope: "menubar" },
+  { combo: "Alt+E", description: "Open R(e)ports menu (Alt+R now opens Receipt)", scope: "menubar" },
   { combo: "Alt+U", description: "Open Utilities menu", scope: "menubar" },
   { combo: "Alt+A", description: "Open Administration menu", scope: "menubar" },
   { combo: "F6", description: "Move between report toolbar and grid", scope: "report" },
