@@ -277,6 +277,17 @@ export async function runAutoRestore(
     const manifestVouchers = m?.vouchers ?? 0;
     const missingVouchers = Math.max(0, manifestVouchers - live.vouchers);
     if (!restored) {
+      // `no-manifest` means we proactively inspected legacy snapshots but
+      // none was a proven superset. That is a healthy no-op, not a missing
+      // backup alarm.
+      if (cls === "no-manifest") {
+        results.push({
+          companyId: c.id, companyName: c.name, status: "skipped-fresh",
+          liveBefore: live.ledgers + live.items + live.vouchers,
+          manifestTotal: 0,
+        });
+        continue;
+      }
       const out: AutoRestoreOutcome = {
         companyId: c.id, companyName: c.name, status: "no-snapshot",
         liveBefore: live.ledgers + live.items + live.vouchers,
