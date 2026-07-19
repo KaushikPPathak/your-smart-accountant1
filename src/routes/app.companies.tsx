@@ -196,9 +196,25 @@ function CompaniesPage() {
   };
 
   const openEdit = async (id: string) => {
-    const { data, error } = await supabase.from("companies").select("*").eq("id", id).single();
-    if (error || !data) {
-      toast.error(error?.message || "Failed to load company");
+    // Try cloud first, but fall back to local IndexedDB for restored / local-only companies.
+    let data: any = null;
+    let cloudErrMsg: string | null = null;
+    try {
+      const res = await supabase.from("companies").select("*").eq("id", id).maybeSingle();
+      if (res.error) cloudErrMsg = res.error.message;
+      if (res.data) data = res.data;
+    } catch (e) {
+      cloudErrMsg = e instanceof Error ? e.message : String(e);
+    }
+    if (!data) {
+      try {
+        const { offlineDb } = await import("@/lib/offline/db");
+        const local = await offlineDb.cache_companies.get(id);
+        if (local) data = local;
+      } catch { /* ignore */ }
+    }
+    if (!data) {
+      toast.error(cloudErrMsg || "Failed to load company");
       return;
     }
     setEditingId(id);
@@ -305,7 +321,14 @@ function CompaniesPage() {
     try {
       if (editingId) {
         const { error } = await supabase.from("companies").update(payload).eq("id", editingId);
-        if (error) { setSubmitting(false); toast.error(error.message); return; }
+        // Ignore cloud error for local-only / restored companies; still mirror locally.
+        if (error && !isLocalOnlyMode()) { setSubmitting(false); toast.error(error.message); return; }
+        try {
+          const { offlineDb } = await import("@/lib/offline/db");
+          const existing = (await offlineDb.cache_companies.get(editingId)) || { id: editingId };
+          await offlineDb.cache_companies.put({ ...existing, ...payload, id: editingId, updated_at: new Date().toISOString() });
+          await offlineDb.companies.put({ id: editingId, name: payload.name, has_password: (existing as any).has_password ?? false });
+        } catch { /* non-fatal */ }
         savedId = editingId;
         toast.success("Company updated");
       } else {
