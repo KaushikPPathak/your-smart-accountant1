@@ -152,6 +152,9 @@ function HousekeepingPage() {
           <TabsTrigger value="recovery">
             <Sparkles className="mr-1 h-3.5 w-3.5" /> Recovery Wizard
           </TabsTrigger>
+          <TabsTrigger value="delete_company">
+            <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete Company
+          </TabsTrigger>
           <TabsTrigger value="renumber">
             <Hash className="mr-1 h-3.5 w-3.5" /> Renumber
           </TabsTrigger>
