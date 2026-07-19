@@ -212,23 +212,15 @@ function LedgerStatement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.ledgerId, search.from, search.to]);
 
-  // Mirror current selection into the URL so back navigation from a drilled
-  // voucher restores the same ledger + date range + view (component
-  // re-mounts on back nav and reads its initial state from search params).
-  useEffect(() => {
-    if (!ledgerId) return;
-    if (
-      search.ledgerId === ledgerId &&
-      search.from === from &&
-      search.to === to &&
-      search.view === view
-    ) return;
-    void navigate({
-      to: "/app/reports/ledger",
-      search: { ledgerId, from, to, view },
-      replace: true,
-    });
-  }, [ledgerId, from, to, view, search.ledgerId, search.from, search.to, search.view, navigate]);
+  // Shared return-state mechanism: mirror the current selection into the
+  // URL so back navigation from a drilled voucher restores exactly what
+  // the user was viewing (ledger + date range + view mode).
+  useReportUrlSync({
+    to: "/app/reports/ledger",
+    current: { ledgerId: search.ledgerId, from: search.from, to: search.to, view: search.view },
+    next: { ledgerId, from, to, view },
+    enabled: !!ledgerId,
+  });
 
   const ledger = ledgers.find((l) => l.id === ledgerId);
 
