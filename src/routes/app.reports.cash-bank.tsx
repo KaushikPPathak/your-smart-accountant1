@@ -21,6 +21,7 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { readLedgers, readVoucherEntriesWithVouchers, withCacheFallback } from "@/lib/offline/cache-read";
+import { useReportUrlSync } from "@/lib/report-url-state";
 
 type Search = { ledgerId?: string; from?: string; to?: string };
 
@@ -108,19 +109,15 @@ function CashBankBook() {
     if (!ledgerId && cashBankLedgers[0]) setLedgerId(cashBankLedgers[0].id);
   }, [ledgerId, cashBankLedgers]);
 
-  // Mirror the current selection into the URL so that going back from a
-  // drilled voucher restores the same ledger + date range (the report
-  // component re-mounts on back nav and reads its initial state from the
-  // URL search params).
-  useEffect(() => {
-    if (!ledgerId) return;
-    if (search.ledgerId === ledgerId && search.from === from && search.to === to) return;
-    void navigate({
-      to: "/app/reports/cash-bank",
-      search: { ledgerId, from, to },
-      replace: true,
-    });
-  }, [ledgerId, from, to, search.ledgerId, search.from, search.to, navigate]);
+  // Shared return-state mechanism: mirror the current selection into the
+  // URL so that when the user drills into a voucher and comes back, the
+  // report re-mounts and re-hydrates from search params.
+  useReportUrlSync({
+    to: "/app/reports/cash-bank",
+    current: { ledgerId: search.ledgerId, from: search.from, to: search.to },
+    next: { ledgerId, from, to },
+    enabled: !!ledgerId,
+  });
 
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [siblings, setSiblings] = useState<Map<string, SiblingRow[]>>(new Map());
