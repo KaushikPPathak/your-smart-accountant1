@@ -5,7 +5,7 @@
 // vouchers, or the debit/credit lines for entry-based vouchers. Recomputes
 // totals and rewrites voucher_items + voucher_entries on save.
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ import { ExportInvoiceDialog } from "@/components/vouchers/ExportInvoiceDialog";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { toast } from "sonner";
 import { goBackFromVoucher } from "@/lib/voucher-return";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 
 export const Route = createFileRoute("/app/vouchers/$voucherId")({
   head: () => ({ meta: [{ title: "Edit Voucher — Your Mehtaji" }] }),
@@ -513,6 +514,22 @@ function VoucherEditPage() {
       toast.error(e instanceof Error ? e.message : "Failed to delete");
     }
   }
+
+  // Push "voucher" scope + wire Ctrl+S / Cmd+S to save. Without this, the
+  // edit page had no keyboard save at all — users had to click the button.
+  const kb = useOptionalKeyboard();
+  useEffect(() => {
+    if (!kb) return;
+    return kb.pushScope("voucher");
+  }, [kb]);
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const saveHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    if (!saving && canWrite) void saveRef.current();
+  }, [saving, canWrite]);
+  useShortcut("Ctrl+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+  useShortcut("Meta+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
 
   if (loading || !voucher) {
     return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
