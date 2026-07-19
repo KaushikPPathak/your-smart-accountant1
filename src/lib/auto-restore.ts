@@ -13,7 +13,7 @@
 import { isDesktopRuntime } from "@/lib/native-bridge";
 import { getAppPaths } from "@/lib/app-paths";
 import { getAllIntegrity, countLive, totalRows, recordIntegrityFromSnapshot, type IntegrityEntry } from "@/lib/integrity";
-import { parseBackupFile, restoreCompanyBackup, type CompanyBackup } from "@/lib/backup";
+import { buildCompanyBackup, parseBackupFile, restoreCompanyBackup, type CompanyBackup } from "@/lib/backup";
 import { setMeta, getMeta } from "@/lib/offline/db";
 
 export interface AutoRestoreOutcome {
@@ -60,7 +60,7 @@ async function listSnapshotsForCompany(companyName: string): Promise<SnapshotCan
       try {
         const raw = await fs.readDir(dir);
         entries = raw as unknown as { name?: string }[];
-      } catch { continue; }
+      } catch { return; }
       for (const e of entries) {
         if (!e.name || !e.name.endsWith(".json")) continue;
         const base = e.name.replace(/\.json$/, "");
@@ -236,14 +236,19 @@ export async function runAutoRestore(
       results.push({ companyId: c.id, companyName: c.name, status: "ok", liveBefore: live.ledgers + live.items + live.vouchers, manifestTotal: m ? totalRows(m) : 0 });
       continue;
     }
-    if (cls === "fresh" || cls === "no-manifest") {
-      results.push({ companyId: c.id, companyName: c.name, status: "skipped-fresh", liveBefore: live.ledgers + live.items + live.vouchers, manifestTotal: m ? totalRows(m) : 0 });
+    // With no manifest, a non-empty live company is still checked against
+    // on-disk history. The superset proof makes this safe and repairs older
+    // installations created before integrity.json existed. A truly fresh,
+    // empty company remains untouched because there is no live lineage to
+    // prove against.
+    if (cls === "fresh") {
+      results.push({ companyId: c.id, companyName: c.name, status: "skipped-fresh", liveBefore: 0, manifestTotal: 0 });
       continue;
     }
-    // cls === "empty" or "shrunk" — try to restore silently.
+    // cls === "empty", "shrunk" or "no-manifest" — inspect snapshots.
     const candidates = await listSnapshotsForCompany(c.name);
-    const livePayload = await import("@/lib/backup").then(({ buildCompanyBackup }) => buildCompanyBackup(c.id));
-    let restored: { path: string; payload: CompanyBackup } | null = null;
+    const livePayload = await buildCompanyBackup(c.id);
+    const valid: { path: string; payload: CompanyBackup; dateFolder: string }[] = [];
     for (const cand of candidates) {
       const payload = await readAndParse(cand.absPath);
       if (!payload) continue;
@@ -252,9 +257,20 @@ export async function runAutoRestore(
       const total = (payload.ledgers?.length ?? 0) + (payload.items?.length ?? 0) + (payload.vouchers?.length ?? 0);
       if (total === 0) continue;
       if (!isBackupSafeSuperset(payload, livePayload)) continue;
-      restored = { path: cand.absPath, payload };
-      break;
+      valid.push({ path: cand.absPath, payload, dateFolder: cand.dateFolder });
     }
+    // Prefer the richest verified lineage, not merely the newest filename.
+    // This is essential when a partial daily snapshot and a fuller pre-merge
+    // or pre-delete safety snapshot were written on the same date.
+    valid.sort((a, b) => {
+      const voucherDiff = (b.payload.vouchers?.length ?? 0) - (a.payload.vouchers?.length ?? 0);
+      if (voucherDiff) return voucherDiff;
+      const rows = (p: CompanyBackup) =>
+        (p.ledgers?.length ?? 0) + (p.items?.length ?? 0) + (p.vouchers?.length ?? 0) +
+        (p.voucher_entries?.length ?? 0) + (p.voucher_items?.length ?? 0);
+      return (rows(b.payload) - rows(a.payload)) || b.dateFolder.localeCompare(a.dateFolder);
+    });
+    const restored = valid[0] ?? null;
     const manifestVouchers = m?.vouchers ?? 0;
     const missingVouchers = Math.max(0, manifestVouchers - live.vouchers);
     if (!restored) {
