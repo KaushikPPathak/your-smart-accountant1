@@ -132,7 +132,7 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
         <div ref={enterTab.ref} onKeyDown={enterTab.onKeyDown} className="grid gap-3">
           <div className="space-y-1">
             <Label>Name *</Label>
-            <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
+            <Input autoFocus value={name} onChange={(e) => setName(toTitleCaseOnType(e.target.value))} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
