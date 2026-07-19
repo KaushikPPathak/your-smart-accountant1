@@ -21,6 +21,7 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { readLedgers, readVoucherEntriesWithVouchers, withCacheFallback } from "@/lib/offline/cache-read";
+import { useReportUrlSync } from "@/lib/report-url-state";
 
 type Search = { ledgerId?: string; from?: string; to?: string };
 
