@@ -58,15 +58,23 @@ async function existingSnapshotRows(absPath: string): Promise<number | null> {
 export async function runAutoSnapshotOnce(
   companies: { id: string; name: string }[],
 ): Promise<void> {
-  if (!isDesktopRuntime() || companies.length === 0) return;
+  if (!isDesktopRuntime()) {
+    await recordSnapshotEvent({ status: "no-desktop" });
+    return;
+  }
+  if (companies.length === 0) return;
   try {
     const last = typeof window !== "undefined" ? localStorage.getItem(RUN_KEY) : null;
     const today = todayKey();
     if (last === today) return; // already ran today
     const paths = await getAppPaths();
-    if (!paths) return;
+    if (!paths) {
+      await recordSnapshotEvent({ status: "no-paths", error: "getAppPaths returned null" });
+      return;
+    }
     const root = paths.root.replace(/[\\/]+$/, "");
     const subDir = `snapshots/${today}`;
+    let anySuccess = false;
     for (const c of companies) {
       try {
         const payload = await buildCompanyBackup(c.id);
@@ -79,7 +87,10 @@ export async function runAutoSnapshotOnce(
           const absPath = await join(root, subDir, fileName);
           const existing = await existingSnapshotRows(absPath);
           if (existing !== null && existing > 0) {
-            // Preserve the good file — do NOT write, do NOT touch integrity.
+            await recordSnapshotEvent({
+              status: "empty-skipped", companyId: c.id, companyName: c.name,
+              target: absPath, rows: 0,
+            });
             continue;
           }
         }
@@ -87,16 +98,41 @@ export async function runAutoSnapshotOnce(
         const envelope = await wrapBackup(payload);
         const contents = JSON.stringify(envelope);
         const res = await writeAbsoluteFileNative(root, subDir, fileName, contents);
-        if (res.ok && rows > 0) {
-          await recordIntegrityFromSnapshot(c.id, c.name, payload, { file: res.path ?? fileName, dir: subDir });
+        if (res.ok) {
+          if (rows > 0) {
+            await recordIntegrityFromSnapshot(c.id, c.name, payload, { file: res.path ?? fileName, dir: subDir });
+          }
+          await recordSnapshotEvent({
+            status: "ok", companyId: c.id, companyName: c.name,
+            target: res.path ?? `${root}\\${subDir}\\${fileName}`, rows,
+          });
+          anySuccess = true;
+        } else {
+          await recordSnapshotEvent({
+            status: "write-failed", companyId: c.id, companyName: c.name,
+            target: `${root}\\${subDir}\\${fileName}`, rows,
+            error: res.error ?? "unknown write error",
+          });
         }
-      } catch {
-        /* per-company failure — keep going */
+      } catch (e) {
+        await recordSnapshotEvent({
+          status: "write-failed", companyId: c.id, companyName: c.name,
+          target: subDir,
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     }
-    try { localStorage.setItem(RUN_KEY, today); } catch { /* ignore */ }
-  } catch {
-    /* silent */
+    // Only mark today as "done" if at least one company wrote successfully.
+    // Otherwise we want tomorrow's launch to retry rather than swallow the
+    // failure for 24 hours.
+    if (anySuccess) {
+      try { localStorage.setItem(RUN_KEY, today); } catch { /* ignore */ }
+    }
+  } catch (e) {
+    await recordSnapshotEvent({
+      status: "write-failed",
+      error: e instanceof Error ? e.message : String(e),
+    });
   }
 }
 
