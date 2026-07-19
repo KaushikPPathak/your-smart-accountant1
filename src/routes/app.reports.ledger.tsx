@@ -1,4 +1,5 @@
 import { openVoucherDetail, hasLedgerOrigin, goBackFromLedger } from "@/lib/voucher-return";
+import { useReportUrlSync } from "@/lib/report-url-state";
 import { amountHeader } from "@/lib/export-format";
 import { sortEntriesByVoucherAsc } from "@/lib/voucher-sort";
 import { narrationOf } from "@/lib/voucher-text";
