@@ -863,11 +863,8 @@ function CompaniesPage() {
                           UNREG.
                         </span>
                       )}
-                      {m.companies.mode === "trial_local" && (
-                        <span className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400">
-                          TRIAL
-                        </span>
-                      )}
+                      {/* All companies are local-only by default — no TRIAL badge needed. */}
+
                     </div>
 
                     {/* Metadata rows */}
