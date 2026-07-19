@@ -392,6 +392,31 @@ function GlobalShortcuts({ onOpenHelp }: { onOpenHelp: () => void }) {
     { scope: "global", description: "Jump to Ledger report" },
   );
 
+  // Quick Entry ribbon Alt+<letter> shortcuts. Menu access keys for Reports
+  // and Print were moved to Alt+E / Alt+N (see TopMenuBar) to free Alt+R and
+  // Alt+P for Receipt and Purchase — matching the ribbon hints the user sees.
+  const RIBBON_SHORTCUTS: Array<{ combo: string; to: string; desc: string }> = [
+    { combo: "Alt+s", to: "/app/vouchers/new/sales", desc: "New Sales voucher" },
+    { combo: "Alt+p", to: "/app/vouchers/new/purchase", desc: "New Purchase voucher" },
+    { combo: "Alt+r", to: "/app/vouchers/new/receipt", desc: "New Receipt voucher" },
+    { combo: "Alt+y", to: "/app/vouchers/new/payment", desc: "New Payment voucher" },
+    { combo: "Alt+c", to: "/app/vouchers/new/credit_note", desc: "New Credit Note" },
+    { combo: "Alt+d", to: "/app/vouchers/new/debit_note", desc: "New Debit Note" },
+    { combo: "Alt+j", to: "/app/vouchers/new/journal", desc: "New Journal voucher" },
+  ];
+  for (const s of RIBBON_SHORTCUTS) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useShortcut(
+      s.combo,
+      (e) => {
+        e.preventDefault();
+        navigate({ to: s.to });
+      },
+      { scope: "global", description: s.desc },
+    );
+  }
+
+
 
 
   return null;
