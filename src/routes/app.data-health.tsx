@@ -1,13 +1,14 @@
 import type { ReactElement } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
-import { ShieldCheck, RefreshCw, AlertTriangle, CheckCircle2, HelpCircle, HardDriveDownload } from "lucide-react";
+import { ShieldCheck, RefreshCw, AlertTriangle, CheckCircle2, HelpCircle, HardDriveDownload, Merge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useCompany } from "@/lib/company-context";
 import { getAllIntegrity, countLive, totalRows, type IntegrityEntry } from "@/lib/integrity";
 import { runAutoRestore, getAutoRestoreEvents, type AutoRestoreOutcome } from "@/lib/auto-restore";
+import { getSnapshotEvents, type SnapshotRunEvent } from "@/lib/snapshot-diagnostics";
 import { toast } from "sonner";
 import { FieldIntegrityPanel } from "@/components/data-health/FieldIntegrityPanel";
 
@@ -38,6 +39,7 @@ function DataHealthPage() {
   const { memberships, activeCompanyId } = useCompany();
   const [rows, setRows] = useState<Row[]>([]);
   const [events, setEvents] = useState<AutoRestoreOutcome[]>([]);
+  const [snapEvents, setSnapEvents] = useState<SnapshotRunEvent[]>([]);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -51,9 +53,31 @@ function DataHealthPage() {
     }
     setRows(list);
     setEvents(await getAutoRestoreEvents());
+    setSnapEvents(await getSnapshotEvents());
   }, [memberships]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  // Detect duplicate normalised names among the memberships — these need the
+  // Housekeeping → Merge Companies tool to consolidate.
+  const dupNames = new Set<string>();
+  const seen = new Map<string, number>();
+  for (const r of rows) {
+    const n = r.companyName.trim().replace(/\s+/g, " ").toLowerCase();
+    if (!n) continue;
+    seen.set(n, (seen.get(n) ?? 0) + 1);
+  }
+  for (const [n, c] of seen) if (c > 1) dupNames.add(n);
+
+  // "Snapshot writes failing" — newest event per company is a failure.
+  const failingSnap = (() => {
+    const perCompany = new Map<string, SnapshotRunEvent>();
+    for (const e of snapEvents) {
+      const k = e.companyId ?? "_";
+      if (!perCompany.has(k)) perCompany.set(k, e);
+    }
+    return Array.from(perCompany.values()).some((e) => e.status === "write-failed" || e.status === "no-paths");
+  })();
 
   const onVerifyNow = async () => {
     setBusy(true);
@@ -90,6 +114,60 @@ function DataHealthPage() {
           <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} /> Verify all now
         </Button>
       </div>
+
+      {failingSnap && (
+        <Card className="border-destructive/60 bg-destructive/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base text-destructive">
+              <AlertTriangle className="h-4 w-4" /> Snapshot writes are failing
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p>
+              The app could not write today&apos;s safety snapshot to disk for at least one company.
+              Until this is fixed, silent recovery has nothing to fall back on if IndexedDB is cleared.
+            </p>
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">Show last 10 snapshot events</summary>
+              <ul className="mt-2 space-y-1">
+                {snapEvents.slice(0, 10).map((e, i) => (
+                  <li key={i} className="rounded border border-border/60 bg-background/60 px-2 py-1">
+                    <span className="font-medium">{e.companyName ?? "—"}</span>{" "}
+                    <span className="uppercase tracking-wide">{e.status}</span>
+                    {e.rows != null && <> · {e.rows} rows</>}
+                    {e.target && <div className="truncate text-muted-foreground">{e.target}</div>}
+                    {e.error && <div className="text-destructive">{e.error}</div>}
+                    <div className="text-muted-foreground">{new Date(e.atIso).toLocaleString()}</div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </CardContent>
+        </Card>
+      )}
+
+      {dupNames.size > 0 && (
+        <Card className="border-amber-500/60 bg-amber-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base text-amber-700 dark:text-amber-400">
+              <Merge className="h-4 w-4" /> Duplicate company detected
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p>
+              Two local company records share the same name ({Array.from(dupNames).join(", ")}).
+              This usually means a fresh install created a second record while the original still held your books.
+              Use <b>Housekeeping → Merge Companies</b> to consolidate them into one.
+            </p>
+            <Button asChild size="sm" variant="outline" className="gap-2">
+              <Link to="/app/housekeeping" search={{ tab: "merge_companies" } as never}>
+                <Merge className="h-4 w-4" /> Open Merge Companies
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <FieldIntegrityPanel companyId={activeCompanyId} />
 
       <Card>
@@ -112,15 +190,21 @@ function DataHealthPage() {
                 {rows.map((r) => {
                   const liveTotal = r.live.ledgers + r.live.items + r.live.vouchers;
                   const manifestTotal = r.manifest ? totalRows(r.manifest) : 0;
+                  const isDup = dupNames.has(r.companyName.trim().replace(/\s+/g, " ").toLowerCase());
                   let status: { label: string; icon: ReactElement; tone: string };
                   if (!r.manifest) status = { label: "No baseline yet", icon: <HelpCircle className="h-3.5 w-3.5" />, tone: "bg-muted text-muted-foreground" };
                   else if (manifestTotal === 0) status = { label: "Empty (never had data)", icon: <HelpCircle className="h-3.5 w-3.5" />, tone: "bg-muted text-muted-foreground" };
+                  else if (liveTotal > manifestTotal * 1.1) status = { label: "Manifest stale — snapshot not caught up", icon: <AlertTriangle className="h-3.5 w-3.5" />, tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400" };
                   else if (liveTotal >= manifestTotal * 0.9) status = { label: "Healthy", icon: <CheckCircle2 className="h-3.5 w-3.5" />, tone: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" };
                   else if (liveTotal === 0) status = { label: "Empty — recovery pending", icon: <AlertTriangle className="h-3.5 w-3.5" />, tone: "bg-destructive/15 text-destructive" };
                   else status = { label: "Shrunk — recovery pending", icon: <AlertTriangle className="h-3.5 w-3.5" />, tone: "bg-amber-500/15 text-amber-700 dark:text-amber-400" };
                   return (
                     <tr key={r.companyId} className="border-b last:border-0">
-                      <td className="px-4 py-2 font-medium">{r.companyName}</td>
+                      <td className="px-4 py-2 font-medium">
+                        {r.companyName}
+                        {isDup && <Badge variant="outline" className="ml-2 border-amber-500/50 text-amber-700 dark:text-amber-400">duplicate</Badge>}
+                        <div className="text-[10px] font-normal text-muted-foreground">{r.companyId.slice(0, 8)}…</div>
+                      </td>
                       <td className="px-4 py-2 tabular-nums">
                         L {r.live.ledgers} · I {r.live.items} · V {r.live.vouchers}
                       </td>
