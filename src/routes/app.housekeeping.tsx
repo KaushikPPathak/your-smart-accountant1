@@ -39,6 +39,7 @@ import {
   CalendarCheck,
   ShieldCheck,
   Activity,
+  Sparkles,
 } from "lucide-react";
 import { OpeningBalanceImport } from "@/components/housekeeping/OpeningBalanceImport";
 import { OpeningStockImport } from "@/components/housekeeping/OpeningStockImport";
