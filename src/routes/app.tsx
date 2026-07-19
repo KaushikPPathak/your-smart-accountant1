@@ -435,7 +435,7 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
         e.preventDefault();
         navigate({ to: s.to });
       },
-      { scope: "global", description: s.desc },
+      { scope: "global", allowInField: true, description: s.desc },
     );
   }
 
