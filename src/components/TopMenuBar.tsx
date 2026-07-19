@@ -206,7 +206,8 @@ const MENUS: TopMenu[] = [
   },
   {
     key: "print",
-    accessKey: "p",
+    accessKey: "n",
+
     label: "Print",
     icon: Printer,
     groups: [
