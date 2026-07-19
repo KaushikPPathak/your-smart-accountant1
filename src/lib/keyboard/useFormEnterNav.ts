@@ -29,15 +29,71 @@ interface Options {
  *                    Fallback: `onLast()` when no such button is tagged.
  *   Enter in textarea → newline (unchanged)
  *   Enter on combobox → let Radix handle it; if closed and empty, open it.
+ *   ArrowLeft at caret-0 (no selection) → focus previous field. Asymmetric
+ *     back-nav only; ArrowRight is intentionally NOT bound so it can't
+ *     conflict with dropdowns, the entry-row grid, or number editing.
  */
 export function useFormEnterNav<T extends HTMLElement = HTMLDivElement>(opts: Options = {}) {
   const ref = React.useRef<T | null>(null);
   const optsRef = React.useRef(opts);
   optsRef.current = opts;
 
+  const focusablesIn = (root: HTMLElement, current: HTMLElement) =>
+    Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+      .filter((el) => el.offsetParent !== null || el === current);
+
+  const focusEl = (el: HTMLElement) => {
+    el.focus();
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      try { el.select(); } catch { /* noop */ }
+    }
+  };
+
   const onKeyDown: React.KeyboardEventHandler<T> = (e) => {
-    if (e.key !== "Enter" || e.ctrlKey || e.metaKey || e.altKey) return;
     const t = e.target as HTMLElement;
+
+    // ArrowLeft — asymmetric back-nav when the caret is at position 0 with
+    // no selection. For non-text controls (button, combobox, checkbox…),
+    // any ArrowLeft press qualifies since there is no caret to move.
+    if (
+      e.key === "ArrowLeft" &&
+      !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey
+    ) {
+      // Skip when a dropdown / popover is open — Radix owns ← in that context.
+      const insideOpenPopup = t.closest('[data-state="open"]');
+      // Skip inside contentEditable regions.
+      const editable = t.isContentEditable;
+      if (!insideOpenPopup && !editable) {
+        let atStart = true;
+        if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) {
+          const type = (t as HTMLInputElement).type;
+          // Some input types don't support selection APIs (number, date…).
+          // For those we can't safely detect caret-0, so bail out.
+          const noCaretApi = ["number", "date", "time", "datetime-local", "month", "week", "email", "range", "color"].includes(type);
+          if (noCaretApi) {
+            atStart = false;
+          } else {
+            const s = t.selectionStart;
+            const eSel = t.selectionEnd;
+            atStart = s === 0 && eSel === 0;
+          }
+        }
+        if (atStart) {
+          const root = ref.current;
+          if (root) {
+            const list = focusablesIn(root, t);
+            const idx = list.indexOf(t);
+            if (idx > 0) {
+              e.preventDefault();
+              focusEl(list[idx - 1]);
+              return;
+            }
+          }
+        }
+      }
+    }
+
+    if (e.key !== "Enter" || e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = t.tagName;
     if (tag === "TEXTAREA") return;
 
