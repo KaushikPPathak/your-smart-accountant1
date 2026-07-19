@@ -107,38 +107,33 @@ function ProfitLoss() {
     })();
   }, [activeCompanyId, inventoryEnabled]);
 
-  // Accounting rule: when Inventory is enabled, Sales / Purchase / Direct
-  // Income / Direct Expense ALWAYS flow through the Trading A/c (and only its
-  // Gross Profit / Loss carries into P&L). Indirect income/expense flow
-  // through P&L. Same head must never appear in both reports. When Inventory
-  // is disabled there is no Trading A/c, so direct + indirect both land in
-  // P&L.
-  const hasStock = openingStock !== 0 || closingStock !== 0;
-  const expenseTypes = inventoryEnabled
-    ? new Set(["expense_indirect"])
-    : new Set(["expense_direct", "expense_indirect"]);
-  const incomeTypes = inventoryEnabled
-    ? new Set(["income_indirect"])
-    : new Set(["income_direct", "income_indirect"]);
+  // Accounting rule: Sales / Purchase / Direct Income / Direct Expense
+  // ALWAYS flow through the Trading A/c — this includes job-work / labour-only
+  // manufacturing concerns that hold zero own-stock (e.g. jewellers turning
+  // customer-supplied gold into ornaments). Only Indirect Income / Indirect
+  // Expense appear in P&L; the Trading A/c's Gross Profit / Loss is carried
+  // here as b/d. The Inventory flag only controls whether Opening / Closing
+  // Stock is added to Trading — it does NOT change which heads belong where.
+  const expenseTypes = new Set(["expense_indirect"]);
+  const incomeTypes = new Set(["income_indirect"]);
 
-  const plSections: ("PL" | "TRADING")[] = inventoryEnabled ? ["PL"] : ["PL", "TRADING"];
   const expenseBuckets = useMemo(
-    () => plSections.flatMap((sec) => groupBalances(
+    () => groupBalances(
       balances.filter((b) => expenseTypes.has(b.type)),
-      sec,
+      "PL",
       (b) => b.closing_paise,
-    )),
+    ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balances, inventoryEnabled],
+    [balances],
   );
   const incomeBuckets = useMemo(
-    () => plSections.flatMap((sec) => groupBalances(
+    () => groupBalances(
       balances.filter((b) => incomeTypes.has(b.type)),
-      sec,
+      "PL",
       (b) => -b.closing_paise,
-    )),
+    ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balances, inventoryEnabled],
+    [balances],
   );
 
   const goLedger = (id: string) =>
@@ -147,11 +142,9 @@ function ProfitLoss() {
   const exp = groupedTRows(expenseBuckets, goLedger);
   const inc = groupedTRows(incomeBuckets, goLedger);
 
-  // Trading Gross Profit / Gross Loss carry — whenever Inventory is enabled,
-  // the Trading A/c is the source of truth for direct income/expense and its
-  // net result flows here as Gross Profit / Loss b/d.
+  // Trading Gross Profit / Gross Loss carry — direct income/expense always
+  // route through Trading, so its net result always carries here as b/d.
   const tradingGp = useMemo(() => {
-    if (!inventoryEnabled) return 0;
     const directIncome = balances
       .filter((b) => b.type === "income_direct")
       .reduce((s, b) => s + -b.closing_paise, 0);
@@ -159,8 +152,7 @@ function ProfitLoss() {
       .filter((b) => b.type === "expense_direct")
       .reduce((s, b) => s + b.closing_paise, 0);
     return directIncome + closingStock - (directExpense + openingStock);
-  }, [balances, inventoryEnabled, openingStock, closingStock]);
-  void hasStock;
+  }, [balances, openingStock, closingStock]);
 
   const profit = inc.totalPaise - exp.totalPaise + tradingGp;
 
