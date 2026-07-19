@@ -19,6 +19,7 @@ import { wrapBackup, isBackupEnvelope, verifyEnvelope, type BackupEnvelope } fro
 import { isDesktopRuntime, writeAbsoluteFileNative, readAbsoluteTextFileNative } from "./native-bridge";
 import { getAppPaths } from "./app-paths";
 import { recordIntegrityFromSnapshot } from "./integrity";
+import { recordSnapshotEvent } from "./snapshot-diagnostics";
 import type { CompanyBackup } from "./backup";
 
 const RUN_KEY = "ym_last_auto_snapshot_day";
