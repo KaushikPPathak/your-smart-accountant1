@@ -47,6 +47,7 @@ function AppLayout() {
   const [savingMirror, setSavingMirror] = useState(false);
   const [lastSaveTick, setLastSaveTick] = useState(0); // forces re-render after save
   const [helpOpen, setHelpOpen] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
 
