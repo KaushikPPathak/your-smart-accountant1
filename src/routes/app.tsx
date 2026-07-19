@@ -312,6 +312,7 @@ function AppLayout() {
           </MastersProvider>
         </AccountGroupsProvider>
         <KeyboardCheatSheet open={helpOpen} onOpenChange={setHelpOpen} />
+        <CalculatorDialog open={calcOpen} onOpenChange={setCalcOpen} />
         <DataOwnershipDialog />
       </div>
     </KeyboardProvider>
