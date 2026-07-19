@@ -13,6 +13,7 @@ import { isOnlineNow } from "@/lib/offline/online-status";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { offlineDb } from "@/lib/offline/db";
 import { HsnCodeAutocomplete } from "@/components/HsnCodeAutocomplete";
+import { toTitleCaseOnType } from "@/lib/text-case";
 
 export interface QuickItem {
   id: string;
