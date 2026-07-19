@@ -282,7 +282,7 @@ function AppLayout() {
 
   return (
     <KeyboardProvider>
-      <GlobalShortcuts onOpenHelp={() => setHelpOpen(true)} />
+      <GlobalShortcuts onOpenHelp={() => setHelpOpen(true)} onOpenCalc={() => setCalcOpen(true)} />
       <div ref={workspaceRef} className="flex min-h-screen w-full flex-col">
         <TopMenuBar
           rightExtras={backupExtras}
