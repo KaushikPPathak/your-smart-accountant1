@@ -5,7 +5,7 @@
 // vouchers, or the debit/credit lines for entry-based vouchers. Recomputes
 // totals and rewrites voucher_items + voucher_entries on save.
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
