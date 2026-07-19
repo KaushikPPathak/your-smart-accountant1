@@ -28,6 +28,7 @@ import { ExportInvoiceDialog } from "@/components/vouchers/ExportInvoiceDialog";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { toast } from "sonner";
 import { goBackFromVoucher } from "@/lib/voucher-return";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 
 export const Route = createFileRoute("/app/vouchers/$voucherId")({
   head: () => ({ meta: [{ title: "Edit Voucher — Your Mehtaji" }] }),
