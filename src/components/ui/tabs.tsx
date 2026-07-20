@@ -8,17 +8,57 @@ const Tabs = TabsPrimitive.Root;
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.List
-    ref={ref}
-    className={cn(
-      "inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground",
-      className,
-    )}
-    {...props}
-  />
-));
+>(({ className, onKeyDown, ...props }, ref) => {
+  // Radix Tabs handles ArrowLeft/ArrowRight natively for horizontal orientation.
+  // For wrapping tablists (multi-row), users also expect ArrowUp/ArrowDown to
+  // move between rows. We augment the list with a geometry-based handler that
+  // finds the closest trigger above/below the currently focused one.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    onKeyDown?.(e);
+    if (e.defaultPrevented) return;
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    const list = e.currentTarget;
+    const triggers = Array.from(
+      list.querySelectorAll<HTMLElement>('[role="tab"]:not([data-disabled])'),
+    );
+    const current = document.activeElement as HTMLElement | null;
+    if (!current || !triggers.includes(current)) return;
+    const cur = current.getBoundingClientRect();
+    const wantBelow = e.key === "ArrowDown";
+    let best: { el: HTMLElement; dy: number; dx: number } | null = null;
+    for (const el of triggers) {
+      if (el === current) continue;
+      const r = el.getBoundingClientRect();
+      const dy = r.top - cur.top;
+      if (wantBelow ? dy <= 2 : dy >= -2) continue;
+      const dx = Math.abs(r.left - cur.left);
+      const absDy = Math.abs(dy);
+      if (!best || absDy < Math.abs(best.dy) || (absDy === Math.abs(best.dy) && dx < best.dx)) {
+        best = { el, dy, dx };
+      }
+    }
+    // No row above/below → wrap to first/last trigger.
+    const target = best?.el ?? (wantBelow ? triggers[0] : triggers[triggers.length - 1]);
+    if (target) {
+      e.preventDefault();
+      target.focus();
+      target.click();
+    }
+  };
+  return (
+    <TabsPrimitive.List
+      ref={ref}
+      onKeyDown={handleKeyDown}
+      className={cn(
+        "inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground",
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 TabsList.displayName = TabsPrimitive.List.displayName;
+
 
 const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
