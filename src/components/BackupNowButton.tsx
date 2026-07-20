@@ -51,7 +51,7 @@ export function BackupNowButton() {
           onClick={runBackup}
           disabled={busy}
           aria-label={`Back up ${companyName} now`}
-          className="h-9 w-9 rounded-md text-primary hover:bg-primary/10 hover:text-primary"
+          className="h-9 w-9 rounded-md text-foreground hover:bg-foreground/10 hover:text-foreground"
         >
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin" />
