@@ -1,2 +1,6 @@
 /target/
 /gen/schemas
+# Local env files — never commit
+.env
+.env.local
+.env.*.local
