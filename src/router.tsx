@@ -1,4 +1,5 @@
 import { createRouter, createHashHistory, useRouter } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { routeTree } from "./routeTree.gen";
 
 // Hash history works identically on https://, file://, and tauri:// — no
@@ -7,10 +8,37 @@ const appHistory = createHashHistory();
 
 function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
+  const [copied, setCopied] = useState(false);
+
+  // Route-level error boundary caught something. Log the raw Error so the
+  // stack (not just .message) reaches the crash ring + devtools console.
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.error("[route-error]", error);
+    try {
+      void import("@/lib/crash-log").then((m) =>
+        m.recordCrash?.({ kind: "route-error", message: error?.message ?? String(error), stack: error?.stack }),
+      ).catch(() => undefined);
+    } catch { /* ignore */ }
+  }, [error]);
+
+  const details = [
+    error?.message || String(error),
+    error?.stack ? `\n${error.stack}` : "",
+    `\nurl: ${typeof window !== "undefined" ? window.location.href : ""}`,
+  ].join("");
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(details);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch { /* ignore */ }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
+      <div className="max-w-lg text-center">
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -31,12 +59,13 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
         <p className="mt-2 text-sm text-muted-foreground">
           An unexpected error occurred. Please try again.
         </p>
-        {import.meta.env.DEV && error.message && (
-          <pre className="mt-4 max-h-40 overflow-auto rounded-md bg-muted p-3 text-left font-mono text-xs text-destructive">
-            {error.message}
+        {(error?.message || error?.stack) && (
+          <pre className="mt-4 max-h-56 overflow-auto rounded-md bg-muted p-3 text-left font-mono text-xs text-destructive whitespace-pre-wrap break-words">
+            {error?.message}
+            {error?.stack ? `\n\n${error.stack}` : ""}
           </pre>
         )}
-        <div className="mt-6 flex items-center justify-center gap-3">
+        <div className="mt-6 flex items-center justify-center gap-3 flex-wrap">
           <button
             type="button"
             onClick={() => {
@@ -53,6 +82,13 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
             Go home
+          </button>
+          <button
+            type="button"
+            onClick={copy}
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            {copied ? "Copied" : "Copy details"}
           </button>
         </div>
       </div>
