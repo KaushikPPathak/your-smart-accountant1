@@ -7,6 +7,7 @@ import { I18nProvider } from "@/lib/i18n";
 import { CurrencyProvider } from "@/lib/currency";
 import { DateFormatProvider } from "@/lib/date-format";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { ExportShowcase } from "@/components/export/ExportShowcase";
 import { isUnlocked } from "@/lib/staff-session";
 import { BrainProvider } from "@/brain/BrainProvider";
@@ -54,11 +55,13 @@ function RootComponent() {
             <AuthProvider>
               <CompanyProvider>
                 <BrainProvider>
-                  <WebGate>
-                    <LockGate>
-                      <Outlet />
-                    </LockGate>
-                  </WebGate>
+                  <TooltipProvider delayDuration={200}>
+                    <WebGate>
+                      <LockGate>
+                        <Outlet />
+                      </LockGate>
+                    </WebGate>
+                  </TooltipProvider>
                 </BrainProvider>
                 <Toaster richColors position="top-right" />
                 <ExportShowcase />
