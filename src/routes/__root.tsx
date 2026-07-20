@@ -55,11 +55,13 @@ function RootComponent() {
             <AuthProvider>
               <CompanyProvider>
                 <BrainProvider>
-                  <WebGate>
-                    <LockGate>
-                      <Outlet />
-                    </LockGate>
-                  </WebGate>
+                  <TooltipProvider delayDuration={200}>
+                    <WebGate>
+                      <LockGate>
+                        <Outlet />
+                      </LockGate>
+                    </WebGate>
+                  </TooltipProvider>
                 </BrainProvider>
                 <Toaster richColors position="top-right" />
                 <ExportShowcase />
