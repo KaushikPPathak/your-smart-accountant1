@@ -17,7 +17,7 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
     console.error("[route-error]", error);
     try {
       void import("@/lib/crash-log").then((m) =>
-        m.recordCrash?.({ kind: "route-error", message: error?.message ?? String(error), stack: error?.stack }),
+        m.recordFailure?.("route-error", error, { url: typeof window !== "undefined" ? window.location.href : "" }),
       ).catch(() => undefined);
     } catch { /* ignore */ }
   }, [error]);
