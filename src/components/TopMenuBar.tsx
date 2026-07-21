@@ -384,6 +384,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       if (items.length === 0) return;
       const target2 = e.key === "ArrowDown" ? items[0] : items[items.length - 1];
       target2.focus();
+    };
+
+
 
     root.addEventListener("keydown", onKeyDown);
     return () => root.removeEventListener("keydown", onKeyDown);
