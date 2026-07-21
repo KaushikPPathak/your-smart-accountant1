@@ -363,35 +363,63 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
     { scope: "global", allowInField: true, description: "Open calculator" },
   );
 
-  // Staged Escape (single owner). Ordered stages:
-  //   1. Field focused (input/textarea/select/contentEditable) → blur.
-  //   2. Any Radix overlay open → let Radix close it first (no-op here).
-  //   3. Focus already on the menubar → let TopMenuBar's own Escape binding
-  //      handle the exit-confirm dialog.
-  //   4. On a voucher entry route → navigate back to the voucher list.
-  //   5. Anywhere else → focus the first top-menu trigger.
+  // Staged Escape (single owner) — Busy/Tally-style "step down one level" ladder:
+  //   1. Field focused (input/textarea/select/contentEditable) → blur it.
+  //   2. Any Radix overlay open → let Radix close it (no-op here).
+  //   3. Focus on top menubar (dropdown closed) → step DOWN to Quick Entry
+  //      ribbon. TopMenuBar's Escape binding then only fires if the ribbon
+  //      isn't present (auth screens, mobile), triggering exit-confirm.
+  //   4. Focus on Quick Entry ribbon → step DOWN to main content.
+  //   5. On a voucher entry route → back to the voucher list.
+  //   6. Anywhere else → step UP to the menubar (so a lost user can always
+  //      hit Esc to reach the menus, exactly like Busy).
   useShortcut(
     "Escape",
     (e) => {
       const target = e.target as HTMLElement | null;
-      const inField =
-        !!target &&
-        (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
       const openOverlay = document.querySelector(
         '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-radix-popper-content-wrapper]',
       );
       if (openOverlay) return;
+      const inField =
+        !!target &&
+        (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
       if (inField) {
         e.preventDefault();
         target?.blur?.();
         return;
       }
-      if (target?.closest?.(".busy-topbar")) return;
+      // Menubar → Ribbon
+      if (target?.closest?.(".busy-topbar")) {
+        const ribbonFirst =
+          document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"][role="button"]') ??
+          document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"]');
+        if (ribbonFirst) {
+          e.preventDefault();
+          ribbonFirst.focus();
+          return;
+        }
+        return; // no ribbon → let TopMenuBar's Escape (exit-confirm) fire
+      }
+      // Ribbon → Main
+      if (target?.closest?.(".busy-menubar")) {
+        const main = document.querySelector<HTMLElement>("main");
+        const focusable = main?.querySelector<HTMLElement>(
+          'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable ?? main) {
+          e.preventDefault();
+          (focusable ?? main!).focus();
+          return;
+        }
+      }
+      // Voucher entry → back to list
       if (location.pathname.startsWith("/app/vouchers/new/")) {
         e.preventDefault();
         navigate({ to: "/app/vouchers" });
         return;
       }
+      // Main → Menubar (loop back to the top)
       const firstTrigger = document.querySelector<HTMLElement>(
         ".busy-topbar button.busy-menu",
       );
@@ -400,7 +428,7 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
         firstTrigger.focus();
       }
     },
-    { scope: "global", allowInField: true, description: "Escape / back" },
+    { scope: "global", allowInField: true, description: "Escape / step down (menu→ribbon→main)" },
   );
 
   useShortcut(
