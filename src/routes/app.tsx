@@ -424,7 +424,7 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
   // Ctrl+F1 / Ctrl+F2 are direct jumps for muscle memory (menubar / ribbon).
   // These make it possible to hop between panes without ever pressing Tab.
   // ---------------------------------------------------------------------------
-  const focusRegion = React.useCallback((region: "menu" | "ribbon" | "main") => {
+  const focusRegion = useCallback((region: "menu" | "ribbon" | "main") => {
     if (region === "menu") {
       const el = document.querySelector<HTMLElement>(".busy-topbar button.busy-menu");
       el?.focus();
@@ -448,7 +448,7 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
     return true;
   }, []);
 
-  const currentRegion = React.useCallback((): "menu" | "ribbon" | "main" => {
+  const currentRegion = useCallback((): "menu" | "ribbon" | "main" => {
     const a = document.activeElement as HTMLElement | null;
     if (a?.closest(".busy-topbar")) return "menu";
     if (a?.closest(".busy-menubar")) return "ribbon";
