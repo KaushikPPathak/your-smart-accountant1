@@ -365,13 +365,29 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
         return;
       }
 
-      if (target.getAttribute("aria-expanded") === "true") return;
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       const key = target.dataset.menuKey;
       if (!key) return;
       e.preventDefault();
-      setOpenMenuKey(key);
+      const isOpen = target.getAttribute("aria-expanded") === "true";
+      if (!isOpen) {
+        setOpenMenuKey(key);
+        return;
+      }
+      // Menu already open (usually via focusin auto-open). Drill focus into
+      // the first/last item of the dropdown so ArrowDown/Up actually navigates.
+      const wrapper = document.querySelector<HTMLElement>(
+        "[data-radix-popper-content-wrapper]",
+      );
+      if (!wrapper) return;
+      const items = wrapper.querySelectorAll<HTMLElement>('[role="menuitem"]:not([data-disabled])');
+      if (items.length === 0) return;
+      const target2 = e.key === "ArrowDown" ? items[0] : items[items.length - 1];
+      target2.focus();
     };
+
+
+
     root.addEventListener("keydown", onKeyDown);
     return () => root.removeEventListener("keydown", onKeyDown);
   }, []);
