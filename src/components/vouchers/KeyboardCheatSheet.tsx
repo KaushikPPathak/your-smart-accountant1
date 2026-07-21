@@ -10,7 +10,7 @@ const STATIC_ROWS: Array<{ combo: string; description: string; scope: ShortcutSc
   { combo: "Enter", description: "Move to next field", scope: "voucher" },
   { combo: "Shift+Enter", description: "Move to previous field", scope: "voucher" },
   { combo: "Tab / Shift+Tab", description: "Move to next / previous field", scope: "voucher" },
-  { combo: "Esc", description: "Cancel · close overlay · go back (staged)", scope: "global" },
+  { combo: "Esc", description: "Step down: Menu → Ribbon → Main (Busy-style)", scope: "global" },
   { combo: "Type any letter in a picker", description: "Open dropdown and start filtering", scope: "voucher" },
   { combo: "Alt+C (in picker)", description: "Create new ledger / item from inside the picker", scope: "voucher" },
   // Menubar access keys — owned by Radix Menubar (not the useShortcut engine),
