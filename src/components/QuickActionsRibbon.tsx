@@ -80,6 +80,17 @@ export function QuickActionsRibbon() {
             }
             return;
           }
+          if (e.key === "ArrowDown") {
+            const main = document.querySelector<HTMLElement>("main");
+            const focusable = main?.querySelector<HTMLElement>(
+              'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+            );
+            if (focusable) {
+              e.preventDefault();
+              focusable.focus();
+            }
+            return;
+          }
           scope.onKeyDown(e);
           if (e.defaultPrevented) {
             const active = document.activeElement as HTMLElement | null;
