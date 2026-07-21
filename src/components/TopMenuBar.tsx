@@ -312,21 +312,18 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   const menubarId = useId();
   const [openMenuKey, setOpenMenuKey] = useState("");
 
-  // Suppress auto-open for the very first focus that lands on the menubar at
-  // startup (Tab-in / programmatic startup focus). After that first focus,
-  // any subsequent trigger focus is user-initiated arrow navigation, and we
-  // open the menu automatically.
-  const suppressNextFocusOpenRef = useRef(true);
+  // Any focus that lands on a menubar trigger opens its dropdown. Combined
+  // with Radix's native arrow-key trigger cycling, this means the user can
+  // arrow left/right across the top menu and every dropdown auto-opens —
+  // exactly like Busy/Tally. No first-focus suppression: even the very first
+  // programmatic focus on cold-start opens the File menu, which is the
+  // desired Busy-style landing state.
   useEffect(() => {
     const root = menubarRef.current;
     if (!root) return;
     const onFocusIn = (e: FocusEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target || !target.classList.contains("busy-menu")) return;
-      if (suppressNextFocusOpenRef.current) {
-        suppressNextFocusOpenRef.current = false;
-        return;
-      }
       const key = target.dataset.menuKey;
       if (key) setOpenMenuKey(key);
     };
@@ -334,18 +331,24 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     return () => root.removeEventListener("focusin", onFocusIn);
   }, []);
 
-  // When the whole menubar loses focus, arm the suppression again so the
-  // next re-entry (e.g. Tab back in after visiting a form) doesn't auto-open.
+  // Belt-and-braces: ArrowDown / ArrowUp / Enter / Space on a focused trigger
+  // must open its dropdown even in the rare case Radix's native handling is
+  // pre-empted by another listener. We only act if no menu is currently open.
   useEffect(() => {
     const root = menubarRef.current;
     if (!root) return;
-    const onFocusOut = (e: FocusEvent) => {
-      const next = e.relatedTarget as HTMLElement | null;
-      if (next && root.contains(next)) return;
-      suppressNextFocusOpenRef.current = true;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || !target.classList.contains("busy-menu")) return;
+      if (target.getAttribute("aria-expanded") === "true") return;
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const key = target.dataset.menuKey;
+      if (!key) return;
+      e.preventDefault();
+      setOpenMenuKey(key);
     };
-    root.addEventListener("focusout", onFocusOut);
-    return () => root.removeEventListener("focusout", onFocusOut);
+    root.addEventListener("keydown", onKeyDown);
+    return () => root.removeEventListener("keydown", onKeyDown);
   }, []);
 
   const openOnHover = useCallback((key: string) => () => setOpenMenuKey(key), []);
