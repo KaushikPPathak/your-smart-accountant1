@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { buildCompressedContext } from "./ai/sqliteContext";
 import { retrieveOriginal } from "./ai/headroom";
 import { isWebGpuAvailable, webLlmChat } from "./ai/webllm";
+import { recentErrors, questionMentionsError } from "./ai/error-ring";
 
 export interface AssistantChatResult {
   ok: boolean;
@@ -34,9 +35,13 @@ const RETRIEVAL_RE = /retrieveOriginal\(["']([a-zA-Z0-9_:.-]+)["']\)/g;
 
 type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
 
-async function cloudChat(messages: ChatMsg[], temperature = 0.3): Promise<string> {
+async function cloudChat(
+  messages: ChatMsg[],
+  temperature = 0.3,
+  extra?: { route?: string; recentErrors?: unknown[] },
+): Promise<string> {
   const { data, error } = await supabase.functions.invoke("ai-assistant", {
-    body: { messages, temperature },
+    body: { messages, temperature, ...extra },
   });
   if (error) throw new Error(error.message || "Cloud AI request failed");
   const payload = data as { ok?: boolean; text?: string; error?: string } | null;
@@ -73,7 +78,11 @@ function offlineAssistantAnswer(question: string, cause?: unknown): string {
   ].filter(Boolean).join("\n");
 }
 
-async function smartChat(messages: ChatMsg[], temperature = 0.3): Promise<string> {
+async function smartChat(
+  messages: ChatMsg[],
+  temperature = 0.3,
+  extra?: { route?: string; recentErrors?: unknown[] },
+): Promise<string> {
   if (isWebGpuAvailable()) {
     try {
       return await webLlmChat(messages as never, { temperature });
@@ -85,7 +94,7 @@ async function smartChat(messages: ChatMsg[], temperature = 0.3): Promise<string
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     throw new Error("Offline: cloud AI is not reachable and WebGPU local AI is unavailable.");
   }
-  return cloudChat(messages, temperature);
+  return cloudChat(messages, temperature, extra);
 }
 
 export async function assistantChat(args?: AssistantArgs): Promise<AssistantChatResult> {
@@ -108,7 +117,13 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       ctx.userMessage as ChatMsg,
     ];
 
-    let answer = await smartChat(baseMessages);
+    // If the user is asking about an error/bug, attach the recent runtime
+    // error ring so the model can name the exact failure.
+    const errs = questionMentionsError(question) ? recentErrors(15) : [];
+    const route = typeof window !== "undefined" ? window.location?.pathname : undefined;
+    const extra = { route, recentErrors: errs };
+
+    let answer = await smartChat(baseMessages, 0.2, extra);
 
     // CCR fallback: if the model references a hash, fetch the raw rows
     // and let it answer again with the expanded context.
