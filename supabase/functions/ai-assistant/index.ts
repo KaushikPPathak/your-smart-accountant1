@@ -2,6 +2,8 @@
 // Proxies to Lovable AI Gateway with a rich system prompt so the model can
 // diagnose real app errors instead of giving generic "click here" advice.
 
+import { ERROR_KB, renderErrorKb } from "./error-kb.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
