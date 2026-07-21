@@ -78,7 +78,11 @@ function offlineAssistantAnswer(question: string, cause?: unknown): string {
   ].filter(Boolean).join("\n");
 }
 
-async function smartChat(messages: ChatMsg[], temperature = 0.3): Promise<string> {
+async function smartChat(
+  messages: ChatMsg[],
+  temperature = 0.3,
+  extra?: { route?: string; recentErrors?: unknown[] },
+): Promise<string> {
   if (isWebGpuAvailable()) {
     try {
       return await webLlmChat(messages as never, { temperature });
@@ -90,7 +94,7 @@ async function smartChat(messages: ChatMsg[], temperature = 0.3): Promise<string
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     throw new Error("Offline: cloud AI is not reachable and WebGPU local AI is unavailable.");
   }
-  return cloudChat(messages, temperature);
+  return cloudChat(messages, temperature, extra);
 }
 
 export async function assistantChat(args?: AssistantArgs): Promise<AssistantChatResult> {
@@ -113,7 +117,13 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       ctx.userMessage as ChatMsg,
     ];
 
-    let answer = await smartChat(baseMessages);
+    // If the user is asking about an error/bug, attach the recent runtime
+    // error ring so the model can name the exact failure.
+    const errs = questionMentionsError(question) ? recentErrors(15) : [];
+    const route = typeof window !== "undefined" ? window.location?.pathname : undefined;
+    const extra = { route, recentErrors: errs };
+
+    let answer = await smartChat(baseMessages, 0.2, extra);
 
     // CCR fallback: if the model references a hash, fetch the raw rows
     // and let it answer again with the expanded context.
