@@ -594,6 +594,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
         {rightExtras}
         <CompanySwitcher />
         <BackupNowButton />
+        <RestoreNowButton />
       </div>
 
       <AlertDialog open={exitConfirmOpen} onOpenChange={setExitConfirmOpen}>
