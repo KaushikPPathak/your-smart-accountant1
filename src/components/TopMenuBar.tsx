@@ -379,7 +379,6 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           );
           if (!btn) return;
           e.preventDefault();
-          suppressNextFocusOpenRef.current = false;
           btn.focus();
           setOpenMenuKey(menuKey);
         },
