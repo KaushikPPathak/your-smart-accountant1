@@ -415,6 +415,69 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
     { scope: "global", description: "Jump to Ledger report" },
   );
 
+  // ---------------------------------------------------------------------------
+  // Region cycler (Tally/Busy-style). F6 = next region, Shift+F6 = previous.
+  // Regions in order: Top menubar → Quick Entry ribbon → Main content.
+  // Report screens push their own "report" F6 handler that cycles toolbar↔grid
+  // and takes precedence, so this global binding only fires elsewhere.
+  //
+  // Ctrl+F1 / Ctrl+F2 are direct jumps for muscle memory (menubar / ribbon).
+  // These make it possible to hop between panes without ever pressing Tab.
+  // ---------------------------------------------------------------------------
+  const focusRegion = React.useCallback((region: "menu" | "ribbon" | "main") => {
+    if (region === "menu") {
+      const el = document.querySelector<HTMLElement>(".busy-topbar button.busy-menu");
+      el?.focus();
+      return !!el;
+    }
+    if (region === "ribbon") {
+      // Prefer the first ribbon action; fall back to the ribbon's toggle button.
+      const el =
+        document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"][role="button"]') ??
+        document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"]');
+      el?.focus();
+      return !!el;
+    }
+    // Main content: first focusable inside <main>.
+    const main = document.querySelector<HTMLElement>("main");
+    if (!main) return false;
+    const focusable = main.querySelector<HTMLElement>(
+      'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+    );
+    (focusable ?? main).focus();
+    return true;
+  }, []);
+
+  const currentRegion = React.useCallback((): "menu" | "ribbon" | "main" => {
+    const a = document.activeElement as HTMLElement | null;
+    if (a?.closest(".busy-topbar")) return "menu";
+    if (a?.closest(".busy-menubar")) return "ribbon";
+    return "main";
+  }, []);
+
+  useShortcut("F6", (e) => {
+    e.preventDefault();
+    const order: Array<"menu" | "ribbon" | "main"> = ["menu", "ribbon", "main"];
+    const idx = order.indexOf(currentRegion());
+    for (let i = 1; i <= order.length; i++) {
+      if (focusRegion(order[(idx + i) % order.length])) return;
+    }
+  }, { scope: "global", allowInField: true, description: "Cycle region (menu → ribbon → main)" });
+
+  useShortcut("Shift+F6", (e) => {
+    e.preventDefault();
+    const order: Array<"menu" | "ribbon" | "main"> = ["menu", "ribbon", "main"];
+    const idx = order.indexOf(currentRegion());
+    for (let i = 1; i <= order.length; i++) {
+      if (focusRegion(order[(idx - i + order.length) % order.length])) return;
+    }
+  }, { scope: "global", allowInField: true, description: "Cycle region (reverse)" });
+
+  useShortcut("Ctrl+F1", (e) => { e.preventDefault(); focusRegion("menu"); },
+    { scope: "global", allowInField: true, description: "Jump to top menu" });
+  useShortcut("Ctrl+F2", (e) => { e.preventDefault(); focusRegion("ribbon"); },
+    { scope: "global", allowInField: true, description: "Jump to Quick Entry ribbon" });
+
   // Quick Entry ribbon Alt+<letter> shortcuts. Menu access keys for Reports
   // and Print were moved to Alt+E / Alt+N (see TopMenuBar) to free Alt+R and
   // Alt+P for Receipt and Purchase — matching the ribbon hints the user sees.
