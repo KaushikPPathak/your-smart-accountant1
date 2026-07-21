@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { buildCompressedContext } from "./ai/sqliteContext";
 import { retrieveOriginal } from "./ai/headroom";
 import { isWebGpuAvailable, webLlmChat } from "./ai/webllm";
+import { recentErrors, questionMentionsError } from "./ai/error-ring";
 
 export interface AssistantChatResult {
   ok: boolean;
@@ -34,9 +35,13 @@ const RETRIEVAL_RE = /retrieveOriginal\(["']([a-zA-Z0-9_:.-]+)["']\)/g;
 
 type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
 
-async function cloudChat(messages: ChatMsg[], temperature = 0.3): Promise<string> {
+async function cloudChat(
+  messages: ChatMsg[],
+  temperature = 0.3,
+  extra?: { route?: string; recentErrors?: unknown[] },
+): Promise<string> {
   const { data, error } = await supabase.functions.invoke("ai-assistant", {
-    body: { messages, temperature },
+    body: { messages, temperature, ...extra },
   });
   if (error) throw new Error(error.message || "Cloud AI request failed");
   const payload = data as { ok?: boolean; text?: string; error?: string } | null;
