@@ -57,51 +57,6 @@ KEY SHORTCUTS:
 
 VOUCHER HEADER ORDER: Date -> Party -> Reference No -> Place of Supply.
 
-KNOWN-ERROR DICTIONARY — match the user's phrase to the correct fix:
-
-1) "Tooltip must be used within TooltipProvider" / "tulip error"
-   Cause: a Tooltip rendered outside <TooltipProvider>.
-   Fix: TooltipProvider is already installed globally in src/routes/__root.tsx
-   wrapping the whole app. If the error returns, a new component is rendering
-   a Tooltip before the root mounts (e.g. inside an error boundary above root).
-
-2) "Invalid id" when saving a voucher / opening a company
-   Cause: legacy imported rows have non-UUID ids.
-   Fix: src/lib/schemas/common.ts already accepts non-UUID ids; if it recurs,
-   the schema was reverted — re-apply the relaxed id validator.
-
-3) "Cannot coerce the result to a single JSON object" on edit-company pencil
-   Cause: .maybeSingle() on a row missing in the cloud.
-   Fix: src/routes/app.companies.tsx openEdit() falls back to local IndexedDB.
-
-4) "This build has no public key baked in — contact support."
-   Cause: src/lib/license/public-key.ts has an empty hex string.
-   Fix: paste the hex public key from the license kit into that file.
-
-5) "Integrity scan found N issue(s) ... missing state_code / missing group_id"
-   Cause: legacy false alarms — most are auto-derivable.
-   Fix: already suppressed in src/lib/integrity-scan.ts; backup proceeds.
-
-6) Keyboard menu not opening / arrows sluggish at cold start
-   Cause: focus not landing on the menubar.
-   Fix: src/routes/app.tsx auto-focuses "Mehtaji" on entry; Radix Menubar owns
-   arrows. If broken, check that no custom onKeyDown listeners were re-added to
-   TopMenuBar.tsx.
-
-7) "Data up to <old date> after fresh install"
-   Cause: snapshot scanner missed nested Documents/YourMehtaji/Exports paths.
-   Fix: patched in src/lib/native-bridge.ts. Re-run Restore (R button).
-
-8) Ribbon shortcut works once then dies
-   Cause: shortcut listener was field-blocked.
-   Fix: QuickActionsRibbon uses allowInField: true — verify that flag.
-
-9) Non-GST company still shows GST config
-   Fix: src/routes/app.settings.tsx hides GST panels when gst_registered=false.
-
-10) P&L mixing direct + indirect heads
-    Fix: Trading account = SALES/PURCHASE only; P&L = indirect only.
-
 ACCOUNTING RULES:
 - Never compare product to Tally / Busy — use generic language.
 - Manufacturing Journal: Dr Finished Goods / Cr Raw Materials.
@@ -109,11 +64,15 @@ ACCOUNTING RULES:
 
 WHEN THE USER REPORTS AN ERROR:
 - Look at "recentRuntimeErrors" in the user JSON (last 15 captured errors).
-- Match the message text to the dictionary above.
-- Return: (a) exact error string you matched, (b) root cause in one line,
-  (c) precise remedy — file path, button, or shortcut.
+- Match against the KNOWN-ERROR KB below by symptom string, cause keyword, or the id tag.
+- Return: (a) the KB id you matched, (b) exact error string, (c) root cause in one line,
+  (d) precise remedy — file path, button, or shortcut.
 - If nothing matches, say so plainly and ask for the exact toast text or
   console line rather than guessing.
+
+KNOWN-ERROR KB (${ERROR_KB.length} entries, grouped by category):
+
+${renderErrorKb()}
 `;
 
 Deno.serve(async (req: Request) => {
