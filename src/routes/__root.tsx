@@ -14,10 +14,13 @@ import { BrainProvider } from "@/brain/BrainProvider";
 import { isDesktopRuntime } from "@/lib/native-bridge";
 import { WebDemoLanding } from "@/components/WebDemoLanding";
 import { installCrashHandlers } from "@/lib/crash-log";
+import { installErrorRing } from "@/lib/ai/error-ring";
 
 // Layer 5 — install global crash + rejection handlers once at module load
 // (browser only; no-op on SSR). Failures land in a bounded local ring buffer.
 installCrashHandlers();
+// AI diagnostic ring — mirrors console.error / window errors for the assistant.
+installErrorRing();
 
 function NotFoundComponent() {
   return (
