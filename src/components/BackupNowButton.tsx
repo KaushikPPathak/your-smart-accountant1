@@ -51,12 +51,20 @@ export function BackupNowButton() {
           onClick={runBackup}
           disabled={busy}
           aria-label={`Back up ${companyName} now`}
-          className="h-9 w-9 rounded-md text-foreground hover:bg-foreground/10 hover:text-foreground"
+          className="relative h-9 w-9 rounded-md text-foreground hover:bg-foreground/10 hover:text-foreground"
         >
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <DatabaseBackup className="h-[18px] w-[18px]" />
+          )}
+          {!busy && (
+            <span
+              aria-hidden
+              className="absolute -bottom-0.5 -right-0.5 rounded-sm bg-primary px-[3px] text-[8px] font-bold leading-[10px] text-primary-foreground shadow-sm"
+            >
+              B
+            </span>
           )}
         </Button>
       </TooltipTrigger>

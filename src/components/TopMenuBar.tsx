@@ -56,6 +56,7 @@ import { useDateFormat, DATE_FORMATS, type DateFormatCode } from "@/lib/date-for
 import { cn } from "@/lib/utils";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { BackupNowButton } from "@/components/BackupNowButton";
+import { RestoreNowButton } from "@/components/RestoreNowButton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -594,6 +595,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
         {rightExtras}
         <CompanySwitcher />
         <BackupNowButton />
+        <RestoreNowButton />
       </div>
 
       <AlertDialog open={exitConfirmOpen} onOpenChange={setExitConfirmOpen}>

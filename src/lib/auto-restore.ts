@@ -38,13 +38,13 @@ function safeName(s: string | null | undefined): string {
   return (s ?? "company").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 60) || "company";
 }
 
-interface SnapshotCandidate {
+export interface SnapshotCandidate {
   absPath: string;
   dateFolder: string;   // YYYY-MM-DD
   fileName: string;
 }
 
-async function listSnapshotsForCompany(companyName: string): Promise<SnapshotCandidate[]> {
+export async function listSnapshotsForCompany(companyName: string): Promise<SnapshotCandidate[]> {
   if (!isDesktopRuntime()) return [];
   try {
     const paths = await getAppPaths();
