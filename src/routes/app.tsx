@@ -228,6 +228,14 @@ function AppLayout() {
     const onFocusOut = (e: FocusEvent) => {
       // relatedTarget=null typically means focus is heading to <body>.
       if (e.relatedTarget) return;
+      // Only park focus if it's leaving the menubar or the Quick Entry ribbon.
+      // If focus was inside a form field, voucher grid, dialog content, or any
+      // main-content control, leave it alone — the user is mid-interaction and
+      // stealing focus to the top menu would be jarring and could interrupt
+      // typing / validation.
+      const from = e.target as HTMLElement | null;
+      if (!from) return;
+      if (!from.closest?.(".busy-topbar") && !from.closest?.(".busy-menubar")) return;
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         // Double-rAF gives Radix time to move focus to its restore target
