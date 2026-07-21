@@ -26,6 +26,12 @@ const STATIC_ROWS: Array<{ combo: string; description: string; scope: ShortcutSc
   { combo: "Alt+E", description: "Open R(e)ports menu (Alt+R now opens Receipt)", scope: "menubar" },
   { combo: "Alt+U", description: "Open Utilities menu", scope: "menubar" },
   { combo: "Alt+A", description: "Open Administration menu", scope: "menubar" },
+  { combo: "F6", description: "Cycle regions: Top menu → Quick Entry → Main", scope: "global" },
+  { combo: "Shift+F6", description: "Cycle regions in reverse", scope: "global" },
+  { combo: "Ctrl+F1", description: "Jump to top menu", scope: "global" },
+  { combo: "Ctrl+F2", description: "Jump to Quick Entry ribbon", scope: "global" },
+  { combo: "↑ (in ribbon)", description: "Jump up to top menu", scope: "global" },
+  { combo: "↓ (in ribbon)", description: "Jump down into main content", scope: "global" },
   { combo: "F6", description: "Move between report toolbar and grid", scope: "report" },
 ];
 
