@@ -318,10 +318,17 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   // exactly like Busy/Tally. No first-focus suppression: even the very first
   // programmatic focus on cold-start opens the File menu, which is the
   // desired Busy-style landing state.
+  // Escape-suppression flag: when Radix closes a dropdown on Escape, it
+  // restores focus to the trigger. Without this flag our focusin handler
+  // would immediately re-open the very menu the user just closed. We hold
+  // the flag until the next tick — long enough to swallow the focus return.
+  const suppressAutoOpenRef = useRef(false);
+
   useEffect(() => {
     const root = menubarRef.current;
     if (!root) return;
     const onFocusIn = (e: FocusEvent) => {
+      if (suppressAutoOpenRef.current) return;
       const target = e.target as HTMLElement | null;
       if (!target || !target.classList.contains("busy-menu")) return;
       const key = target.dataset.menuKey;
@@ -331,15 +338,33 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     return () => root.removeEventListener("focusin", onFocusIn);
   }, []);
 
-  // Belt-and-braces: ArrowDown / ArrowUp / Enter / Space on a focused trigger
-  // must open its dropdown even in the rare case Radix's native handling is
-  // pre-empted by another listener. We only act if no menu is currently open.
+  // Belt-and-braces: ArrowDown / ArrowUp on a focused trigger must open its
+  // dropdown. Escape on a trigger with an open dropdown must close it AND
+  // suppress our own focusin re-open for one tick.
   useEffect(() => {
     const root = menubarRef.current;
     if (!root) return;
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target || !target.classList.contains("busy-menu")) return;
+
+      if (e.key === "Escape") {
+        // A dropdown is open (either this trigger's or a submenu the user
+        // navigated into). Let Radix close it, then block the focus-return
+        // from re-opening it via our focusin listener.
+        const anyOpen =
+          target.getAttribute("aria-expanded") === "true" ||
+          !!document.querySelector("[data-radix-popper-content-wrapper]");
+        if (anyOpen) {
+          suppressAutoOpenRef.current = true;
+          setOpenMenuKey("");
+          window.setTimeout(() => {
+            suppressAutoOpenRef.current = false;
+          }, 0);
+        }
+        return;
+      }
+
       if (target.getAttribute("aria-expanded") === "true") return;
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       const key = target.dataset.menuKey;
