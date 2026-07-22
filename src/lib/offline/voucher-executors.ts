@@ -12,6 +12,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
+import { emitDataChange } from "@/lib/ai/cache-events";
 
 export type VoucherExecutor = (snap: unknown) => Promise<void>;
 
@@ -520,7 +521,11 @@ export interface EntryVoucherSnap {
 
 export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
   const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
-  if (isLocalOnlyMode()) return runLocalItemVoucherCreate(snap);
+  if (isLocalOnlyMode()) {
+    const r = await runLocalItemVoucherCreate(snap);
+    emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`, `party:${snap.partyId}`]);
+    return r;
+  }
 
   const ledgerRemap = await ensureMasterRefsSynced("ledgers", snap.companyId, [snap.partyId]);
   const itemRemap = await ensureMasterRefsSynced("items", snap.companyId, snap.lines.map((x) => x.l.item_id));
@@ -647,6 +652,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
     _entries: entryRows as any,
   });
   if (saveErr) throw saveErr;
+  emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`, `party:${partyId}`]);
   return { voucherId: vid as string, voucherNumber };
 }
 
@@ -654,7 +660,11 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
 
 export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void> {
   const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
-  if (isLocalOnlyMode()) return runLocalEntryVoucherCreate(snap);
+  if (isLocalOnlyMode()) {
+    await runLocalEntryVoucherCreate(snap);
+    emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`]);
+    return;
+  }
 
   const ledgerIds = Array.from(
     new Set(
@@ -703,6 +713,7 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
     _items: [] as any,
   });
   if (saveErr) throw saveErr;
+  emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`]);
 }
 
 // ---------- Registration -----------------------------------------------------
