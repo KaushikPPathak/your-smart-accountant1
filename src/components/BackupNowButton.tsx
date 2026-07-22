@@ -52,16 +52,16 @@ export function BackupNowButton() {
           onClick={runBackup}
           disabled={busy}
           aria-label={`Back up ${companyName} now`}
-          className="relative h-9 w-9 rounded-md hover:bg-foreground/10"
+          className="relative h-11 w-11 rounded-full p-0 hover:bg-transparent"
         >
           {busy ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
             <img
               src={backupMedallion}
               alt=""
               aria-hidden
-              className="h-7 w-7 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
+              className="h-11 w-11 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
               draggable={false}
             />
           )}
