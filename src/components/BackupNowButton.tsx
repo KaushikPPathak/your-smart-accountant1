@@ -61,7 +61,7 @@ export function BackupNowButton() {
           {!busy && (
             <span
               aria-hidden
-              className="absolute -bottom-0.5 -right-0.5 rounded-sm bg-primary px-[3px] text-[8px] font-bold leading-[10px] text-primary-foreground shadow-sm"
+              className="backup-letter-badge absolute -bottom-0.5 -right-0.5"
             >
               B
             </span>

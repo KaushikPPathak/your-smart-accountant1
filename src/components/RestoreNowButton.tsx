@@ -154,7 +154,7 @@ export function RestoreNowButton() {
             <DatabaseZap className="h-[18px] w-[18px]" />
             <span
               aria-hidden
-              className="absolute -bottom-0.5 -right-0.5 rounded-sm bg-primary px-[3px] text-[8px] font-bold leading-[10px] text-primary-foreground shadow-sm"
+              className="restore-letter-badge absolute -bottom-0.5 -right-0.5"
             >
               R
             </span>
