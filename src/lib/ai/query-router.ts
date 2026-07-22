@@ -127,9 +127,19 @@ export function routeQuery(question: string): RoutedQuery {
           ?? q.match(/\bfor\s+company\s+([A-Z][A-Za-z0-9&.\s]{2,60})/i);
   if (cm) companyHint = cm[1].trim().replace(/[.,;:!?]+$/, "");
 
+  // "last/latest <kind> bill/invoice/voucher/entry"
+  let latestKind: RoutedQuery["latestKind"];
+  const lm = lower.match(/\b(last|latest|most\s+recent|previous)\s+(sales|sale|purchase|receipt|payment|journal|credit\s*note|debit\s*note)\b/);
+  if (lm) {
+    const k = lm[2].replace(/\s+/g, "_");
+    latestKind = (k === "sale" ? "sales" : k) as RoutedQuery["latestKind"];
+  }
+
   let intent: QueryIntent = "general";
 
-  if (voucherNumber || /\b(voucher|invoice|bill|receipt|payment)\s*(no|number|#)/.test(lower)) {
+  if (latestKind) {
+    intent = "latest_voucher";
+  } else if (voucherNumber || /\b(voucher|invoice|bill|receipt|payment)\s*(no|number|#)/.test(lower)) {
     intent = "voucher_lookup";
   } else if (/\b(ageing|aging|overdue|days? outstanding|30 days|60 days|90 days)\b/.test(lower)) {
     intent = "ageing";
@@ -150,6 +160,7 @@ export function routeQuery(question: string): RoutedQuery {
   } else if ((dates.from || dates.to) && /\b(sales|purchase|receipt|payment|journal|register)\b/.test(lower)) {
     intent = "date_range_report";
   }
+
 
   return { intent, entityHints, ...dates, voucherNumber, companyHint };
 }
