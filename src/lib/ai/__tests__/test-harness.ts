@@ -116,7 +116,7 @@ export class AiTestHarness {
     }
     const tableCount = anyDb.tables?.length ?? 0;
     const has = (n: string) => anyDb.tables?.some((t) => t.name === n) ?? false;
-    const required = ["ledgers_cache", "vouchers_cache", "voucher_entries_cache"];
+    const required = ["cache_ledgers", "cache_vouchers", "cache_voucher_entries"];
     const missing = required.filter((n) => !has(n));
     if (missing.length > 0) {
       return { passed: false, message: `Missing tables: ${missing.join(", ")}`, details: { tableCount } };
