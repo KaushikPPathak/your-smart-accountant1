@@ -57,8 +57,18 @@ const RULES: Rule[] = [
   },
 ];
 
+// Read-only question phrases — we must NEVER draft a voucher when the user is
+// just asking about existing books ("what is the cash balance ...", "show me
+// receivables", "closing balance of ...", etc.). Without this guard, phrases
+// like "cash in <party>" wrongly matched the receipt rule.
+const READ_ONLY_QUESTION = /^\s*(what|which|who|whom|whose|when|where|why|how|is|are|was|were|do|does|did|show|list|tell|give|display|find|fetch|get|report|view|see|check|explain|summar[iy]se?)\b/i;
+const READ_ONLY_TERMS = /\b(closing balance|opening balance|trial balance|balance sheet|balance as on|balance of|outstanding|receivable|payable|ageing|aging|statement of|ledger of|p&l|profit and loss|gross profit|net profit|how much|report|summary|total sales|total purchase|list of)\b/i;
+
 export function detectVoucherIntent(text: string): VoucherIntent | null {
   if (!text) return null;
+  // Skip when the user is asking a question about existing books rather than
+  // recording a new transaction.
+  if (READ_ONLY_QUESTION.test(text) || READ_ONLY_TERMS.test(text)) return null;
   // Score by number of matched patterns so "received from supplier" → purchase
   // beats the generic "received" → receipt rule.
   let best: { intent: VoucherIntent; score: number } | null = null;
