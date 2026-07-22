@@ -24,16 +24,46 @@ export interface RetrievedSlice {
 
 function fuzzyPickLedger(all: any[], hints: string[]): any | null {
   if (hints.length === 0) return null;
+  // Score each ledger against the JOINED hint phrase (so "Jasudben A Shah"
+  // is matched as one entity, not three loose words that all pick "Shah").
+  const phrase = hints.join(" ").trim();
+  const nPhrase = normalizeName(phrase);
+  const phraseTokens = nPhrase.split(/\s+/).filter((t) => t.length >= 3);
   let best: any = null;
   let bestScore = 0;
   for (const l of all) {
     const name = String(l.name ?? "");
-    for (const h of hints) {
-      const s = Math.max(similarity(name, h), normalizeName(name).includes(normalizeName(h)) ? 0.9 : 0);
-      if (s > bestScore) { bestScore = s; best = l; }
-    }
+    const nName = normalizeName(name);
+    const sim = similarity(name, phrase);
+    // Token-overlap ratio: how many significant hint tokens appear in the name.
+    const overlap = phraseTokens.length
+      ? phraseTokens.filter((t) => nName.includes(t)).length / phraseTokens.length
+      : 0;
+    const contains = nName.includes(nPhrase) || nPhrase.includes(nName) ? 0.95 : 0;
+    const s = Math.max(sim, contains, overlap >= 0.6 ? 0.6 + overlap * 0.3 : 0);
+    if (s > bestScore) { bestScore = s; best = l; }
   }
-  return bestScore >= 0.55 ? best : null;
+  // Raised from 0.55 → 0.72 to avoid confidently returning the wrong ledger.
+  return bestScore >= 0.72 ? best : null;
+}
+
+/** Resolve "in the books of <Company>" phrasing → companyId. */
+async function resolveCompanyFromHints(hints: string[], currentId: string): Promise<string> {
+  if (hints.length === 0) return currentId;
+  const companies = (await readCompanies()) as any[];
+  if (companies.length <= 1) return currentId;
+  const phrase = hints.join(" ").trim();
+  const nPhrase = normalizeName(phrase);
+  let best: any = null;
+  let bestScore = 0;
+  for (const c of companies) {
+    const nName = normalizeName(String(c.name ?? ""));
+    const sim = similarity(String(c.name ?? ""), phrase);
+    const contains = nName.includes(nPhrase) || nPhrase.includes(nName) ? 0.95 : 0;
+    const s = Math.max(sim, contains);
+    if (s > bestScore) { bestScore = s; best = c; }
+  }
+  return bestScore >= 0.78 ? String(best.id) : currentId;
 }
 
 function sumEntriesFor(entries: any[], ledgerId: string) {
