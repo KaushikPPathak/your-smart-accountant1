@@ -1,10 +1,13 @@
 // Answer cache — stores AI answers keyed by (company, intent, scope, question).
 //
-// Backed by localStorage with a hard cap + LRU eviction. Cache entries are
-// invalidated whenever the underlying data mutates: writers should call
-// `invalidateAnswerCache(companyId)` after any voucher/ledger/item write.
+// Each entry carries `tags` describing which intents/scopes it depends on.
+// When a data-change event fires (voucher/ledger/item write), only matching
+// entries are dropped — the rest stay hot. This is the Smart Invalidation
+// layer: fresh answers without a blanket cache wipe.
 
-const STORAGE_KEY = "ym_ai_answer_cache_v1";
+import { INTENT_DEPS, onDataChange, type DataChangeEvent } from "./cache-events";
+
+const STORAGE_KEY = "ym_ai_answer_cache_v2";
 const MAX_ENTRIES = 200;
 const TTL_MS = 1000 * 60 * 60 * 6; // 6h hard TTL as a safety net
 
@@ -15,6 +18,7 @@ interface CacheEntry {
   scope: string;
   question: string;
   answer: string;
+  tags: string[];
   createdAt: number;
   lastUsed: number;
 }
@@ -41,6 +45,18 @@ function hashKey(companyId: string, intent: string, scope: string, question: str
   return h.toString(36);
 }
 
+/** Derive dependency tags from the intent + scope so writers can target them. */
+function deriveTags(intent: string, scope: string): string[] {
+  const tags = new Set<string>();
+  tags.add(`intent:${intent}`);
+  // Scope hints like "party:Ramesh & Co" or "period:2025-Q3" — split on commas.
+  for (const part of scope.split(/[,;]+/)) {
+    const t = part.trim().toLowerCase();
+    if (t) tags.add(t);
+  }
+  return [...tags];
+}
+
 export function lookupAnswer(
   companyId: string, intent: string, scope: string, question: string,
 ): string | null {
@@ -64,7 +80,11 @@ export function storeAnswer(
   const key = hashKey(companyId, intent, scope, question);
   const now = Date.now();
   const all = loadAll().filter((e) => e.key !== key);
-  all.push({ key, companyId, intent, scope, question, answer, createdAt: now, lastUsed: now });
+  all.push({
+    key, companyId, intent, scope, question, answer,
+    tags: deriveTags(intent, scope),
+    createdAt: now, lastUsed: now,
+  });
   if (all.length > MAX_ENTRIES) {
     all.sort((a, b) => b.lastUsed - a.lastUsed);
     all.length = MAX_ENTRIES;
@@ -72,9 +92,26 @@ export function storeAnswer(
   saveAll(all);
 }
 
+/** Nuke everything (or one company). Kept for restore / manual reset. */
 export function invalidateAnswerCache(companyId?: string) {
   if (!companyId) { saveAll([]); return; }
   saveAll(loadAll().filter((e) => e.companyId !== companyId));
+}
+
+/** Drop entries whose tags intersect any of the given tags for a company. */
+export function invalidateByTags(companyId: string, tags: string[]): number {
+  if (!companyId || tags.length === 0) return 0;
+  const wanted = new Set(tags.map((t) => t.toLowerCase()));
+  const all = loadAll();
+  let dropped = 0;
+  const kept = all.filter((e) => {
+    if (e.companyId !== companyId) return true;
+    const hit = e.tags.some((t) => wanted.has(t.toLowerCase()));
+    if (hit) { dropped++; return false; }
+    return true;
+  });
+  if (dropped > 0) saveAll(kept);
+  return dropped;
 }
 
 export function answerCacheStats(): { entries: number; companies: number; oldestAgeMs: number } {
@@ -86,3 +123,17 @@ export function answerCacheStats(): { entries: number; companies: number; oldest
     oldestAgeMs: Date.now() - oldest,
   };
 }
+
+// --- Wire cache to data-change bus (module-load side effect, idempotent) ----
+
+let wired = false;
+function wireInvalidation() {
+  if (wired) return;
+  wired = true;
+  onDataChange((evt: DataChangeEvent) => {
+    const intentTags = (INTENT_DEPS[evt.kind] ?? []).map((i) => `intent:${i}`);
+    const scopeTags = (evt.scopes ?? []).map((s) => s.toLowerCase());
+    invalidateByTags(evt.companyId, [...intentTags, ...scopeTags]);
+  });
+}
+wireInvalidation();

@@ -16,6 +16,7 @@ import {
   type CachedLedger,
   type CachedItem,
 } from "@/lib/masters-cache";
+import { emitDataChange } from "@/lib/ai/cache-events";
 
 // Explicitly declare interfaces to strip out top-level import bindings entirely
 export interface LedgerCacheRow extends LedgerInsertPayload {
@@ -199,6 +200,8 @@ export async function createLedger(payload: LedgerInsertPayload): Promise<Ledger
     syncEssentialMasters(payload.company_id);
   }
 
+  emitDataChange(payload.company_id, "ledger", [`ledger:${payload.name.toLowerCase()}`]);
+
   return {
     id,
     name: payload.name,
@@ -261,6 +264,8 @@ export async function updateLedger(
     syncEssentialMasters(companyId);
   }
 
+  emitDataChange(companyId, "ledger", existing ? [`ledger:${String(existing.name).toLowerCase()}`] : undefined);
+
   return existing ? (existing as unknown as LedgerRow) : null;
 }
 
@@ -293,6 +298,8 @@ export async function deleteLedger(id: string, companyId: string, label?: string
   if (!isLocalOnlyMode() && isOnlineNow()) {
     syncEssentialMasters(companyId);
   }
+
+  emitDataChange(companyId, "ledger", label ? [`ledger:${label.toLowerCase()}`] : undefined);
 }
 
 export async function deactivateLedger(id: string, companyId: string): Promise<void> {
@@ -359,6 +366,8 @@ export async function createItem(payload: ItemInsertPayload): Promise<ItemRow> {
     syncEssentialMasters(payload.company_id);
   }
 
+  emitDataChange(payload.company_id, "item", [`item:${payload.name.toLowerCase()}`]);
+
   return {
     id,
     name: payload.name,
@@ -409,6 +418,8 @@ export async function updateItem(
     syncEssentialMasters(companyId);
   }
 
+  emitDataChange(companyId, "item", existing ? [`item:${String(existing.name).toLowerCase()}`] : undefined);
+
   return existing ? (existing as unknown as ItemRow) : null;
 }
 
@@ -440,6 +451,8 @@ export async function deleteItem(id: string, companyId: string, label?: string):
   if (!isLocalOnlyMode() && isOnlineNow()) {
     syncEssentialMasters(companyId);
   }
+
+  emitDataChange(companyId, "item", label ? [`item:${label.toLowerCase()}`] : undefined);
 }
 
 export async function deactivateItem(id: string, companyId: string): Promise<void> {
