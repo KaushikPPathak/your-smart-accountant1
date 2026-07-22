@@ -152,6 +152,15 @@ function DiagnosticsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">AI Layer Tests</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <TestDashboard />
+        </CardContent>
+      </Card>
     </div>
   );
 }
