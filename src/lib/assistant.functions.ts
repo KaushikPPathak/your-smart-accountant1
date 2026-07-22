@@ -12,7 +12,7 @@
 //      transparently and re-run.
 
 import { supabase } from "@/integrations/supabase/client";
-import { buildCompressedContext } from "./ai/sqliteContext";
+import { buildCompressedContext, unredactAnswer } from "./ai/sqliteContext";
 import { retrieveOriginal } from "./ai/headroom";
 import { isWebGpuAvailable, webLlmChat } from "./ai/webllm";
 import { recentErrors, questionMentionsError } from "./ai/error-ring";
@@ -151,7 +151,7 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       }
     }
 
-    return { ok: true, text: answer };
+    return { ok: true, text: unredactAnswer(answer, ctx) };
   } catch (err) {
     if (looksOfflineOrBlocked(err)) {
       return { ok: true, text: offlineAssistantAnswer(question, err) };
