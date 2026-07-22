@@ -493,6 +493,20 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
   useShortcut("Ctrl+F2", (e) => { e.preventDefault(); focusRegion("ribbon"); },
     { scope: "global", allowInField: true, description: "Jump to Quick Entry ribbon" });
 
+  // Alt+O → open the Company switcher dropdown (no more mouse hunting).
+  useShortcut("Alt+o", (e) => {
+    e.preventDefault();
+    const trigger = document.querySelector<HTMLButtonElement>(
+      '[data-company-switcher-trigger="true"]',
+    );
+    if (!trigger) return;
+    trigger.focus();
+    // Open the Radix dropdown if it isn't already.
+    if (trigger.getAttribute("aria-expanded") !== "true") {
+      trigger.click();
+    }
+  }, { scope: "global", allowInField: true, description: "Open Company switcher" });
+
   // Quick Entry ribbon Alt+<letter> shortcuts. Menu access keys for Reports
   // and Print were moved to Alt+E / Alt+N (see TopMenuBar) to free Alt+R and
   // Alt+P for Receipt and Purchase — matching the ribbon hints the user sees.
