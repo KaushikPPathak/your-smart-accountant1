@@ -384,27 +384,19 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
         target?.blur?.();
         return;
       }
-      // Menubar → Ribbon
+      // Menubar → let TopMenuBar's Escape binding fire (exit-confirm dialog).
+      // Use F6 / Ctrl+F2 to hop menu→ribbon; Escape must exit, not sidestep.
       if (target?.closest?.(".busy-topbar")) {
-        const ribbonFirst =
-          document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"][role="button"]') ??
-          document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"]');
-        if (ribbonFirst) {
-          e.preventDefault();
-          ribbonFirst.focus();
-          return;
-        }
-        return; // no ribbon → let TopMenuBar's Escape (exit-confirm) fire
+        return;
       }
-      // Ribbon → Main
+      // Ribbon → Menubar (so the very next Escape triggers exit-confirm).
       if (target?.closest?.(".busy-menubar")) {
-        const main = document.querySelector<HTMLElement>("main");
-        const focusable = main?.querySelector<HTMLElement>(
-          'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        const firstTrigger = document.querySelector<HTMLElement>(
+          ".busy-topbar button.busy-menu",
         );
-        if (focusable ?? main) {
+        if (firstTrigger) {
           e.preventDefault();
-          (focusable ?? main!).focus();
+          firstTrigger.focus();
           return;
         }
       }
