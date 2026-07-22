@@ -436,19 +436,27 @@ export async function retrieveForQuery(routed: RoutedQuery, companyIdIn?: string
     const resolved = await resolveCompanyFromHints([routed.companyHint], companyId);
     if (resolved && resolved !== companyId) companyId = resolved;
   }
+  let slice: RetrievedSlice;
   switch (routed.intent) {
-    case "party_balance":     return retrieveParty(companyId, routed, { withEntries: false });
-    case "party_ledger":      return retrieveParty(companyId, routed, { withEntries: true });
-    case "date_range_report": return retrieveDateRange(companyId, routed);
-    case "voucher_lookup":    return retrieveVoucher(companyId, routed);
-    case "latest_voucher":    return retrieveLatestVoucher(companyId, routed);
-    case "ageing":            return retrieveAgeing(companyId, routed);
-    case "gst_query":         return retrieveGst(companyId, routed);
-    case "trial_balance":     return retrieveTrialBalance(companyId);
-    case "profit_loss":       return retrieveProfitLoss(companyId, routed);
-    case "cash_bank":         return retrieveCashBank(companyId, routed);
-    case "stock_query":       return retrieveStock(companyId);
+    case "party_balance":     slice = await retrieveParty(companyId, routed, { withEntries: false }); break;
+    case "party_ledger":      slice = await retrieveParty(companyId, routed, { withEntries: true }); break;
+    case "date_range_report": slice = await retrieveDateRange(companyId, routed); break;
+    case "voucher_lookup":    slice = await retrieveVoucher(companyId, routed); break;
+    case "latest_voucher":    slice = await retrieveLatestVoucher(companyId, routed); break;
+    case "ageing":            slice = await retrieveAgeing(companyId, routed); break;
+    case "gst_query":         slice = await retrieveGst(companyId, routed); break;
+    case "trial_balance":     slice = await retrieveTrialBalance(companyId); break;
+    case "profit_loss":       slice = await retrieveProfitLoss(companyId, routed); break;
+    case "cash_bank":         slice = await retrieveCashBank(companyId, routed); break;
+    case "stock_query":       slice = await retrieveStock(companyId); break;
     case "general":
-    default:                  return retrieveGeneral(companyId);
+    default:                  slice = await retrieveGeneral(companyId); break;
   }
+  // Stamp company identity into facts so the LLM can enforce "right company" rule.
+  try {
+    const companies = (await readCompanies()) as any[];
+    const co = companies.find((c) => String(c.id) === String(companyId));
+    slice.facts = { ...(slice.facts ?? {}), company_id: companyId, company_name: co?.name ?? null };
+  } catch { /* ignore */ }
+  return slice;
 }
