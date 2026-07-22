@@ -24,6 +24,8 @@ export interface RoutedQuery {
   to?: string;
   /** Voucher number if explicitly mentioned. */
   voucherNumber?: string;
+  /** "in the books of X" → candidate company name to switch context to. */
+  companyHint?: string;
 }
 
 const MONTHS: Record<string, number> = {
