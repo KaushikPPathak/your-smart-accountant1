@@ -33,14 +33,14 @@ async function safeDelete(name: string, companyId: string) {
 }
 
 export async function setupTestFixtures(): Promise<void> {
-  await safeBulkPut("ledgers_cache", MOCK_LEDGERS);
-  await safeBulkPut("items_cache", MOCK_ITEMS);
-  await safeBulkPut("vouchers_cache", MOCK_VOUCHERS);
-  await safeBulkPut("voucher_entries_cache", MOCK_VOUCHER_ENTRIES);
+  await safeBulkPut("cache_ledgers", MOCK_LEDGERS);
+  await safeBulkPut("cache_items", MOCK_ITEMS);
+  await safeBulkPut("cache_vouchers", MOCK_VOUCHERS);
+  await safeBulkPut("cache_voucher_entries", MOCK_VOUCHER_ENTRIES);
 }
 
 export async function teardownTestFixtures(): Promise<void> {
-  for (const n of ["ledgers_cache", "items_cache", "vouchers_cache", "voucher_entries_cache", "voucher_items_cache"]) {
+  for (const n of ["cache_ledgers", "cache_items", "cache_vouchers", "cache_voucher_entries", "cache_voucher_items"]) {
     await safeDelete(n, TEST_COMPANY_ID);
   }
   invalidateAnswerCache(TEST_COMPANY_ID);
