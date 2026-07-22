@@ -129,7 +129,7 @@ function serialise(idx: CompanyIndex): PersistedIndex {
       kind: d.kind,
       name: d.name,
       group: d.group,
-      vec: bufToB64(d.vec.buffer),
+      vec: bufToB64(d.vec.buffer as ArrayBuffer),
     })),
   };
 }
