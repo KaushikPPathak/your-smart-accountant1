@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import TestDashboard from "@/components/TestDashboard";
 
 export const Route = createFileRoute("/app/diagnostics")({
   head: () => ({
@@ -149,6 +150,15 @@ function DiagnosticsPage() {
               </Table>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">AI Layer Tests</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <TestDashboard />
         </CardContent>
       </Card>
     </div>
