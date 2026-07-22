@@ -176,16 +176,21 @@ function classifyLedger(l: any): LedgerKind {
   return "other";
 }
 
-/** Trial balance — all ledgers with net balance (opening + movement). */
+/** Trial balance — all ledgers with net balance (streamed, O(1) memory). */
 async function retrieveTrialBalance(companyId: string): Promise<RetrievedSlice> {
-  const [ledgers, entries] = await Promise.all([
-    readLedgers(companyId),
-    readVoucherEntriesForCompany(companyId),
-  ]);
-  const rows = (ledgers as any[]).map((l) => {
-    const bal = sumEntriesFor(entries as any[], l.id);
+  const ledgers = (await readLedgers(companyId)) as any[];
+  const acc = new Map<string, { debit_paise: number; credit_paise: number }>();
+  await forEachEntry(companyId, (e) => {
+    const key = String(e.ledger_id);
+    const cur = acc.get(key) ?? { debit_paise: 0, credit_paise: 0 };
+    cur.debit_paise += Number(e.debit_paise ?? 0);
+    cur.credit_paise += Number(e.credit_paise ?? 0);
+    acc.set(key, cur);
+  });
+  const rows = ledgers.map((l) => {
+    const bal = acc.get(String(l.id)) ?? { debit_paise: 0, credit_paise: 0 };
     const opening = Number(l.opening_balance_paise ?? 0) * (l.opening_balance_is_debit ? 1 : -1);
-    const net = opening + bal.balance_paise;
+    const net = opening + bal.debit_paise - bal.credit_paise;
     return {
       ledger_id: l.id, name: l.name, group: l.group_name,
       opening_paise: opening, debit_paise: bal.debit_paise,
