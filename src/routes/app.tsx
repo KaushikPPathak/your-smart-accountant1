@@ -203,58 +203,6 @@ function AppLayout() {
     return () => window.clearTimeout(id);
   }, [bootstrapping, companyLoading, activeCompanyId, onCompaniesPage]);
 
-  // Focus parker (Busy/Tally-style): the app must never sit in a "no focus"
-  // state that forces the user to press Tab to re-engage the keyboard.
-  // Whenever focus falls back to <body> (dialog closes, click on empty space,
-  // route change, etc.), gently return focus to the first top-menu trigger.
-  // We ignore this while on the companies picker page and during bootstrap.
-  useEffect(() => {
-    if (bootstrapping || companyLoading) return;
-    if (!activeCompanyId) return;
-    if (onCompaniesPage) return;
-    let raf = 0;
-    const park = () => {
-      const active = document.activeElement as HTMLElement | null;
-      if (active && active !== document.body) return;
-      // Don't steal focus if a dialog / popover is open — Radix will restore
-      // focus itself when it closes, and we'd fight it.
-      if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
-      if (document.querySelector('[role="dialog"][data-state="open"]')) return;
-      const firstTrigger = document.querySelector<HTMLElement>(
-        ".busy-topbar button.busy-menu",
-      );
-      firstTrigger?.focus();
-    };
-    const onFocusOut = (e: FocusEvent) => {
-      // relatedTarget=null typically means focus is heading to <body>.
-      if (e.relatedTarget) return;
-      // Only park focus if it's leaving the menubar or the Quick Entry ribbon.
-      // If focus was inside a form field, voucher grid, dialog content, or any
-      // main-content control, leave it alone — the user is mid-interaction and
-      // stealing focus to the top menu would be jarring and could interrupt
-      // typing / validation.
-      const from = e.target as HTMLElement | null;
-      if (!from) return;
-      if (!from.closest?.(".busy-topbar") && !from.closest?.(".busy-menubar")) return;
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        // Double-rAF gives Radix time to move focus to its restore target
-        // before we decide to park it back on the menubar.
-        raf = requestAnimationFrame(park);
-      });
-    };
-    document.addEventListener("focusout", onFocusOut);
-    return () => {
-      document.removeEventListener("focusout", onFocusOut);
-      cancelAnimationFrame(raf);
-    };
-  }, [bootstrapping, companyLoading, activeCompanyId, onCompaniesPage]);
-
-
-
-
-  
-
   // Gate: every page under /app requires a chosen + unlocked company
   // (except /app/companies, which is reachable when the user clicked "+ New company").
   // /app/assistant is intentionally NOT exempted — it can read accounting data.
