@@ -24,6 +24,8 @@ export interface RoutedQuery {
   to?: string;
   /** Voucher number if explicitly mentioned. */
   voucherNumber?: string;
+  /** "in the books of X" → candidate company name to switch context to. */
+  companyHint?: string;
 }
 
 const MONTHS: Record<string, number> = {
@@ -116,6 +118,12 @@ export function routeQuery(question: string): RoutedQuery {
   const entityHints = extractEntityHints(q);
   const voucherNumber = extractVoucherNumber(q);
 
+  // "in the books of X", "books of X", "for company X"
+  let companyHint: string | undefined;
+  const cm = q.match(/\b(?:in\s+the\s+)?books?\s+of\s+([A-Z][A-Za-z0-9&.\s]{2,60})/i)
+          ?? q.match(/\bfor\s+company\s+([A-Z][A-Za-z0-9&.\s]{2,60})/i);
+  if (cm) companyHint = cm[1].trim().replace(/[.,;:!?]+$/, "");
+
   let intent: QueryIntent = "general";
 
   if (voucherNumber || /\b(voucher|invoice|bill|receipt|payment)\s*(no|number|#)/.test(lower)) {
@@ -140,5 +148,5 @@ export function routeQuery(question: string): RoutedQuery {
     intent = "date_range_report";
   }
 
-  return { intent, entityHints, ...dates, voucherNumber };
+  return { intent, entityHints, ...dates, voucherNumber, companyHint };
 }
