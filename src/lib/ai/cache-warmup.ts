@@ -55,10 +55,11 @@ async function runWarmup(companyId: string) {
   // Mark first so a crash mid-run doesn't cause a hot loop.
   markRan(companyId);
 
-  let assistantChat: ((args: { data: { messages: Array<{ role: string; content: string }>; companyId: string } }) => Promise<unknown>) | null = null;
+  type ChatFn = (args: { data: { messages: Array<{ role: string; content: string }>; companyId: string } }) => Promise<unknown>;
+  let assistantChat: ChatFn | null = null;
   try {
     const mod = await import("@/lib/assistant.functions");
-    assistantChat = mod.assistantChat as typeof assistantChat;
+    assistantChat = mod.assistantChat as unknown as ChatFn;
   } catch { return; }
   if (!assistantChat) return;
 
