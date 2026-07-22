@@ -144,26 +144,206 @@ async function retrieveGeneral(companyId: string): Promise<RetrievedSlice> {
   };
 }
 
+// ---------- Phase 2: dedicated retrievers ----------------------------------
+
+const DIRECT_INCOME_HINTS = /(sales|direct income|export)/i;
+const DIRECT_EXPENSE_HINTS = /(purchase|direct expense|freight inward|wages|carriage inward|manufacturing)/i;
+const INDIRECT_INCOME_HINTS = /(indirect income|interest received|discount received|commission received|other income)/i;
+const INDIRECT_EXPENSE_HINTS = /(indirect expense|salary|rent|electricity|office|admin|bank charges|discount allowed|depreciation)/i;
+const CASH_HINTS = /(^cash|petty cash|cash in hand)/i;
+const BANK_HINTS = /(bank|hdfc|icici|sbi|axis|kotak|yes bank|current a\/c|saving)/i;
+const STOCK_HINTS = /(stock-in-hand|stock in hand|inventory)/i;
+
+type LedgerKind = "direct_income"|"direct_expense"|"indirect_income"|"indirect_expense"|"cash"|"bank"|"stock"|"other";
+function classifyLedger(l: any): LedgerKind {
+  const g = String(l.group_name ?? "");
+  const n = String(l.name ?? "");
+  if (CASH_HINTS.test(n) || /cash/i.test(g)) return "cash";
+  if (BANK_HINTS.test(n) || /bank/i.test(g)) return "bank";
+  if (STOCK_HINTS.test(g) || STOCK_HINTS.test(n)) return "stock";
+  if (DIRECT_INCOME_HINTS.test(g)) return "direct_income";
+  if (DIRECT_EXPENSE_HINTS.test(g)) return "direct_expense";
+  if (INDIRECT_INCOME_HINTS.test(g) || /income/i.test(g)) return "indirect_income";
+  if (INDIRECT_EXPENSE_HINTS.test(g) || /expense/i.test(g)) return "indirect_expense";
+  return "other";
+}
+
+/** Trial balance — all ledgers with net balance (opening + movement). */
+async function retrieveTrialBalance(companyId: string): Promise<RetrievedSlice> {
+  const [ledgers, entries] = await Promise.all([
+    readLedgers(companyId),
+    readVoucherEntriesForCompany(companyId),
+  ]);
+  const rows = (ledgers as any[]).map((l) => {
+    const bal = sumEntriesFor(entries as any[], l.id);
+    const opening = Number(l.opening_balance_paise ?? 0) * (l.opening_balance_is_debit ? 1 : -1);
+    const net = opening + bal.balance_paise;
+    return {
+      ledger_id: l.id, name: l.name, group: l.group_name,
+      opening_paise: opening, debit_paise: bal.debit_paise,
+      credit_paise: bal.credit_paise, closing_paise: net,
+    };
+  }).filter((r) => r.opening_paise !== 0 || r.debit_paise !== 0 || r.credit_paise !== 0);
+  const totalDr = rows.reduce((s, r) => s + Math.max(0, r.closing_paise), 0);
+  const totalCr = rows.reduce((s, r) => s + Math.max(0, -r.closing_paise), 0);
+  return {
+    scope: `trial balance (${rows.length} active ledgers)`,
+    data: { trial_balance: rows.slice(0, 200) },
+    facts: { total_debit_paise: totalDr, total_credit_paise: totalCr, difference_paise: totalDr - totalCr },
+  };
+}
+
+/** Profit & Loss — direct vs indirect income/expense grouping. */
+async function retrieveProfitLoss(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+  const [ledgers, entries, vouchers] = await Promise.all([
+    readLedgers(companyId),
+    readVoucherEntriesForCompany(companyId),
+    readVouchers(companyId, { from: routed.from, to: routed.to }),
+  ]);
+  const inWindow = new Set((vouchers as any[]).map((v) => String(v.id)));
+  const buckets: Record<string, { name: string; group: string; amount_paise: number }[]> = {
+    direct_income: [], direct_expense: [], indirect_income: [], indirect_expense: [],
+  };
+  for (const l of ledgers as any[]) {
+    const kind = classifyLedger(l);
+    if (!(kind in buckets)) continue;
+    let dr = 0, cr = 0;
+    for (const e of entries as any[]) {
+      if (String(e.ledger_id) !== String(l.id)) continue;
+      if (!inWindow.has(String(e.voucher_id))) continue;
+      dr += Number(e.debit_paise ?? 0);
+      cr += Number(e.credit_paise ?? 0);
+    }
+    const amt = kind.endsWith("income") ? cr - dr : dr - cr;
+    if (amt !== 0) buckets[kind].push({ name: l.name, group: l.group_name, amount_paise: amt });
+  }
+  const sum = (arr: any[]) => arr.reduce((s, r) => s + r.amount_paise, 0);
+  const gross = sum(buckets.direct_income) - sum(buckets.direct_expense);
+  const net = gross + sum(buckets.indirect_income) - sum(buckets.indirect_expense);
+  return {
+    scope: `P&L ${routed.from ?? "all-time"} → ${routed.to ?? "..."}`,
+    data: buckets as unknown as Record<string, unknown[]>,
+    facts: { gross_profit_paise: gross, net_profit_paise: net },
+  };
+}
+
+/** Cash / bank book — entries touching cash or bank ledgers. */
+async function retrieveCashBank(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+  const [ledgers, entries, vouchers] = await Promise.all([
+    readLedgers(companyId),
+    readVoucherEntriesForCompany(companyId),
+    readVouchers(companyId, { from: routed.from, to: routed.to }),
+  ]);
+  const cashBank = (ledgers as any[]).filter((l) => {
+    const k = classifyLedger(l);
+    return k === "cash" || k === "bank";
+  });
+  const cbIds = new Set(cashBank.map((l) => String(l.id)));
+  const inWindow = new Set((vouchers as any[]).map((v) => String(v.id)));
+  const relevant = (entries as any[]).filter((e) => cbIds.has(String(e.ledger_id)) && inWindow.has(String(e.voucher_id)));
+  const vById = new Map((vouchers as any[]).map((v) => [String(v.id), v]));
+  const rows = relevant.slice(-100).map((e) => {
+    const v = vById.get(String(e.voucher_id));
+    return {
+      date: v?.voucher_date, voucher_number: v?.voucher_number, voucher_type: v?.voucher_type,
+      ledger_id: e.ledger_id, debit_paise: e.debit_paise, credit_paise: e.credit_paise,
+    };
+  });
+  return {
+    scope: `cash/bank book (${cashBank.length} accounts, ${rows.length} rows)`,
+    data: {
+      accounts: cashBank.map((l) => ({ id: l.id, name: l.name, kind: classifyLedger(l) })),
+      entries: rows,
+    },
+    facts: { entry_count: relevant.length },
+  };
+}
+
+/** GST — sales/purchase vouchers in window with taxable & total totals. */
+async function retrieveGst(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+  const vouchers = (await readVouchers(companyId, { from: routed.from, to: routed.to })) as any[];
+  const gstTypes = new Set(["sales", "purchase", "credit_note", "debit_note"]);
+  const rel = vouchers.filter((v) => gstTypes.has(String(v.voucher_type)));
+  let taxable = 0, total = 0;
+  for (const v of rel) { total += Number(v.total_paise ?? 0); taxable += Number(v.subtotal_paise ?? v.total_paise ?? 0); }
+  return {
+    scope: `GST vouchers ${routed.from ?? "..."} → ${routed.to ?? "..."} (${rel.length} rows)`,
+    data: {
+      vouchers: rel.slice(0, 100).map((v) => ({
+        id: v.id, date: v.voucher_date, voucher_number: v.voucher_number, voucher_type: v.voucher_type,
+        party_ledger_id: v.party_ledger_id, subtotal_paise: v.subtotal_paise, total_paise: v.total_paise,
+        place_of_supply: v.place_of_supply,
+      })),
+    },
+    facts: { taxable_paise: taxable, total_paise: total, count: rel.length },
+  };
+}
+
+/** Ageing — outstanding balance per party bucketed by voucher age. */
+async function retrieveAgeing(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+  const [ledgers, entries, vouchers] = await Promise.all([
+    readLedgers(companyId),
+    readVoucherEntriesForCompany(companyId),
+    readVouchers(companyId),
+  ]);
+  const parties = (ledgers as any[]).filter((l) => /debtor|creditor|sundry/i.test(String(l.group_name ?? "")));
+  const asOf = routed.to ? new Date(routed.to) : new Date();
+  const vById = new Map((vouchers as any[]).map((v) => [String(v.id), v]));
+  const rows = parties.map((p) => {
+    const b: Record<string, number> = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
+    let net = Number(p.opening_balance_paise ?? 0) * (p.opening_balance_is_debit ? 1 : -1);
+    for (const e of entries as any[]) {
+      if (String(e.ledger_id) !== String(p.id)) continue;
+      const amt = Number(e.debit_paise ?? 0) - Number(e.credit_paise ?? 0);
+      net += amt;
+      const v = vById.get(String(e.voucher_id));
+      if (!v?.voucher_date) continue;
+      const days = Math.floor((asOf.getTime() - new Date(v.voucher_date).getTime()) / 86400000);
+      const bucket = days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
+      b[bucket] += amt;
+    }
+    return { party_id: p.id, name: p.name, group: p.group_name, net_paise: net, buckets: b };
+  }).filter((r) => r.net_paise !== 0);
+  return {
+    scope: `ageing as of ${asOf.toISOString().slice(0, 10)} (${rows.length} parties)`,
+    data: { ageing: rows.slice(0, 150) },
+    facts: { total_outstanding_paise: rows.reduce((s, r) => s + r.net_paise, 0) },
+  };
+}
+
+/** Stock — items with opening + running quantities. */
+async function retrieveStock(companyId: string): Promise<RetrievedSlice> {
+  const { readItems } = await import("@/lib/offline/cache-read");
+  const [items, ledgers] = await Promise.all([readItems(companyId), readLedgers(companyId)]);
+  const stockLedgers = (ledgers as any[]).filter((l) => classifyLedger(l) === "stock");
+  return {
+    scope: `stock summary (${(items as any[]).length} items)`,
+    data: {
+      items: (items as any[]).slice(0, 200).map((i) => ({
+        id: i.id, name: i.name, unit: i.unit, gst_rate: i.gst_rate,
+        opening_qty: i.opening_stock_qty, opening_value_paise: i.opening_stock_value_paise,
+      })),
+      stock_ledgers: stockLedgers.map((l) => ({ id: l.id, name: l.name })),
+    },
+    facts: { item_count: (items as any[]).length },
+  };
+}
+
 export async function retrieveForQuery(routed: RoutedQuery, companyIdIn?: string | null): Promise<RetrievedSlice> {
   const companyId = await resolveCompanyId(companyIdIn);
-  if (!companyId) {
-    return { scope: "no active company", data: {} };
-  }
+  if (!companyId) return { scope: "no active company", data: {} };
   switch (routed.intent) {
-    case "party_balance":  return retrieveParty(companyId, routed, { withEntries: false });
-    case "party_ledger":   return retrieveParty(companyId, routed, { withEntries: true });
+    case "party_balance":     return retrieveParty(companyId, routed, { withEntries: false });
+    case "party_ledger":      return retrieveParty(companyId, routed, { withEntries: true });
     case "date_range_report": return retrieveDateRange(companyId, routed);
-    case "voucher_lookup": return retrieveVoucher(companyId, routed);
-    // TODO Phase 2: dedicated ageing / gst / trial-balance retrievers.
-    // For now, fall through to a general snapshot so the model still has context.
-    case "ageing":
-    case "gst_query":
-    case "trial_balance":
-    case "profit_loss":
-    case "cash_bank":
-    case "stock_query":
+    case "voucher_lookup":    return retrieveVoucher(companyId, routed);
+    case "ageing":            return retrieveAgeing(companyId, routed);
+    case "gst_query":         return retrieveGst(companyId, routed);
+    case "trial_balance":     return retrieveTrialBalance(companyId);
+    case "profit_loss":       return retrieveProfitLoss(companyId, routed);
+    case "cash_bank":         return retrieveCashBank(companyId, routed);
+    case "stock_query":       return retrieveStock(companyId);
     case "general":
-    default:
-      return retrieveGeneral(companyId);
+    default:                  return retrieveGeneral(companyId);
   }
 }
