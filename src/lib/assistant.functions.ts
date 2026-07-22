@@ -16,6 +16,7 @@ import { buildCompressedContext, unredactAnswer } from "./ai/sqliteContext";
 import { retrieveOriginal } from "./ai/headroom";
 import { isWebGpuAvailable, webLlmChat } from "./ai/webllm";
 import { recentErrors, questionMentionsError } from "./ai/error-ring";
+import { lookupAnswer, storeAnswer } from "./ai/answer-cache";
 
 export interface AssistantChatResult {
   ok: boolean;
