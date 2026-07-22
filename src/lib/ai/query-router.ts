@@ -7,6 +7,7 @@ export type QueryIntent =
   | "party_ledger"        // "show Ramesh's ledger", "statement of ABC"
   | "date_range_report"   // "sales in march", "purchases last quarter"
   | "voucher_lookup"      // "invoice SI-234", "voucher #123"
+  | "latest_voucher"      // "last sales bill", "latest purchase invoice"
   | "ageing"              // "overdue", "90 days outstanding", "ageing"
   | "gst_query"           // "gstr1", "gst liability", "itc"
   | "trial_balance"       // "trial balance", "tb as of"
