@@ -253,6 +253,15 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         else setTimeout(hydrate, 2_000);
       }
     }
+
+    // Warm the AI answer cache with the common first-of-the-day questions so
+    // they return instantly when the user actually asks. Throttled to once
+    // per 6 h per company and only when online.
+    if (activeCompanyId) {
+      import("@/lib/ai/cache-warmup")
+        .then((m) => m.scheduleWarmup(activeCompanyId))
+        .catch(() => { /* silent */ });
+    }
   }, [activeMembership, activeCompanyId]);
 
   return (
