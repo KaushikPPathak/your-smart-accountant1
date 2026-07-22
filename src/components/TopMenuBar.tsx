@@ -343,8 +343,22 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       }
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
 
+      // If this trigger's dropdown is NOT already open, ArrowDown jumps down
+      // into the Quick Entry ribbon (Busy/Tally-style region hop). ArrowUp
+      // is a no-op — there is nothing above the menubar.
+      if (openMenuKey !== key) {
+        if (e.key === "ArrowUp") return;
+        e.preventDefault();
+        const ribbonItem = document.querySelector<HTMLElement>(
+          '[role="toolbar"] [data-focus-item="true"]',
+        );
+        if (ribbonItem) ribbonItem.focus();
+        return;
+      }
+
+      // Menu already open (e.g. auto-opened by hover or ArrowLeft/Right):
+      // drill focus into the dropdown items.
       e.preventDefault();
-      setOpenMenuKey(key);
       const edge = e.key === "ArrowDown" ? "first" : "last";
       const focusDropdownEdge = () => {
         const content = document.querySelector<HTMLElement>(
@@ -365,6 +379,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           if (!focusDropdownEdge()) window.requestAnimationFrame(focusDropdownEdge);
         });
       }
+
     },
     [openMenuKey, orderedMenuKeys],
   );
