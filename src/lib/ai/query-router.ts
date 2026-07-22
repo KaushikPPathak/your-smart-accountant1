@@ -27,6 +27,8 @@ export interface RoutedQuery {
   voucherNumber?: string;
   /** "in the books of X" → candidate company name to switch context to. */
   companyHint?: string;
+  /** For "last/latest <kind> bill" → normalized voucher type. */
+  latestKind?: "sales" | "purchase" | "receipt" | "payment" | "journal" | "credit_note" | "debit_note";
 }
 
 const MONTHS: Record<string, number> = {
