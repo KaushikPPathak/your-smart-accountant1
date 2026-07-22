@@ -82,7 +82,7 @@ export function CompanySwitcher() {
         <Button
           variant="outline"
           size="sm"
-          className="h-9 gap-2 min-w-[240px] max-w-[360px] justify-between"
+          className="busy-company-switcher h-9 gap-2 justify-between"
           data-company-switcher-trigger="true"
           aria-label={`Switch company: ${activeMembership?.companies.name ?? t("company.noneShort")}`}
         >
