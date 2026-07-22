@@ -445,32 +445,40 @@
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    min-width: 13px;
-    height: 13px;
-    padding: 0 3px;
-    border: 1px solid color-mix(in oklab, var(--utility-badge-ink) 42%, transparent);
-    border-radius: 3px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border: 1px solid color-mix(in oklab, var(--utility-badge-ink) 55%, transparent);
+    border-radius: 4px;
     color: var(--utility-badge-ink);
-    font-size: 8px;
-    font-weight: 800;
-    line-height: 11px;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 16px;
     text-align: center;
-    box-shadow: 0 1px 3px color-mix(in oklab, var(--foreground) 28%, transparent);
+    letter-spacing: 0.02em;
+    box-shadow:
+      0 1px 3px color-mix(in oklab, var(--foreground) 40%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent);
+    text-shadow: 0 1px 0 color-mix(in oklab, #ffffff 55%, transparent);
   }
-  .backup-letter-badge { background: var(--backup-badge); }
+  .backup-letter-badge {
+    background: var(--backup-badge);
+    color: #000;
+  }
   .restore-letter-badge { background: var(--restore-badge); }
   .backup-letter-badge::after,
   .restore-letter-badge::after {
     content: "";
     position: absolute;
     z-index: -1;
-    inset: -2px auto -2px -80%;
-    width: 55%;
+    inset: -3px auto -3px -80%;
+    width: 60%;
     transform: skewX(-18deg);
-    animation: utility-badge-glitter 1.8s ease-in-out infinite;
+    animation: utility-badge-glitter 1.6s ease-in-out infinite;
   }
   .backup-letter-badge::after { background: var(--backup-badge-highlight); }
   .restore-letter-badge::after { background: var(--restore-badge-highlight); }
+
 }
 
 @keyframes utility-badge-glitter {
