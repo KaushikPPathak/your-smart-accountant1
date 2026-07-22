@@ -110,10 +110,11 @@ async function retrieveVoucher(companyId: string, routed: RoutedQuery): Promise<
   if (!match) {
     return { scope: `voucher not found: ${routed.voucherNumber}`, data: {} };
   }
-  const [entries, items] = await Promise.all([
-    (await readVoucherEntriesForCompany(companyId)).then((all: any[]) => all.filter((e) => String(e.voucher_id) === String(match.id))),
+  const [allEntries, items] = await Promise.all([
+    readVoucherEntriesForCompany(companyId),
     readVoucherItems(String(match.id)),
   ]);
+  const entries = (allEntries as any[]).filter((e) => String(e.voucher_id) === String(match.id));
   return {
     scope: `voucher ${match.voucher_number} (${match.voucher_type})`,
     data: { voucher: [match], entries, items },
