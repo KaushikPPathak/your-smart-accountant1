@@ -384,8 +384,13 @@ async function retrieveStock(companyId: string): Promise<RetrievedSlice> {
 }
 
 export async function retrieveForQuery(routed: RoutedQuery, companyIdIn?: string | null): Promise<RetrievedSlice> {
-  const companyId = await resolveCompanyId(companyIdIn);
+  let companyId = await resolveCompanyId(companyIdIn);
   if (!companyId) return { scope: "no active company", data: {} };
+  // Cross-company: "in the books of X" switches the retrieval context.
+  if (routed.companyHint) {
+    const resolved = await resolveCompanyFromHints([routed.companyHint], companyId);
+    if (resolved && resolved !== companyId) companyId = resolved;
+  }
   switch (routed.intent) {
     case "party_balance":     return retrieveParty(companyId, routed, { withEntries: false });
     case "party_ledger":      return retrieveParty(companyId, routed, { withEntries: true });
