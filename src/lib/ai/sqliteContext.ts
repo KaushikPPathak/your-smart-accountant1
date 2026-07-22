@@ -8,6 +8,7 @@
 import { cacheRowsForCcr, compressMessages } from "./headroom";
 import { routeQuery, type QueryIntent } from "./query-router";
 import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
+import { optimiseSlice } from "./slice-optimizer";
 import { createRedactionMap, redactDeep, unredact, type RedactionMap } from "./redactor";
 
 export interface AccountingContext {
@@ -45,7 +46,7 @@ function resolveContextCompanyId(explicitCompanyId?: string | null): string | nu
  */
 export async function buildCompressedContext(userQuestion: string, companyId?: string | null): Promise<CompressedContext> {
   const routed = routeQuery(userQuestion);
-  const slice: RetrievedSlice = await retrieveForQuery(routed, resolveContextCompanyId(companyId));
+  const slice: RetrievedSlice = optimiseSlice(await retrieveForQuery(routed, resolveContextCompanyId(companyId)));
 
   const redaction = createRedactionMap();
   const safeData = redactDeep(slice.data, redaction);
@@ -66,6 +67,9 @@ export async function buildCompressedContext(userQuestion: string, companyId?: s
       "is attached. PII (GSTIN, PAN, phone, email, bank a/c) has been replaced " +
       'with opaque tokens like "<GSTIN_a1b2>" — reference those tokens as-is; ' +
       "the client will substitute the real values before showing your answer. " +
+      "Monetary amounts appear as `*_rs` fields in INR rupees (2 dp). Arrays " +
+      'may end with a `{"_more": N}` sentinel meaning N further rows were ' +
+      "trimmed — request them via `retrieveOriginal` if needed. " +
       "If you need more rows than the attached slice, request them by calling " +
       'the `retrieveOriginal` tool with a matching hash from "ccrHashes". ' +
       "CITATIONS: every numeric claim you make MUST be followed by a citation " +
