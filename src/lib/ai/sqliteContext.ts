@@ -68,7 +68,10 @@ export async function buildCompressedContext(userQuestion: string, companyId?: s
       "the client will substitute the real values before showing your answer. " +
       "If you need more rows than the attached slice, request them by calling " +
       'the `retrieveOriginal` tool with a matching hash from "ccrHashes". ' +
-      "Cite voucher numbers and dates in your answer whenever possible.",
+      "CITATIONS: every numeric claim you make MUST be followed by a citation " +
+      'in the exact form [V:<voucher_number> <YYYY-MM-DD>] for a voucher, ' +
+      '[L:<ledger name>] for a ledger, or [F:<fact key>] for a computed fact ' +
+      'from the "facts" object. Do not cite anything not present in the payload.',
   };
 
   const userMessage = {
