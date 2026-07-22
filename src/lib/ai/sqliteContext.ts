@@ -46,7 +46,7 @@ function resolveContextCompanyId(explicitCompanyId?: string | null): string | nu
  */
 export async function buildCompressedContext(userQuestion: string, companyId?: string | null): Promise<CompressedContext> {
   const routed = routeQuery(userQuestion);
-  const slice: RetrievedSlice = await retrieveForQuery(routed, resolveContextCompanyId(companyId));
+  const slice: RetrievedSlice = optimiseSlice(await retrieveForQuery(routed, resolveContextCompanyId(companyId)));
 
   const redaction = createRedactionMap();
   const safeData = redactDeep(slice.data, redaction);
