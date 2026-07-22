@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 
 import {
   LayoutDashboard,
@@ -312,59 +312,40 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   const menubarId = useId();
   const [openMenuKey, setOpenMenuKey] = useState("");
 
-  // Any focus that lands on a menubar trigger opens its dropdown. Combined
-  // with Radix's native arrow-key trigger cycling, this means the user can
-  // arrow left/right across the top menu and every dropdown auto-opens —
-  // exactly like Busy/Tally. No first-focus suppression: even the very first
-  // programmatic focus on cold-start opens the File menu, which is the
-  // desired Busy-style landing state.
-  // Escape-suppression flag: when Radix closes a dropdown it restores focus
-  // to the trigger. Without this flag our focusin handler would immediately
-  // re-open the menu. The controlled value-change handler below suppresses
-  // that single focus return without competing with Radix's Escape handling.
-  const suppressAutoOpenRef = useRef(false);
+  const orderedMenuKeys = useMemo(
+    () => ["file", ...visible.map((menu) => menu.key)],
+    [visible],
+  );
 
-  const handleMenuValueChange = useCallback((nextValue: string) => {
-    if (!nextValue && openMenuKey) {
-      suppressAutoOpenRef.current = true;
-      window.requestAnimationFrame(() => {
-        suppressAutoOpenRef.current = false;
-      });
-    }
-    setOpenMenuKey(nextValue);
-  }, [openMenuKey]);
-
-  useEffect(() => {
-    const root = menubarRef.current;
-    if (!root) return;
-    const onFocusIn = (e: FocusEvent) => {
-      if (suppressAutoOpenRef.current) return;
-      const target = e.target as HTMLElement | null;
-      if (!target || !target.classList.contains("busy-menu")) return;
-      const key = target.dataset.menuKey;
-      if (key) setOpenMenuKey(key);
-    };
-    root.addEventListener("focusin", onFocusIn);
-    return () => root.removeEventListener("focusin", onFocusIn);
-  }, []);
-
-  // ArrowDown / ArrowUp on a focused trigger always opens the matching menu
-  // and transfers focus to its first / last item. We select the content by
-  // menu key instead of the first Radix popper on the page (which may be a
-  // tooltip or the company switcher).
-  useEffect(() => {
-    const root = menubarRef.current;
-    if (!root) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target || !target.classList.contains("busy-menu")) return;
+  // This handler is attached directly to each Radix trigger. Do not move it to
+  // a native root listener: stopping propagation there prevents Radix's React
+  // keyboard handler from receiving the event at all.
+  const handleTriggerKeyDown = useCallback(
+    (key: string) => (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (e.key === "Escape" && openMenuKey === key) {
+        e.preventDefault();
+        setOpenMenuKey("");
+        return;
+      }
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        const currentIndex = orderedMenuKeys.indexOf(key);
+        const delta = e.key === "ArrowRight" ? 1 : -1;
+        const nextIndex = (currentIndex + delta + orderedMenuKeys.length) % orderedMenuKeys.length;
+        const nextKey = orderedMenuKeys[nextIndex];
+        setOpenMenuKey(nextKey);
+        window.requestAnimationFrame(() => {
+          menubarRef.current
+            ?.querySelector<HTMLButtonElement>(`button.busy-menu[data-menu-key="${nextKey}"]`)
+            ?.focus();
+        });
+        return;
+      }
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-      const key = target.dataset.menuKey;
-      if (!key) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setOpenMenuKey(key);
 
+      e.preventDefault();
+      setOpenMenuKey(key);
+      const edge = e.key === "ArrowDown" ? "first" : "last";
       const focusDropdownEdge = () => {
         const content = document.querySelector<HTMLElement>(
           `[data-top-menu-content="${key}"][data-state="open"]`,
@@ -373,17 +354,20 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           '[role="menuitem"]:not([data-disabled])',
         );
         if (!items?.length) return false;
-        (e.key === "ArrowDown" ? items[0] : items[items.length - 1]).focus();
+        (edge === "first" ? items[0] : items[items.length - 1]).focus();
         return true;
       };
 
-      // Existing auto-opened content can be focused immediately. A newly
-      // opened portal is available on the next animation frame.
-      if (!focusDropdownEdge()) window.requestAnimationFrame(focusDropdownEdge);
-    };
-    root.addEventListener("keydown", onKeyDown);
-    return () => root.removeEventListener("keydown", onKeyDown);
-  }, []);
+      // React may need one frame to mount a newly opened portal. The second
+      // frame is a deterministic fallback for slower desktop WebViews.
+      if (!focusDropdownEdge()) {
+        window.requestAnimationFrame(() => {
+          if (!focusDropdownEdge()) window.requestAnimationFrame(focusDropdownEdge);
+        });
+      }
+    },
+    [openMenuKey, orderedMenuKeys],
+  );
 
   const openOnHover = useCallback((key: string) => () => setOpenMenuKey(key), []);
 
@@ -443,7 +427,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     <Menubar
       ref={menubarRef}
       value={openMenuKey}
-      onValueChange={handleMenuValueChange}
+      onValueChange={setOpenMenuKey}
       className="busy-topbar print:hidden h-auto space-x-0 rounded-none border-x-0 border-t-0 p-0 shadow-none"
       aria-label="Application menu"
     >
@@ -458,6 +442,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
             data-menu-key="file"
             id={`${menubarId}-menu-file`}
             onMouseEnter={openOnHover("file")}
+             onKeyDown={handleTriggerKeyDown("file")}
           >
 
             <span className="busy-brand-mark">म</span>
@@ -465,7 +450,11 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
             <ChevronDown className="h-3 w-3 opacity-70" />
           </button>
         </MenubarTrigger>
-        <MenubarContent data-top-menu-content="file" align="start" className="busy-menu-dropdown min-w-[240px]">
+        <MenubarContent
+          data-top-menu-content="file"
+          align="start"
+          className="busy-menu-dropdown min-w-[240px]"
+        >
           {FILE_GROUPS.map((g, gi) => (
             <div key={g.label}>
               {gi > 0 && <MenubarSeparator />}
@@ -503,12 +492,17 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                   id={`${menubarId}-menu-${m.key}`}
                   title={`${m.label} (Alt+${m.accessKey.toUpperCase()})`}
                   onMouseEnter={openOnHover(m.key)}
+                   onKeyDown={handleTriggerKeyDown(m.key)}
                 >
                   {labelWithAccessKey(m.label, m.accessKey)}
                   <ChevronDown className="h-3 w-3 opacity-70" />
                 </button>
               </MenubarTrigger>
-              <MenubarContent data-top-menu-content={m.key} align="start" className="busy-menu-dropdown min-w-[240px]">
+              <MenubarContent
+                data-top-menu-content={m.key}
+                align="start"
+                className="busy-menu-dropdown min-w-[240px]"
+              >
                 {m.groups.map((g, gi) => (
                   <div key={g.label}>
                     {gi > 0 && <MenubarSeparator />}

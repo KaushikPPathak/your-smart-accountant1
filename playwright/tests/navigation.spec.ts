@@ -5,10 +5,8 @@ import { setupCompanyPicker, setupRealWorkspace } from './workspace.setup';
  * End-to-end keyboard navigation tests — HONEST version.
  *
  * Rule: no test body uses .focus() or page.focus() to reach a starting
- * position. The only way to reach the menubar is `page.keyboard.press('Tab')`
- * from the cold-start body-focus state established by setupRealWorkspace().
- * This is what catches real regressions like "Tab doesn't reach the menu"
- * or "arrow doesn't open the dropdown from a cold start".
+ * position. setupRealWorkspace() must leave focus on the File trigger so the
+ * first arrow works immediately, without Tab or a mouse click.
  *
  * Radix Menubar contract:
  *   - Menubar is a single tabstop (Tab exits, arrows move inside).
@@ -17,9 +15,8 @@ import { setupCompanyPicker, setupRealWorkspace } from './workspace.setup';
  *   - Escape closes the dropdown and restores focus to the trigger.
  */
 
-/** Land focus on the File (first) menu trigger via Tab only. */
-async function tabToFileMenu(page: Page) {
-  await page.keyboard.press('Tab');
+/** Cold start parks focus on File so arrows work without an initial Tab. */
+async function startOnFileMenu(page: Page) {
   const fileMenu = page.locator('button[data-menu-key="file"]');
   await expect(fileMenu).toBeFocused();
   return fileMenu;
@@ -30,8 +27,7 @@ test.describe('Keyboard navigation — top menu bar', () => {
     await setupRealWorkspace(page);
   });
 
-  test('startup focus lands on the top menu bar after a single Tab', async ({ page }) => {
-    await page.keyboard.press('Tab');
+  test('startup focus lands on the top menu bar without Tab', async ({ page }) => {
     const focused = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement | null;
       return el?.dataset?.menuKey ?? el?.getAttribute('data-menu-key') ?? null;
@@ -40,7 +36,7 @@ test.describe('Keyboard navigation — top menu bar', () => {
   });
 
   test('ArrowRight cycles forward through every top menu and wraps', async ({ page }) => {
-    await tabToFileMenu(page);
+    await startOnFileMenu(page);
 
     const keys = await page.$$eval(
       'button[data-menu-key]',
@@ -61,7 +57,7 @@ test.describe('Keyboard navigation — top menu bar', () => {
   });
 
   test('ArrowLeft from File wraps to the last menu', async ({ page }) => {
-    await tabToFileMenu(page);
+    await startOnFileMenu(page);
     const keys = await page.$$eval(
       'button[data-menu-key]',
       (els) => els.map((e) => (e as HTMLElement).dataset.menuKey ?? ''),
@@ -75,7 +71,7 @@ test.describe('Keyboard navigation — top menu bar', () => {
   test('Tab eventually exits the menubar into subsequent chrome', async ({ page }) => {
     // Radix Menubar is a single tabstop, but the first Tab after landing on
     // the trigger may not always leave — a couple of presses must.
-    await tabToFileMenu(page);
+    await startOnFileMenu(page);
     let escaped = false;
     for (let i = 0; i < 4; i++) {
       await page.keyboard.press('Tab');
@@ -89,7 +85,7 @@ test.describe('Keyboard navigation — top menu bar', () => {
   });
 
   test('Shift+Tab from the menubar returns focus outside', async ({ page }) => {
-    await tabToFileMenu(page);
+    await startOnFileMenu(page);
     await page.keyboard.press('Shift+Tab');
     const stillOnMenubar = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement | null;
@@ -99,7 +95,7 @@ test.describe('Keyboard navigation — top menu bar', () => {
   });
 
   test('Escape on an open dropdown restores focus to the trigger', async ({ page }) => {
-    const fileMenu = await tabToFileMenu(page);
+    const fileMenu = await startOnFileMenu(page);
     await page.keyboard.press('Enter');
     await page.waitForSelector('[role="menu"][data-state="open"]');
     await page.keyboard.press('Escape');
@@ -107,12 +103,40 @@ test.describe('Keyboard navigation — top menu bar', () => {
   });
 
   test('ArrowDown opens the currently focused top menu', async ({ page }) => {
-    await tabToFileMenu(page);
+    await startOnFileMenu(page);
     await page.keyboard.press('ArrowDown');
-    await expect(page.locator('button[data-menu-key="file"]')).toHaveAttribute(
-      'aria-expanded',
-      'true',
+    await expect(page.locator('[data-top-menu-content="file"] [role="menuitem"]').first()).toBeFocused();
+  });
+
+  test('ArrowDown, ArrowUp and Escape work in every top menu', async ({ page }) => {
+    await startOnFileMenu(page);
+    const keys = await page.$$eval(
+      'button[data-menu-key]',
+      (els) => els.map((e) => (e as HTMLElement).dataset.menuKey ?? ''),
     );
+
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const trigger = page.locator(`button[data-menu-key="${key}"]`);
+      await expect(trigger).toBeFocused();
+
+      await page.keyboard.press('ArrowDown');
+      const items = page.locator(`[data-top-menu-content="${key}"] [role="menuitem"]:not([data-disabled])`);
+      await expect(items.first()).toBeFocused();
+      await page.keyboard.press('ArrowDown');
+      if (await items.count() > 1) await expect(items.nth(1)).toBeFocused();
+      await page.keyboard.press('ArrowUp');
+      await expect(items.first()).toBeFocused();
+
+      await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
+      await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+      if (i < keys.length - 1) {
+        await page.keyboard.press('ArrowRight');
+        await expect(page.locator(`button[data-menu-key="${keys[i + 1]}"]`)).toBeFocused();
+      }
+    }
   });
 });
 
@@ -125,7 +149,7 @@ test.describe('Keyboard navigation — quick actions ribbon', () => {
   // the ribbon there may be intermediate focusable chrome (Install button,
   // etc.), so tab up to N times until focus lands inside role="toolbar".
   async function tabIntoRibbon(page: Page) {
-    await tabToFileMenu(page);
+    await startOnFileMenu(page);
     for (let i = 0; i < 8; i++) {
       await page.keyboard.press('Tab');
       const inRibbon = await page.evaluate(() => {
