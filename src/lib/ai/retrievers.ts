@@ -9,6 +9,7 @@ import {
   readVoucherEntriesForCompany,
   readVoucherItems,
 } from "@/lib/offline/cache-read";
+import { forEachEntry, forEachVoucher } from "@/lib/offline/cache-read-paged";
 import { normalizeName, similarity } from "@/lib/tally-busy-import";
 import type { RoutedQuery } from "./query-router";
 
