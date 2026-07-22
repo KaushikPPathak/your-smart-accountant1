@@ -384,27 +384,19 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
         target?.blur?.();
         return;
       }
-      // Menubar → Ribbon
+      // Menubar → let TopMenuBar's Escape binding fire (exit-confirm dialog).
+      // Use F6 / Ctrl+F2 to hop menu→ribbon; Escape must exit, not sidestep.
       if (target?.closest?.(".busy-topbar")) {
-        const ribbonFirst =
-          document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"][role="button"]') ??
-          document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"]');
-        if (ribbonFirst) {
-          e.preventDefault();
-          ribbonFirst.focus();
-          return;
-        }
-        return; // no ribbon → let TopMenuBar's Escape (exit-confirm) fire
+        return;
       }
-      // Ribbon → Main
+      // Ribbon → Menubar (so the very next Escape triggers exit-confirm).
       if (target?.closest?.(".busy-menubar")) {
-        const main = document.querySelector<HTMLElement>("main");
-        const focusable = main?.querySelector<HTMLElement>(
-          'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        const firstTrigger = document.querySelector<HTMLElement>(
+          ".busy-topbar button.busy-menu",
         );
-        if (focusable ?? main) {
+        if (firstTrigger) {
           e.preventDefault();
-          (focusable ?? main!).focus();
+          firstTrigger.focus();
           return;
         }
       }
@@ -500,6 +492,20 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
     { scope: "global", allowInField: true, description: "Jump to top menu" });
   useShortcut("Ctrl+F2", (e) => { e.preventDefault(); focusRegion("ribbon"); },
     { scope: "global", allowInField: true, description: "Jump to Quick Entry ribbon" });
+
+  // Alt+O → open the Company switcher dropdown (no more mouse hunting).
+  useShortcut("Alt+o", (e) => {
+    e.preventDefault();
+    const trigger = document.querySelector<HTMLButtonElement>(
+      '[data-company-switcher-trigger="true"]',
+    );
+    if (!trigger) return;
+    trigger.focus();
+    // Open the Radix dropdown if it isn't already.
+    if (trigger.getAttribute("aria-expanded") !== "true") {
+      trigger.click();
+    }
+  }, { scope: "global", allowInField: true, description: "Open Company switcher" });
 
   // Quick Entry ribbon Alt+<letter> shortcuts. Menu access keys for Reports
   // and Print were moved to Alt+E / Alt+N (see TopMenuBar) to free Alt+R and
