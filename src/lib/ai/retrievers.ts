@@ -159,6 +159,51 @@ async function retrieveVoucher(companyId: string, routed: RoutedQuery): Promise<
   };
 }
 
+/** Latest voucher of a given kind — full detail incl. items, entries, party. */
+async function retrieveLatestVoucher(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+  const kind = routed.latestKind ?? "sales";
+  const all = (await readVouchers(companyId)) as any[];
+  const filtered = all.filter((v) => String(v.voucher_type) === kind);
+  if (filtered.length === 0) {
+    return { scope: `no ${kind} vouchers found`, data: {} };
+  }
+  filtered.sort((a, b) => {
+    const da = String(a.voucher_date ?? ""); const db = String(b.voucher_date ?? "");
+    if (da !== db) return db.localeCompare(da);
+    return String(b.voucher_number ?? "").localeCompare(String(a.voucher_number ?? ""));
+  });
+  const match = filtered[0];
+  const [allEntries, items, ledgers] = await Promise.all([
+    readVoucherEntriesForCompany(companyId),
+    readVoucherItems(String(match.id)),
+    readLedgers(companyId),
+  ]);
+  const entries = (allEntries as any[]).filter((e) => String(e.voucher_id) === String(match.id));
+  const lById = new Map((ledgers as any[]).map((l) => [String(l.id), l]));
+  const party = match.party_ledger_id ? lById.get(String(match.party_ledger_id)) : null;
+  const enrichedEntries = entries.map((e) => ({
+    ...e, ledger_name: lById.get(String(e.ledger_id))?.name,
+  }));
+  return {
+    scope: `latest ${kind}: ${match.voucher_number} @ ${match.voucher_date}`,
+    data: {
+      voucher: [match],
+      party: party ? [{ id: party.id, name: party.name, gstin: party.gstin, state: party.state }] : [],
+      entries: enrichedEntries,
+      items: (items as any[]).map((i) => ({
+        item_name: i.item_name, hsn: i.hsn, qty: i.qty, unit: i.unit,
+        rate_paise: i.rate_paise, amount_paise: i.amount_paise,
+        gst_rate: i.gst_rate, discount_paise: i.discount_paise,
+      })),
+    },
+    facts: {
+      voucher_number: match.voucher_number, voucher_date: match.voucher_date,
+      voucher_type: match.voucher_type, total_paise: match.total_paise,
+      subtotal_paise: match.subtotal_paise, item_count: (items as any[]).length,
+    },
+  };
+}
+
 /** Compact snapshot for questions we couldn't classify. */
 async function retrieveGeneral(companyId: string): Promise<RetrievedSlice> {
   const [companies, ledgers, vouchers] = await Promise.all([
@@ -396,6 +441,7 @@ export async function retrieveForQuery(routed: RoutedQuery, companyIdIn?: string
     case "party_ledger":      return retrieveParty(companyId, routed, { withEntries: true });
     case "date_range_report": return retrieveDateRange(companyId, routed);
     case "voucher_lookup":    return retrieveVoucher(companyId, routed);
+    case "latest_voucher":    return retrieveLatestVoucher(companyId, routed);
     case "ageing":            return retrieveAgeing(companyId, routed);
     case "gst_query":         return retrieveGst(companyId, routed);
     case "trial_balance":     return retrieveTrialBalance(companyId);

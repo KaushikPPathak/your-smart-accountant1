@@ -7,6 +7,7 @@ export type QueryIntent =
   | "party_ledger"        // "show Ramesh's ledger", "statement of ABC"
   | "date_range_report"   // "sales in march", "purchases last quarter"
   | "voucher_lookup"      // "invoice SI-234", "voucher #123"
+  | "latest_voucher"      // "last sales bill", "latest purchase invoice"
   | "ageing"              // "overdue", "90 days outstanding", "ageing"
   | "gst_query"           // "gstr1", "gst liability", "itc"
   | "trial_balance"       // "trial balance", "tb as of"
@@ -26,6 +27,8 @@ export interface RoutedQuery {
   voucherNumber?: string;
   /** "in the books of X" → candidate company name to switch context to. */
   companyHint?: string;
+  /** For "last/latest <kind> bill" → normalized voucher type. */
+  latestKind?: "sales" | "purchase" | "receipt" | "payment" | "journal" | "credit_note" | "debit_note";
 }
 
 const MONTHS: Record<string, number> = {
@@ -124,9 +127,19 @@ export function routeQuery(question: string): RoutedQuery {
           ?? q.match(/\bfor\s+company\s+([A-Z][A-Za-z0-9&.\s]{2,60})/i);
   if (cm) companyHint = cm[1].trim().replace(/[.,;:!?]+$/, "");
 
+  // "last/latest <kind> bill/invoice/voucher/entry"
+  let latestKind: RoutedQuery["latestKind"];
+  const lm = lower.match(/\b(last|latest|most\s+recent|previous)\s+(sales|sale|purchase|receipt|payment|journal|credit\s*note|debit\s*note)\b/);
+  if (lm) {
+    const k = lm[2].replace(/\s+/g, "_");
+    latestKind = (k === "sale" ? "sales" : k) as RoutedQuery["latestKind"];
+  }
+
   let intent: QueryIntent = "general";
 
-  if (voucherNumber || /\b(voucher|invoice|bill|receipt|payment)\s*(no|number|#)/.test(lower)) {
+  if (latestKind) {
+    intent = "latest_voucher";
+  } else if (voucherNumber || /\b(voucher|invoice|bill|receipt|payment)\s*(no|number|#)/.test(lower)) {
     intent = "voucher_lookup";
   } else if (/\b(ageing|aging|overdue|days? outstanding|30 days|60 days|90 days)\b/.test(lower)) {
     intent = "ageing";
@@ -148,5 +161,6 @@ export function routeQuery(question: string): RoutedQuery {
     intent = "date_range_report";
   }
 
-  return { intent, entityHints, ...dates, voucherNumber, companyHint };
+
+  return { intent, entityHints, ...dates, voucherNumber, companyHint, latestKind };
 }
