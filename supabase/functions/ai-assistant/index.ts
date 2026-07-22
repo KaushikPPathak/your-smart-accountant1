@@ -35,7 +35,9 @@ function json(payload: unknown, status = 200): Response {
 }
 
 // App map + known-error dictionary. Keep this concise; the model reads it once.
-const APP_KNOWLEDGE = `
+// The huge error KB is only appended when the user is actually asking about
+// an error — otherwise we ship the lean prompt to keep latency low.
+const APP_KNOWLEDGE_CORE = `
 You are "Mate", the in-app diagnostic assistant for a desktop accounting app
 built with React + TanStack Router + local IndexedDB (all business data is
 local-only; only auth is cloud). Answer as a senior support engineer:
@@ -46,34 +48,21 @@ local-only; only auth is cloud). Answer as a senior support engineer:
 
 TOP MENU (Alt+E opens it, Alt+N focuses Mehtaji):
   Mehtaji · Masters · Transactions · Reports · Utilities · Settings · Help
-  Company switcher · Backup (B badge, DatabaseBackup icon) ·
-  Restore (R badge, DatabaseZap icon) — both live to the right of the company name.
+  Company switcher · Backup (B badge) · Restore (R badge) — right of company name.
 
 KEY SHORTCUTS:
-  Ctrl+S = Save voucher · Ctrl+/ or ? = Cheat sheet · Ctrl+Alt+C = Calculator
-  Alt+Y = Payment · Alt+R = Receipt · Alt+S = Sales · Alt+P = Purchase · Alt+J = Journal
-  Enter = next field · ArrowLeft = previous field in vouchers · F6 = Grid <-> Toolbar
+  Ctrl+S = Save · Ctrl+/ = Cheat sheet · Ctrl+Alt+C = Calculator
+  Alt+Y Payment · Alt+R Receipt · Alt+S Sales · Alt+P Purchase · Alt+J Journal
+  Enter = next field · ArrowLeft = previous field · F6 = Grid <-> Toolbar
   Escape = staged exit (field -> dialog -> menu -> app exit confirm)
 
 VOUCHER HEADER ORDER: Date -> Party -> Reference No -> Place of Supply.
-
-ACCOUNTING RULES:
-- Never compare product to Tally / Busy — use generic language.
-- Manufacturing Journal: Dr Finished Goods / Cr Raw Materials.
-- All-first-letter capitalisation is applied to ledger and item names.
-
-WHEN THE USER REPORTS AN ERROR:
-- Look at "recentRuntimeErrors" in the user JSON (last 15 captured errors).
-- Match against the KNOWN-ERROR KB below by symptom string, cause keyword, or the id tag.
-- Return: (a) the KB id you matched, (b) exact error string, (c) root cause in one line,
-  (d) precise remedy — file path, button, or shortcut.
-- If nothing matches, say so plainly and ask for the exact toast text or
-  console line rather than guessing.
-
-KNOWN-ERROR KB (${ERROR_KB.length} entries, grouped by category):
-
-${renderErrorKb()}
+Never compare the product to Tally / Busy — use generic language.
 `;
+
+// Rendered once at cold start, not per request.
+const ERROR_KB_BLOCK = `\n\nKNOWN-ERROR KB (${ERROR_KB.length} entries):\n\n${renderErrorKb()}\n\nWHEN THE USER REPORTS AN ERROR:\n- Match "recentRuntimeErrors" against the KB by symptom / cause keyword / id.\n- Return: KB id matched, exact error string, one-line root cause, precise remedy.\n- If nothing matches, ask for the exact toast text or console line.\n`;
+
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
@@ -90,17 +79,23 @@ Deno.serve(async (req: Request) => {
   // Prepend our knowledge system prompt; keep any client-supplied system as extra context.
   const clientSystem = incoming.find((m) => m.role === "system");
   const nonSystem = incoming.filter((m) => m.role !== "system");
-  const errBlock = Array.isArray(body.recentErrors) && body.recentErrors.length > 0
+  const hasErrors = Array.isArray(body.recentErrors) && body.recentErrors.length > 0;
+  const errBlock = hasErrors
     ? `\n\nrecentRuntimeErrors=${JSON.stringify(body.recentErrors).slice(0, 4000)}`
     : "";
   const routeBlock = body.route ? `\n\ncurrentRoute=${body.route}` : "";
+  // Only ship the huge error KB when the user is actually asking about an
+  // error — cuts ~15-20k tokens off the average latency-sensitive question.
+  const knowledge = APP_KNOWLEDGE_CORE + (hasErrors ? ERROR_KB_BLOCK : "");
   const mergedSystem: Msg = {
     role: "system",
-    content: APP_KNOWLEDGE + routeBlock + errBlock +
+    content: knowledge + routeBlock + errBlock +
       (clientSystem ? `\n\nExtraContext:\n${String(clientSystem.content ?? "").slice(0, 6000)}` : ""),
   };
 
-  const model = (typeof body.model === "string" && body.model) || "google/gemini-3.5-flash";
+  // Default to the fastest capable Gemini for chat latency; caller can override.
+  const model = (typeof body.model === "string" && body.model) || "google/gemini-3.1-flash-lite";
+
   const temperature = typeof body.temperature === "number" ? body.temperature : 0.2;
 
   try {
