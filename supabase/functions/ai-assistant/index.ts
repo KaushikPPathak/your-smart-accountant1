@@ -79,17 +79,23 @@ Deno.serve(async (req: Request) => {
   // Prepend our knowledge system prompt; keep any client-supplied system as extra context.
   const clientSystem = incoming.find((m) => m.role === "system");
   const nonSystem = incoming.filter((m) => m.role !== "system");
-  const errBlock = Array.isArray(body.recentErrors) && body.recentErrors.length > 0
+  const hasErrors = Array.isArray(body.recentErrors) && body.recentErrors.length > 0;
+  const errBlock = hasErrors
     ? `\n\nrecentRuntimeErrors=${JSON.stringify(body.recentErrors).slice(0, 4000)}`
     : "";
   const routeBlock = body.route ? `\n\ncurrentRoute=${body.route}` : "";
+  // Only ship the huge error KB when the user is actually asking about an
+  // error — cuts ~15-20k tokens off the average latency-sensitive question.
+  const knowledge = APP_KNOWLEDGE_CORE + (hasErrors ? ERROR_KB_BLOCK : "");
   const mergedSystem: Msg = {
     role: "system",
-    content: APP_KNOWLEDGE + routeBlock + errBlock +
+    content: knowledge + routeBlock + errBlock +
       (clientSystem ? `\n\nExtraContext:\n${String(clientSystem.content ?? "").slice(0, 6000)}` : ""),
   };
 
-  const model = (typeof body.model === "string" && body.model) || "google/gemini-3.5-flash";
+  // Default to the fastest capable Gemini for chat latency; caller can override.
+  const model = (typeof body.model === "string" && body.model) || "google/gemini-3.1-flash-lite";
+
   const temperature = typeof body.temperature === "number" ? body.temperature : 0.2;
 
   try {
