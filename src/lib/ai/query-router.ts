@@ -162,5 +162,5 @@ export function routeQuery(question: string): RoutedQuery {
   }
 
 
-  return { intent, entityHints, ...dates, voucherNumber, companyHint };
+  return { intent, entityHints, ...dates, voucherNumber, companyHint, latestKind };
 }
