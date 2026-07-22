@@ -16,6 +16,7 @@ import { buildCompressedContext, unredactAnswer } from "./ai/sqliteContext";
 import { retrieveOriginal } from "./ai/headroom";
 import { isWebGpuAvailable, webLlmChat } from "./ai/webllm";
 import { recentErrors, questionMentionsError } from "./ai/error-ring";
+import { lookupAnswer, storeAnswer } from "./ai/answer-cache";
 
 export interface AssistantChatResult {
   ok: boolean;
@@ -107,6 +108,14 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
 
   try {
     const ctx = await buildCompressedContext(question, args?.data?.companyId ?? null);
+    const cacheCompanyId = args?.data?.companyId
+      ?? (typeof window !== "undefined" ? window.localStorage?.getItem("ym_active_company_id") ?? "" : "");
+
+    // Answer cache — same intent+scope+question inside TTL returns instantly.
+    if (cacheCompanyId) {
+      const cached = lookupAnswer(cacheCompanyId, ctx.intent, ctx.scope, question);
+      if (cached) return { ok: true, text: cached };
+    }
 
     const baseMessages: ChatMsg[] = [
       ctx.systemMessage as ChatMsg,
@@ -151,7 +160,9 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       }
     }
 
-    return { ok: true, text: unredactAnswer(answer, ctx) };
+    const finalText = unredactAnswer(answer, ctx);
+    if (cacheCompanyId) storeAnswer(cacheCompanyId, ctx.intent, ctx.scope, question, finalText);
+    return { ok: true, text: finalText };
   } catch (err) {
     if (looksOfflineOrBlocked(err)) {
       return { ok: true, text: offlineAssistantAnswer(question, err) };
