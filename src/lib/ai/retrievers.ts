@@ -54,7 +54,14 @@ async function resolveCompanyId(companyId?: string | null): Promise<string | nul
 /** Party balance / party ledger — fetch just that party's ledger + its entries. */
 async function retrieveParty(companyId: string, routed: RoutedQuery, opts: { withEntries: boolean }): Promise<RetrievedSlice> {
   const ledgers = (await readLedgers(companyId)) as any[];
-  const target = fuzzyPickLedger(ledgers, routed.entityHints);
+  let target = fuzzyPickLedger(ledgers, routed.entityHints);
+  // Fallback: semantic index (typos, transliteration, word order).
+  if (!target && routed.entityHints.length > 0) {
+    const { semanticSearch } = await import("./semantic-index");
+    const hits = await semanticSearch(companyId, routed.entityHints.join(" "), { k: 3, kinds: ["party", "ledger"] });
+    const top = hits[0];
+    if (top) target = ledgers.find((l) => String(l.id) === top.id) ?? null;
+  }
   if (!target) {
     return {
       scope: `no party matched hints=${JSON.stringify(routed.entityHints)}`,
