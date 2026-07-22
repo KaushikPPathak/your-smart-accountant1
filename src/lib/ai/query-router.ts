@@ -128,7 +128,7 @@ export function routeQuery(question: string): RoutedQuery {
     intent = "trial_balance";
   } else if (/\b(p&l|p and l|profit|loss|trading|gross profit|net profit)\b/.test(lower)) {
     intent = "profit_loss";
-  } else if (/\b(cash|bank) (book|balance|position)|\bbrs\b/.test(lower)) {
+  } else if (/\b(cash|bank) (book|balance|position|in hand|on hand|at bank)\b|\bcash\s*[- ]?in[- ]?hand\b|\bcash\s*[- ]?on[- ]?hand\b|\bbrs\b/.test(lower)) {
     intent = "cash_bank";
   } else if (/\b(stock|inventory|closing stock|opening stock|item)\b/.test(lower)) {
     intent = "stock_query";
