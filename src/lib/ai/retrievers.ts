@@ -9,6 +9,7 @@ import {
   readVoucherEntriesForCompany,
   readVoucherItems,
 } from "@/lib/offline/cache-read";
+import { forEachEntry, forEachVoucher } from "@/lib/offline/cache-read-paged";
 import { normalizeName, similarity } from "@/lib/tally-busy-import";
 import type { RoutedQuery } from "./query-router";
 
@@ -175,16 +176,21 @@ function classifyLedger(l: any): LedgerKind {
   return "other";
 }
 
-/** Trial balance — all ledgers with net balance (opening + movement). */
+/** Trial balance — all ledgers with net balance (streamed, O(1) memory). */
 async function retrieveTrialBalance(companyId: string): Promise<RetrievedSlice> {
-  const [ledgers, entries] = await Promise.all([
-    readLedgers(companyId),
-    readVoucherEntriesForCompany(companyId),
-  ]);
-  const rows = (ledgers as any[]).map((l) => {
-    const bal = sumEntriesFor(entries as any[], l.id);
+  const ledgers = (await readLedgers(companyId)) as any[];
+  const acc = new Map<string, { debit_paise: number; credit_paise: number }>();
+  await forEachEntry(companyId, (e) => {
+    const key = String(e.ledger_id);
+    const cur = acc.get(key) ?? { debit_paise: 0, credit_paise: 0 };
+    cur.debit_paise += Number(e.debit_paise ?? 0);
+    cur.credit_paise += Number(e.credit_paise ?? 0);
+    acc.set(key, cur);
+  });
+  const rows = ledgers.map((l) => {
+    const bal = acc.get(String(l.id)) ?? { debit_paise: 0, credit_paise: 0 };
     const opening = Number(l.opening_balance_paise ?? 0) * (l.opening_balance_is_debit ? 1 : -1);
-    const net = opening + bal.balance_paise;
+    const net = opening + bal.debit_paise - bal.credit_paise;
     return {
       ledger_id: l.id, name: l.name, group: l.group_name,
       opening_paise: opening, debit_paise: bal.debit_paise,
@@ -286,30 +292,41 @@ async function retrieveGst(companyId: string, routed: RoutedQuery): Promise<Retr
   };
 }
 
-/** Ageing — outstanding balance per party bucketed by voucher age. */
+/** Ageing — outstanding balance per party bucketed by voucher age (streamed). */
 async function retrieveAgeing(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
-  const [ledgers, entries, vouchers] = await Promise.all([
-    readLedgers(companyId),
-    readVoucherEntriesForCompany(companyId),
-    readVouchers(companyId),
-  ]);
-  const parties = (ledgers as any[]).filter((l) => /debtor|creditor|sundry/i.test(String(l.group_name ?? "")));
+  const ledgers = (await readLedgers(companyId)) as any[];
+  const parties = ledgers.filter((l) => /debtor|creditor|sundry/i.test(String(l.group_name ?? "")));
+  const partyIds = new Set(parties.map((p) => String(p.id)));
   const asOf = routed.to ? new Date(routed.to) : new Date();
-  const vById = new Map((vouchers as any[]).map((v) => [String(v.id), v]));
+
+  // Stream vouchers → date map, and entries → per-party accumulators in a
+  // single pass each. O(parties + vouchers + entries) time, O(parties) memory.
+  const vDate = new Map<string, string>();
+  await forEachVoucher(companyId, {}, (v) => {
+    if (v.voucher_date) vDate.set(String(v.id), String(v.voucher_date));
+  });
+
+  const acc = new Map<string, { net: number; buckets: Record<string, number> }>();
+  for (const p of parties) {
+    const opening = Number(p.opening_balance_paise ?? 0) * (p.opening_balance_is_debit ? 1 : -1);
+    acc.set(String(p.id), { net: opening, buckets: { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 } });
+  }
+  await forEachEntry(companyId, (e) => {
+    const key = String(e.ledger_id);
+    if (!partyIds.has(key)) return;
+    const cur = acc.get(key)!;
+    const amt = Number(e.debit_paise ?? 0) - Number(e.credit_paise ?? 0);
+    cur.net += amt;
+    const date = vDate.get(String(e.voucher_id));
+    if (!date) return;
+    const days = Math.floor((asOf.getTime() - new Date(date).getTime()) / 86400000);
+    const bucket = days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
+    cur.buckets[bucket] += amt;
+  });
+
   const rows = parties.map((p) => {
-    const b: Record<string, number> = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
-    let net = Number(p.opening_balance_paise ?? 0) * (p.opening_balance_is_debit ? 1 : -1);
-    for (const e of entries as any[]) {
-      if (String(e.ledger_id) !== String(p.id)) continue;
-      const amt = Number(e.debit_paise ?? 0) - Number(e.credit_paise ?? 0);
-      net += amt;
-      const v = vById.get(String(e.voucher_id));
-      if (!v?.voucher_date) continue;
-      const days = Math.floor((asOf.getTime() - new Date(v.voucher_date).getTime()) / 86400000);
-      const bucket = days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
-      b[bucket] += amt;
-    }
-    return { party_id: p.id, name: p.name, group: p.group_name, net_paise: net, buckets: b };
+    const a = acc.get(String(p.id))!;
+    return { party_id: p.id, name: p.name, group: p.group_name, net_paise: a.net, buckets: a.buckets };
   }).filter((r) => r.net_paise !== 0);
   return {
     scope: `ageing as of ${asOf.toISOString().slice(0, 10)} (${rows.length} parties)`,
