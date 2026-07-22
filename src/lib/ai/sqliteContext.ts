@@ -8,6 +8,7 @@
 import { cacheRowsForCcr, compressMessages } from "./headroom";
 import { routeQuery, type QueryIntent } from "./query-router";
 import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
+import { optimiseSlice } from "./slice-optimizer";
 import { createRedactionMap, redactDeep, unredact, type RedactionMap } from "./redactor";
 
 export interface AccountingContext {
