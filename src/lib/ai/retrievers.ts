@@ -441,6 +441,7 @@ export async function retrieveForQuery(routed: RoutedQuery, companyIdIn?: string
     case "party_ledger":      return retrieveParty(companyId, routed, { withEntries: true });
     case "date_range_report": return retrieveDateRange(companyId, routed);
     case "voucher_lookup":    return retrieveVoucher(companyId, routed);
+    case "latest_voucher":    return retrieveLatestVoucher(companyId, routed);
     case "ageing":            return retrieveAgeing(companyId, routed);
     case "gst_query":         return retrieveGst(companyId, routed);
     case "trial_balance":     return retrieveTrialBalance(companyId);
