@@ -221,20 +221,20 @@ export class AiTestHarness {
 
   private async testSmartInvalidation(): Promise<Omit<TestResult, "name" | "durationMs">> {
     invalidateAnswerCache(TEST_COMPANY_ID);
-    storeAnswer(TEST_COMPANY_ID, "trial_balance", "period:2026-Q4", "tb q1", "A");
-    storeAnswer(TEST_COMPANY_ID, "stock",         "item:widget",     "stock q", "B");
-    storeAnswer(TEST_COMPANY_ID, "gst",           "period:2026-03",  "gst q",  "C");
+    storeAnswer(TEST_COMPANY_ID, "trial_balance", "period:2026-Q4", "tb q1", "TB-ANSWER");
+    storeAnswer(TEST_COMPANY_ID, "stock",         "item:widget",     "stock q", "STOCK-ANSWER");
+    storeAnswer(TEST_COMPANY_ID, "gst",           "period:2026-03",  "gst q",  "GST-ANSWER");
     const before = answerCacheStats().entries;
 
     // A ledger change must drop trial_balance and gst entries but preserve stock.
     emitDataChange(TEST_COMPANY_ID, "ledger");
-    const stockStillThere = lookupAnswer(TEST_COMPANY_ID, "stock", "item:widget", "stock q") === "B";
+    const stockStillThere = lookupAnswer(TEST_COMPANY_ID, "stock", "item:widget", "stock q") === "STOCK-ANSWER";
     const tbGone = lookupAnswer(TEST_COMPANY_ID, "trial_balance", "period:2026-Q4", "tb q1") === null;
     const after = answerCacheStats().entries;
     const surgical = tbGone && stockStillThere && after < before;
 
     // Fall-back check: invalidateByTags returns count of dropped rows.
-    storeAnswer(TEST_COMPANY_ID, "stock", "item:widget", "stock q2", "D");
+    storeAnswer(TEST_COMPANY_ID, "stock", "item:widget", "stock q2", "STOCK-ANSWER-2");
     const dropped = invalidateByTags(TEST_COMPANY_ID, ["intent:stock"]);
     const passed = surgical && dropped >= 1;
     return {
