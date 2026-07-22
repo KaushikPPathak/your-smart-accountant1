@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { DatabaseBackup, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import backupMedallion from "@/assets/backup-medallion.png";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCompany } from "@/lib/company-context";
@@ -51,20 +52,18 @@ export function BackupNowButton() {
           onClick={runBackup}
           disabled={busy}
           aria-label={`Back up ${companyName} now`}
-          className="relative h-9 w-9 rounded-md text-foreground hover:bg-foreground/10 hover:text-foreground"
+          className="relative h-9 w-9 rounded-md hover:bg-foreground/10"
         >
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <DatabaseBackup className="h-[18px] w-[18px]" />
-          )}
-          {!busy && (
-            <span
+            <img
+              src={backupMedallion}
+              alt=""
               aria-hidden
-              className="backup-letter-badge absolute -bottom-0.5 -right-0.5"
-            >
-              B
-            </span>
+              className="h-7 w-7 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
+              draggable={false}
+            />
           )}
         </Button>
       </TooltipTrigger>

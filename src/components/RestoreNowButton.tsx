@@ -20,6 +20,7 @@ import {
   DatabaseZap, Loader2, ShieldCheck, ShieldAlert, ShieldQuestion,
   FolderOpen, CalendarClock, FileText, CheckCircle2, AlertTriangle, XCircle,
 } from "lucide-react";
+import restoreMedallion from "@/assets/restore-medallion.png";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -149,15 +150,15 @@ export function RestoreNowButton() {
             size="icon"
             onClick={() => setOpen(true)}
             aria-label={`Restore ${companyName} from backup`}
-            className="relative h-9 w-9 rounded-md text-foreground hover:bg-foreground/10 hover:text-foreground"
+            className="relative h-9 w-9 rounded-md hover:bg-foreground/10"
           >
-            <DatabaseZap className="h-[18px] w-[18px]" />
-            <span
+            <img
+              src={restoreMedallion}
+              alt=""
               aria-hidden
-              className="restore-letter-badge absolute -bottom-0.5 -right-0.5"
-            >
-              R
-            </span>
+              className="h-7 w-7 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
+              draggable={false}
+            />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">Restore {companyName}</TooltipContent>
