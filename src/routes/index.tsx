@@ -166,8 +166,10 @@ function StartScreen() {
             .sort((a, b) => a.name.localeCompare(b.name));
         }
 
-        const cachedCompanies = formatCachedCompanies(Array.from(merged.values()));
+        const { filterTombstoned } = await import("@/lib/recovery/tombstones");
+        const cachedCompanies = await filterTombstoned(formatCachedCompanies(Array.from(merged.values())));
         const displayCached = localOnly ? await dedupeLocal(cachedCompanies) : cachedCompanies;
+
 
         // Local-first: brand-new device with zero companies and no local
         // profile yet — send the user to the welcome/onboarding screen.
