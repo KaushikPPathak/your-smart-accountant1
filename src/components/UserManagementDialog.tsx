@@ -23,7 +23,11 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { getActiveStaff } from "@/lib/staff-session";
+import { getActiveStaff, getLastUsername } from "@/lib/staff-session";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { isLocalProfileLinked } from "@/lib/local-device-profile";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Info } from "lucide-react";
 
 interface AccountRow {
   id: string;
@@ -167,7 +171,29 @@ export function UserManagementDialog({ open, onOpenChange }: Props) {
           </DialogTitle>
         </DialogHeader>
 
-        {!verified ? (
+        {(!staff || getLastUsername() === "local-device" || (isLocalOnlyMode() && !isLocalProfileLinked())) ? (
+          <div className="space-y-3 pt-2">
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Login accounts aren't set up on this device</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>
+                  You're signed in as <strong>This device</strong> — a hidden local profile that
+                  lets you use the app without an account. There are no other login accounts to
+                  manage yet.
+                </p>
+                <p>
+                  To create additional users (Admin / Staff) with their own passwords, first
+                  connect a cloud account from <strong>Settings → Connect account</strong>. Your
+                  local company data stays on this device either way.
+                </p>
+              </AlertDescription>
+            </Alert>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => closeDialog(false)}>Close</Button>
+            </DialogFooter>
+          </div>
+        ) : !verified ? (
           <form onSubmit={handleVerify} className="space-y-3 pt-2">
             <p className="text-sm text-muted-foreground">
               Confirm your admin password to manage other login accounts.
