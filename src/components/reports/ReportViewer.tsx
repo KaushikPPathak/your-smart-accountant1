@@ -130,7 +130,7 @@ export function ReportViewer({
     if (!rootRef.current) return;
     const headerHtml = `
       <div class="report-print-header">
-        <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:.5pt">${escape(company)}</div>
+        <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:.5pt;color:#002060">${escape(company)}</div>
         <div style="font-size:11pt;font-weight:600">${escape(localizedHeading || localizedTitle)}</div>
         ${subtitleText ? `<div style="font-size:9pt">${escape(subtitleText)}</div>` : ""}
         ${periodText ? `<div style="font-size:9pt">${escape(periodText)}</div>` : ""}
