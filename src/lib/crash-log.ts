@@ -170,4 +170,43 @@ export function installCrashHandlers(): void {
     });
     writeAll(entries);
   });
+
+  // Diagnose "app closed on its own after idle" reports. Record every
+  // unload/hide with timing + visibility state so the crash log shows WHY
+  // the window went away (user closed, tab hidden, WebView2 discarded,
+  // OS killed the renderer, etc.). Extremely cheap — one localStorage write.
+  const bootAt = Date.now();
+  let lastActivityAt = Date.now();
+  const bumpActivity = () => { lastActivityAt = Date.now(); };
+  ["mousemove", "keydown", "pointerdown", "wheel", "touchstart"].forEach((evt) => {
+    window.addEventListener(evt, bumpActivity, { passive: true, capture: true });
+  });
+
+  const logLifecycle = (kind: string, extra?: Record<string, unknown>) => {
+    const entries = readAll();
+    entries.push({
+      id: makeId(),
+      ts: Date.now(),
+      kind: "failure",
+      scope: "lifecycle",
+      message: kind,
+      context: {
+        uptime_ms: Date.now() - bootAt,
+        idle_ms: Date.now() - lastActivityAt,
+        visibility: typeof document !== "undefined" ? document.visibilityState : "unknown",
+        online: typeof navigator !== "undefined" ? navigator.onLine : "unknown",
+        ...(extra || {}),
+      },
+      route: currentRoute(),
+    });
+    writeAll(entries);
+  };
+
+  window.addEventListener("pagehide", (ev) => {
+    logLifecycle("pagehide", { persisted: (ev as PageTransitionEvent).persisted });
+  });
+  window.addEventListener("beforeunload", () => { logLifecycle("beforeunload"); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") logLifecycle("visibility_hidden");
+  });
 }
