@@ -684,18 +684,17 @@ function LedgerStatement() {
     const foot: (string | number)[][] = [
       ["", "", "Total", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
       ["", "", (closing >= 0 ? "By Balance c/d" : "To Balance c/d"), "Closing", "", "", fmtBal(closing)],
-      [{ content: " ", colSpan: 7, styles: { lineWidth: 0, minCellHeight: 8 } } as never],
-      [{ content: confirmationLine, colSpan: 7, styles: { halign: "left", fontStyle: "normal", fillColor: [255, 255, 255], textColor: 0, lineWidth: 0 } } as never],
-      [{ content: " ", colSpan: 7, styles: { lineWidth: 0, minCellHeight: 24 } } as never],
-      [
-        { content: `For ${pdfHeader.companyName}\n\n\n_____________________\nAuthorised Signatory`, colSpan: 4, styles: { halign: "left", fontStyle: "normal", fillColor: [255, 255, 255], textColor: 0, lineWidth: 0 } } as never,
-        { content: `For ${ledger?.name ?? ""}\n\n\n_____________________\nAuthorised Signatory`, colSpan: 3, styles: { halign: "right", fontStyle: "normal", fillColor: [255, 255, 255], textColor: 0, lineWidth: 0 } } as never,
-      ],
     ];
+    const companyName = pdfHeader.companyName;
+    const partyName = ledger?.name ?? "";
+    const balText = `${formatINR(Math.abs(closing))} ${closing >= 0 ? "Dr" : "Cr"}`;
+    const confirmationLine =
+      `We confirm that the balance of ${balText} standing to the account of ${partyName} ` +
+      `in our books as on ${fmtIndianDate(to)} is correct as per the above statement.`;
     downloadPdfTable({
-      title: `LEDGER CONFIRMATION — ${ledger?.name ?? ""}`,
+      title: `LEDGER CONFIRMATION — ${partyName}`,
       subtitle: `As on ${fmtIndianDate(to)}   ·   Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
-      companyName: pdfHeader.companyName,
+      companyName,
       companySubLine: pdfHeader.companySubLine,
       head: [head],
       body: bodyRows,
@@ -703,6 +702,36 @@ function LedgerStatement() {
       fileName: `${fileBase}-confirmation.pdf`,
       orientation: "l",
       rightAlignCols: [4, 5, 6],
+      afterTable: ({ doc, finalY, pageWidth, pageHeight, margin, font }) => {
+        const usableW = pageWidth - margin * 2;
+        let y = finalY + 18;
+        // If not enough room for paragraph + signatures, add a page
+        if (y + 90 > pageHeight - 30) {
+          doc.addPage();
+          y = margin + 10;
+        }
+        doc.setFont(font, "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(0);
+        const lines = doc.splitTextToSize(confirmationLine, usableW);
+        doc.text(lines, margin, y);
+        y += lines.length * 12 + 30;
+        // Signature blocks
+        doc.setFont(font, "bold");
+        doc.setFontSize(10);
+        doc.text(`For ${companyName}`, margin, y);
+        doc.text(`For ${partyName}`, pageWidth - margin, y, { align: "right" });
+        y += 34;
+        doc.setDrawColor(0);
+        doc.setLineWidth(0.4);
+        doc.line(margin, y, margin + 160, y);
+        doc.line(pageWidth - margin - 160, y, pageWidth - margin, y);
+        y += 12;
+        doc.setFont(font, "normal");
+        doc.setFontSize(9);
+        doc.text("Authorised Signatory", margin, y);
+        doc.text("Authorised Signatory", pageWidth - margin, y, { align: "right" });
+      },
     });
   }
 
