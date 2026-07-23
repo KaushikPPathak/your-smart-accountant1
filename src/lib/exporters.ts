@@ -60,6 +60,8 @@ export interface PdfTableOptions {
   fileName: string;
   orientation?: "p" | "l";
   rightAlignCols?: number[]; // column indexes that should be right aligned (numeric)
+  /** Explicit per-column widths (pt). Use to force symmetry (e.g. Dr/Cr T-format). */
+  columnWidths?: Record<number, number>;
   /** Folder under the company export root. Defaults to "Reports". */
   subFolder?: string;
   /** Draw a thick vertical divider on the LEFT edge of this column (e.g. T-shape ledger center). */
