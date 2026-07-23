@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { RefreshCw, HardDriveDownload, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { RefreshCw, HardDriveDownload, HardDrive, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { checkCanRebuild, rebuildCompanyCache } from "@/lib/offline/cache-rebuild";
+import { rebuildLocalDerived } from "@/lib/offline/local-rebuild";
 import { getStoredSchemaVersion, SCHEMA_VERSION } from "@/lib/offline/schema-version";
 import { runIntegrityScan, totalIssues, type IntegrityIssue, type ScanProgress } from "@/lib/offline/integrity-scan";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
@@ -19,6 +20,7 @@ export function FieldIntegrityPanel({ companyId }: { companyId: string | null | 
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const [busy, setBusy] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
+  const [localRebuilding, setLocalRebuilding] = useState(false);
   const [storedVersion, setStoredVersion] = useState<number>(SCHEMA_VERSION);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -68,6 +70,19 @@ export function FieldIntegrityPanel({ companyId }: { companyId: string | null | 
     } finally { setRebuilding(false); }
   };
 
+  const onLocalRebuild = async () => {
+    if (!companyId) return;
+    if (!confirm("Recompute indexes and clear cached AI answers for this company from local data on this device? Your ledgers, vouchers and items are not touched.")) return;
+    setLocalRebuilding(true);
+    try {
+      const res = await rebuildLocalDerived(companyId);
+      toast.success(`Rebuilt from device: ${res.indexDocs} index doc(s), ${res.ledgers} ledger(s), ${res.vouchers} voucher(s).`);
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Local rebuild failed");
+    } finally { setLocalRebuilding(false); }
+  };
+
   const total = issues ? totalIssues(issues) : 0;
   const schemaStale = storedVersion < SCHEMA_VERSION;
   const pct = progress && progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
@@ -93,6 +108,16 @@ export function FieldIntegrityPanel({ companyId }: { companyId: string | null | 
             <Button variant="outline" size="sm" onClick={refresh} disabled={busy || !companyId}>
               <RefreshCw className={`h-4 w-4 mr-1 ${busy ? "animate-spin" : ""}`} />
               {busy ? "Scanning…" : "Run audit"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onLocalRebuild}
+              disabled={localRebuilding || !companyId}
+              title="Recompute AI indexes and clear cached answers using data already on this device."
+            >
+              <HardDrive className={`h-4 w-4 mr-1 ${localRebuilding ? "animate-pulse" : ""}`} />
+              {localRebuilding ? "Rebuilding…" : "Rebuild from device"}
             </Button>
             {!isLocalOnlyMode() && (
               <Button variant="outline" size="sm" onClick={onRebuild} disabled={rebuilding || !companyId}>
