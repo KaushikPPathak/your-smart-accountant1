@@ -784,31 +784,6 @@ function LedgerStatement() {
       rightAlignCols: [3, 5, 6],
     });
   }
-    } else {
-      downloadPdfTable({
-        title: `Ledger A/c — ${ledger?.name ?? ""}`,
-        subtitle: pdfHeader.dateRangeSubtitle(from, to),
-        companyName: pdfHeader.companyName,
-        companySubLine: pdfHeader.companySubLine,
-        head: [
-          [
-            { content: "Dr.", colSpan: 6, styles: { halign: "center", fontStyle: "bold" } } as never,
-            { content: "Cr.", colSpan: 6, styles: { halign: "center", fontStyle: "bold" } } as never,
-          ],
-          [...horizontalHead, ...horizontalHead],
-        ],
-        body: horizontalBody(),
-        foot: [
-          ["Total", "", "", "", "", r(grandTotal).toFixed(2), "Total", "", "", "", "", r(grandTotal).toFixed(2)],
-          ["", "", "", "", "", "", "Closing Balance", "", "", "", "", fmtBal(closing)],
-        ],
-        fileName: `${fileBase}-horizontal.pdf`,
-        orientation: "l",
-        rightAlignCols: [5, 11],
-        dividerBeforeCol: 6,
-      });
-    }
-  };
 
   // ---------- All-Ledgers (batch) builder ----------
   type AllRow = { date: string; particulars: string; vchType: string; vchNo: string; narration: string; debit: number; credit: number; balance: number };
