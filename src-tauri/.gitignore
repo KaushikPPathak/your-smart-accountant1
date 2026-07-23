@@ -4,3 +4,8 @@
 .env
 .env.local
 .env.*.local
+# Code signing — never commit
+*.pfx
+*.p12
+pfx-base64.txt
+smartaccountant.pfx
