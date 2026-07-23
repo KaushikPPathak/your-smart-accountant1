@@ -86,7 +86,8 @@ export function groupedTRows(
     }
     rows.push({
       label: <span className="pl-3 italic text-muted-foreground">Subtotal — {groupLabelText}</span>,
-      amount: formatINR(b.subtotalPaise),
+      amount: "",
+      outerAmount: formatINR(b.subtotalPaise),
       emphasis: "total",
     });
     total += b.subtotalPaise;
