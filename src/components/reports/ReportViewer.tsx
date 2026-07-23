@@ -337,6 +337,10 @@ function openPrintPreview(
     .report-print-header div:first-child {
       font-size: 13pt; font-weight: 700; text-transform: uppercase;
       letter-spacing: .5pt; }
+    .preview-content .report-print-company-name,
+    .preview-content .report-print-header div:first-child {
+      color: #002060 !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .report-print-title { font-size: 11pt; font-weight: 600; }
     .report-print-company-capture, .report-print-fy-capture { display: none; }
     .report-header-rule { height: 3px; border-top: 1px solid #000;
