@@ -206,8 +206,10 @@ function StartScreen() {
         if (cloud.error) throw cloud.error;
         if (cancelled) return;
 
-        const fetchedCompanies = (cloud.data ?? []) as PickerCompany[];
+        const fetchedCompaniesRaw = (cloud.data ?? []) as PickerCompany[];
+        const fetchedCompanies = await filterTombstoned(fetchedCompaniesRaw);
         setCompanies(fetchedCompanies);
+
         if (fetchedCompanies.length > 0) {
           void db.companies.bulkPut(
             fetchedCompanies.map(c => ({
