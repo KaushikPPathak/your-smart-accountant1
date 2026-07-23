@@ -198,6 +198,9 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
       sundry_type: s.sundry_type,
       ledger_id: s.ledger_id,
       amount_paise: s.amount_paise,
+      mode: s.mode ?? "amount",
+      rate_bps: s.rate_bps ?? 0,
+      apply_stage: s.apply_stage ?? "post_gst",
       line_no: i + 1,
       narration: s.narration ?? null,
       updated_at: stamp,
@@ -495,6 +498,9 @@ export interface ItemVoucherSnap {
     sundry_type: string;
     ledger_id: string;
     amount_paise: number;
+    mode?: "amount" | "percent";
+    rate_bps?: number;
+    apply_stage?: "pre_gst" | "post_gst";
     narration?: string | null;
   }>;
 }

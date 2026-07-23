@@ -62,7 +62,7 @@ import { LedgerBalanceChip } from "./LedgerBalanceChip";
 import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-store";
 import { AutoTaxChip } from "./AutoTaxChip";
 import { SundryStrip } from "./SundryStrip";
-import { netSundryPaise } from "@/lib/sundries";
+import { netSundryPaise, resolveSundryPaise, splitSundriesByStage, type Sundry } from "@/lib/sundries";
 
 type VoucherType =
   | "sales"
@@ -486,22 +486,49 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     () => Math.round((miscPreGstPaise * weightedGstRate) / 100),
     [miscPreGstPaise, weightedGstRate],
   );
-  const sundriesNetPaise = useMemo(() => netSundryPaise(sundries), [sundries]);
+  // Resolve each sundry against the correct base, then split into pre-GST
+  // (folded into taxable value) and post-GST (added after tax) buckets. For
+  // % sundries the base is the raw subtotal (pre_gst) or the total before
+  // any post_gst sundry (post_gst) so % applies to the taxed value.
+  const resolvedSundries = useMemo<Sundry[]>(() => {
+    const preBase = rawTotals.subtotal_paise + miscPreGstPaise;
+    const postBase = rawTotals.total_paise + miscPreGstPaise + miscPostGstPaise;
+    return sundries.map((s) => {
+      const stage = s.apply_stage ?? "post_gst";
+      const base = stage === "pre_gst" ? preBase : postBase;
+      const amt = resolveSundryPaise(s, base);
+      return { ...s, amount_paise: amt };
+    });
+  }, [sundries, rawTotals.subtotal_paise, rawTotals.total_paise, miscPreGstPaise, miscPostGstPaise]);
+  const { preGst: preGstSundries, postGst: postGstSundries } = useMemo(
+    () => splitSundriesByStage(resolvedSundries),
+    [resolvedSundries],
+  );
+  const preGstSundryNetPaise = useMemo(() => netSundryPaise(preGstSundries), [preGstSundries]);
+  const postGstSundryNetPaise = useMemo(() => netSundryPaise(postGstSundries), [postGstSundries]);
+  const sundriesNetPaise = preGstSundryNetPaise + postGstSundryNetPaise;
+  // Pre-GST sundries add to taxable base and pull tax at the weighted-avg rate.
+  const preGstSundryTaxPaise = useMemo(
+    () => Math.round((preGstSundryNetPaise * weightedGstRate) / 100),
+    [preGstSundryNetPaise, weightedGstRate],
+  );
   const adjustedTotals = useMemo(() => {
-    const cgstAdd = interstate ? 0 : Math.floor(miscPreTaxPaise / 2);
-    const sgstAdd = interstate ? 0 : Math.floor(miscPreTaxPaise / 2);
-    const igstAdd = interstate ? miscPreTaxPaise : 0;
-    const taxLeftover = interstate ? 0 : miscPreTaxPaise - cgstAdd - sgstAdd;
+    const taxableAdd = miscPreGstPaise + preGstSundryNetPaise;
+    const taxAddTotal = miscPreTaxPaise + preGstSundryTaxPaise;
+    const cgstAdd = interstate ? 0 : Math.floor(taxAddTotal / 2);
+    const sgstAdd = interstate ? 0 : Math.floor(taxAddTotal / 2);
+    const igstAdd = interstate ? taxAddTotal : 0;
+    const taxLeftover = interstate ? 0 : taxAddTotal - cgstAdd - sgstAdd;
     return {
-      subtotal_paise: rawTotals.subtotal_paise + miscPreGstPaise,
+      subtotal_paise: rawTotals.subtotal_paise + taxableAdd,
       cgst_paise: rawTotals.cgst_paise + cgstAdd,
       sgst_paise: rawTotals.sgst_paise + sgstAdd,
       igst_paise: rawTotals.igst_paise + igstAdd,
       rounding_paise: rawTotals.rounding_paise + taxLeftover,
       total_paise:
-        rawTotals.total_paise + miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise + sundriesNetPaise,
+        rawTotals.total_paise + taxableAdd + taxAddTotal + miscPostGstPaise + postGstSundryNetPaise,
     };
-  }, [rawTotals, miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, sundriesNetPaise, interstate]);
+  }, [rawTotals, miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, preGstSundryNetPaise, preGstSundryTaxPaise, postGstSundryNetPaise, interstate]);
   const roundOffPaise = useMemo(() => {
     if (!roundOff) return 0;
     const rounded = Math.round(adjustedTotals.total_paise / 100) * 100;
@@ -674,11 +701,14 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       lines: lines
         .map((l, i) => ({ l, c: computed[i] }))
         .filter((x) => x.l.item_id && x.c?.total_paise > 0),
-      sundries: sundries.map((s) => ({
+      sundries: resolvedSundries.map((s) => ({
         id: s.id,
         sundry_type: s.sundry_type,
         ledger_id: s.ledger_id,
         amount_paise: s.amount_paise,
+        mode: s.mode ?? "amount",
+        rate_bps: s.rate_bps ?? 0,
+        apply_stage: s.apply_stage ?? "post_gst",
         narration: s.narration ?? null,
       })),
     };

@@ -18,8 +18,12 @@ import {
 import { formatINR, rupeesToPaise } from "@/lib/money";
 import {
   SUNDRY_TYPE_LABELS,
+  SUNDRY_STAGE_LABELS,
   defaultSignForType,
+  defaultStageForType,
   type Sundry,
+  type SundryMode,
+  type SundryStage,
   type SundryType,
 } from "@/lib/sundries";
 
@@ -40,12 +44,10 @@ interface Props {
 /**
  * SundryStrip — the "+ Add charge" surface for the totals block.
  *
- * Progressive disclosure: renders as a single small button when the list is
- * empty. Rows only appear once the user has added something. No permanent
- * chip strip cluttering the default form.
- *
- * Ledger options should be scoped to expense/income heads (indirect / direct)
- * — the caller filters. Sign convention lives in `src/lib/sundries.ts`.
+ * Each charge can be entered as a flat ₹ amount OR as a % of the base, and
+ * applied BEFORE GST (folded into taxable value) or AFTER GST (added to
+ * grand total, no tax effect). The signed convention lives in
+ * `src/lib/sundries.ts`.
  */
 export function SundryStrip({ sundries, onChange, ledgerOptions, onCreateLedger, disabled }: Props) {
   return (
@@ -54,10 +56,16 @@ export function SundryStrip({ sundries, onChange, ledgerOptions, onCreateLedger,
         <div className="space-y-1">
           {sundries.map((s) => {
             const lg = ledgerOptions.find((l) => l.id === s.ledger_id);
+            const stage = s.apply_stage ?? "post_gst";
+            const isPercent = (s.mode ?? "amount") === "percent";
             return (
               <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
                 <div className="flex-1 min-w-0 truncate text-muted-foreground">
                   <span className="font-medium text-foreground">{SUNDRY_TYPE_LABELS[s.sundry_type]}</span>
+                  {isPercent && (
+                    <span> · {((s.rate_bps ?? 0) / 100).toFixed(2)}%</span>
+                  )}
+                  <span> · <span className={stage === "pre_gst" ? "text-primary" : ""}>{SUNDRY_STAGE_LABELS[stage]}</span></span>
                   {lg ? <span> · {lg.name}</span> : <span className="text-destructive"> · ledger missing</span>}
                 </div>
                 <span className={`font-mono ${s.amount_paise < 0 ? "text-destructive" : ""}`}>
@@ -102,29 +110,43 @@ function AddChargePopover({
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<SundryType>("freight");
   const [ledgerId, setLedgerId] = useState<string>("");
-  const [amount, setAmount] = useState<string>("");
+  const [value, setValue] = useState<string>("");
   const [sign, setSign] = useState<1 | -1>(1);
+  const [mode, setMode] = useState<SundryMode>("amount");
+  const [stage, setStage] = useState<SundryStage>("post_gst");
 
   const reset = () => {
     setType("freight");
     setLedgerId("");
-    setAmount("");
+    setValue("");
     setSign(1);
+    setMode("amount");
+    setStage("post_gst");
   };
 
   const onTypeChange = (v: SundryType) => {
     setType(v);
     setSign(defaultSignForType(v));
+    setStage(defaultStageForType(v));
   };
 
   const confirm = () => {
-    const paise = rupeesToPaise(parseFloat(amount) || 0) * sign;
-    if (!ledgerId || paise === 0) return;
+    const num = parseFloat(value) || 0;
+    if (!ledgerId || num === 0) return;
+    // For percent, amount_paise is a placeholder; ItemVoucherForm recomputes
+    // it against the current base. Its sign still carries the +/-.
+    const amountPaise =
+      mode === "percent"
+        ? sign * 1 // placeholder magnitude, real value computed at totals time
+        : rupeesToPaise(num) * sign;
     onAdd({
       id: crypto.randomUUID(),
       sundry_type: type,
       ledger_id: ledgerId,
-      amount_paise: paise,
+      amount_paise: amountPaise,
+      mode,
+      rate_bps: mode === "percent" ? Math.round(num * 100) : 0,
+      apply_stage: stage,
     });
     reset();
     setOpen(false);
@@ -146,10 +168,10 @@ function AddChargePopover({
           className="h-7 w-full justify-start text-xs text-muted-foreground hover:text-foreground"
           disabled={disabled}
         >
-          <Plus className="mr-1 h-3 w-3" /> Add charge
+          <Plus className="mr-1 h-3 w-3" /> Add charge / discount
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 space-y-3 p-3">
+      <PopoverContent align="end" className="w-80 space-y-3 p-3">
         <div className="space-y-1">
           <Label className="text-[11px]">Type</Label>
           <Select value={type} onValueChange={(v) => onTypeChange(v as SundryType)}>
@@ -185,8 +207,50 @@ function AddChargePopover({
             </button>
           )}
         </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className="text-[11px]">Apply</Label>
+            <div className="flex gap-1">
+              <Button
+                type="button"
+                variant={stage === "pre_gst" ? "default" : "outline"}
+                size="sm"
+                className="h-8 flex-1 px-2 text-[11px]"
+                onClick={() => setStage("pre_gst")}
+                title="Folded into taxable value; GST recalculates"
+              >Before GST</Button>
+              <Button
+                type="button"
+                variant={stage === "post_gst" ? "default" : "outline"}
+                size="sm"
+                className="h-8 flex-1 px-2 text-[11px]"
+                onClick={() => setStage("post_gst")}
+                title="Added to grand total; no tax effect"
+              >After GST</Button>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px]">Mode</Label>
+            <div className="flex gap-1">
+              <Button
+                type="button"
+                variant={mode === "amount" ? "default" : "outline"}
+                size="sm"
+                className="h-8 flex-1 px-2 text-[11px]"
+                onClick={() => setMode("amount")}
+              >₹</Button>
+              <Button
+                type="button"
+                variant={mode === "percent" ? "default" : "outline"}
+                size="sm"
+                className="h-8 flex-1 px-2 text-[11px]"
+                onClick={() => setMode("percent")}
+              >%</Button>
+            </div>
+          </div>
+        </div>
         <div className="space-y-1">
-          <Label className="text-[11px]">Amount</Label>
+          <Label className="text-[11px]">{mode === "percent" ? "Percentage" : "Amount"}</Label>
           <div className="flex gap-1">
             <Button
               type="button"
@@ -204,20 +268,25 @@ function AddChargePopover({
               onClick={() => setSign(-1)}
               title="Reduces invoice total"
             >−</Button>
-            <Input
-              value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-              onFocus={(e) => e.currentTarget.select()}
-              className="h-8 text-right font-mono text-xs"
-              inputMode="decimal"
-              placeholder="0.00"
-              autoFocus
-            />
+            <div className="relative flex-1">
+              <Input
+                value={value}
+                onChange={(e) => setValue(e.target.value.replace(/[^0-9.]/g, ""))}
+                onFocus={(e) => e.currentTarget.select()}
+                className="h-8 text-right font-mono text-xs pr-6"
+                inputMode="decimal"
+                placeholder={mode === "percent" ? "0.00" : "0.00"}
+                autoFocus
+              />
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
+                {mode === "percent" ? "%" : "₹"}
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { reset(); setOpen(false); }}>Cancel</Button>
-          <Button size="sm" className="h-7 text-xs" onClick={confirm} disabled={!ledgerId || !amount}>Add</Button>
+          <Button size="sm" className="h-7 text-xs" onClick={confirm} disabled={!ledgerId || !value}>Add</Button>
         </div>
       </PopoverContent>
     </Popover>
