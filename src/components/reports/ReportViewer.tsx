@@ -189,6 +189,16 @@ export function ReportViewer({
     { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "Word export" });
   useShortcut("v", (e) => { e.preventDefault(); handlePick("preview"); },
     { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "Print preview" });
+  // Cross-component hook: any toolbar (e.g. Ledger, Day Book) can dispatch a
+  // "report:preview" CustomEvent to open the print-preview popup directly,
+  // bypassing the picker. This gives every report a consistent, reliable
+  // preview even inside Tauri where window.print() may skip the browser's
+  // native preview and go straight to the default printer.
+  React.useEffect(() => {
+    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, orientation);
+    window.addEventListener("report:preview", handler as EventListener);
+    return () => window.removeEventListener("report:preview", handler as EventListener);
+  }, [company, localizedHeading, localizedTitle, orientation]);
 
 
   const [autoFit, setAutoFit] = React.useState<boolean>(() => {
