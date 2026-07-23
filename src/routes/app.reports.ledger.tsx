@@ -147,6 +147,7 @@ function LedgerStatement() {
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [ledgerId, setLedgerId] = useState<string>(search.ledgerId || "");
   const [view, setView] = useState<ViewMode>(search.view ?? "columnar");
+  const [pdfFormat, setPdfFormat] = useState<"standard" | "confirmation" | "ageing">("standard");
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [siblings, setSiblings] = useState<Map<string, SiblingRow[]>>(new Map());
   const [siblingNames, setSiblingNames] = useState<Map<string, { name: string; type: string }>>(new Map());
@@ -582,48 +583,9 @@ function LedgerStatement() {
     ]);
   const onExportPdf = () => {
     if (view === "columnar") {
-      const showNarr = columnarRows.some((row) => (row.narration || "").trim().length > 0);
-      const head = showNarr
-        ? ["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"]
-        : ["Date", "Particulars", "Vch Type", "Vch No", "Debit", "Credit", "Balance"];
-      const openingRow = showNarr
-        ? ["", "Opening Balance", "", "", "", "", "", fmtBal(openingBeforeFrom)]
-        : ["", "Opening Balance", "", "", "", "", fmtBal(openingBeforeFrom)];
-      const bodyRows = columnarRows.map((row) => {
-        const base = [
-          fmtIndianDate(row.date),
-          row.particulars,
-          row.vchType,
-          row.vchNo,
-        ];
-        const tail = [
-          row.debit ? r(row.debit).toFixed(2) : "",
-          row.credit ? r(row.credit).toFixed(2) : "",
-          fmtBal(row.balance),
-        ];
-        return showNarr ? [...base, row.narration, ...tail] : [...base, ...tail];
-      });
-      const footRows = showNarr
-        ? [
-            ["Total", "", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
-            ["Closing Balance", "", "", "", "", "", "", fmtBal(closing)],
-          ]
-        : [
-            ["Total", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
-            ["Closing Balance", "", "", "", "", "", fmtBal(closing)],
-          ];
-      downloadPdfTable({
-        title: `Ledger A/c — ${ledger?.name ?? ""}`,
-        subtitle: pdfHeader.dateRangeSubtitle(from, to),
-        companyName: pdfHeader.companyName,
-        companySubLine: pdfHeader.companySubLine,
-        head: [head],
-        body: [openingRow, ...bodyRows],
-        foot: footRows,
-        fileName: `${fileBase}-columnar.pdf`,
-        orientation: "l",
-        rightAlignCols: showNarr ? [5, 6, 7] : [4, 5, 6],
-      });
+      if (pdfFormat === "confirmation") return exportConfirmationPdf();
+      if (pdfFormat === "ageing") return exportAgeingPdf();
+      return exportStandardColumnarPdf();
     } else {
       downloadPdfTable({
         title: `Ledger A/c — ${ledger?.name ?? ""}`,
@@ -649,6 +611,179 @@ function LedgerStatement() {
       });
     }
   };
+
+  // ---------- Standard columnar PDF (ABC-Enterprises style) ----------
+  function exportStandardColumnarPdf() {
+    const showNarr = columnarRows.some((row) => (row.narration || "").trim().length > 0);
+    // Column order matches the requested sample: Date | Vch No | Particulars | Vch Type | Debit | Credit | Balance
+    const head = showNarr
+      ? ["Date", "Vch No", "Particulars", "Vch Type", "Narration", "Debit (₹)", "Credit (₹)", "Balance (₹)"]
+      : ["Date", "Vch No", "Particulars", "Vch Type", "Debit (₹)", "Credit (₹)", "Balance (₹)"];
+    const openingLabel = openingBeforeFrom >= 0 ? "To Balance b/d" : "By Balance b/d";
+    const openingRow = showNarr
+      ? [fmtIndianDate(from), "Opening", openingLabel, "Opening", "", "", "", fmtBal(openingBeforeFrom)]
+      : [fmtIndianDate(from), "Opening", openingLabel, "Opening", "", "", fmtBal(openingBeforeFrom)];
+    const bodyRows = columnarRows.map((row) => {
+      const base = [
+        fmtIndianDate(row.date),
+        row.vchNo,
+        row.particulars,
+        row.vchType,
+      ];
+      const tail = [
+        row.debit ? r(row.debit).toFixed(2) : "",
+        row.credit ? r(row.credit).toFixed(2) : "",
+        fmtBal(row.balance),
+      ];
+      return showNarr ? [...base, row.narration, ...tail] : [...base, ...tail];
+    });
+    const closingLabel = closing >= 0 ? "By Balance c/d" : "To Balance c/d";
+    const footRows = showNarr
+      ? [
+          ["", "", "Total", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+          [fmtIndianDate(to), "Closing", closingLabel, "Closing", "", "", "", fmtBal(closing)],
+        ]
+      : [
+          ["", "", "Total", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+          [fmtIndianDate(to), "Closing", closingLabel, "Closing", "", "", fmtBal(closing)],
+        ];
+      downloadPdfTable({
+        title: `LEDGER — ${ledger?.name ?? ""}`,
+        subtitle: `Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}   ·   Opening: ${fmtBal(openingBeforeFrom)}`,
+        companyName: pdfHeader.companyName,
+        companySubLine: pdfHeader.companySubLine,
+        head: [head],
+        body: [openingRow, ...bodyRows],
+        foot: footRows,
+        fileName: `${fileBase}-standard.pdf`,
+        orientation: "l",
+        rightAlignCols: showNarr ? [5, 6, 7] : [4, 5, 6],
+      });
+  }
+
+  // ---------- Confirmation PDF ----------
+  function exportConfirmationPdf() {
+    const head = ["Date", "Vch No", "Particulars", "Vch Type", "Debit (₹)", "Credit (₹)", "Balance (₹)"];
+    const openingLabel = openingBeforeFrom >= 0 ? "To Balance b/d" : "By Balance b/d";
+    const bodyRows: (string | number)[][] = [
+      [fmtIndianDate(from), "Opening", openingLabel, "Opening", "", "", fmtBal(openingBeforeFrom)],
+      ...columnarRows.map((row) => [
+        fmtIndianDate(row.date),
+        row.vchNo,
+        row.particulars,
+        row.vchType,
+        row.debit ? r(row.debit).toFixed(2) : "",
+        row.credit ? r(row.credit).toFixed(2) : "",
+        fmtBal(row.balance),
+      ]),
+    ];
+    const confirmationLine =
+      `We confirm that the balance of ${formatINR(Math.abs(closing))} ${closing >= 0 ? "Dr" : "Cr"} ` +
+      `standing to the account of ${ledger?.name ?? ""} in our books as on ${fmtIndianDate(to)} ` +
+      `is correct as per the above statement.`;
+    const foot: (string | number)[][] = [
+      ["", "", "Total", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+      ["", "", (closing >= 0 ? "By Balance c/d" : "To Balance c/d"), "Closing", "", "", fmtBal(closing)],
+      [{ content: " ", colSpan: 7, styles: { lineWidth: 0, minCellHeight: 8 } } as never],
+      [{ content: confirmationLine, colSpan: 7, styles: { halign: "left", fontStyle: "normal", fillColor: [255, 255, 255], textColor: 0, lineWidth: 0 } } as never],
+      [{ content: " ", colSpan: 7, styles: { lineWidth: 0, minCellHeight: 24 } } as never],
+      [
+        { content: `For ${pdfHeader.companyName}\n\n\n_____________________\nAuthorised Signatory`, colSpan: 4, styles: { halign: "left", fontStyle: "normal", fillColor: [255, 255, 255], textColor: 0, lineWidth: 0 } } as never,
+        { content: `For ${ledger?.name ?? ""}\n\n\n_____________________\nAuthorised Signatory`, colSpan: 3, styles: { halign: "right", fontStyle: "normal", fillColor: [255, 255, 255], textColor: 0, lineWidth: 0 } } as never,
+      ],
+    ];
+    downloadPdfTable({
+      title: `LEDGER CONFIRMATION — ${ledger?.name ?? ""}`,
+      subtitle: `As on ${fmtIndianDate(to)}   ·   Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`,
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
+      head: [head],
+      body: bodyRows,
+      foot,
+      fileName: `${fileBase}-confirmation.pdf`,
+      orientation: "l",
+      rightAlignCols: [4, 5, 6],
+    });
+  }
+
+  // ---------- Ageing PDF (FIFO on closing side) ----------
+  function exportAgeingPdf() {
+    // Determine which side represents "outstanding" — same sign as closing.
+    const asOfMs = new Date(to).getTime();
+    type Lot = { date: string; vchNo: string; particulars: string; original: number; remaining: number };
+    const lots: Lot[] = [];
+    const outstandingSide: "dr" | "cr" = closing >= 0 ? "dr" : "cr";
+    // Seed with opening on the outstanding side (if any)
+    if (outstandingSide === "dr" && openingBeforeFrom > 0) {
+      lots.push({ date: from, vchNo: "Opening", particulars: "Balance b/d", original: openingBeforeFrom, remaining: openingBeforeFrom });
+    } else if (outstandingSide === "cr" && openingBeforeFrom < 0) {
+      lots.push({ date: from, vchNo: "Opening", particulars: "Balance b/d", original: -openingBeforeFrom, remaining: -openingBeforeFrom });
+    }
+    // Walk rows chronologically applying FIFO
+    for (const row of columnarRows) {
+      const add = outstandingSide === "dr" ? row.debit : row.credit;
+      const reduce = outstandingSide === "dr" ? row.credit : row.debit;
+      if (add > 0) {
+        lots.push({ date: row.date, vchNo: row.vchNo, particulars: `${row.vchType}: ${row.particulars}`, original: add, remaining: add });
+      }
+      if (reduce > 0) {
+        let left = reduce;
+        for (const lot of lots) {
+          if (left <= 0) break;
+          if (lot.remaining <= 0) continue;
+          const take = Math.min(lot.remaining, left);
+          lot.remaining -= take;
+          left -= take;
+        }
+      }
+    }
+    const open = lots.filter((l) => l.remaining > 0);
+    const bucketOf = (isoDate: string) => {
+      const days = Math.max(0, Math.floor((asOfMs - new Date(isoDate).getTime()) / 86400000));
+      if (days <= 30) return { key: "b0", label: "0–30" } as const;
+      if (days <= 60) return { key: "b1", label: "31–60" } as const;
+      if (days <= 90) return { key: "b2", label: "61–90" } as const;
+      return { key: "b3", label: "90+" } as const;
+    };
+    const totals4 = { b0: 0, b1: 0, b2: 0, b3: 0 };
+    const rows = open.map((l) => {
+      const b = bucketOf(l.date);
+      const days = Math.max(0, Math.floor((asOfMs - new Date(l.date).getTime()) / 86400000));
+      (totals4 as Record<string, number>)[b.key] += l.remaining;
+      return [
+        fmtIndianDate(l.date),
+        l.vchNo,
+        l.particulars,
+        String(days),
+        b.label,
+        r(l.original).toFixed(2),
+        r(l.remaining).toFixed(2),
+      ] as (string | number)[];
+    });
+    const totalOutstanding = totals4.b0 + totals4.b1 + totals4.b2 + totals4.b3;
+    const foot: (string | number)[][] = [
+      ["", "", "Total Outstanding", "", "", "", r(totalOutstanding).toFixed(2)],
+      [
+        { content: "Ageing summary (₹):", colSpan: 3, styles: { halign: "right", fontStyle: "bold" } } as never,
+        { content: `0–30: ${r(totals4.b0).toFixed(2)}`, colSpan: 1, styles: { halign: "right" } } as never,
+        { content: `31–60: ${r(totals4.b1).toFixed(2)}`, colSpan: 1, styles: { halign: "right" } } as never,
+        { content: `61–90: ${r(totals4.b2).toFixed(2)}`, colSpan: 1, styles: { halign: "right" } } as never,
+        { content: `90+: ${r(totals4.b3).toFixed(2)}`, colSpan: 1, styles: { halign: "right" } } as never,
+      ],
+    ];
+    downloadPdfTable({
+      title: `LEDGER AGEING — ${ledger?.name ?? ""}`,
+      subtitle: `As on ${fmtIndianDate(to)}   ·   Outstanding side: ${outstandingSide === "dr" ? "Debit (Receivable)" : "Credit (Payable)"}`,
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
+      head: [["Date", "Vch No", "Particulars", "Days", "Bucket", "Original (₹)", "Outstanding (₹)"]],
+      body: rows.length > 0 ? rows : [["", "", "No outstanding as on this date.", "", "", "", ""]],
+      foot,
+      fileName: `${fileBase}-ageing.pdf`,
+      orientation: "l",
+      rightAlignCols: [3, 5, 6],
+    });
+  }
 
   // ---------- All-Ledgers (batch) builder ----------
   type AllRow = { date: string; particulars: string; vchType: string; vchNo: string; narration: string; debit: number; credit: number; balance: number };
@@ -1030,6 +1165,22 @@ function LedgerStatement() {
                   </ToggleGroupItem>
                 </ToggleGroup>
               </div>
+              {view === "columnar" && (
+                <div className="space-y-1">
+                  <Label className="text-xs">PDF Format</Label>
+                  <ToggleGroup
+                    type="single"
+                    size="sm"
+                    value={pdfFormat}
+                    onValueChange={(v) => v && setPdfFormat(v as "standard" | "confirmation" | "ageing")}
+                    className="h-9 rounded-md border border-input bg-background p-0.5"
+                  >
+                    <ToggleGroupItem value="standard" className="px-3 text-xs">Standard</ToggleGroupItem>
+                    <ToggleGroupItem value="confirmation" className="px-3 text-xs">Confirmation</ToggleGroupItem>
+                    <ToggleGroupItem value="ageing" className="px-3 text-xs">Ageing</ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label className="text-xs">All Ledgers (one go)</Label>
                 <div className="flex h-9 items-center gap-1">
