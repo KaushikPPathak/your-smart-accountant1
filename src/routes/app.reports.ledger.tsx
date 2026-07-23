@@ -615,16 +615,18 @@ function LedgerStatement() {
   // ---------- Standard columnar PDF (ABC-Enterprises style) ----------
   function exportStandardColumnarPdf() {
     const showNarr = columnarRows.some((row) => (row.narration || "").trim().length > 0);
-    // Column order matches the requested sample: Date | Vch No | Particulars | Vch Type | Debit | Credit | Balance
+    // Column order matches the requested sample. A leading "#" (serial number)
+    // column indexes every row so printed ledgers can be cross-referenced.
     const head = showNarr
-      ? ["Date", "Vch No", "Particulars", "Vch Type", "Narration", "Debit (₹)", "Credit (₹)", "Balance (₹)"]
-      : ["Date", "Vch No", "Particulars", "Vch Type", "Debit (₹)", "Credit (₹)", "Balance (₹)"];
+      ? ["#", "Date", "Vch No", "Particulars", "Vch Type", "Narration", "Debit (₹)", "Credit (₹)", "Balance (₹)"]
+      : ["#", "Date", "Vch No", "Particulars", "Vch Type", "Debit (₹)", "Credit (₹)", "Balance (₹)"];
     const openingLabel = openingBeforeFrom >= 0 ? "To Balance b/d" : "By Balance b/d";
     const openingRow = showNarr
-      ? [fmtIndianDate(from), "Opening", openingLabel, "Opening", "", "", "", fmtBal(openingBeforeFrom)]
-      : [fmtIndianDate(from), "Opening", openingLabel, "Opening", "", "", fmtBal(openingBeforeFrom)];
-    const bodyRows = columnarRows.map((row) => {
+      ? ["", fmtIndianDate(from), "Opening", openingLabel, "Opening", "", "", "", fmtBal(openingBeforeFrom)]
+      : ["", fmtIndianDate(from), "Opening", openingLabel, "Opening", "", "", fmtBal(openingBeforeFrom)];
+    const bodyRows = columnarRows.map((row, i) => {
       const base = [
+        String(i + 1),
         fmtIndianDate(row.date),
         row.vchNo,
         row.particulars,
@@ -640,12 +642,12 @@ function LedgerStatement() {
     const closingLabel = closing >= 0 ? "By Balance c/d" : "To Balance c/d";
     const footRows = showNarr
       ? [
-          ["", "", "Total", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
-          [fmtIndianDate(to), "Closing", closingLabel, "Closing", "", "", "", fmtBal(closing)],
+          ["", "", "", "Total", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+          ["", fmtIndianDate(to), "Closing", closingLabel, "Closing", "", "", "", fmtBal(closing)],
         ]
       : [
-          ["", "", "Total", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
-          [fmtIndianDate(to), "Closing", closingLabel, "Closing", "", "", fmtBal(closing)],
+          ["", "", "", "Total", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+          ["", fmtIndianDate(to), "Closing", closingLabel, "Closing", "", "", fmtBal(closing)],
         ];
       downloadPdfTable({
         title: `LEDGER — ${ledger?.name ?? ""}`,
@@ -657,9 +659,10 @@ function LedgerStatement() {
         foot: footRows,
         fileName: `${fileBase}-standard.pdf`,
         orientation: "l",
-        rightAlignCols: showNarr ? [5, 6, 7] : [4, 5, 6],
+        rightAlignCols: showNarr ? [0, 6, 7, 8] : [0, 5, 6, 7],
       });
   }
+
 
   // ---------- Confirmation PDF ----------
   function exportConfirmationPdf() {
