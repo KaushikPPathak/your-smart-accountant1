@@ -200,7 +200,9 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
             return !ownerId || ownerId === activeStaff.id || ownerId === "offline-user-session";
           })
         : out;
-      const finalValidList = list.length === 0 && out.length > 0 ? out : list;
+      const preTomb = list.length === 0 && out.length > 0 ? out : list;
+      const { filterTombstoned } = await import("./recovery/tombstones");
+      const finalValidList = await filterTombstoned(preTomb);
 
       if (finalValidList.length > 0) {
         applyMemberships(finalValidList);
