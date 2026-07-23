@@ -419,11 +419,22 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
   // ── Total Invoice Value box (right) + Amount in words (left) ────────────
   const totalsW = 260;
   const totalsX = pageW - M - 10 - totalsW;
+
+  // Blended GST rate(s) from HSN summary — show "@ x%" on tax rows.
+  const uniqueRates = Array.from(new Set(hsnRows.map(([, s]) => s.rate))).filter((r) => r > 0);
+  const rateLabel = uniqueRates.length === 1
+    ? `${uniqueRates[0]}%`
+    : uniqueRates.length > 1 ? "" : "";
+  const halfRateLabel = uniqueRates.length === 1
+    ? `${uniqueRates[0] / 2}%`
+    : "";
+
   const totalsRows: [string, string][] = [["Taxable Value", rIN(v.subtotal_paise)]];
-  if (isInter) totalsRows.push([`Add: IGST`, rIN(v.igst_paise)]);
-  else {
-    totalsRows.push([`Add: CGST`, rIN(v.cgst_paise)]);
-    totalsRows.push([`Add: SGST`, rIN(v.sgst_paise)]);
+  if (isInter) {
+    totalsRows.push([`Add: IGST${rateLabel ? ` @ ${rateLabel}` : ""}`, rIN(v.igst_paise)]);
+  } else {
+    totalsRows.push([`Add: CGST${halfRateLabel ? ` @ ${halfRateLabel}` : ""}`, rIN(v.cgst_paise)]);
+    totalsRows.push([`Add: SGST${halfRateLabel ? ` @ ${halfRateLabel}` : ""}`, rIN(v.sgst_paise)]);
   }
   if (v.round_off_paise) totalsRows.push(["Round Off", rIN(v.round_off_paise)]);
 
@@ -435,17 +446,23 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
   doc.text("TOTAL INVOICE VALUE", totalsX + totalsW / 2, cursorY + 12, { align: "center" });
   doc.line(totalsX, cursorY + 16, totalsX + totalsW, cursorY + 16);
 
+  // Right edge for amounts; currency symbol at a fixed x so decimals align cleanly.
+  const amtRightX = totalsX + totalsW - 8;
+  const currX = totalsX + totalsW - 96;
+
   doc.setFont("helvetica", "normal");
   totalsRows.forEach(([k, val], i) => {
     const yy = cursorY + 16 + lh + i * lh - 2;
     doc.text(k, totalsX + 8, yy);
-    doc.text(`${curr} ${val}`, totalsX + totalsW - 8, yy, { align: "right" });
+    doc.text(curr, currX, yy);
+    doc.text(val, amtRightX, yy, { align: "right" });
   });
   const grandY = cursorY + 16 + lh + totalsRows.length * lh - 2;
   doc.line(totalsX, grandY - 10, totalsX + totalsW, grandY - 10);
   doc.setFont("helvetica", "bold");
   doc.text("Total Invoice Amount", totalsX + 8, grandY);
-  doc.text(`${curr} ${rIN(v.total_paise)}`, totalsX + totalsW - 8, grandY, { align: "right" });
+  doc.text(curr, currX, grandY);
+  doc.text(rIN(v.total_paise), amtRightX, grandY, { align: "right" });
 
   // Amount in words (left of totals box)
   doc.setFont("helvetica", "bold");
