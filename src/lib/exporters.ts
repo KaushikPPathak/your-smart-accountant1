@@ -64,6 +64,16 @@ export interface PdfTableOptions {
   subFolder?: string;
   /** Draw a thick vertical divider on the LEFT edge of this column (e.g. T-shape ledger center). */
   dividerBeforeCol?: number;
+  /** Optional callback invoked after the table has rendered on the last page.
+   *  Use it to draw wrapped paragraphs, signature blocks, etc. within page margins. */
+  afterTable?: (ctx: {
+    doc: jsPDFType;
+    finalY: number;
+    pageWidth: number;
+    pageHeight: number;
+    margin: number;
+    font: string;
+  }) => void;
 }
 
 // Rows per autoTable chunk. autoTable is synchronous, so we render the body
