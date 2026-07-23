@@ -60,6 +60,8 @@ export interface PdfTableOptions {
   fileName: string;
   orientation?: "p" | "l";
   rightAlignCols?: number[]; // column indexes that should be right aligned (numeric)
+  /** Explicit per-column widths (pt). Use to force symmetry (e.g. Dr/Cr T-format). */
+  columnWidths?: Record<number, number>;
   /** Folder under the company export root. Defaults to "Reports". */
   subFolder?: string;
   /** Draw a thick vertical divider on the LEFT edge of this column (e.g. T-shape ledger center). */
@@ -131,8 +133,14 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     }
     const tableStartY = y + 4;
 
-    const columnStyles: Record<number, { halign: "right" }> = {};
-    (opts.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
+    const columnStyles: Record<number, { halign?: "right"; cellWidth?: number }> = {};
+    (opts.rightAlignCols || []).forEach((c) => (columnStyles[c] = { ...(columnStyles[c] || {}), halign: "right" }));
+    if (opts.columnWidths) {
+      for (const [k, w] of Object.entries(opts.columnWidths)) {
+        const i = Number(k);
+        columnStyles[i] = { ...(columnStyles[i] || {}), cellWidth: w };
+      }
+    }
 
     const drawPageChrome = () => {
       let hy = 28;
@@ -374,6 +382,8 @@ export interface PdfSection {
   body: (string | number)[][];
   foot?: (string | number)[][];
   rightAlignCols?: number[];
+  /** Explicit per-column widths (pt). Use to force symmetry (e.g. Dr/Cr T-format). */
+  columnWidths?: Record<number, number>;
   /** Draw a thick vertical divider before this column index (T-format split). */
   dividerBeforeCol?: number;
 }
@@ -464,8 +474,14 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
         doc.text(localizeExportText(section.sectionSubtitle, lang), pageW / 2, y, { align: "center" });
         y += 11;
       }
-      const columnStyles: Record<number, { halign: "right" }> = {};
-      (section.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
+      const columnStyles: Record<number, { halign?: "right"; cellWidth?: number }> = {};
+      (section.rightAlignCols || []).forEach((c) => (columnStyles[c] = { ...(columnStyles[c] || {}), halign: "right" }));
+      if (section.columnWidths) {
+        for (const [k, w] of Object.entries(section.columnWidths)) {
+          const i = Number(k);
+          columnStyles[i] = { ...(columnStyles[i] || {}), cellWidth: w };
+        }
+      }
 
       const sectionBody = localizeExportRows(section.body as (string | number)[][], lang);
       const sectionHead = localizeExportRows(section.head, lang);
