@@ -436,10 +436,17 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
     });
     let rowsDone = 0;
 
+    // Reserve page 1 as the Index (TOC). We'll fill in the entries after
+    // sections render so the page numbers listed are accurate.
+    drawPageHeader();
+    const startPages: number[] = [];
+
     for (let idx = 0; idx < opts.sections.length; idx++) {
       if (aborted) return;
       const section = opts.sections[idx];
-      if (idx > 0) doc.addPage();
+      // Every section starts on a fresh page (first section moves off TOC page).
+      doc.addPage();
+      startPages.push(doc.getNumberOfPages());
       let y = drawPageHeader();
       doc.setFont(FONT, "bold");
       doc.setFontSize(11);
@@ -508,6 +515,45 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
         await yieldToUi();
       }
     }
+
+    // ---- Fill the reserved Index (TOC) page ----
+    if (opts.sections.length > 0) {
+      doc.setPage(1);
+      const indexLabel = "Index";
+      doc.setFont(FONT, "bold");
+      doc.setFontSize(12);
+      doc.text(indexLabel, pageW / 2, 90, { align: "center" });
+      const tocBody = opts.sections.map((s, i) => [
+        String(i + 1),
+        localizeExportText(s.sectionTitle, lang),
+        String(startPages[i] ?? ""),
+      ]);
+      autoTable(doc, {
+        startY: 100,
+        head: [["#", "Ledger / Section", "Page"]],
+        body: tocBody,
+        theme: "grid",
+        styles: { font: FONT, fontSize: 9, cellPadding: 3, lineColor: [80, 80, 80], lineWidth: 0.2, textColor: 20 },
+        headStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
+        columnStyles: { 0: { halign: "right", cellWidth: 40 }, 2: { halign: "right", cellWidth: 60 } },
+        margin: { left: 40, right: 40 },
+        didParseCell: (data) => { data.cell.styles.font = FONT; },
+      });
+      // Footer page number on the TOC page.
+      const pageLabel = tReportLabel("Page", lang);
+      const ofLabel = tReportLabel("of", lang);
+      doc.setFont(FONT, "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(120);
+      doc.text(
+        `${pageLabel} 1 ${ofLabel} {total_pages_count_string}`,
+        pageW / 2,
+        doc.internal.pageSize.getHeight() - 12,
+        { align: "center" },
+      );
+      doc.setTextColor(0);
+    }
+
 
     if (aborted) return;
     if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
