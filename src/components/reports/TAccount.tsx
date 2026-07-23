@@ -57,7 +57,7 @@ function RowCell({ row }: { row: TRow }) {
   return (
     <div
       className={cn(
-        "flex items-start justify-between gap-2 px-2 py-1.5 text-[12px] leading-tight",
+        "flex items-start gap-2 px-2 py-1.5 text-[12px] leading-tight",
         row.onClick && "cursor-pointer hover:bg-muted/40",
         weight,
       )}
@@ -69,8 +69,11 @@ function RowCell({ row }: { row: TRow }) {
           <div className="truncate text-[10px] text-muted-foreground">{row.hint}</div>
         )}
       </div>
-      <div className="whitespace-nowrap text-right font-mono tabular-nums text-[12px]">
+      <div className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums text-[12px]">
         {row.amount}
+      </div>
+      <div className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums text-[12px]">
+        {row.outerAmount}
       </div>
     </div>
   );
