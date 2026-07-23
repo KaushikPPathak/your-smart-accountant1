@@ -172,9 +172,9 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
         foot: isLast ? foot : undefined,
       showFoot: "lastPage",
       theme: "grid",
-      styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
-      headStyles: { font: FONT, fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
-      footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
+      styles: { font: FONT, fontSize: 9, cellPadding: 3, lineColor: [80, 80, 80], lineWidth: 0.2, textColor: 20 },
+      headStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
+      footStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
         columnStyles,
         margin: { top: tableStartY },
         didParseCell: (data) => {
