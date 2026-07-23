@@ -50,9 +50,9 @@ export async function rebuildLocalDerived(companyId: string): Promise<LocalRebui
   const idx = await getIndex(companyId);
 
   // 3. Fan out change events so any live retriever / balances chip refreshes.
-  try { emitDataChange({ kind: "ledger", companyId }); } catch { /* ignore */ }
-  try { emitDataChange({ kind: "item", companyId }); } catch { /* ignore */ }
-  try { emitDataChange({ kind: "voucher", companyId }); } catch { /* ignore */ }
+  try { emitDataChange(companyId, "ledger"); } catch { /* ignore */ }
+  try { emitDataChange(companyId, "item"); } catch { /* ignore */ }
+  try { emitDataChange(companyId, "voucher"); } catch { /* ignore */ }
 
   // 4. Re-stamp schema version so the "rebuild recommended" badge clears.
   await stampSchemaVersion();
