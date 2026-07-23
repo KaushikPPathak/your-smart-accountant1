@@ -382,6 +382,8 @@ export interface PdfSection {
   body: (string | number)[][];
   foot?: (string | number)[][];
   rightAlignCols?: number[];
+  /** Explicit per-column widths (pt). Use to force symmetry (e.g. Dr/Cr T-format). */
+  columnWidths?: Record<number, number>;
   /** Draw a thick vertical divider before this column index (T-format split). */
   dividerBeforeCol?: number;
 }
