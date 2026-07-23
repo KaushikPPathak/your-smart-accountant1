@@ -89,6 +89,7 @@ function mapCompanyRowToMembership(
 async function loadCachedMemberships(): Promise<CompanyMembership[]> {
   try {
     const { offlineDb } = await import("./offline/db");
+    const { filterTombstoned } = await import("./recovery/tombstones");
     const [snapshotCompanies, pickerCompanies] = await Promise.all([
       offlineDb.cache_companies.toArray().catch(() => []),
       offlineDb.companies.toArray().catch(() => []),
@@ -102,9 +103,12 @@ async function loadCachedMemberships(): Promise<CompanyMembership[]> {
       if (row?.id) byId.set(String(row.id), { ...(byId.get(String(row.id)) ?? {}), ...row });
     }
 
-    return Array.from(byId.values())
+    const mapped = Array.from(byId.values())
       .map((company) => mapCompanyRowToMembership(String(company.id), company.role ?? "admin", company))
       .filter(Boolean) as CompanyMembership[];
+    // Hide any company the user has purged, even if a stale cache row snuck
+    // back in from a background reconcile.
+    return await filterTombstoned(mapped);
   } catch (err) {
     console.warn("Failed to read cached companies:", err);
     return [];
