@@ -406,14 +406,12 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
         navigate({ to: "/app/vouchers" });
         return;
       }
-      // Main → Menubar (loop back to the top)
-      const firstTrigger = document.querySelector<HTMLElement>(
-        ".busy-topbar button.busy-menu",
-      );
-      if (firstTrigger) {
-        e.preventDefault();
-        firstTrigger.focus();
-      }
+      // Main content / body → ask TopMenuBar to open the exit-confirm dialog
+      // directly. Previously we hopped focus to the menubar and required a
+      // second Escape, which failed on pages like Companies where the user
+      // couldn't tell focus had moved.
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent("app:exit-request"));
     },
     { scope: "global", allowInField: true, description: "Escape / step down (menu→ribbon→main)" },
   );
