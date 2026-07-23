@@ -107,9 +107,11 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     let y = 28;
     if (opts.companyName) {
       doc.setFont(FONT, "bold");
-      doc.setFontSize(13);
+      doc.setFontSize(14);
+      doc.setTextColor(0, 32, 96); // dark blue
       doc.text(opts.companyName.toUpperCase(), pageW / 2, y, { align: "center" });
-      y += 14;
+      doc.setTextColor(0, 0, 0);
+      y += 15;
     }
     if (opts.companySubLine) {
       doc.setFont(FONT, "normal");
