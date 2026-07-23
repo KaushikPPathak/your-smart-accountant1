@@ -62,7 +62,7 @@ import { LedgerBalanceChip } from "./LedgerBalanceChip";
 import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-store";
 import { AutoTaxChip } from "./AutoTaxChip";
 import { SundryStrip } from "./SundryStrip";
-import { netSundryPaise } from "@/lib/sundries";
+import { netSundryPaise, resolveSundryPaise, splitSundriesByStage, type Sundry } from "@/lib/sundries";
 
 type VoucherType =
   | "sales"
