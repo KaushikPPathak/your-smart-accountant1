@@ -495,6 +495,9 @@ export interface ItemVoucherSnap {
     sundry_type: string;
     ledger_id: string;
     amount_paise: number;
+    mode?: "amount" | "percent";
+    rate_bps?: number;
+    apply_stage?: "pre_gst" | "post_gst";
     narration?: string | null;
   }>;
 }
