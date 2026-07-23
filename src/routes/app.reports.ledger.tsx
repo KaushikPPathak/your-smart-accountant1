@@ -147,6 +147,7 @@ function LedgerStatement() {
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [ledgerId, setLedgerId] = useState<string>(search.ledgerId || "");
   const [view, setView] = useState<ViewMode>(search.view ?? "columnar");
+  const [pdfFormat, setPdfFormat] = useState<"standard" | "confirmation" | "ageing">("standard");
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [siblings, setSiblings] = useState<Map<string, SiblingRow[]>>(new Map());
   const [siblingNames, setSiblingNames] = useState<Map<string, { name: string; type: string }>>(new Map());
