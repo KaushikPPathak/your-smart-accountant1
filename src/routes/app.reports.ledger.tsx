@@ -776,11 +776,12 @@ function LedgerStatement() {
       return { key: "b3", label: "90+" } as const;
     };
     const totals4 = { b0: 0, b1: 0, b2: 0, b3: 0 };
-    const rows = open.map((l) => {
+    const rows = open.map((l, i) => {
       const b = bucketOf(l.date);
       const days = Math.max(0, Math.floor((asOfMs - new Date(l.date).getTime()) / 86400000));
       (totals4 as Record<string, number>)[b.key] += l.remaining;
       return [
+        String(i + 1),
         fmtIndianDate(l.date),
         l.vchNo,
         l.particulars,
@@ -792,9 +793,9 @@ function LedgerStatement() {
     });
     const totalOutstanding = totals4.b0 + totals4.b1 + totals4.b2 + totals4.b3;
     const foot: (string | number)[][] = [
-      ["", "", "Total Outstanding", "", "", "", r(totalOutstanding).toFixed(2)],
+      ["", "", "", "Total Outstanding", "", "", "", r(totalOutstanding).toFixed(2)],
       [
-        { content: "Ageing summary (₹):", colSpan: 3, styles: { halign: "right", fontStyle: "bold" } } as never,
+        { content: "Ageing summary (₹):", colSpan: 4, styles: { halign: "right", fontStyle: "bold" } } as never,
         { content: `0–30: ${r(totals4.b0).toFixed(2)}`, colSpan: 1, styles: { halign: "right" } } as never,
         { content: `31–60: ${r(totals4.b1).toFixed(2)}`, colSpan: 1, styles: { halign: "right" } } as never,
         { content: `61–90: ${r(totals4.b2).toFixed(2)}`, colSpan: 1, styles: { halign: "right" } } as never,
@@ -806,14 +807,15 @@ function LedgerStatement() {
       subtitle: `As on ${fmtIndianDate(to)}   ·   Outstanding side: ${outstandingSide === "dr" ? "Debit (Receivable)" : "Credit (Payable)"}`,
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
-      head: [["Date", "Vch No", "Particulars", "Days", "Bucket", "Original (₹)", "Outstanding (₹)"]],
-      body: rows.length > 0 ? rows : [["", "", "No outstanding as on this date.", "", "", "", ""]],
+      head: [["#", "Date", "Vch No", "Particulars", "Days", "Bucket", "Original (₹)", "Outstanding (₹)"]],
+      body: rows.length > 0 ? rows : [["", "", "", "No outstanding as on this date.", "", "", "", ""]],
       foot,
       fileName: `${fileBase}-ageing.pdf`,
       orientation: "l",
-      rightAlignCols: [3, 5, 6],
+      rightAlignCols: [0, 4, 6, 7],
     });
   }
+
 
   // ---------- All-Ledgers (batch) builder ----------
   type AllRow = { date: string; particulars: string; vchType: string; vchNo: string; narration: string; debit: number; credit: number; balance: number };
