@@ -161,13 +161,15 @@ export function TAccount({
       </div>
       {/* Totals strip */}
       <div className="grid grid-cols-2 border-t-2 border-foreground bg-muted/50 text-[12px] font-semibold print:border-black">
-        <div className="flex min-w-0 items-center justify-between gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black">
-          <span className="truncate">{totalLabel}</span>
-          <span className="whitespace-nowrap font-mono tabular-nums">{leftTotal}</span>
+        <div className="flex min-w-0 items-center gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black">
+          <span className="min-w-0 flex-1 truncate">{totalLabel}</span>
+          <span className="w-[6.5rem] shrink-0" />
+          <span className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums">{leftTotal}</span>
         </div>
-        <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-1.5">
-          <span className="truncate">{totalLabel}</span>
-          <span className="whitespace-nowrap font-mono tabular-nums">{rightTotal}</span>
+        <div className="flex min-w-0 items-center gap-2 px-2 py-1.5">
+          <span className="min-w-0 flex-1 truncate">{totalLabel}</span>
+          <span className="w-[6.5rem] shrink-0" />
+          <span className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums">{rightTotal}</span>
         </div>
       </div>
     </div>
