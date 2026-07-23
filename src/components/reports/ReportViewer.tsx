@@ -130,7 +130,7 @@ export function ReportViewer({
     if (!rootRef.current) return;
     const headerHtml = `
       <div class="report-print-header">
-        <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:.5pt">${escape(company)}</div>
+        <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:.5pt;color:#002060">${escape(company)}</div>
         <div style="font-size:11pt;font-weight:600">${escape(localizedHeading || localizedTitle)}</div>
         ${subtitleText ? `<div style="font-size:9pt">${escape(subtitleText)}</div>` : ""}
         ${periodText ? `<div style="font-size:9pt">${escape(periodText)}</div>` : ""}
@@ -239,7 +239,7 @@ export function ReportViewer({
         )}
       >
         <div className="report-print-header mb-3 text-center">
-          <div className="text-lg font-bold uppercase tracking-wide leading-tight">{company || "\u00A0"}</div>
+          <div className="report-print-company-name text-lg font-bold uppercase tracking-wide leading-tight">{company || "\u00A0"}</div>
           <span className="report-print-company-capture" aria-hidden>{company || "\u00A0"}</span>
           {fyText && (
             <span className="report-print-fy-capture" aria-hidden>{fyText}</span>
@@ -337,6 +337,10 @@ function openPrintPreview(
     .report-print-header div:first-child {
       font-size: 13pt; font-weight: 700; text-transform: uppercase;
       letter-spacing: .5pt; }
+    .preview-content .report-print-company-name,
+    .preview-content .report-print-header div:first-child {
+      color: #002060 !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .report-print-title { font-size: 11pt; font-weight: 600; }
     .report-print-company-capture, .report-print-fy-capture { display: none; }
     .report-header-rule { height: 3px; border-top: 1px solid #000;

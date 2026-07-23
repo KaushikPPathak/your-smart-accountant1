@@ -562,6 +562,11 @@
   .report-print-root .report-print-header {
     display: block !important;
   }
+  .report-print-root .report-print-company-name {
+    color: #002060 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   /* Capture the report title into a CSS string so the @page footer
      can echo it on the left of every page. */
   .report-print-root .report-print-title {
