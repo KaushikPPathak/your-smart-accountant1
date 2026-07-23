@@ -118,14 +118,30 @@ export function routeQuery(question: string): RoutedQuery {
   const q = question.trim();
   const lower = q.toLowerCase();
   const dates = extractDateRange(q);
-  const entityHints = extractEntityHints(q);
   const voucherNumber = extractVoucherNumber(q);
 
   // "in the books of X", "books of X", "for company X"
+  // Strip company clause BEFORE extracting entity hints so "X in the books of Y"
+  // doesn't pollute entity matching with the company name tokens.
   let companyHint: string | undefined;
-  const cm = q.match(/\b(?:in\s+the\s+)?books?\s+of\s+([A-Z][A-Za-z0-9&.\s]{2,60})/i)
-          ?? q.match(/\bfor\s+company\s+([A-Z][A-Za-z0-9&.\s]{2,60})/i);
-  if (cm) companyHint = cm[1].trim().replace(/[.,;:!?]+$/, "");
+  let qForEntities = q;
+  const cm = q.match(/\b(?:in\s+the\s+)?books?\s+of\s+([A-Za-z][A-Za-z0-9&.\s]{2,60})$/i)
+          ?? q.match(/\b(?:in\s+the\s+)?books?\s+of\s+([A-Za-z][A-Za-z0-9&.\s]{2,60}?)(?=\s+(?:what|show|list|give|tell|and|find|for|as\s+on)\b|[?.,;]|$)/i)
+          ?? q.match(/\bfor\s+company\s+([A-Za-z][A-Za-z0-9&.\s]{2,60})/i);
+  if (cm) {
+    companyHint = cm[1].trim().replace(/[.,;:!?]+$/, "");
+    qForEntities = q.replace(cm[0], " ").trim();
+  }
+
+  // Extract entity hints from the question (with company clause removed).
+  // Also capture explicit "balance of X" / "ledger of X" / "<X> balance"
+  // phrases in a case-insensitive way, so lowercase names like "Land navsari"
+  // are still picked up.
+  const entityHints = extractEntityHints(qForEntities);
+  const balOf = qForEntities.match(/\b(?:balance|ledger|statement|account)\s+(?:of|for)\s+([A-Za-z][A-Za-z0-9&.\s]{1,60}?)(?=\s+(?:as\s+on|on|what|show|and|for|in)\b|[?.,;]|$)/i);
+  if (balOf) entityHints.unshift(balOf[1].trim());
+  const leading = qForEntities.match(/^([A-Za-z][A-Za-z0-9&.\s]{1,60}?)\s+(?:what\s+is\s+(?:the\s+)?(?:ledger\s+)?balance|balance|ledger\s+balance)\b/i);
+  if (leading) entityHints.unshift(leading[1].trim());
 
   // "last/latest <kind> bill/invoice/voucher/entry"
   let latestKind: RoutedQuery["latestKind"];
