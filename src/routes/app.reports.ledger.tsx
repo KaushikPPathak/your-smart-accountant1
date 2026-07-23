@@ -1069,7 +1069,7 @@ function LedgerStatement() {
     const periodLine = `${fmtIndianDate(from)} to ${fmtIndianDate(to)}`;
     const headerHtml = `
       <div class="report-print-header">
-        ${pdfHeader.companyName ? `<div style="font-weight:bold;font-size:13pt">${esc(pdfHeader.companyName.toUpperCase())}</div>` : ""}
+        ${pdfHeader.companyName ? `<div style="font-weight:bold;font-size:13pt;color:#002060">${esc(pdfHeader.companyName.toUpperCase())}</div>` : ""}
         ${pdfHeader.companySubLine ? `<div style="font-size:9pt">${esc(pdfHeader.companySubLine)}</div>` : ""}
         <div style="font-weight:bold;font-size:12pt;margin-top:4pt">All Ledgers</div>
         <div style="font-size:10pt">${esc(periodLine)}</div>
