@@ -50,21 +50,21 @@ export function ExportShowcase() {
       aria-label="Export in progress"
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
     >
-      <div className="relative w-[min(92vw,420px)] rounded-2xl border border-border/60 bg-card/95 shadow-2xl overflow-hidden">
+      <div className="relative w-[min(88vw,300px)] rounded-xl border border-border/60 bg-card/95 shadow-xl overflow-hidden">
         {/* Ambient aurora backdrop */}
         <div
           aria-hidden
-          className="pointer-events-none absolute -inset-24 opacity-70 blur-3xl"
+          className="pointer-events-none absolute -inset-16 opacity-50 blur-2xl"
           style={{
             background:
-              "conic-gradient(from 0deg, hsl(var(--primary)/0.35), hsl(var(--accent)/0.35), hsl(var(--primary)/0.10), hsl(var(--primary)/0.35))",
+              "conic-gradient(from 0deg, hsl(var(--primary)/0.30), hsl(var(--accent)/0.25), hsl(var(--primary)/0.08), hsl(var(--primary)/0.30))",
             animation: "export-aurora 8s linear infinite",
           }}
         />
 
-        <div className="relative p-6 flex flex-col items-center">
+        <div className="relative px-4 py-3 flex flex-col items-center">
           {/* Progress ring */}
-          <div className="relative h-40 w-40 flex items-center justify-center">
+          <div className="relative h-20 w-20 flex items-center justify-center">
             <div
               className="absolute inset-0 rounded-full transition-[background] duration-300"
               style={{
@@ -74,46 +74,45 @@ export function ExportShowcase() {
                 animation: state.status === "running" ? "export-spin 6s linear infinite" : undefined,
               }}
             />
-            <div className="absolute inset-2 rounded-full bg-card" />
-            <div className="relative flex flex-col items-center justify-center">
-              <Icon className={`h-8 w-8 mb-1 ${isFail ? "text-destructive" : "text-primary"}`} />
-              <div className="text-2xl font-semibold tabular-nums">
+            <div className="absolute inset-1.5 rounded-full bg-card" />
+            <div className="relative flex flex-col items-center justify-center leading-none">
+              <Icon className={`h-4 w-4 mb-0.5 ${isFail ? "text-destructive" : "text-primary"}`} />
+              <div className="text-sm font-semibold tabular-nums">
                 {isDone ? "100%" : isFail ? "!" : `${pct}%`}
               </div>
-              <div className="text-[11px] text-muted-foreground tabular-nums">{elapsed}</div>
+              <div className="text-[9px] text-muted-foreground tabular-nums mt-0.5">{elapsed}</div>
             </div>
 
             {/* Floating sparkles */}
             {state.status === "running" && (
               <>
-                <Sparkles className="absolute -top-1 -right-1 h-4 w-4 text-primary/70" style={{ animation: "export-float 2.4s ease-in-out infinite" }} />
-                <Sparkles className="absolute -bottom-1 -left-2 h-3 w-3 text-accent-foreground/60" style={{ animation: "export-float 3.1s ease-in-out infinite", animationDelay: "0.6s" }} />
-                <Sparkles className="absolute top-1/2 -left-3 h-3 w-3 text-primary/60" style={{ animation: "export-float 2.8s ease-in-out infinite", animationDelay: "1.1s" }} />
+                <Sparkles className="absolute -top-0.5 -right-0.5 h-3 w-3 text-primary/70" style={{ animation: "export-float 2.4s ease-in-out infinite" }} />
+                <Sparkles className="absolute -bottom-0.5 -left-1 h-2.5 w-2.5 text-accent-foreground/60" style={{ animation: "export-float 3.1s ease-in-out infinite", animationDelay: "0.6s" }} />
               </>
             )}
           </div>
 
-          <div className="mt-5 text-center max-w-full">
-            <div className="text-sm font-medium truncate max-w-[340px] mx-auto" title={state.fileName}>
+          <div className="mt-2.5 text-center max-w-full">
+            <div className="text-xs font-medium truncate max-w-[260px] mx-auto" title={state.fileName}>
               {isDone ? "Ready" : isFail ? "Export failed" : "Preparing"} · {state.fileName}
             </div>
             {state.stage && !isDone && !isFail && (
-              <div className="mt-1 text-xs text-muted-foreground truncate max-w-[340px] mx-auto">
+              <div className="mt-0.5 text-[10px] text-muted-foreground truncate max-w-[260px] mx-auto">
                 {state.stage}
               </div>
             )}
             {state.total > 0 && !isFail && (
-              <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+              <div className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
                 {state.done.toLocaleString("en-IN")} / {state.total.toLocaleString("en-IN")} rows
               </div>
             )}
             {isFail && state.stage && (
-              <div className="mt-1 text-xs text-destructive/90 max-w-[340px] mx-auto">{state.stage}</div>
+              <div className="mt-0.5 text-[10px] text-destructive/90 max-w-[260px] mx-auto">{state.stage}</div>
             )}
           </div>
 
           {/* Linear progress bar */}
-          <div className="mt-5 h-2 w-full rounded-full bg-muted overflow-hidden">
+          <div className="mt-2.5 h-1.5 w-full rounded-full bg-muted overflow-hidden">
             <div
               className={`h-full rounded-full transition-[width] duration-300 ${isFail ? "bg-destructive" : "bg-primary"}`}
               style={{
@@ -129,12 +128,12 @@ export function ExportShowcase() {
           </div>
 
           {/* Actions */}
-          <div className="mt-5 flex items-center gap-2">
+          <div className="mt-2.5 flex items-center gap-2">
             {state.status === "running" && state.onCancel && (
               <button
                 type="button"
                 onClick={state.onCancel}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted transition"
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[11px] hover:bg-muted transition"
               >
                 <X className="h-3 w-3" /> Cancel
               </button>
@@ -143,7 +142,7 @@ export function ExportShowcase() {
               <button
                 type="button"
                 onClick={state.dismiss}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted transition"
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[11px] hover:bg-muted transition"
               >
                 Close
               </button>
