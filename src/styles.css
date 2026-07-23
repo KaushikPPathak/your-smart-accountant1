@@ -252,6 +252,33 @@
    Use as: <div class="kpi-card kpi-sales">…</div>
 ------------------------------------------------------------ */
 @layer components {
+  /* Compact export/save toast — narrow, small text, single-line truncation. */
+  [data-sonner-toast].sa-compact-toast {
+    width: 280px !important;
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+  }
+  [data-sonner-toast].sa-compact-toast [data-title] {
+    font-size: 12px !important;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  [data-sonner-toast].sa-compact-toast [data-description] {
+    font-size: 11px !important;
+    color: hsl(var(--muted-foreground));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  [data-sonner-toast].sa-compact-toast [data-button] {
+    height: 22px !important;
+    padding: 0 8px !important;
+    font-size: 11px !important;
+  }
+
   .kpi-card {
     position: relative;
     background: var(--card);
