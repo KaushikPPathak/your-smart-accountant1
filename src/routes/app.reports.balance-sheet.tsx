@@ -85,9 +85,9 @@ function BalanceSheet() {
   const liabRows: TRow[] = [...liab.rows];
   const assetRows: TRow[] = [...asset.rows];
   if (profitPaise > 0) {
-    liabRows.push({ label: profitLabelPos, amount: formatINR(profitPaise), emphasis: "bold" });
+    liabRows.push({ label: profitLabelPos, amount: "", outerAmount: formatINR(profitPaise), emphasis: "bold" });
   } else if (profitPaise < 0) {
-    assetRows.push({ label: profitLabelNeg, amount: formatINR(-profitPaise), emphasis: "bold" });
+    assetRows.push({ label: profitLabelNeg, amount: "", outerAmount: formatINR(-profitPaise), emphasis: "bold" });
   }
   const grandL = liab.totalPaise + Math.max(0, profitPaise);
   const grandA = asset.totalPaise + Math.max(0, -profitPaise);
@@ -96,24 +96,31 @@ function BalanceSheet() {
   // Exports
   const liabExp = groupedExportRows(liabBuckets);
   const assetExp = groupedExportRows(assetBuckets);
-  if (profitPaise > 0) liabExp.push({ label: profitLabelPos, paise: profitPaise, isSubtotal: true });
-  if (profitPaise < 0) assetExp.push({ label: profitLabelNeg, paise: -profitPaise, isSubtotal: true });
+  if (profitPaise > 0) liabExp.push({ label: profitLabelPos, paise: 0, outerPaise: profitPaise, isSubtotal: true });
+  if (profitPaise < 0) assetExp.push({ label: profitLabelNeg, paise: 0, outerPaise: -profitPaise, isSubtotal: true });
+
+  const fmtInner = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
+    row && !row.isHeader && row.outerPaise === undefined && row.paise !== 0 ? r(row.paise).toFixed(2) : "";
+  const fmtOuter = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
+    row && !row.isHeader && row.outerPaise !== undefined ? r(row.outerPaise).toFixed(2) : "";
 
   const exportBody = (): (string | number)[][] => {
     const max = Math.max(liabExp.length, assetExp.length);
     return Array.from({ length: max }).map((_, i) => [
       liabExp[i]?.label ?? "",
-      liabExp[i] && !liabExp[i].isHeader ? r(liabExp[i].paise).toFixed(2) : "",
+      fmtInner(liabExp[i]),
+      fmtOuter(liabExp[i]),
       assetExp[i]?.label ?? "",
-      assetExp[i] && !assetExp[i].isHeader ? r(assetExp[i].paise).toFixed(2) : "",
+      fmtInner(assetExp[i]),
+      fmtOuter(assetExp[i]),
     ]);
   };
 
   const csvRows = (): (string | number)[][] => [
-    [`Balance Sheet as on ${to}`, "", "", ""],
-    [liabHeader, amountHeader(), assetHeader, amountHeader()],
+    [`Balance Sheet as on ${to}`, "", "", "", "", ""],
+    [liabHeader, "", amountHeader(), assetHeader, "", amountHeader()],
     ...exportBody(),
-    ["Total", r(grandL).toFixed(2), "Total", r(grandA).toFixed(2)],
+    ["Total", "", r(grandL).toFixed(2), "Total", "", r(grandA).toFixed(2)],
   ];
 
   const onExportCsv = () => downloadCsv(`balance-sheet-${to}.csv`, csvRows());
@@ -125,12 +132,12 @@ function BalanceSheet() {
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       subtitle: `As on ${to}`,
-      head: [[liabHeader, amountHeader(), assetHeader, amountHeader()]],
+      head: [[liabHeader, "", amountHeader(), assetHeader, "", amountHeader()]],
       body: exportBody(),
-      foot: [["Total", r(grandL).toFixed(2), "Total", r(grandA).toFixed(2)]],
+      foot: [["Total", "", r(grandL).toFixed(2), "Total", "", r(grandA).toFixed(2)]],
       fileName: `balance-sheet-${to}.pdf`,
       orientation: "l",
-      rightAlignCols: [1, 3],
+      rightAlignCols: [1, 2, 4, 5],
     });
 
   return (

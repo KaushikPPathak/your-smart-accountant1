@@ -86,7 +86,8 @@ export function groupedTRows(
     }
     rows.push({
       label: <span className="pl-3 italic text-muted-foreground">Subtotal — {groupLabelText}</span>,
-      amount: formatINR(b.subtotalPaise),
+      amount: "",
+      outerAmount: formatINR(b.subtotalPaise),
       emphasis: "total",
     });
     total += b.subtotalPaise;
@@ -98,12 +99,12 @@ export function groupedTRows(
 export function groupedExportRows(
   buckets: GroupBucket[],
   prefix: "" | "To " | "By " = "",
-): { label: string; paise: number; isHeader?: boolean; isSubtotal?: boolean }[] {
-  const out: { label: string; paise: number; isHeader?: boolean; isSubtotal?: boolean }[] = [];
+): { label: string; paise: number; outerPaise?: number; isHeader?: boolean; isSubtotal?: boolean }[] {
+  const out: { label: string; paise: number; outerPaise?: number; isHeader?: boolean; isSubtotal?: boolean }[] = [];
   for (const b of buckets) {
     out.push({ label: b.group.label.toUpperCase(), paise: 0, isHeader: true });
     for (const r of b.rows) out.push({ label: `  ${prefix}${r.name}`, paise: r.valuePaise });
-    out.push({ label: `  Subtotal — ${b.group.label}`, paise: b.subtotalPaise, isSubtotal: true });
+    out.push({ label: `  Subtotal — ${b.group.label}`, paise: 0, outerPaise: b.subtotalPaise, isSubtotal: true });
   }
   return out;
 }

@@ -158,11 +158,11 @@ function ProfitLoss() {
 
   const expenseRows: TRow[] = [...exp.rows];
   const incomeRows: TRow[] = [];
-  if (tradingGp > 0) incomeRows.push({ label: "By Gross Profit b/d", amount: formatINR(tradingGp), emphasis: "bold" });
-  if (tradingGp < 0) expenseRows.unshift({ label: "To Gross Loss b/d", amount: formatINR(-tradingGp), emphasis: "bold" });
+  if (tradingGp > 0) incomeRows.push({ label: "By Gross Profit b/d", amount: "", outerAmount: formatINR(tradingGp), emphasis: "bold" });
+  if (tradingGp < 0) expenseRows.unshift({ label: "To Gross Loss b/d", amount: "", outerAmount: formatINR(-tradingGp), emphasis: "bold" });
   incomeRows.push(...inc.rows);
-  if (profit > 0) expenseRows.push({ label: surplusLabel, amount: formatINR(profit), emphasis: "bold" });
-  if (profit < 0) incomeRows.push({ label: deficitLabel, amount: formatINR(-profit), emphasis: "bold" });
+  if (profit > 0) expenseRows.push({ label: surplusLabel, amount: "", outerAmount: formatINR(profit), emphasis: "bold" });
+  if (profit < 0) incomeRows.push({ label: deficitLabel, amount: "", outerAmount: formatINR(-profit), emphasis: "bold" });
 
   const grandLeft = exp.totalPaise + Math.max(0, -tradingGp) + Math.max(0, profit);
   const grandRight = inc.totalPaise + Math.max(0, tradingGp) + Math.max(0, -profit);
@@ -170,26 +170,33 @@ function ProfitLoss() {
   // Exports
   const drExp = groupedExportRows(expenseBuckets, isIE ? "" : "To ");
   const crExp = groupedExportRows(incomeBuckets, isIE ? "" : "By ");
-  if (tradingGp > 0) crExp.unshift({ label: "  By Gross Profit b/d", paise: tradingGp, isSubtotal: true });
-  if (tradingGp < 0) drExp.unshift({ label: "  To Gross Loss b/d", paise: -tradingGp, isSubtotal: true });
-  if (profit > 0) drExp.push({ label: `  ${surplusLabel}`, paise: profit, isSubtotal: true });
-  if (profit < 0) crExp.push({ label: `  ${deficitLabel}`, paise: -profit, isSubtotal: true });
+  if (tradingGp > 0) crExp.unshift({ label: "  By Gross Profit b/d", paise: 0, outerPaise: tradingGp, isSubtotal: true });
+  if (tradingGp < 0) drExp.unshift({ label: "  To Gross Loss b/d", paise: 0, outerPaise: -tradingGp, isSubtotal: true });
+  if (profit > 0) drExp.push({ label: `  ${surplusLabel}`, paise: 0, outerPaise: profit, isSubtotal: true });
+  if (profit < 0) crExp.push({ label: `  ${deficitLabel}`, paise: 0, outerPaise: -profit, isSubtotal: true });
+
+  const fmtInner = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
+    row && !row.isHeader && row.outerPaise === undefined && row.paise !== 0 ? r(row.paise).toFixed(2) : "";
+  const fmtOuter = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
+    row && !row.isHeader && row.outerPaise !== undefined ? r(row.outerPaise).toFixed(2) : "";
 
   const exportBody = (): (string | number)[][] => {
     const max = Math.max(drExp.length, crExp.length);
     return Array.from({ length: max }).map((_, i) => [
       drExp[i]?.label ?? "",
-      drExp[i] && !drExp[i].isHeader ? r(drExp[i].paise).toFixed(2) : "",
+      fmtInner(drExp[i]),
+      fmtOuter(drExp[i]),
       crExp[i]?.label ?? "",
-      crExp[i] && !crExp[i].isHeader ? r(crExp[i].paise).toFixed(2) : "",
+      fmtInner(crExp[i]),
+      fmtOuter(crExp[i]),
     ]);
   };
 
   const csvRows = (): (string | number)[][] => [
-    [`${reportTitle}: ${from} to ${to}`, "", "", ""],
-    [dr, amountHeader(), cr, amountHeader()],
+    [`${reportTitle}: ${from} to ${to}`, "", "", "", "", ""],
+    [dr, "", amountHeader(), cr, "", amountHeader()],
     ...exportBody(),
-    ["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)],
+    ["Total", "", r(grandLeft).toFixed(2), "Total", "", r(grandRight).toFixed(2)],
   ];
 
   const fileSlug = isIE ? "income-expenditure" : "profit-loss";
@@ -202,12 +209,12 @@ function ProfitLoss() {
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       subtitle: `${from} to ${to}`,
-      head: [[dr, amountHeader(), cr, amountHeader()]],
+      head: [[dr, "", amountHeader(), cr, "", amountHeader()]],
       body: exportBody(),
-      foot: [["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)]],
+      foot: [["Total", "", r(grandLeft).toFixed(2), "Total", "", r(grandRight).toFixed(2)]],
       fileName: `${fileSlug}-${from}_to_${to}.pdf`,
       orientation: "l",
-      rightAlignCols: [1, 3],
+      rightAlignCols: [1, 2, 4, 5],
     });
 
   return (
