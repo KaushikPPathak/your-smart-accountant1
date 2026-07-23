@@ -677,10 +677,6 @@ function LedgerStatement() {
         fmtBal(row.balance),
       ]),
     ];
-    const confirmationLine =
-      `We confirm that the balance of ${formatINR(Math.abs(closing))} ${closing >= 0 ? "Dr" : "Cr"} ` +
-      `standing to the account of ${ledger?.name ?? ""} in our books as on ${fmtIndianDate(to)} ` +
-      `is correct as per the above statement.`;
     const foot: (string | number)[][] = [
       ["", "", "Total", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
       ["", "", (closing >= 0 ? "By Balance c/d" : "To Balance c/d"), "Closing", "", "", fmtBal(closing)],
