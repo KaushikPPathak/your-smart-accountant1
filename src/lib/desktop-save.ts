@@ -91,18 +91,21 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
     return;
   }
   const savedPath = res.path;
+  // Compact description: show only the parent folder name, not the full path.
+  const folderName = savedPath.replace(/[\\/][^\\/]+$/, "").replace(/^.*[\\/]/, "") || "folder";
   const exportToastId = toast.success(opts.toastTitle || opts.fileName, {
-    description: `Saved to ${savedPath}`,
-    duration: 10000,
+    description: `Saved to …\\${folderName}`,
+    duration: 6000,
     closeButton: true,
+    className: "sa-compact-toast",
     action: {
-      label: "Show in folder",
+      label: "Open folder",
       onClick: () => {
         void showInFolderNative(savedPath);
       },
     },
     cancel: {
-      label: "Cancel",
+      label: "Dismiss",
       onClick: () => toast.dismiss(exportToastId),
     },
   });
