@@ -474,8 +474,14 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
         doc.text(localizeExportText(section.sectionSubtitle, lang), pageW / 2, y, { align: "center" });
         y += 11;
       }
-      const columnStyles: Record<number, { halign: "right" }> = {};
-      (section.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
+      const columnStyles: Record<number, { halign?: "right"; cellWidth?: number }> = {};
+      (section.rightAlignCols || []).forEach((c) => (columnStyles[c] = { ...(columnStyles[c] || {}), halign: "right" }));
+      if (section.columnWidths) {
+        for (const [k, w] of Object.entries(section.columnWidths)) {
+          const i = Number(k);
+          columnStyles[i] = { ...(columnStyles[i] || {}), cellWidth: w };
+        }
+      }
 
       const sectionBody = localizeExportRows(section.body as (string | number)[][], lang);
       const sectionHead = localizeExportRows(section.head, lang);
