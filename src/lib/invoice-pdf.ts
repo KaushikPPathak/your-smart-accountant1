@@ -1,6 +1,6 @@
-// A4 GST Tax Invoice PDF generator using jsPDF + autotable.
-// Pulls company, party, items and totals from Supabase.
-// jspdf / jspdf-autotable are loaded dynamically (heavy bundle, only used on Print).
+// A4 GST Tax Invoice PDF generator — ink-light layout adopted from the
+// customer-approved ABC Enterprises sample. Six-column item table, HSN-wise
+// tax classification block, right-side totals box. Hairline rules only.
 import type jsPDFType from "jspdf";
 import type autoTableType from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +18,7 @@ import {
 import { offlineDb } from "@/lib/offline/db";
 
 const r = (paise: number) => (paise / 100).toFixed(2);
+const rIN = (paise: number) => formatINR(paise, { symbol: false });
 
 async function loadJsPdf(): Promise<{ jsPDF: typeof jsPDFType; autoTable: typeof autoTableType }> {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
@@ -26,7 +27,6 @@ async function loadJsPdf(): Promise<{ jsPDF: typeof jsPDFType; autoTable: typeof
   ]);
   return { jsPDF, autoTable };
 }
-
 
 interface CompanyRow {
   name: string;
@@ -101,28 +101,6 @@ const TYPE_TITLE: Record<string, string> = {
   debit_note: "Debit Note",
 };
 
-async function loadLogo(url: string): Promise<{ data: string; w: number; h: number } | null> {
-  try {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const data = await new Promise<string>((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onload = () => resolve(fr.result as string);
-      fr.onerror = reject;
-      fr.readAsDataURL(blob);
-    });
-    const dims = await new Promise<{ w: number; h: number }>((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve({ w: img.width, h: img.height });
-      img.onerror = () => resolve({ w: 1, h: 1 });
-      img.src = data;
-    });
-    return { data, ...dims };
-  } catch {
-    return null;
-  }
-}
-
 export async function downloadInvoicePdf(voucherId: string, companyId: string): Promise<void> {
   type Bundle = {
     v: VoucherRow & { ledgers: PartyRow | null };
@@ -176,7 +154,6 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
       };
     },
     async () => {
-      // Offline path: assemble the same shape from IndexedDB caches.
       const [voucherRaw, itemRows, ledgers, itemsMaster, companies, settings] = await Promise.all([
         offlineDb.cache_vouchers.get(voucherId) as Promise<any>,
         readVoucherItems(voucherId) as Promise<any[]>,
@@ -217,6 +194,8 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
   const company = bundle.company;
   const settings = bundle.settings;
   const party = v.ledgers;
+  const isInter = v.is_interstate;
+  const curr = exportCurrencySymbol();
 
   const { jsPDF, autoTable } = await loadJsPdf();
   const doc = new jsPDF({ orientation: "p", unit: "pt", format: "a4" });
@@ -224,249 +203,325 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const M = 32;
-  let y = M;
+  const contentW = pageW - M * 2;
+  const HAIR = 0.5;
 
-  // Header band
-  doc.setFillColor(26, 39, 68);
-  doc.rect(0, 0, pageW, 70, "F");
-  doc.setTextColor(255, 255, 255);
+  doc.setLineWidth(HAIR);
+  doc.setDrawColor(60);
+  doc.setTextColor(0);
+
+  // ── Outer frame ──────────────────────────────────────────────────────────
+  doc.rect(M, M, contentW, pageH - M * 2);
+
+  // ── Header block ─────────────────────────────────────────────────────────
+  let y = M + 18;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text(TYPE_TITLE[v.voucher_type] ?? "Invoice", pageW - M, 28, { align: "right" });
+  doc.setFontSize(14);
+  doc.text(company.name || "", pageW / 2, y, { align: "center" });
+  y += 14;
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.text(`Invoice #: ${v.voucher_number}`, pageW - M, 44, { align: "right" });
-  doc.text(`Date: ${v.voucher_date}`, pageW - M, 56, { align: "right" });
-
-  // Logo
-  let logo: { data: string; w: number; h: number } | null = null;
-  if (company.logo_url) logo = await loadLogo(company.logo_url);
-  if (logo) {
-    const maxH = 40;
-    const ratio = logo.w / logo.h;
-    const h = Math.min(maxH, logo.h);
-    const w = h * ratio;
-    try {
-      doc.addImage(logo.data, "PNG", M, 15, w, h);
-    } catch {
-      /* ignore unsupported format */
-    }
-  } else {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text(company.name, M, 32);
-  }
-
-  doc.setTextColor(0, 0, 0);
-  y = 90;
-
-  // Company block
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text(company.name, M, y);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  y += 12;
   if (company.address) {
-    const lines = doc.splitTextToSize(company.address, 280);
-    doc.text(lines, M, y);
-    y += lines.length * 10;
-  }
-  if (company.state) {
-    doc.text(`State: ${company.state}${company.state_code ? ` (${company.state_code})` : ""}`, M, y);
-    y += 10;
-  }
-  const contactBits: string[] = [];
-  if (company.phone) contactBits.push(`Ph: ${company.phone}`);
-  if (company.email) contactBits.push(company.email);
-  if (contactBits.length) {
-    doc.text(contactBits.join(" · "), M, y);
-    y += 10;
+    const lines = doc.splitTextToSize(company.address, contentW - 20);
+    doc.text(lines, pageW / 2, y, { align: "center" });
+    y += lines.length * 11;
   }
   if (company.gstin) {
-    doc.setFont("helvetica", "bold");
-    doc.text(`GSTIN: ${company.gstin}`, M, y);
-    y += 10;
+    doc.text(`GSTIN/UIN: ${company.gstin}`, pageW / 2, y, { align: "center" });
+    y += 11;
   }
-  if (company.pan) {
-    doc.setFont("helvetica", "normal");
-    doc.text(`PAN: ${company.pan}`, M, y);
-    y += 10;
+  if (company.state) {
+    doc.text(
+      `State Name: ${company.state}${company.state_code ? `, Code: ${company.state_code}` : ""}`,
+      pageW / 2,
+      y,
+      { align: "center" },
+    );
+    y += 11;
   }
 
-  // Bill-to block (right side)
-  let yR = 90;
+  y += 4;
+  doc.line(M, y, pageW - M, y);
+  y += 14;
+
+  // Invoice No / Date row
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.text("Bill To:", pageW - M - 240, yR);
-  yR += 12;
+  doc.text(`Invoice No: ${v.voucher_number}`, M + 8, y);
+  doc.text(`Date: ${formatDate(v.voucher_date)}`, pageW - M - 8, y, { align: "right" });
+  y += 8;
+  doc.line(M, y, pageW - M, y);
+  y += 12;
+
+  // Document title
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text((TYPE_TITLE[v.voucher_type] ?? "Invoice").toUpperCase(), pageW / 2, y, { align: "center" });
+  y += 12;
+
+  // ── Bill To box ──────────────────────────────────────────────────────────
+  const billBoxX = M + 10;
+  const billBoxW = contentW - 20;
+  const billLines: string[] = [];
+  if (party?.address) billLines.push(...doc.splitTextToSize(party.address, billBoxW - 16));
+  if (party?.gstin) billLines.push(`GSTIN/UIN: ${party.gstin}`);
+  if (party?.state)
+    billLines.push(`State Name: ${party.state}${party.state_code ? `, Code: ${party.state_code}` : ""}`);
+  if (v.place_of_supply_code) billLines.push(`Place of Supply: ${v.place_of_supply_code}`);
+
+  const billBoxH = 14 + 12 + billLines.length * 11 + 8;
+  doc.rect(billBoxX, y, billBoxW, billBoxH);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("Bill To:", billBoxX + 8, y + 12);
   doc.setFontSize(10);
-  doc.text(party?.name ?? "Cash Sale", pageW - M - 240, yR);
-  yR += 11;
+  doc.text((party?.name ?? "Cash Sale").toUpperCase(), billBoxX + 8, y + 24);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  if (party?.address) {
-    const lines = doc.splitTextToSize(party.address, 240);
-    doc.text(lines, pageW - M - 240, yR);
-    yR += lines.length * 10;
+  doc.setFontSize(9);
+  let by = y + 36;
+  for (const ln of billLines) {
+    doc.text(ln, billBoxX + 8, by);
+    by += 11;
   }
-  if (party?.state) {
-    doc.text(`State: ${party.state}${party.state_code ? ` (${party.state_code})` : ""}`, pageW - M - 240, yR);
-    yR += 10;
-  }
-  if (party?.gstin) {
-    doc.setFont("helvetica", "bold");
-    doc.text(`GSTIN: ${party.gstin}`, pageW - M - 240, yR);
-    yR += 10;
-  }
-  if (v.place_of_supply_code) {
-    doc.setFont("helvetica", "normal");
-    doc.text(`Place of Supply: ${v.place_of_supply_code}`, pageW - M - 240, yR);
-    yR += 10;
-  }
-  if (v.reference_no) {
-    doc.text(`Ref: ${v.reference_no}`, pageW - M - 240, yR);
-    yR += 10;
-  }
-  if (v.vendor_invoice_no) {
-    doc.text(`Vendor Inv: ${v.vendor_invoice_no} ${v.vendor_invoice_date ?? ""}`, pageW - M - 240, yR);
-    yR += 10;
-  }
+  y += billBoxH + 10;
 
-  const startY = Math.max(y, yR) + 10;
-  const isInter = v.is_interstate;
-
-  // Line items table
-  const head = isInter
-    ? [["#", "Item / Description", "HSN", "Qty", "Rate", "Disc", "Taxable", "IGST %", "IGST", "Amount"]]
-    : [["#", "Item / Description", "HSN", "Qty", "Rate", "Disc", "Taxable", "GST %", "CGST", "SGST", "Amount"]];
-
-  const body = items.map((it, i) => {
-    const desc = it.items?.name + (it.description ? `\n${it.description}` : "");
-    const base = [
-      String(i + 1),
-      desc,
-      it.items?.hsn_code ?? "—",
-      `${it.qty} ${it.items?.unit ?? ""}`,
-      r(it.rate_paise),
-      r(it.discount_paise),
-      r(it.taxable_paise),
-    ];
-    if (isInter) return [...base, `${it.gst_rate}%`, r(it.igst_paise), r(it.amount_paise)];
-    return [...base, `${it.gst_rate}%`, r(it.cgst_paise), r(it.sgst_paise), r(it.amount_paise)];
-  });
+  // ── Items table ──────────────────────────────────────────────────────────
+  const head = [["Sr.\nNo.", "Description of Goods", "HSN/SAC", "Quantity", `Rate\n(${curr})`, `Amount\n(${curr})`]];
+  const body = items.map((it, i) => [
+    String(i + 1),
+    (it.items?.name ?? "") + (it.description ? `\n${it.description}` : ""),
+    it.items?.hsn_code ?? "—",
+    `${Number(it.qty).toLocaleString("en-IN")}\n${it.items?.unit ?? ""}`,
+    rIN(it.rate_paise),
+    rIN(it.amount_paise),
+  ]);
 
   autoTable(doc, {
-    startY,
+    startY: y,
+    margin: { left: M + 10, right: M + 10 },
     head,
     body,
-    styles: { fontSize: 8, cellPadding: 4 },
-    headStyles: { fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold" },
-    columnStyles: isInter
-      ? { 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" }, 8: { halign: "right" }, 9: { halign: "right" } }
-      : { 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" }, 8: { halign: "right" }, 9: { halign: "right" }, 10: { halign: "right" } },
+    theme: "grid",
+    styles: {
+      fontSize: 8.5,
+      cellPadding: 4,
+      lineColor: [60, 60, 60],
+      lineWidth: HAIR,
+      textColor: 0,
+      valign: "top",
+    },
+    headStyles: {
+      fillColor: [245, 245, 245],
+      textColor: 0,
+      fontStyle: "bold",
+      halign: "center",
+      valign: "middle",
+      fontSize: 9,
+    },
+    columnStyles: {
+      0: { halign: "center", cellWidth: 32 },
+      1: { halign: "left", cellWidth: "auto" },
+      2: { halign: "center", cellWidth: 60 },
+      3: { halign: "center", cellWidth: 62 },
+      4: { halign: "right", cellWidth: 62 },
+      5: { halign: "right", cellWidth: 72 },
+    },
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let cursorY = (doc as any).lastAutoTable.finalY + 14;
+  let cursorY = (doc as any).lastAutoTable.finalY;
 
-  // Totals box (right)
-  const boxX = pageW - M - 220;
-  const boxW = 220;
-  const lh = 14;
-  const totals: [string, string][] = [
-    ["Subtotal", r(v.subtotal_paise)],
-  ];
-  if (isInter) totals.push(["IGST", r(v.igst_paise)]);
-  else {
-    totals.push(["CGST", r(v.cgst_paise)]);
-    totals.push(["SGST", r(v.sgst_paise)]);
-  }
-  if (v.round_off_paise) totals.push(["Round Off", r(v.round_off_paise)]);
-  totals.push(["Grand Total", r(v.total_paise)]);
-
-  doc.setDrawColor(200);
-  doc.rect(boxX, cursorY, boxW, totals.length * lh + 6);
-  doc.setFontSize(9);
-  totals.forEach(([k, val], i) => {
-    const yy = cursorY + 14 + i * lh;
-    if (i === totals.length - 1) {
-      doc.setFont("helvetica", "bold");
-      doc.setFillColor(245, 245, 245);
-      doc.rect(boxX, yy - 11, boxW, lh, "F");
-    } else {
-      doc.setFont("helvetica", "normal");
-    }
-    doc.text(k, boxX + 8, yy);
-    doc.text(`${exportCurrencySymbol()} ${val}`, boxX + boxW - 8, yy, { align: "right" });
-  });
-
-  // Amount in words (left)
+  // Subtotal row (right-aligned "Total" spanning last two columns)
+  const stH = 18;
+  const tableRight = pageW - M - 10;
+  const tableLeft = M + 10;
+  doc.rect(tableLeft, cursorY, tableRight - tableLeft, stH);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.text("Amount in words:", M, cursorY + 14);
+  doc.text("Total", tableRight - 72 - 8, cursorY + 12, { align: "right" });
+  doc.text(rIN(v.subtotal_paise), tableRight - 6, cursorY + 12, { align: "right" });
+  cursorY += stH + 10;
+
+  // ── HSN-wise Tax Classification ──────────────────────────────────────────
+  const hsnMap = new Map<
+    string,
+    { taxable: number; cgst: number; sgst: number; igst: number; rate: number }
+  >();
+  for (const it of items) {
+    const key = it.items?.hsn_code || "—";
+    const cur = hsnMap.get(key) ?? { taxable: 0, cgst: 0, sgst: 0, igst: 0, rate: it.gst_rate };
+    cur.taxable += it.taxable_paise;
+    cur.cgst += it.cgst_paise;
+    cur.sgst += it.sgst_paise;
+    cur.igst += it.igst_paise;
+    cur.rate = it.gst_rate;
+    hsnMap.set(key, cur);
+  }
+  const hsnRows = Array.from(hsnMap.entries());
+
+  const taxHead = isInter
+    ? [["HSN/SAC", `Taxable\nValue (${curr})`, `IGST %`, `IGST\nAmount (${curr})`]]
+    : [["HSN/SAC", `Taxable\nValue (${curr})`, `CGST %`, `CGST\nAmount (${curr})`, `SGST %`, `SGST\nAmount (${curr})`]];
+
+  const taxBody = hsnRows.map(([hsn, s]) =>
+    isInter
+      ? [hsn, rIN(s.taxable), `${s.rate}%`, rIN(s.igst)]
+      : [hsn, rIN(s.taxable), `${s.rate / 2}%`, rIN(s.cgst), `${s.rate / 2}%`, rIN(s.sgst)],
+  );
+
+  const totalRow = isInter
+    ? ["Total", rIN(v.subtotal_paise), "", rIN(v.igst_paise)]
+    : ["Total", rIN(v.subtotal_paise), "", rIN(v.cgst_paise), "", rIN(v.sgst_paise)];
+  taxBody.push(totalRow);
+
+  autoTable(doc, {
+    startY: cursorY,
+    margin: { left: M + 10, right: M + 10 },
+    head: taxHead,
+    body: taxBody,
+    theme: "grid",
+    styles: {
+      fontSize: 8.5,
+      cellPadding: 4,
+      lineColor: [60, 60, 60],
+      lineWidth: HAIR,
+      textColor: 0,
+    },
+    headStyles: {
+      fillColor: [245, 245, 245],
+      textColor: 0,
+      fontStyle: "bold",
+      halign: "center",
+      fontSize: 9,
+    },
+    columnStyles: isInter
+      ? { 0: { halign: "left" }, 1: { halign: "right" }, 2: { halign: "center" }, 3: { halign: "right" } }
+      : {
+          0: { halign: "left" },
+          1: { halign: "right" },
+          2: { halign: "center" },
+          3: { halign: "right" },
+          4: { halign: "center" },
+          5: { halign: "right" },
+        },
+    didParseCell: (data) => {
+      if (data.row.index === taxBody.length - 1) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = [250, 250, 250];
+      }
+    },
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cursorY = (doc as any).lastAutoTable.finalY + 12;
+
+  // ── Total Invoice Value box (right) + Amount in words (left) ────────────
+  const totalsW = 260;
+  const totalsX = pageW - M - 10 - totalsW;
+  const totalsRows: [string, string][] = [["Taxable Value", rIN(v.subtotal_paise)]];
+  if (isInter) totalsRows.push([`Add: IGST`, rIN(v.igst_paise)]);
+  else {
+    totalsRows.push([`Add: CGST`, rIN(v.cgst_paise)]);
+    totalsRows.push([`Add: SGST`, rIN(v.sgst_paise)]);
+  }
+  if (v.round_off_paise) totalsRows.push(["Round Off", rIN(v.round_off_paise)]);
+
+  const lh = 14;
+  const totalsH = totalsRows.length * lh + lh + 8;
+  doc.rect(totalsX, cursorY, totalsW, totalsH);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("TOTAL INVOICE VALUE", totalsX + totalsW / 2, cursorY + 12, { align: "center" });
+  doc.line(totalsX, cursorY + 16, totalsX + totalsW, cursorY + 16);
+
   doc.setFont("helvetica", "normal");
-  const words = doc.splitTextToSize(amountInWords(v.total_paise), pageW - M - boxW - 40);
-  doc.text(words, M, cursorY + 28);
+  totalsRows.forEach(([k, val], i) => {
+    const yy = cursorY + 16 + lh + i * lh - 2;
+    doc.text(k, totalsX + 8, yy);
+    doc.text(`${curr} ${val}`, totalsX + totalsW - 8, yy, { align: "right" });
+  });
+  const grandY = cursorY + 16 + lh + totalsRows.length * lh - 2;
+  doc.line(totalsX, grandY - 10, totalsX + totalsW, grandY - 10);
+  doc.setFont("helvetica", "bold");
+  doc.text("Total Invoice Amount", totalsX + 8, grandY);
+  doc.text(`${curr} ${rIN(v.total_paise)}`, totalsX + totalsW - 8, grandY, { align: "right" });
 
-  cursorY = cursorY + Math.max(totals.length * lh + 16, 28 + words.length * 11) + 12;
+  // Amount in words (left of totals box)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("Amount Chargeable (in words):", M + 10, cursorY + 12);
+  doc.setFont("helvetica", "normal");
+  const wordsW = totalsX - (M + 10) - 12;
+  const words = doc.splitTextToSize(`${amountInWords(v.total_paise)} Only`, wordsW);
+  doc.text(words, M + 10, cursorY + 26);
 
-  // Bank details + terms + signatory
+  cursorY += Math.max(totalsH, 26 + words.length * 11) + 14;
+
+  // ── Bank details ────────────────────────────────────────────────────────
   if (settings.show_bank_details && (company.bank_name || company.bank_account_no)) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text("Bank Details:", M, cursorY);
+    doc.text("Bank Details:", M + 10, cursorY);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    let by = cursorY + 12;
-    if (company.bank_name) { doc.text(`Bank: ${company.bank_name}`, M, by); by += 10; }
-    if (company.bank_account_no) { doc.text(`A/c No: ${company.bank_account_no}`, M, by); by += 10; }
-    if (company.bank_ifsc) { doc.text(`IFSC: ${company.bank_ifsc}`, M, by); by += 10; }
-    if (company.bank_branch) { doc.text(`Branch: ${company.bank_branch}`, M, by); by += 10; }
-    cursorY = by + 4;
+    doc.setFontSize(8.5);
+    let by2 = cursorY + 12;
+    if (company.bank_name) { doc.text(`Bank: ${company.bank_name}`, M + 10, by2); by2 += 10; }
+    if (company.bank_account_no) { doc.text(`A/c No: ${company.bank_account_no}`, M + 10, by2); by2 += 10; }
+    if (company.bank_ifsc) { doc.text(`IFSC: ${company.bank_ifsc}`, M + 10, by2); by2 += 10; }
+    if (company.bank_branch) { doc.text(`Branch: ${company.bank_branch}`, M + 10, by2); by2 += 10; }
+    cursorY = by2 + 4;
   }
 
+  // Terms / narration
   if (settings.invoice_terms) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text("Terms & Conditions:", M, cursorY);
+    doc.text("Terms:", M + 10, cursorY);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    const tlines = doc.splitTextToSize(settings.invoice_terms, pageW - M * 2 - 180);
-    doc.text(tlines, M, cursorY + 12);
-    cursorY += 12 + tlines.length * 10 + 6;
+    doc.setFontSize(8.5);
+    const tlines = doc.splitTextToSize(settings.invoice_terms, contentW - 200);
+    doc.text(tlines, M + 10 + 36, cursorY);
+    cursorY += Math.max(12, tlines.length * 10 + 4);
   }
-
   if (v.narration) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.text("Narration:", M, cursorY);
+    doc.text("Narration:", M + 10, cursorY);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    const nlines = doc.splitTextToSize(v.narration, pageW - M * 2 - 180);
-    doc.text(nlines, M, cursorY + 12);
-    cursorY += 12 + nlines.length * 10 + 6;
+    doc.setFontSize(8.5);
+    const nlines = doc.splitTextToSize(v.narration, contentW - 200);
+    doc.text(nlines, M + 10 + 50, cursorY);
+    cursorY += Math.max(12, nlines.length * 10 + 4);
   }
 
+  // System-generated line
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(8);
+  doc.setTextColor(90);
+  doc.text("This is a system-generated invoice.", M + 10, pageH - M - 50);
+  doc.setTextColor(0);
+
+  // Signatory (right)
   if (settings.show_signatory) {
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    const sx = pageW - M - 160;
-    const sy = pageH - 60;
+    doc.setFontSize(9);
+    const sx = pageW - M - 180;
+    const sy = pageH - M - 40;
     doc.text(`For ${company.name}`, sx, sy);
-    doc.line(sx, sy + 28, sx + 150, sy + 28);
-    doc.text("Authorised Signatory", sx, sy + 40);
+    doc.line(sx, sy + 20, sx + 160, sy + 20);
+    doc.setFont("helvetica", "bold");
+    doc.text("Authorised Signatory", sx, sy + 32);
   }
 
+  // Footer note
   if (settings.invoice_footer_note) {
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(120);
-    doc.text(settings.invoice_footer_note, pageW / 2, pageH - 20, { align: "center" });
+    doc.text(settings.invoice_footer_note, pageW / 2, pageH - M - 8, { align: "center" });
     doc.setTextColor(0);
   }
-
-  // suppress unused-warning helper
-  void formatINR;
 
   const fileName = `${TYPE_TITLE[v.voucher_type] || "invoice"}-${v.voucher_number}.pdf`;
   const { stampWatermarkIfUnlicensed } = await import("./license/pdf-watermark");
@@ -478,4 +533,10 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
     contents: buf,
     mime: "application/pdf",
   });
+}
+
+function formatDate(iso: string): string {
+  // Turn YYYY-MM-DD into DD-MM-YYYY for Indian invoice convention.
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : iso;
 }
