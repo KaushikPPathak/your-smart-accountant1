@@ -117,13 +117,13 @@ export function TAccount({
       )}
       {/* Column headers */}
       <div className="grid grid-cols-2 border-b-2 border-foreground bg-muted/40 text-[11px] font-semibold uppercase tracking-wide print:border-black">
-        <div className="flex min-w-0 items-center justify-between gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black">
-          <span className="truncate">{loc(leftHeader, lang)}</span>
-          <span className="whitespace-nowrap">{loc(amountHeader, lang)}</span>
+        <div className="flex min-w-0 items-center gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black">
+          <span className="min-w-0 flex-1 truncate">{loc(leftHeader, lang)}</span>
+          <span className="w-[13rem] shrink-0 whitespace-nowrap text-right">{loc(amountHeader, lang)}</span>
         </div>
-        <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-1.5">
-          <span className="truncate">{loc(rightHeader, lang)}</span>
-          <span className="whitespace-nowrap">{loc(amountHeader, lang)}</span>
+        <div className="flex min-w-0 items-center gap-2 px-2 py-1.5">
+          <span className="min-w-0 flex-1 truncate">{loc(rightHeader, lang)}</span>
+          <span className="w-[13rem] shrink-0 whitespace-nowrap text-right">{loc(amountHeader, lang)}</span>
         </div>
       </div>
       {/* Body */}
