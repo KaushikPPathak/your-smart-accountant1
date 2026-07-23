@@ -185,7 +185,7 @@ export async function purgeCompany(companyId: string): Promise<PurgeResult> {
 
   // Clear the integrity manifest entry so silent auto-restore stops looking
   // for this company on the next boot.
-  try { await setMeta(`integrity:${companyId}`, undefined as unknown); } catch { /* ignore */ }
+  try { await offlineDb.meta.delete(`integrity:${companyId}`); } catch { /* ignore */ }
   // Persistent tombstone — auto-restore + picker filter both honour it.
   try { await addTombstone(companyId, name); } catch { /* ignore */ }
 
