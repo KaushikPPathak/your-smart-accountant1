@@ -171,7 +171,7 @@ export function UserManagementDialog({ open, onOpenChange }: Props) {
           </DialogTitle>
         </DialogHeader>
 
-        {(!staff || staff.username === "local-device" || (isLocalOnlyMode() && !isLocalProfileLinked())) ? (
+        {(!staff || getLastUsername() === "local-device" || (isLocalOnlyMode() && !isLocalProfileLinked())) ? (
           <div className="space-y-3 pt-2">
             <Alert>
               <Info className="h-4 w-4" />
