@@ -171,7 +171,29 @@ export function UserManagementDialog({ open, onOpenChange }: Props) {
           </DialogTitle>
         </DialogHeader>
 
-        {!verified ? (
+        {(!staff || staff.username === "local-device" || (isLocalOnlyMode() && !isLocalProfileLinked())) ? (
+          <div className="space-y-3 pt-2">
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Login accounts aren't set up on this device</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>
+                  You're signed in as <strong>This device</strong> — a hidden local profile that
+                  lets you use the app without an account. There are no other login accounts to
+                  manage yet.
+                </p>
+                <p>
+                  To create additional users (Admin / Staff) with their own passwords, first
+                  connect a cloud account from <strong>Settings → Connect account</strong>. Your
+                  local company data stays on this device either way.
+                </p>
+              </AlertDescription>
+            </Alert>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => closeDialog(false)}>Close</Button>
+            </DialogFooter>
+          </div>
+        ) : !verified ? (
           <form onSubmit={handleVerify} className="space-y-3 pt-2">
             <p className="text-sm text-muted-foreground">
               Confirm your admin password to manage other login accounts.
