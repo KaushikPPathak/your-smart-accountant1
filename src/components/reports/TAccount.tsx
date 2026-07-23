@@ -19,8 +19,10 @@ export interface TRow {
   label: React.ReactNode;
   /** Optional small detail line under the label (date, voucher no., etc.) */
   hint?: React.ReactNode;
-  /** Amount in rupees, already formatted (e.g. "₹ 12,345.00") */
+  /** Amount in the inner (ledger-level) column */
   amount: React.ReactNode;
+  /** Amount in the outer (group subtotal / grand) column */
+  outerAmount?: React.ReactNode;
   /** Optional click handler for drill-down */
   onClick?: () => void;
   /** Mark as bold/total/c-d style */
