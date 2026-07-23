@@ -6,9 +6,10 @@
 // so nothing is truly lost. The delete runs inside a single Dexie
 // transaction — a mid-flight crash leaves the DB unchanged.
 
-import { offlineDb } from "@/lib/offline/db";
+import { offlineDb, setMeta, getMeta } from "@/lib/offline/db";
 import { buildCompanyBackup } from "@/lib/backup";
 import { wrapBackup } from "@/lib/backup-policy";
+import { addTombstone } from "@/lib/recovery/tombstones";
 import { getAppPaths } from "@/lib/app-paths";
 import { isDesktopRuntime, writeAbsoluteFileNative } from "@/lib/native-bridge";
 
