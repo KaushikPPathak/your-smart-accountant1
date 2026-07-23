@@ -666,11 +666,12 @@ function LedgerStatement() {
 
   // ---------- Confirmation PDF ----------
   function exportConfirmationPdf() {
-    const head = ["Date", "Vch No", "Particulars", "Vch Type", "Debit (₹)", "Credit (₹)", "Balance (₹)"];
+    const head = ["#", "Date", "Vch No", "Particulars", "Vch Type", "Debit (₹)", "Credit (₹)", "Balance (₹)"];
     const openingLabel = openingBeforeFrom >= 0 ? "To Balance b/d" : "By Balance b/d";
     const bodyRows: (string | number)[][] = [
-      [fmtIndianDate(from), "Opening", openingLabel, "Opening", "", "", fmtBal(openingBeforeFrom)],
-      ...columnarRows.map((row) => [
+      ["", fmtIndianDate(from), "Opening", openingLabel, "Opening", "", "", fmtBal(openingBeforeFrom)],
+      ...columnarRows.map((row, i) => [
+        String(i + 1),
         fmtIndianDate(row.date),
         row.vchNo,
         row.particulars,
@@ -681,8 +682,8 @@ function LedgerStatement() {
       ]),
     ];
     const foot: (string | number)[][] = [
-      ["", "", "Total", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
-      ["", "", (closing >= 0 ? "By Balance c/d" : "To Balance c/d"), "Closing", "", "", fmtBal(closing)],
+      ["", "", "", "Total", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
+      ["", "", "", (closing >= 0 ? "By Balance c/d" : "To Balance c/d"), "Closing", "", "", fmtBal(closing)],
     ];
     const companyName = pdfHeader.companyName;
     const partyName = ledger?.name ?? "";
@@ -700,7 +701,8 @@ function LedgerStatement() {
       foot,
       fileName: `${fileBase}-confirmation.pdf`,
       orientation: "l",
-      rightAlignCols: [4, 5, 6],
+      rightAlignCols: [0, 5, 6, 7],
+
       afterTable: ({ doc, finalY, pageWidth, pageHeight, margin, font }) => {
         const usableW = pageWidth - margin * 2;
         let y = finalY + 18;
