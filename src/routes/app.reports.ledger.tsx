@@ -1016,6 +1016,7 @@ function LedgerStatement() {
               ["Total", "", "", "", "", r(total).toFixed(2), "Total", "", "", "", "", r(total).toFixed(2)],
             ],
             rightAlignCols: [5, 11],
+            columnWidths: { 0:55, 1:130, 2:55, 3:45, 4:55, 5:53, 6:55, 7:130, 8:55, 9:45, 10:55, 11:53 },
             dividerBeforeCol: 6,
           } as PdfSection;
         })
