@@ -64,6 +64,16 @@ export interface PdfTableOptions {
   subFolder?: string;
   /** Draw a thick vertical divider on the LEFT edge of this column (e.g. T-shape ledger center). */
   dividerBeforeCol?: number;
+  /** Optional callback invoked after the table has rendered on the last page.
+   *  Use it to draw wrapped paragraphs, signature blocks, etc. within page margins. */
+  afterTable?: (ctx: {
+    doc: jsPDFType;
+    finalY: number;
+    pageWidth: number;
+    pageHeight: number;
+    margin: number;
+    font: string;
+  }) => void;
 }
 
 // Rows per autoTable chunk. autoTable is synchronous, so we render the body
@@ -162,9 +172,9 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
         foot: isLast ? foot : undefined,
       showFoot: "lastPage",
       theme: "grid",
-      styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
-      headStyles: { font: FONT, fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
-      footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
+      styles: { font: FONT, fontSize: 9, cellPadding: 3, lineColor: [80, 80, 80], lineWidth: 0.2, textColor: 20 },
+      headStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
+      footStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
         columnStyles,
         margin: { top: tableStartY },
         didParseCell: (data) => {
@@ -200,6 +210,20 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
       await yieldToUi();
     }
     if (aborted) return;
+    if (opts.afterTable) {
+      try {
+        opts.afterTable({
+          doc,
+          finalY: nextY,
+          pageWidth: doc.internal.pageSize.getWidth(),
+          pageHeight: doc.internal.pageSize.getHeight(),
+          margin: 28,
+          font: FONT,
+        });
+      } catch (e) {
+        console.warn("afterTable hook failed", e);
+      }
+    }
     if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
       (doc as unknown as { putTotalPages: (s: string) => void }).putTotalPages("{total_pages_count_string}");
     }
@@ -447,9 +471,9 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
           foot: isLast ? sectionFoot : undefined,
           showFoot: "lastPage",
           theme: "grid",
-          styles: { font: FONT, fontSize: 9, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5 },
-          headStyles: { font: FONT, fillColor: [26, 39, 68], textColor: 255, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.5 },
-          footStyles: { font: FONT, fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.8 },
+          styles: { font: FONT, fontSize: 9, cellPadding: 3, lineColor: [80, 80, 80], lineWidth: 0.2, textColor: 20 },
+          headStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
+          footStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
           columnStyles,
           margin: { top: y + 4 },
           didParseCell: (data) => {
