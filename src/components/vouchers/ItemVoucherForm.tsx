@@ -701,11 +701,14 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       lines: lines
         .map((l, i) => ({ l, c: computed[i] }))
         .filter((x) => x.l.item_id && x.c?.total_paise > 0),
-      sundries: sundries.map((s) => ({
+      sundries: resolvedSundries.map((s) => ({
         id: s.id,
         sundry_type: s.sundry_type,
         ledger_id: s.ledger_id,
         amount_paise: s.amount_paise,
+        mode: s.mode ?? "amount",
+        rate_bps: s.rate_bps ?? 0,
+        apply_stage: s.apply_stage ?? "post_gst",
         narration: s.narration ?? null,
       })),
     };
