@@ -227,9 +227,16 @@ export async function runAutoRestore(
   companies: { id: string; name: string }[],
 ): Promise<AutoRestoreOutcome[]> {
   if (companies.length === 0) return [];
+  // Respect tombstones: never resurrect a company the user has purged.
+  const { isTombstoned } = await import("@/lib/recovery/tombstones");
+  const filtered: { id: string; name: string }[] = [];
+  for (const c of companies) {
+    if (!(await isTombstoned(c.id, c.name))) filtered.push(c);
+  }
+  if (filtered.length === 0) return [];
   const manifest = await getAllIntegrity();
   const results: AutoRestoreOutcome[] = [];
-  for (const c of companies) {
+  for (const c of filtered) {
     // A deleted duplicate company may have held the fuller lineage under a
     // different ID. Company name ties those on-device manifests together;
     // the strict superset check below is the final safety gate.

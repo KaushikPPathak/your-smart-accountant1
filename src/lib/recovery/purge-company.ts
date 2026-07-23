@@ -9,6 +9,7 @@
 import { offlineDb } from "@/lib/offline/db";
 import { buildCompanyBackup } from "@/lib/backup";
 import { wrapBackup } from "@/lib/backup-policy";
+import { addTombstone } from "@/lib/recovery/tombstones";
 import { getAppPaths } from "@/lib/app-paths";
 import { isDesktopRuntime, writeAbsoluteFileNative } from "@/lib/native-bridge";
 
@@ -181,6 +182,12 @@ export async function purgeCompany(companyId: string): Promise<PurgeResult> {
     await db.companies.delete(companyId).catch(() => undefined);
     await db.cache_companies.delete(companyId).catch(() => undefined);
   });
+
+  // Clear the integrity manifest entry so silent auto-restore stops looking
+  // for this company on the next boot.
+  try { await offlineDb.meta.delete(`integrity:${companyId}`); } catch { /* ignore */ }
+  // Persistent tombstone — auto-restore + picker filter both honour it.
+  try { await addTombstone(companyId, name); } catch { /* ignore */ }
 
   return { companyId, companyName: name, rowsDeleted: deleted, safetyBackup: safety };
 }
