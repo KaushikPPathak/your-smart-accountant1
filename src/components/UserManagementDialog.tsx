@@ -23,7 +23,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { getActiveStaff } from "@/lib/staff-session";
+import { getActiveStaff, getLastUsername } from "@/lib/staff-session";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { isLocalProfileLinked } from "@/lib/local-device-profile";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
