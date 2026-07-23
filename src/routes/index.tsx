@@ -579,6 +579,31 @@ function StartScreen() {
         </DialogContent>
       </Dialog>
 
+      <AlertDialog open={exitConfirmOpen} onOpenChange={setExitConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Exit application?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Close Your Mehtaji? Any unsaved work in open dialogs will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel autoFocus>Stay</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setExitConfirmOpen(false);
+                const closed = await closeNativeApp();
+                if (closed.ok) return;
+                window.open("", "_self");
+                window.close();
+              }}
+            >
+              Exit
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <footer className="border-t border-border/60 py-4 text-center text-xs text-muted-foreground">
         © {new Date().getFullYear()} Your Mehtaji
       </footer>
