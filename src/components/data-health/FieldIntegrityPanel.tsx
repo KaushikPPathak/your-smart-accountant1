@@ -93,10 +93,12 @@ export function FieldIntegrityPanel({ companyId }: { companyId: string | null | 
               <RefreshCw className={`h-4 w-4 mr-1 ${busy ? "animate-spin" : ""}`} />
               {busy ? "Scanning…" : "Run audit"}
             </Button>
-            <Button variant="outline" size="sm" onClick={onRebuild} disabled={rebuilding || !companyId}>
-              <HardDriveDownload className={`h-4 w-4 mr-1 ${rebuilding ? "animate-pulse" : ""}`} />
-              Rebuild from server
-            </Button>
+            {!isLocalOnlyMode() && (
+              <Button variant="outline" size="sm" onClick={onRebuild} disabled={rebuilding || !companyId}>
+                <HardDriveDownload className={`h-4 w-4 mr-1 ${rebuilding ? "animate-pulse" : ""}`} />
+                Rebuild from server
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
