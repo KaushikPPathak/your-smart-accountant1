@@ -1165,6 +1165,22 @@ function LedgerStatement() {
                   </ToggleGroupItem>
                 </ToggleGroup>
               </div>
+              {view === "columnar" && (
+                <div className="space-y-1">
+                  <Label className="text-xs">PDF Format</Label>
+                  <ToggleGroup
+                    type="single"
+                    size="sm"
+                    value={pdfFormat}
+                    onValueChange={(v) => v && setPdfFormat(v as "standard" | "confirmation" | "ageing")}
+                    className="h-9 rounded-md border border-input bg-background p-0.5"
+                  >
+                    <ToggleGroupItem value="standard" className="px-3 text-xs">Standard</ToggleGroupItem>
+                    <ToggleGroupItem value="confirmation" className="px-3 text-xs">Confirmation</ToggleGroupItem>
+                    <ToggleGroupItem value="ageing" className="px-3 text-xs">Ageing</ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label className="text-xs">All Ledgers (one go)</Label>
                 <div className="flex h-9 items-center gap-1">
