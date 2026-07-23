@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { checkCanRebuild, rebuildCompanyCache } from "@/lib/offline/cache-rebuild";
 import { getStoredSchemaVersion, SCHEMA_VERSION } from "@/lib/offline/schema-version";
 import { runIntegrityScan, totalIssues, type IntegrityIssue, type ScanProgress } from "@/lib/offline/integrity-scan";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 export function FieldIntegrityPanel({ companyId }: { companyId: string | null | undefined }) {
   const [issues, setIssues] = useState<IntegrityIssue[] | null>(null);
