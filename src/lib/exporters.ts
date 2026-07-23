@@ -133,8 +133,14 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
     }
     const tableStartY = y + 4;
 
-    const columnStyles: Record<number, { halign: "right" }> = {};
-    (opts.rightAlignCols || []).forEach((c) => (columnStyles[c] = { halign: "right" }));
+    const columnStyles: Record<number, { halign?: "right"; cellWidth?: number }> = {};
+    (opts.rightAlignCols || []).forEach((c) => (columnStyles[c] = { ...(columnStyles[c] || {}), halign: "right" }));
+    if (opts.columnWidths) {
+      for (const [k, w] of Object.entries(opts.columnWidths)) {
+        const i = Number(k);
+        columnStyles[i] = { ...(columnStyles[i] || {}), cellWidth: w };
+      }
+    }
 
     const drawPageChrome = () => {
       let hy = 28;
