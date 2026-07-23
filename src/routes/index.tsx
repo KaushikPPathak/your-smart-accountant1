@@ -135,9 +135,35 @@ function StartScreen() {
           db.companies.toArray().catch(() => []),
           db.cache_companies.toArray().catch(() => []),
         ]);
+
+        // Hard-remove any rows that match an existing tombstone so silent
+        // background restores can't resurrect them into the picker.
+        try {
+          const { getTombstones, normalizeCompanyName } = await import("@/lib/recovery/tombstones");
+          const tombs = await getTombstones();
+          if (tombs.length) {
+            const ids = new Set(tombs.map((t) => t.companyId));
+            const names = new Set(tombs.map((t) => t.normalizedName).filter(Boolean));
+            const kill = (rows: any[]) => rows
+              .filter((r) => r?.id && (ids.has(String(r.id)) || names.has(normalizeCompanyName(r?.name))))
+              .map((r) => String(r.id));
+            const killIds = Array.from(new Set([...kill(pickerCache), ...kill(snapshotCache)]));
+            if (killIds.length) {
+              await Promise.all([
+                db.companies.bulkDelete(killIds).catch(() => undefined),
+                db.cache_companies.bulkDelete(killIds).catch(() => undefined),
+              ]);
+              for (const id of killIds) {
+                await db.meta.delete(`integrity:${id}`).catch(() => undefined);
+              }
+            }
+          }
+        } catch { /* best-effort */ }
+
         const merged = new Map<string, any>();
         for (const c of pickerCache || []) if (c?.id) merged.set(String(c.id), c);
         for (const c of snapshotCache || []) if (c?.id) merged.set(String(c.id), { ...(merged.get(String(c.id)) ?? {}), ...c });
+
 
         // In local-only mode business data lives ONLY on this device.
         // Compute per-company row counts and, when several ids share the
