@@ -9,7 +9,7 @@ import { cacheRowsForCcr, compressMessages } from "./headroom";
 import { routeQuery, type QueryIntent } from "./query-router";
 import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
 import { optimiseSlice } from "./slice-optimizer";
-import { createRedactionMap, redactDeep, unredact, type RedactionMap } from "./redactor";
+import { createRedactionMap, redactDeep, redactString, unredact, type RedactionMap } from "./redactor";
 
 export interface AccountingContext {
   companyId?: string;
@@ -105,8 +105,8 @@ export async function buildCompressedContext(userQuestion: string, companyId?: s
       {
         question: redactDeep(userQuestion, redaction),
         intent: routed.intent,
-        scope: slice.scope,
-        entityHints: routed.entityHints,
+        scope: redactString(slice.scope, redaction),
+        entityHints: redactDeep(routed.entityHints, redaction),
         dateRange: routed.from || routed.to ? { from: routed.from, to: routed.to } : undefined,
         facts: safeFacts,
         data: safeData,
