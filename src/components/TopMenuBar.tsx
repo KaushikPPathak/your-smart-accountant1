@@ -437,6 +437,16 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     { scope: "global", allowInField: true, description: "Exit application" },
   );
 
+  // Any part of the app can request the exit dialog by dispatching
+  // `app:exit-request`. Used by the app-level Escape ladder so pages
+  // without a focused menubar (Companies, dashboard, empty routes) can
+  // exit in a single keypress instead of hopping through the menubar.
+  useEffect(() => {
+    const onExit = () => { if (onLock) setExitConfirmOpen(true); };
+    window.addEventListener("app:exit-request", onExit);
+    return () => window.removeEventListener("app:exit-request", onExit);
+  }, [onLock]);
+
 
   return (
     <Menubar
