@@ -210,6 +210,20 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
       await yieldToUi();
     }
     if (aborted) return;
+    if (opts.afterTable) {
+      try {
+        opts.afterTable({
+          doc,
+          finalY: nextY,
+          pageWidth: doc.internal.pageSize.getWidth(),
+          pageHeight: doc.internal.pageSize.getHeight(),
+          margin: 28,
+          font: FONT,
+        });
+      } catch (e) {
+        console.warn("afterTable hook failed", e);
+      }
+    }
     if (typeof (doc as unknown as { putTotalPages?: (s: string) => void }).putTotalPages === "function") {
       (doc as unknown as { putTotalPages: (s: string) => void }).putTotalPages("{total_pages_count_string}");
     }
