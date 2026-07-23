@@ -294,7 +294,12 @@ function openPrintPreview(
 ): void {
   if (!el) return;
   const w = window.open("", "_blank", "width=900,height=1100");
-  if (!w) return;
+  if (!w) {
+    // Tauri / popup-blocked environments: fall back to native print of the
+    // current window so the Print button never silently no-ops.
+    try { window.print(); } catch { /* ignore */ }
+    return;
+  }
   const orient = orientation === "landscape" ? "landscape" : "portrait";
   // Pull every stylesheet (Tailwind, design-tokens, component CSS) from the
   // host document so utility classes (bg-card, text-muted-foreground,
