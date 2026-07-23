@@ -239,7 +239,7 @@ export function ReportViewer({
         )}
       >
         <div className="report-print-header mb-3 text-center">
-          <div className="text-lg font-bold uppercase tracking-wide leading-tight">{company || "\u00A0"}</div>
+          <div className="report-print-company-name text-lg font-bold uppercase tracking-wide leading-tight">{company || "\u00A0"}</div>
           <span className="report-print-company-capture" aria-hidden>{company || "\u00A0"}</span>
           {fyText && (
             <span className="report-print-fy-capture" aria-hidden>{fyText}</span>
