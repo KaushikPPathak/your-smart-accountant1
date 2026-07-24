@@ -351,10 +351,31 @@
     background: var(--amber-pale) !important;
     color: var(--amber-ink) !important;
     border: 1px solid color-mix(in oklab, var(--amber-dark) 35%, transparent) !important;
+    /* Long menus (Reports, Transactions) must scroll so arrow-key focus
+       never lands on an off-screen item that the user can't see. */
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    scroll-padding-block: 0.5rem;
+  }
+  .busy-menu-dropdown [role="menuitem"],
+  .busy-menu-dropdown [role="menuitemradio"] {
+    scroll-margin-block: 0.5rem;
   }
   .busy-menu-dropdown [role="menuitem"]:hover,
-  .busy-menu-dropdown [role="menuitem"][data-highlighted] {
+  .busy-menu-dropdown [role="menuitem"][data-highlighted],
+  .busy-menu-dropdown [role="menuitemradio"][data-highlighted],
+  .busy-menu-dropdown [role="menuitem"]:focus-visible {
     background: color-mix(in oklab, var(--amber-base) 55%, transparent) !important;
+    color: var(--amber-ink) !important;
+    outline: none;
+  }
+  /* Sub-menu triggers (Reports → GST, File → Language, etc.) get the same
+     strong highlight so Right/Left arrow navigation is obvious. */
+  .busy-menu-dropdown [role="menuitem"][data-state="open"],
+  .busy-menu-dropdown [data-radix-menubar-subtrigger][data-highlighted],
+  .busy-menu-dropdown [data-radix-menubar-subtrigger][data-state="open"] {
+    background: color-mix(in oklab, var(--amber-base) 70%, transparent) !important;
     color: var(--amber-ink) !important;
   }
 
