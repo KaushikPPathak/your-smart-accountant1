@@ -1236,6 +1236,9 @@ function LedgerStatement() {
             </div>
           }
         />
+        <div className="mt-2">
+          <QuickRangeChips from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+        </div>
       </CardContent>
     </Card>
   );
