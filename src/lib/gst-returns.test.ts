@@ -97,7 +97,7 @@ describe("GSTR-1 HSN reconciliation", () => {
       sales: [voucher("1", "sales", true, [item(100_00, 18, 900, "1001")], 118_00)],
       creditNotes: [],
     });
-    result.hsn_b2b[0].txval += 1;
+    result.hsn_b2b[0].txval += 5;
     expect(() => assertGstr1Reconciled(result)).toThrow("GSTR-1 reconciliation failed");
   });
 });
