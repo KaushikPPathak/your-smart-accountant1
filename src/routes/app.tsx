@@ -491,6 +491,23 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
   useShortcut("Ctrl+F2", (e) => { e.preventDefault(); focusRegion("ribbon"); },
     { scope: "global", allowInField: true, description: "Jump to Quick Entry ribbon" });
 
+  // Alt+Arrow region hops — mirror F6 but with a mnemonic direction. Alt+Up
+  // walks main → ribbon → menu; Alt+Down walks the reverse. This gives users
+  // an arrow-key path between regions without stealing plain ArrowUp/Down
+  // from form fields and grids.
+  useShortcut("Alt+ArrowUp", (e) => {
+    e.preventDefault();
+    const here = currentRegion();
+    if (here === "main") focusRegion("ribbon");
+    else if (here === "ribbon") focusRegion("menu");
+  }, { scope: "global", allowInField: true, description: "Region up (main→ribbon→menu)" });
+  useShortcut("Alt+ArrowDown", (e) => {
+    e.preventDefault();
+    const here = currentRegion();
+    if (here === "menu") focusRegion("ribbon");
+    else if (here === "ribbon") focusRegion("main");
+  }, { scope: "global", allowInField: true, description: "Region down (menu→ribbon→main)" });
+
   // Alt+O → open the Company switcher dropdown (no more mouse hunting).
   useShortcut("Alt+o", (e) => {
     e.preventDefault();
