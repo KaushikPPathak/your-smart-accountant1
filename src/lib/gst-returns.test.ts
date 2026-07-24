@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { assertGstr1Reconciled, buildGstr1, getGstr1Reconciliation, type VoucherRow } from "@/lib/gst-returns";
+import { assertGstr1Reconciled, buildGstr1, buildGstr3B, getGstr1Reconciliation, type VoucherRow } from "@/lib/gst-returns";
+import type { Database } from "@/integrations/supabase/types";
+type GstTreatment = Database["public"]["Enums"]["gst_treatment"];
 
 const item = (taxable: number, rate: number, tax: number, hsn: string) => ({
   qty: 1,
@@ -95,7 +97,48 @@ describe("GSTR-1 HSN reconciliation", () => {
       sales: [voucher("1", "sales", true, [item(100_00, 18, 900, "1001")], 118_00)],
       creditNotes: [],
     });
-    result.hsn_b2b[0].txval += 1;
+    result.hsn_b2b[0].txval += 5;
     expect(() => assertGstr1Reconciled(result)).toThrow("GSTR-1 reconciliation failed");
+  });
+});
+
+describe("GSTR-3B Table 5 auto-aggregation", () => {
+  const purchase = (
+    number: string,
+    sn: VoucherRow["supply_nature"],
+    treatment: GstTreatment,
+    amountPaise: number,
+    interstate = false,
+  ): VoucherRow => ({
+    ...voucher(number, "sales", true, [], amountPaise),
+    voucher_type: "purchase",
+    is_interstate: interstate,
+    supply_nature: sn,
+    subtotal_paise: amountPaise,
+    total_paise: amountPaise,
+    ledgers: { name: "Supplier", gstin: null, state_code: "36", gst_treatment: treatment, country: "India" },
+    voucher_items: [],
+  });
+
+  it("routes nil/exempt/non-GST purchases and composition suppliers into Table 5", () => {
+    const built = buildGstr3B({
+      company: { name: "Test", gstin: "36AAAAA0000A1Z5", state_code: "36" },
+      from: "2026-04-01", to: "2026-04-30", fp: "042026",
+      sales: [],
+      purchases: [
+        purchase("P1", "nil_rated", "regular", 10_000_00, false),      // intra 10,000
+        purchase("P2", "exempt", "regular", 5_000_00, true),           // inter 5,000
+        purchase("P3", "non_gst", "regular", 2_000_00, false),         // intra non-GST 2,000
+        purchase("P4", "taxable", "composition", 3_000_00, false),     // intra composition 3,000
+        purchase("P5", "taxable", "regular", 99_999_00, false),        // taxable → ignored in Table 5
+      ],
+      creditNotes: [], debitNotes: [],
+    });
+    const gst = built.inward_sup.isup_details.find((x) => x.ty === "GST")!;
+    const non = built.inward_sup.isup_details.find((x) => x.ty === "NONGST")!;
+    expect(gst.intra).toBe(13_000); // 10,000 nil + 3,000 composition
+    expect(gst.inter).toBe(5_000);  // 5,000 exempt inter-state
+    expect(non.intra).toBe(2_000);
+    expect(non.inter).toBe(0);
   });
 });
