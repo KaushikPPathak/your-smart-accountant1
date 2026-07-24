@@ -294,7 +294,13 @@ function ItemsPage() {
                       nameHint={form.name}
                       id="hsn_code"
                       value={form.hsn_code}
-                      onChange={(v) => setForm((f) => ({ ...f, hsn_code: v }))}
+                      onChange={(v) =>
+                        setForm((f) => ({
+                          ...f,
+                          hsn_code: v,
+                          unit: isServiceHsn(v) ? "NA" : f.unit,
+                        }))
+                      }
                       onResolved={(rec) => {
                         const rate = rec.is_exempt ? 0 : (rec.igst_rate || rec.cgst_rate + rec.sgst_rate);
                         const match = (GST_RATES as readonly number[]).find((g) => Math.abs(g - rate) < 0.001);
@@ -302,16 +308,20 @@ function ItemsPage() {
                           ...f,
                           hsn_code: rec.hsn_code,
                           gst_rate: match !== undefined ? String(match) : f.gst_rate,
+                          unit: isServiceHsn(rec.hsn_code) ? "NA" : f.unit,
                         }));
                       }}
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="unit">Unit *</Label>
+                    <Label htmlFor="unit">
+                      Unit{isServiceHsn(form.hsn_code) ? " (service — N/A)" : " *"}
+                    </Label>
                     <Select
                       value={form.unit}
                       onValueChange={(v) => setForm({ ...form, unit: v })}
+                      disabled={isServiceHsn(form.hsn_code)}
                     >
                       <SelectTrigger id="unit">
                         <SelectValue />
