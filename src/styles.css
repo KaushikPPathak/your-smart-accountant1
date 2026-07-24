@@ -434,6 +434,13 @@
     color: var(--amber-onDark);
     border-color: var(--amber-dark);
   }
+  .busy-menu:focus-visible {
+    outline: none;
+    background: var(--amber-dark);
+    color: var(--amber-onDark);
+    border-color: var(--amber-dark);
+    box-shadow: 0 0 0 2px var(--sidebar), 0 0 0 4px var(--amber-dark);
+  }
   .busy-menu-active {
     background: var(--amber-base);
     color: var(--amber-ink);
