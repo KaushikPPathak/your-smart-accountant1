@@ -791,3 +791,15 @@ html[lang="gu"] body {
     line-height: 1.35;
   }
 }
+
+/* --- Keyboard navigation: guaranteed focus indicator ---
+ * Ribbon/menubar roving items rely purely on native focus (no state re-render
+ * on arrow keys). Guarantee a visible ring even if a theme override strips
+ * the default focus-visible outline. Never remove. */
+[data-focus-item]:focus-visible,
+[role="menubar"] [role="menuitem"]:focus-visible,
+[role="toolbar"] [data-focus-item]:focus-visible {
+  outline: 2px solid hsl(var(--ring, 220 90% 56%));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
