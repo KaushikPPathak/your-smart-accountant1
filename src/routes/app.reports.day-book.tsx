@@ -242,17 +242,20 @@ function DayBook() {
             onExportPdf={onExportPdf}
             onPrint={() => window.print()}
           />
-          <div className="mt-2 flex gap-1">
-            <Button
-              size="sm"
-              variant={view === "t" ? "default" : "outline"}
-              onClick={() => setView("t")}
-            ><Columns2 className="mr-1 h-3.5 w-3.5" /> T-account</Button>
-            <Button
-              size="sm"
-              variant={view === "grid" ? "default" : "outline"}
-              onClick={() => setView("grid")}
-            ><LayoutGrid className="mr-1 h-3.5 w-3.5" /> Grid</Button>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <QuickRangeChips from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant={view === "t" ? "default" : "outline"}
+                onClick={() => setView("t")}
+              ><Columns2 className="mr-1 h-3.5 w-3.5" /> T-account</Button>
+              <Button
+                size="sm"
+                variant={view === "grid" ? "default" : "outline"}
+                onClick={() => setView("grid")}
+              ><LayoutGrid className="mr-1 h-3.5 w-3.5" /> Grid</Button>
+            </div>
           </div>
         </CardContent>
       </Card>
