@@ -767,15 +767,62 @@ function SettingsPage() {
                       This will permanently delete <span className="font-semibold">{activeMembership?.companies.name}</span> and all of its data. Type the company name to confirm.
                     </DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-2">
-                    <Label htmlFor="delete-confirm">Company name</Label>
-                    <Input
-                      id="delete-confirm"
-                      value={deleteConfirm}
-                      onChange={(e) => setDeleteConfirm(e.target.value)}
-                      placeholder={activeMembership?.companies.name ?? ""}
-                      autoComplete="off"
-                    />
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Delete scope</Label>
+                      <RadioGroup
+                        value={deleteScope}
+                        onValueChange={(v) => {
+                          const next = v === "local_and_remote" ? "local_and_remote" : "local";
+                          setDeleteScope(next);
+                          try { window.localStorage.setItem("ym_delete_company_scope", next); } catch { /* ignore */ }
+                        }}
+                        className="gap-2"
+                      >
+                        <label className="flex items-start gap-2 rounded-md border border-border/60 p-2 cursor-pointer">
+                          <RadioGroupItem value="local" id="scope-local" className="mt-0.5" />
+                          <div className="text-sm">
+                            <div className="font-medium">This device only</div>
+                            <div className="text-xs text-muted-foreground">
+                              Removes the company from local storage. Any copy on your account or other devices is left untouched.
+                            </div>
+                          </div>
+                        </label>
+                        <label className={`flex items-start gap-2 rounded-md border p-2 cursor-pointer ${isLocalOnlyMode() ? "opacity-60" : "border-destructive/50"}`}>
+                          <RadioGroupItem value="local_and_remote" id="scope-remote" className="mt-0.5" disabled={isLocalOnlyMode()} />
+                          <div className="text-sm">
+                            <div className="font-medium">This device + remote account</div>
+                            <div className="text-xs text-muted-foreground">
+                              {isLocalOnlyMode()
+                                ? "Unavailable — local-only mode is on, no data is stored on our servers."
+                                : "Also deletes the company from your cloud account. All other devices linked to this account will lose it on their next sync."}
+                            </div>
+                          </div>
+                        </label>
+                      </RadioGroup>
+                    </div>
+
+                    {deleteScope === "local_and_remote" && !isLocalOnlyMode() && (
+                      <div className="rounded-md border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive">
+                        <div className="flex items-center gap-1.5 font-semibold">
+                          <AlertTriangle className="h-3.5 w-3.5" /> Server data will be removed
+                        </div>
+                        <div className="mt-1 text-destructive/90">
+                          This deletes the company from the shared account on our servers. Team members and other devices will no longer see it. This action cannot be undone.
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="delete-confirm">Type company name to confirm</Label>
+                      <Input
+                        id="delete-confirm"
+                        value={deleteConfirm}
+                        onChange={(e) => setDeleteConfirm(e.target.value)}
+                        placeholder={activeMembership?.companies.name ?? ""}
+                        autoComplete="off"
+                      />
+                    </div>
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>
@@ -786,13 +833,27 @@ function SettingsPage() {
                       disabled={deleting || deleteConfirm.trim() !== (activeMembership?.companies.name ?? "").trim()}
                       onClick={async () => {
                         if (!activeCompanyId) return;
+                        const wantsRemote = deleteScope === "local_and_remote" && !isLocalOnlyMode();
+                        if (wantsRemote) {
+                          const ok = window.confirm(
+                            `Final warning: this will also delete "${activeMembership?.companies.name}" from your cloud account and every device linked to it. Continue?`,
+                          );
+                          if (!ok) return;
+                        }
                         setDeleting(true);
                         try {
                           const { purgeCompany } = await import("@/lib/recovery/purge-company");
                           const r = await purgeCompany(activeCompanyId);
-                          // Best-effort remote delete (no-op in local-only mode).
-                          await supabase.from("companies").delete().eq("id", activeCompanyId).then(() => undefined, () => undefined);
-                          toast.success(`Deleted "${r.companyName}" — ${r.rowsDeleted} rows removed`);
+                          if (wantsRemote) {
+                            const { error } = await supabase.from("companies").delete().eq("id", activeCompanyId);
+                            if (error) {
+                              toast.warning(`Local delete done. Remote delete failed: ${error.message}`);
+                            } else {
+                              toast.success(`Deleted "${r.companyName}" locally and from your account — ${r.rowsDeleted} rows removed`);
+                            }
+                          } else {
+                            toast.success(`Deleted "${r.companyName}" from this device — ${r.rowsDeleted} rows removed`);
+                          }
                           setDeleteOpen(false);
                           setDeleteConfirm("");
                           if (typeof window !== "undefined") {
@@ -807,9 +868,10 @@ function SettingsPage() {
                         }
                       }}
                     >
-                      {deleting ? "Deleting…" : "Delete permanently"}
+                      {deleting ? "Deleting…" : deleteScope === "local_and_remote" && !isLocalOnlyMode() ? "Delete locally + remotely" : "Delete on this device"}
                     </Button>
                   </DialogFooter>
+
                 </DialogContent>
               </Dialog>
             </div>
