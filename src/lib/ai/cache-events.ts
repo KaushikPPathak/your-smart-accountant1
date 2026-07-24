@@ -50,7 +50,16 @@ export function emitDataChange(
 ): void {
   if (!companyId) return;
   const evt: DataChangeEvent = { companyId, kind, scopes, at: Date.now() };
-  for (const fn of listeners) {
-    try { fn(evt); } catch { /* isolate */ }
-  }
+  // Fan-out is async so a synchronous caller (e.g. voucher save on Enter)
+  // never pays for subscriber work (answer cache, semantic index, warm-up)
+  // on the same tick that dispatched the event. Keeps the keystroke path
+  // free for paint/focus updates.
+  const dispatch = () => {
+    for (const fn of listeners) {
+      try { fn(evt); } catch { /* isolate */ }
+    }
+  };
+  if (typeof queueMicrotask === "function") queueMicrotask(dispatch);
+  else Promise.resolve().then(dispatch);
 }
+

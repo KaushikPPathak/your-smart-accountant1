@@ -51,9 +51,24 @@ export function QuickActionsRibbon() {
   const [showHotkeys, setShowHotkeys] = useState<boolean>(() => {
     try { return localStorage.getItem(HOTKEY_KEY) === "1"; } catch { return false; }
   });
-  const [focusedId, setFocusedId] = useState<string>(`${ribbonId}-toggle`);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const scope = useFocusScope(toolbarRef, { orientation: "horizontal", loop: true });
+
+  // Roving tabindex is applied imperatively (not through React state) so an
+  // arrow keypress never triggers a re-render. One item carries tabIndex=0;
+  // the rest are -1. The active id is mirrored to aria-activedescendant via
+  // a DOM attribute write instead of setState.
+  const activeIdRef = useRef<string>(`${ribbonId}-toggle`);
+  const applyRoving = (nextId: string) => {
+    const root = toolbarRef.current;
+    if (!root) return;
+    activeIdRef.current = nextId;
+    root.setAttribute("aria-activedescendant", nextId);
+    const items = root.querySelectorAll<HTMLElement>("[data-focus-item='true']");
+    items.forEach((el) => {
+      el.tabIndex = el.id === nextId ? 0 : -1;
+    });
+  };
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, open ? "1" : "0"); } catch { /* ignore */ }
@@ -61,6 +76,15 @@ export function QuickActionsRibbon() {
   useEffect(() => {
     try { localStorage.setItem(HOTKEY_KEY, showHotkeys ? "1" : "0"); } catch { /* ignore */ }
   }, [showHotkeys]);
+
+  // Re-apply roving after render (open toggle / hotkeys toggle adds/removes items).
+  useEffect(() => {
+    const root = toolbarRef.current;
+    if (!root) return;
+    const cur = root.querySelector<HTMLElement>(`#${CSS.escape(activeIdRef.current)}`);
+    applyRoving(cur ? activeIdRef.current : `${ribbonId}-toggle`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, showHotkeys]);
 
   return (
     <div className="busy-menubar hidden md:block print:hidden">
@@ -70,7 +94,11 @@ export function QuickActionsRibbon() {
         role="toolbar"
         aria-label={t("ribbon.quickEntry")}
         aria-orientation="horizontal"
-        aria-activedescendant={focusedId}
+        aria-activedescendant={`${ribbonId}-toggle`}
+        onFocusCapture={(e) => {
+          const el = e.target as HTMLElement;
+          if (el.dataset.focusItem === "true" && el.id) applyRoving(el.id);
+        }}
         onKeyDown={(e) => {
           if (e.key === "ArrowUp") {
             const topBtn = document.querySelector<HTMLButtonElement>('.busy-topbar button.busy-menu');
@@ -92,10 +120,6 @@ export function QuickActionsRibbon() {
             return;
           }
           scope.onKeyDown(e);
-          if (e.defaultPrevented) {
-            const active = document.activeElement as HTMLElement | null;
-            if (active?.id) setFocusedId(active.id);
-          }
         }}
       >
 
@@ -108,8 +132,7 @@ export function QuickActionsRibbon() {
           title={open ? "Collapse Quick Entry" : "Expand Quick Entry"}
           aria-expanded={open}
           aria-label={open ? "Collapse quick entry ribbon" : "Expand quick entry ribbon"}
-          tabIndex={focusedId === `${ribbonId}-toggle` ? 0 : -1}
-          onFocus={() => setFocusedId(`${ribbonId}-toggle`)}
+          tabIndex={0}
         >
           <Zap className="h-3 w-3" aria-hidden="true" />
           <span>{t("ribbon.quickEntry")}</span>
@@ -132,8 +155,7 @@ export function QuickActionsRibbon() {
               role="button"
               aria-label={`${label} (${a.hotkey})`}
               aria-current={active ? "page" : undefined}
-              tabIndex={focusedId === itemId ? 0 : -1}
-              onFocus={() => setFocusedId(itemId)}
+              tabIndex={-1}
               style={{ ["--dot" as string]: a.dot }}
               title={`${label} (${a.hotkey})`}
             >
@@ -158,8 +180,7 @@ export function QuickActionsRibbon() {
             className="ml-auto rounded px-2 py-1 text-[10px] text-[color:var(--amber-ink)]/70 hover:bg-[color:var(--amber-dark)]/20 hover:text-[color:var(--amber-ink)]"
             title="Toggle keyboard shortcut hints"
             aria-pressed={showHotkeys}
-            tabIndex={focusedId === `${ribbonId}-hotkeys` ? 0 : -1}
-            onFocus={() => setFocusedId(`${ribbonId}-hotkeys`)}
+            tabIndex={-1}
           >
             {showHotkeys ? "Hide keys" : "Show keys"}
           </button>
@@ -168,3 +189,4 @@ export function QuickActionsRibbon() {
     </div>
   );
 }
+
