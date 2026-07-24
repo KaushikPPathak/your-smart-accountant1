@@ -1318,9 +1318,39 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
     ineligible_blocked: { iamt: r(cb.ineligible_blocked.iamt), camt: r(cb.ineligible_blocked.camt), samt: r(cb.ineligible_blocked.samt), csamt: 0, txval: r(cb.ineligible_blocked.txval) },
   };
 
-  // 5 — Inward exempt/nil/non-GST (manual entry per period; defaults zero)
-  const inwardGst = inwardSummary.find((x) => x.ty === "GST") ?? { ty: "GST" as const, inter_paise: 0, intra_paise: 0 };
-  const inwardNon = inwardSummary.find((x) => x.ty === "NONGST") ?? { ty: "NONGST" as const, inter_paise: 0, intra_paise: 0 };
+  // 5 — Inward exempt/nil/non-GST. Auto-aggregated from purchase vouchers per
+  // supply_nature and supplier gst_treatment, then ADDED to any manual entries
+  // (accountants can key opening / prior-period figures via the manual card
+  // and both contribute to the filed value).
+  //   • Row "GST" (composition/exempt/nil rated): purchases where
+  //       supply_nature ∈ {nil_rated, exempt}  OR
+  //       supplier gst_treatment === "composition"
+  //   • Row "NONGST": purchases where supply_nature === "non_gst"
+  //       (petrol / diesel / liquor / electricity etc.)
+  // Inter vs intra split follows the voucher's is_interstate flag.
+  const autoGst = { inter: 0, intra: 0 };
+  const autoNon = { inter: 0, intra: 0 };
+  const addToTable5 = (v: VoucherRow, sign: 1 | -1) => {
+    const sn = (v.supply_nature ?? "taxable") as SupplyNature;
+    const treatment = v.ledgers?.gst_treatment;
+    const isCompositionSupplier = treatment === "composition";
+    const isExemptNil = sn === "nil_rated" || sn === "exempt";
+    const isNonGst = sn === "non_gst";
+    if (!isExemptNil && !isNonGst && !isCompositionSupplier) return;
+    const val = v.subtotal_paise || v.total_paise;
+    if (!val) return;
+    const bucket = isNonGst ? autoNon : autoGst;
+    if (v.is_interstate) bucket.inter += sign * val;
+    else bucket.intra += sign * val;
+  };
+  for (const v of purchases) addToTable5(v, 1);
+  for (const v of debitNotes) if (v.voucher_type === "debit_note") addToTable5(v, 1);
+  for (const v of creditNotes) if (v.voucher_type === "credit_note") addToTable5(v, -1);
+
+  const manualGst = inwardSummary.find((x) => x.ty === "GST") ?? { ty: "GST" as const, inter_paise: 0, intra_paise: 0 };
+  const manualNon = inwardSummary.find((x) => x.ty === "NONGST") ?? { ty: "NONGST" as const, inter_paise: 0, intra_paise: 0 };
+  const inwardGst = { ty: "GST" as const, inter_paise: manualGst.inter_paise + autoGst.inter, intra_paise: manualGst.intra_paise + autoGst.intra };
+  const inwardNon = { ty: "NONGST" as const, inter_paise: manualNon.inter_paise + autoNon.inter, intra_paise: manualNon.intra_paise + autoNon.intra };
 
   // 6.1 Payable
   const outIamt = osup_det.iamt + osup_zero.iamt;
