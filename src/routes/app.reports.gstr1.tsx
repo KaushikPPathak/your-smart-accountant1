@@ -253,6 +253,13 @@ function GSTR1Page() {
             )}
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 pr-2 border-r">
+                <Switch id="live" checked={livePreviewOn} onCheckedChange={setLivePreviewOn} />
+                <Label htmlFor="live" className="text-xs">Live preview</Label>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setDrilldownOpen(true)} disabled={!built}>
+                <Search className="mr-1 h-4 w-4" /> Explain Difference
+              </Button>
               <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
               {cadence === "quarterly" ? (
                 <>
