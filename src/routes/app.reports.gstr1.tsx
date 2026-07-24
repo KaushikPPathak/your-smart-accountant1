@@ -295,9 +295,37 @@ function GSTR1Page() {
         </CardContent>
       </Card>
 
+      {livePreviewOn && company && (
+        <Gstr1LivePreview
+          company={company}
+          companyId={activeCompanyId || ""}
+          sales={sales}
+          creditNotes={cdnotes}
+          from={period.from}
+          to={period.to}
+          fp={period.fp}
+          iffOnly={iffMode}
+          fileBase={fileBase}
+          onOpenDrilldown={() => setDrilldownOpen(true)}
+          onReload={() => { void reloadVouchers(); }}
+        />
+      )}
+
+      {company && (
+        <Gstr1ReconciliationDrilldown
+          open={drilldownOpen}
+          onOpenChange={setDrilldownOpen}
+          company={company}
+          companyId={activeCompanyId || ""}
+          sales={sales}
+          creditNotes={cdnotes}
+        />
+      )}
+
       {built && (
         <>
           <ValidationPanel issues={validateGstr1(built, validationOpts)} />
+
 
           <PeriodLockCard
             returnType="GSTR1"
