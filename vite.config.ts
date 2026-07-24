@@ -24,15 +24,14 @@ const pwaPlugins = isTauri
           display: "standalone",
           start_url: "/",
           scope: "/",
-          theme_color: "#ffffff",
-          background_color: "#ffffff",
+          theme_color: "#0b1e3f",
+          background_color: "#0b1e3f",
+          description: "GST-ready offline accounting for Indian businesses. Works on any computer, no internet required.",
           icons: [
-            {
-              src: "/pwa-icon.svg",
-              sizes: "any",
-              type: "image/svg+xml",
-              purpose: "any maskable"
-            }
+            { src: "/pwa-icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+            { src: "/pwa-icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+            { src: "/pwa-icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+            { src: "/pwa-icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }
           ]
         },
         workbox: {
