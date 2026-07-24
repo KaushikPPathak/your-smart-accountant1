@@ -82,7 +82,14 @@ export const UNITS = [
   "SQF",
   "TON",
   "UNT",
+  "NA",
 ] as const;
+
+/** SAC codes (services) all start with "99" — no physical unit applies. */
+export function isServiceHsn(code: string | null | undefined): boolean {
+  const c = (code || "").trim();
+  return c.length >= 4 && c.startsWith("99");
+}
 
 export const GSTIN_REGEX =
   /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;

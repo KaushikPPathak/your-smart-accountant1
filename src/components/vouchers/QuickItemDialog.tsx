@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { UNITS, GST_RATES } from "@/lib/constants";
+import { UNITS, GST_RATES, isServiceHsn } from "@/lib/constants";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { createItem, updateItem } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
@@ -136,8 +136,8 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
-              <Label>Unit</Label>
-              <Select value={unit} onValueChange={setUnit}>
+              <Label>Unit{isServiceHsn(hsn) ? " (service)" : ""}</Label>
+              <Select value={unit} onValueChange={setUnit} disabled={isServiceHsn(hsn)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
@@ -158,9 +158,13 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
               <HsnCodeAutocomplete
                 nameHint={name}
                 value={hsn}
-                onChange={setHsn}
+                onChange={(v) => {
+                  setHsn(v);
+                  if (isServiceHsn(v)) setUnit("NA");
+                }}
                 onResolved={(rec) => {
                   setHsn(rec.hsn_code);
+                  if (isServiceHsn(rec.hsn_code)) setUnit("NA");
                   const rate = rec.is_exempt ? 0 : (rec.igst_rate || rec.cgst_rate + rec.sgst_rate);
                   const match = (GST_RATES as readonly number[]).find((g) => Math.abs(g - rate) < 0.001);
                   if (match !== undefined) setGstRate(String(match));
