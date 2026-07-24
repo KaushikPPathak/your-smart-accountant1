@@ -25,6 +25,7 @@ import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { EwayBillPrepDialog } from "@/components/vouchers/EwayBillPrepDialog";
 import { ExportInvoiceDialog } from "@/components/vouchers/ExportInvoiceDialog";
+import { Gstr1PostingAudit } from "@/components/vouchers/Gstr1PostingAudit";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { toast } from "sonner";
 import { goBackFromVoucher } from "@/lib/voucher-return";
