@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { assertGstr1Reconciled, buildGstr1, getGstr1Reconciliation, type VoucherRow } from "@/lib/gst-returns";
+import { assertGstr1Reconciled, buildGstr1, buildGstr3B, getGstr1Reconciliation, type VoucherRow } from "@/lib/gst-returns";
+import type { Database } from "@/integrations/supabase/types";
+type GstTreatment = Database["public"]["Enums"]["gst_treatment"];
 
 const item = (taxable: number, rate: number, tax: number, hsn: string) => ({
   qty: 1,
