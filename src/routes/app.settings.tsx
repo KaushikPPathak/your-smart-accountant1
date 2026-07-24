@@ -72,6 +72,11 @@ function SettingsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [deleteScope, setDeleteScope] = useState<"local" | "local_and_remote">(() => {
+    if (typeof window === "undefined") return "local";
+    const v = window.localStorage.getItem("ym_delete_company_scope");
+    return v === "local_and_remote" ? "local_and_remote" : "local";
+  });
   const restoreFileRef = useRef<HTMLInputElement | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [exportingAll, setExportingAll] = useState(false);
