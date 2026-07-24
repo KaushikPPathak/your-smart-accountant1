@@ -34,7 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/money";
-import { GST_RATES, UNITS } from "@/lib/constants";
+import { GST_RATES, UNITS, isServiceHsn } from "@/lib/constants";
 import { EmptyState } from "@/components/EmptyState";
 import { itemFormSchema as schema } from "@/lib/schemas/item";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
