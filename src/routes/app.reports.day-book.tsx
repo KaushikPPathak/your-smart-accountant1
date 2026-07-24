@@ -16,6 +16,7 @@ import { fmtIndianDate } from "@/lib/format-date";
 import { EmptyState } from "@/components/EmptyState";
 import { BookOpen, LayoutGrid, Columns2 } from "lucide-react";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { QuickRangeChips } from "@/components/reports/QuickRangeChips";
 import { Button } from "@/components/ui/button";
 import { readLedgers, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 import { offlineDb } from "@/lib/offline/db";
