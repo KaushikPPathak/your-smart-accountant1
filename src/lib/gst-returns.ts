@@ -1605,7 +1605,11 @@ export function validateGstr1(g: BuiltGstr1, opts: Gstr1ValidationOptions = {}):
   for (const [section, rows] of [["hsn_b2b", g.hsn_b2b], ["hsn_b2c", g.hsn_b2c]] as const) {
     for (const h of rows) {
       const hsnCode = String(h.hsn_sc ?? "").trim();
-      const uqc = String(h.uqc ?? "").trim().toUpperCase();
+      // Stored UQC is in offline-utility format like "NOS-NUMBERS" / "NOS-NOS".
+      // GSTN's master itself uses just the 3-letter code, so normalise before
+      // checking against VALID_UQC — else every valid unit is flagged.
+      const uqcRaw = String(h.uqc ?? "").trim().toUpperCase();
+      const uqc = uqcRaw.split("-")[0].trim();
       const codeErr = hsnCodeIssue(hsnCode, minDigits);
       if (codeErr && !seenHsn.has(hsnCode)) {
         seenHsn.add(hsnCode);
@@ -1618,18 +1622,19 @@ export function validateGstr1(g: BuiltGstr1, opts: Gstr1ValidationOptions = {}):
           issues.push({
             level: "error",
             section,
-            message: `Service SAC ${hsnCode} must use UQC "NA" (found "${uqc}") — services have no unit of measure`,
+            message: `Service SAC ${hsnCode} must use UQC "NA" (found "${uqcRaw}") — services have no unit of measure`,
           });
         }
       } else if (!hsnCode.startsWith("99") && uqc && !VALID_UQC.has(uqc)) {
         const key = `uqc|${uqc}`;
         if (!seenUqc.has(key)) {
           seenUqc.add(key);
-          issues.push({ level: "error", section, message: `UQC "${uqc}" is not in the GSTN master — use one of NOS, PCS, KGS, LTR, NA, etc.` });
+          issues.push({ level: "error", section, message: `UQC "${uqcRaw}" is not in the GSTN master — use one of NOS, PCS, KGS, LTR, NA, etc.` });
         }
       }
     }
   }
+
 
   return issues;
 }
