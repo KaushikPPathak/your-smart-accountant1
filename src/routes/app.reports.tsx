@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCompany } from "@/lib/company-context";
 
