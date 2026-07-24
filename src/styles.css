@@ -330,6 +330,13 @@
     background: color-mix(in oklab, var(--amber-dark) 22%, transparent);
     color: var(--amber-ink);
   }
+  .busy-menubar .busy-menu-item:focus-visible,
+  .busy-menubar [data-focus-item="true"]:focus-visible {
+    outline: none;
+    background: var(--amber-dark);
+    color: var(--amber-onDark);
+    box-shadow: 0 0 0 2px var(--amber-light), 0 0 0 4px var(--amber-dark);
+  }
   .busy-menubar .busy-menu-item[data-active="true"] {
     background: var(--amber-dark);
     color: var(--amber-onDark);
