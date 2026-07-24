@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { UNITS, GST_RATES } from "@/lib/constants";
+import { UNITS, GST_RATES, isServiceHsn } from "@/lib/constants";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { createItem, updateItem } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
