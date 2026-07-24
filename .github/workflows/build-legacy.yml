@@ -1,0 +1,82 @@
+name: Build Legacy Windows Installers (Win 7 32/64-bit)
+
+on:
+  push:
+    tags:
+      - 'v*-legacy'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Create a GitHub Release with the installers'
+        required: false
+        default: 'false'
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }} installer
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ia32, x64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build web app (relative base for file://)
+        run: npx vite build --base=./
+
+      - name: Stage web build into electron-legacy
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path electron-legacy/dist | Out-Null
+          Copy-Item -Recurse -Force dist/* electron-legacy/dist/
+
+      - name: Install electron-legacy dependencies
+        working-directory: electron-legacy
+        run: npm install --legacy-peer-deps
+
+      - name: Build ${{ matrix.arch }} installer
+        working-directory: electron-legacy
+        run: npx electron-builder --win nsis --${{ matrix.arch }} --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartAccountant-${{ matrix.arch }}
+          path: electron-legacy/out/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Attach to GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release and upload installers
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.exe
+          generate_release_notes: true
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
