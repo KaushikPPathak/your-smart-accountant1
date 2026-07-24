@@ -88,18 +88,18 @@ function GSTR1Page() {
     })();
   }, [activeCompanyId]);
 
-  // Load vouchers for the period
-  useEffect(() => {
+  const reloadVouchers = useMemo(() => async () => {
     if (!activeCompanyId) return;
-    (async () => {
-      const [s, cn] = await Promise.all([
-        fetchVouchers(activeCompanyId, period.from, period.to, ["sales"]),
-        fetchVouchers(activeCompanyId, period.from, period.to, ["credit_note", "debit_note"]),
-      ]);
-      setSales(s);
-      setCdnotes(cn);
-    })();
+    const [s, cn] = await Promise.all([
+      fetchVouchers(activeCompanyId, period.from, period.to, ["sales"]),
+      fetchVouchers(activeCompanyId, period.from, period.to, ["credit_note", "debit_note"]),
+    ]);
+    setSales(s);
+    setCdnotes(cn);
   }, [activeCompanyId, period.from, period.to]);
+
+  useEffect(() => { void reloadVouchers(); }, [reloadVouchers]);
+
 
   const built: BuiltGstr1 | null = useMemo(() => {
     if (!company) return null;
