@@ -59,6 +59,8 @@ function GSTR1Page() {
   const [sales, setSales] = useState<VoucherRow[]>([]);
   const [cdnotes, setCdnotes] = useState<VoucherRow[]>([]);
   const [templateExporting, setTemplateExporting] = useState(false);
+  const [livePreviewOn, setLivePreviewOn] = useState(false);
+  const [drilldownOpen, setDrilldownOpen] = useState(false);
   const { view, setView } = useReportView("gstr1");
 
   // Determine effective period
