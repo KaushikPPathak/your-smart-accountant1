@@ -55,6 +55,52 @@ function ReportsLayout() {
     }
   }, [location.pathname, navigate]);
 
+  // Roving arrow-key navigation across report tabs. Left/Right (and Up/Down)
+  // move focus between tabs without needing Tab; Home/End jump to first/last.
+  // ArrowUp from any tab hops back into the Quick Entry ribbon so users can
+  // reach the top regions without touching the mouse.
+  const navRef = useRef<HTMLElement | null>(null);
+  const onTabsKeyDown = useCallback((e: KeyboardEvent<HTMLElement>) => {
+    const root = navRef.current;
+    if (!root) return;
+    const items = Array.from(root.querySelectorAll<HTMLAnchorElement>('a[data-report-tab="true"]'));
+    if (items.length === 0) return;
+    const current = document.activeElement as HTMLElement | null;
+    const idx = current ? items.indexOf(current as HTMLAnchorElement) : -1;
+    const focusAt = (i: number) => {
+      const el = items[(i + items.length) % items.length];
+      el?.focus();
+    };
+    switch (e.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        e.preventDefault();
+        focusAt(idx < 0 ? 0 : idx + 1);
+        return;
+      case "ArrowLeft":
+        e.preventDefault();
+        focusAt(idx < 0 ? 0 : idx - 1);
+        return;
+      case "ArrowUp": {
+        e.preventDefault();
+        const ribbon =
+          document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"][role="button"]') ??
+          document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"]');
+        ribbon?.focus();
+        return;
+      }
+      case "Home":
+        e.preventDefault();
+        focusAt(0);
+        return;
+      case "End":
+        e.preventDefault();
+        focusAt(items.length - 1);
+        return;
+      default:
+    }
+  }, []);
+
   return (
     <div className="space-y-4">
       <div className="print:hidden">
@@ -63,14 +109,24 @@ function ReportsLayout() {
       </div>
       <Card className="print:hidden">
         <CardContent className="p-2">
-          <nav className="flex flex-wrap gap-1">
+          <nav
+            ref={navRef}
+            role="tablist"
+            aria-label="Reports"
+            className="flex flex-wrap gap-1"
+            onKeyDown={onTabsKeyDown}
+          >
             {TABS.map((t) => {
               const active = location.pathname === t.to;
               return (
                 <Link
                   key={t.to}
                   to={t.to}
-                  className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                  role="tab"
+                  aria-selected={active}
+                  data-report-tab="true"
+                  tabIndex={active ? 0 : -1}
+                  className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     active
                       ? "bg-primary text-primary-foreground"
                       : "hover:bg-accent hover:text-accent-foreground"
