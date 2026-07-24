@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
+import { QuickRangeChips } from "@/components/reports/QuickRangeChips";
 import { ReportViewer } from "@/components/reports/ReportViewer";
 import { TAccountColumnar, type TColRow } from "@/components/reports/TAccountColumnar";
 import { supabase } from "@/integrations/supabase/client";
