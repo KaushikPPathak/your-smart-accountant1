@@ -780,23 +780,24 @@ function SettingsPage() {
                       onClick={async () => {
                         if (!activeCompanyId) return;
                         setDeleting(true);
-                        const { error } = await supabase
-                          .from("companies")
-                          .delete()
-                          .eq("id", activeCompanyId);
-                        setDeleting(false);
-                        if (error) {
-                          toast.error(error.message || "Failed to delete company");
-                          return;
+                        try {
+                          const { purgeCompany } = await import("@/lib/recovery/purge-company");
+                          const r = await purgeCompany(activeCompanyId);
+                          // Best-effort remote delete (no-op in local-only mode).
+                          await supabase.from("companies").delete().eq("id", activeCompanyId).then(() => undefined, () => undefined);
+                          toast.success(`Deleted "${r.companyName}" — ${r.rowsDeleted} rows removed`);
+                          setDeleteOpen(false);
+                          setDeleteConfirm("");
+                          if (typeof window !== "undefined") {
+                            localStorage.removeItem("ym_active_company_id");
+                          }
+                          await refreshCompanies();
+                          navigate({ to: "/app/companies" });
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Failed to delete company");
+                        } finally {
+                          setDeleting(false);
                         }
-                        toast.success("Company deleted");
-                        setDeleteOpen(false);
-                        setDeleteConfirm("");
-                        if (typeof window !== "undefined") {
-                          localStorage.removeItem("ym_active_company_id");
-                        }
-                        await refreshCompanies();
-                        navigate({ to: "/app/companies" });
                       }}
                     >
                       {deleting ? "Deleting…" : "Delete permanently"}
