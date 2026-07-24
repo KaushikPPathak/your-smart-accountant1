@@ -6,7 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { FileSpreadsheet, FileJson, Printer } from "lucide-react";
+import { FileSpreadsheet, FileJson, Printer, Search } from "lucide-react";
+import { Gstr1LivePreview } from "@/components/reports/Gstr1LivePreview";
+import { Gstr1ReconciliationDrilldown } from "@/components/reports/Gstr1ReconciliationDrilldown";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
@@ -57,6 +59,8 @@ function GSTR1Page() {
   const [sales, setSales] = useState<VoucherRow[]>([]);
   const [cdnotes, setCdnotes] = useState<VoucherRow[]>([]);
   const [templateExporting, setTemplateExporting] = useState(false);
+  const [livePreviewOn, setLivePreviewOn] = useState(false);
+  const [drilldownOpen, setDrilldownOpen] = useState(false);
   const { view, setView } = useReportView("gstr1");
 
   // Determine effective period
@@ -84,18 +88,18 @@ function GSTR1Page() {
     })();
   }, [activeCompanyId]);
 
-  // Load vouchers for the period
-  useEffect(() => {
+  const reloadVouchers = useMemo(() => async () => {
     if (!activeCompanyId) return;
-    (async () => {
-      const [s, cn] = await Promise.all([
-        fetchVouchers(activeCompanyId, period.from, period.to, ["sales"]),
-        fetchVouchers(activeCompanyId, period.from, period.to, ["credit_note", "debit_note"]),
-      ]);
-      setSales(s);
-      setCdnotes(cn);
-    })();
+    const [s, cn] = await Promise.all([
+      fetchVouchers(activeCompanyId, period.from, period.to, ["sales"]),
+      fetchVouchers(activeCompanyId, period.from, period.to, ["credit_note", "debit_note"]),
+    ]);
+    setSales(s);
+    setCdnotes(cn);
   }, [activeCompanyId, period.from, period.to]);
+
+  useEffect(() => { void reloadVouchers(); }, [reloadVouchers]);
+
 
   const built: BuiltGstr1 | null = useMemo(() => {
     if (!company) return null;
@@ -249,6 +253,13 @@ function GSTR1Page() {
             )}
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 pr-2 border-r">
+                <Switch id="live" checked={livePreviewOn} onCheckedChange={setLivePreviewOn} />
+                <Label htmlFor="live" className="text-xs">Live preview</Label>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setDrilldownOpen(true)} disabled={!built}>
+                <Search className="mr-1 h-4 w-4" /> Explain Difference
+              </Button>
               <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
               {cadence === "quarterly" ? (
                 <>
@@ -284,9 +295,37 @@ function GSTR1Page() {
         </CardContent>
       </Card>
 
+      {livePreviewOn && company && (
+        <Gstr1LivePreview
+          company={company}
+          companyId={activeCompanyId || ""}
+          sales={sales}
+          creditNotes={cdnotes}
+          from={period.from}
+          to={period.to}
+          fp={period.fp}
+          iffOnly={iffMode}
+          fileBase={fileBase}
+          onOpenDrilldown={() => setDrilldownOpen(true)}
+          onReload={() => { void reloadVouchers(); }}
+        />
+      )}
+
+      {company && (
+        <Gstr1ReconciliationDrilldown
+          open={drilldownOpen}
+          onOpenChange={setDrilldownOpen}
+          company={company}
+          companyId={activeCompanyId || ""}
+          sales={sales}
+          creditNotes={cdnotes}
+        />
+      )}
+
       {built && (
         <>
           <ValidationPanel issues={validateGstr1(built, validationOpts)} />
+
 
           <PeriodLockCard
             returnType="GSTR1"

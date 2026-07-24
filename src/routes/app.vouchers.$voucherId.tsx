@@ -25,6 +25,7 @@ import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { EwayBillPrepDialog } from "@/components/vouchers/EwayBillPrepDialog";
 import { ExportInvoiceDialog } from "@/components/vouchers/ExportInvoiceDialog";
+import { Gstr1PostingAudit } from "@/components/vouchers/Gstr1PostingAudit";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { toast } from "sonner";
 import { goBackFromVoucher } from "@/lib/voucher-return";
@@ -754,9 +755,14 @@ function VoucherEditPage() {
         </Card>
       )}
 
+      {["sales", "credit_note", "debit_note"].includes(voucher.voucher_type) && (
+        <Gstr1PostingAudit voucherId={voucher.id} companyId={voucher.company_id} />
+      )}
+
       <p className="text-xs text-muted-foreground">
         Tip: every voucher row in <Link to="/app/reports/day-book" className="underline">Day Book</Link>, <Link to="/app/reports/ledger" className="underline">Ledger Statement</Link>, <Link to="/app/vouchers" className="underline">Vouchers</Link>, and registers links here so you can edit from anywhere.
       </p>
+
 
       <EwayBillPrepDialog
         open={ewbOpen}
