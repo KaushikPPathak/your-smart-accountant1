@@ -21,6 +21,7 @@
     "appId": "com.smartaccountant.legacy",
     "productName": "SmartAccountant",
     "asar": true,
+    "publish": null,
     "directories": {
       "output": "out",
       "buildResources": "assets"
