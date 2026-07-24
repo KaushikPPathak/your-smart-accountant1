@@ -6,7 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { FileSpreadsheet, FileJson, Printer } from "lucide-react";
+import { FileSpreadsheet, FileJson, Printer, Search } from "lucide-react";
+import { Gstr1LivePreview } from "@/components/reports/Gstr1LivePreview";
+import { Gstr1ReconciliationDrilldown } from "@/components/reports/Gstr1ReconciliationDrilldown";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
