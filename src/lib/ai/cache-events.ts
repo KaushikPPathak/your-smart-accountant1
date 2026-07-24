@@ -43,23 +43,48 @@ export function onDataChange(fn: Listener): () => void {
   return () => listeners.delete(fn);
 }
 
+// Pending microtask dispatches — exposed via flushDataChange() so tests and
+// any rare caller that MUST read derived state on the same tick can drain
+// the queue synchronously.
+const pending: Array<() => void> = [];
+
+export interface EmitOptions {
+  /** Run listeners synchronously in the same tick. Use only when a caller
+   * must read a derived value immediately after emit (rare — default async
+   * keeps keystroke paths free). */
+  sync?: boolean;
+}
+
 export function emitDataChange(
   companyId: string,
   kind: DataChangeKind,
   scopes?: string[],
+  opts?: EmitOptions,
 ): void {
   if (!companyId) return;
   const evt: DataChangeEvent = { companyId, kind, scopes, at: Date.now() };
-  // Fan-out is async so a synchronous caller (e.g. voucher save on Enter)
-  // never pays for subscriber work (answer cache, semantic index, warm-up)
-  // on the same tick that dispatched the event. Keeps the keystroke path
-  // free for paint/focus updates.
   const dispatch = () => {
     for (const fn of listeners) {
       try { fn(evt); } catch { /* isolate */ }
     }
   };
-  if (typeof queueMicrotask === "function") queueMicrotask(dispatch);
-  else Promise.resolve().then(dispatch);
+  if (opts?.sync) { dispatch(); return; }
+  // Default: async fan-out so a synchronous caller (e.g. voucher save on
+  // Enter) never pays for subscriber work (answer cache, semantic index,
+  // warm-up) on the same tick that dispatched the event.
+  pending.push(dispatch);
+  const drain = () => {
+    const jobs = pending.splice(0);
+    for (const j of jobs) j();
+  };
+  if (typeof queueMicrotask === "function") queueMicrotask(drain);
+  else Promise.resolve().then(drain);
+}
+
+/** Drain any queued async dispatches immediately. Intended for tests and
+ * the rare caller that needs to read derived state right after emit. */
+export function flushDataChange(): void {
+  const jobs = pending.splice(0);
+  for (const j of jobs) j();
 }
 
