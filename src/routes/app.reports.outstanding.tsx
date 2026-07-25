@@ -183,25 +183,42 @@ function OutstandingPage() {
         </CardContent>
       </Card>
 
-      {mode === "payables" && msmeOverdue.length > 0 && (
+      {mode === "payables" && msmeRows.length > 0 && (
         <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-            <div>
+            <div className="min-w-[240px]">
               <div className="text-sm font-semibold text-destructive">
-                MSMED §15 alert — {msmeOverdue.length} bill{msmeOverdue.length === 1 ? "" : "s"} past 45 days
+                MSMED §15/§16 alert — {msmeRows.length} bill{msmeRows.length === 1 ? "" : "s"} past appointed day
               </div>
               <div className="text-xs text-muted-foreground">
-                Payments to MSE suppliers pending &gt; 45 days attract interest under MSMED Act and are
-                disallowed under Sec 43B(h) of the Income-tax Act until paid.
+                Compound interest @ 3× RBI bank rate ({(bankRate * 3).toFixed(2)}% p.a., monthly rests)
+                from day after appointed day. Also disallowed u/s 43B(h) of the Income-tax Act until paid.
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-xs text-muted-foreground">MSME overdue</div>
-              <div className="font-mono text-lg font-semibold text-destructive">{formatINR(msmeOverdueTotal)}</div>
+            <div className="flex items-end gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">RBI bank rate %</Label>
+                <Input
+                  type="number"
+                  step="0.05"
+                  value={bankRate}
+                  onChange={(e) => setBankRate(Math.max(0, Number(e.target.value) || 0))}
+                  className="h-8 w-24 font-mono"
+                />
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground">Principal overdue</div>
+                <div className="font-mono text-base font-semibold text-destructive">{formatINR(msmeOverdueTotal)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground">§16 interest</div>
+                <div className="font-mono text-base font-semibold text-destructive">{formatINR(msmeInterestTotal)}</div>
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
+
 
       <Card>
         <CardContent className="p-0">
