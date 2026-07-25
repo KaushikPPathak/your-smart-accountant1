@@ -28,40 +28,34 @@ function PresumptivePage() {
 
   const [grossReceipts, setGrossReceipts] = useState(0);
   const [digitalReceipts, setDigitalReceipts] = useState(0);
+  const [cashReceipts, setCashReceipts] = useState(0);
 
   useEffect(() => {
     if (!activeCompanyId) return;
     (async () => {
-      // Sales + Receipt vouchers in the period → gross receipts. Digital = via
-      // Bank ledgers; Cash = via Cash ledgers.
-      const { data: vs } = await supabase
-        .from("vouchers")
-        .select("id, voucher_type, total_paise")
-        .eq("company_id", activeCompanyId)
-        .in("voucher_type", ["sales", "receipt"])
-        .gte("voucher_date", from)
-        .lte("voucher_date", to);
-      const totalGross = ((vs ?? []) as { total_paise: number }[]).reduce((s, v) => s + (v.total_paise || 0), 0);
-      setGrossReceipts(totalGross);
-
-      // Digital share: sum of debit_paise on bank ledgers across receipt vouchers.
-      const receiptIds = ((vs ?? []) as { id: string; voucher_type: string }[])
-        .filter(v => v.voucher_type === "receipt").map(v => v.id);
-      if (receiptIds.length === 0) { setDigitalReceipts(0); return; }
-      const { data: banks } = await supabase
-        .from("ledgers")
-        .select("id, type")
-        .eq("company_id", activeCompanyId)
-        .eq("type", "bank");
-      const bankIds = new Set(((banks ?? []) as { id: string }[]).map(b => b.id));
-      const { data: ves } = await supabase
-        .from("voucher_entries")
-        .select("ledger_id, debit_paise")
-        .in("voucher_id", receiptIds);
-      const digital = ((ves ?? []) as { ledger_id: string; debit_paise: number }[])
-        .filter(e => bankIds.has(e.ledger_id))
-        .reduce((s, e) => s + (e.debit_paise || 0), 0);
+      // Gross receipts = credit balance on income ledgers in the period.
+      // Digital/Cash split = pro-rata Bank vs Cash contra across the same
+      // vouchers (via fetchLedgerModeSplits — same engine that drives the
+      // P&L / R&P inner-column breakdown, so numbers reconcile 1:1).
+      const [ledgers, splits] = await Promise.all([
+        readLedgers(activeCompanyId),
+        fetchLedgerModeSplits(activeCompanyId, from, to, { excludeProfitLossClosingTransfers: true }),
+      ]);
+      const incomeIds = new Set(
+        (ledgers as any[]).filter((l) => PL_INCOME.has(String(l.type))).map((l) => String(l.id)),
+      );
+      let gross = 0, digital = 0, cash = 0;
+      for (const id of incomeIds) {
+        const s = splits.get(id);
+        if (!s) continue;
+        // Income ledgers carry credit balance → net is negative; flip sign.
+        gross   += Math.max(0, -(s.cashPaise + s.bankPaise + s.otherPaise));
+        digital += Math.max(0, -s.bankPaise);
+        cash    += Math.max(0, -s.cashPaise);
+      }
+      setGrossReceipts(gross);
       setDigitalReceipts(digital);
+      setCashReceipts(cash);
     })();
   }, [activeCompanyId, from, to]);
 
