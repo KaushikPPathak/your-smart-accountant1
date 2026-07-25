@@ -371,6 +371,7 @@ export async function createItem(payload: ItemInsertPayload): Promise<ItemRow> {
   }
 
   emitDataChange(payload.company_id, "item", [`item:${payload.name.toLowerCase()}`]);
+  void logActivity({ company_id: payload.company_id, entity_type: "item", entity_id: id, entity_label: payload.name, action: "create" });
 
   return {
     id,
