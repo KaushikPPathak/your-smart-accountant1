@@ -212,6 +212,20 @@ function ReceiptsPayments() {
       orientation: "l",
       rightAlignCols: [1, 2, 3, 5, 6, 7],
     });
+
+  return (
+    <div className="space-y-4">
+      <ReportToolbar
+        from={from}
+        to={to}
+        onFrom={setFrom}
+        onTo={setTo}
+        onExportCsv={onExportCsv}
+        onExportXlsx={onExportXlsx}
+        onExportPdf={onExportPdf}
+        onPrint={() => window.print()}
+      />
+      <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-lg">Receipts &amp; Payments Account — {from} to {to}</CardTitle>
           <p className="text-xs text-muted-foreground">
