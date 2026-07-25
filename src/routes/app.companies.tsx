@@ -620,6 +620,9 @@ function CompaniesPage() {
                       Determines HSN digits required: <strong>4-digit</strong> if &lt; ₹5 Cr, <strong>6-digit</strong> if ≥ ₹5 Cr.
                     </p>
                 </div>
+
+                <NceComplianceCard form={form} setForm={setForm} />
+
                 <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
                   <Label className="text-sm font-semibold">Display Preferences</Label>
                   <p className="text-[11px] text-muted-foreground">
