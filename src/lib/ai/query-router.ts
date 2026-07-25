@@ -188,6 +188,12 @@ export function routeQuery(question: string): RoutedQuery {
 
   let intent: QueryIntent = "general";
 
+  // A strong party signal exists when the question said "balance/ledger of <Name>"
+  // OR a leading "<Name> balance" clause matched. In that case, party lookup wins
+  // over generic cash_bank routing even if the word "cash" appears (e.g. the user
+  // asked "cash balance of Madhuben" = party balance, settled in cash).
+  const strongPartyHint = Boolean(balOf || leading);
+
   if (latestKind) {
     intent = "latest_voucher";
   } else if (voucherNumber || /\b(voucher|invoice|bill|receipt|payment)\s*(no|number|#)/.test(lower)) {
@@ -200,6 +206,10 @@ export function routeQuery(question: string): RoutedQuery {
     intent = "trial_balance";
   } else if (/\b(p&l|p and l|profit|loss|trading|gross profit|net profit)\b/.test(lower)) {
     intent = "profit_loss";
+  } else if (strongPartyHint && /\b(ledger|statement|account)\b/.test(lower)) {
+    intent = "party_ledger";
+  } else if (strongPartyHint) {
+    intent = "party_balance";
   } else if (/\b(cash|bank) (book|balance|position|in hand|on hand|at bank)\b|\bcash\s*[- ]?in[- ]?hand\b|\bcash\s*[- ]?on[- ]?hand\b|\bbrs\b/.test(lower)) {
     intent = "cash_bank";
   } else if (/\b(stock|inventory|closing stock|opening stock|item)\b/.test(lower)) {
@@ -213,5 +223,5 @@ export function routeQuery(question: string): RoutedQuery {
   }
 
 
-  return { intent, entityHints, ...dates, voucherNumber, companyHint, latestKind };
+  return { intent, entityHints, ...dates, asOn, voucherNumber, companyHint, latestKind };
 }
