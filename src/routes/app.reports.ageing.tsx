@@ -56,7 +56,7 @@ function AgeingPage() {
       async () => {
         const [v, a] = await Promise.all([
           supabase.from("vouchers")
-            .select("id, voucher_date, due_date, total_paise, party_ledger_id, ledgers:party_ledger_id(name)")
+            .select("id, voucher_date, due_date, total_paise, party_ledger_id, ledgers:party_ledger_id(name, msme_registered)")
             .eq("company_id", activeCompanyId)
             .eq("voucher_type", type)
             .lte("voucher_date", asOf),
@@ -84,7 +84,10 @@ function AgeingPage() {
             total_paise: Number(v.total_paise || 0),
             party_ledger_id: v.party_ledger_id ?? null,
             ledgers: v.party_ledger_id
-              ? { name: ledgerById.get(String(v.party_ledger_id))?.name ?? "" }
+              ? {
+                  name: ledgerById.get(String(v.party_ledger_id))?.name ?? "",
+                  msme_registered: !!ledgerById.get(String(v.party_ledger_id))?.msme_registered,
+                }
               : null,
           })) as InvRow[],
           allocs: (allocRows as any[]).map((a) => ({
