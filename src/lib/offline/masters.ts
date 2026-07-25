@@ -303,6 +303,7 @@ export async function deleteLedger(id: string, companyId: string, label?: string
   }
 
   emitDataChange(companyId, "ledger", label ? [`ledger:${label.toLowerCase()}`] : undefined);
+  void logActivity({ company_id: companyId, entity_type: "ledger", entity_id: id, entity_label: label ?? null, action: "delete" });
 }
 
 export async function deactivateLedger(id: string, companyId: string): Promise<void> {
