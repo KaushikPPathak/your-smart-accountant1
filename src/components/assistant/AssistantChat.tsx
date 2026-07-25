@@ -725,11 +725,20 @@ export function AssistantChat() {
                 creating={creating}
                 isPendingCompany={!!pendingCompany && m.preview === pendingCompany}
                 isPendingVoucher={!!pendingVoucher && m.voucherPreview === pendingVoucher}
+                onConfirmOcr={confirmOcrDraft}
+                onCancelOcr={() => {
+                  setPendingOcr(null);
+                  setMessages((mm) => [
+                    ...mm,
+                    { id: `a-${Date.now()}`, role: "assistant", text: "OCR draft discarded. Drop another bill anytime." },
+                  ]);
+                }}
+                isPendingOcr={!!pendingOcr && m.ocrPreview === pendingOcr}
               />
             ))}
-            {thinking && (
+            {(thinking || ocrLoading) && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" /> Mate is thinking…
+                <Loader2 className="h-3 w-3 animate-spin" /> {ocrLoading ? "Reading your invoice…" : "Mate is thinking…"}
               </div>
             )}
           </div>
