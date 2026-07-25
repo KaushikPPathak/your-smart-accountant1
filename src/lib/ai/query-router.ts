@@ -144,6 +144,15 @@ export function routeQuery(question: string): RoutedQuery {
   const q = question.trim();
   const lower = q.toLowerCase();
   const dates = extractDateRange(q);
+  const asOn = extractAsOn(q);
+  // "as on <date>" implies the closing date; use it as `to` if no explicit range was given.
+  if (asOn && !dates.to) {
+    dates.to = asOn;
+    // Anchor `from` to the FY start of the as-on date for windowed reports.
+    const d = new Date(asOn);
+    const fyStartYear = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+    if (!dates.from) dates.from = `${fyStartYear}-04-01`;
+  }
   const voucherNumber = extractVoucherNumber(q);
 
   // "in the books of X", "books of X", "for company X"
