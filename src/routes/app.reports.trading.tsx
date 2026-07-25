@@ -136,21 +136,30 @@ function TradingAccount() {
   if (gp > 0) drExp.push({ label: "  To Gross Profit c/d", paise: gp, isSubtotal: true });
   if (gp < 0) crExp.push({ label: "  By Gross Loss c/d", paise: -gp, isSubtotal: true });
 
+  const fmtInner = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
+    row && !row.isHeader && row.outerPaise === undefined && row.paise !== 0 ? r(row.paise).toFixed(2) : "";
+  const fmtOuter = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
+    row && !row.isHeader && row.outerPaise !== undefined ? r(row.outerPaise).toFixed(2)
+      : row && !row.isHeader && row.outerPaise === undefined && row.paise !== 0 && (row as { inner?: unknown }).inner === undefined && !(row.label.startsWith("      "))
+        ? r(row.paise).toFixed(2) : "";
+
   const exportBody = (): (string | number)[][] => {
     const max = Math.max(drExp.length, crExp.length);
     return Array.from({ length: max }).map((_, i) => [
       drExp[i]?.label ?? "",
-      drExp[i] && !drExp[i].isHeader ? r(drExp[i].paise).toFixed(2) : "",
+      fmtInner(drExp[i]),
+      fmtOuter(drExp[i]),
       crExp[i]?.label ?? "",
-      crExp[i] && !crExp[i].isHeader ? r(crExp[i].paise).toFixed(2) : "",
+      fmtInner(crExp[i]),
+      fmtOuter(crExp[i]),
     ]);
   };
 
   const csvRows = (): (string | number)[][] => [
-    [`Trading A/c: ${from} to ${to}`, "", "", ""],
-    ["Dr. Particulars", amountHeader(), "Cr. Particulars", amountHeader()],
+    [`Trading A/c: ${from} to ${to}`, "", "", "", "", ""],
+    ["Dr. Particulars", "", amountHeader(), "Cr. Particulars", "", amountHeader()],
     ...exportBody(),
-    ["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)],
+    ["Total", "", r(grandLeft).toFixed(2), "Total", "", r(grandRight).toFixed(2)],
   ];
 
   const onExportCsv = () => downloadCsv(`trading-${from}_to_${to}.csv`, csvRows());
@@ -161,12 +170,12 @@ function TradingAccount() {
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       subtitle: `${from} to ${to}`,
-      head: [["Dr. Particulars", amountHeader(), "Cr. Particulars", amountHeader()]],
+      head: [["Dr. Particulars", "", amountHeader(), "Cr. Particulars", "", amountHeader()]],
       body: exportBody(),
-      foot: [["Total", r(grandLeft).toFixed(2), "Total", r(grandRight).toFixed(2)]],
+      foot: [["Total", "", r(grandLeft).toFixed(2), "Total", "", r(grandRight).toFixed(2)]],
       fileName: `trading-${from}_to_${to}.pdf`,
       orientation: "l",
-      rightAlignCols: [1, 3],
+      rightAlignCols: [1, 2, 4, 5],
     });
 
   return (
