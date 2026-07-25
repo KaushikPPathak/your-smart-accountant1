@@ -979,6 +979,9 @@ function MessageBubble({
   creating,
   isPendingCompany,
   isPendingVoucher,
+  onConfirmOcr,
+  onCancelOcr,
+  isPendingOcr,
 }: {
   msg: ChatMessage;
   onAction: (a: AssistantAction) => void;
@@ -989,6 +992,9 @@ function MessageBubble({
   creating: boolean;
   isPendingCompany: boolean;
   isPendingVoucher: boolean;
+  onConfirmOcr: (d: OcrDraft, opts: { remember: boolean; overrideLedgerId?: string; overrideLedgerName?: string }) => void;
+  onCancelOcr: () => void;
+  isPendingOcr: boolean;
 }) {
   const isUser = msg.role === "user";
   return (
