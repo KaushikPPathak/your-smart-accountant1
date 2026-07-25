@@ -197,20 +197,32 @@ function OutstandingPage() {
                 <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">Loading…</TableCell></TableRow>
               ) : rows.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">No outstanding bills 🎉</TableCell></TableRow>
-              ) : rows.map((r) => (
-                <TableRow key={r.id}>
+              ) : rows.map((r) => {
+                const isMsmeOverdue = mode === "payables" && !!r.ledgers?.msme_registered && r.days > 45;
+                return (
+                <TableRow key={r.id} className={isMsmeOverdue ? "bg-destructive/5" : undefined}>
                   <TableCell className="font-mono text-xs">{fmtIndianDate(r.voucher_date)}</TableCell>
                   <TableCell className="font-medium">{r.voucher_number}</TableCell>
-                  <TableCell>{r.ledgers?.name || "—"}</TableCell>
+                  <TableCell>
+                    <span>{r.ledgers?.name || "—"}</span>
+                    {r.ledgers?.msme_registered && (
+                      <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700 dark:text-amber-400">MSME</Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{fmtIndianDate(r.due_date || r.voucher_date)}</TableCell>
                   <TableCell className="text-right font-mono">{formatINR(r.total_paise)}</TableCell>
                   <TableCell className="text-right font-mono">{formatINR(r.paid_paise)}</TableCell>
                   <TableCell className="text-right font-mono font-semibold">{formatINR(r.pending_paise)}</TableCell>
                   <TableCell className="text-right">
-                    <Badge variant={r.days > 90 ? "destructive" : r.days > 60 ? "default" : "secondary"}>{r.days}d</Badge>
+                    {isMsmeOverdue ? (
+                      <Badge variant="destructive" title="MSMED §15 / Sec 43B(h) — overdue beyond 45 days">{r.days}d ⚠</Badge>
+                    ) : (
+                      <Badge variant={r.days > 90 ? "destructive" : r.days > 60 ? "default" : "secondary"}>{r.days}d</Badge>
+                    )}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
