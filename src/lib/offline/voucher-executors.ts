@@ -13,6 +13,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { emitDataChange } from "@/lib/ai/cache-events";
+import { logActivity } from "@/lib/activity-log";
 
 export type VoucherExecutor = (snap: unknown) => Promise<void>;
 
@@ -530,6 +531,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
   if (isLocalOnlyMode()) {
     const r = await runLocalItemVoucherCreate(snap);
     emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`, `party:${snap.partyId}`]);
+    void logActivity({ company_id: snap.companyId, entity_type: "voucher", entity_id: r.voucherId, entity_label: `${snap.voucherType} ${r.voucherNumber}`, action: "create" });
     return r;
   }
 
@@ -659,6 +661,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
   });
   if (saveErr) throw saveErr;
   emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`, `party:${partyId}`]);
+  void logActivity({ company_id: snap.companyId, entity_type: "voucher", entity_id: vid as string, entity_label: `${snap.voucherType} ${voucherNumber}`, action: "create" });
   return { voucherId: vid as string, voucherNumber };
 }
 
@@ -669,6 +672,7 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
   if (isLocalOnlyMode()) {
     await runLocalEntryVoucherCreate(snap);
     emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`]);
+    void logActivity({ company_id: snap.companyId, entity_type: "voucher", entity_id: null, entity_label: snap.voucherType, action: "create" });
     return;
   }
 
@@ -720,6 +724,7 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
   });
   if (saveErr) throw saveErr;
   emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`]);
+  void logActivity({ company_id: snap.companyId, entity_type: "voucher", entity_id: null, entity_label: `${snap.voucherType} ${header.voucher_number}`, action: "create" });
 }
 
 // ---------- Registration -----------------------------------------------------

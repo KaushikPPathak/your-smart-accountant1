@@ -17,6 +17,7 @@ import {
   type CachedItem,
 } from "@/lib/masters-cache";
 import { emitDataChange } from "@/lib/ai/cache-events";
+import { logActivity } from "@/lib/activity-log";
 
 // Explicitly declare interfaces to strip out top-level import bindings entirely
 export interface LedgerCacheRow extends LedgerInsertPayload {
@@ -201,6 +202,7 @@ export async function createLedger(payload: LedgerInsertPayload): Promise<Ledger
   }
 
   emitDataChange(payload.company_id, "ledger", [`ledger:${payload.name.toLowerCase()}`]);
+  void logActivity({ company_id: payload.company_id, entity_type: "ledger", entity_id: id, entity_label: payload.name, action: "create" });
 
   return {
     id,
@@ -265,6 +267,7 @@ export async function updateLedger(
   }
 
   emitDataChange(companyId, "ledger", existing ? [`ledger:${String(existing.name).toLowerCase()}`] : undefined);
+  void logActivity({ company_id: companyId, entity_type: "ledger", entity_id: id, entity_label: (values.name as string | undefined) ?? (existing?.name as string | undefined) ?? null, action: "update", diff: values as Record<string, unknown> });
 
   return existing ? (existing as unknown as LedgerRow) : null;
 }
@@ -300,6 +303,7 @@ export async function deleteLedger(id: string, companyId: string, label?: string
   }
 
   emitDataChange(companyId, "ledger", label ? [`ledger:${label.toLowerCase()}`] : undefined);
+  void logActivity({ company_id: companyId, entity_type: "ledger", entity_id: id, entity_label: label ?? null, action: "delete" });
 }
 
 export async function deactivateLedger(id: string, companyId: string): Promise<void> {
@@ -367,6 +371,7 @@ export async function createItem(payload: ItemInsertPayload): Promise<ItemRow> {
   }
 
   emitDataChange(payload.company_id, "item", [`item:${payload.name.toLowerCase()}`]);
+  void logActivity({ company_id: payload.company_id, entity_type: "item", entity_id: id, entity_label: payload.name, action: "create" });
 
   return {
     id,
@@ -419,6 +424,7 @@ export async function updateItem(
   }
 
   emitDataChange(companyId, "item", existing ? [`item:${String(existing.name).toLowerCase()}`] : undefined);
+  void logActivity({ company_id: companyId, entity_type: "item", entity_id: id, entity_label: (values.name as string | undefined) ?? (existing?.name as string | undefined) ?? null, action: "update", diff: values as Record<string, unknown> });
 
   return existing ? (existing as unknown as ItemRow) : null;
 }
@@ -453,6 +459,7 @@ export async function deleteItem(id: string, companyId: string, label?: string):
   }
 
   emitDataChange(companyId, "item", label ? [`item:${label.toLowerCase()}`] : undefined);
+  void logActivity({ company_id: companyId, entity_type: "item", entity_id: id, entity_label: label ?? null, action: "delete" });
 }
 
 export async function deactivateItem(id: string, companyId: string): Promise<void> {

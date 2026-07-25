@@ -12,6 +12,8 @@ import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { fetchLedgerBalancesWithMeta, type LedgerBalance } from "@/lib/reports";
 import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
+import { computeNceReportShape } from "@/lib/nce-report-shape";
+import { NCE_LEVEL_LABEL } from "@/lib/nce-classification";
 import { openLedgerReport } from "@/lib/voucher-return";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { BucketedGrid } from "@/components/reports/BucketedGrid";
@@ -249,6 +251,36 @@ function ProfitLoss() {
               Year-end Profit &amp; Loss transfer entries are excluded here so the period income and expenses remain visible.
             </p>
           )}
+          {(() => {
+            const c = activeMembership?.companies as unknown as {
+              entity_status?: string | null;
+              annual_turnover_paise?: number | null;
+              borrowings_paise?: number | null;
+              nce_level?: number | null;
+            } | undefined;
+            if (!c) return null;
+            const shape = computeNceReportShape({
+              entity: (c.entity_status ?? "individual") as Parameters<typeof computeNceReportShape>[0]["entity"],
+              turnoverPaise: Number(c.annual_turnover_paise ?? 0),
+              borrowingsPaise: Number(c.borrowings_paise ?? 0),
+              levelOverride: (c.nce_level ?? null) as 1 | 2 | 3 | null,
+            });
+            if (shape.isCorporate) return null;
+            return (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 font-medium text-primary">
+                  ICAI NCE: {NCE_LEVEL_LABEL[shape.level]}
+                </span>
+                <span className="text-muted-foreground">
+                  {shape.level === 3
+                    ? "Simplified P&L — no cash-flow / related-party / segment / AS 15 disclosures required."
+                    : shape.level === 2
+                    ? "Level 2 disclosures — segment reporting & detailed employee benefits not required."
+                    : "Level 1 — full NCE disclosures apply."}
+                </span>
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
       {view === "grid" ? (
