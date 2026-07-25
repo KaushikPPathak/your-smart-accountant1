@@ -23,12 +23,38 @@ export interface RoutedQuery {
   /** ISO from/to if the question mentions a date range. */
   from?: string;
   to?: string;
+  /** "as on <date>" — freeze balances at this ISO date. Implies to = asOn. */
+  asOn?: string;
   /** Voucher number if explicitly mentioned. */
   voucherNumber?: string;
   /** "in the books of X" → candidate company name to switch context to. */
   companyHint?: string;
   /** For "last/latest <kind> bill" → normalized voucher type. */
   latestKind?: "sales" | "purchase" | "receipt" | "payment" | "journal" | "credit_note" | "debit_note";
+}
+
+/** Parse an "as on / as at / as of / on <date>" phrase → ISO date. */
+function extractAsOn(q: string): string | undefined {
+  const lower = q.toLowerCase();
+  // ISO form: as on 2026-03-31
+  const iso = lower.match(/\b(?:as\s+(?:on|at|of)|on|upto|up\s+to|till|until)\s+(\d{4}-\d{2}-\d{2})\b/);
+  if (iso) return iso[1];
+  // DD/MM/YYYY or DD-MM-YYYY (Indian convention). Year may be 2 or 4 digits.
+  const dmy = lower.match(/\b(?:as\s+(?:on|at|of)|on|upto|up\s+to|till|until)\s+(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/);
+  if (dmy) {
+    const d = Number(dmy[1]); const m = Number(dmy[2]);
+    let y = Number(dmy[3]); if (y < 100) y += 2000;
+    if (d >= 1 && d <= 31 && m >= 1 && m <= 12) {
+      return `${y.toString().padStart(4, "0")}-${m.toString().padStart(2, "0")}-${d.toString().padStart(2, "0")}`;
+    }
+  }
+  // "as on 31 March 2026"
+  const dmn = lower.match(/\b(?:as\s+(?:on|at|of)|on)\s+(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+(\d{4})\b/);
+  if (dmn) {
+    const d = Number(dmn[1]); const m = MONTHS[dmn[2]]; const y = Number(dmn[3]);
+    return `${y}-${(m + 1).toString().padStart(2, "0")}-${d.toString().padStart(2, "0")}`;
+  }
+  return undefined;
 }
 
 const MONTHS: Record<string, number> = {
