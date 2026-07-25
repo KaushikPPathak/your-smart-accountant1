@@ -793,12 +793,31 @@ export function AssistantChat() {
         )}
 
         <form
-          className="flex items-end gap-2 border-t border-border p-3"
+          className={`flex items-end gap-2 border-t border-border p-3 transition-colors ${isDragging ? "bg-primary/5 ring-2 ring-primary/40 ring-inset" : ""}`}
           onSubmit={(e) => {
             e.preventDefault();
             ask(inputRef.current?.value ?? "");
           }}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) void handleFileUpload(file, "purchase");
+          }}
         >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleFileUpload(file, "purchase");
+              e.target.value = "";
+            }}
+          />
           <Textarea
             ref={inputRef}
             defaultValue=""
@@ -817,13 +836,24 @@ export function AssistantChat() {
             }}
             placeholder={
               hasCompany
-                ? "Ask anything… Enter to send, Shift+Enter for new line. Paste multi-line details freely."
+                ? "Ask anything, or drop a bill/invoice here to auto-extract. Enter to send, Shift+Enter for new line."
                 : "Type or paste: Name: ABC Traders\nGSTIN: 27ABCDE1234F1Z5\nPhone: 9876543210"
             }
             autoFocus
-            disabled={creating || thinking}
+            disabled={creating || thinking || ocrLoading}
             className="min-h-[60px] max-h-[240px] resize-none text-sm"
           />
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            aria-label="Upload bill / invoice"
+            title="Upload bill or invoice (image/PDF) — I'll extract party, GSTIN, HSN & tax"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={creating || thinking || ocrLoading || !hasCompany}
+          >
+            {ocrLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+          </Button>
           {voice.supported ? (
             <Button
               type="button"
@@ -837,7 +867,7 @@ export function AssistantChat() {
               {voice.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
           ) : null}
-          <Button type="submit" size="icon" aria-label="Send" disabled={creating || thinking}>
+          <Button type="submit" size="icon" aria-label="Send" disabled={creating || thinking || ocrLoading}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
