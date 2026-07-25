@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet } from "lucide-react";
+import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff, FileText } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { useVoiceInput } from "@/lib/ai/voice-input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -105,6 +107,18 @@ export function AssistantChat() {
   // Per-session conversation memory — last resolved party/company/asOn so
   // follow-ups like "and as on 31/12/2025?" work without repeating names.
   const memoryRef = useRef<ConversationMemory | undefined>(undefined);
+
+  // Tier 3 #11 — Web Speech API voice input. Transcript is appended to the
+  // composer so the user can review/edit before hitting send.
+  const voice = useVoiceInput((text) => {
+    const el = inputRef.current;
+    if (!el) return;
+    const cur = el.value.trim();
+    el.value = cur ? `${cur} ${text}` : text;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 240) + "px";
+    el.focus();
+  });
 
   const callAssistant = assistantChat;
   const callDraftVoucher = assistantDraftVoucher;
@@ -662,6 +676,19 @@ export function AssistantChat() {
             disabled={creating || thinking}
             className="min-h-[60px] max-h-[240px] resize-none text-sm"
           />
+          {voice.supported ? (
+            <Button
+              type="button"
+              size="icon"
+              variant={voice.listening ? "default" : "outline"}
+              aria-label={voice.listening ? "Stop voice input" : "Start voice input"}
+              title={voice.listening ? "Listening… click to stop" : "Speak your question"}
+              onClick={() => (voice.listening ? voice.stop() : voice.start())}
+              disabled={creating || thinking}
+            >
+              {voice.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
+          ) : null}
           <Button type="submit" size="icon" aria-label="Send" disabled={creating || thinking}>
             <Send className="h-4 w-4" />
           </Button>
@@ -758,9 +785,37 @@ function BalanceCard({ card }: { card: StructuredCard }) {
           </div>
         </div>
       ) : null}
+      {card.recentVouchers && card.recentVouchers.length > 0 ? (
+        <div className="mt-2 border-t border-border/40 pt-2">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+            Recent vouchers — click to open
+          </div>
+          <div className="space-y-0.5">
+            {card.recentVouchers.slice(0, 6).map((v) => (
+              <Link
+                key={v.id}
+                to="/app/vouchers/$voucherId"
+                params={{ voucherId: v.id }}
+                className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-[11px] hover:bg-accent hover:text-accent-foreground"
+              >
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <FileText className="h-3 w-3 shrink-0 opacity-60" />
+                  <span className="font-mono">{v.number || "—"}</span>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="text-muted-foreground">{v.date}</span>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="uppercase text-[10px] text-muted-foreground">{v.kind}</span>
+                </span>
+                <span className="font-mono shrink-0">{formatInrCard(v.totalPaise)}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="mt-2 text-[10px] text-muted-foreground">
         Verified from your books · {card.voucherCount} voucher{card.voucherCount === 1 ? "" : "s"}
       </div>
+
     </div>
   );
 }

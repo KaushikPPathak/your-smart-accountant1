@@ -11,6 +11,7 @@ import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
 import { optimiseSlice } from "./slice-optimizer";
 import { createRedactionMap, redactDeep, redactString, unredact, type RedactionMap } from "./redactor";
 import type { ConversationMemory } from "./conversation-memory";
+import { toolCatalogPrompt } from "./tools";
 
 export interface AccountingContext {
   companyId?: string;
@@ -36,6 +37,8 @@ export interface StructuredCard {
   asOnDate: string | null;
   modeSplit?: { cashPaise: number; bankPaise: number; otherPaise: number };
   voucherCount: number;
+  /** Drill-through: recent vouchers touching this party (id + display info). */
+  recentVouchers?: { id: string; number: string; date: string; kind: string; totalPaise: number }[];
 }
 
 export interface CompressedContext {
@@ -105,6 +108,15 @@ function buildStructuredCard(routed: RoutedQuery, slice: RetrievedSlice): Struct
     isDebit: closing >= 0,
     asOnDate: (facts.as_on_date as string | null | undefined) ?? null,
     voucherCount: Number(facts.voucher_count ?? 0),
+    recentVouchers: Array.isArray(facts.recent_vouchers)
+      ? (facts.recent_vouchers as any[]).map((v) => ({
+          id: String(v.id ?? ""),
+          number: String(v.number ?? ""),
+          date: String(v.date ?? ""),
+          kind: String(v.kind ?? ""),
+          totalPaise: Number(v.total_paise ?? 0),
+        }))
+      : undefined,
     modeSplit: ms
       ? {
           cashPaise: Number(ms.cash_paise ?? 0),
@@ -184,6 +196,8 @@ export async function buildCompressedContext(
       "  [F:<fact key>]                       — for a value in the `facts` object",
       "Do not cite anything not present in the payload. Uncited numeric claims are",
       "treated as hallucination and are forbidden.",
+      "",
+      toolCatalogPrompt(),
     ].join("\n"),
   };
 

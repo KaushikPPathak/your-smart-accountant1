@@ -145,6 +145,18 @@ async function retrieveParty(companyId: string, routed: RoutedQuery, opts: { wit
   }
 
   const opening = Number(target.opening_balance_paise ?? 0) * (target.opening_balance_is_debit ? 1 : -1);
+  // Recent vouchers (most-recent first) — surfaced on the balance card so
+  // the user can click through to the source voucher for drill-down.
+  const recentVouchers = [...vouchers]
+    .sort((a: any, b: any) => String(b.voucher_date ?? "").localeCompare(String(a.voucher_date ?? "")))
+    .slice(0, 8)
+    .map((v: any) => ({
+      id: String(v.id),
+      number: String(v.voucher_number ?? ""),
+      date: String(v.voucher_date ?? ""),
+      kind: String(v.voucher_type ?? ""),
+      total_paise: Number(v.total_paise ?? 0),
+    }));
   return {
     scope: asOnIso
       ? `party="${target.name}" as on ${asOnIso} (${vouchers.length} vouchers)`
@@ -165,6 +177,7 @@ async function retrieveParty(companyId: string, routed: RoutedQuery, opts: { wit
       total_debit_paise: bal.debit_paise,
       total_credit_paise: bal.credit_paise,
       voucher_count: vouchers.length,
+      recent_vouchers: recentVouchers,
       ...(modeSplit ? { mode_split: modeSplit } : {}),
     },
   };
