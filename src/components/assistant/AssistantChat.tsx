@@ -108,6 +108,10 @@ export function AssistantChat() {
   const [pendingVoucher, setPendingVoucher] = useState<ParsedVoucher | null>(null);
   const [aiMode, setAiMode] = useState(true);
   const [thinking, setThinking] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [pendingOcr, setPendingOcr] = useState<OcrDraft | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   // Per-session conversation memory — last resolved party/company/asOn so
   // follow-ups like "and as on 31/12/2025?" work without repeating names.
