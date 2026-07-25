@@ -63,7 +63,9 @@ function OutstandingPage() {
     if (typeof window !== "undefined") window.localStorage.setItem(rateKey, String(bankRate));
   }, [bankRate, rateKey]);
 
-
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    setLoading(true);
     const type = mode === "receivables" ? "sales" : "purchase";
     withCacheFallback<{ invs: InvRow[]; allocs: AllocRow[] }>(
       async () => {
