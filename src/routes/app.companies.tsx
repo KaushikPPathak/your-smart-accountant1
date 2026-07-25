@@ -253,6 +253,12 @@ function CompaniesPage() {
       gst_filing_frequency: (data.gst_filing_frequency ?? "monthly") as "monthly" | "quarterly" | "iff",
       inventory_enabled: data.inventory_enabled ?? true,
       annual_turnover_lakhs: data.annual_turnover_paise ? String(data.annual_turnover_paise / 100 / 100000) : "",
+      borrowings_lakhs: (data as { borrowings_paise?: number }).borrowings_paise
+        ? String(((data as { borrowings_paise: number }).borrowings_paise) / 100 / 100000) : "",
+      nce_level_override: !!(data as { nce_level_override?: boolean }).nce_level_override,
+      nce_level: ((data as { nce_level?: 1 | 2 | 3 | null }).nce_level ?? null),
+      presumptive_scheme: (((data as { presumptive_scheme?: "none" | "44ad" | "44ada" }).presumptive_scheme) ?? "none"),
+      presumptive_mode: (((data as { presumptive_mode?: "digital" | "cash" | "professional" }).presumptive_mode) ?? "cash"),
       // Missing mode = treat as trial_local (app is local-only by default).
       trial_local: ((data as { mode?: string }).mode ?? "trial_local") === "trial_local",
       currency_code: ((data as { currency_code?: string }).currency_code) ?? "INR",
