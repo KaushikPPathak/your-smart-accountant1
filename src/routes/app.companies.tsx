@@ -71,6 +71,11 @@ interface FormState {
   gst_filing_frequency: "monthly" | "quarterly" | "iff";
   inventory_enabled: boolean;
   annual_turnover_lakhs: string;
+  borrowings_lakhs: string;
+  nce_level_override: boolean;
+  nce_level: 1 | 2 | 3 | null;
+  presumptive_scheme: "none" | "44ad" | "44ada";
+  presumptive_mode: "digital" | "cash" | "professional";
   trial_local: boolean;
   currency_code: string;
   date_format: "dd-mm-yyyy" | "dd/mm/yyyy" | "mm-dd-yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "dd-mmm-yyyy";
@@ -99,6 +104,11 @@ const empty: FormState = {
   gst_filing_frequency: "monthly",
   inventory_enabled: true,
   annual_turnover_lakhs: "",
+  borrowings_lakhs: "",
+  nce_level_override: false,
+  nce_level: null,
+  presumptive_scheme: "none",
+  presumptive_mode: "cash",
   trial_local: true,
   currency_code: "INR",
   date_format: "dd-mm-yyyy",
