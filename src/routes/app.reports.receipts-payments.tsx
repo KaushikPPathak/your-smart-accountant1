@@ -5,6 +5,10 @@ import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolb
 import { useCompany } from "@/lib/company-context";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/money";
+import { amountHeader } from "@/lib/export-format";
+import { downloadCsv } from "@/lib/csv";
+import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 
 export const Route = createFileRoute("/app/reports/receipts-payments")({
   head: () => ({ meta: [{ title: "Receipts & Payments — Reports" }] }),
