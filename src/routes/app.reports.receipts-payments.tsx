@@ -5,6 +5,10 @@ import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolb
 import { useCompany } from "@/lib/company-context";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/money";
+import { amountHeader } from "@/lib/export-format";
+import { downloadCsv } from "@/lib/csv";
+import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 
 export const Route = createFileRoute("/app/reports/receipts-payments")({
   head: () => ({ meta: [{ title: "Receipts & Payments — Reports" }] }),
@@ -36,11 +40,13 @@ interface OpeningRow {
 // classified by the contra ledger's group heading.
 function ReceiptsPayments() {
   const { activeCompanyId, activeMembership } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [rows, setRows] = useState<Row[]>([]);
   const [openingCash, setOpeningCash] = useState(0);
   const [closingCash, setClosingCash] = useState(0);
   const currency = activeMembership?.companies?.currency_code ?? "INR";
+  void currency;
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -150,10 +156,75 @@ function ReceiptsPayments() {
   );
   const totalReceipts = receipts.reduce((s, r) => s + r.total, 0);
   const totalPayments = payments.reduce((s, r) => s + r.total, 0);
+  const openBal = Math.max(0, openingCash);
+  const closeBal = Math.max(0, closingCash);
+  const grandReceipts = totalReceipts + openBal;
+  const grandPayments = totalPayments + closeBal;
+
+  // Six-column export: Particulars | Cash | Bank | Total (Receipts side) |
+  // Particulars | Cash | Bank | Total (Payments side). Cash & Bank are the
+  // inner breakdown; Total is the outer figure that ties back to the ledger.
+  const exportBody = (): (string | number)[][] => {
+    const rec: (string | number)[][] = [
+      ["To Opening Cash & Bank", "", "", r(openBal).toFixed(2)],
+      ...receipts.map((x) => [
+        `To ${x.name}`,
+        x.cash ? r(x.cash).toFixed(2) : "",
+        x.bank ? r(x.bank).toFixed(2) : "",
+        r(x.total).toFixed(2),
+      ]),
+    ];
+    const pay: (string | number)[][] = [
+      ...payments.map((x) => [
+        `By ${x.name}`,
+        x.cash ? r(x.cash).toFixed(2) : "",
+        x.bank ? r(x.bank).toFixed(2) : "",
+        r(x.total).toFixed(2),
+      ]),
+      ["By Closing Cash & Bank", "", "", r(closeBal).toFixed(2)],
+    ];
+    const max = Math.max(rec.length, pay.length);
+    return Array.from({ length: max }).map((_, i) => [
+      ...(rec[i] ?? ["", "", "", ""]),
+      ...(pay[i] ?? ["", "", "", ""]),
+    ]);
+  };
+
+  const csvRows = (): (string | number)[][] => [
+    [`Receipts & Payments: ${from} to ${to}`, "", "", "", "", "", "", ""],
+    ["Receipts (Cr.)", "Cash", "Bank/Cheque", amountHeader(), "Payments (Dr.)", "Cash", "Bank/Cheque", amountHeader()],
+    ...exportBody(),
+    ["Total", "", "", r(grandReceipts).toFixed(2), "Total", "", "", r(grandPayments).toFixed(2)],
+  ];
+
+  const onExportCsv = () => downloadCsv(`receipts-payments-${from}_to_${to}.csv`, csvRows());
+  const onExportXlsx = () => downloadXlsx(`receipts-payments-${from}_to_${to}.xlsx`, [{ name: "R&P", rows: csvRows() }]);
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title: "Receipts & Payments Account",
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
+      subtitle: `${from} to ${to}`,
+      head: [["Receipts (Cr.)", "Cash", "Bank/Cheque", amountHeader(), "Payments (Dr.)", "Cash", "Bank/Cheque", amountHeader()]],
+      body: exportBody(),
+      foot: [["Total", "", "", r(grandReceipts).toFixed(2), "Total", "", "", r(grandPayments).toFixed(2)]],
+      fileName: `receipts-payments-${from}_to_${to}.pdf`,
+      orientation: "l",
+      rightAlignCols: [1, 2, 3, 5, 6, 7],
+    });
 
   return (
     <div className="space-y-4">
-      <ReportToolbar from={from} to={to} onFrom={setFrom} onTo={setTo} />
+      <ReportToolbar
+        from={from}
+        to={to}
+        onFrom={setFrom}
+        onTo={setTo}
+        onExportCsv={onExportCsv}
+        onExportXlsx={onExportXlsx}
+        onExportPdf={onExportPdf}
+        onPrint={() => window.print()}
+      />
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-lg">Receipts &amp; Payments Account — {from} to {to}</CardTitle>
