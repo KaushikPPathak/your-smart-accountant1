@@ -14,6 +14,7 @@ const ALL_TABS: readonly Tab[] = [
   { to: "/app/reports/day-book", label: "Day Book" },
   { to: "/app/reports/ledger", label: "Ledger" },
   { to: "/app/reports/cash-bank", label: "Cash & Bank Book" },
+  { to: "/app/reports/receipts-payments", label: "Receipts & Payments" },
   { to: "/app/reports/group-ledger", label: "Group Ledger (B/S & P&L)" },
   { to: "/app/reports/trial-balance", label: "Trial Balance" },
   { to: "/app/reports/trading", label: "Trading A/c" },
@@ -30,6 +31,8 @@ const ALL_TABS: readonly Tab[] = [
   { to: "/app/reports/gstr2b", label: "GSTR-2B Recon", requires: "gst" },
   { to: "/app/reports/brs", label: "Bank Recon (BRS)" },
   { to: "/app/reports/stock-summary", label: "Stock Summary", requires: "inventory" },
+  { to: "/app/reports/presumptive", label: "Presumptive Tax" },
+  { to: "/app/reports/activity-log", label: "Activity Log" },
 ] as const;
 
 function ReportsLayout() {

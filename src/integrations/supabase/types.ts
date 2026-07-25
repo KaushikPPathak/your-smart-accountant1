@@ -468,6 +468,7 @@ export type Database = {
           bank_branch: string | null
           bank_ifsc: string | null
           bank_name: string | null
+          borrowings_paise: number
           cin: string | null
           corpus_fund_paise: number
           created_at: string
@@ -485,9 +486,13 @@ export type Database = {
           logo_url: string | null
           mode: string
           name: string
+          nce_level: number | null
+          nce_level_override: boolean
           owner_app_user_id: string | null
           pan: string | null
           phone: string | null
+          presumptive_mode: string | null
+          presumptive_scheme: string
           share_capital_paise: number
           state: string | null
           state_code: string | null
@@ -502,6 +507,7 @@ export type Database = {
           bank_branch?: string | null
           bank_ifsc?: string | null
           bank_name?: string | null
+          borrowings_paise?: number
           cin?: string | null
           corpus_fund_paise?: number
           created_at?: string
@@ -519,9 +525,13 @@ export type Database = {
           logo_url?: string | null
           mode?: string
           name: string
+          nce_level?: number | null
+          nce_level_override?: boolean
           owner_app_user_id?: string | null
           pan?: string | null
           phone?: string | null
+          presumptive_mode?: string | null
+          presumptive_scheme?: string
           share_capital_paise?: number
           state?: string | null
           state_code?: string | null
@@ -536,6 +546,7 @@ export type Database = {
           bank_branch?: string | null
           bank_ifsc?: string | null
           bank_name?: string | null
+          borrowings_paise?: number
           cin?: string | null
           corpus_fund_paise?: number
           created_at?: string
@@ -553,9 +564,13 @@ export type Database = {
           logo_url?: string | null
           mode?: string
           name?: string
+          nce_level?: number | null
+          nce_level_override?: boolean
           owner_app_user_id?: string | null
           pan?: string | null
           phone?: string | null
+          presumptive_mode?: string | null
+          presumptive_scheme?: string
           share_capital_paise?: number
           state?: string | null
           state_code?: string | null

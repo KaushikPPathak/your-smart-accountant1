@@ -71,6 +71,11 @@ interface FormState {
   gst_filing_frequency: "monthly" | "quarterly" | "iff";
   inventory_enabled: boolean;
   annual_turnover_lakhs: string;
+  borrowings_lakhs: string;
+  nce_level_override: boolean;
+  nce_level: 1 | 2 | 3 | null;
+  presumptive_scheme: "none" | "44ad" | "44ada";
+  presumptive_mode: "digital" | "cash" | "professional";
   trial_local: boolean;
   currency_code: string;
   date_format: "dd-mm-yyyy" | "dd/mm/yyyy" | "mm-dd-yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "dd-mmm-yyyy";
@@ -99,6 +104,11 @@ const empty: FormState = {
   gst_filing_frequency: "monthly",
   inventory_enabled: true,
   annual_turnover_lakhs: "",
+  borrowings_lakhs: "",
+  nce_level_override: false,
+  nce_level: null,
+  presumptive_scheme: "none",
+  presumptive_mode: "cash",
   trial_local: true,
   currency_code: "INR",
   date_format: "dd-mm-yyyy",
@@ -243,6 +253,12 @@ function CompaniesPage() {
       gst_filing_frequency: (data.gst_filing_frequency ?? "monthly") as "monthly" | "quarterly" | "iff",
       inventory_enabled: data.inventory_enabled ?? true,
       annual_turnover_lakhs: data.annual_turnover_paise ? String(data.annual_turnover_paise / 100 / 100000) : "",
+      borrowings_lakhs: (data as { borrowings_paise?: number }).borrowings_paise
+        ? String(((data as { borrowings_paise: number }).borrowings_paise) / 100 / 100000) : "",
+      nce_level_override: !!(data as { nce_level_override?: boolean }).nce_level_override,
+      nce_level: ((data as { nce_level?: 1 | 2 | 3 | null }).nce_level ?? null),
+      presumptive_scheme: (((data as { presumptive_scheme?: "none" | "44ad" | "44ada" }).presumptive_scheme) ?? "none"),
+      presumptive_mode: (((data as { presumptive_mode?: "digital" | "cash" | "professional" }).presumptive_mode) ?? "cash"),
       // Missing mode = treat as trial_local (app is local-only by default).
       trial_local: ((data as { mode?: string }).mode ?? "trial_local") === "trial_local",
       currency_code: ((data as { currency_code?: string }).currency_code) ?? "INR",
@@ -313,6 +329,13 @@ function CompaniesPage() {
       gst_filing_frequency: parsed.data.gst_registered ? parsed.data.gst_filing_frequency : "monthly",
       inventory_enabled: parsed.data.inventory_enabled,
       annual_turnover_paise: Math.round((parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) * 100000 * 100),
+      borrowings_paise: Math.round((parseFloat(parsed.data.borrowings_lakhs ?? "") || 0) * 100000 * 100),
+      nce_level: parsed.data.nce_level_override ? (parsed.data.nce_level ?? null) : null,
+      nce_level_override: !!parsed.data.nce_level_override,
+      presumptive_scheme: parsed.data.presumptive_scheme ?? "none",
+      presumptive_mode: parsed.data.presumptive_scheme === "44ada"
+        ? "professional"
+        : (parsed.data.presumptive_mode ?? "cash"),
       mode: "trial_local",
       currency_code: parsed.data.currency_code || "INR",
       date_format: parsed.data.date_format || "dd-mm-yyyy",
@@ -597,6 +620,9 @@ function CompaniesPage() {
                       Determines HSN digits required: <strong>4-digit</strong> if &lt; ₹5 Cr, <strong>6-digit</strong> if ≥ ₹5 Cr.
                     </p>
                 </div>
+
+                <NceComplianceCard form={form} setForm={setForm} />
+
                 <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
                   <Label className="text-sm font-semibold">Display Preferences</Label>
                   <p className="text-[11px] text-muted-foreground">
@@ -1029,6 +1055,106 @@ function CompaniesPage() {
         memberships={memberships.map((m) => ({ company_id: m.company_id, companies: { name: m.companies.name } }))}
         onDone={() => refresh()}
       />
+    </div>
+  );
+}
+
+// ---------- NCE Compliance card ----------
+function NceComplianceCard({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
+  const turnoverPaise = Math.round((parseFloat(form.annual_turnover_lakhs || "0") || 0) * 100000 * 100);
+  const borrowingsPaise = Math.round((parseFloat(form.borrowings_lakhs || "0") || 0) * 100000 * 100);
+  // Lazy require to keep top imports tidy.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { classifyNceLevel, NCE_LEVEL_LABEL } = require("@/lib/nce-classification") as typeof import("@/lib/nce-classification");
+  const auto = classifyNceLevel({ entity: form.entity_status, turnoverPaise, borrowingsPaise });
+  const effectiveLevel = form.nce_level_override && form.nce_level ? form.nce_level : auto.level;
+
+  return (
+    <div className="space-y-3 md:col-span-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <Label className="text-sm font-semibold">NCE Compliance (ICAI classification)</Label>
+        {auto.isCorporate ? (
+          <Badge variant="secondary">Corporate — Schedule III</Badge>
+        ) : (
+          <Badge>{NCE_LEVEL_LABEL[effectiveLevel]}</Badge>
+        )}
+      </div>
+      <p className="text-[11px] text-muted-foreground">{auto.reason}</p>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Outstanding Borrowings (₹ in Lakhs)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            placeholder="e.g. 100 for ₹1 Cr"
+            value={form.borrowings_lakhs}
+            onChange={(e) => setForm({ ...form, borrowings_lakhs: e.target.value })}
+          />
+          <p className="text-[11px] text-muted-foreground">Used with turnover to compute Level 1/2/3.</p>
+        </div>
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.nce_level_override}
+              onChange={(e) => setForm({ ...form, nce_level_override: e.target.checked })}
+            />
+            Manually override Level
+          </label>
+          {form.nce_level_override && (
+            <Select
+              value={String(form.nce_level ?? auto.level)}
+              onValueChange={(v) => setForm({ ...form, nce_level: parseInt(v, 10) as 1 | 2 | 3 })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">Level 1 (Large)</SelectItem>
+                <SelectItem value="2">Level 2 (Medium)</SelectItem>
+                <SelectItem value="3">Level 3 (Small / MSME)</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t pt-3 space-y-1.5">
+        <Label className="text-sm font-semibold">Presumptive Taxation</Label>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Scheme</Label>
+            <Select
+              value={form.presumptive_scheme}
+              onValueChange={(v) => setForm({ ...form, presumptive_scheme: v as FormState["presumptive_scheme"] })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (regular assessment)</SelectItem>
+                <SelectItem value="44ad">§44AD — Small Business</SelectItem>
+                <SelectItem value="44ada">§44ADA — Professional</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {form.presumptive_scheme === "44ad" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Primary receipt mode</Label>
+              <Select
+                value={form.presumptive_mode}
+                onValueChange={(v) => setForm({ ...form, presumptive_mode: v as FormState["presumptive_mode"] })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="digital">Digital / banking (6% deemed profit)</SelectItem>
+                  <SelectItem value="cash">Cash (8% deemed profit)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          When enabled, the <strong>Reports → Presumptive Tax</strong> dashboard tracks gross receipts against the §44AD (₹2 Cr / ₹3 Cr) or §44ADA (₹50 L / ₹75 L) cap.
+        </p>
+      </div>
     </div>
   );
 }

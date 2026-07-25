@@ -24,6 +24,11 @@ export const companyFormSchema = z
     gst_filing_frequency: z.enum(["monthly", "quarterly", "iff"]),
     inventory_enabled: z.boolean(),
     annual_turnover_lakhs: z.string().optional(),
+    borrowings_lakhs: z.string().optional(),
+    nce_level_override: z.boolean().optional(),
+    nce_level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+    presumptive_scheme: z.enum(["none", "44ad", "44ada"]).optional(),
+    presumptive_mode: z.enum(["digital", "cash", "professional"]).optional(),
     trial_local: z.boolean(),
     currency_code: z.string().trim().min(3).max(8).default("INR"),
     date_format: z.enum([
