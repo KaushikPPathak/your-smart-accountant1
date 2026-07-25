@@ -174,3 +174,117 @@ export const BS_LIAB = new Set([
   "capital",
   "duties_taxes",
 ]);
+
+/**
+ * Receipt-mode split for P&L / Trading ledgers.
+ * For every voucher touching an income/expense ledger, look at the contra
+ * cash/bank entries in the same voucher and attribute the ledger movement
+ * pro-rata across Cash vs Bank/Cheque. Journal entries with no cash/bank
+ * contra fall into `otherPaise` (e.g. accrual, contra of debtor/creditor).
+ * Values are signed (debit − credit) so callers can apply the same
+ * display-sign transform used for the parent ledger.
+ */
+export type ModeSplit = { cashPaise: number; bankPaise: number; otherPaise: number };
+
+export async function fetchLedgerModeSplits(
+  companyId: string,
+  from: string,
+  to: string,
+  options: LedgerBalanceOptions = {},
+): Promise<Map<string, ModeSplit>> {
+  const { ledgers, entries } = await withCacheFallback(
+    async () => {
+      const { data: leds } = await supabase
+        .from("ledgers")
+        .select("id, type")
+        .eq("company_id", companyId);
+      const { data: ves } = await supabase
+        .from("voucher_entries")
+        .select("voucher_id, ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id, voucher_type, narration)")
+        .eq("vouchers.company_id", companyId)
+        .filter("vouchers.voucher_date", "gte", from)
+        .filter("vouchers.voucher_date", "lte", to);
+      return {
+        ledgers: (leds ?? []) as { id: string; type: string }[],
+        entries: (ves ?? []) as {
+          voucher_id: string; ledger_id: string;
+          debit_paise: number; credit_paise: number;
+          vouchers: { voucher_type: string | null; narration: string | null } | null;
+        }[],
+      };
+    },
+    async () => {
+      const [leds, vouchers, rawEntries] = await Promise.all([
+        readLedgers(companyId),
+        readVouchers(companyId),
+        readVoucherEntriesForCompany(companyId),
+      ]);
+      const vById = new Map(vouchers.map((v: any) => [String(v.id), v]));
+      const ents = (rawEntries as any[])
+        .map((e) => {
+          const v = vById.get(String(e.voucher_id));
+          if (!v) return null;
+          const d = String(v.voucher_date ?? v.date ?? "");
+          if (d < from || d > to) return null;
+          return {
+            voucher_id: String(e.voucher_id),
+            ledger_id: String(e.ledger_id ?? ""),
+            debit_paise: Number(e.debit_paise ?? 0),
+            credit_paise: Number(e.credit_paise ?? 0),
+            vouchers: { voucher_type: v.voucher_type ?? null, narration: v.narration ?? null },
+          };
+        })
+        .filter(Boolean) as any[];
+      return {
+        ledgers: (leds as any[]).map((l) => ({ id: String(l.id), type: String(l.type ?? "") })),
+        entries: ents,
+      };
+    },
+  );
+
+  const typeOf = new Map(ledgers.map((l) => [l.id, l.type]));
+  const byVoucher = new Map<string, typeof entries>();
+  for (const e of entries) {
+    if (options.excludeProfitLossClosingTransfers && isProfitLossClosingTransfer(e.vouchers)) continue;
+    const arr = byVoucher.get(e.voucher_id) ?? [];
+    arr.push(e);
+    byVoucher.set(e.voucher_id, arr);
+  }
+
+  const out = new Map<string, ModeSplit>();
+  const bump = (id: string, key: keyof ModeSplit, v: number) => {
+    if (!v) return;
+    const cur = out.get(id) ?? { cashPaise: 0, bankPaise: 0, otherPaise: 0 };
+    cur[key] += v;
+    out.set(id, cur);
+  };
+
+  for (const [, es] of byVoucher) {
+    let cashNet = 0, bankNet = 0;
+    for (const e of es) {
+      const t = typeOf.get(e.ledger_id);
+      const m = (e.debit_paise || 0) - (e.credit_paise || 0);
+      if (t === "cash") cashNet += m;
+      else if (t === "bank") bankNet += m;
+    }
+    const cashAbs = Math.abs(cashNet);
+    const bankAbs = Math.abs(bankNet);
+    const totalAbs = cashAbs + bankAbs;
+
+    for (const e of es) {
+      const t = typeOf.get(e.ledger_id);
+      if (t === "cash" || t === "bank") continue;
+      const m = (e.debit_paise || 0) - (e.credit_paise || 0);
+      if (!m) continue;
+      if (totalAbs === 0) {
+        bump(e.ledger_id, "otherPaise", m);
+      } else {
+        const cashShare = Math.round((m * cashAbs) / totalAbs);
+        const bankShare = m - cashShare;
+        bump(e.ledger_id, "cashPaise", cashShare);
+        bump(e.ledger_id, "bankPaise", bankShare);
+      }
+    }
+  }
+  return out;
+}
