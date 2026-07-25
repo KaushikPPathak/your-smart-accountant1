@@ -36,7 +36,7 @@ interface InvRow {
   due_date: string | null;
   total_paise: number;
   party_ledger_id: string | null;
-  ledgers: { name: string } | null;
+  ledgers: { name: string; msme_registered?: boolean | null } | null;
 }
 
 interface AllocRow { invoice_voucher_id: string; amount_paise: number }
