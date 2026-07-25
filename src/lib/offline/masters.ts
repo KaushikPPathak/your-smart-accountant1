@@ -424,6 +424,7 @@ export async function updateItem(
   }
 
   emitDataChange(companyId, "item", existing ? [`item:${String(existing.name).toLowerCase()}`] : undefined);
+  void logActivity({ company_id: companyId, entity_type: "item", entity_id: id, entity_label: (values.name as string | undefined) ?? (existing?.name as string | undefined) ?? null, action: "update", diff: values as Record<string, unknown> });
 
   return existing ? (existing as unknown as ItemRow) : null;
 }
