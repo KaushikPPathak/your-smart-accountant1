@@ -91,6 +91,17 @@ export async function lockPeriod(args: {
     _notes: args.notes ?? null,
   });
   if (error) throw error;
+  try {
+    const { logActivity } = await import("./activity-log");
+    void logActivity({
+      company_id: args.companyId,
+      entity_type: "settings",
+      entity_id: null,
+      entity_label: `Period lock: ${args.returnType} ${args.period}`,
+      action: "create",
+      note: args.filedReference ? `Filed ref: ${args.filedReference}` : null,
+    });
+  } catch { /* non-fatal */ }
   return data as string;
 }
 
@@ -111,6 +122,17 @@ export async function unlockPeriod(args: {
     _reason: reason,
   });
   if (error) throw error;
+  try {
+    const { logActivity } = await import("./activity-log");
+    void logActivity({
+      company_id: args.companyId,
+      entity_type: "settings",
+      entity_id: null,
+      entity_label: `Period unlock: ${args.returnType} ${args.period}`,
+      action: "delete",
+      note: reason,
+    });
+  } catch { /* non-fatal */ }
 }
 
 export async function fetchAudit(companyId: string, limit = 50): Promise<PeriodLockAudit[]> {

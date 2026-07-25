@@ -153,6 +153,14 @@ const SECTIONS: NavSection[] = [
         ],
       },
       {
+        label: "NCE Compliance",
+        items: [
+          { title: "Receipts & Payments", url: "/app/reports/receipts-payments", icon: BookOpen },
+          { title: "Presumptive Tax (44AD/44ADA)", url: "/app/reports/presumptive", icon: Calculator },
+          { title: "Activity Log", url: "/app/reports/activity-log", icon: ScrollText },
+        ],
+      },
+      {
         label: "Inventory reports",
         items: [
           { title: "Stock Summary", url: "/app/reports/stock-summary", icon: Boxes, i18nKey: "nav.stockSummary" },
