@@ -107,6 +107,15 @@ function buildStructuredCard(routed: RoutedQuery, slice: RetrievedSlice): Struct
     isDebit: closing >= 0,
     asOnDate: (facts.as_on_date as string | null | undefined) ?? null,
     voucherCount: Number(facts.voucher_count ?? 0),
+    recentVouchers: Array.isArray(facts.recent_vouchers)
+      ? (facts.recent_vouchers as any[]).map((v) => ({
+          id: String(v.id ?? ""),
+          number: String(v.number ?? ""),
+          date: String(v.date ?? ""),
+          kind: String(v.kind ?? ""),
+          totalPaise: Number(v.total_paise ?? 0),
+        }))
+      : undefined,
     modeSplit: ms
       ? {
           cashPaise: Number(ms.cash_paise ?? 0),
