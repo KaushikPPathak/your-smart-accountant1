@@ -129,6 +129,7 @@ function CompaniesPage() {
   const [userMgmtOpen, setUserMgmtOpen] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoreFileOpen, setRestoreFileOpen] = useState(false);
+  const [nceWizard, setNceWizard] = useState<{ id: string; entity: EntityStatus } | null>(null);
 
   // Pull FY lock status (return_type = 'fy_close') for every company the user
   // is a member of, in a single query, so each card can render a
