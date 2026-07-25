@@ -52,6 +52,7 @@ function ProfitLoss() {
   const [excludedClosingEntries, setExcludedClosingEntries] = useState(0);
   const [openingStock, setOpeningStock] = useState(0);
   const [closingStock, setClosingStock] = useState(0);
+  const [modeSplits, setModeSplits] = useState<Map<string, ModeSplit>>(new Map());
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -61,6 +62,9 @@ function ProfitLoss() {
       setBalances(result.balances);
       setExcludedClosingEntries(result.excludedClosingTransferEntries);
     });
+    fetchLedgerModeSplits(activeCompanyId, from, to, {
+      excludeProfitLossClosingTransfers: true,
+    }).then(setModeSplits).catch(() => setModeSplits(new Map()));
   }, [activeCompanyId, from, to]);
 
   // Opening / Closing stock for gross-profit carry from Trading A/c.
