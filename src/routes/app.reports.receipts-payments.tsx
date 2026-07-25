@@ -166,30 +166,40 @@ function ReceiptsPayments() {
             <div>
               <h3 className="mb-2 text-sm font-semibold">Receipts (Cr.)</h3>
               <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground">
+                  <tr><th className="text-left font-normal py-1">Particulars</th><th className="text-right font-normal">Cash</th><th className="text-right font-normal">Bank / Cheque</th><th className="text-right font-normal">Total</th></tr>
+                </thead>
                 <tbody>
-                  <tr className="border-b"><td className="py-1">To Opening Cash &amp; Bank</td><td className="py-1 text-right font-mono">{formatINR(Math.max(0, openingCash))}</td></tr>
+                  <tr className="border-b"><td className="py-1">To Opening Cash &amp; Bank</td><td /><td /><td className="py-1 text-right font-mono">{formatINR(Math.max(0, openingCash))}</td></tr>
                   {receipts.map((r) => (
                     <tr key={r.name} className="border-b">
                       <td className="py-1">To {r.name}</td>
-                      <td className="py-1 text-right font-mono">{formatINR(r.amt)}</td>
+                      <td className="py-1 text-right font-mono text-muted-foreground">{r.cash ? formatINR(r.cash) : ""}</td>
+                      <td className="py-1 text-right font-mono text-muted-foreground">{r.bank ? formatINR(r.bank) : ""}</td>
+                      <td className="py-1 text-right font-mono">{formatINR(r.total)}</td>
                     </tr>
                   ))}
-                  <tr className="font-semibold"><td className="py-2">Total</td><td className="py-2 text-right font-mono">{formatINR(totalReceipts + Math.max(0, openingCash))}</td></tr>
+                  <tr className="font-semibold"><td className="py-2">Total</td><td /><td /><td className="py-2 text-right font-mono">{formatINR(totalReceipts + Math.max(0, openingCash))}</td></tr>
                 </tbody>
               </table>
             </div>
             <div>
               <h3 className="mb-2 text-sm font-semibold">Payments (Dr.)</h3>
               <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground">
+                  <tr><th className="text-left font-normal py-1">Particulars</th><th className="text-right font-normal">Cash</th><th className="text-right font-normal">Bank / Cheque</th><th className="text-right font-normal">Total</th></tr>
+                </thead>
                 <tbody>
                   {payments.map((r) => (
                     <tr key={r.name} className="border-b">
                       <td className="py-1">By {r.name}</td>
-                      <td className="py-1 text-right font-mono">{formatINR(r.amt)}</td>
+                      <td className="py-1 text-right font-mono text-muted-foreground">{r.cash ? formatINR(r.cash) : ""}</td>
+                      <td className="py-1 text-right font-mono text-muted-foreground">{r.bank ? formatINR(r.bank) : ""}</td>
+                      <td className="py-1 text-right font-mono">{formatINR(r.total)}</td>
                     </tr>
                   ))}
-                  <tr className="border-b"><td className="py-1">By Closing Cash &amp; Bank</td><td className="py-1 text-right font-mono">{formatINR(Math.max(0, closingCash))}</td></tr>
-                  <tr className="font-semibold"><td className="py-2">Total</td><td className="py-2 text-right font-mono">{formatINR(totalPayments + Math.max(0, closingCash))}</td></tr>
+                  <tr className="border-b"><td className="py-1">By Closing Cash &amp; Bank</td><td /><td /><td className="py-1 text-right font-mono">{formatINR(Math.max(0, closingCash))}</td></tr>
+                  <tr className="font-semibold"><td className="py-2">Total</td><td /><td /><td className="py-2 text-right font-mono">{formatINR(totalPayments + Math.max(0, closingCash))}</td></tr>
                 </tbody>
               </table>
             </div>
