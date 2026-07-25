@@ -95,11 +95,29 @@ export function groupedTRows(
       emphasis: "bold",
     });
     for (const r of b.rows) {
-      rows.push({
-        label: <span className="pl-3">{r.name}</span> as ReactNode,
-        amount: formatINR(r.valuePaise),
-        onClick: onLedgerClick ? () => onLedgerClick(r.id) : undefined,
-      });
+      if (r.inner && r.inner.length > 0) {
+        // Ledger row: name on left, total in OUTER column.
+        rows.push({
+          label: <span className="pl-3 font-medium">{r.name}</span> as ReactNode,
+          amount: "",
+          outerAmount: formatINR(r.valuePaise),
+          onClick: onLedgerClick ? () => onLedgerClick(r.id) : undefined,
+          emphasis: "bold",
+        });
+        // Inner mode-split rows: label indented further, value in INNER column.
+        for (const inn of r.inner) {
+          rows.push({
+            label: <span className="pl-8 text-muted-foreground">{inn.label}</span> as ReactNode,
+            amount: formatINR(inn.valuePaise),
+          });
+        }
+      } else {
+        rows.push({
+          label: <span className="pl-3">{r.name}</span> as ReactNode,
+          amount: formatINR(r.valuePaise),
+          onClick: onLedgerClick ? () => onLedgerClick(r.id) : undefined,
+        });
+      }
     }
     rows.push({
       label: <span className="pl-3 italic text-muted-foreground">Subtotal — {groupLabelText}</span>,
