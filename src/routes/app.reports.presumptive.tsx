@@ -225,16 +225,72 @@ function PresumptivePage() {
           </Card>
         </>
       )}
+
+      <Dialog open={drill !== null} onOpenChange={(o) => !o && setDrill(null)}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>
+              {drill === "digital" ? "Digital receipts — voucher breakdown"
+                : drill === "cash" ? "Cash receipts — voucher breakdown"
+                : drill === "other" ? "Other (accrual) receipts — voucher breakdown"
+                : "Gross receipts — voucher breakdown"}
+            </DialogTitle>
+            <DialogDescription>
+              Each row is a voucher that posts to an Income ledger. Cash / Digital columns are the
+              pro-rata share of that voucher’s cash-ledger vs bank-ledger contra — same engine that
+              feeds the P&amp;L inner-column split, so totals reconcile 1:1.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Voucher</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Narration</TableHead>
+                  <TableHead className="text-right">Cash</TableHead>
+                  <TableHead className="text-right">Digital</TableHead>
+                  <TableHead className="text-right">Other</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRows.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">No vouchers in this bucket.</TableCell></TableRow>
+                ) : filteredRows.map((r) => (
+                  <TableRow key={r.voucherId}>
+                    <TableCell className="whitespace-nowrap">{r.date}</TableCell>
+                    <TableCell className="font-mono">{r.number || "—"}</TableCell>
+                    <TableCell className="capitalize">{r.type}</TableCell>
+                    <TableCell className="max-w-[280px] truncate" title={r.narration}>{r.narration}</TableCell>
+                    <TableCell className="text-right font-mono">{r.cashPaise ? formatINR(r.cashPaise) : "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{r.bankPaise ? formatINR(r.bankPaise) : "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{r.otherPaise ? formatINR(r.otherPaise) : "—"}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">{formatINR(r.totalPaise)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" onClick={() => setDrill(null)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-md border p-3">
+function Stat({ label, value, sub, onClick }: { label: string; value: string; sub?: string; onClick?: () => void }) {
+  const cls = "rounded-md border p-3 text-left w-full" + (onClick ? " hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer" : "");
+  const inner = (
+    <>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="font-mono text-lg">{value}</div>
       {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
-    </div>
+      {onClick && <div className="text-[11px] text-muted-foreground">click to drill down</div>}
+    </>
   );
+  return onClick ? <button type="button" onClick={onClick} className={cls}>{inner}</button> : <div className={cls}>{inner}</div>;
 }
