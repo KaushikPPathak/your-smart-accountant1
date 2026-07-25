@@ -19,6 +19,11 @@ import {
   readBillAllocations,
   withCacheFallback,
 } from "@/lib/offline/cache-read";
+import {
+  msmedInterestPaise,
+  msmedInterestBreakdown,
+  DEFAULT_RBI_BANK_RATE_PCT,
+} from "@/lib/msme-interest";
 
 export const Route = createFileRoute("/app/reports/outstanding")({
   head: () => ({ meta: [{ title: "Bill-by-Bill Outstanding — Reports" }] }),
@@ -48,6 +53,15 @@ function OutstandingPage() {
   const [invs, setInvs] = useState<InvRow[]>([]);
   const [allocs, setAllocs] = useState<AllocRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const rateKey = `msme:bankRate:${activeCompanyId ?? "_"}`;
+  const [bankRate, setBankRate] = useState<number>(() => {
+    if (typeof window === "undefined") return DEFAULT_RBI_BANK_RATE_PCT;
+    const v = Number(window.localStorage.getItem(rateKey));
+    return Number.isFinite(v) && v > 0 ? v : DEFAULT_RBI_BANK_RATE_PCT;
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem(rateKey, String(bankRate));
+  }, [bankRate, rateKey]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -124,11 +138,23 @@ function OutstandingPage() {
   }, [invs, allocs, asOf]);
 
   const totalPending = rows.reduce((s, r) => s + r.pending_paise, 0);
-  // MSMED §15: buyer must pay MSE supplier within 45 days. Flag payables past that.
-  const msmeOverdue = mode === "payables"
-    ? rows.filter((r) => r.ledgers?.msme_registered && r.days > 45)
-    : [];
-  const msmeOverdueTotal = msmeOverdue.reduce((s, r) => s + r.pending_paise, 0);
+  // MSMED §15/§16 — flag payables past appointed day, compute compound interest.
+  const msmeRows = useMemo(() => {
+    if (mode !== "payables") return [] as Array<typeof rows[number] & { interest_paise: number; appointed_day: string; days_late: number }>;
+    return rows
+      .filter((r) => r.ledgers?.msme_registered)
+      .map((r) => {
+        const b = msmedInterestBreakdown(r.pending_paise, r.voucher_date, asOf, {
+          agreedDueDate: r.due_date,
+          bankRatePct: bankRate,
+        });
+        return { ...r, interest_paise: b.interestPaise, appointed_day: b.appointedDay, days_late: b.daysLate };
+      })
+      .filter((r) => r.days_late > 0);
+  }, [rows, mode, asOf, bankRate]);
+  const msmeOverdueTotal = msmeRows.reduce((s, r) => s + r.pending_paise, 0);
+  const msmeInterestTotal = msmeRows.reduce((s, r) => s + r.interest_paise, 0);
+
 
   return (
     <div className="space-y-4">
@@ -157,25 +183,42 @@ function OutstandingPage() {
         </CardContent>
       </Card>
 
-      {mode === "payables" && msmeOverdue.length > 0 && (
+      {mode === "payables" && msmeRows.length > 0 && (
         <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-            <div>
+            <div className="min-w-[240px]">
               <div className="text-sm font-semibold text-destructive">
-                MSMED §15 alert — {msmeOverdue.length} bill{msmeOverdue.length === 1 ? "" : "s"} past 45 days
+                MSMED §15/§16 alert — {msmeRows.length} bill{msmeRows.length === 1 ? "" : "s"} past appointed day
               </div>
               <div className="text-xs text-muted-foreground">
-                Payments to MSE suppliers pending &gt; 45 days attract interest under MSMED Act and are
-                disallowed under Sec 43B(h) of the Income-tax Act until paid.
+                Compound interest @ 3× RBI bank rate ({(bankRate * 3).toFixed(2)}% p.a., monthly rests)
+                from day after appointed day. Also disallowed u/s 43B(h) of the Income-tax Act until paid.
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-xs text-muted-foreground">MSME overdue</div>
-              <div className="font-mono text-lg font-semibold text-destructive">{formatINR(msmeOverdueTotal)}</div>
+            <div className="flex items-end gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">RBI bank rate %</Label>
+                <Input
+                  type="number"
+                  step="0.05"
+                  value={bankRate}
+                  onChange={(e) => setBankRate(Math.max(0, Number(e.target.value) || 0))}
+                  className="h-8 w-24 font-mono"
+                />
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground">Principal overdue</div>
+                <div className="font-mono text-base font-semibold text-destructive">{formatINR(msmeOverdueTotal)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground">§16 interest</div>
+                <div className="font-mono text-base font-semibold text-destructive">{formatINR(msmeInterestTotal)}</div>
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
+
 
       <Card>
         <CardContent className="p-0">
@@ -190,15 +233,20 @@ function OutstandingPage() {
                 <TableHead className="text-right">Received/Paid</TableHead>
                 <TableHead className="text-right">Pending</TableHead>
                 <TableHead className="text-right">Days</TableHead>
+                {mode === "payables" && <TableHead className="text-right">§16 Interest</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={mode === "payables" ? 9 : 8} className="p-6 text-center text-sm text-muted-foreground">Loading…</TableCell></TableRow>
               ) : rows.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">No outstanding bills 🎉</TableCell></TableRow>
+                <TableRow><TableCell colSpan={mode === "payables" ? 9 : 8} className="p-6 text-center text-sm text-muted-foreground">No outstanding bills 🎉</TableCell></TableRow>
               ) : rows.map((r) => {
-                const isMsmeOverdue = mode === "payables" && !!r.ledgers?.msme_registered && r.days > 45;
+                const isMsme = mode === "payables" && !!r.ledgers?.msme_registered;
+                const brk = isMsme
+                  ? msmedInterestBreakdown(r.pending_paise, r.voucher_date, asOf, { agreedDueDate: r.due_date, bankRatePct: bankRate })
+                  : null;
+                const isMsmeOverdue = !!brk && brk.daysLate > 0;
                 return (
                 <TableRow key={r.id} className={isMsmeOverdue ? "bg-destructive/5" : undefined}>
                   <TableCell className="font-mono text-xs">{fmtIndianDate(r.voucher_date)}</TableCell>
@@ -215,11 +263,25 @@ function OutstandingPage() {
                   <TableCell className="text-right font-mono font-semibold">{formatINR(r.pending_paise)}</TableCell>
                   <TableCell className="text-right">
                     {isMsmeOverdue ? (
-                      <Badge variant="destructive" title="MSMED §15 / Sec 43B(h) — overdue beyond 45 days">{r.days}d ⚠</Badge>
+                      <Badge variant="destructive" title={`MSMED §15 — appointed day ${fmtIndianDate(brk!.appointedDay)}, ${brk!.daysLate}d late`}>{r.days}d ⚠</Badge>
                     ) : (
                       <Badge variant={r.days > 90 ? "destructive" : r.days > 60 ? "default" : "secondary"}>{r.days}d</Badge>
                     )}
                   </TableCell>
+                  {mode === "payables" && (
+                    <TableCell className="text-right font-mono">
+                      {brk && brk.interestPaise > 0 ? (
+                        <span
+                          className="text-destructive font-semibold"
+                          title={`Appointed day ${fmtIndianDate(brk.appointedDay)} · ${brk.daysLate}d @ ${brk.ratePct.toFixed(2)}% p.a. monthly compounded`}
+                        >
+                          {formatINR(brk.interestPaise)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
                 );
               })}
@@ -230,3 +292,4 @@ function OutstandingPage() {
     </div>
   );
 }
+
