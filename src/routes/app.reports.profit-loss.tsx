@@ -123,23 +123,44 @@ function ProfitLoss() {
   const expenseTypes = new Set(["expense_indirect"]);
   const incomeTypes = new Set(["income_indirect"]);
 
+  // Inner breakdown: split each P&L ledger by receipt mode (Cash vs Bank/Cheque).
+  // Signed ModeSplit is dr−cr; expenses (Dr-natural) use +, incomes (Cr-natural) flip.
+  const innerForExpense = (b: LedgerBalance) => {
+    const m = modeSplits.get(b.id); if (!m) return undefined;
+    return [
+      { label: "Paid in Cash", valuePaise: m.cashPaise },
+      { label: "Paid via Bank / Cheque", valuePaise: m.bankPaise },
+      { label: "Other (journal / adjustment)", valuePaise: m.otherPaise },
+    ];
+  };
+  const innerForIncome = (b: LedgerBalance) => {
+    const m = modeSplits.get(b.id); if (!m) return undefined;
+    return [
+      { label: "Received in Cash", valuePaise: -m.cashPaise },
+      { label: "Received via Bank / Cheque", valuePaise: -m.bankPaise },
+      { label: "Other (journal / adjustment)", valuePaise: -m.otherPaise },
+    ];
+  };
+
   const expenseBuckets = useMemo(
     () => groupBalances(
       balances.filter((b) => expenseTypes.has(b.type)),
       "PL",
       (b) => b.closing_paise,
+      innerForExpense,
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balances],
+    [balances, modeSplits],
   );
   const incomeBuckets = useMemo(
     () => groupBalances(
       balances.filter((b) => incomeTypes.has(b.type)),
       "PL",
       (b) => -b.closing_paise,
+      innerForIncome,
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balances],
+    [balances, modeSplits],
   );
 
   const goLedger = (id: string) =>
