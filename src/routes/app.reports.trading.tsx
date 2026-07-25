@@ -65,22 +65,44 @@ function TradingAccount() {
     });
   }, [activeCompanyId]);
 
+  // Inner mode-split (Cash vs Bank/Cheque) per direct ledger.
+  const innerDr = (b: LedgerBalance) => {
+    const m = modeSplits.get(b.id); if (!m) return undefined;
+    return [
+      { label: "Paid in Cash", valuePaise: m.cashPaise },
+      { label: "Paid via Bank / Cheque", valuePaise: m.bankPaise },
+      { label: "Other (journal / adjustment)", valuePaise: m.otherPaise },
+    ];
+  };
+  const innerCr = (b: LedgerBalance) => {
+    const m = modeSplits.get(b.id); if (!m) return undefined;
+    return [
+      { label: "Received in Cash", valuePaise: -m.cashPaise },
+      { label: "Received via Bank / Cheque", valuePaise: -m.bankPaise },
+      { label: "Other (journal / adjustment)", valuePaise: -m.otherPaise },
+    ];
+  };
+
   // Direct income (Sales / Direct Income) and direct expenses (Purchase / Direct Exp), grouped.
   const drBuckets = useMemo(
     () => groupBalances(
       balances.filter((b) => b.type === "expense_direct"),
       "TRADING",
       (b) => b.closing_paise,
+      innerDr,
     ),
-    [balances],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [balances, modeSplits],
   );
   const crBuckets = useMemo(
     () => groupBalances(
       balances.filter((b) => b.type === "income_direct"),
       "TRADING",
       (b) => -b.closing_paise,
+      innerCr,
     ),
-    [balances],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [balances, modeSplits],
   );
 
   const goLedger = (id: string) =>
