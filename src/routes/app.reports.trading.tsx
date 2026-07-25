@@ -139,9 +139,7 @@ function TradingAccount() {
   const fmtInner = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
     row && !row.isHeader && row.outerPaise === undefined && row.paise !== 0 ? r(row.paise).toFixed(2) : "";
   const fmtOuter = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
-    row && !row.isHeader && row.outerPaise !== undefined ? r(row.outerPaise).toFixed(2)
-      : row && !row.isHeader && row.outerPaise === undefined && row.paise !== 0 && (row as { inner?: unknown }).inner === undefined && !(row.label.startsWith("      "))
-        ? r(row.paise).toFixed(2) : "";
+    row && !row.isHeader && row.outerPaise !== undefined ? r(row.outerPaise).toFixed(2) : "";
 
   const exportBody = (): (string | number)[][] => {
     const max = Math.max(drExp.length, crExp.length);
