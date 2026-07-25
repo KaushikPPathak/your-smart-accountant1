@@ -45,6 +45,8 @@ interface ChatMessage {
   voucherPreview?: ParsedVoucher;
   toolCalls?: { name: string; input: string }[];
   card?: StructuredCard;
+  ocrPreview?: OcrDraft;
+  memoryHint?: PartyPattern;
 }
 
 type ParsedCompany = {
