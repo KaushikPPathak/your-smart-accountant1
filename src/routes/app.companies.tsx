@@ -1058,3 +1058,103 @@ function CompaniesPage() {
     </div>
   );
 }
+
+// ---------- NCE Compliance card ----------
+function NceComplianceCard({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
+  const turnoverPaise = Math.round((parseFloat(form.annual_turnover_lakhs || "0") || 0) * 100000 * 100);
+  const borrowingsPaise = Math.round((parseFloat(form.borrowings_lakhs || "0") || 0) * 100000 * 100);
+  // Lazy require to keep top imports tidy.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { classifyNceLevel, NCE_LEVEL_LABEL } = require("@/lib/nce-classification") as typeof import("@/lib/nce-classification");
+  const auto = classifyNceLevel({ entity: form.entity_status, turnoverPaise, borrowingsPaise });
+  const effectiveLevel = form.nce_level_override && form.nce_level ? form.nce_level : auto.level;
+
+  return (
+    <div className="space-y-3 md:col-span-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <Label className="text-sm font-semibold">NCE Compliance (ICAI classification)</Label>
+        {auto.isCorporate ? (
+          <Badge variant="secondary">Corporate — Schedule III</Badge>
+        ) : (
+          <Badge>{NCE_LEVEL_LABEL[effectiveLevel]}</Badge>
+        )}
+      </div>
+      <p className="text-[11px] text-muted-foreground">{auto.reason}</p>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Outstanding Borrowings (₹ in Lakhs)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            placeholder="e.g. 100 for ₹1 Cr"
+            value={form.borrowings_lakhs}
+            onChange={(e) => setForm({ ...form, borrowings_lakhs: e.target.value })}
+          />
+          <p className="text-[11px] text-muted-foreground">Used with turnover to compute Level 1/2/3.</p>
+        </div>
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.nce_level_override}
+              onChange={(e) => setForm({ ...form, nce_level_override: e.target.checked })}
+            />
+            Manually override Level
+          </label>
+          {form.nce_level_override && (
+            <Select
+              value={String(form.nce_level ?? auto.level)}
+              onValueChange={(v) => setForm({ ...form, nce_level: parseInt(v, 10) as 1 | 2 | 3 })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">Level 1 (Large)</SelectItem>
+                <SelectItem value="2">Level 2 (Medium)</SelectItem>
+                <SelectItem value="3">Level 3 (Small / MSME)</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t pt-3 space-y-1.5">
+        <Label className="text-sm font-semibold">Presumptive Taxation</Label>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Scheme</Label>
+            <Select
+              value={form.presumptive_scheme}
+              onValueChange={(v) => setForm({ ...form, presumptive_scheme: v as FormState["presumptive_scheme"] })}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (regular assessment)</SelectItem>
+                <SelectItem value="44ad">§44AD — Small Business</SelectItem>
+                <SelectItem value="44ada">§44ADA — Professional</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {form.presumptive_scheme === "44ad" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Primary receipt mode</Label>
+              <Select
+                value={form.presumptive_mode}
+                onValueChange={(v) => setForm({ ...form, presumptive_mode: v as FormState["presumptive_mode"] })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="digital">Digital / banking (6% deemed profit)</SelectItem>
+                  <SelectItem value="cash">Cash (8% deemed profit)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          When enabled, the <strong>Reports → Presumptive Tax</strong> dashboard tracks gross receipts against the §44AD (₹2 Cr / ₹3 Cr) or §44ADA (₹50 L / ₹75 L) cap.
+        </p>
+      </div>
+    </div>
+  );
+}
