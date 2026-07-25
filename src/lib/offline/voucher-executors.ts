@@ -661,6 +661,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
   });
   if (saveErr) throw saveErr;
   emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`, `party:${partyId}`]);
+  void logActivity({ company_id: snap.companyId, entity_type: "voucher", entity_id: vid as string, entity_label: `${snap.voucherType} ${voucherNumber}`, action: "create" });
   return { voucherId: vid as string, voucherNumber };
 }
 
