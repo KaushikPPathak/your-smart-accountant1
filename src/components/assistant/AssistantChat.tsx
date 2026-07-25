@@ -428,8 +428,13 @@ export function AssistantChat() {
             .slice(-12)
             .map((m) => ({ role: m.role, content: m.text }));
           const res = await callAssistant({
-            data: { companyId: activeCompanyId ?? null, messages: history },
+            data: {
+              companyId: activeCompanyId ?? null,
+              messages: history,
+              prior: memoryRef.current,
+            },
           });
+          if (res.memory) memoryRef.current = res.memory;
           if (res.ok && res.text) {
             setMessages((m) => [
               ...m,
@@ -438,6 +443,7 @@ export function AssistantChat() {
                 role: "assistant",
                 text: res.text,
                 toolCalls: res.toolCalls,
+                card: res.card,
               },
             ]);
             return;
