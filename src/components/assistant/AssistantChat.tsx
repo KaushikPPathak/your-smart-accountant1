@@ -785,9 +785,37 @@ function BalanceCard({ card }: { card: StructuredCard }) {
           </div>
         </div>
       ) : null}
+      {card.recentVouchers && card.recentVouchers.length > 0 ? (
+        <div className="mt-2 border-t border-border/40 pt-2">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+            Recent vouchers — click to open
+          </div>
+          <div className="space-y-0.5">
+            {card.recentVouchers.slice(0, 6).map((v) => (
+              <Link
+                key={v.id}
+                to="/app/vouchers/$voucherId"
+                params={{ voucherId: v.id }}
+                className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-[11px] hover:bg-accent hover:text-accent-foreground"
+              >
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <FileText className="h-3 w-3 shrink-0 opacity-60" />
+                  <span className="font-mono">{v.number || "—"}</span>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="text-muted-foreground">{v.date}</span>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="uppercase text-[10px] text-muted-foreground">{v.kind}</span>
+                </span>
+                <span className="font-mono shrink-0">{formatInrCard(v.totalPaise)}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="mt-2 text-[10px] text-muted-foreground">
         Verified from your books · {card.voucherCount} voucher{card.voucherCount === 1 ? "" : "s"}
       </div>
+
     </div>
   );
 }
