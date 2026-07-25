@@ -124,6 +124,11 @@ function OutstandingPage() {
   }, [invs, allocs, asOf]);
 
   const totalPending = rows.reduce((s, r) => s + r.pending_paise, 0);
+  // MSMED §15: buyer must pay MSE supplier within 45 days. Flag payables past that.
+  const msmeOverdue = mode === "payables"
+    ? rows.filter((r) => r.ledgers?.msme_registered && r.days > 45)
+    : [];
+  const msmeOverdueTotal = msmeOverdue.reduce((s, r) => s + r.pending_paise, 0);
 
   return (
     <div className="space-y-4">
