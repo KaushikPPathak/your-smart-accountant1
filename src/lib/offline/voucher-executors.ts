@@ -531,6 +531,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
   if (isLocalOnlyMode()) {
     const r = await runLocalItemVoucherCreate(snap);
     emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`, `party:${snap.partyId}`]);
+    void logActivity({ company_id: snap.companyId, entity_type: "voucher", entity_id: r.voucherId, entity_label: `${snap.voucherType} ${r.voucherNumber}`, action: "create" });
     return r;
   }
 
