@@ -10,25 +10,36 @@
 //      assistant still answers.
 //   4. If the model asks for a specific raw row by CCR hash, fetch it
 //      transparently and re-run.
+//   5. Verifier — before returning, cross-check any ₹ figures in the reply
+//      against the deterministic aggregator (`ctx.card`). If they disagree,
+//      prepend a "Verified figure from your books" banner so the ground
+//      truth is what the user sees first.
 
 import { supabase } from "@/integrations/supabase/client";
-import { buildCompressedContext, unredactAnswer } from "./ai/sqliteContext";
+import { buildCompressedContext, unredactAnswer, type StructuredCard } from "./ai/sqliteContext";
 import { retrieveOriginal } from "./ai/headroom";
 import { isWebGpuAvailable, webLlmChat } from "./ai/webllm";
 import { recentErrors, questionMentionsError } from "./ai/error-ring";
 import { lookupAnswer, storeAnswer } from "./ai/answer-cache";
+import type { ConversationMemory } from "./ai/conversation-memory";
 
 export interface AssistantChatResult {
   ok: boolean;
   text: string;
   error?: string;
   toolCalls?: { name: string; input: string }[];
+  /** Structured, deterministic answer card (rendered above the prose). */
+  card?: StructuredCard;
+  /** Updated conversation memory — the caller should persist for the next turn. */
+  memory?: ConversationMemory;
 }
 
 interface AssistantArgs {
   data?: {
     companyId?: string | null;
     messages?: { role: string; content: string }[];
+    /** Prior turn's resolved party / date / company — see conversation-memory.ts. */
+    prior?: ConversationMemory;
   };
 }
 
@@ -98,6 +109,45 @@ async function smartChat(
   return cloudChat(messages, temperature, extra);
 }
 
+/** Format paise → "₹2,92,433.28" (Indian grouping). */
+function formatInr(paise: number): string {
+  const rupees = Math.abs(paise) / 100;
+  return "₹" + new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rupees);
+}
+
+/** Extract ₹ amounts from a model reply, returning paise. */
+function extractRupeeFigures(text: string): number[] {
+  const out: number[] = [];
+  const re = /(?:₹|rs\.?|inr)\s*([0-9]{1,3}(?:[,\s][0-9]{2,3})*(?:\.[0-9]{1,2})?)/gi;
+  for (const m of text.matchAll(re)) {
+    const num = Number(m[1].replace(/[,\s]/g, ""));
+    if (!Number.isNaN(num)) out.push(Math.round(num * 100));
+  }
+  return out;
+}
+
+/**
+ * Verifier — compare every ₹ figure in the model reply against the
+ * deterministic closing balance. If the model's headline number is off by
+ * more than 1 rupee, prepend a corrective banner. This prevents hallucinated
+ * balances from being the first thing the user reads.
+ */
+function verifyAnswer(text: string, card: StructuredCard | undefined): string {
+  if (!card) return text;
+  const truthPaise = Math.abs(card.closingPaise);
+  const figures = extractRupeeFigures(text);
+  if (figures.length === 0) return text;
+  const off = figures.some((f) => Math.abs(f - truthPaise) > 100);
+  if (!off) return text;
+  const drCr = card.isDebit ? "Dr" : "Cr";
+  const asOn = card.asOnDate ? ` as on ${card.asOnDate}` : "";
+  const banner =
+    `> ⚠️ **Verified from your books:** ${card.partyName} — ` +
+    `${formatInr(truthPaise)} ${drCr}${asOn}. ` +
+    `The narrative below may reference a different figure — trust the verified number.\n\n`;
+  return banner + text;
+}
+
 export async function assistantChat(args?: AssistantArgs): Promise<AssistantChatResult> {
   const history = args?.data?.messages ?? [];
   const lastUser = [...history].reverse().find((m) => m.role === "user");
@@ -107,14 +157,14 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
   }
 
   try {
-    const ctx = await buildCompressedContext(question, args?.data?.companyId ?? null);
+    const ctx = await buildCompressedContext(question, args?.data?.companyId ?? null, args?.data?.prior);
     const cacheCompanyId = args?.data?.companyId
       ?? (typeof window !== "undefined" ? window.localStorage?.getItem("ym_active_company_id") ?? "" : "");
 
     // Answer cache — same intent+scope+question inside TTL returns instantly.
     if (cacheCompanyId) {
       const cached = lookupAnswer(cacheCompanyId, ctx.intent, ctx.scope, question);
-      if (cached) return { ok: true, text: cached };
+      if (cached) return { ok: true, text: cached, card: ctx.card, memory: ctx.memory };
     }
 
     const baseMessages: ChatMsg[] = [
@@ -160,9 +210,9 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       }
     }
 
-    const finalText = unredactAnswer(answer, ctx);
+    const finalText = verifyAnswer(unredactAnswer(answer, ctx), ctx.card);
     if (cacheCompanyId) storeAnswer(cacheCompanyId, ctx.intent, ctx.scope, question, finalText);
-    return { ok: true, text: finalText };
+    return { ok: true, text: finalText, card: ctx.card, memory: ctx.memory };
   } catch (err) {
     if (looksOfflineOrBlocked(err)) {
       return { ok: true, text: offlineAssistantAnswer(question, err) };
