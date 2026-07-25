@@ -5,9 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { useCompany } from "@/lib/company-context";
-import { supabase } from "@/integrations/supabase/client";
+
 import { formatINR } from "@/lib/money";
 import { computePresumptive, type PresumptiveScheme, type PresumptiveMode } from "@/lib/presumptive";
+import { fetchLedgerModeSplits, PL_INCOME } from "@/lib/reports";
+import { readLedgers } from "@/lib/offline/cache-read";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
 export const Route = createFileRoute("/app/reports/presumptive")({
@@ -26,40 +28,34 @@ function PresumptivePage() {
 
   const [grossReceipts, setGrossReceipts] = useState(0);
   const [digitalReceipts, setDigitalReceipts] = useState(0);
+  const [cashReceipts, setCashReceipts] = useState(0);
 
   useEffect(() => {
     if (!activeCompanyId) return;
     (async () => {
-      // Sales + Receipt vouchers in the period → gross receipts. Digital = via
-      // Bank ledgers; Cash = via Cash ledgers.
-      const { data: vs } = await supabase
-        .from("vouchers")
-        .select("id, voucher_type, total_paise")
-        .eq("company_id", activeCompanyId)
-        .in("voucher_type", ["sales", "receipt"])
-        .gte("voucher_date", from)
-        .lte("voucher_date", to);
-      const totalGross = ((vs ?? []) as { total_paise: number }[]).reduce((s, v) => s + (v.total_paise || 0), 0);
-      setGrossReceipts(totalGross);
-
-      // Digital share: sum of debit_paise on bank ledgers across receipt vouchers.
-      const receiptIds = ((vs ?? []) as { id: string; voucher_type: string }[])
-        .filter(v => v.voucher_type === "receipt").map(v => v.id);
-      if (receiptIds.length === 0) { setDigitalReceipts(0); return; }
-      const { data: banks } = await supabase
-        .from("ledgers")
-        .select("id, type")
-        .eq("company_id", activeCompanyId)
-        .eq("type", "bank");
-      const bankIds = new Set(((banks ?? []) as { id: string }[]).map(b => b.id));
-      const { data: ves } = await supabase
-        .from("voucher_entries")
-        .select("ledger_id, debit_paise")
-        .in("voucher_id", receiptIds);
-      const digital = ((ves ?? []) as { ledger_id: string; debit_paise: number }[])
-        .filter(e => bankIds.has(e.ledger_id))
-        .reduce((s, e) => s + (e.debit_paise || 0), 0);
+      // Gross receipts = credit balance on income ledgers in the period.
+      // Digital/Cash split = pro-rata Bank vs Cash contra across the same
+      // vouchers (via fetchLedgerModeSplits — same engine that drives the
+      // P&L / R&P inner-column breakdown, so numbers reconcile 1:1).
+      const [ledgers, splits] = await Promise.all([
+        readLedgers(activeCompanyId),
+        fetchLedgerModeSplits(activeCompanyId, from, to, { excludeProfitLossClosingTransfers: true }),
+      ]);
+      const incomeIds = new Set(
+        (ledgers as any[]).filter((l) => PL_INCOME.has(String(l.type))).map((l) => String(l.id)),
+      );
+      let gross = 0, digital = 0, cash = 0;
+      for (const id of incomeIds) {
+        const s = splits.get(id);
+        if (!s) continue;
+        // Income ledgers carry credit balance → net is negative; flip sign.
+        gross   += Math.max(0, -(s.cashPaise + s.bankPaise + s.otherPaise));
+        digital += Math.max(0, -s.bankPaise);
+        cash    += Math.max(0, -s.cashPaise);
+      }
+      setGrossReceipts(gross);
       setDigitalReceipts(digital);
+      setCashReceipts(cash);
     })();
   }, [activeCompanyId, from, to]);
 
@@ -108,23 +104,36 @@ function PresumptivePage() {
                 </div>
                 <Progress value={pctUsed} className={pctUsed >= 90 ? "bg-red-100" : ""} />
               </div>
-              <div className="grid gap-3 md:grid-cols-2 text-sm">
+              <div className="grid gap-3 md:grid-cols-3 text-sm">
                 <div className="rounded-md border p-3">
-                  <div className="text-xs text-muted-foreground">Digital receipts</div>
+                  <div className="text-xs text-muted-foreground">Digital receipts (Bank/UPI/Cheque)</div>
                   <div className="font-mono">{formatINR(digitalReceipts)}</div>
-                  <div className="text-xs">{result.digitalSharePct.toFixed(1)}% of gross — {result.digitalSharePct >= 95 ? "qualifies for the extended cap." : "below 95% (base cap applies)."}</div>
+                  <div className="text-xs">{result.digitalSharePct.toFixed(2)}% of gross</div>
                 </div>
-                <div className={`rounded-md border p-3 flex items-start gap-2 ${result.thresholdBreached ? "border-destructive/50 bg-destructive/5" : "border-green-500/40 bg-green-500/5"}`}>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-muted-foreground">Cash receipts</div>
+                  <div className="font-mono">{formatINR(cashReceipts)}</div>
+                  <div className="text-xs">
+                    {grossReceipts > 0 ? ((cashReceipts / grossReceipts) * 100).toFixed(2) : "0.00"}% of gross
+                    {scheme === "44ad" && grossReceipts > 0 && (cashReceipts / grossReceipts) > 0.05 && (
+                      <span className="ml-1 text-destructive">· &gt; 5% cash blocks ₹3 Cr extended cap</span>
+                    )}
+                  </div>
+                </div>
+                <div className={`rounded-md border p-3 flex items-start gap-2 ${result.thresholdBreached ? "border-destructive/50 bg-destructive/5" : result.usesExtendedLimit ? "border-green-500/40 bg-green-500/5" : "border-amber-500/40 bg-amber-500/5"}`}>
                   {result.thresholdBreached
                     ? <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
-                    : <CheckCircle2 className="mt-0.5 h-4 w-4 text-green-600" />}
+                    : <CheckCircle2 className={`mt-0.5 h-4 w-4 ${result.usesExtendedLimit ? "text-green-600" : "text-amber-600"}`} />}
                   <div className="text-xs">
                     {result.thresholdBreached
-                      ? "You are no longer eligible for presumptive scheme this year. A tax audit under §44AB may apply — consult your CA."
-                      : "You are eligible. Books of accounts are not required to be maintained (though we still recommend it for internal control)."}
+                      ? "Turnover exceeds the applicable cap — presumptive scheme not available this year. Tax audit u/s 44AB may apply; consult your CA."
+                      : result.usesExtendedLimit
+                        ? `Digital share ≥ 95% — extended cap of ${formatINR(result.eligibleThresholdPaise)} applies (proviso to §44AD(1)).`
+                        : `Digital share is ${result.digitalSharePct.toFixed(2)}% (needs ≥ 95%) — base cap of ${formatINR(result.eligibleThresholdPaise)} applies. Route more receipts through bank to unlock extended cap.`}
                   </div>
                 </div>
               </div>
+
             </CardContent>
           </Card>
         </>
