@@ -32,6 +32,7 @@ import {
   writeAssistantPrefill,
   type VoucherIntent,
 } from "@/lib/voucher-intent";
+import { detectVoucherAction } from "@/lib/ai/voucher-actions";
 
 interface ChatMessage {
   id: string;
