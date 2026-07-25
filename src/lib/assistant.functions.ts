@@ -22,6 +22,8 @@ import { isWebGpuAvailable, webLlmChat } from "./ai/webllm";
 import { recentErrors, questionMentionsError } from "./ai/error-ring";
 import { lookupAnswer, storeAnswer } from "./ai/answer-cache";
 import type { ConversationMemory } from "./ai/conversation-memory";
+import { executeTool, parseToolCall, stripToolCall } from "./ai/tools";
+import { localFirstAnswer } from "./ai/local-first";
 
 export interface AssistantChatResult {
   ok: boolean;
