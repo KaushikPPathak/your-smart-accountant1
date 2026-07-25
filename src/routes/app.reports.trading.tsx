@@ -30,6 +30,7 @@ function TradingAccount() {
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
   const [openingStock, setOpeningStock] = useState(0);
   const [closingStock, setClosingStock] = useState(0);
+  const [modeSplits, setModeSplits] = useState<Map<string, ModeSplit>>(new Map());
   const { view, setView } = useReportView("trading");
 
   useEffect(() => {
@@ -37,6 +38,9 @@ function TradingAccount() {
     fetchLedgerBalances(activeCompanyId, to, from, {
       excludeProfitLossClosingTransfers: true,
     }).then(setBalances);
+    fetchLedgerModeSplits(activeCompanyId, from, to, {
+      excludeProfitLossClosingTransfers: true,
+    }).then(setModeSplits).catch(() => setModeSplits(new Map()));
   }, [activeCompanyId, from, to]);
 
   useEffect(() => {
