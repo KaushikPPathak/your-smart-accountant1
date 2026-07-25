@@ -15,8 +15,11 @@ interface Row {
   ledger_id: string;
   ledger_name: string;
   ledger_type: string;
-  dr: number;
-  cr: number;
+  // Split by which side of the till the money moved through.
+  cashDr: number;  // paid out via cash
+  bankDr: number;  // paid out via bank / cheque
+  cashCr: number;  // received in cash
+  bankCr: number;  // received via bank / cheque
 }
 
 interface OpeningRow {
