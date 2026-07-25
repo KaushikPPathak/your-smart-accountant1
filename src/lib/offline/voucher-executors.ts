@@ -13,6 +13,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { emitDataChange } from "@/lib/ai/cache-events";
+import { logActivity } from "@/lib/activity-log";
 
 export type VoucherExecutor = (snap: unknown) => Promise<void>;
 
