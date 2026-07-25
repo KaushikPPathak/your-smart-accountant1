@@ -202,6 +202,7 @@ export async function createLedger(payload: LedgerInsertPayload): Promise<Ledger
   }
 
   emitDataChange(payload.company_id, "ledger", [`ledger:${payload.name.toLowerCase()}`]);
+  void logActivity({ company_id: payload.company_id, entity_type: "ledger", entity_id: id, entity_label: payload.name, action: "create" });
 
   return {
     id,
