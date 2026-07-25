@@ -138,11 +138,23 @@ function OutstandingPage() {
   }, [invs, allocs, asOf]);
 
   const totalPending = rows.reduce((s, r) => s + r.pending_paise, 0);
-  // MSMED §15: buyer must pay MSE supplier within 45 days. Flag payables past that.
-  const msmeOverdue = mode === "payables"
-    ? rows.filter((r) => r.ledgers?.msme_registered && r.days > 45)
-    : [];
-  const msmeOverdueTotal = msmeOverdue.reduce((s, r) => s + r.pending_paise, 0);
+  // MSMED §15/§16 — flag payables past appointed day, compute compound interest.
+  const msmeRows = useMemo(() => {
+    if (mode !== "payables") return [] as Array<typeof rows[number] & { interest_paise: number; appointed_day: string; days_late: number }>;
+    return rows
+      .filter((r) => r.ledgers?.msme_registered)
+      .map((r) => {
+        const b = msmedInterestBreakdown(r.pending_paise, r.voucher_date, asOf, {
+          agreedDueDate: r.due_date,
+          bankRatePct: bankRate,
+        });
+        return { ...r, interest_paise: b.interestPaise, appointed_day: b.appointedDay, days_late: b.daysLate };
+      })
+      .filter((r) => r.days_late > 0);
+  }, [rows, mode, asOf, bankRate]);
+  const msmeOverdueTotal = msmeRows.reduce((s, r) => s + r.pending_paise, 0);
+  const msmeInterestTotal = msmeRows.reduce((s, r) => s + r.interest_paise, 0);
+
 
   return (
     <div className="space-y-4">
