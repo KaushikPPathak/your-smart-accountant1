@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { useCompany } from "@/lib/company-context";
-import { supabase } from "@/integrations/supabase/client";
+
 import { formatINR } from "@/lib/money";
 import { computePresumptive, type PresumptiveScheme, type PresumptiveMode } from "@/lib/presumptive";
 import { fetchLedgerModeSplits, PL_INCOME } from "@/lib/reports";
