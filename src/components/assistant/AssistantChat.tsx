@@ -102,6 +102,9 @@ export function AssistantChat() {
   const [aiMode, setAiMode] = useState(true);
   const [thinking, setThinking] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  // Per-session conversation memory — last resolved party/company/asOn so
+  // follow-ups like "and as on 31/12/2025?" work without repeating names.
+  const memoryRef = useRef<ConversationMemory | undefined>(undefined);
 
   const callAssistant = assistantChat;
   const callDraftVoucher = assistantDraftVoucher;
