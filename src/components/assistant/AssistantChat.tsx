@@ -108,6 +108,18 @@ export function AssistantChat() {
   // follow-ups like "and as on 31/12/2025?" work without repeating names.
   const memoryRef = useRef<ConversationMemory | undefined>(undefined);
 
+  // Tier 3 #11 — Web Speech API voice input. Transcript is appended to the
+  // composer so the user can review/edit before hitting send.
+  const voice = useVoiceInput((text) => {
+    const el = inputRef.current;
+    if (!el) return;
+    const cur = el.value.trim();
+    el.value = cur ? `${cur} ${text}` : text;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 240) + "px";
+    el.focus();
+  });
+
   const callAssistant = assistantChat;
   const callDraftVoucher = assistantDraftVoucher;
 
