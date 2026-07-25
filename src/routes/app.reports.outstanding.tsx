@@ -157,6 +157,26 @@ function OutstandingPage() {
         </CardContent>
       </Card>
 
+      {mode === "payables" && msmeOverdue.length > 0 && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <div className="text-sm font-semibold text-destructive">
+                MSMED §15 alert — {msmeOverdue.length} bill{msmeOverdue.length === 1 ? "" : "s"} past 45 days
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Payments to MSE suppliers pending &gt; 45 days attract interest under MSMED Act and are
+                disallowed under Sec 43B(h) of the Income-tax Act until paid.
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-muted-foreground">MSME overdue</div>
+              <div className="font-mono text-lg font-semibold text-destructive">{formatINR(msmeOverdueTotal)}</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <Table>
