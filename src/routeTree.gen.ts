@@ -44,8 +44,10 @@ import { Route as AppReportsTaxAuditRouteImport } from './routes/app.reports.tax
 import { Route as AppReportsStockSummaryRouteImport } from './routes/app.reports.stock-summary'
 import { Route as AppReportsSalesRegisterRouteImport } from './routes/app.reports.sales-register'
 import { Route as AppReportsReceivablesRouteImport } from './routes/app.reports.receivables'
+import { Route as AppReportsReceiptsPaymentsRouteImport } from './routes/app.reports.receipts-payments'
 import { Route as AppReportsPurchaseRegisterRouteImport } from './routes/app.reports.purchase-register'
 import { Route as AppReportsProfitLossRouteImport } from './routes/app.reports.profit-loss'
+import { Route as AppReportsPresumptiveRouteImport } from './routes/app.reports.presumptive'
 import { Route as AppReportsPayablesRouteImport } from './routes/app.reports.payables'
 import { Route as AppReportsOutstandingRouteImport } from './routes/app.reports.outstanding'
 import { Route as AppReportsLedgerRouteImport } from './routes/app.reports.ledger'
@@ -64,6 +66,7 @@ import { Route as AppReportsCashBankRouteImport } from './routes/app.reports.cas
 import { Route as AppReportsBrsRouteImport } from './routes/app.reports.brs'
 import { Route as AppReportsBalanceSheetRouteImport } from './routes/app.reports.balance-sheet'
 import { Route as AppReportsAgeingRouteImport } from './routes/app.reports.ageing'
+import { Route as AppReportsActivityLogRouteImport } from './routes/app.reports.activity-log'
 import { Route as AppVouchersNewSales_orderRouteImport } from './routes/app.vouchers.new.sales_order'
 import { Route as AppVouchersNewSalesRouteImport } from './routes/app.vouchers.new.sales'
 import { Route as AppVouchersNewReceiptRouteImport } from './routes/app.vouchers.new.receipt'
@@ -251,6 +254,12 @@ const AppReportsReceivablesRoute = AppReportsReceivablesRouteImport.update({
   path: '/receivables',
   getParentRoute: () => AppReportsRoute,
 } as any)
+const AppReportsReceiptsPaymentsRoute =
+  AppReportsReceiptsPaymentsRouteImport.update({
+    id: '/receipts-payments',
+    path: '/receipts-payments',
+    getParentRoute: () => AppReportsRoute,
+  } as any)
 const AppReportsPurchaseRegisterRoute =
   AppReportsPurchaseRegisterRouteImport.update({
     id: '/purchase-register',
@@ -260,6 +269,11 @@ const AppReportsPurchaseRegisterRoute =
 const AppReportsProfitLossRoute = AppReportsProfitLossRouteImport.update({
   id: '/profit-loss',
   path: '/profit-loss',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsPresumptiveRoute = AppReportsPresumptiveRouteImport.update({
+  id: '/presumptive',
+  path: '/presumptive',
   getParentRoute: () => AppReportsRoute,
 } as any)
 const AppReportsPayablesRoute = AppReportsPayablesRouteImport.update({
@@ -353,6 +367,11 @@ const AppReportsAgeingRoute = AppReportsAgeingRouteImport.update({
   path: '/ageing',
   getParentRoute: () => AppReportsRoute,
 } as any)
+const AppReportsActivityLogRoute = AppReportsActivityLogRouteImport.update({
+  id: '/activity-log',
+  path: '/activity-log',
+  getParentRoute: () => AppReportsRoute,
+} as any)
 const AppVouchersNewSales_orderRoute =
   AppVouchersNewSales_orderRouteImport.update({
     id: '/new/sales_order',
@@ -438,6 +457,7 @@ export interface FileRoutesByFullPath {
   '/app/settings': typeof AppSettingsRouteWithChildren
   '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/app/reports/activity-log': typeof AppReportsActivityLogRoute
   '/app/reports/ageing': typeof AppReportsAgeingRoute
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
@@ -456,8 +476,10 @@ export interface FileRoutesByFullPath {
   '/app/reports/ledger': typeof AppReportsLedgerRoute
   '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
+  '/app/reports/presumptive': typeof AppReportsPresumptiveRoute
   '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
   '/app/reports/purchase-register': typeof AppReportsPurchaseRegisterRoute
+  '/app/reports/receipts-payments': typeof AppReportsReceiptsPaymentsRoute
   '/app/reports/receivables': typeof AppReportsReceivablesRoute
   '/app/reports/sales-register': typeof AppReportsSalesRegisterRoute
   '/app/reports/stock-summary': typeof AppReportsStockSummaryRoute
@@ -505,6 +527,7 @@ export interface FileRoutesByTo {
   '/app/settings': typeof AppSettingsRouteWithChildren
   '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app': typeof AppIndexRoute
+  '/app/reports/activity-log': typeof AppReportsActivityLogRoute
   '/app/reports/ageing': typeof AppReportsAgeingRoute
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
@@ -523,8 +546,10 @@ export interface FileRoutesByTo {
   '/app/reports/ledger': typeof AppReportsLedgerRoute
   '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
+  '/app/reports/presumptive': typeof AppReportsPresumptiveRoute
   '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
   '/app/reports/purchase-register': typeof AppReportsPurchaseRegisterRoute
+  '/app/reports/receipts-payments': typeof AppReportsReceiptsPaymentsRoute
   '/app/reports/receivables': typeof AppReportsReceivablesRoute
   '/app/reports/sales-register': typeof AppReportsSalesRegisterRoute
   '/app/reports/stock-summary': typeof AppReportsStockSummaryRoute
@@ -574,6 +599,7 @@ export interface FileRoutesById {
   '/app/settings': typeof AppSettingsRouteWithChildren
   '/app/vouchers': typeof AppVouchersRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/app/reports/activity-log': typeof AppReportsActivityLogRoute
   '/app/reports/ageing': typeof AppReportsAgeingRoute
   '/app/reports/balance-sheet': typeof AppReportsBalanceSheetRoute
   '/app/reports/brs': typeof AppReportsBrsRoute
@@ -592,8 +618,10 @@ export interface FileRoutesById {
   '/app/reports/ledger': typeof AppReportsLedgerRoute
   '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
+  '/app/reports/presumptive': typeof AppReportsPresumptiveRoute
   '/app/reports/profit-loss': typeof AppReportsProfitLossRoute
   '/app/reports/purchase-register': typeof AppReportsPurchaseRegisterRoute
+  '/app/reports/receipts-payments': typeof AppReportsReceiptsPaymentsRoute
   '/app/reports/receivables': typeof AppReportsReceivablesRoute
   '/app/reports/sales-register': typeof AppReportsSalesRegisterRoute
   '/app/reports/stock-summary': typeof AppReportsStockSummaryRoute
@@ -644,6 +672,7 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app/'
+    | '/app/reports/activity-log'
     | '/app/reports/ageing'
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
@@ -662,8 +691,10 @@ export interface FileRouteTypes {
     | '/app/reports/ledger'
     | '/app/reports/outstanding'
     | '/app/reports/payables'
+    | '/app/reports/presumptive'
     | '/app/reports/profit-loss'
     | '/app/reports/purchase-register'
+    | '/app/reports/receipts-payments'
     | '/app/reports/receivables'
     | '/app/reports/sales-register'
     | '/app/reports/stock-summary'
@@ -711,6 +742,7 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app'
+    | '/app/reports/activity-log'
     | '/app/reports/ageing'
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
@@ -729,8 +761,10 @@ export interface FileRouteTypes {
     | '/app/reports/ledger'
     | '/app/reports/outstanding'
     | '/app/reports/payables'
+    | '/app/reports/presumptive'
     | '/app/reports/profit-loss'
     | '/app/reports/purchase-register'
+    | '/app/reports/receipts-payments'
     | '/app/reports/receivables'
     | '/app/reports/sales-register'
     | '/app/reports/stock-summary'
@@ -779,6 +813,7 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/vouchers'
     | '/app/'
+    | '/app/reports/activity-log'
     | '/app/reports/ageing'
     | '/app/reports/balance-sheet'
     | '/app/reports/brs'
@@ -797,8 +832,10 @@ export interface FileRouteTypes {
     | '/app/reports/ledger'
     | '/app/reports/outstanding'
     | '/app/reports/payables'
+    | '/app/reports/presumptive'
     | '/app/reports/profit-loss'
     | '/app/reports/purchase-register'
+    | '/app/reports/receipts-payments'
     | '/app/reports/receivables'
     | '/app/reports/sales-register'
     | '/app/reports/stock-summary'
@@ -1080,6 +1117,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsReceivablesRouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/receipts-payments': {
+      id: '/app/reports/receipts-payments'
+      path: '/receipts-payments'
+      fullPath: '/app/reports/receipts-payments'
+      preLoaderRoute: typeof AppReportsReceiptsPaymentsRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/reports/purchase-register': {
       id: '/app/reports/purchase-register'
       path: '/purchase-register'
@@ -1092,6 +1136,13 @@ declare module '@tanstack/react-router' {
       path: '/profit-loss'
       fullPath: '/app/reports/profit-loss'
       preLoaderRoute: typeof AppReportsProfitLossRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
+    '/app/reports/presumptive': {
+      id: '/app/reports/presumptive'
+      path: '/presumptive'
+      fullPath: '/app/reports/presumptive'
+      preLoaderRoute: typeof AppReportsPresumptiveRouteImport
       parentRoute: typeof AppReportsRoute
     }
     '/app/reports/payables': {
@@ -1220,6 +1271,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsAgeingRouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/activity-log': {
+      id: '/app/reports/activity-log'
+      path: '/activity-log'
+      fullPath: '/app/reports/activity-log'
+      preLoaderRoute: typeof AppReportsActivityLogRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/vouchers/new/sales_order': {
       id: '/app/vouchers/new/sales_order'
       path: '/new/sales_order'
@@ -1301,6 +1359,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppReportsRouteChildren {
+  AppReportsActivityLogRoute: typeof AppReportsActivityLogRoute
   AppReportsAgeingRoute: typeof AppReportsAgeingRoute
   AppReportsBalanceSheetRoute: typeof AppReportsBalanceSheetRoute
   AppReportsBrsRoute: typeof AppReportsBrsRoute
@@ -1319,8 +1378,10 @@ interface AppReportsRouteChildren {
   AppReportsLedgerRoute: typeof AppReportsLedgerRoute
   AppReportsOutstandingRoute: typeof AppReportsOutstandingRoute
   AppReportsPayablesRoute: typeof AppReportsPayablesRoute
+  AppReportsPresumptiveRoute: typeof AppReportsPresumptiveRoute
   AppReportsProfitLossRoute: typeof AppReportsProfitLossRoute
   AppReportsPurchaseRegisterRoute: typeof AppReportsPurchaseRegisterRoute
+  AppReportsReceiptsPaymentsRoute: typeof AppReportsReceiptsPaymentsRoute
   AppReportsReceivablesRoute: typeof AppReportsReceivablesRoute
   AppReportsSalesRegisterRoute: typeof AppReportsSalesRegisterRoute
   AppReportsStockSummaryRoute: typeof AppReportsStockSummaryRoute
@@ -1330,6 +1391,7 @@ interface AppReportsRouteChildren {
 }
 
 const AppReportsRouteChildren: AppReportsRouteChildren = {
+  AppReportsActivityLogRoute: AppReportsActivityLogRoute,
   AppReportsAgeingRoute: AppReportsAgeingRoute,
   AppReportsBalanceSheetRoute: AppReportsBalanceSheetRoute,
   AppReportsBrsRoute: AppReportsBrsRoute,
@@ -1348,8 +1410,10 @@ const AppReportsRouteChildren: AppReportsRouteChildren = {
   AppReportsLedgerRoute: AppReportsLedgerRoute,
   AppReportsOutstandingRoute: AppReportsOutstandingRoute,
   AppReportsPayablesRoute: AppReportsPayablesRoute,
+  AppReportsPresumptiveRoute: AppReportsPresumptiveRoute,
   AppReportsProfitLossRoute: AppReportsProfitLossRoute,
   AppReportsPurchaseRegisterRoute: AppReportsPurchaseRegisterRoute,
+  AppReportsReceiptsPaymentsRoute: AppReportsReceiptsPaymentsRoute,
   AppReportsReceivablesRoute: AppReportsReceivablesRoute,
   AppReportsSalesRegisterRoute: AppReportsSalesRegisterRoute,
   AppReportsStockSummaryRoute: AppReportsStockSummaryRoute,
