@@ -106,17 +106,18 @@ function AgeingPage() {
     const paidByInv = new Map<string, number>();
     for (const a of allocs) paidByInv.set(a.invoice_voucher_id, (paidByInv.get(a.invoice_voucher_id) || 0) + a.amount_paise);
     const today = new Date(asOf).getTime();
-    const byParty = new Map<string, { name: string; b0: number; b1: number; b2: number; b3: number; total: number }>();
+    const byParty = new Map<string, { name: string; msme: boolean; b0: number; b1: number; b2: number; b3: number; msme45: number; total: number }>();
     for (const inv of invs) {
       const pending = inv.total_paise - (paidByInv.get(inv.id) || 0);
       if (pending <= 0) continue;
       const dueIso = inv.due_date || inv.voucher_date;
       const days = Math.max(0, Math.floor((today - new Date(dueIso).getTime()) / 86400000));
       const key = inv.party_ledger_id || "_";
-      const cur = byParty.get(key) || { name: inv.ledgers?.name || "—", b0: 0, b1: 0, b2: 0, b3: 0, total: 0 };
+      const cur = byParty.get(key) || { name: inv.ledgers?.name || "—", msme: !!inv.ledgers?.msme_registered, b0: 0, b1: 0, b2: 0, b3: 0, msme45: 0, total: 0 };
       const bIdx = days <= 30 ? "b0" : days <= 60 ? "b1" : days <= 90 ? "b2" : "b3";
       cur[bIdx] += pending;
       cur.total += pending;
+      if (cur.msme && days > 45) cur.msme45 += pending;
       byParty.set(key, cur);
     }
     return Array.from(byParty.values()).sort((a, b) => b.total - a.total);
@@ -124,8 +125,8 @@ function AgeingPage() {
 
   const totals = useMemo(() => {
     return partyRows.reduce((acc, r) => ({
-      b0: acc.b0 + r.b0, b1: acc.b1 + r.b1, b2: acc.b2 + r.b2, b3: acc.b3 + r.b3, total: acc.total + r.total,
-    }), { b0: 0, b1: 0, b2: 0, b3: 0, total: 0 });
+      b0: acc.b0 + r.b0, b1: acc.b1 + r.b1, b2: acc.b2 + r.b2, b3: acc.b3 + r.b3, msme45: acc.msme45 + r.msme45, total: acc.total + r.total,
+    }), { b0: 0, b1: 0, b2: 0, b3: 0, msme45: 0, total: 0 });
   }, [partyRows]);
 
   type PartyVm = (typeof partyRows)[number];
