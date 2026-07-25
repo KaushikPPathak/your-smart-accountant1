@@ -172,7 +172,7 @@ function PresumptivePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
-                <Stat label="Gross receipts (period)" value={formatINR(grossReceipts)} />
+                <Stat label="Gross receipts (period)" value={formatINR(grossReceipts)} onClick={() => setDrill("all")} />
                 <Stat label={`Deemed profit @ ${result.effectiveRatePct}%`} value={formatINR(result.deemedProfitPaise)} />
                 <Stat label="Eligible threshold" value={formatINR(result.eligibleThresholdPaise)} sub={result.usesExtendedLimit ? "Extended (≥95% digital receipts)" : "Base cap"} />
               </div>
@@ -184,21 +184,29 @@ function PresumptivePage() {
                 <Progress value={pctUsed} className={pctUsed >= 90 ? "bg-red-100" : ""} />
               </div>
               <div className="grid gap-3 md:grid-cols-3 text-sm">
-                <div className="rounded-md border p-3">
+                <button
+                  type="button"
+                  onClick={() => setDrill("digital")}
+                  className="rounded-md border p-3 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   <div className="text-xs text-muted-foreground">Digital receipts (Bank/UPI/Cheque)</div>
                   <div className="font-mono">{formatINR(digitalReceipts)}</div>
-                  <div className="text-xs">{result.digitalSharePct.toFixed(2)}% of gross</div>
-                </div>
-                <div className="rounded-md border p-3">
+                  <div className="text-xs">{result.digitalSharePct.toFixed(2)}% of gross · click to drill down</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrill("cash")}
+                  className="rounded-md border p-3 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   <div className="text-xs text-muted-foreground">Cash receipts</div>
                   <div className="font-mono">{formatINR(cashReceipts)}</div>
                   <div className="text-xs">
-                    {grossReceipts > 0 ? ((cashReceipts / grossReceipts) * 100).toFixed(2) : "0.00"}% of gross
+                    {grossReceipts > 0 ? ((cashReceipts / grossReceipts) * 100).toFixed(2) : "0.00"}% of gross · click to drill down
                     {scheme === "44ad" && grossReceipts > 0 && (cashReceipts / grossReceipts) > 0.05 && (
                       <span className="ml-1 text-destructive">· &gt; 5% cash blocks ₹3 Cr extended cap</span>
                     )}
                   </div>
-                </div>
+                </button>
                 <div className={`rounded-md border p-3 flex items-start gap-2 ${result.thresholdBreached ? "border-destructive/50 bg-destructive/5" : result.usesExtendedLimit ? "border-green-500/40 bg-green-500/5" : "border-amber-500/40 bg-amber-500/5"}`}>
                   {result.thresholdBreached
                     ? <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
