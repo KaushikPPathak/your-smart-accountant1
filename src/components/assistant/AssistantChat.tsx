@@ -738,6 +738,7 @@ function MessageBubble({
             : "bg-muted text-foreground"
         }`}
       >
+        {!isUser && msg.card ? <BalanceCard card={msg.card} /> : null}
         <RichText text={msg.text} />
         {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
