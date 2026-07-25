@@ -12,9 +12,22 @@ import {
 } from "@/lib/account-groups";
 import { formatINR } from "@/lib/money";
 
+export interface GroupBucketInner {
+  label: string;
+  valuePaise: number;
+}
+
+export interface GroupBucketRow {
+  id: string;
+  name: string;
+  valuePaise: number;
+  /** Optional inner breakdown (e.g. Cash / Bank / Other receipt mode). */
+  inner?: GroupBucketInner[];
+}
+
 export interface GroupBucket {
   group: AccountGroup;
-  rows: { id: string; name: string; valuePaise: number }[];
+  rows: GroupBucketRow[];
   subtotalPaise: number;
 }
 
@@ -30,11 +43,14 @@ export function ledgerGroupCode(b: { group_code: string | null; type: string }):
  *  - For Liabilities (Cr-natural): pass `(b) => -b.closing_paise`
  *  - For Assets (Dr-natural):       pass `(b) => b.closing_paise`
  *  - Same idea for P&L sides.
+ * `innerFor` (optional) returns inner breakdown rows already sign-aligned
+ * with `signFor(b)` — negative values are filtered.
  */
 export function groupBalances(
   balances: LedgerBalance[],
   section: AccountSection,
   signFor: (b: LedgerBalance) => number,
+  innerFor?: (b: LedgerBalance, displayValue: number) => GroupBucketInner[] | undefined,
 ): GroupBucket[] {
   const groupsForSection = GROUPS_BY_SECTION[section];
   const codes = new Set(groupsForSection.map((g) => g.code));
@@ -48,7 +64,8 @@ export function groupBalances(
     const v = signFor(b);
     if (!v) continue;
     const bucket = buckets.get(code)!;
-    bucket.rows.push({ id: b.id, name: b.name, valuePaise: v });
+    const inner = innerFor?.(b, v)?.filter((x) => x.valuePaise !== 0);
+    bucket.rows.push({ id: b.id, name: b.name, valuePaise: v, inner: inner && inner.length > 0 ? inner : undefined });
     bucket.subtotalPaise += v;
   }
   // Drop empty groups, preserve order
