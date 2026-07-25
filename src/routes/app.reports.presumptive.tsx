@@ -3,14 +3,29 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { useCompany } from "@/lib/company-context";
 
 import { formatINR } from "@/lib/money";
 import { computePresumptive, type PresumptiveScheme, type PresumptiveMode } from "@/lib/presumptive";
-import { fetchLedgerModeSplits, PL_INCOME } from "@/lib/reports";
-import { readLedgers } from "@/lib/offline/cache-read";
+import { fetchLedgerModeSplits, PL_INCOME, isProfitLossClosingTransfer } from "@/lib/reports";
+import { readLedgers, readVouchers, readVoucherEntriesForCompany } from "@/lib/offline/cache-read";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
+
+type VoucherBreakdownRow = {
+  voucherId: string;
+  date: string;
+  number: string;
+  type: string;
+  narration: string;
+  cashPaise: number;
+  bankPaise: number;
+  otherPaise: number;
+  totalPaise: number;
+};
 
 export const Route = createFileRoute("/app/reports/presumptive")({
   head: () => ({ meta: [{ title: "Presumptive Taxation (44AD / 44ADA) — Reports" }] }),
@@ -29,17 +44,17 @@ function PresumptivePage() {
   const [grossReceipts, setGrossReceipts] = useState(0);
   const [digitalReceipts, setDigitalReceipts] = useState(0);
   const [cashReceipts, setCashReceipts] = useState(0);
+  const [rows, setRows] = useState<VoucherBreakdownRow[]>([]);
+  const [drill, setDrill] = useState<null | "all" | "digital" | "cash" | "other">(null);
 
   useEffect(() => {
     if (!activeCompanyId) return;
     (async () => {
-      // Gross receipts = credit balance on income ledgers in the period.
-      // Digital/Cash split = pro-rata Bank vs Cash contra across the same
-      // vouchers (via fetchLedgerModeSplits — same engine that drives the
-      // P&L / R&P inner-column breakdown, so numbers reconcile 1:1).
-      const [ledgers, splits] = await Promise.all([
+      const [ledgers, splits, vouchers, entries] = await Promise.all([
         readLedgers(activeCompanyId),
         fetchLedgerModeSplits(activeCompanyId, from, to, { excludeProfitLossClosingTransfers: true }),
+        readVouchers(activeCompanyId),
+        readVoucherEntriesForCompany(activeCompanyId),
       ]);
       const incomeIds = new Set(
         (ledgers as any[]).filter((l) => PL_INCOME.has(String(l.type))).map((l) => String(l.id)),
@@ -48,7 +63,6 @@ function PresumptivePage() {
       for (const id of incomeIds) {
         const s = splits.get(id);
         if (!s) continue;
-        // Income ledgers carry credit balance → net is negative; flip sign.
         gross   += Math.max(0, -(s.cashPaise + s.bankPaise + s.otherPaise));
         digital += Math.max(0, -s.bankPaise);
         cash    += Math.max(0, -s.cashPaise);
@@ -56,6 +70,64 @@ function PresumptivePage() {
       setGrossReceipts(gross);
       setDigitalReceipts(digital);
       setCashReceipts(cash);
+
+      // Per-voucher contribution to income ledgers (pro-rata cash vs bank).
+      const typeOf = new Map((ledgers as any[]).map((l) => [String(l.id), String(l.type ?? "")]));
+      const vById = new Map((vouchers as any[]).map((v) => [String(v.id), v]));
+      const byVoucher = new Map<string, any[]>();
+      for (const e of entries as any[]) {
+        const v = vById.get(String(e.voucher_id));
+        if (!v) continue;
+        const d = String(v.voucher_date ?? v.date ?? "");
+        if (d < from || d > to) continue;
+        if (isProfitLossClosingTransfer({ voucher_type: v.voucher_type ?? null, narration: v.narration ?? null })) continue;
+        const arr = byVoucher.get(String(e.voucher_id)) ?? [];
+        arr.push(e);
+        byVoucher.set(String(e.voucher_id), arr);
+      }
+      const built: VoucherBreakdownRow[] = [];
+      for (const [vid, es] of byVoucher) {
+        let cashNet = 0, bankNet = 0;
+        for (const e of es) {
+          const t = typeOf.get(String(e.ledger_id));
+          const m = (Number(e.debit_paise) || 0) - (Number(e.credit_paise) || 0);
+          if (t === "cash") cashNet += m;
+          else if (t === "bank") bankNet += m;
+        }
+        const cashAbs = Math.abs(cashNet), bankAbs = Math.abs(bankNet), totalAbs = cashAbs + bankAbs;
+        let cP = 0, bP = 0, oP = 0;
+        for (const e of es) {
+          const lid = String(e.ledger_id);
+          if (!incomeIds.has(lid)) continue;
+          const m = (Number(e.debit_paise) || 0) - (Number(e.credit_paise) || 0);
+          if (!m) continue;
+          // Income credit → contribution to gross is -m (positive).
+          if (totalAbs === 0) {
+            oP += -m;
+          } else {
+            const cashShare = Math.round((m * cashAbs) / totalAbs);
+            const bankShare = m - cashShare;
+            cP += -cashShare;
+            bP += -bankShare;
+          }
+        }
+        const total = cP + bP + oP;
+        if (total <= 0) continue;
+        const v = vById.get(vid)!;
+        built.push({
+          voucherId: vid,
+          date: String(v.voucher_date ?? v.date ?? ""),
+          number: String(v.voucher_number ?? ""),
+          type: String(v.voucher_type ?? ""),
+          narration: String(v.narration ?? ""),
+          cashPaise: cP,
+          bankPaise: bP,
+          otherPaise: oP,
+          totalPaise: total,
+        });
+      }
+      built.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+      setRows(built);
     })();
   }, [activeCompanyId, from, to]);
 
@@ -66,6 +138,13 @@ function PresumptivePage() {
   const pctUsed = result.eligibleThresholdPaise > 0
     ? Math.min(100, (grossReceipts / result.eligibleThresholdPaise) * 100)
     : 0;
+
+  const filteredRows = useMemo(() => {
+    if (!drill || drill === "all") return rows;
+    if (drill === "digital") return rows.filter((r) => r.bankPaise > 0);
+    if (drill === "cash") return rows.filter((r) => r.cashPaise > 0);
+    return rows.filter((r) => r.otherPaise > 0);
+  }, [rows, drill]);
 
   return (
     <div className="space-y-4">
@@ -93,7 +172,7 @@ function PresumptivePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
-                <Stat label="Gross receipts (period)" value={formatINR(grossReceipts)} />
+                <Stat label="Gross receipts (period)" value={formatINR(grossReceipts)} onClick={() => setDrill("all")} />
                 <Stat label={`Deemed profit @ ${result.effectiveRatePct}%`} value={formatINR(result.deemedProfitPaise)} />
                 <Stat label="Eligible threshold" value={formatINR(result.eligibleThresholdPaise)} sub={result.usesExtendedLimit ? "Extended (≥95% digital receipts)" : "Base cap"} />
               </div>
@@ -105,21 +184,29 @@ function PresumptivePage() {
                 <Progress value={pctUsed} className={pctUsed >= 90 ? "bg-red-100" : ""} />
               </div>
               <div className="grid gap-3 md:grid-cols-3 text-sm">
-                <div className="rounded-md border p-3">
+                <button
+                  type="button"
+                  onClick={() => setDrill("digital")}
+                  className="rounded-md border p-3 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   <div className="text-xs text-muted-foreground">Digital receipts (Bank/UPI/Cheque)</div>
                   <div className="font-mono">{formatINR(digitalReceipts)}</div>
-                  <div className="text-xs">{result.digitalSharePct.toFixed(2)}% of gross</div>
-                </div>
-                <div className="rounded-md border p-3">
+                  <div className="text-xs">{result.digitalSharePct.toFixed(2)}% of gross · click to drill down</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrill("cash")}
+                  className="rounded-md border p-3 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   <div className="text-xs text-muted-foreground">Cash receipts</div>
                   <div className="font-mono">{formatINR(cashReceipts)}</div>
                   <div className="text-xs">
-                    {grossReceipts > 0 ? ((cashReceipts / grossReceipts) * 100).toFixed(2) : "0.00"}% of gross
+                    {grossReceipts > 0 ? ((cashReceipts / grossReceipts) * 100).toFixed(2) : "0.00"}% of gross · click to drill down
                     {scheme === "44ad" && grossReceipts > 0 && (cashReceipts / grossReceipts) > 0.05 && (
                       <span className="ml-1 text-destructive">· &gt; 5% cash blocks ₹3 Cr extended cap</span>
                     )}
                   </div>
-                </div>
+                </button>
                 <div className={`rounded-md border p-3 flex items-start gap-2 ${result.thresholdBreached ? "border-destructive/50 bg-destructive/5" : result.usesExtendedLimit ? "border-green-500/40 bg-green-500/5" : "border-amber-500/40 bg-amber-500/5"}`}>
                   {result.thresholdBreached
                     ? <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
@@ -138,16 +225,72 @@ function PresumptivePage() {
           </Card>
         </>
       )}
+
+      <Dialog open={drill !== null} onOpenChange={(o) => !o && setDrill(null)}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>
+              {drill === "digital" ? "Digital receipts — voucher breakdown"
+                : drill === "cash" ? "Cash receipts — voucher breakdown"
+                : drill === "other" ? "Other (accrual) receipts — voucher breakdown"
+                : "Gross receipts — voucher breakdown"}
+            </DialogTitle>
+            <DialogDescription>
+              Each row is a voucher that posts to an Income ledger. Cash / Digital columns are the
+              pro-rata share of that voucher’s cash-ledger vs bank-ledger contra — same engine that
+              feeds the P&amp;L inner-column split, so totals reconcile 1:1.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Voucher</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Narration</TableHead>
+                  <TableHead className="text-right">Cash</TableHead>
+                  <TableHead className="text-right">Digital</TableHead>
+                  <TableHead className="text-right">Other</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRows.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">No vouchers in this bucket.</TableCell></TableRow>
+                ) : filteredRows.map((r) => (
+                  <TableRow key={r.voucherId}>
+                    <TableCell className="whitespace-nowrap">{r.date}</TableCell>
+                    <TableCell className="font-mono">{r.number || "—"}</TableCell>
+                    <TableCell className="capitalize">{r.type}</TableCell>
+                    <TableCell className="max-w-[280px] truncate" title={r.narration}>{r.narration}</TableCell>
+                    <TableCell className="text-right font-mono">{r.cashPaise ? formatINR(r.cashPaise) : "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{r.bankPaise ? formatINR(r.bankPaise) : "—"}</TableCell>
+                    <TableCell className="text-right font-mono">{r.otherPaise ? formatINR(r.otherPaise) : "—"}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold">{formatINR(r.totalPaise)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" onClick={() => setDrill(null)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-md border p-3">
+function Stat({ label, value, sub, onClick }: { label: string; value: string; sub?: string; onClick?: () => void }) {
+  const cls = "rounded-md border p-3 text-left w-full" + (onClick ? " hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer" : "");
+  const inner = (
+    <>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="font-mono text-lg">{value}</div>
       {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
-    </div>
+      {onClick && <div className="text-[11px] text-muted-foreground">click to drill down</div>}
+    </>
   );
+  return onClick ? <button type="button" onClick={onClick} className={cls}>{inner}</button> : <div className={cls}>{inner}</div>;
 }
