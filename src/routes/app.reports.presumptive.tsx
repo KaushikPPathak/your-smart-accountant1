@@ -104,23 +104,36 @@ function PresumptivePage() {
                 </div>
                 <Progress value={pctUsed} className={pctUsed >= 90 ? "bg-red-100" : ""} />
               </div>
-              <div className="grid gap-3 md:grid-cols-2 text-sm">
+              <div className="grid gap-3 md:grid-cols-3 text-sm">
                 <div className="rounded-md border p-3">
-                  <div className="text-xs text-muted-foreground">Digital receipts</div>
+                  <div className="text-xs text-muted-foreground">Digital receipts (Bank/UPI/Cheque)</div>
                   <div className="font-mono">{formatINR(digitalReceipts)}</div>
-                  <div className="text-xs">{result.digitalSharePct.toFixed(1)}% of gross — {result.digitalSharePct >= 95 ? "qualifies for the extended cap." : "below 95% (base cap applies)."}</div>
+                  <div className="text-xs">{result.digitalSharePct.toFixed(2)}% of gross</div>
                 </div>
-                <div className={`rounded-md border p-3 flex items-start gap-2 ${result.thresholdBreached ? "border-destructive/50 bg-destructive/5" : "border-green-500/40 bg-green-500/5"}`}>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-muted-foreground">Cash receipts</div>
+                  <div className="font-mono">{formatINR(cashReceipts)}</div>
+                  <div className="text-xs">
+                    {grossReceipts > 0 ? ((cashReceipts / grossReceipts) * 100).toFixed(2) : "0.00"}% of gross
+                    {scheme === "44ad" && grossReceipts > 0 && (cashReceipts / grossReceipts) > 0.05 && (
+                      <span className="ml-1 text-destructive">· &gt; 5% cash blocks ₹3 Cr extended cap</span>
+                    )}
+                  </div>
+                </div>
+                <div className={`rounded-md border p-3 flex items-start gap-2 ${result.thresholdBreached ? "border-destructive/50 bg-destructive/5" : result.usesExtendedLimit ? "border-green-500/40 bg-green-500/5" : "border-amber-500/40 bg-amber-500/5"}`}>
                   {result.thresholdBreached
                     ? <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
-                    : <CheckCircle2 className="mt-0.5 h-4 w-4 text-green-600" />}
+                    : <CheckCircle2 className={`mt-0.5 h-4 w-4 ${result.usesExtendedLimit ? "text-green-600" : "text-amber-600"}`} />}
                   <div className="text-xs">
                     {result.thresholdBreached
-                      ? "You are no longer eligible for presumptive scheme this year. A tax audit under §44AB may apply — consult your CA."
-                      : "You are eligible. Books of accounts are not required to be maintained (though we still recommend it for internal control)."}
+                      ? "Turnover exceeds the applicable cap — presumptive scheme not available this year. Tax audit u/s 44AB may apply; consult your CA."
+                      : result.usesExtendedLimit
+                        ? `Digital share ≥ 95% — extended cap of ${formatINR(result.eligibleThresholdPaise)} applies (proviso to §44AD(1)).`
+                        : `Digital share is ${result.digitalSharePct.toFixed(2)}% (needs ≥ 95%) — base cap of ${formatINR(result.eligibleThresholdPaise)} applies. Route more receipts through bank to unlock extended cap.`}
                   </div>
                 </div>
               </div>
+
             </CardContent>
           </Card>
         </>
