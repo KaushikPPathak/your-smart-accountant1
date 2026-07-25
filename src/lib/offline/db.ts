@@ -107,6 +107,7 @@ class OfflineDatabase extends Dexie {
   sync_cursors!: Table<any, any>;
   account_creds!: Table<any, any>;
   meta!: Table<any, any>;
+  activity_log!: Table<any, any>;
 
   constructor() {
     super("ym_offline_cache_v3");
@@ -196,6 +197,11 @@ class OfflineDatabase extends Dexie {
       cache_voucher_entries:
         "id, voucher_id, company_id, ledger_id, [company_id+ledger_id]",
     });
+    // v9 — Lightweight, opt-in NCE activity log (local-only). See
+    // src/lib/activity-log.ts. Not synced remotely; pruned on retention.
+    this.version(9).stores({
+      activity_log: "++id, company_id, ts, entity_type, action, [company_id+ts]",
+    });
   }
 }
 
@@ -237,6 +243,7 @@ function makeStubDb(): OfflineDatabase {
     "cache_voucher_series", "cache_tax_templates", "cache_bill_sundries", "cache_transport_details",
     "cache_cost_centres", "cache_cost_categories",
     "outbox", "dead_letter", "sync_cursors", "account_creds", "meta",
+    "activity_log",
   ];
   const stub: Record<string, unknown> = {
     async transaction(_mode: string, ...args: unknown[]) {
