@@ -163,6 +163,15 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
     const cacheCompanyId = args?.data?.companyId
       ?? (typeof window !== "undefined" ? window.localStorage?.getItem("ym_active_company_id") ?? "" : "");
 
+    // Tier 3 #12 — Local-first: for deterministic intents the structured
+    // card IS the answer. Skip the LLM entirely (no tokens, no credits, no
+    // network) and return a formulaic blurb the UI renders beneath the card.
+    const localAnswer = localFirstAnswer(ctx.card);
+    if (localAnswer) {
+      if (cacheCompanyId) storeAnswer(cacheCompanyId, ctx.intent, ctx.scope, question, localAnswer);
+      return { ok: true, text: localAnswer, card: ctx.card, memory: ctx.memory };
+    }
+
     // Answer cache — same intent+scope+question inside TTL returns instantly.
     if (cacheCompanyId) {
       const cached = lookupAnswer(cacheCompanyId, ctx.intent, ctx.scope, question);
@@ -185,6 +194,30 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
     const extra = { route, recentErrors: errs };
 
     let answer = await smartChat(baseMessages, 0.2, extra);
+
+    // Tier 3 #9 — Tool-calling loop. The model may emit a
+    // [[TOOL_CALL {...}]] block instead of a final answer; we execute the
+    // tool locally against IndexedDB and feed the result back. Bounded to
+    // 3 rounds so a stuck model never spins forever.
+    const toolTrail: { name: string; input: string }[] = [];
+    const toolConvo: ChatMsg[] = [...baseMessages];
+    for (let round = 0; round < 3; round++) {
+      const call = parseToolCall(answer);
+      if (!call) break;
+      let result: unknown;
+      try { result = await executeTool(call.name, call.args); }
+      catch (e) { result = { error: e instanceof Error ? e.message : String(e) }; }
+      toolTrail.push({ name: call.name, input: JSON.stringify(call.args) });
+      toolConvo.push({ role: "assistant", content: answer });
+      toolConvo.push({
+        role: "user",
+        content:
+          `[[TOOL_RESULT name="${call.name}"]]\n` +
+          JSON.stringify(result) +
+          "\n\nUse this result to answer. Do not emit another tool call unless it is strictly required.",
+      });
+      answer = await smartChat(toolConvo, 0.2, extra);
+    }
 
     // CCR fallback: if the model references a hash, fetch the raw rows
     // and let it answer again with the expanded context.
@@ -212,9 +245,17 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       }
     }
 
-    const finalText = verifyAnswer(unredactAnswer(answer, ctx), ctx.card);
+    // Strip any residual tool-call block so it doesn't leak into the UI.
+    const cleanAnswer = stripToolCall(answer);
+    const finalText = verifyAnswer(unredactAnswer(cleanAnswer, ctx), ctx.card);
     if (cacheCompanyId) storeAnswer(cacheCompanyId, ctx.intent, ctx.scope, question, finalText);
-    return { ok: true, text: finalText, card: ctx.card, memory: ctx.memory };
+    return {
+      ok: true,
+      text: finalText,
+      card: ctx.card,
+      memory: ctx.memory,
+      toolCalls: toolTrail.length ? toolTrail : undefined,
+    };
   } catch (err) {
     if (looksOfflineOrBlocked(err)) {
       return { ok: true, text: offlineAssistantAnswer(question, err) };
