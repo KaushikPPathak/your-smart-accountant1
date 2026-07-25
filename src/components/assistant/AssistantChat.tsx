@@ -376,6 +376,48 @@ export function AssistantChat() {
         return;
       }
 
+      // Phase 2 — local draft-first path. Handles reverse / duplicate and
+      // fully-parseable "pay 12000 rent to landlord cash today" style
+      // commands without calling the LLM.
+      if (activeCompanyId) {
+        try {
+          const action = await detectVoucherAction(text, activeCompanyId);
+          if (action) {
+            const d = action.draft;
+            const voucherPayload: ParsedVoucher = {
+              intent: d.intent,
+              date: d.date,
+              amount: d.amount,
+              narration: d.narration,
+              refNo: d.refNo,
+              partyLedgerId: d.partyLedgerId,
+              cashBankLedgerId: d.cashBankLedgerId,
+              counterLedgerId: d.counterLedgerId,
+              displayDetails: d.displayDetails,
+            };
+            setPendingVoucher(voucherPayload);
+            const header =
+              action.kind === "reverse"
+                ? `Reversing **${action.source.type}** voucher #${action.source.number} dated ${action.source.date}. Review and press **Enter** to open the compensating entry.`
+                : action.kind === "duplicate"
+                  ? `Duplicating ${action.source.type} voucher${action.source.number ? ` #${action.source.number}` : ""} from ${action.source.date} onto **${d.date}**. Review and press **Enter** to open.`
+                  : `Drafted locally from your instruction — review the ledgers and press **Enter** to open the ${d.intent} form.`;
+            setMessages((m) => [
+              ...m,
+              {
+                id: `a-${Date.now()}`,
+                role: "assistant",
+                text: header,
+                voucherPreview: voucherPayload,
+              },
+            ]);
+            return;
+          }
+        } catch (err) {
+          console.warn("[assistant.local-draft] failed", err);
+        }
+      }
+
       const intent: VoucherIntent | null = activeCompanyId
         ? detectVoucherIntent(text)
         : null;
