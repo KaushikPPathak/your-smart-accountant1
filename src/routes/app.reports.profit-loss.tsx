@@ -9,7 +9,7 @@ import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
-import { fetchLedgerBalancesWithMeta, type LedgerBalance } from "@/lib/reports";
+import { fetchLedgerBalancesWithMeta, fetchLedgerModeSplits, type LedgerBalance, type ModeSplit } from "@/lib/reports";
 import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
 import { computeNceReportShape } from "@/lib/nce-report-shape";
