@@ -196,6 +196,8 @@ export async function buildCompressedContext(
       "  [F:<fact key>]                       — for a value in the `facts` object",
       "Do not cite anything not present in the payload. Uncited numeric claims are",
       "treated as hallucination and are forbidden.",
+      "",
+      toolCatalogPrompt(),
     ].join("\n"),
   };
 
