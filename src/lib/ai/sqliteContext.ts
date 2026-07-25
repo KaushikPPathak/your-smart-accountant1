@@ -36,6 +36,8 @@ export interface StructuredCard {
   asOnDate: string | null;
   modeSplit?: { cashPaise: number; bankPaise: number; otherPaise: number };
   voucherCount: number;
+  /** Drill-through: recent vouchers touching this party (id + display info). */
+  recentVouchers?: { id: string; number: string; date: string; kind: string; totalPaise: number }[];
 }
 
 export interface CompressedContext {
