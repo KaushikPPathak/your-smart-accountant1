@@ -33,7 +33,7 @@ interface InvRow {
   total_paise: number;
   party_ledger_id: string | null;
   voucher_type: string;
-  ledgers: { name: string } | null;
+  ledgers: { name: string; msme_registered?: boolean | null } | null;
 }
 
 interface AllocRow {
