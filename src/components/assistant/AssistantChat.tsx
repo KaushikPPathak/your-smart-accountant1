@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff, FileText } from "lucide-react";
+import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff, FileText, Paperclip, ScanLine, BrainCircuit } from "lucide-react";
+import { extractInvoiceOcr, type OcrDraft } from "@/lib/ai/ocr-invoice";
+import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
 import { Link } from "@tanstack/react-router";
 import { useVoiceInput } from "@/lib/ai/voice-input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,6 +45,8 @@ interface ChatMessage {
   voucherPreview?: ParsedVoucher;
   toolCalls?: { name: string; input: string }[];
   card?: StructuredCard;
+  ocrPreview?: OcrDraft;
+  memoryHint?: PartyPattern;
 }
 
 type ParsedCompany = {
@@ -104,6 +108,10 @@ export function AssistantChat() {
   const [pendingVoucher, setPendingVoucher] = useState<ParsedVoucher | null>(null);
   const [aiMode, setAiMode] = useState(true);
   const [thinking, setThinking] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [pendingOcr, setPendingOcr] = useState<OcrDraft | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   // Per-session conversation memory — last resolved party/company/asOn so
   // follow-ups like "and as on 31/12/2025?" work without repeating names.
@@ -327,6 +335,94 @@ export function AssistantChat() {
     setPendingVoucher(null);
     navigate({ to: intentToRoute(draft.intent) });
   }
+
+  // ---------- Phase 3: OCR bill → voucher draft --------------------------
+  async function handleFileUpload(file: File, intent: "purchase" | "sales" = "purchase") {
+    if (!activeCompanyId) {
+      toast.error("Select or create a company first.");
+      return;
+    }
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    if (!isImage && !isPdf) {
+      toast.error("Only images (JPG/PNG) and PDF files are supported.");
+      return;
+    }
+    setMessages((m) => [
+      ...m,
+      {
+        id: `u-${Date.now()}`,
+        role: "user",
+        text: `📎 Uploaded **${file.name}** — extracting invoice data…`,
+      },
+    ]);
+    setOcrLoading(true);
+    try {
+      const draft = await extractInvoiceOcr(file, activeCompanyId, intent);
+      const partyName = draft.matchedPartyName ?? draft.extracted.party_name;
+      const memoryHint = partyName
+        ? (await recallPartyPattern(activeCompanyId, partyName)) ?? undefined
+        : undefined;
+      setPendingOcr(draft);
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          text: memoryHint
+            ? `I extracted the invoice. I also **remember** this party — see the note below. Confirm to open the ${intent} form.`
+            : `I extracted the invoice. Review the details below and confirm to open the ${intent} form pre-filled.`,
+          ocrPreview: draft,
+          memoryHint,
+        },
+      ]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`OCR failed: ${msg}`);
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          text: `I couldn't read that file — ${msg}. Try a clearer photo, or type the invoice details in chat.`,
+        },
+      ]);
+    } finally {
+      setOcrLoading(false);
+    }
+  }
+
+  async function confirmOcrDraft(draft: OcrDraft, opts: { remember: boolean; overrideLedgerId?: string; overrideLedgerName?: string }) {
+    const partyLedgerId = opts.overrideLedgerId ?? draft.matchedPartyLedgerId ?? undefined;
+    const partyName = opts.overrideLedgerName ?? draft.matchedPartyName ?? draft.extracted.party_name;
+    writeAssistantPrefill({
+      voucherType: draft.intent,
+      date: draft.extracted.invoice_date ?? new Date().toISOString().slice(0, 10),
+      partyLedgerId,
+      amount: draft.extracted.total_amount,
+      narration: `${draft.intent === "purchase" ? "Bill" : "Invoice"} from ${draft.extracted.party_name}${draft.extracted.invoice_number ? ` — ${draft.extracted.invoice_number}` : ""}`,
+      refNo: draft.extracted.invoice_number ?? undefined,
+    });
+    if (opts.remember && activeCompanyId && partyLedgerId && partyName) {
+      await rememberPartyPattern(activeCompanyId, partyName, {
+        counterLedgerId: partyLedgerId,
+        counterLedgerName: partyName,
+        intent: draft.intent,
+      });
+      toast.success(`Remembered: ${partyName} → ${draft.intent}`);
+    }
+    setPendingOcr(null);
+    setMessages((m) => [
+      ...m,
+      {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        text: `Opening the **${draft.intent}** form. Review the line items, HSN, and GST split before saving.`,
+      },
+    ]);
+    navigate({ to: intentToRoute(draft.intent) });
+  }
+
 
   function ask(rawText: string) {
     const text = rawText.trim();
@@ -629,11 +725,20 @@ export function AssistantChat() {
                 creating={creating}
                 isPendingCompany={!!pendingCompany && m.preview === pendingCompany}
                 isPendingVoucher={!!pendingVoucher && m.voucherPreview === pendingVoucher}
+                onConfirmOcr={confirmOcrDraft}
+                onCancelOcr={() => {
+                  setPendingOcr(null);
+                  setMessages((mm) => [
+                    ...mm,
+                    { id: `a-${Date.now()}`, role: "assistant", text: "OCR draft discarded. Drop another bill anytime." },
+                  ]);
+                }}
+                isPendingOcr={!!pendingOcr && m.ocrPreview === pendingOcr}
               />
             ))}
-            {thinking && (
+            {(thinking || ocrLoading) && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" /> Mate is thinking…
+                <Loader2 className="h-3 w-3 animate-spin" /> {ocrLoading ? "Reading your invoice…" : "Mate is thinking…"}
               </div>
             )}
           </div>
@@ -688,12 +793,31 @@ export function AssistantChat() {
         )}
 
         <form
-          className="flex items-end gap-2 border-t border-border p-3"
+          className={`flex items-end gap-2 border-t border-border p-3 transition-colors ${isDragging ? "bg-primary/5 ring-2 ring-primary/40 ring-inset" : ""}`}
           onSubmit={(e) => {
             e.preventDefault();
             ask(inputRef.current?.value ?? "");
           }}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) void handleFileUpload(file, "purchase");
+          }}
         >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleFileUpload(file, "purchase");
+              e.target.value = "";
+            }}
+          />
           <Textarea
             ref={inputRef}
             defaultValue=""
@@ -712,13 +836,24 @@ export function AssistantChat() {
             }}
             placeholder={
               hasCompany
-                ? "Ask anything… Enter to send, Shift+Enter for new line. Paste multi-line details freely."
+                ? "Ask anything, or drop a bill/invoice here to auto-extract. Enter to send, Shift+Enter for new line."
                 : "Type or paste: Name: ABC Traders\nGSTIN: 27ABCDE1234F1Z5\nPhone: 9876543210"
             }
             autoFocus
-            disabled={creating || thinking}
+            disabled={creating || thinking || ocrLoading}
             className="min-h-[60px] max-h-[240px] resize-none text-sm"
           />
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            aria-label="Upload bill / invoice"
+            title="Upload bill or invoice (image/PDF) — I'll extract party, GSTIN, HSN & tax"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={creating || thinking || ocrLoading || !hasCompany}
+          >
+            {ocrLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+          </Button>
           {voice.supported ? (
             <Button
               type="button"
@@ -732,7 +867,7 @@ export function AssistantChat() {
               {voice.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
           ) : null}
-          <Button type="submit" size="icon" aria-label="Send" disabled={creating || thinking}>
+          <Button type="submit" size="icon" aria-label="Send" disabled={creating || thinking || ocrLoading}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
@@ -874,6 +1009,9 @@ function MessageBubble({
   creating,
   isPendingCompany,
   isPendingVoucher,
+  onConfirmOcr,
+  onCancelOcr,
+  isPendingOcr,
 }: {
   msg: ChatMessage;
   onAction: (a: AssistantAction) => void;
@@ -884,6 +1022,9 @@ function MessageBubble({
   creating: boolean;
   isPendingCompany: boolean;
   isPendingVoucher: boolean;
+  onConfirmOcr: (d: OcrDraft, opts: { remember: boolean; overrideLedgerId?: string; overrideLedgerName?: string }) => void;
+  onCancelOcr: () => void;
+  isPendingOcr: boolean;
 }) {
   const isUser = msg.role === "user";
   return (
@@ -925,6 +1066,18 @@ function MessageBubble({
             onCancel={onCancelVoucher}
           />
         )}
+
+        {!isUser && msg.ocrPreview && (
+          <OcrPreviewCard
+            draft={msg.ocrPreview}
+            memoryHint={msg.memoryHint}
+            disabled={!isPendingOcr}
+            onConfirm={(opts) => onConfirmOcr(msg.ocrPreview!, opts)}
+            onCancel={onCancelOcr}
+          />
+        )}
+
+
 
         {!isUser && msg.matches && msg.matches[0]?.actions && (
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1156,4 +1309,137 @@ function inlineMd(s: string): string {
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/_(.+?)_/g, "<em>$1</em>")
     .replace(/`([^`]+)`/g, '<code class="rounded bg-background/60 px-1 text-[11px]">$1</code>');
+}
+
+// ---------- Phase 3: OCR preview card ---------------------------------------
+function OcrPreviewCard({
+  draft,
+  memoryHint,
+  disabled,
+  onConfirm,
+  onCancel,
+}: {
+  draft: OcrDraft;
+  memoryHint?: PartyPattern;
+  disabled: boolean;
+  onConfirm: (opts: { remember: boolean; overrideLedgerId?: string; overrideLedgerName?: string }) => void;
+  onCancel: () => void;
+}) {
+  const [remember, setRemember] = useState(false);
+  const [overrideId, setOverrideId] = useState<string | undefined>(undefined);
+  const [overrideName, setOverrideName] = useState<string | undefined>(undefined);
+  const e = draft.extracted;
+  const conf = Math.round((e.confidence ?? 0) * 100);
+  const confTone =
+    conf >= 80 ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" :
+    conf >= 60 ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" :
+                 "bg-rose-500/15 text-rose-700 dark:text-rose-300";
+  const matched = !!draft.matchedPartyLedgerId;
+
+  return (
+    <div className="mt-3 rounded-lg border bg-background/60 p-3 text-xs">
+      <div className="mb-2 flex items-center gap-2">
+        <ScanLine className="h-3.5 w-3.5 text-primary" />
+        <div className="font-semibold">Extracted invoice</div>
+        <Badge className={`ml-auto gap-1 border-0 ${confTone}`}>{conf}% confidence</Badge>
+      </div>
+
+      {memoryHint && (
+        <div className="mb-2 flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2">
+          <BrainCircuit className="mt-0.5 h-3.5 w-3.5 text-primary" />
+          <div className="space-y-0.5">
+            <div className="font-medium text-primary">I remember this party</div>
+            <div className="text-[11px] text-muted-foreground">
+              You booked <b>{memoryHint.displayName}</b> under <b>{memoryHint.counterLedgerName ?? "—"}</b>
+              {memoryHint.rcmPercent ? ` with ${memoryHint.rcmPercent}% RCM` : ""} · seen {memoryHint.hits}×.
+              {memoryHint.note ? ` Note: ${memoryHint.note}` : ""}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+        <div><span className="text-muted-foreground">Party:</span> <b>{e.party_name || "—"}</b></div>
+        <div><span className="text-muted-foreground">GSTIN:</span> {e.party_gstin || "—"}</div>
+        <div><span className="text-muted-foreground">Invoice #:</span> {e.invoice_number || "—"}</div>
+        <div><span className="text-muted-foreground">Date:</span> {e.invoice_date || "—"}</div>
+        <div><span className="text-muted-foreground">Taxable:</span> ₹ {e.taxable_value?.toLocaleString("en-IN")}</div>
+        <div><span className="text-muted-foreground">GST:</span> ₹ {((e.cgst||0)+(e.sgst||0)+(e.igst||0)).toLocaleString("en-IN")} {e.is_interstate ? "(IGST)" : "(CGST+SGST)"}</div>
+        <div className="col-span-2 border-t pt-1"><span className="text-muted-foreground">Total:</span> <b>₹ {e.total_amount?.toLocaleString("en-IN")}</b></div>
+      </div>
+
+      {e.items && e.items.length > 0 && (
+        <div className="mt-2">
+          <div className="mb-1 text-[11px] font-medium text-muted-foreground">Line items ({e.items.length})</div>
+          <div className="max-h-32 space-y-0.5 overflow-y-auto rounded-md border bg-muted/30 p-1.5">
+            {e.items.slice(0, 8).map((it, i) => (
+              <div key={i} className="flex items-center gap-2 text-[11px]">
+                <span className="flex-1 truncate">{it.description}</span>
+                {it.hsn && <span className="text-muted-foreground">{it.hsn}</span>}
+                {typeof it.gst_rate === "number" && <span className="text-muted-foreground">{it.gst_rate}%</span>}
+                <span className="tabular-nums">₹ {it.amount?.toLocaleString("en-IN")}</span>
+              </div>
+            ))}
+            {e.items.length > 8 && <div className="text-[10px] text-muted-foreground">…and {e.items.length - 8} more</div>}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-2 rounded-md border p-2">
+        <div className="mb-1 text-[11px] font-medium text-muted-foreground">Party ledger</div>
+        {matched ? (
+          <div className="flex items-center gap-2">
+            <Check className="h-3 w-3 text-emerald-600" />
+            <span>Matched → <b>{draft.matchedPartyName}</b></span>
+            <Badge variant="outline" className="ml-auto text-[10px]">{Math.round(draft.matchScore * 100)}%</Badge>
+          </div>
+        ) : draft.alternatives.length > 0 ? (
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+              <span>No confident match. Pick one:</span>
+            </div>
+            {draft.alternatives.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => { setOverrideId(a.id); setOverrideName(a.name); }}
+                className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-muted ${overrideId === a.id ? "bg-primary/10 ring-1 ring-primary" : ""}`}
+              >
+                <span className="flex-1 truncate">{a.name}</span>
+                <span className="text-[10px] text-muted-foreground">{Math.round(a.score * 100)}%</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="text-muted-foreground">No local ledger match — one will be created in the form.</div>
+        )}
+      </div>
+
+      {(matched || overrideId) && (
+        <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px]">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(ev) => setRemember(ev.target.checked)}
+            className="h-3 w-3"
+          />
+          Remember this party for future bills
+        </label>
+      )}
+
+      <div className="mt-3 flex gap-2">
+        <Button
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          disabled={disabled}
+          onClick={() => onConfirm({ remember, overrideLedgerId: overrideId, overrideLedgerName: overrideName })}
+        >
+          <Check className="h-3 w-3" /> Open {draft.intent} form
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" disabled={disabled} onClick={onCancel}>
+          <X className="h-3 w-3" /> Discard
+        </Button>
+      </div>
+    </div>
+  );
 }
