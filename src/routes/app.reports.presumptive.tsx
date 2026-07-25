@@ -73,7 +73,7 @@ function PresumptivePage() {
 
   return (
     <div className="space-y-4">
-      <ReportToolbar from={from} to={to} onFrom={setFrom} onTo={setTo} title="Presumptive Taxation" />
+      <ReportToolbar from={from} to={to} onFrom={setFrom} onTo={setTo} />
       {scheme === "none" ? (
         <Card>
           <CardContent className="p-6">
@@ -97,9 +97,9 @@ function PresumptivePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
-                <Stat label="Gross receipts (period)" value={formatINR(grossReceipts / 100, currency)} />
-                <Stat label={`Deemed profit @ ${result.effectiveRatePct}%`} value={formatINR(result.deemedProfitPaise / 100, currency)} />
-                <Stat label="Eligible threshold" value={formatINR(result.eligibleThresholdPaise / 100, currency)} sub={result.usesExtendedLimit ? "Extended (≥95% digital receipts)" : "Base cap"} />
+                <Stat label="Gross receipts (period)" value={formatINR(grossReceipts)} />
+                <Stat label={`Deemed profit @ ${result.effectiveRatePct}%`} value={formatINR(result.deemedProfitPaise)} />
+                <Stat label="Eligible threshold" value={formatINR(result.eligibleThresholdPaise)} sub={result.usesExtendedLimit ? "Extended (≥95% digital receipts)" : "Base cap"} />
               </div>
               <div>
                 <div className="mb-1 flex justify-between text-xs">
@@ -111,7 +111,7 @@ function PresumptivePage() {
               <div className="grid gap-3 md:grid-cols-2 text-sm">
                 <div className="rounded-md border p-3">
                   <div className="text-xs text-muted-foreground">Digital receipts</div>
-                  <div className="font-mono">{formatINR(digitalReceipts / 100, currency)}</div>
+                  <div className="font-mono">{formatINR(digitalReceipts)}</div>
                   <div className="text-xs">{result.digitalSharePct.toFixed(1)}% of gross — {result.digitalSharePct >= 95 ? "qualifies for the extended cap." : "below 95% (base cap applies)."}</div>
                 </div>
                 <div className={`rounded-md border p-3 flex items-start gap-2 ${result.thresholdBreached ? "border-destructive/50 bg-destructive/5" : "border-green-500/40 bg-green-500/5"}`}>
