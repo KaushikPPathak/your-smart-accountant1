@@ -169,6 +169,31 @@ function BalanceSheet() {
             (Capital, Reserves, Loans, Sundry Creditors, Duties &amp; Taxes, Current Liabilities;
             Fixed Assets, Investments, Stock, Debtors, Cash, Bank, Loans &amp; Advances, Current Assets).
           </p>
+          {(() => {
+            const c = activeMembership?.companies;
+            if (!c) return null;
+            const shape = computeNceReportShape({
+              entity: (c.entity_status ?? "individual") as Parameters<typeof computeNceReportShape>[0]["entity"],
+              turnoverPaise: Number(c.annual_turnover_paise ?? 0),
+              borrowingsPaise: Number(c.borrowings_paise ?? 0),
+              levelOverride: (c.nce_level ?? null) as 1 | 2 | 3 | null,
+            });
+            if (shape.isCorporate) return null;
+            return (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 font-medium text-primary">
+                  ICAI NCE: {NCE_LEVEL_LABEL[shape.level]}
+                </span>
+                {shape.level === 3 ? (
+                  <span className="text-muted-foreground">Simplified disclosures — cash-flow, related-party & segment schedules hidden.</span>
+                ) : shape.level === 2 ? (
+                  <span className="text-muted-foreground">Medium entity — segment & AS 15 detailed disclosures hidden.</span>
+                ) : (
+                  <span className="text-muted-foreground">Large entity — full NCE disclosures apply.</span>
+                )}
+              </div>
+            );
+          })()}
           <div
             className={`mt-2 flex items-center justify-between rounded border px-3 py-2 text-sm ${
               diffPaise === 0
