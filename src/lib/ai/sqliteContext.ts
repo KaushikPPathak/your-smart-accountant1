@@ -11,6 +11,7 @@ import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
 import { optimiseSlice } from "./slice-optimizer";
 import { createRedactionMap, redactDeep, redactString, unredact, type RedactionMap } from "./redactor";
 import type { ConversationMemory } from "./conversation-memory";
+import { toolCatalogPrompt } from "./tools";
 
 export interface AccountingContext {
   companyId?: string;
