@@ -170,7 +170,12 @@ function BalanceSheet() {
             Fixed Assets, Investments, Stock, Debtors, Cash, Bank, Loans &amp; Advances, Current Assets).
           </p>
           {(() => {
-            const c = activeMembership?.companies;
+            const c = activeMembership?.companies as unknown as {
+              entity_status?: string | null;
+              annual_turnover_paise?: number | null;
+              borrowings_paise?: number | null;
+              nce_level?: number | null;
+            } | undefined;
             if (!c) return null;
             const shape = computeNceReportShape({
               entity: (c.entity_status ?? "individual") as Parameters<typeof computeNceReportShape>[0]["entity"],
