@@ -1,115 +1,104 @@
-## Goal
-Give the user three tightly linked GSTR-1 tools so mismatches become impossible to hide:
-1. **Live preview export** that streams from the same builder the report uses, so it stays in sync as invoices change.
-2. **Reconciliation drill-down** that itemises every invoice/line contributing to the `Net outward − HSN total` Difference.
-3. **Voucher audit view** that shows, per sales line, which GSTR-1 bucket (B2B / B2CL / B2CS / CDNR / CDNUR / EXP / NIL / HSN-B2B / HSN-B2C) it lands in and why.
 
-All work is frontend + a small extension to the existing `buildGstr1()` engine in `src/lib/gst-returns.ts` — no schema changes, no server work, local-only.
+# NCE Accounting & Compliance Module — Gap Analysis & Plan
 
----
+## What already exists in the app
 
-## What to build
+| Requirement | Status | Where |
+|---|---|---|
+| Entity type selector (Individual / HUF / AOP / Pvt Ltd / RF / Trust) | ✅ Present | `src/lib/entity-status.ts`, `app.companies.tsx` |
+| Per-entity form bundling (Karta / Partners / Trustees / Directors) | ✅ Present | `entity-status.ts` (`getEntityFeatures`) |
+| Annual turnover captured on company | ✅ Present | `companies.annual_turnover_paise` |
+| P&L vs Income & Expenditure toggle (Trust) | ✅ Present | `app.reports.profit-loss.tsx`, `report-i18n.ts` |
+| Balance Sheet with per-entity capital labels | ✅ Partial | `app.reports.balance-sheet.tsx` |
+| Trading Account | ✅ Present | `app.reports.trading.tsx` |
+| Period locks / FY lock (heavy-audit style) | ✅ Present | `period-locks.ts` — used for GST filings |
+| Voucher repair audit table | ✅ Present (limited) | `voucher_repair_audit`, `period_lock_audit` |
 
-### 1. Trace-enabled build (engine change)
-Extend `buildGstr1()` with an optional `trace: true` mode that, in addition to the current buckets, returns a per-line ledger:
+## What is missing (the ICAI-NCE gaps)
 
-```text
-BuildTrace = {
-  lines: TracedLine[]        // one row per voucher_item (+ CN/DN items)
-  voucherSummary: Map<voucherId, TracedVoucherSummary>
-}
-
-TracedLine = {
-  voucherId, voucherNumber, voucherDate, voucherType,
-  partyName, partyGstin, isInterstate, pos,
-  itemName, hsn, uqc, qty, rate, taxable, iamt, camt, samt, csamt,
-  supplyNature,                    // taxable | nil_rated | exempt | non_gst | export | sez
-  buckets: {                       // where this line contributed
-    section: "B2B" | "B2CL" | "B2CS" | "CDNR" | "CDNUR" | "EXP" | "NIL" | null,
-    subKey:  string,               // e.g. "INTRB2B" for NIL, "27|18" for B2CS
-    hsnBucket: "HSN_B2B" | "HSN_B2C" | null,
-    reason: string,                // human-readable: "Registered dealer + interstate → B2B; nil line stripped to NIL/INTRB2B"
-  }
-}
-```
-
-Implemented by threading a lightweight recorder through the existing sales/CN loops — no branching logic change, just observation. Zero cost when `trace` is off (default).
-
-### 2. Reconciliation drill-down (new component)
-`src/components/reports/Gstr1ReconciliationDrilldown.tsx`
-
-Opens as a dialog from a new **"Explain Difference"** button in the existing reconciliation card on `/app/reports/gstr1`.
-
-Layout:
-- Header: A (Net outward) − B (HSN total) = **Difference** (rupees + paise).
-- Two panels side by side:
-  - **Left — Outward side (A)**: expandable rows per section (B2B, B2CL, B2CS, EXP, NIL, CDNR, CDNUR). Each expands to the traced lines contributing to that section, showing invoice number, party, taxable, tax, section total. Running subtotal at bottom of each.
-  - **Right — HSN side (B)**: same lines regrouped by `HSN_B2B` / `HSN_B2C` with per-HSN subtotals.
-- **Mismatch band** at the bottom: any line whose "A side" bucket total ≠ its HSN contribution is highlighted amber. Common causes are auto-diagnosed and labelled:
-  - "Round-off residue < ₹1"
-  - "HSN missing on line — counted in A but not in HSN summary"
-  - "UQC missing"
-  - "Nil line without HSN"
-  - "CN/DN sign flip"
-- CSV export of the drill-down for auditor sharing.
-
-### 3. Voucher audit view (new component + link)
-`src/components/vouchers/Gstr1PostingAudit.tsx`
-
-Reusable panel that takes a `voucherId` and shows, per line:
-
-```text
-Line 1 — "Copier Paper A4" 12% · HSN 4802 · Qty 10 REAM · ₹5,000
-  → Section: B2B (registered dealer + intra-state)
-  → HSN bucket: HSN_B2B (grouped 4802|REAM|12%)
-  → GSTR-1 row: B2B > CTIN 24ABCDE1234F1Z5 > Inv INV/001
-  → Tax split: CGST ₹300 + SGST ₹300
-
-Line 2 — "Loose grain" NIL · no HSN
-  → Section: NIL sheet > INTRAB2B > Nil-rated column
-  → HSN bucket: HSN_B2B (line dropped because HSN blank — flagged)
-  → Reason: 0% rate + zero tax → treated as nil-rated per Table 8
-```
-
-Mounted in two places:
-- **Voucher detail page** (`app.vouchers.$voucherId.tsx`) as a collapsible "GSTR-1 posting" section.
-- **From the drill-down** — clicking any invoice row opens this panel in-place.
-
-### 4. Live preview export
-`src/components/reports/Gstr1LivePreview.tsx` — a persistent side panel on `/app/reports/gstr1` (toggled by a "Live preview" switch, off by default so it stays out of the way for users who don't need it).
-
-- Subscribes to the same `sales` / `cdnotes` state the page already loads.
-- Re-runs `buildGstr1({ trace: true })` on every voucher save via the existing `cache-events.ts` bus (already used for AI cache invalidation) — debounced 300 ms.
-- Shows a compact per-section table: rows, taxable, IGST, CGST, SGST, total. Difference badge highlighted red when non-zero.
-- **"Download current"** button emits `.xlsx` and `.json` from the *exact* in-memory build — same guardrail path as the main export (HSN error block, reconciliation check).
-- Each total in the panel has a `?` tooltip: "Sum of 42 lines from 17 invoices — click to trace" → opens the drill-down scoped to that section.
+1. **ICAI Level 1/2/3 classification engine** — no code anywhere computes Level from turnover + borrowings. Field `borrowings_paise` doesn't exist on `companies`.
+2. **Borrowings input** — not captured in onboarding/settings.
+3. **Receipts & Payments Account report** — no report route exists (only P&L, I&E, Trading, BS). Trusts and professionals need this.
+4. **Level-driven disclosure gating** — reports don't hide/show disclosures based on Level. Cash-flow, related-party etc. are always the same regardless of size.
+5. **Presumptive taxation (44AD / 44ADA)**
+   - No calculator, no threshold tracking (₹2 Cr / ₹3 Cr for 44AD; ₹50 L / ₹75 L for 44ADA; 6% digital / 8% cash / 50% professional).
+   - No opt-in flag on the company, no dashboard tile, no report route.
+6. **Lightweight activity log** — today only heavyweight audits exist (period-lock, voucher-repair). No general "who edited what voucher / created which ledger" trail that a proprietor can browse.
+7. **Onboarding classification wizard** — new companies skip straight to the full form; no guided "what kind of entity are you + Level auto-suggestion" step.
 
 ---
 
-## Technical details
+## Plan — 4 phases, each shippable independently
 
-### Files to add
-- `src/lib/gstr1-trace.ts` — `TracedLine`, `BuildTrace`, `classifyReason()` helpers.
-- `src/components/reports/Gstr1ReconciliationDrilldown.tsx`
-- `src/components/reports/Gstr1LivePreview.tsx`
-- `src/components/vouchers/Gstr1PostingAudit.tsx`
-- `src/lib/gstr1-trace.test.ts` — verify every existing test invoice in `gst-returns.test.ts` produces a trace whose bucket sums equal the aggregate output (invariant: `sum(trace.lines where bucket=X) === built[X].totals`).
+### Phase 1 — Classification & Threshold Engine
 
-### Files to modify
-- `src/lib/gst-returns.ts` — thread optional `trace` recorder through the sales + CN loops. Additive only; no behaviour change when `trace` is undefined.
-- `src/routes/app.reports.gstr1.tsx` — add "Live preview" toggle, "Explain Difference" button on the reconciliation card, wire both components.
-- `src/routes/app.vouchers.$voucherId.tsx` — mount `Gstr1PostingAudit` in a collapsible section for sales / CN / DN voucher types.
-- `src/lib/ai/cache-events.ts` — reuse existing `voucher:saved` topic; no new events.
+**Schema (migration)**
+- Add to `public.companies`:
+  - `borrowings_paise BIGINT NOT NULL DEFAULT 0`
+  - `nce_level SMALLINT` (1/2/3, nullable = "auto-compute")
+  - `nce_level_override BOOLEAN DEFAULT false`
+  - `presumptive_scheme TEXT CHECK (presumptive_scheme IN ('none','44ad','44ada'))` default `'none'`
+  - `presumptive_mode TEXT CHECK (presumptive_mode IN ('digital','cash','professional'))` nullable
 
-### Performance
-- Trace only runs when a consumer asks for it (live preview open, drill-down open, or single-voucher audit).
-- Live preview uses `queueMicrotask` + 300 ms debounce, same pattern as the AI cache warmer, so keystroke latency budget in `keyboard-perf.spec.ts` remains untouched.
-- Single-voucher audit builds only that voucher's slice (`buildGstr1({ sales: [v], creditNotes: [] })`) — sub-millisecond.
+**Code**
+- New `src/lib/nce-classification.ts`:
+  - `classifyNceLevel({ turnover, borrowings, entity }) → { level: 1|2|3, reason }`
+  - ICAI thresholds: Level 1 turnover > ₹250 Cr or borrowings > ₹50 Cr; Level 2 turnover > ₹50 Cr or borrowings > ₹10 Cr; else Level 3.
+  - Pvt Ltd is force-flagged as "corporate — use Schedule III" and this module skips it.
+- Extend `entity-status.ts` with `getNceDisclosureFlags(level)` → `{ showCashFlow, showRelatedParty, showSegmentReport, ... }`.
+- `Zod` schema (`schemas/company.ts`) gains `borrowings_lakhs`, `presumptive_scheme`, `presumptive_mode`.
+- UI: `app.companies.tsx` gets a **Classification** card showing computed Level + reason + manual override checkbox.
 
-### Correctness guardrails
-- Trace invariant test: for every fixture in `gst-returns.test.ts`, aggregate-by-bucket of `trace.lines` must equal the section totals in the current output. If it drifts, the test fails — this locks the "explanation" to the actual numbers so the drill-down can never lie.
-- Reconciliation drill-down never re-computes totals; it groups already-traced lines. A and B always come from the same `BuildTrace`.
+### Phase 2 — Simplified Financial Statements
 
-### Out of scope (deliberately)
-- No changes to the GSTN JSON shape, portal template export, validators, or existing "block export on HSN error" rule.
-- No new database tables — everything is derived at render time from vouchers already in IndexedDB.
+**New reports**
+- `src/routes/app.reports.receipts-payments.tsx` — pure cash/bank Dr–Cr rebuild from `voucher_entries` filtered by ledger type = `cash` / `bank`. Follows Trust / Professional format.
+
+**Wiring existing reports to Level**
+- `app.reports.balance-sheet.tsx` and `app.reports.profit-loss.tsx`: read `nce_level` and hide corporate-only sections (Schedule III subtotals, related-party notes) when level ≥ 2.
+- New shared helper `src/lib/nce-report-shape.ts` returning the disclosure set for the active company (used by BS, P&L, Trading, R&P).
+- Reports menu (`app.reports.tsx`) gains "Receipts & Payments" tab, visible only when entity is Trust / Individual / HUF / RF (feature-flag driven).
+
+### Phase 3 — Presumptive Taxation (44AD / 44ADA)
+
+**Code**
+- `src/lib/presumptive.ts`:
+  - `computePresumptive({ scheme, mode, grossReceiptsPaise, digitalReceiptsPaise, cashReceiptsPaise })`.
+  - Returns `{ eligibleThresholdPaise, deemedProfitPaise, effectiveRate, thresholdBreached }`.
+  - Rates: 44AD → 6% digital / 8% cash; 44ADA → 50% (professional). Thresholds: ₹2 Cr / ₹3 Cr (95%+ digital); ₹50 L / ₹75 L.
+- New route `src/routes/app.reports.presumptive.tsx` — dashboard with gross receipts YTD, deemed profit, threshold gauge, disqualification warnings.
+- Settings toggle in `app.settings.tsx` under "Compliance": enable presumptive + pick scheme.
+- Dashboard tile in `app.index.tsx` when scheme active.
+
+### Phase 4 — Lightweight Activity Log (opt-in, local-first)
+
+**Local-first design** (respects Core rule: no server sync of business data)
+- New Dexie table in `src/lib/offline/db.ts`:
+  ```
+  activity_log: "++id, company_id, ts, entity_type, entity_id, action"
+  ```
+  Fields: `ts, actor, entity_type ('voucher'|'ledger'|'item'|'company'), entity_id, action ('create'|'update'|'delete'), diff (jsonb-ish)`.
+- New helper `src/lib/activity-log.ts` — `logActivity(...)`; wrapped around existing repository writes (voucher save/update/delete, ledger create, item create).
+- New route `src/routes/app.reports.activity-log.tsx` — filterable table (date/entity type/action), CSV export.
+- Setting: "Enable activity log" default **on** for new NCE companies; toggle in Settings → Compliance. Retention slider (30/90/180/365 days).
+- Explicitly **not** immutable, **not** synced remotely — matches the "non-mandatory / opt-in / lightweight" spec.
+
+---
+
+## Technical notes
+
+- All new columns + Dexie tables follow the Core rule "no auto server sync of business data" — Phase 4 log lives only in IndexedDB.
+- Migration adds `GRANT` for `authenticated` on the new columns (they're on an existing table so no fresh GRANT needed, but the migration will re-assert).
+- Reports reuse the existing `voucher_entries` + `ledgers` cache — zero new heavy queries.
+- No changes to keyboard architecture, GST engine, or Tauri/Electron builds.
+
+## Deliverables per phase
+
+| Phase | New files | Migrations | User-visible |
+|---|---|---|---|
+| 1 | `nce-classification.ts` + schema update | 1 | Classification card in Company form |
+| 2 | `app.reports.receipts-payments.tsx`, `nce-report-shape.ts` | 0 | New R&P report, cleaner BS/P&L for small entities |
+| 3 | `presumptive.ts`, `app.reports.presumptive.tsx` | 0 (uses Phase 1 cols) | Presumptive dashboard + settings toggle |
+| 4 | `activity-log.ts`, Dexie v9, `app.reports.activity-log.tsx` | 0 | Opt-in activity trail |
+
+Approve and I'll ship Phase 1 first, then loop back for Phase 2–4.
