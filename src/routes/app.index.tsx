@@ -14,6 +14,7 @@ import {
   ArrowUpFromLine,
 } from "lucide-react";
 const SalesPurchaseChart = lazy(() => import("@/components/dashboard/SalesPurchaseChart"));
+import { MorningBriefing } from "@/components/assistant/MorningBriefing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -249,6 +250,13 @@ function Dashboard() {
           Quick overview of your books for {new Date().toLocaleString("en-IN", { month: "long", year: "numeric" })}.
         </p>
       </div>
+      {activeCompanyId ? (
+        <MorningBriefing
+          companyId={activeCompanyId}
+          companyName={activeMembership?.companies?.name}
+        />
+      ) : null}
+
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (
