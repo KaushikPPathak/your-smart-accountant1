@@ -16,6 +16,8 @@ import {
   type KbEntry,
 } from "@/lib/assistant-knowledge";
 import { assistantChat, assistantDraftVoucher } from "@/lib/assistant.functions";
+import type { StructuredCard } from "@/lib/ai/sqliteContext";
+import type { ConversationMemory } from "@/lib/ai/conversation-memory";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
