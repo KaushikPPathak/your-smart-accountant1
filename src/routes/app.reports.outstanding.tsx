@@ -53,10 +53,17 @@ function OutstandingPage() {
   const [invs, setInvs] = useState<InvRow[]>([]);
   const [allocs, setAllocs] = useState<AllocRow[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const rateKey = `msme:bankRate:${activeCompanyId ?? "_"}`;
+  const [bankRate, setBankRate] = useState<number>(() => {
+    if (typeof window === "undefined") return DEFAULT_RBI_BANK_RATE_PCT;
+    const v = Number(window.localStorage.getItem(rateKey));
+    return Number.isFinite(v) && v > 0 ? v : DEFAULT_RBI_BANK_RATE_PCT;
+  });
   useEffect(() => {
-    if (!activeCompanyId) return;
-    setLoading(true);
+    if (typeof window !== "undefined") window.localStorage.setItem(rateKey, String(bankRate));
+  }, [bankRate, rateKey]);
+
+
     const type = mode === "receivables" ? "sales" : "purchase";
     withCacheFallback<{ invs: InvRow[]; allocs: AllocRow[] }>(
       async () => {
