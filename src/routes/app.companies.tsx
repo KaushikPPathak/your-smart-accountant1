@@ -329,6 +329,13 @@ function CompaniesPage() {
       gst_filing_frequency: parsed.data.gst_registered ? parsed.data.gst_filing_frequency : "monthly",
       inventory_enabled: parsed.data.inventory_enabled,
       annual_turnover_paise: Math.round((parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) * 100000 * 100),
+      borrowings_paise: Math.round((parseFloat(parsed.data.borrowings_lakhs ?? "") || 0) * 100000 * 100),
+      nce_level: parsed.data.nce_level_override ? (parsed.data.nce_level ?? null) : null,
+      nce_level_override: !!parsed.data.nce_level_override,
+      presumptive_scheme: parsed.data.presumptive_scheme ?? "none",
+      presumptive_mode: parsed.data.presumptive_scheme === "44ada"
+        ? "professional"
+        : (parsed.data.presumptive_mode ?? "cash"),
       mode: "trial_local",
       currency_code: parsed.data.currency_code || "INR",
       date_format: parsed.data.date_format || "dd-mm-yyyy",
