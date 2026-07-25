@@ -156,6 +156,9 @@ async function retrieveParty(companyId: string, routed: RoutedQuery, opts: { wit
     },
     facts: {
       as_on_date: asOnIso,
+      resolved_party_id: String(target.id),
+      resolved_party_name: String(target.name ?? ""),
+      resolved_party_group: target.group_name ?? null,
       opening_balance_paise: target.opening_balance_paise ?? 0,
       closing_balance_paise: opening + bal.balance_paise,
       current_balance_paise: opening + bal.balance_paise,
