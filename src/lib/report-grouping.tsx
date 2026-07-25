@@ -12,9 +12,22 @@ import {
 } from "@/lib/account-groups";
 import { formatINR } from "@/lib/money";
 
+export interface GroupBucketInner {
+  label: string;
+  valuePaise: number;
+}
+
+export interface GroupBucketRow {
+  id: string;
+  name: string;
+  valuePaise: number;
+  /** Optional inner breakdown (e.g. Cash / Bank / Other receipt mode). */
+  inner?: GroupBucketInner[];
+}
+
 export interface GroupBucket {
   group: AccountGroup;
-  rows: { id: string; name: string; valuePaise: number }[];
+  rows: GroupBucketRow[];
   subtotalPaise: number;
 }
 
@@ -30,11 +43,14 @@ export function ledgerGroupCode(b: { group_code: string | null; type: string }):
  *  - For Liabilities (Cr-natural): pass `(b) => -b.closing_paise`
  *  - For Assets (Dr-natural):       pass `(b) => b.closing_paise`
  *  - Same idea for P&L sides.
+ * `innerFor` (optional) returns inner breakdown rows already sign-aligned
+ * with `signFor(b)` — negative values are filtered.
  */
 export function groupBalances(
   balances: LedgerBalance[],
   section: AccountSection,
   signFor: (b: LedgerBalance) => number,
+  innerFor?: (b: LedgerBalance, displayValue: number) => GroupBucketInner[] | undefined,
 ): GroupBucket[] {
   const groupsForSection = GROUPS_BY_SECTION[section];
   const codes = new Set(groupsForSection.map((g) => g.code));
@@ -48,7 +64,8 @@ export function groupBalances(
     const v = signFor(b);
     if (!v) continue;
     const bucket = buckets.get(code)!;
-    bucket.rows.push({ id: b.id, name: b.name, valuePaise: v });
+    const inner = innerFor?.(b, v)?.filter((x) => x.valuePaise !== 0);
+    bucket.rows.push({ id: b.id, name: b.name, valuePaise: v, inner: inner && inner.length > 0 ? inner : undefined });
     bucket.subtotalPaise += v;
   }
   // Drop empty groups, preserve order
@@ -78,11 +95,29 @@ export function groupedTRows(
       emphasis: "bold",
     });
     for (const r of b.rows) {
-      rows.push({
-        label: <span className="pl-3">{r.name}</span> as ReactNode,
-        amount: formatINR(r.valuePaise),
-        onClick: onLedgerClick ? () => onLedgerClick(r.id) : undefined,
-      });
+      if (r.inner && r.inner.length > 0) {
+        // Ledger row: name on left, total in OUTER column.
+        rows.push({
+          label: <span className="pl-3 font-medium">{r.name}</span> as ReactNode,
+          amount: "",
+          outerAmount: formatINR(r.valuePaise),
+          onClick: onLedgerClick ? () => onLedgerClick(r.id) : undefined,
+          emphasis: "bold",
+        });
+        // Inner mode-split rows: label indented further, value in INNER column.
+        for (const inn of r.inner) {
+          rows.push({
+            label: <span className="pl-8 text-muted-foreground">{inn.label}</span> as ReactNode,
+            amount: formatINR(inn.valuePaise),
+          });
+        }
+      } else {
+        rows.push({
+          label: <span className="pl-3">{r.name}</span> as ReactNode,
+          amount: formatINR(r.valuePaise),
+          onClick: onLedgerClick ? () => onLedgerClick(r.id) : undefined,
+        });
+      }
     }
     rows.push({
       label: <span className="pl-3 italic text-muted-foreground">Subtotal — {groupLabelText}</span>,
@@ -103,7 +138,16 @@ export function groupedExportRows(
   const out: { label: string; paise: number; outerPaise?: number; isHeader?: boolean; isSubtotal?: boolean }[] = [];
   for (const b of buckets) {
     out.push({ label: b.group.label.toUpperCase(), paise: 0, isHeader: true });
-    for (const r of b.rows) out.push({ label: `  ${prefix}${r.name}`, paise: r.valuePaise });
+    for (const r of b.rows) {
+      if (r.inner && r.inner.length > 0) {
+        out.push({ label: `  ${prefix}${r.name}`, paise: 0, outerPaise: r.valuePaise, isSubtotal: true });
+        for (const inn of r.inner) {
+          out.push({ label: `      ${inn.label}`, paise: inn.valuePaise });
+        }
+      } else {
+        out.push({ label: `  ${prefix}${r.name}`, paise: r.valuePaise });
+      }
+    }
     out.push({ label: `  Subtotal — ${b.group.label}`, paise: 0, outerPaise: b.subtotalPaise, isSubtotal: true });
   }
   return out;

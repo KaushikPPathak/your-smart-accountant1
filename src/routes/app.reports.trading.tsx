@@ -10,7 +10,7 @@ import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
-import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
+import { fetchLedgerBalances, fetchLedgerModeSplits, type LedgerBalance, type ModeSplit } from "@/lib/reports";
 import { supabase } from "@/integrations/supabase/client";
 import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
@@ -30,6 +30,7 @@ function TradingAccount() {
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
   const [openingStock, setOpeningStock] = useState(0);
   const [closingStock, setClosingStock] = useState(0);
+  const [modeSplits, setModeSplits] = useState<Map<string, ModeSplit>>(new Map());
   const { view, setView } = useReportView("trading");
 
   useEffect(() => {
@@ -37,6 +38,9 @@ function TradingAccount() {
     fetchLedgerBalances(activeCompanyId, to, from, {
       excludeProfitLossClosingTransfers: true,
     }).then(setBalances);
+    fetchLedgerModeSplits(activeCompanyId, from, to, {
+      excludeProfitLossClosingTransfers: true,
+    }).then(setModeSplits).catch(() => setModeSplits(new Map()));
   }, [activeCompanyId, from, to]);
 
   useEffect(() => {
@@ -61,22 +65,44 @@ function TradingAccount() {
     });
   }, [activeCompanyId]);
 
+  // Inner mode-split (Cash vs Bank/Cheque) per direct ledger.
+  const innerDr = (b: LedgerBalance) => {
+    const m = modeSplits.get(b.id); if (!m) return undefined;
+    return [
+      { label: "Paid in Cash", valuePaise: m.cashPaise },
+      { label: "Paid via Bank / Cheque", valuePaise: m.bankPaise },
+      { label: "Other (journal / adjustment)", valuePaise: m.otherPaise },
+    ];
+  };
+  const innerCr = (b: LedgerBalance) => {
+    const m = modeSplits.get(b.id); if (!m) return undefined;
+    return [
+      { label: "Received in Cash", valuePaise: -m.cashPaise },
+      { label: "Received via Bank / Cheque", valuePaise: -m.bankPaise },
+      { label: "Other (journal / adjustment)", valuePaise: -m.otherPaise },
+    ];
+  };
+
   // Direct income (Sales / Direct Income) and direct expenses (Purchase / Direct Exp), grouped.
   const drBuckets = useMemo(
     () => groupBalances(
       balances.filter((b) => b.type === "expense_direct"),
       "TRADING",
       (b) => b.closing_paise,
+      innerDr,
     ),
-    [balances],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [balances, modeSplits],
   );
   const crBuckets = useMemo(
     () => groupBalances(
       balances.filter((b) => b.type === "income_direct"),
       "TRADING",
       (b) => -b.closing_paise,
+      innerCr,
     ),
-    [balances],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [balances, modeSplits],
   );
 
   const goLedger = (id: string) =>

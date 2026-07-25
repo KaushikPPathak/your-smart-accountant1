@@ -9,7 +9,7 @@ import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
-import { fetchLedgerBalancesWithMeta, type LedgerBalance } from "@/lib/reports";
+import { fetchLedgerBalancesWithMeta, fetchLedgerModeSplits, type LedgerBalance, type ModeSplit } from "@/lib/reports";
 import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
 import { computeNceReportShape } from "@/lib/nce-report-shape";
@@ -52,6 +52,7 @@ function ProfitLoss() {
   const [excludedClosingEntries, setExcludedClosingEntries] = useState(0);
   const [openingStock, setOpeningStock] = useState(0);
   const [closingStock, setClosingStock] = useState(0);
+  const [modeSplits, setModeSplits] = useState<Map<string, ModeSplit>>(new Map());
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -61,6 +62,9 @@ function ProfitLoss() {
       setBalances(result.balances);
       setExcludedClosingEntries(result.excludedClosingTransferEntries);
     });
+    fetchLedgerModeSplits(activeCompanyId, from, to, {
+      excludeProfitLossClosingTransfers: true,
+    }).then(setModeSplits).catch(() => setModeSplits(new Map()));
   }, [activeCompanyId, from, to]);
 
   // Opening / Closing stock for gross-profit carry from Trading A/c.
@@ -119,23 +123,44 @@ function ProfitLoss() {
   const expenseTypes = new Set(["expense_indirect"]);
   const incomeTypes = new Set(["income_indirect"]);
 
+  // Inner breakdown: split each P&L ledger by receipt mode (Cash vs Bank/Cheque).
+  // Signed ModeSplit is dr−cr; expenses (Dr-natural) use +, incomes (Cr-natural) flip.
+  const innerForExpense = (b: LedgerBalance) => {
+    const m = modeSplits.get(b.id); if (!m) return undefined;
+    return [
+      { label: "Paid in Cash", valuePaise: m.cashPaise },
+      { label: "Paid via Bank / Cheque", valuePaise: m.bankPaise },
+      { label: "Other (journal / adjustment)", valuePaise: m.otherPaise },
+    ];
+  };
+  const innerForIncome = (b: LedgerBalance) => {
+    const m = modeSplits.get(b.id); if (!m) return undefined;
+    return [
+      { label: "Received in Cash", valuePaise: -m.cashPaise },
+      { label: "Received via Bank / Cheque", valuePaise: -m.bankPaise },
+      { label: "Other (journal / adjustment)", valuePaise: -m.otherPaise },
+    ];
+  };
+
   const expenseBuckets = useMemo(
     () => groupBalances(
       balances.filter((b) => expenseTypes.has(b.type)),
       "PL",
       (b) => b.closing_paise,
+      innerForExpense,
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balances],
+    [balances, modeSplits],
   );
   const incomeBuckets = useMemo(
     () => groupBalances(
       balances.filter((b) => incomeTypes.has(b.type)),
       "PL",
       (b) => -b.closing_paise,
+      innerForIncome,
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balances],
+    [balances, modeSplits],
   );
 
   const goLedger = (id: string) =>
