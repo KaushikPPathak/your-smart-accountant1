@@ -676,6 +676,19 @@ export function AssistantChat() {
             disabled={creating || thinking}
             className="min-h-[60px] max-h-[240px] resize-none text-sm"
           />
+          {voice.supported ? (
+            <Button
+              type="button"
+              size="icon"
+              variant={voice.listening ? "default" : "outline"}
+              aria-label={voice.listening ? "Stop voice input" : "Start voice input"}
+              title={voice.listening ? "Listening… click to stop" : "Speak your question"}
+              onClick={() => (voice.listening ? voice.stop() : voice.start())}
+              disabled={creating || thinking}
+            >
+              {voice.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
+          ) : null}
           <Button type="submit" size="icon" aria-label="Send" disabled={creating || thinking}>
             <Send className="h-4 w-4" />
           </Button>
