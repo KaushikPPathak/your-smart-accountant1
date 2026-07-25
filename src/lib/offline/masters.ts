@@ -17,6 +17,7 @@ import {
   type CachedItem,
 } from "@/lib/masters-cache";
 import { emitDataChange } from "@/lib/ai/cache-events";
+import { logActivity } from "@/lib/activity-log";
 
 // Explicitly declare interfaces to strip out top-level import bindings entirely
 export interface LedgerCacheRow extends LedgerInsertPayload {
