@@ -210,31 +210,41 @@ function AgeingPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Party</TableHead>
+                  {mode === "payables" && <TableHead>MSME</TableHead>}
                   {BUCKETS.map((b) => <TableHead key={b.key} className="text-right">{b.label} days</TableHead>)}
                   <TableHead className="text-right">Total</TableHead>
+                  {mode === "payables" && <TableHead className="text-right">MSME 45+ ⚠</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {partyRows.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="p-6 text-center text-sm text-muted-foreground">No outstanding</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={mode === "payables" ? 8 : 6} className="p-6 text-center text-sm text-muted-foreground">No outstanding</TableCell></TableRow>
                 ) : partyRows.map((r, i) => (
-                  <TableRow key={i}>
+                  <TableRow key={i} className={mode === "payables" && r.msme45 > 0 ? "bg-destructive/5" : undefined}>
                     <TableCell>{r.name}</TableCell>
+                    {mode === "payables" && (
+                      <TableCell>{r.msme ? <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">MSME</Badge> : null}</TableCell>
+                    )}
                     <TableCell className="text-right font-mono">{formatINR(r.b0)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(r.b1)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(r.b2)}</TableCell>
                     <TableCell className="text-right font-mono text-destructive">{formatINR(r.b3)}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{formatINR(r.total)}</TableCell>
+                    {mode === "payables" && (
+                      <TableCell className="text-right font-mono">{r.msme45 > 0 ? <span className="text-destructive font-semibold">{formatINR(r.msme45)}</span> : <span className="text-muted-foreground">—</span>}</TableCell>
+                    )}
                   </TableRow>
                 ))}
                 {partyRows.length > 0 && (
                   <TableRow className="font-semibold border-t-2">
                     <TableCell>Total</TableCell>
+                    {mode === "payables" && <TableCell />}
                     <TableCell className="text-right font-mono">{formatINR(totals.b0)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(totals.b1)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(totals.b2)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(totals.b3)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(totals.total)}</TableCell>
+                    {mode === "payables" && <TableCell className="text-right font-mono text-destructive">{formatINR(totals.msme45)}</TableCell>}
                   </TableRow>
                 )}
               </TableBody>
