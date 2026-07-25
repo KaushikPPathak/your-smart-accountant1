@@ -33,7 +33,7 @@ interface InvRow {
   total_paise: number;
   party_ledger_id: string | null;
   voucher_type: string;
-  ledgers: { name: string } | null;
+  ledgers: { name: string; msme_registered?: boolean | null } | null;
 }
 
 interface AllocRow {
@@ -57,7 +57,7 @@ function OutstandingPage() {
       async () => {
         const [v, a] = await Promise.all([
           supabase.from("vouchers")
-            .select("id, voucher_number, voucher_date, due_date, total_paise, party_ledger_id, voucher_type, ledgers:party_ledger_id(name)")
+            .select("id, voucher_number, voucher_date, due_date, total_paise, party_ledger_id, voucher_type, ledgers:party_ledger_id(name, msme_registered)")
             .eq("company_id", activeCompanyId)
             .eq("voucher_type", type)
             .lte("voucher_date", asOf)
@@ -88,7 +88,10 @@ function OutstandingPage() {
             party_ledger_id: v.party_ledger_id ?? null,
             voucher_type: String(v.voucher_type ?? ""),
             ledgers: v.party_ledger_id
-              ? { name: ledgerById.get(String(v.party_ledger_id))?.name ?? "" }
+              ? {
+                  name: ledgerById.get(String(v.party_ledger_id))?.name ?? "",
+                  msme_registered: !!ledgerById.get(String(v.party_ledger_id))?.msme_registered,
+                }
               : null,
           })) as InvRow[],
           allocs: (allocRows as any[]).map((a) => ({
@@ -121,6 +124,11 @@ function OutstandingPage() {
   }, [invs, allocs, asOf]);
 
   const totalPending = rows.reduce((s, r) => s + r.pending_paise, 0);
+  // MSMED §15: buyer must pay MSE supplier within 45 days. Flag payables past that.
+  const msmeOverdue = mode === "payables"
+    ? rows.filter((r) => r.ledgers?.msme_registered && r.days > 45)
+    : [];
+  const msmeOverdueTotal = msmeOverdue.reduce((s, r) => s + r.pending_paise, 0);
 
   return (
     <div className="space-y-4">
@@ -149,6 +157,26 @@ function OutstandingPage() {
         </CardContent>
       </Card>
 
+      {mode === "payables" && msmeOverdue.length > 0 && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <div className="text-sm font-semibold text-destructive">
+                MSMED §15 alert — {msmeOverdue.length} bill{msmeOverdue.length === 1 ? "" : "s"} past 45 days
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Payments to MSE suppliers pending &gt; 45 days attract interest under MSMED Act and are
+                disallowed under Sec 43B(h) of the Income-tax Act until paid.
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-muted-foreground">MSME overdue</div>
+              <div className="font-mono text-lg font-semibold text-destructive">{formatINR(msmeOverdueTotal)}</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -169,20 +197,32 @@ function OutstandingPage() {
                 <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">Loading…</TableCell></TableRow>
               ) : rows.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">No outstanding bills 🎉</TableCell></TableRow>
-              ) : rows.map((r) => (
-                <TableRow key={r.id}>
+              ) : rows.map((r) => {
+                const isMsmeOverdue = mode === "payables" && !!r.ledgers?.msme_registered && r.days > 45;
+                return (
+                <TableRow key={r.id} className={isMsmeOverdue ? "bg-destructive/5" : undefined}>
                   <TableCell className="font-mono text-xs">{fmtIndianDate(r.voucher_date)}</TableCell>
                   <TableCell className="font-medium">{r.voucher_number}</TableCell>
-                  <TableCell>{r.ledgers?.name || "—"}</TableCell>
+                  <TableCell>
+                    <span>{r.ledgers?.name || "—"}</span>
+                    {r.ledgers?.msme_registered && (
+                      <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700 dark:text-amber-400">MSME</Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{fmtIndianDate(r.due_date || r.voucher_date)}</TableCell>
                   <TableCell className="text-right font-mono">{formatINR(r.total_paise)}</TableCell>
                   <TableCell className="text-right font-mono">{formatINR(r.paid_paise)}</TableCell>
                   <TableCell className="text-right font-mono font-semibold">{formatINR(r.pending_paise)}</TableCell>
                   <TableCell className="text-right">
-                    <Badge variant={r.days > 90 ? "destructive" : r.days > 60 ? "default" : "secondary"}>{r.days}d</Badge>
+                    {isMsmeOverdue ? (
+                      <Badge variant="destructive" title="MSMED §15 / Sec 43B(h) — overdue beyond 45 days">{r.days}d ⚠</Badge>
+                    ) : (
+                      <Badge variant={r.days > 90 ? "destructive" : r.days > 60 ? "default" : "secondary"}>{r.days}d</Badge>
+                    )}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

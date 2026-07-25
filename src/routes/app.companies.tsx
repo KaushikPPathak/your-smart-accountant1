@@ -37,6 +37,7 @@ import { INDIAN_STATES } from "@/lib/constants";
 import { ENTITY_STATUSES, getEntityFeatures, getEntityMeta, type EntityStatus } from "@/lib/entity-status";
 import { companyFormSchema as schema } from "@/lib/schemas/company";
 import { EntityMembersEditor } from "@/components/companies/EntityMembersEditor";
+import { NceOnboardingDialog } from "@/components/companies/NceOnboardingDialog";
 import { CURRENCIES } from "@/lib/currency";
 import { DATE_FORMATS } from "@/lib/date-format";
 import { isCompanyUnlocked, markCompanyUnlocked } from "@/lib/tech-user";
@@ -128,6 +129,7 @@ function CompaniesPage() {
   const [userMgmtOpen, setUserMgmtOpen] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoreFileOpen, setRestoreFileOpen] = useState(false);
+  const [nceWizard, setNceWizard] = useState<{ id: string; entity: EntityStatus } | null>(null);
 
   // Pull FY lock status (return_type = 'fy_close') for every company the user
   // is a member of, in a single query, so each card can render a
@@ -401,10 +403,23 @@ function CompaniesPage() {
       }
     } catch { /* cache refresh is best-effort */ }
     await refresh();
+    const wasCreate = !editingId;
+    const createdId = savedId;
+    const createdEntity = parsed.data.entity_status;
     setForm(empty);
     setEditingId(null);
     setOpen(false);
+    // For brand-new companies without a turnover figure, pop the NCE onboarding
+    // wizard so the user picks the correct disclosure level right away.
+    if (wasCreate && createdId) {
+      const already = (() => { try { return localStorage.getItem(`ym_nce_onboarded_${createdId}`) === "1"; } catch { return false; } })();
+      const turnoverEntered = (parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) > 0;
+      if (!already && !turnoverEntered) {
+        setNceWizard({ id: createdId, entity: createdEntity });
+      }
+    }
   };
+
 
   const onStateCodeChange = (code: string) => {
     const state = INDIAN_STATES.find((s) => s.code === code);
@@ -1055,6 +1070,15 @@ function CompaniesPage() {
         memberships={memberships.map((m) => ({ company_id: m.company_id, companies: { name: m.companies.name } }))}
         onDone={() => refresh()}
       />
+      {nceWizard && (
+        <NceOnboardingDialog
+          open={!!nceWizard}
+          onOpenChange={(v) => { if (!v) setNceWizard(null); }}
+          companyId={nceWizard.id}
+          entity={nceWizard.entity}
+          onSaved={() => { void refresh(); }}
+        />
+      )}
     </div>
   );
 }

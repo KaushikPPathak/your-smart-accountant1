@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { useFyAsOfState } from "@/components/reports/ReportToolbar";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
@@ -36,7 +37,7 @@ interface InvRow {
   due_date: string | null;
   total_paise: number;
   party_ledger_id: string | null;
-  ledgers: { name: string } | null;
+  ledgers: { name: string; msme_registered?: boolean | null } | null;
 }
 
 interface AllocRow { invoice_voucher_id: string; amount_paise: number }
@@ -56,7 +57,7 @@ function AgeingPage() {
       async () => {
         const [v, a] = await Promise.all([
           supabase.from("vouchers")
-            .select("id, voucher_date, due_date, total_paise, party_ledger_id, ledgers:party_ledger_id(name)")
+            .select("id, voucher_date, due_date, total_paise, party_ledger_id, ledgers:party_ledger_id(name, msme_registered)")
             .eq("company_id", activeCompanyId)
             .eq("voucher_type", type)
             .lte("voucher_date", asOf),
@@ -84,7 +85,10 @@ function AgeingPage() {
             total_paise: Number(v.total_paise || 0),
             party_ledger_id: v.party_ledger_id ?? null,
             ledgers: v.party_ledger_id
-              ? { name: ledgerById.get(String(v.party_ledger_id))?.name ?? "" }
+              ? {
+                  name: ledgerById.get(String(v.party_ledger_id))?.name ?? "",
+                  msme_registered: !!ledgerById.get(String(v.party_ledger_id))?.msme_registered,
+                }
               : null,
           })) as InvRow[],
           allocs: (allocRows as any[]).map((a) => ({
@@ -103,17 +107,18 @@ function AgeingPage() {
     const paidByInv = new Map<string, number>();
     for (const a of allocs) paidByInv.set(a.invoice_voucher_id, (paidByInv.get(a.invoice_voucher_id) || 0) + a.amount_paise);
     const today = new Date(asOf).getTime();
-    const byParty = new Map<string, { name: string; b0: number; b1: number; b2: number; b3: number; total: number }>();
+    const byParty = new Map<string, { name: string; msme: boolean; b0: number; b1: number; b2: number; b3: number; msme45: number; total: number }>();
     for (const inv of invs) {
       const pending = inv.total_paise - (paidByInv.get(inv.id) || 0);
       if (pending <= 0) continue;
       const dueIso = inv.due_date || inv.voucher_date;
       const days = Math.max(0, Math.floor((today - new Date(dueIso).getTime()) / 86400000));
       const key = inv.party_ledger_id || "_";
-      const cur = byParty.get(key) || { name: inv.ledgers?.name || "—", b0: 0, b1: 0, b2: 0, b3: 0, total: 0 };
+      const cur = byParty.get(key) || { name: inv.ledgers?.name || "—", msme: !!inv.ledgers?.msme_registered, b0: 0, b1: 0, b2: 0, b3: 0, msme45: 0, total: 0 };
       const bIdx = days <= 30 ? "b0" : days <= 60 ? "b1" : days <= 90 ? "b2" : "b3";
       cur[bIdx] += pending;
       cur.total += pending;
+      if (cur.msme && days > 45) cur.msme45 += pending;
       byParty.set(key, cur);
     }
     return Array.from(byParty.values()).sort((a, b) => b.total - a.total);
@@ -121,28 +126,45 @@ function AgeingPage() {
 
   const totals = useMemo(() => {
     return partyRows.reduce((acc, r) => ({
-      b0: acc.b0 + r.b0, b1: acc.b1 + r.b1, b2: acc.b2 + r.b2, b3: acc.b3 + r.b3, total: acc.total + r.total,
-    }), { b0: 0, b1: 0, b2: 0, b3: 0, total: 0 });
+      b0: acc.b0 + r.b0, b1: acc.b1 + r.b1, b2: acc.b2 + r.b2, b3: acc.b3 + r.b3, msme45: acc.msme45 + r.msme45, total: acc.total + r.total,
+    }), { b0: 0, b1: 0, b2: 0, b3: 0, msme45: 0, total: 0 });
   }, [partyRows]);
 
   type PartyVm = (typeof partyRows)[number];
-  const ageingGridColumns: DGColumn<PartyVm>[] = useMemo(() => [
-    { id: "party", header: "Party", type: "text", width: 260, accessor: (x) => x.name, groupable: true },
-    ...BUCKETS.map((b): DGColumn<PartyVm> => ({
-      id: b.key, header: `${b.label} days`, type: "number", width: 120, align: "right",
-      accessor: (x) => (x[b.key as "b0" | "b1" | "b2" | "b3"]) / 100,
-      cell: (x) => formatINR(x[b.key as "b0" | "b1" | "b2" | "b3"]),
-      aggregator: "sum",
-      formatAggregate: (v) => formatINR(Math.round(v * 100)),
-    })),
-    {
-      id: "total", header: "Total", type: "number", width: 140, align: "right",
-      accessor: (x) => x.total / 100,
-      cell: (x) => formatINR(x.total),
-      aggregator: "sum",
-      formatAggregate: (v) => formatINR(Math.round(v * 100)),
-    },
-  ], []);
+  const ageingGridColumns: DGColumn<PartyVm>[] = useMemo(() => {
+    const cols: DGColumn<PartyVm>[] = [
+      { id: "party", header: "Party", type: "text", width: 260, accessor: (x) => x.name, groupable: true },
+      ...BUCKETS.map((b): DGColumn<PartyVm> => ({
+        id: b.key, header: `${b.label} days`, type: "number", width: 120, align: "right",
+        accessor: (x) => (x[b.key as "b0" | "b1" | "b2" | "b3"]) / 100,
+        cell: (x) => formatINR(x[b.key as "b0" | "b1" | "b2" | "b3"]),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      })),
+      {
+        id: "total", header: "Total", type: "number", width: 140, align: "right",
+        accessor: (x) => x.total / 100,
+        cell: (x) => formatINR(x.total),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+    ];
+    if (mode === "payables") {
+      cols.splice(1, 0, {
+        id: "msme", header: "MSME", type: "text", width: 80, align: "center",
+        accessor: (x) => (x.msme ? "Yes" : ""),
+        cell: (x) => x.msme ? <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">MSME</Badge> : null,
+      });
+      cols.push({
+        id: "msme45", header: "MSME 45+ ⚠", type: "number", width: 140, align: "right",
+        accessor: (x) => x.msme45 / 100,
+        cell: (x) => x.msme45 > 0 ? <span className="font-mono text-destructive font-semibold">{formatINR(x.msme45)}</span> : <span className="text-muted-foreground">—</span>,
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      });
+    }
+    return cols;
+  }, [mode]);
 
   return (
     <div className="space-y-4">
@@ -188,31 +210,41 @@ function AgeingPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Party</TableHead>
+                  {mode === "payables" && <TableHead>MSME</TableHead>}
                   {BUCKETS.map((b) => <TableHead key={b.key} className="text-right">{b.label} days</TableHead>)}
                   <TableHead className="text-right">Total</TableHead>
+                  {mode === "payables" && <TableHead className="text-right">MSME 45+ ⚠</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {partyRows.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="p-6 text-center text-sm text-muted-foreground">No outstanding</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={mode === "payables" ? 8 : 6} className="p-6 text-center text-sm text-muted-foreground">No outstanding</TableCell></TableRow>
                 ) : partyRows.map((r, i) => (
-                  <TableRow key={i}>
+                  <TableRow key={i} className={mode === "payables" && r.msme45 > 0 ? "bg-destructive/5" : undefined}>
                     <TableCell>{r.name}</TableCell>
+                    {mode === "payables" && (
+                      <TableCell>{r.msme ? <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">MSME</Badge> : null}</TableCell>
+                    )}
                     <TableCell className="text-right font-mono">{formatINR(r.b0)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(r.b1)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(r.b2)}</TableCell>
                     <TableCell className="text-right font-mono text-destructive">{formatINR(r.b3)}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">{formatINR(r.total)}</TableCell>
+                    {mode === "payables" && (
+                      <TableCell className="text-right font-mono">{r.msme45 > 0 ? <span className="text-destructive font-semibold">{formatINR(r.msme45)}</span> : <span className="text-muted-foreground">—</span>}</TableCell>
+                    )}
                   </TableRow>
                 ))}
                 {partyRows.length > 0 && (
                   <TableRow className="font-semibold border-t-2">
                     <TableCell>Total</TableCell>
+                    {mode === "payables" && <TableCell />}
                     <TableCell className="text-right font-mono">{formatINR(totals.b0)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(totals.b1)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(totals.b2)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(totals.b3)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(totals.total)}</TableCell>
+                    {mode === "payables" && <TableCell className="text-right font-mono text-destructive">{formatINR(totals.msme45)}</TableCell>}
                   </TableRow>
                 )}
               </TableBody>
