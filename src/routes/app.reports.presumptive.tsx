@@ -3,14 +3,29 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { useCompany } from "@/lib/company-context";
 
 import { formatINR } from "@/lib/money";
 import { computePresumptive, type PresumptiveScheme, type PresumptiveMode } from "@/lib/presumptive";
-import { fetchLedgerModeSplits, PL_INCOME } from "@/lib/reports";
-import { readLedgers } from "@/lib/offline/cache-read";
+import { fetchLedgerModeSplits, PL_INCOME, isProfitLossClosingTransfer } from "@/lib/reports";
+import { readLedgers, readVouchers, readVoucherEntriesForCompany } from "@/lib/offline/cache-read";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
+
+type VoucherBreakdownRow = {
+  voucherId: string;
+  date: string;
+  number: string;
+  type: string;
+  narration: string;
+  cashPaise: number;
+  bankPaise: number;
+  otherPaise: number;
+  totalPaise: number;
+};
 
 export const Route = createFileRoute("/app/reports/presumptive")({
   head: () => ({ meta: [{ title: "Presumptive Taxation (44AD / 44ADA) — Reports" }] }),
