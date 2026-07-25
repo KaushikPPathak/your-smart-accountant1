@@ -403,10 +403,21 @@ function CompaniesPage() {
       }
     } catch { /* cache refresh is best-effort */ }
     await refresh();
+    const wasCreate = !editingId;
+    const createdId = savedId;
+    const createdEntity = parsed.data.entity_status;
     setForm(empty);
     setEditingId(null);
     setOpen(false);
-  };
+    // For brand-new companies without a turnover figure, pop the NCE onboarding
+    // wizard so the user picks the correct disclosure level right away.
+    if (wasCreate && createdId) {
+      const already = (() => { try { return localStorage.getItem(`ym_nce_onboarded_${createdId}`) === "1"; } catch { return false; } })();
+      const turnoverEntered = (parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) > 0;
+      if (!already && !turnoverEntered) {
+        setNceWizard({ id: createdId, entity: createdEntity });
+      }
+    }
 
   const onStateCodeChange = (code: string) => {
     const state = INDIAN_STATES.find((s) => s.code === code);
