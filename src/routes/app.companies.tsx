@@ -38,6 +38,7 @@ import { ENTITY_STATUSES, getEntityFeatures, getEntityMeta, type EntityStatus } 
 import { companyFormSchema as schema } from "@/lib/schemas/company";
 import { EntityMembersEditor } from "@/components/companies/EntityMembersEditor";
 import { NceOnboardingDialog } from "@/components/companies/NceOnboardingDialog";
+import { classifyNceLevel, NCE_LEVEL_LABEL } from "@/lib/nce-classification";
 import { CURRENCIES } from "@/lib/currency";
 import { DATE_FORMATS } from "@/lib/date-format";
 import { isCompanyUnlocked, markCompanyUnlocked } from "@/lib/tech-user";
