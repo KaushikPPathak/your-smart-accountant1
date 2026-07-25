@@ -459,6 +459,7 @@ export async function deleteItem(id: string, companyId: string, label?: string):
   }
 
   emitDataChange(companyId, "item", label ? [`item:${label.toLowerCase()}`] : undefined);
+  void logActivity({ company_id: companyId, entity_type: "item", entity_id: id, entity_label: label ?? null, action: "delete" });
 }
 
 export async function deactivateItem(id: string, companyId: string): Promise<void> {
