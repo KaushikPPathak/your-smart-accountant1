@@ -40,11 +40,13 @@ interface OpeningRow {
 // classified by the contra ledger's group heading.
 function ReceiptsPayments() {
   const { activeCompanyId, activeMembership } = useCompany();
+  const pdfHeader = useReportPdfHeader();
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [rows, setRows] = useState<Row[]>([]);
   const [openingCash, setOpeningCash] = useState(0);
   const [closingCash, setClosingCash] = useState(0);
   const currency = activeMembership?.companies?.currency_code ?? "INR";
+  void currency;
 
   useEffect(() => {
     if (!activeCompanyId) return;
