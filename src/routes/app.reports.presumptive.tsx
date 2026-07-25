@@ -8,6 +8,8 @@ import { useCompany } from "@/lib/company-context";
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR } from "@/lib/money";
 import { computePresumptive, type PresumptiveScheme, type PresumptiveMode } from "@/lib/presumptive";
+import { fetchLedgerModeSplits, PL_INCOME } from "@/lib/reports";
+import { readLedgers } from "@/lib/offline/cache-read";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
 export const Route = createFileRoute("/app/reports/presumptive")({
