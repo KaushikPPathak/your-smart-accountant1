@@ -233,15 +233,20 @@ function OutstandingPage() {
                 <TableHead className="text-right">Received/Paid</TableHead>
                 <TableHead className="text-right">Pending</TableHead>
                 <TableHead className="text-right">Days</TableHead>
+                {mode === "payables" && <TableHead className="text-right">§16 Interest</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={mode === "payables" ? 9 : 8} className="p-6 text-center text-sm text-muted-foreground">Loading…</TableCell></TableRow>
               ) : rows.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">No outstanding bills 🎉</TableCell></TableRow>
+                <TableRow><TableCell colSpan={mode === "payables" ? 9 : 8} className="p-6 text-center text-sm text-muted-foreground">No outstanding bills 🎉</TableCell></TableRow>
               ) : rows.map((r) => {
-                const isMsmeOverdue = mode === "payables" && !!r.ledgers?.msme_registered && r.days > 45;
+                const isMsme = mode === "payables" && !!r.ledgers?.msme_registered;
+                const brk = isMsme
+                  ? msmedInterestBreakdown(r.pending_paise, r.voucher_date, asOf, { agreedDueDate: r.due_date, bankRatePct: bankRate })
+                  : null;
+                const isMsmeOverdue = !!brk && brk.daysLate > 0;
                 return (
                 <TableRow key={r.id} className={isMsmeOverdue ? "bg-destructive/5" : undefined}>
                   <TableCell className="font-mono text-xs">{fmtIndianDate(r.voucher_date)}</TableCell>
@@ -258,11 +263,25 @@ function OutstandingPage() {
                   <TableCell className="text-right font-mono font-semibold">{formatINR(r.pending_paise)}</TableCell>
                   <TableCell className="text-right">
                     {isMsmeOverdue ? (
-                      <Badge variant="destructive" title="MSMED §15 / Sec 43B(h) — overdue beyond 45 days">{r.days}d ⚠</Badge>
+                      <Badge variant="destructive" title={`MSMED §15 — appointed day ${fmtIndianDate(brk!.appointedDay)}, ${brk!.daysLate}d late`}>{r.days}d ⚠</Badge>
                     ) : (
                       <Badge variant={r.days > 90 ? "destructive" : r.days > 60 ? "default" : "secondary"}>{r.days}d</Badge>
                     )}
                   </TableCell>
+                  {mode === "payables" && (
+                    <TableCell className="text-right font-mono">
+                      {brk && brk.interestPaise > 0 ? (
+                        <span
+                          className="text-destructive font-semibold"
+                          title={`Appointed day ${fmtIndianDate(brk.appointedDay)} · ${brk.daysLate}d @ ${brk.ratePct.toFixed(2)}% p.a. monthly compounded`}
+                        >
+                          {formatINR(brk.interestPaise)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
                 );
               })}
@@ -273,3 +292,4 @@ function OutstandingPage() {
     </div>
   );
 }
+
