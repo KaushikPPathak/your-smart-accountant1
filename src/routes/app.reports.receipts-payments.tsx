@@ -96,18 +96,40 @@ function ReceiptsPayments() {
         const otherSide = es.filter(e => !cashLedgerIds.has(e.ledger_id));
         if (cashSide.length === 0) continue;
 
-        const cashDr = cashSide.reduce((s, e) => s + (e.debit_paise || 0), 0);
-        const cashCr = cashSide.reduce((s, e) => s + (e.credit_paise || 0), 0);
-        netCashMove += cashDr - cashCr;
+        // Split cash-side movement into "cash till" vs "bank till" so contra
+        // entries can be attributed to the correct receipt mode.
+        let cashTillNet = 0, bankTillNet = 0;
+        for (const e of cashSide) {
+          const led = ledMap.get(e.ledger_id);
+          const m = (e.debit_paise || 0) - (e.credit_paise || 0);
+          if (led?.type === "cash") cashTillNet += m;
+          else if (led?.type === "bank") bankTillNet += m;
+        }
+        netCashMove += cashTillNet + bankTillNet;
+        const cashAbs = Math.abs(cashTillNet);
+        const bankAbs = Math.abs(bankTillNet);
+        const totalAbs = cashAbs + bankAbs;
+        if (totalAbs === 0) continue;
 
         for (const e of otherSide) {
           const led = ledMap.get(e.ledger_id);
           if (!led) continue;
           const key = led.id;
-          const existing = bucket.get(key) ?? { ledger_id: led.id, ledger_name: led.name, ledger_type: led.type, dr: 0, cr: 0 };
-          // Contra debit means CASH went out (payment); contra credit means CASH came in (receipt)
-          existing.dr += e.debit_paise || 0;   // payments (application of cash)
-          existing.cr += e.credit_paise || 0;  // receipts (source of cash)
+          const existing = bucket.get(key) ?? {
+            ledger_id: led.id, ledger_name: led.name, ledger_type: led.type,
+            cashDr: 0, bankDr: 0, cashCr: 0, bankCr: 0,
+          };
+          const dr = e.debit_paise || 0;
+          const cr = e.credit_paise || 0;
+          // Split dr/cr pro-rata across cash-till vs bank-till.
+          const drCash = Math.round((dr * cashAbs) / totalAbs);
+          const drBank = dr - drCash;
+          const crCash = Math.round((cr * cashAbs) / totalAbs);
+          const crBank = cr - crCash;
+          existing.cashDr += drCash;
+          existing.bankDr += drBank;
+          existing.cashCr += crCash;
+          existing.bankCr += crBank;
           bucket.set(key, existing);
         }
       }
@@ -116,10 +138,18 @@ function ReceiptsPayments() {
     })();
   }, [activeCompanyId, from, to]);
 
-  const receipts = useMemo(() => rows.filter(r => r.cr > 0).map(r => ({ name: r.ledger_name, amt: r.cr })), [rows]);
-  const payments = useMemo(() => rows.filter(r => r.dr > 0).map(r => ({ name: r.ledger_name, amt: r.dr })), [rows]);
-  const totalReceipts = receipts.reduce((s, r) => s + r.amt, 0);
-  const totalPayments = payments.reduce((s, r) => s + r.amt, 0);
+  const receipts = useMemo(
+    () => rows.filter(r => (r.cashCr + r.bankCr) > 0)
+      .map(r => ({ name: r.ledger_name, cash: r.cashCr, bank: r.bankCr, total: r.cashCr + r.bankCr })),
+    [rows],
+  );
+  const payments = useMemo(
+    () => rows.filter(r => (r.cashDr + r.bankDr) > 0)
+      .map(r => ({ name: r.ledger_name, cash: r.cashDr, bank: r.bankDr, total: r.cashDr + r.bankDr })),
+    [rows],
+  );
+  const totalReceipts = receipts.reduce((s, r) => s + r.total, 0);
+  const totalPayments = payments.reduce((s, r) => s + r.total, 0);
 
   return (
     <div className="space-y-4">
