@@ -130,23 +130,40 @@ function AgeingPage() {
   }, [partyRows]);
 
   type PartyVm = (typeof partyRows)[number];
-  const ageingGridColumns: DGColumn<PartyVm>[] = useMemo(() => [
-    { id: "party", header: "Party", type: "text", width: 260, accessor: (x) => x.name, groupable: true },
-    ...BUCKETS.map((b): DGColumn<PartyVm> => ({
-      id: b.key, header: `${b.label} days`, type: "number", width: 120, align: "right",
-      accessor: (x) => (x[b.key as "b0" | "b1" | "b2" | "b3"]) / 100,
-      cell: (x) => formatINR(x[b.key as "b0" | "b1" | "b2" | "b3"]),
-      aggregator: "sum",
-      formatAggregate: (v) => formatINR(Math.round(v * 100)),
-    })),
-    {
-      id: "total", header: "Total", type: "number", width: 140, align: "right",
-      accessor: (x) => x.total / 100,
-      cell: (x) => formatINR(x.total),
-      aggregator: "sum",
-      formatAggregate: (v) => formatINR(Math.round(v * 100)),
-    },
-  ], []);
+  const ageingGridColumns: DGColumn<PartyVm>[] = useMemo(() => {
+    const cols: DGColumn<PartyVm>[] = [
+      { id: "party", header: "Party", type: "text", width: 260, accessor: (x) => x.name, groupable: true },
+      ...BUCKETS.map((b): DGColumn<PartyVm> => ({
+        id: b.key, header: `${b.label} days`, type: "number", width: 120, align: "right",
+        accessor: (x) => (x[b.key as "b0" | "b1" | "b2" | "b3"]) / 100,
+        cell: (x) => formatINR(x[b.key as "b0" | "b1" | "b2" | "b3"]),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      })),
+      {
+        id: "total", header: "Total", type: "number", width: 140, align: "right",
+        accessor: (x) => x.total / 100,
+        cell: (x) => formatINR(x.total),
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      },
+    ];
+    if (mode === "payables") {
+      cols.splice(1, 0, {
+        id: "msme", header: "MSME", type: "text", width: 80, align: "center",
+        accessor: (x) => (x.msme ? "Yes" : ""),
+        cell: (x) => x.msme ? <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">MSME</Badge> : null,
+      });
+      cols.push({
+        id: "msme45", header: "MSME 45+ ⚠", type: "number", width: 140, align: "right",
+        accessor: (x) => x.msme45 / 100,
+        cell: (x) => x.msme45 > 0 ? <span className="font-mono text-destructive font-semibold">{formatINR(x.msme45)}</span> : <span className="text-muted-foreground">—</span>,
+        aggregator: "sum",
+        formatAggregate: (v) => formatINR(Math.round(v * 100)),
+      });
+    }
+    return cols;
+  }, [mode]);
 
   return (
     <div className="space-y-4">
