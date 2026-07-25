@@ -418,6 +418,8 @@ function CompaniesPage() {
         setNceWizard({ id: createdId, entity: createdEntity });
       }
     }
+  };
+
 
   const onStateCodeChange = (code: string) => {
     const state = INDIAN_STATES.find((s) => s.code === code);
