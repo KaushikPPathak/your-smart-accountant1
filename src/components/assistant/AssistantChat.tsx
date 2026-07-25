@@ -1280,3 +1280,136 @@ function inlineMd(s: string): string {
     .replace(/_(.+?)_/g, "<em>$1</em>")
     .replace(/`([^`]+)`/g, '<code class="rounded bg-background/60 px-1 text-[11px]">$1</code>');
 }
+
+// ---------- Phase 3: OCR preview card ---------------------------------------
+function OcrPreviewCard({
+  draft,
+  memoryHint,
+  disabled,
+  onConfirm,
+  onCancel,
+}: {
+  draft: OcrDraft;
+  memoryHint?: PartyPattern;
+  disabled: boolean;
+  onConfirm: (opts: { remember: boolean; overrideLedgerId?: string; overrideLedgerName?: string }) => void;
+  onCancel: () => void;
+}) {
+  const [remember, setRemember] = useState(false);
+  const [overrideId, setOverrideId] = useState<string | undefined>(undefined);
+  const [overrideName, setOverrideName] = useState<string | undefined>(undefined);
+  const e = draft.extracted;
+  const conf = Math.round((e.confidence ?? 0) * 100);
+  const confTone =
+    conf >= 80 ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" :
+    conf >= 60 ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" :
+                 "bg-rose-500/15 text-rose-700 dark:text-rose-300";
+  const matched = !!draft.matchedPartyLedgerId;
+
+  return (
+    <div className="mt-3 rounded-lg border bg-background/60 p-3 text-xs">
+      <div className="mb-2 flex items-center gap-2">
+        <ScanLine className="h-3.5 w-3.5 text-primary" />
+        <div className="font-semibold">Extracted invoice</div>
+        <Badge className={`ml-auto gap-1 border-0 ${confTone}`}>{conf}% confidence</Badge>
+      </div>
+
+      {memoryHint && (
+        <div className="mb-2 flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2">
+          <BrainCircuit className="mt-0.5 h-3.5 w-3.5 text-primary" />
+          <div className="space-y-0.5">
+            <div className="font-medium text-primary">I remember this party</div>
+            <div className="text-[11px] text-muted-foreground">
+              You booked <b>{memoryHint.displayName}</b> under <b>{memoryHint.counterLedgerName ?? "—"}</b>
+              {memoryHint.rcmPercent ? ` with ${memoryHint.rcmPercent}% RCM` : ""} · seen {memoryHint.hits}×.
+              {memoryHint.note ? ` Note: ${memoryHint.note}` : ""}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+        <div><span className="text-muted-foreground">Party:</span> <b>{e.party_name || "—"}</b></div>
+        <div><span className="text-muted-foreground">GSTIN:</span> {e.party_gstin || "—"}</div>
+        <div><span className="text-muted-foreground">Invoice #:</span> {e.invoice_number || "—"}</div>
+        <div><span className="text-muted-foreground">Date:</span> {e.invoice_date || "—"}</div>
+        <div><span className="text-muted-foreground">Taxable:</span> ₹ {e.taxable_value?.toLocaleString("en-IN")}</div>
+        <div><span className="text-muted-foreground">GST:</span> ₹ {((e.cgst||0)+(e.sgst||0)+(e.igst||0)).toLocaleString("en-IN")} {e.is_interstate ? "(IGST)" : "(CGST+SGST)"}</div>
+        <div className="col-span-2 border-t pt-1"><span className="text-muted-foreground">Total:</span> <b>₹ {e.total_amount?.toLocaleString("en-IN")}</b></div>
+      </div>
+
+      {e.items && e.items.length > 0 && (
+        <div className="mt-2">
+          <div className="mb-1 text-[11px] font-medium text-muted-foreground">Line items ({e.items.length})</div>
+          <div className="max-h-32 space-y-0.5 overflow-y-auto rounded-md border bg-muted/30 p-1.5">
+            {e.items.slice(0, 8).map((it, i) => (
+              <div key={i} className="flex items-center gap-2 text-[11px]">
+                <span className="flex-1 truncate">{it.description}</span>
+                {it.hsn && <span className="text-muted-foreground">{it.hsn}</span>}
+                {typeof it.gst_rate === "number" && <span className="text-muted-foreground">{it.gst_rate}%</span>}
+                <span className="tabular-nums">₹ {it.amount?.toLocaleString("en-IN")}</span>
+              </div>
+            ))}
+            {e.items.length > 8 && <div className="text-[10px] text-muted-foreground">…and {e.items.length - 8} more</div>}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-2 rounded-md border p-2">
+        <div className="mb-1 text-[11px] font-medium text-muted-foreground">Party ledger</div>
+        {matched ? (
+          <div className="flex items-center gap-2">
+            <Check className="h-3 w-3 text-emerald-600" />
+            <span>Matched → <b>{draft.matchedPartyName}</b></span>
+            <Badge variant="outline" className="ml-auto text-[10px]">{Math.round(draft.matchScore * 100)}%</Badge>
+          </div>
+        ) : draft.alternatives.length > 0 ? (
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+              <span>No confident match. Pick one:</span>
+            </div>
+            {draft.alternatives.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => { setOverrideId(a.id); setOverrideName(a.name); }}
+                className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-muted ${overrideId === a.id ? "bg-primary/10 ring-1 ring-primary" : ""}`}
+              >
+                <span className="flex-1 truncate">{a.name}</span>
+                <span className="text-[10px] text-muted-foreground">{Math.round(a.score * 100)}%</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="text-muted-foreground">No local ledger match — one will be created in the form.</div>
+        )}
+      </div>
+
+      {(matched || overrideId) && (
+        <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px]">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(ev) => setRemember(ev.target.checked)}
+            className="h-3 w-3"
+          />
+          Remember this party for future bills
+        </label>
+      )}
+
+      <div className="mt-3 flex gap-2">
+        <Button
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          disabled={disabled}
+          onClick={() => onConfirm({ remember, overrideLedgerId: overrideId, overrideLedgerName: overrideName })}
+        >
+          <Check className="h-3 w-3" /> Open {draft.intent} form
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" disabled={disabled} onClick={onCancel}>
+          <X className="h-3 w-3" /> Discard
+        </Button>
+      </div>
+    </div>
+  );
+}
