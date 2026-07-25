@@ -1087,9 +1087,6 @@ function CompaniesPage() {
 function NceComplianceCard({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
   const turnoverPaise = Math.round((parseFloat(form.annual_turnover_lakhs || "0") || 0) * 100000 * 100);
   const borrowingsPaise = Math.round((parseFloat(form.borrowings_lakhs || "0") || 0) * 100000 * 100);
-  // Lazy require to keep top imports tidy.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { classifyNceLevel, NCE_LEVEL_LABEL } = require("@/lib/nce-classification") as typeof import("@/lib/nce-classification");
   const auto = classifyNceLevel({ entity: form.entity_status, turnoverPaise, borrowingsPaise });
   const effectiveLevel = form.nce_level_override && form.nce_level ? form.nce_level : auto.level;
 
