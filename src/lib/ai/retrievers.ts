@@ -11,6 +11,7 @@ import {
 } from "@/lib/offline/cache-read";
 import { forEachEntry, forEachVoucher } from "@/lib/offline/cache-read-paged";
 import { normalizeName, similarity } from "@/lib/tally-busy-import";
+import { scoreNameMatch, stripHonorifics } from "./phonetic";
 import type { RoutedQuery } from "./query-router";
 
 export interface RetrievedSlice {
@@ -28,19 +29,31 @@ function fuzzyPickLedger(all: any[], hints: string[]): any | null {
   // is matched as one entity, not three loose words that all pick "Shah").
   const phrase = hints.join(" ").trim();
   const nPhrase = normalizeName(phrase);
+  const strippedPhrase = stripHonorifics(phrase);
   const phraseTokens = nPhrase.split(/\s+/).filter((t) => t.length >= 3);
   let best: any = null;
   let bestScore = 0;
   for (const l of all) {
     const name = String(l.name ?? "");
     const nName = normalizeName(name);
+    // Base: existing edit-distance + token similarity on normalised strings.
     const sim = similarity(name, phrase);
-    // Token-overlap ratio: how many significant hint tokens appear in the name.
     const overlap = phraseTokens.length
       ? phraseTokens.filter((t) => nName.includes(t)).length / phraseTokens.length
       : 0;
     const contains = nName.includes(nPhrase) || nPhrase.includes(nName) ? 0.95 : 0;
-    const s = Math.max(sim, contains, overlap >= 0.6 ? 0.6 + overlap * 0.3 : 0);
+    // Phonetic + honorific-stripped scoring — the new signal for Tier 2.
+    // Lets "M Shah" match "Madhuben Shah" and "Smt Madhuben H Shah" match
+    // "Madhuben Shah" even when edit distance is large.
+    const phon = scoreNameMatch(name, phrase).score;
+    // Extra credit when the stripped phrase is contained in the stripped name
+    // (handles honorific-prefix cases like "Shri Ramesh" vs "Ramesh Traders").
+    const strippedName = stripHonorifics(name);
+    const strippedContains =
+      strippedName && strippedPhrase &&
+      (strippedName.includes(strippedPhrase) || strippedPhrase.includes(strippedName))
+        ? 0.9 : 0;
+    const s = Math.max(sim, contains, phon, strippedContains, overlap >= 0.6 ? 0.6 + overlap * 0.3 : 0);
     if (s > bestScore) { bestScore = s; best = l; }
   }
   // Raised from 0.55 → 0.72 to avoid confidently returning the wrong ledger.
@@ -143,6 +156,9 @@ async function retrieveParty(companyId: string, routed: RoutedQuery, opts: { wit
     },
     facts: {
       as_on_date: asOnIso,
+      resolved_party_id: String(target.id),
+      resolved_party_name: String(target.name ?? ""),
+      resolved_party_group: target.group_name ?? null,
       opening_balance_paise: target.opening_balance_paise ?? 0,
       closing_balance_paise: opening + bal.balance_paise,
       current_balance_paise: opening + bal.balance_paise,

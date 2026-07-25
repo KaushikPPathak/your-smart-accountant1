@@ -16,6 +16,8 @@ import {
   type KbEntry,
 } from "@/lib/assistant-knowledge";
 import { assistantChat, assistantDraftVoucher } from "@/lib/assistant.functions";
+import type { StructuredCard } from "@/lib/ai/sqliteContext";
+import type { ConversationMemory } from "@/lib/ai/conversation-memory";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -37,6 +39,7 @@ interface ChatMessage {
   preview?: ParsedCompany;
   voucherPreview?: ParsedVoucher;
   toolCalls?: { name: string; input: string }[];
+  card?: StructuredCard;
 }
 
 type ParsedCompany = {
@@ -99,6 +102,9 @@ export function AssistantChat() {
   const [aiMode, setAiMode] = useState(true);
   const [thinking, setThinking] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  // Per-session conversation memory — last resolved party/company/asOn so
+  // follow-ups like "and as on 31/12/2025?" work without repeating names.
+  const memoryRef = useRef<ConversationMemory | undefined>(undefined);
 
   const callAssistant = assistantChat;
   const callDraftVoucher = assistantDraftVoucher;
@@ -422,8 +428,13 @@ export function AssistantChat() {
             .slice(-12)
             .map((m) => ({ role: m.role, content: m.text }));
           const res = await callAssistant({
-            data: { companyId: activeCompanyId ?? null, messages: history },
+            data: {
+              companyId: activeCompanyId ?? null,
+              messages: history,
+              prior: memoryRef.current,
+            },
           });
+          if (res.memory) memoryRef.current = res.memory;
           if (res.ok && res.text) {
             setMessages((m) => [
               ...m,
@@ -432,6 +443,7 @@ export function AssistantChat() {
                 role: "assistant",
                 text: res.text,
                 toolCalls: res.toolCalls,
+                card: res.card,
               },
             ]);
             return;
@@ -695,6 +707,65 @@ export function AssistantChat() {
   );
 }
 
+function formatInrCard(paise: number): string {
+  const rupees = Math.abs(paise) / 100;
+  return "₹" + new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rupees);
+}
+
+function BalanceCard({ card }: { card: StructuredCard }) {
+  const drCr = card.isDebit ? "Dr" : "Cr";
+  const closingClass = card.isDebit ? "text-emerald-600" : "text-rose-600";
+  return (
+    <div className="mb-2 rounded-md border border-border/60 bg-background/70 p-3 text-xs">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="font-semibold text-sm">{card.partyName || "—"}</div>
+        <div className={`font-mono font-bold text-sm ${closingClass}`}>
+          {formatInrCard(card.closingPaise)} {drCr}
+        </div>
+      </div>
+      <div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        {card.partyGroup ?? "Ledger"}
+        {card.asOnDate ? ` · as on ${card.asOnDate}` : ""}
+        {card.companyName ? ` · ${card.companyName}` : ""}
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+        <div>
+          <div className="text-muted-foreground">Opening</div>
+          <div className="font-mono">{formatInrCard(card.openingPaise)}</div>
+        </div>
+        <div>
+          <div className="text-muted-foreground">Debits</div>
+          <div className="font-mono text-emerald-600">{formatInrCard(card.debitPaise)}</div>
+        </div>
+        <div>
+          <div className="text-muted-foreground">Credits</div>
+          <div className="font-mono text-rose-600">{formatInrCard(card.creditPaise)}</div>
+        </div>
+      </div>
+      {card.modeSplit ? (
+        <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] border-t border-border/40 pt-2">
+          <div>
+            <div className="text-muted-foreground">Cash</div>
+            <div className="font-mono">{formatInrCard(card.modeSplit.cashPaise)}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Bank</div>
+            <div className="font-mono">{formatInrCard(card.modeSplit.bankPaise)}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Other</div>
+            <div className="font-mono">{formatInrCard(card.modeSplit.otherPaise)}</div>
+          </div>
+        </div>
+      ) : null}
+      <div className="mt-2 text-[10px] text-muted-foreground">
+        Verified from your books · {card.voucherCount} voucher{card.voucherCount === 1 ? "" : "s"}
+      </div>
+    </div>
+  );
+}
+
+
 function MessageBubble({
   msg,
   onAction,
@@ -726,6 +797,7 @@ function MessageBubble({
             : "bg-muted text-foreground"
         }`}
       >
+        {!isUser && msg.card ? <BalanceCard card={msg.card} /> : null}
         <RichText text={msg.text} />
         {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">

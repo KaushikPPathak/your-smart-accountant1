@@ -6,16 +6,36 @@
 // for the original rows back later via `retrieveOriginal`.
 
 import { cacheRowsForCcr, compressMessages } from "./headroom";
-import { routeQuery, type QueryIntent } from "./query-router";
+import { routeQuery, type QueryIntent, type RoutedQuery } from "./query-router";
 import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
 import { optimiseSlice } from "./slice-optimizer";
 import { createRedactionMap, redactDeep, redactString, unredact, type RedactionMap } from "./redactor";
+import type { ConversationMemory } from "./conversation-memory";
 
 export interface AccountingContext {
   companyId?: string;
   ledgers?: number;
   parties?: number;
   recentVouchers?: number;
+}
+
+/** Structured answer card — the deterministic "ground truth" the client
+ *  renders alongside (and above) the model's prose commentary. Built from
+ *  local aggregators, never from the LLM. */
+export interface StructuredCard {
+  kind: "party_balance";
+  companyName?: string | null;
+  partyName: string;
+  partyGroup?: string | null;
+  openingPaise: number;
+  debitPaise: number;
+  creditPaise: number;
+  closingPaise: number;
+  /** true if closing is Dr (net debit), false if Cr. */
+  isDebit: boolean;
+  asOnDate: string | null;
+  modeSplit?: { cashPaise: number; bankPaise: number; otherPaise: number };
+  voucherCount: number;
 }
 
 export interface CompressedContext {
@@ -29,6 +49,10 @@ export interface CompressedContext {
   scope: string;
   /** Reverse-PII map. Keep it local and call `unredactAnswer` on the LLM reply. */
   redaction: RedactionMap;
+  /** Deterministic answer card (rendered by the UI, verified against the model). */
+  card?: StructuredCard;
+  /** Memory update the caller should persist for the next turn. */
+  memory: ConversationMemory;
 }
 
 function resolveContextCompanyId(explicitCompanyId?: string | null): string | null {
@@ -37,16 +61,78 @@ function resolveContextCompanyId(explicitCompanyId?: string | null): string | nu
   try { return localStorage.getItem("ym_active_company_id"); } catch { return null; }
 }
 
+/** Merge previously-resolved context into the routed query so follow-up
+ *  questions ("and as on 31/12/2025?", "what about last FY?") re-use the
+ *  last party / date without the user having to repeat them. */
+function enrichWithPrior(routed: RoutedQuery, prior?: ConversationMemory): RoutedQuery {
+  if (!prior) return routed;
+  const out: RoutedQuery = { ...routed, entityHints: [...routed.entityHints] };
+  if (out.entityHints.length === 0 && prior.partyName) {
+    out.entityHints.push(prior.partyName);
+    // If the follow-up has no strong intent signal, inherit the last one so
+    // "and as on 31/12/2025?" stays a party_balance lookup instead of falling
+    // back to `general`.
+    if (out.intent === "general" && (prior.intent === "party_balance" || prior.intent === "party_ledger")) {
+      out.intent = prior.intent;
+    }
+  }
+  if (!out.asOn && !out.to && prior.asOnDate) {
+    out.asOn = prior.asOnDate;
+    out.to = prior.asOnDate;
+    if (!out.from) out.from = prior.from;
+  }
+  return out;
+}
+
+function buildStructuredCard(routed: RoutedQuery, slice: RetrievedSlice): StructuredCard | undefined {
+  if (routed.intent !== "party_balance" && routed.intent !== "party_ledger") return undefined;
+  const facts = slice.facts as Record<string, unknown> | undefined;
+  if (!facts || facts.resolved_party_id == null) return undefined;
+  const opening = Number(facts.opening_balance_paise ?? 0);
+  const debit = Number(facts.total_debit_paise ?? 0);
+  const credit = Number(facts.total_credit_paise ?? 0);
+  const closing = Number(facts.closing_balance_paise ?? opening + debit - credit);
+  const ms = facts.mode_split as { cash_paise?: number; bank_paise?: number; other_paise?: number } | undefined;
+  return {
+    kind: "party_balance",
+    companyName: (facts.company_name as string | null | undefined) ?? null,
+    partyName: String(facts.resolved_party_name ?? ""),
+    partyGroup: (facts.resolved_party_group as string | null | undefined) ?? null,
+    openingPaise: opening,
+    debitPaise: debit,
+    creditPaise: credit,
+    closingPaise: closing,
+    isDebit: closing >= 0,
+    asOnDate: (facts.as_on_date as string | null | undefined) ?? null,
+    voucherCount: Number(facts.voucher_count ?? 0),
+    modeSplit: ms
+      ? {
+          cashPaise: Number(ms.cash_paise ?? 0),
+          bankPaise: Number(ms.bank_paise ?? 0),
+          otherPaise: Number(ms.other_paise ?? 0),
+        }
+      : undefined,
+  };
+}
+
 /**
  * Build a compressed, PII-scrubbed context bundle for a user question.
  *
- * Pipeline: routeQuery → retrieveForQuery → redactDeep → cacheRowsForCcr →
- * Headroom compression. Only the minimum slice needed to answer the question
- * leaves the device, and PII (GSTIN/PAN/phone/email/bank a/c) is tokenised.
+ * Pipeline: enrich-with-prior → routeQuery → retrieveForQuery → redactDeep →
+ * cacheRowsForCcr → Headroom compression. Only the minimum slice needed to
+ * answer the question leaves the device, and PII (GSTIN/PAN/phone/email/bank
+ * a/c) is tokenised.
  */
-export async function buildCompressedContext(userQuestion: string, companyId?: string | null): Promise<CompressedContext> {
-  const routed = routeQuery(userQuestion);
+export async function buildCompressedContext(
+  userQuestion: string,
+  companyId?: string | null,
+  prior?: ConversationMemory,
+): Promise<CompressedContext> {
+  const routedRaw = routeQuery(userQuestion);
+  const routed = enrichWithPrior(routedRaw, prior);
   const slice: RetrievedSlice = optimiseSlice(await retrieveForQuery(routed, resolveContextCompanyId(companyId)));
+
+  const card = buildStructuredCard(routed, slice);
 
   const redaction = createRedactionMap();
   const safeData = redactDeep(slice.data, redaction);
@@ -88,6 +174,8 @@ export async function buildCompressedContext(userQuestion: string, companyId?: s
       "   trimmed. If the answer depends on those trimmed rows, say the slice is",
       "   incomplete and ask the user to narrow the question (date range, party, etc.)",
       "   rather than guessing.",
+      "8. The client will render a verified balance card ABOVE your reply using values",
+      "   from `facts`. Keep your prose short — explain, don't repeat the numbers.",
       "",
       "CITATIONS — every numeric or factual claim MUST be followed by a citation in one",
       "of these exact forms, drawn only from the attached payload:",
@@ -108,6 +196,9 @@ export async function buildCompressedContext(userQuestion: string, companyId?: s
         scope: redactString(slice.scope, redaction),
         entityHints: redactDeep(routed.entityHints, redaction),
         dateRange: routed.from || routed.to ? { from: routed.from, to: routed.to } : undefined,
+        priorContext: prior && (prior.partyName || prior.asOnDate)
+          ? { partyName: prior.partyName, asOnDate: prior.asOnDate }
+          : undefined,
         facts: safeFacts,
         data: safeData,
         ccrHashes,
@@ -121,6 +212,16 @@ export async function buildCompressedContext(userQuestion: string, companyId?: s
     model: "local-webllm",
   });
 
+  const memory: ConversationMemory = {
+    companyId: (slice.facts as any)?.company_id ?? companyId ?? prior?.companyId ?? null,
+    partyName: card?.partyName ?? prior?.partyName,
+    partyLedgerId: (slice.facts as any)?.resolved_party_id ?? prior?.partyLedgerId,
+    asOnDate: routed.asOn ?? routed.to ?? prior?.asOnDate,
+    from: routed.from ?? prior?.from,
+    to: routed.to ?? prior?.to,
+    intent: routed.intent,
+  };
+
   return {
     systemMessage: messages[0] as { role: "system"; content: string },
     userMessage: messages[1] as { role: "user"; content: string },
@@ -129,6 +230,8 @@ export async function buildCompressedContext(userQuestion: string, companyId?: s
     intent: routed.intent,
     scope: slice.scope,
     redaction,
+    card,
+    memory,
   };
 }
 
