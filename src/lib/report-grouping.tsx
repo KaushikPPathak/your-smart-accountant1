@@ -138,7 +138,16 @@ export function groupedExportRows(
   const out: { label: string; paise: number; outerPaise?: number; isHeader?: boolean; isSubtotal?: boolean }[] = [];
   for (const b of buckets) {
     out.push({ label: b.group.label.toUpperCase(), paise: 0, isHeader: true });
-    for (const r of b.rows) out.push({ label: `  ${prefix}${r.name}`, paise: r.valuePaise });
+    for (const r of b.rows) {
+      if (r.inner && r.inner.length > 0) {
+        out.push({ label: `  ${prefix}${r.name}`, paise: 0, outerPaise: r.valuePaise, isSubtotal: true });
+        for (const inn of r.inner) {
+          out.push({ label: `      ${inn.label}`, paise: inn.valuePaise });
+        }
+      } else {
+        out.push({ label: `  ${prefix}${r.name}`, paise: r.valuePaise });
+      }
+    }
     out.push({ label: `  Subtotal — ${b.group.label}`, paise: 0, outerPaise: b.subtotalPaise, isSubtotal: true });
   }
   return out;
