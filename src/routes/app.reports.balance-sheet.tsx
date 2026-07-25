@@ -17,6 +17,8 @@ import {
   groupedExportRows,
 } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
+import { computeNceReportShape } from "@/lib/nce-report-shape";
+import { NCE_LEVEL_LABEL } from "@/lib/nce-classification";
 import { useAccountGroups } from "@/lib/account-groups-runtime";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { BucketedGrid } from "@/components/reports/BucketedGrid";
