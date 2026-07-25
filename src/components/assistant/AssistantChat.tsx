@@ -336,6 +336,94 @@ export function AssistantChat() {
     navigate({ to: intentToRoute(draft.intent) });
   }
 
+  // ---------- Phase 3: OCR bill → voucher draft --------------------------
+  async function handleFileUpload(file: File, intent: "purchase" | "sales" = "purchase") {
+    if (!activeCompanyId) {
+      toast.error("Select or create a company first.");
+      return;
+    }
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    if (!isImage && !isPdf) {
+      toast.error("Only images (JPG/PNG) and PDF files are supported.");
+      return;
+    }
+    setMessages((m) => [
+      ...m,
+      {
+        id: `u-${Date.now()}`,
+        role: "user",
+        text: `📎 Uploaded **${file.name}** — extracting invoice data…`,
+      },
+    ]);
+    setOcrLoading(true);
+    try {
+      const draft = await extractInvoiceOcr(file, activeCompanyId, intent);
+      const partyName = draft.matchedPartyName ?? draft.extracted.party_name;
+      const memoryHint = partyName
+        ? (await recallPartyPattern(activeCompanyId, partyName)) ?? undefined
+        : undefined;
+      setPendingOcr(draft);
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          text: memoryHint
+            ? `I extracted the invoice. I also **remember** this party — see the note below. Confirm to open the ${intent} form.`
+            : `I extracted the invoice. Review the details below and confirm to open the ${intent} form pre-filled.`,
+          ocrPreview: draft,
+          memoryHint,
+        },
+      ]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`OCR failed: ${msg}`);
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          text: `I couldn't read that file — ${msg}. Try a clearer photo, or type the invoice details in chat.`,
+        },
+      ]);
+    } finally {
+      setOcrLoading(false);
+    }
+  }
+
+  async function confirmOcrDraft(draft: OcrDraft, opts: { remember: boolean; overrideLedgerId?: string; overrideLedgerName?: string }) {
+    const partyLedgerId = opts.overrideLedgerId ?? draft.matchedPartyLedgerId ?? undefined;
+    const partyName = opts.overrideLedgerName ?? draft.matchedPartyName ?? draft.extracted.party_name;
+    writeAssistantPrefill({
+      voucherType: draft.intent,
+      date: draft.extracted.invoice_date ?? new Date().toISOString().slice(0, 10),
+      partyLedgerId,
+      amount: draft.extracted.total_amount,
+      narration: `${draft.intent === "purchase" ? "Bill" : "Invoice"} from ${draft.extracted.party_name}${draft.extracted.invoice_number ? ` — ${draft.extracted.invoice_number}` : ""}`,
+      refNo: draft.extracted.invoice_number ?? undefined,
+    });
+    if (opts.remember && activeCompanyId && partyLedgerId && partyName) {
+      await rememberPartyPattern(activeCompanyId, partyName, {
+        counterLedgerId: partyLedgerId,
+        counterLedgerName: partyName,
+        intent: draft.intent,
+      });
+      toast.success(`Remembered: ${partyName} → ${draft.intent}`);
+    }
+    setPendingOcr(null);
+    setMessages((m) => [
+      ...m,
+      {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        text: `Opening the **${draft.intent}** form. Review the line items, HSN, and GST split before saving.`,
+      },
+    ]);
+    navigate({ to: intentToRoute(draft.intent) });
+  }
+
+
   function ask(rawText: string) {
     const text = rawText.trim();
     if (!text) return;
