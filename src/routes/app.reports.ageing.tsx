@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { useFyAsOfState } from "@/components/reports/ReportToolbar";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
