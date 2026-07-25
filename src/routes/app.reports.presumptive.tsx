@@ -44,17 +44,17 @@ function PresumptivePage() {
   const [grossReceipts, setGrossReceipts] = useState(0);
   const [digitalReceipts, setDigitalReceipts] = useState(0);
   const [cashReceipts, setCashReceipts] = useState(0);
+  const [rows, setRows] = useState<VoucherBreakdownRow[]>([]);
+  const [drill, setDrill] = useState<null | "all" | "digital" | "cash" | "other">(null);
 
   useEffect(() => {
     if (!activeCompanyId) return;
     (async () => {
-      // Gross receipts = credit balance on income ledgers in the period.
-      // Digital/Cash split = pro-rata Bank vs Cash contra across the same
-      // vouchers (via fetchLedgerModeSplits — same engine that drives the
-      // P&L / R&P inner-column breakdown, so numbers reconcile 1:1).
-      const [ledgers, splits] = await Promise.all([
+      const [ledgers, splits, vouchers, entries] = await Promise.all([
         readLedgers(activeCompanyId),
         fetchLedgerModeSplits(activeCompanyId, from, to, { excludeProfitLossClosingTransfers: true }),
+        readVouchers(activeCompanyId),
+        readVoucherEntriesForCompany(activeCompanyId),
       ]);
       const incomeIds = new Set(
         (ledgers as any[]).filter((l) => PL_INCOME.has(String(l.type))).map((l) => String(l.id)),
@@ -63,7 +63,6 @@ function PresumptivePage() {
       for (const id of incomeIds) {
         const s = splits.get(id);
         if (!s) continue;
-        // Income ledgers carry credit balance → net is negative; flip sign.
         gross   += Math.max(0, -(s.cashPaise + s.bankPaise + s.otherPaise));
         digital += Math.max(0, -s.bankPaise);
         cash    += Math.max(0, -s.cashPaise);
@@ -71,6 +70,64 @@ function PresumptivePage() {
       setGrossReceipts(gross);
       setDigitalReceipts(digital);
       setCashReceipts(cash);
+
+      // Per-voucher contribution to income ledgers (pro-rata cash vs bank).
+      const typeOf = new Map((ledgers as any[]).map((l) => [String(l.id), String(l.type ?? "")]));
+      const vById = new Map((vouchers as any[]).map((v) => [String(v.id), v]));
+      const byVoucher = new Map<string, any[]>();
+      for (const e of entries as any[]) {
+        const v = vById.get(String(e.voucher_id));
+        if (!v) continue;
+        const d = String(v.voucher_date ?? v.date ?? "");
+        if (d < from || d > to) continue;
+        if (isProfitLossClosingTransfer({ voucher_type: v.voucher_type ?? null, narration: v.narration ?? null })) continue;
+        const arr = byVoucher.get(String(e.voucher_id)) ?? [];
+        arr.push(e);
+        byVoucher.set(String(e.voucher_id), arr);
+      }
+      const built: VoucherBreakdownRow[] = [];
+      for (const [vid, es] of byVoucher) {
+        let cashNet = 0, bankNet = 0;
+        for (const e of es) {
+          const t = typeOf.get(String(e.ledger_id));
+          const m = (Number(e.debit_paise) || 0) - (Number(e.credit_paise) || 0);
+          if (t === "cash") cashNet += m;
+          else if (t === "bank") bankNet += m;
+        }
+        const cashAbs = Math.abs(cashNet), bankAbs = Math.abs(bankNet), totalAbs = cashAbs + bankAbs;
+        let cP = 0, bP = 0, oP = 0;
+        for (const e of es) {
+          const lid = String(e.ledger_id);
+          if (!incomeIds.has(lid)) continue;
+          const m = (Number(e.debit_paise) || 0) - (Number(e.credit_paise) || 0);
+          if (!m) continue;
+          // Income credit → contribution to gross is -m (positive).
+          if (totalAbs === 0) {
+            oP += -m;
+          } else {
+            const cashShare = Math.round((m * cashAbs) / totalAbs);
+            const bankShare = m - cashShare;
+            cP += -cashShare;
+            bP += -bankShare;
+          }
+        }
+        const total = cP + bP + oP;
+        if (total <= 0) continue;
+        const v = vById.get(vid)!;
+        built.push({
+          voucherId: vid,
+          date: String(v.voucher_date ?? v.date ?? ""),
+          number: String(v.voucher_number ?? ""),
+          type: String(v.voucher_type ?? ""),
+          narration: String(v.narration ?? ""),
+          cashPaise: cP,
+          bankPaise: bP,
+          otherPaise: oP,
+          totalPaise: total,
+        });
+      }
+      built.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+      setRows(built);
     })();
   }, [activeCompanyId, from, to]);
 
@@ -81,6 +138,13 @@ function PresumptivePage() {
   const pctUsed = result.eligibleThresholdPaise > 0
     ? Math.min(100, (grossReceipts / result.eligibleThresholdPaise) * 100)
     : 0;
+
+  const filteredRows = useMemo(() => {
+    if (!drill || drill === "all") return rows;
+    if (drill === "digital") return rows.filter((r) => r.bankPaise > 0);
+    if (drill === "cash") return rows.filter((r) => r.cashPaise > 0);
+    return rows.filter((r) => r.otherPaise > 0);
+  }, [rows, drill]);
 
   return (
     <div className="space-y-4">
