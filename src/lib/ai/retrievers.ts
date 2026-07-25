@@ -99,25 +99,57 @@ async function retrieveParty(companyId: string, routed: RoutedQuery, opts: { wit
       data: { candidates: ledgers.slice(0, 20).map((l) => ({ id: l.id, name: l.name })) },
     };
   }
-  const entries = (await readVoucherEntriesForCompany(companyId)) as any[];
-  const bal = sumEntriesFor(entries, target.id);
-  const partyEntries = entries.filter((e) => String(e.ledger_id) === String(target.id));
+  const [entries, allVouchers] = await Promise.all([
+    readVoucherEntriesForCompany(companyId),
+    readVouchers(companyId),
+  ]);
+  // Point-in-time: freeze balance at asOn (or `to`) if the user asked "as on <date>".
+  const asOnIso = routed.asOn ?? routed.to ?? null;
+  const vDate = new Map((allVouchers as any[]).map((v) => [String(v.id), String(v.voucher_date ?? "")]));
+  const withinAsOn = (e: any) => {
+    if (!asOnIso) return true;
+    const d = vDate.get(String(e.voucher_id));
+    return d ? d <= asOnIso : false;
+  };
+  const scopedEntries = (entries as any[]).filter(withinAsOn);
+  const bal = sumEntriesFor(scopedEntries, target.id);
+  const partyEntries = scopedEntries.filter((e) => String(e.ledger_id) === String(target.id));
   const voucherIds = new Set(partyEntries.map((e) => String(e.voucher_id)));
-  const allVouchers = (await readVouchers(companyId)) as any[];
-  const vouchers = allVouchers.filter((v) => voucherIds.has(String(v.id)));
+  const vouchers = (allVouchers as any[]).filter((v) => voucherIds.has(String(v.id)));
+
+  // Optional cash-vs-bank split for the FY window ending at asOn.
+  let modeSplit: { cash_paise: number; bank_paise: number; other_paise: number } | undefined;
+  if (asOnIso) {
+    try {
+      const { fetchLedgerModeSplits } = await import("@/lib/reports");
+      const d = new Date(asOnIso);
+      const fyStartYear = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+      const from = routed.from ?? `${fyStartYear}-04-01`;
+      const splits = await fetchLedgerModeSplits(companyId, from, asOnIso);
+      const s = splits.get(String(target.id));
+      if (s) modeSplit = { cash_paise: s.cashPaise, bank_paise: s.bankPaise, other_paise: s.otherPaise };
+    } catch { /* mode split is best-effort */ }
+  }
+
+  const opening = Number(target.opening_balance_paise ?? 0) * (target.opening_balance_is_debit ? 1 : -1);
   return {
-    scope: `party="${target.name}" (${vouchers.length} vouchers)`,
+    scope: asOnIso
+      ? `party="${target.name}" as on ${asOnIso} (${vouchers.length} vouchers)`
+      : `party="${target.name}" (${vouchers.length} vouchers)`,
     data: {
       party: [{ id: target.id, name: target.name, group_name: target.group_name, gstin: target.gstin, state: target.state }],
       vouchers: opts.withEntries ? vouchers.slice(0, 50) : vouchers.slice(0, 10),
       entries: opts.withEntries ? partyEntries.slice(0, 200) : [],
     },
     facts: {
+      as_on_date: asOnIso,
       opening_balance_paise: target.opening_balance_paise ?? 0,
-      current_balance_paise: bal.balance_paise + Number(target.opening_balance_paise ?? 0) * (target.opening_balance_is_debit ? 1 : -1),
+      closing_balance_paise: opening + bal.balance_paise,
+      current_balance_paise: opening + bal.balance_paise,
       total_debit_paise: bal.debit_paise,
       total_credit_paise: bal.credit_paise,
       voucher_count: vouchers.length,
+      ...(modeSplit ? { mode_split: modeSplit } : {}),
     },
   };
 }

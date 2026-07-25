@@ -23,12 +23,38 @@ export interface RoutedQuery {
   /** ISO from/to if the question mentions a date range. */
   from?: string;
   to?: string;
+  /** "as on <date>" — freeze balances at this ISO date. Implies to = asOn. */
+  asOn?: string;
   /** Voucher number if explicitly mentioned. */
   voucherNumber?: string;
   /** "in the books of X" → candidate company name to switch context to. */
   companyHint?: string;
   /** For "last/latest <kind> bill" → normalized voucher type. */
   latestKind?: "sales" | "purchase" | "receipt" | "payment" | "journal" | "credit_note" | "debit_note";
+}
+
+/** Parse an "as on / as at / as of / on <date>" phrase → ISO date. */
+function extractAsOn(q: string): string | undefined {
+  const lower = q.toLowerCase();
+  // ISO form: as on 2026-03-31
+  const iso = lower.match(/\b(?:as\s+(?:on|at|of)|on|upto|up\s+to|till|until)\s+(\d{4}-\d{2}-\d{2})\b/);
+  if (iso) return iso[1];
+  // DD/MM/YYYY or DD-MM-YYYY (Indian convention). Year may be 2 or 4 digits.
+  const dmy = lower.match(/\b(?:as\s+(?:on|at|of)|on|upto|up\s+to|till|until)\s+(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/);
+  if (dmy) {
+    const d = Number(dmy[1]); const m = Number(dmy[2]);
+    let y = Number(dmy[3]); if (y < 100) y += 2000;
+    if (d >= 1 && d <= 31 && m >= 1 && m <= 12) {
+      return `${y.toString().padStart(4, "0")}-${m.toString().padStart(2, "0")}-${d.toString().padStart(2, "0")}`;
+    }
+  }
+  // "as on 31 March 2026"
+  const dmn = lower.match(/\b(?:as\s+(?:on|at|of)|on)\s+(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+(\d{4})\b/);
+  if (dmn) {
+    const d = Number(dmn[1]); const m = MONTHS[dmn[2]]; const y = Number(dmn[3]);
+    return `${y}-${(m + 1).toString().padStart(2, "0")}-${d.toString().padStart(2, "0")}`;
+  }
+  return undefined;
 }
 
 const MONTHS: Record<string, number> = {
@@ -118,6 +144,15 @@ export function routeQuery(question: string): RoutedQuery {
   const q = question.trim();
   const lower = q.toLowerCase();
   const dates = extractDateRange(q);
+  const asOn = extractAsOn(q);
+  // "as on <date>" implies the closing date; use it as `to` if no explicit range was given.
+  if (asOn && !dates.to) {
+    dates.to = asOn;
+    // Anchor `from` to the FY start of the as-on date for windowed reports.
+    const d = new Date(asOn);
+    const fyStartYear = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+    if (!dates.from) dates.from = `${fyStartYear}-04-01`;
+  }
   const voucherNumber = extractVoucherNumber(q);
 
   // "in the books of X", "books of X", "for company X"
@@ -153,6 +188,12 @@ export function routeQuery(question: string): RoutedQuery {
 
   let intent: QueryIntent = "general";
 
+  // A strong party signal exists when the question said "balance/ledger of <Name>"
+  // OR a leading "<Name> balance" clause matched. In that case, party lookup wins
+  // over generic cash_bank routing even if the word "cash" appears (e.g. the user
+  // asked "cash balance of Madhuben" = party balance, settled in cash).
+  const strongPartyHint = Boolean(balOf || leading);
+
   if (latestKind) {
     intent = "latest_voucher";
   } else if (voucherNumber || /\b(voucher|invoice|bill|receipt|payment)\s*(no|number|#)/.test(lower)) {
@@ -165,6 +206,10 @@ export function routeQuery(question: string): RoutedQuery {
     intent = "trial_balance";
   } else if (/\b(p&l|p and l|profit|loss|trading|gross profit|net profit)\b/.test(lower)) {
     intent = "profit_loss";
+  } else if (strongPartyHint && /\b(ledger|statement|account)\b/.test(lower)) {
+    intent = "party_ledger";
+  } else if (strongPartyHint) {
+    intent = "party_balance";
   } else if (/\b(cash|bank) (book|balance|position|in hand|on hand|at bank)\b|\bcash\s*[- ]?in[- ]?hand\b|\bcash\s*[- ]?on[- ]?hand\b|\bbrs\b/.test(lower)) {
     intent = "cash_bank";
   } else if (/\b(stock|inventory|closing stock|opening stock|item)\b/.test(lower)) {
@@ -178,5 +223,5 @@ export function routeQuery(question: string): RoutedQuery {
   }
 
 
-  return { intent, entityHints, ...dates, voucherNumber, companyHint, latestKind };
+  return { intent, entityHints, ...dates, asOn, voucherNumber, companyHint, latestKind };
 }
