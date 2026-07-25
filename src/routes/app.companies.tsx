@@ -1070,6 +1070,15 @@ function CompaniesPage() {
         memberships={memberships.map((m) => ({ company_id: m.company_id, companies: { name: m.companies.name } }))}
         onDone={() => refresh()}
       />
+      {nceWizard && (
+        <NceOnboardingDialog
+          open={!!nceWizard}
+          onOpenChange={(v) => { if (!v) setNceWizard(null); }}
+          companyId={nceWizard.id}
+          entity={nceWizard.entity}
+          onSaved={() => { void refresh(); }}
+        />
+      )}
     </div>
   );
 }
