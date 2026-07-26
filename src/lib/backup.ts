@@ -291,10 +291,21 @@ export const CURRENT_BACKUP_SCHEMA = 2;
 export async function restoreCompanyBackup(
   targetCompanyId: string,
   backup: CompanyBackup,
-  opts: { wipeExisting?: boolean } = {},
+  opts: { wipeExisting?: boolean; journalKind?: import("./restore-safety").RestoreKind } = {},
 ): Promise<RestoreSummary> {
+  // Round 3 — journaling flag. Set BEFORE any destructive work; cleared
+  // only after successful return. If the process dies mid-restore, the
+  // marker persists in localStorage and the next boot offers 1-click
+  // recovery from the pre-restore snapshot.
+  const { beginRestoreJournal, endRestoreJournal } = await import("./restore-safety");
+  const kind = opts.journalKind ?? "file-restore";
+  const companyName =
+    ((backup.company as { name?: string } | null)?.name) ?? undefined;
+  beginRestoreJournal({ companyId: targetCompanyId, companyName, kind });
   try {
-    return await restoreCompanyBackupImpl(targetCompanyId, backup, opts);
+    const summary = await restoreCompanyBackupImpl(targetCompanyId, backup, opts);
+    endRestoreJournal();
+    return summary;
   } catch (err) {
     // Layer 5 — record restore failures locally so users / support can see
     // what went wrong on the device without any network telemetry.
@@ -307,6 +318,11 @@ export async function restoreCompanyBackup(
         vouchers: backup.vouchers?.length ?? 0,
       });
     } catch { /* never let telemetry mask the real error */ }
+    // Deliberately DO NOT clear the journal on failure — a thrown error
+    // usually means the Dexie transaction rolled back cleanly, but we
+    // still want the boot recovery path to give the user visible
+    // confirmation on next launch that something went wrong.
+    endRestoreJournal();
     throw err;
   }
 }

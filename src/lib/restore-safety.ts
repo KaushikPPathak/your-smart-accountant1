@@ -129,3 +129,83 @@ export async function undoRestore(companyId: string): Promise<void> {
 export async function clearPreRestoreSnapshot(companyId: string): Promise<void> {
   try { await offlineDb.meta.delete(key(companyId)); } catch { /* ignore */ }
 }
+
+// ---------------------------------------------------------------------------
+// Round 3 — Restore journaling flag
+//
+// Every restore operation writes a marker into localStorage BEFORE it enters
+// the Dexie transaction, and clears it once the transaction commits. If the
+// browser is killed (power cut, tab crash, OS kill) mid-transaction, Dexie
+// rolls the DB back but the marker remains. On next boot the app spots the
+// stale marker and offers a one-click recovery from the pre-restore snapshot
+// captured just before the interrupted attempt.
+//
+// The marker is deliberately stored in localStorage (NOT IndexedDB): if a
+// transaction is aborting on IndexedDB we can't rely on further IDB writes
+// landing atomically. localStorage is synchronous and single-key-safe.
+// ---------------------------------------------------------------------------
+
+const JOURNAL_KEY = "ym:restore_in_progress";
+
+export type RestoreKind = "file-restore" | "undo-restore" | "intraday-restore" | "auto-restore";
+
+export interface RestoreJournalEntry {
+  companyId: string;
+  companyName?: string;
+  kind: RestoreKind;
+  startedAt: number;
+}
+
+function safeLocalStorage(): Storage | null {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : null;
+  } catch { return null; }
+}
+
+export function beginRestoreJournal(entry: Omit<RestoreJournalEntry, "startedAt">): void {
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try {
+    ls.setItem(JOURNAL_KEY, JSON.stringify({ ...entry, startedAt: Date.now() }));
+  } catch { /* ignore quota / disabled storage */ }
+}
+
+export function endRestoreJournal(): void {
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try { ls.removeItem(JOURNAL_KEY); } catch { /* ignore */ }
+}
+
+export function getInterruptedRestore(): RestoreJournalEntry | null {
+  const ls = safeLocalStorage();
+  if (!ls) return null;
+  try {
+    const raw = ls.getItem(JOURNAL_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RestoreJournalEntry;
+    if (!parsed || typeof parsed.companyId !== "string") return null;
+    return parsed;
+  } catch { return null; }
+}
+
+/**
+ * Boot-time recovery: roll the company back to the pre-restore snapshot
+ * captured just before the interrupted attempt. Clears the journal either
+ * way to avoid a boot loop; callers should surface the result to the user.
+ */
+export async function recoverFromInterruptedRestore(): Promise<
+  | { ran: false }
+  | { ran: true; ok: true; entry: RestoreJournalEntry }
+  | { ran: true; ok: false; entry: RestoreJournalEntry; error: string }
+> {
+  const entry = getInterruptedRestore();
+  if (!entry) return { ran: false };
+  try {
+    await undoRestore(entry.companyId);
+    endRestoreJournal();
+    return { ran: true, ok: true, entry };
+  } catch (e) {
+    endRestoreJournal();
+    return { ran: true, ok: false, entry, error: e instanceof Error ? e.message : String(e) };
+  }
+}

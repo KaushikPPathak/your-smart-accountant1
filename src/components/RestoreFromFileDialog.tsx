@@ -41,6 +41,13 @@ interface Props {
 
 type Mode = "new" | "overwrite";
 
+interface DiffPreview {
+  ledgers: { current: number; incoming: number };
+  items: { current: number; incoming: number };
+  vouchers: { current: number; incoming: number };
+  settingsWillRevert: boolean;
+}
+
 export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [parsing, setParsing] = useState(false);
@@ -51,6 +58,9 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
   const [newName, setNewName] = useState("");
   const [targetId, setTargetId] = useState<string>("");
   const [confirmText, setConfirmText] = useState("");
+  const [checksumOk, setChecksumOk] = useState<boolean | undefined>(undefined);
+  const [trustCorrupt, setTrustCorrupt] = useState(false);
+  const [diff, setDiff] = useState<DiffPreview | null>(null);
 
   function reset() {
     setBackup(null);
@@ -59,6 +69,9 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
     setNewName("");
     setTargetId("");
     setConfirmText("");
+    setChecksumOk(undefined);
+    setTrustCorrupt(false);
+    setDiff(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -80,8 +93,16 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
         toast.error("This is a multi-company backup. Open Housekeeping inside a company to restore individual companies from it.");
         return;
       }
+      // Round 3 — checksum is a HARD gate. If the envelope was wrapped
+      // (all new exports are) and the SHA-256 doesn't match, the file has
+      // been edited or corrupted since export. Refuse silently-destructive
+      // restores unless the user explicitly overrides.
+      setChecksumOk(parsed.checksumOk);
       if (parsed.checksumOk === false) {
-        toast.warning("Backup checksum mismatch — file may be edited. Proceed carefully.");
+        toast.error("Backup checksum FAILED — the file has been edited or is corrupted.", {
+          description: "Tick 'Trust this file anyway' below only if you understand the risk.",
+          duration: 10000,
+        });
       }
       const srcName =
         ((parsed.data.company as { name?: string } | null)?.name) ?? "Unknown company";
@@ -93,6 +114,28 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
     } finally {
       setParsing(false);
     }
+  }
+
+  // Recompute the diff preview whenever the user picks an overwrite target.
+  async function refreshDiff(target: string) {
+    if (!backup || !target) { setDiff(null); return; }
+    try {
+      const { offlineDb: db } = await import("@/lib/offline/db");
+      const [led, itm, vch, cs] = await Promise.all([
+        db.cache_ledgers.where("company_id").equals(target).count(),
+        db.cache_items.where("company_id").equals(target).count(),
+        db.cache_vouchers.where("company_id").equals(target).count(),
+        db.cache_company_settings.where("company_id").equals(target).first(),
+      ]);
+      const localTs = Date.parse(String((cs as { updated_at?: string } | undefined)?.updated_at ?? "")) || 0;
+      const backupTs = Date.parse(String((backup.settings as { updated_at?: string } | null)?.updated_at ?? "")) || 0;
+      setDiff({
+        ledgers: { current: led, incoming: backup.ledgers?.length ?? 0 },
+        items: { current: itm, incoming: backup.items?.length ?? 0 },
+        vouchers: { current: vch, incoming: backup.vouchers?.length ?? 0 },
+        settingsWillRevert: !!cs && backupTs > 0 && backupTs < localTs,
+      });
+    } catch { setDiff(null); }
   }
 
   async function createNewCompanyFrom(b: CompanyBackup, name: string): Promise<string> {
@@ -145,6 +188,12 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
 
   async function onRestore() {
     if (!backup) return;
+    // Round 3 — checksum enforcement. If verification failed and the user
+    // hasn't explicitly overridden, refuse the restore.
+    if (checksumOk === false && !trustCorrupt) {
+      toast.error("Restore blocked — backup checksum failed. Tick 'Trust this file anyway' to proceed.");
+      return;
+    }
     setBusy(true);
     try {
       let target: string;
@@ -168,7 +217,7 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
         if (!proceed) { toast.info("Restore cancelled."); return; }
       }
       if (mode !== "new") await preflightIntegrityToast(target, "restore");
-      const summary = await restoreCompanyBackup(target, backup, { wipeExisting: true });
+      const summary = await restoreCompanyBackup(target, backup, { wipeExisting: true, journalKind: "file-restore" });
       const restoredName = mode === "new" ? newName : (memberships.find((m) => m.company_id === target)?.companies.name ?? "");
       toast.success(
         `Restored into "${restoredName}": ` +
@@ -202,6 +251,7 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
   const canRestore =
     !!backup &&
     !busy &&
+    (checksumOk !== false || trustCorrupt) &&
     (mode === "new"
       ? newName.trim().length > 0
       : !!targetId && confirmText.trim() === targetName);
@@ -248,6 +298,34 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
               </div>
             </div>
 
+            {checksumOk === false && (
+              <div className="rounded-md border border-destructive bg-destructive/10 p-2 text-xs space-y-2">
+                <div className="flex items-start gap-2">
+                  <ShieldAlert className="mt-0.5 h-3.5 w-3.5 text-destructive shrink-0" />
+                  <div className="flex-1 font-medium text-destructive">
+                    Checksum FAILED — this file has been edited or corrupted since it was exported.
+                  </div>
+                </div>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={trustCorrupt}
+                    onChange={(e) => setTrustCorrupt(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-[11px]">
+                    Trust this file anyway (I understand the data may be inconsistent).
+                  </span>
+                </label>
+              </div>
+            )}
+            {checksumOk === true && (
+              <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-400">
+                ✓ Checksum verified — file is intact.
+              </div>
+            )}
+
+
             <RadioGroup value={mode} onValueChange={(v) => setMode(v as Mode)}>
               <div className="flex items-start gap-2 rounded-md border p-2">
                 <RadioGroupItem value="new" id="mode-new" className="mt-1" />
@@ -282,7 +360,7 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
               <div className="space-y-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Target company to overwrite</Label>
-                  <Select value={targetId} onValueChange={setTargetId}>
+                  <Select value={targetId} onValueChange={(v) => { setTargetId(v); void refreshDiff(v); }}>
                     <SelectTrigger><SelectValue placeholder="Choose target…" /></SelectTrigger>
                     <SelectContent>
                       {memberships.map((m) => (
@@ -293,6 +371,21 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
                     </SelectContent>
                   </Select>
                 </div>
+                {targetId && diff && (
+                  <div className="rounded-md border bg-muted/30 p-2 text-[11px]">
+                    <div className="mb-1 font-medium">Change preview (current → after restore):</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>Ledgers: <strong>{diff.ledgers.current} → {diff.ledgers.incoming}</strong></div>
+                      <div>Items: <strong>{diff.items.current} → {diff.items.incoming}</strong></div>
+                      <div>Vouchers: <strong>{diff.vouchers.current} → {diff.vouchers.incoming}</strong></div>
+                    </div>
+                    {diff.settingsWillRevert && (
+                      <div className="mt-1 text-amber-600 dark:text-amber-400">
+                        ⚠ Backup settings are OLDER than local — newer local settings will be preserved automatically.
+                      </div>
+                    )}
+                  </div>
+                )}
                 {targetId && (
                   <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs">
                     <div className="flex items-start gap-2">

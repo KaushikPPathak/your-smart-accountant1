@@ -133,10 +133,27 @@ export async function clearIntradayRing(companyId: string): Promise<void> {
 
 let scheduleHandle: number | null = null;
 
+// Round 3 — idle + mutation-aware trigger.
+// Every write path (voucher save, ledger create, import, etc.) can call
+// `noteMutation()` to advance a small counter. When the user is idle
+// (tab hidden, or no input for a while) AND the counter has advanced
+// since the last snapshot, we take an out-of-band checkpoint so the ring
+// stays fresh even during busy afternoons between hourly ticks.
+let mutationCounter = 0;
+let lastSnapshotAtCounter = 0;
+let lastIdleTriggerAt = 0;
+const IDLE_MIN_INTERVAL_MS = 5 * 60 * 1000; // 5 min throttle
+
+export function noteMutation(): void {
+  mutationCounter++;
+}
+
 /**
- * Start the hourly capture loop for every listed company. Idempotent —
- * calling it again replaces the previous timer. Safe to call from the
- * app-shell boot effect. Never throws.
+ * Start the hourly capture loop for every listed company, PLUS an
+ * idle/visibility trigger that fires whenever the tab becomes hidden or
+ * the browser reports idle time (throttled). Idempotent — calling it
+ * again replaces the previous timer. Safe to call from the app-shell
+ * boot effect. Never throws.
  */
 export function scheduleIntradaySnapshots(
   companies: { id: string }[],
@@ -146,19 +163,44 @@ export function scheduleIntradaySnapshots(
     window.clearInterval(scheduleHandle);
     scheduleHandle = null;
   }
-  const tick = async () => {
+  const tick = async (reason: "hourly" | "idle" = "hourly") => {
     for (const c of companies) {
-      try { await saveIntradaySnapshot(c.id, "hourly"); } catch { /* ignore */ }
+      try { await saveIntradaySnapshot(c.id, reason === "idle" ? "manual" : "hourly"); }
+      catch { /* ignore */ }
     }
+    lastSnapshotAtCounter = mutationCounter;
   };
   // Kick a first pass ~30s after boot so the launch storm calms down first.
   const kickoff = window.setTimeout(() => { void tick(); }, 30_000);
   scheduleHandle = window.setInterval(() => { void tick(); }, SCHEDULE_TICK_MS);
+
+  // Idle triggers — only when the user actually changed something since
+  // the last checkpoint AND we haven't fired an idle snapshot in the
+  // throttle window.
+  const idleTick = () => {
+    if (mutationCounter === lastSnapshotAtCounter) return;
+    const now = Date.now();
+    if (now - lastIdleTriggerAt < IDLE_MIN_INTERVAL_MS) return;
+    lastIdleTriggerAt = now;
+    void tick("idle");
+  };
+
+  const onVisibility = () => {
+    if (document.visibilityState === "hidden") idleTick();
+  };
+  document.addEventListener("visibilitychange", onVisibility);
+
+  // requestIdleCallback isn't available on Safari — fall back to a plain
+  // long-idle timer (checks every 3 min for a mutation-since-snapshot).
+  const idleInterval = window.setInterval(idleTick, 3 * 60 * 1000);
+
   return () => {
     window.clearTimeout(kickoff);
     if (scheduleHandle !== null) {
       window.clearInterval(scheduleHandle);
       scheduleHandle = null;
     }
+    window.clearInterval(idleInterval);
+    document.removeEventListener("visibilitychange", onVisibility);
   };
 }
