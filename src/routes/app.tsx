@@ -104,8 +104,10 @@ function AppLayout() {
   // immediately; none of these maintenance jobs is required to navigate it.
   useEffect(() => {
     let cancelled = false;
+    let stopIntraday: (() => void) | null = null;
     setBootstrapping(false);
     (async () => {
+
       try {
         // Record version transition + detect unexpectedly-empty DB. Runs on
         // every launch, on every platform.
