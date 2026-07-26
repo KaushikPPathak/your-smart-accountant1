@@ -298,6 +298,34 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
               </div>
             </div>
 
+            {checksumOk === false && (
+              <div className="rounded-md border border-destructive bg-destructive/10 p-2 text-xs space-y-2">
+                <div className="flex items-start gap-2">
+                  <ShieldAlert className="mt-0.5 h-3.5 w-3.5 text-destructive shrink-0" />
+                  <div className="flex-1 font-medium text-destructive">
+                    Checksum FAILED — this file has been edited or corrupted since it was exported.
+                  </div>
+                </div>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={trustCorrupt}
+                    onChange={(e) => setTrustCorrupt(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-[11px]">
+                    Trust this file anyway (I understand the data may be inconsistent).
+                  </span>
+                </label>
+              </div>
+            )}
+            {checksumOk === true && (
+              <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 px-2 py-1 text-[11px] text-emerald-700 dark:text-emerald-400">
+                ✓ Checksum verified — file is intact.
+              </div>
+            )}
+
+
             <RadioGroup value={mode} onValueChange={(v) => setMode(v as Mode)}>
               <div className="flex items-start gap-2 rounded-md border p-2">
                 <RadioGroupItem value="new" id="mode-new" className="mt-1" />
