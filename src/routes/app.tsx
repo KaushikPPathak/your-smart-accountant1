@@ -335,6 +335,7 @@ function AppLayout() {
         <KeyboardCheatSheet open={helpOpen} onOpenChange={setHelpOpen} />
         <CalculatorDialog open={calcOpen} onOpenChange={setCalcOpen} />
         <DataOwnershipDialog />
+        <RestoreInterruptedBanner />
       </div>
     </KeyboardProvider>
   );
