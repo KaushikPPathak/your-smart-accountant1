@@ -634,10 +634,33 @@ async function mirrorRestoreToLocalCache(
     db.cache_voucher_items,
     db.cache_bill_allocations,
     db.cache_recurring_invoices,
+    // v2 additions — kept in the SAME transaction so atomicity extends
+    // to every collection the backup carries. If any bulkPut fails,
+    // the whole restore rolls back (per Bug 3.1 comment above).
+    db.cache_account_subgroups,
+    db.cache_ledger_group_mappings,
+    db.cache_account_group_overrides,
+    db.cache_voucher_export_details,
+    db.cache_einvoice_details,
+    db.cache_period_locks,
+    db.cache_bom_templates,
+    db.cache_bom_template_lines,
+    db.cache_voucher_series,
+    db.cache_tax_templates,
+    db.cache_bill_sundries,
+    db.cache_transport_details,
+    db.cache_cost_centres,
+    db.cache_cost_categories,
   ];
 
+  // v2 backups carry these tables; older v1 backups leave them undefined,
+  // in which case we DO NOT wipe them (preserves any local data the app
+  // has for these features so a v1 restore doesn't nuke settings the user
+  // never intended to touch).
+  const hasV2 = (backup.schema_version ?? 1) >= 2;
+
   await db.transaction("rw", tables, async () => {
-    await Promise.all([
+    const wipes: Promise<unknown>[] = [
       db.cache_ledgers.where("company_id").equals(targetCompanyId).delete(),
       db.cache_items.where("company_id").equals(targetCompanyId).delete(),
       db.cache_vouchers.where("company_id").equals(targetCompanyId).delete(),
@@ -646,7 +669,26 @@ async function mirrorRestoreToLocalCache(
       db.cache_bill_allocations.where("company_id").equals(targetCompanyId).delete(),
       db.cache_recurring_invoices.where("company_id").equals(targetCompanyId).delete(),
       db.cache_company_settings.where("company_id").equals(targetCompanyId).delete(),
-    ]);
+    ];
+    if (hasV2) {
+      wipes.push(
+        db.cache_account_subgroups.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_ledger_group_mappings.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_account_group_overrides.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_voucher_export_details.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_einvoice_details.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_period_locks.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_bom_templates.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_bom_template_lines.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_voucher_series.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_tax_templates.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_bill_sundries.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_transport_details.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_cost_centres.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_cost_categories.where("company_id").equals(targetCompanyId).delete(),
+      );
+    }
+    await Promise.all(wipes);
 
     if (backup.company) {
       const companyRow = stamp({ ...(backup.company as Record<string, unknown>), id: targetCompanyId });
