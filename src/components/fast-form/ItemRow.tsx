@@ -114,12 +114,32 @@ function ItemRowImpl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row.id]);
 
+  // Sync programmatic value changes into the uncontrolled inputs — but
+  // only when the input is NOT focused, so we never stomp mid-typing.
+  useEffect(() => {
+    const el = qtyRef.current;
+    if (el && document.activeElement !== el && el.value !== row.qty) el.value = row.qty;
+  }, [row.qty]);
+  useEffect(() => {
+    const el = rateRef.current;
+    if (el && document.activeElement !== el && el.value !== row.rate) el.value = row.rate;
+  }, [row.rate]);
+  useEffect(() => {
+    const el = discRef.current;
+    if (el && document.activeElement !== el && el.value !== row.discount) el.value = row.discount;
+  }, [row.discount]);
+  useEffect(() => {
+    const el = descRef.current;
+    if (el && document.activeElement !== el && el.value !== row.description) el.value = row.description;
+  }, [row.description]);
+
   const commitOnEnter = (e: React.KeyboardEvent<HTMLInputElement>, field: keyof ItemRowData) => {
     if (e.key === "Enter") {
-      const v = (e.currentTarget.value ?? "").toString();
+      const v = cleanDecimal((e.currentTarget.value ?? "").toString());
       onCommit(idx, { [field]: v } as Partial<ItemRowData>);
     }
   };
+
 
   const gstTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -149,11 +169,15 @@ function ItemRowImpl({
             onChange={(v) => {
               onFocusRow(idx);
               onPickItem(idx, v);
+              // Single rAF — lets Radix Popover finish its close-focus,
+              // then we take focus for qty. Rate may have been auto-filled
+              // by onPickItem; sync the uncontrolled input's DOM value.
               requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                  qtyRef.current?.focus();
-                  qtyRef.current?.select();
-                });
+                if (rateRef.current && document.activeElement !== rateRef.current) {
+                  rateRef.current.value = row.rate;
+                }
+                qtyRef.current?.focus();
+                qtyRef.current?.select();
               });
             }}
             options={items.map((it) => ({ value: it.id, label: it.name, hint: it.unit }))}
@@ -225,9 +249,9 @@ function ItemRowImpl({
             inputMode="decimal"
             autoComplete="off"
             maxLength={12}
-            value={row.qty}
-            onChange={(e) => onCommit(idx, { qty: cleanDecimal(e.target.value) })}
+            defaultValue={row.qty}
             onFocus={(e) => e.currentTarget.select()}
+            onBlur={(e) => onCommit(idx, { qty: cleanDecimal(e.target.value) })}
             onKeyDown={(e) => commitOnEnter(e, "qty")}
           />
           <span
@@ -246,9 +270,9 @@ function ItemRowImpl({
           inputMode="decimal"
           autoComplete="off"
           maxLength={12}
-          value={row.rate}
-          onChange={(e) => onCommit(idx, { rate: cleanDecimal(e.target.value) })}
+          defaultValue={row.rate}
           onFocus={(e) => e.currentTarget.select()}
+          onBlur={(e) => onCommit(idx, { rate: cleanDecimal(e.target.value) })}
           onKeyDown={(e) => commitOnEnter(e, "rate")}
         />
       </TableCell>
@@ -260,13 +284,13 @@ function ItemRowImpl({
           inputMode="decimal"
           autoComplete="off"
           maxLength={10}
-          value={row.discount}
-          onChange={(e) => onCommit(idx, { discount: cleanDecimal(e.target.value) })}
+          defaultValue={row.discount}
           onFocus={(e) => e.currentTarget.select()}
+          onBlur={(e) => onCommit(idx, { discount: cleanDecimal(e.target.value) })}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !showGstColumn) {
               e.preventDefault();
-              onCommit(idx, { discount: e.currentTarget.value });
+              onCommit(idx, { discount: cleanDecimal(e.currentTarget.value) });
               onAdvanceToNextRow?.(idx);
               return;
             }

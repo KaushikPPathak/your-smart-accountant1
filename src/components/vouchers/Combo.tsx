@@ -86,11 +86,11 @@ export function Combo({
     onChange(val);
     setOpen(false);
     setQuery("");
-    // After selecting an option, auto-advance to the next field (Tally/Busy-style).
+    // After selecting an option, auto-advance to the next field.
+    // Single rAF: lets Radix Popover finish its close-focus restore, then
+    // we hop past the trigger to the next focusable in one step.
     requestAnimationFrame(() => {
-      // Briefly focus trigger first so any close-handlers settle, then advance.
-      triggerRef.current?.focus();
-      requestAnimationFrame(() => advanceFocus());
+      advanceFocus();
     });
   };
 

@@ -626,6 +626,17 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     [focusRowItemCombo],
   );
 
+  const onAddItemDlg = useCallback((idx: number) => {
+    setFocusedLine(idx);
+    setItemDlg({ open: true, editId: null, lineIdx: idx });
+  }, []);
+  const onEditItemDlg = useCallback((idx: number, itemId: string) => {
+    setFocusedLine(idx);
+    setItemDlg({ open: true, editId: itemId, lineIdx: idx });
+  }, []);
+
+
+
   const canWrite = activeMembership?.role === "admin" || activeMembership?.role === "accountant";
 
   const performSave = useCallback(async () => {
@@ -1120,14 +1131,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     onCommit={updateLine}
                     onFocusRow={setFocusedLine}
                     onDelete={removeLine}
-                    onAddItemDlg={(idx) => {
-                      setFocusedLine(idx);
-                      setItemDlg({ open: true, editId: null, lineIdx: idx });
-                    }}
-                    onEditItemDlg={(idx, itemId) => {
-                      setFocusedLine(idx);
-                      setItemDlg({ open: true, editId: itemId, lineIdx: idx });
-                    }}
+                    onAddItemDlg={onAddItemDlg}
+                    onEditItemDlg={onEditItemDlg}
                     onAdvanceToNextRow={onAdvanceToNextRow}
                     showDescription={showLineDescription}
                     showGstColumn={showGstColumn}
