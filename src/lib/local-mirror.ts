@@ -71,7 +71,13 @@ export async function writeLocalMirror(
   const jsonFile = `${safe}${codePart}_${stamp}.json`;
   const latestJson = `${safe}${codePart}_latest.json`;
 
-  const jsonStr = JSON.stringify(backup, null, 2);
+  // Wrap in the signed envelope so the JSON file carries a SHA-256 checksum
+  // and is recognised by parseBackupFile as a trustworthy restore source.
+  // Prior versions wrote raw JSON, which meant silent corruption / truncation
+  // was undetectable. parseBackupFile still accepts legacy bare files, so
+  // old mirror artifacts continue to restore without any user action.
+  const envelope = await wrapBackup(backup);
+  const jsonStr = JSON.stringify(envelope);
 
   if (isDesktopRuntime()) {
     // If the user hasn't picked a backup folder yet, default to the short
