@@ -259,6 +259,21 @@ export interface RestoreSummary {
   voucher_entries: number;
   bill_allocations: number;
   recurring_invoices: number;
+  // v2 additions — silently 0 for v1 backups.
+  account_subgroups?: number;
+  ledger_group_mappings?: number;
+  account_group_overrides?: number;
+  voucher_export_details?: number;
+  einvoice_details?: number;
+  period_locks?: number;
+  bom_templates?: number;
+  bom_template_lines?: number;
+  voucher_series?: number;
+  tax_templates?: number;
+  bill_sundries?: number;
+  transport_details?: number;
+  cost_centres?: number;
+  cost_categories?: number;
 }
 
 /**
@@ -267,13 +282,11 @@ export interface RestoreSummary {
  * - Does NOT touch the target company's settings or member list.
  * - Skips rows that fail (e.g. duplicate voucher numbers).
  */
-// Current schema version this build writes. Older backups are accepted
-// verbatim; newer backups are accepted with a "forward compatibility" warning
-// (unknown fields are ignored, known tables are restored). This mirrors the
-// bidirectional version tolerance users expect from established accounting
-// software — never refuse a legitimate backup just because the version number
-// differs.
-export const CURRENT_BACKUP_SCHEMA = 1;
+// Current schema version this build writes. Older backups (v1) are accepted
+// verbatim — v2-only collections default to empty and are not wiped, so
+// downgraded/legacy backups never delete data the app already knows about.
+// Newer backups: unknown fields ignored, known tables restored, warning logged.
+export const CURRENT_BACKUP_SCHEMA = 2;
 
 export async function restoreCompanyBackup(
   targetCompanyId: string,
