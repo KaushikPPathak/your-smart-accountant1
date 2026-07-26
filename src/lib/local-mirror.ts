@@ -6,6 +6,7 @@
 // In a browser tab the user gets a manual download.
 
 import { buildCompanyBackup } from "./backup";
+import { wrapBackup } from "./backup-policy";
 import { isDesktopRuntime, saveCompanyFileNative, writeAbsoluteFileNative } from "./native-bridge";
 import { getBackupFolder, setBackupFolder } from "./backup-location";
 import { getShortDataRoot } from "./short-data-root";
