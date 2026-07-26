@@ -104,8 +104,10 @@ function AppLayout() {
   // immediately; none of these maintenance jobs is required to navigate it.
   useEffect(() => {
     let cancelled = false;
+    let stopIntraday: (() => void) | null = null;
     setBootstrapping(false);
     (async () => {
+
       try {
         // Record version transition + detect unexpectedly-empty DB. Runs on
         // every launch, on every platform.
@@ -154,6 +156,16 @@ function AppLayout() {
             const { runAutoSnapshotOnce } = await import("@/lib/auto-snapshot");
             void runAutoSnapshotOnce(list).catch(() => undefined);
 
+            // 2b) Start the hourly intraday snapshot ring — an in-app,
+            // IndexedDB-only checkpoint every ~1h so an intra-day mistake
+            // never loses more than an hour of typing. Runs in every
+            // runtime, not just desktop. Cleanup registered below.
+            try {
+              const { scheduleIntradaySnapshots } = await import("@/lib/intraday-snapshot");
+              stopIntraday = scheduleIntradaySnapshots(list);
+            } catch { /* ignore — intraday is a bonus, never blocks boot */ }
+
+
             // If a new service worker is waiting to take over, snapshot
             // FIRST, then let it activate.
             if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
@@ -171,8 +183,10 @@ function AppLayout() {
     })();
     return () => {
       cancelled = true;
+      if (stopIntraday) { try { stopIntraday(); } catch { /* ignore */ } }
     };
   }, [memberships]);
+
 
   // No login screen any more — AuthProvider silently signs in a shared
   // tech user. We just wait for that to finish before rendering.

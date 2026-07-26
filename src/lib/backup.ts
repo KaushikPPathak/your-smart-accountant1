@@ -660,6 +660,21 @@ async function mirrorRestoreToLocalCache(
   const hasV2 = (backup.schema_version ?? 1) >= 2;
 
   await db.transaction("rw", tables, async () => {
+    // ---------- Settings guard (Round 2) ----------
+    // Read the CURRENT settings row before wiping. If the local copy is
+    // newer than the one in the backup (e.g. the user just tweaked GSTIN,
+    // logo, or invoice numbering after the backup was taken), keep the
+    // local values — merging over the backup's settings — instead of
+    // silently reverting them. This is the most common footgun users hit
+    // when auto-restore repairs an orphaned profile hours after new
+    // configuration was saved. We NEVER silently downgrade settings.
+    let localSettings: Record<string, unknown> | null = null;
+    try {
+      const rows = await db.cache_company_settings
+        .where("company_id").equals(targetCompanyId).toArray();
+      localSettings = (rows[0] as Record<string, unknown> | undefined) ?? null;
+    } catch { /* ignore */ }
+
     const wipes: Promise<unknown>[] = [
       db.cache_ledgers.where("company_id").equals(targetCompanyId).delete(),
       db.cache_items.where("company_id").equals(targetCompanyId).delete(),
@@ -700,8 +715,26 @@ async function mirrorRestoreToLocalCache(
         account_id: "local-user",
       });
     }
-    if (backup.settings) {
-      const s = stamp({ ...(backup.settings as Record<string, unknown>) }) as Record<string, unknown>;
+    // Choose the settings row that wins the guard.
+    const backupSettingsRaw = backup.settings as Record<string, unknown> | null;
+    let effectiveSettings: Record<string, unknown> | null = backupSettingsRaw;
+    if (localSettings) {
+      const localTs = Date.parse(String(localSettings.updated_at ?? "")) || 0;
+      const backupTs = Date.parse(String(backupSettingsRaw?.updated_at ?? "")) || 0;
+      if (localTs > backupTs) {
+        // Keep local — but layer any fields the backup has that local is
+        // missing (e.g. brand-new columns). Local wins on collisions.
+        effectiveSettings = { ...(backupSettingsRaw ?? {}), ...localSettings };
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[restore] Kept newer local company_settings (updated_at %s > backup %s) — backup settings were older and would have reverted user changes.",
+          new Date(localTs).toISOString(),
+          new Date(backupTs).toISOString(),
+        );
+      }
+    }
+    if (effectiveSettings) {
+      const s = stamp({ ...effectiveSettings }) as Record<string, unknown>;
       s.id = shouldRemapIds ? `settings-${targetCompanyId}` : (s.id || `settings-${targetCompanyId}`);
       await db.cache_company_settings.put(s);
     }
