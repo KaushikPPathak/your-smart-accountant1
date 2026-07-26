@@ -231,7 +231,7 @@ export async function exportAllCompaniesBackup(
     all.push(await buildCompanyBackup(c.id));
   }
   const payload: MultiCompanyBackup = {
-    schema_version: 1,
+    schema_version: 2,
     kind: "all_companies",
     exported_at: new Date().toISOString(),
     companies: all,
