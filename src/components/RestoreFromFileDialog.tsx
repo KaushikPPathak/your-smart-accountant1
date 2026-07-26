@@ -188,6 +188,12 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
 
   async function onRestore() {
     if (!backup) return;
+    // Round 3 — checksum enforcement. If verification failed and the user
+    // hasn't explicitly overridden, refuse the restore.
+    if (checksumOk === false && !trustCorrupt) {
+      toast.error("Restore blocked — backup checksum failed. Tick 'Trust this file anyway' to proceed.");
+      return;
+    }
     setBusy(true);
     try {
       let target: string;
@@ -211,7 +217,7 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
         if (!proceed) { toast.info("Restore cancelled."); return; }
       }
       if (mode !== "new") await preflightIntegrityToast(target, "restore");
-      const summary = await restoreCompanyBackup(target, backup, { wipeExisting: true });
+      const summary = await restoreCompanyBackup(target, backup, { wipeExisting: true, journalKind: "file-restore" });
       const restoredName = mode === "new" ? newName : (memberships.find((m) => m.company_id === target)?.companies.name ?? "");
       toast.success(
         `Restored into "${restoredName}": ` +
