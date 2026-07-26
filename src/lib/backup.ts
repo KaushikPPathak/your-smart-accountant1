@@ -791,6 +791,105 @@ async function mirrorRestoreToLocalCache(
         backup.recurring_invoices.length,
       );
     }
+
+    // ---------- v2 additions ----------
+    // Same-company restore (auto-restore, undo, re-import) -> shouldRemapIds
+    // is false, so IDs pass through unchanged and every FK stays valid.
+    // Cross-company restore (recovery wizard "restore into new company") ->
+    // IDs get remapped consistently with vouchers/ledgers/items above.
+    const bomTemplateId = (id: unknown) => remapId("bom-template", id);
+    const subgroupId = (id: unknown) => remapId("subgroup", id);
+    const mappingId = (id: unknown) => remapId("group-mapping", id);
+    const overrideId = (id: unknown) => remapId("group-override", id);
+    const periodLockId = (id: unknown) => remapId("period-lock", id);
+    const seriesId = (id: unknown) => remapId("voucher-series", id);
+    const taxTplId = (id: unknown) => remapId("tax-template", id);
+    const sundryId = (id: unknown) => remapId("bill-sundry", id);
+    const centreId = (id: unknown) => remapId("cost-centre", id);
+    const categoryId = (id: unknown) => remapId("cost-category", id);
+    const exportDetId = (voucher: unknown) => voucherId(voucher);
+    const einvDetId = (voucher: unknown) => voucherId(voucher);
+    const transportDetId = (voucher: unknown) => voucherId(voucher);
+
+    const putArr = async (
+      arr: Record<string, unknown>[] | undefined,
+      table: { bulkPut: (rows: unknown[]) => Promise<unknown> },
+      mapRow: (row: Record<string, unknown>) => Record<string, unknown>,
+    ): Promise<number> => {
+      if (!arr || !arr.length) return 0;
+      const rows = arr.map((r) => mapRow(r));
+      await table.bulkPut(rows);
+      return rows.length;
+    };
+
+    summary.account_subgroups = await putArr(backup.account_subgroups, db.cache_account_subgroups, (r) =>
+      withId(r, subgroupId(r.id)),
+    );
+    summary.ledger_group_mappings = await putArr(backup.ledger_group_mappings, db.cache_ledger_group_mappings, (r) =>
+      withId(r, mappingId(r.id), {
+        ledger_id: r.ledger_id ? ledgerId(r.ledger_id) ?? r.ledger_id : r.ledger_id,
+        subgroup_id: r.subgroup_id ? subgroupId(r.subgroup_id) ?? r.subgroup_id : r.subgroup_id,
+      }),
+    );
+    summary.account_group_overrides = await putArr(backup.account_group_overrides, db.cache_account_group_overrides, (r) =>
+      withId(r, overrideId(r.id), {
+        ledger_id: r.ledger_id ? ledgerId(r.ledger_id) ?? r.ledger_id : r.ledger_id,
+      }),
+    );
+    summary.voucher_export_details = await putArr(backup.voucher_export_details, db.cache_voucher_export_details, (r) => {
+      const row = withId(r, undefined, {
+        voucher_id: exportDetId(r.voucher_id) ?? r.voucher_id,
+      });
+      // table is keyed by voucher_id, not id — use it as the primary key
+      row.voucher_id = row.voucher_id ?? r.voucher_id;
+      return row;
+    });
+    summary.einvoice_details = await putArr(backup.einvoice_details, db.cache_einvoice_details, (r) => {
+      const row = withId(r, undefined, {
+        voucher_id: einvDetId(r.voucher_id) ?? r.voucher_id,
+      });
+      row.voucher_id = row.voucher_id ?? r.voucher_id;
+      return row;
+    });
+    summary.period_locks = await putArr(backup.period_locks, db.cache_period_locks, (r) =>
+      withId(r, periodLockId(r.id)),
+    );
+    summary.bom_templates = await putArr(backup.bom_templates, db.cache_bom_templates, (r) =>
+      withId(r, bomTemplateId(r.id), {
+        output_item_id: r.output_item_id ? itemId(r.output_item_id) ?? r.output_item_id : r.output_item_id,
+      }),
+    );
+    summary.bom_template_lines = await putArr(backup.bom_template_lines, db.cache_bom_template_lines, (r) =>
+      withId(r, remapId("bom-template-line", r.id), {
+        template_id: r.template_id ? bomTemplateId(r.template_id) ?? r.template_id : r.template_id,
+        item_id: r.item_id ? itemId(r.item_id) ?? r.item_id : r.item_id,
+      }),
+    );
+    summary.voucher_series = await putArr(backup.voucher_series, db.cache_voucher_series, (r) =>
+      withId(r, seriesId(r.id)),
+    );
+    summary.tax_templates = await putArr(backup.tax_templates, db.cache_tax_templates, (r) =>
+      withId(r, taxTplId(r.id)),
+    );
+    summary.bill_sundries = await putArr(backup.bill_sundries, db.cache_bill_sundries, (r) =>
+      withId(r, sundryId(r.id), {
+        voucher_id: r.voucher_id ? voucherId(r.voucher_id) ?? r.voucher_id : r.voucher_id,
+        ledger_id: r.ledger_id ? ledgerId(r.ledger_id) ?? r.ledger_id : r.ledger_id,
+      }),
+    );
+    summary.transport_details = await putArr(backup.transport_details, db.cache_transport_details, (r) => {
+      const row = withId(r, undefined, {
+        voucher_id: transportDetId(r.voucher_id) ?? r.voucher_id,
+      });
+      row.voucher_id = row.voucher_id ?? r.voucher_id;
+      return row;
+    });
+    summary.cost_centres = await putArr(backup.cost_centres, db.cache_cost_centres, (r) =>
+      withId(r, centreId(r.id)),
+    );
+    summary.cost_categories = await putArr(backup.cost_categories, db.cache_cost_categories, (r) =>
+      withId(r, categoryId(r.id)),
+    );
   });
 }
 
