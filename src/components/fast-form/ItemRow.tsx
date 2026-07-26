@@ -149,11 +149,15 @@ function ItemRowImpl({
             onChange={(v) => {
               onFocusRow(idx);
               onPickItem(idx, v);
+              // Single rAF — lets Radix Popover finish its close-focus,
+              // then we take focus for qty. Rate may have been auto-filled
+              // by onPickItem; sync the uncontrolled input's DOM value.
               requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                  qtyRef.current?.focus();
-                  qtyRef.current?.select();
-                });
+                if (rateRef.current && document.activeElement !== rateRef.current) {
+                  rateRef.current.value = row.rate;
+                }
+                qtyRef.current?.focus();
+                qtyRef.current?.select();
               });
             }}
             options={items.map((it) => ({ value: it.id, label: it.name, hint: it.unit }))}
