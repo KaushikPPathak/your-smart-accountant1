@@ -114,12 +114,32 @@ function ItemRowImpl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row.id]);
 
+  // Sync programmatic value changes into the uncontrolled inputs — but
+  // only when the input is NOT focused, so we never stomp mid-typing.
+  useEffect(() => {
+    const el = qtyRef.current;
+    if (el && document.activeElement !== el && el.value !== row.qty) el.value = row.qty;
+  }, [row.qty]);
+  useEffect(() => {
+    const el = rateRef.current;
+    if (el && document.activeElement !== el && el.value !== row.rate) el.value = row.rate;
+  }, [row.rate]);
+  useEffect(() => {
+    const el = discRef.current;
+    if (el && document.activeElement !== el && el.value !== row.discount) el.value = row.discount;
+  }, [row.discount]);
+  useEffect(() => {
+    const el = descRef.current;
+    if (el && document.activeElement !== el && el.value !== row.description) el.value = row.description;
+  }, [row.description]);
+
   const commitOnEnter = (e: React.KeyboardEvent<HTMLInputElement>, field: keyof ItemRowData) => {
     if (e.key === "Enter") {
-      const v = (e.currentTarget.value ?? "").toString();
+      const v = cleanDecimal((e.currentTarget.value ?? "").toString());
       onCommit(idx, { [field]: v } as Partial<ItemRowData>);
     }
   };
+
 
   const gstTriggerRef = useRef<HTMLButtonElement | null>(null);
 
