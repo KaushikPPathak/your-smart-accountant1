@@ -183,8 +183,10 @@ function AppLayout() {
     })();
     return () => {
       cancelled = true;
+      if (stopIntraday) { try { stopIntraday(); } catch { /* ignore */ } }
     };
   }, [memberships]);
+
 
   // No login screen any more — AuthProvider silently signs in a shared
   // tech user. We just wait for that to finish before rendering.
