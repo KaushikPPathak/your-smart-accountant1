@@ -97,10 +97,56 @@ async function buildCompanyBackupFromLocal(companyId: string): Promise<CompanyBa
     ledgers: (ledgers as Record<string, unknown>[]) ?? [],
     items: (items as Record<string, unknown>[]) ?? [],
     vouchers: (vouchers as Record<string, unknown>[]) ?? [],
-    voucher_entries: (voucher_entries as Record<string, unknown>[]) ?? [],
-    voucher_items: (voucher_items as Record<string, unknown>[]) ?? [],
-    bill_allocations: (bill_allocations as Record<string, unknown>[]) ?? [],
-    recurring_invoices: (recurring_invoices as Record<string, unknown>[]) ?? [],
+async function buildCompanyBackupFromLocal(companyId: string): Promise<CompanyBackup> {
+  const { offlineDb: db } = await import("./offline/db");
+  const byCompany = <T>(table: { where: (i: string) => { equals: (v: string) => { toArray: () => Promise<T[]> } } }) =>
+    table.where("company_id").equals(companyId).toArray().catch(() => [] as T[]);
+
+  const [
+    company, settings,
+    ledgers, items,
+    vouchers, voucher_entries, voucher_items, bill_allocations, recurring_invoices,
+    account_subgroups, ledger_group_mappings, account_group_overrides,
+    voucher_export_details, einvoice_details, period_locks,
+    bom_templates, bom_template_lines,
+    voucher_series, tax_templates, bill_sundries, transport_details,
+    cost_centres, cost_categories,
+  ] = await Promise.all([
+    db.cache_companies.get(companyId).catch(() => null),
+    db.cache_company_settings.where("company_id").equals(companyId).first().catch(() => null),
+    byCompany<Record<string, unknown>>(db.cache_ledgers),
+    byCompany<Record<string, unknown>>(db.cache_items),
+    byCompany<Record<string, unknown>>(db.cache_vouchers),
+    byCompany<Record<string, unknown>>(db.cache_voucher_entries),
+    byCompany<Record<string, unknown>>(db.cache_voucher_items),
+    byCompany<Record<string, unknown>>(db.cache_bill_allocations),
+    byCompany<Record<string, unknown>>(db.cache_recurring_invoices),
+    byCompany<Record<string, unknown>>(db.cache_account_subgroups),
+    byCompany<Record<string, unknown>>(db.cache_ledger_group_mappings),
+    byCompany<Record<string, unknown>>(db.cache_account_group_overrides),
+    byCompany<Record<string, unknown>>(db.cache_voucher_export_details),
+    byCompany<Record<string, unknown>>(db.cache_einvoice_details),
+    byCompany<Record<string, unknown>>(db.cache_period_locks),
+    byCompany<Record<string, unknown>>(db.cache_bom_templates),
+    byCompany<Record<string, unknown>>(db.cache_bom_template_lines),
+    byCompany<Record<string, unknown>>(db.cache_voucher_series),
+    byCompany<Record<string, unknown>>(db.cache_tax_templates),
+    byCompany<Record<string, unknown>>(db.cache_bill_sundries),
+    byCompany<Record<string, unknown>>(db.cache_transport_details),
+    byCompany<Record<string, unknown>>(db.cache_cost_centres),
+    byCompany<Record<string, unknown>>(db.cache_cost_categories),
+  ]);
+  return {
+    schema_version: 2,
+    exported_at: new Date().toISOString(),
+    company: (company as Record<string, unknown> | null) ?? null,
+    settings: (settings as Record<string, unknown> | null) ?? null,
+    ledgers, items, vouchers, voucher_entries, voucher_items, bill_allocations, recurring_invoices,
+    account_subgroups, ledger_group_mappings, account_group_overrides,
+    voucher_export_details, einvoice_details, period_locks,
+    bom_templates, bom_template_lines,
+    voucher_series, tax_templates, bill_sundries, transport_details,
+    cost_centres, cost_categories,
   };
 }
 
@@ -131,8 +177,16 @@ export async function buildCompanyBackup(companyId: string): Promise<CompanyBack
   ]);
   const strip = <T extends Record<string, unknown>>(rows: T[] | null) =>
     (rows ?? []).map(({ vouchers: _v, ...rest }) => rest as Record<string, unknown>);
+
+  // Cloud path also augments with the local-only tables (BOM, cost centres,
+  // period locks, etc.) so a cloud-mode backup is a full superset of the
+  // company's actual state, matching the local-only path's completeness.
+  const localExtras = (typeof indexedDB !== "undefined")
+    ? await buildCompanyBackupFromLocal(companyId).catch(() => null)
+    : null;
+
   return {
-    schema_version: 1,
+    schema_version: 2,
     exported_at: new Date().toISOString(),
     company: (c.data as Record<string, unknown> | null) ?? null,
     settings: (s.data as Record<string, unknown> | null) ?? null,
@@ -143,6 +197,20 @@ export async function buildCompanyBackup(companyId: string): Promise<CompanyBack
     voucher_entries: strip(ve.data as Record<string, unknown>[] | null),
     bill_allocations: (ba.data as Record<string, unknown>[] | null) ?? [],
     recurring_invoices: (ri.data as Record<string, unknown>[] | null) ?? [],
+    account_subgroups: localExtras?.account_subgroups ?? [],
+    ledger_group_mappings: localExtras?.ledger_group_mappings ?? [],
+    account_group_overrides: localExtras?.account_group_overrides ?? [],
+    voucher_export_details: localExtras?.voucher_export_details ?? [],
+    einvoice_details: localExtras?.einvoice_details ?? [],
+    period_locks: localExtras?.period_locks ?? [],
+    bom_templates: localExtras?.bom_templates ?? [],
+    bom_template_lines: localExtras?.bom_template_lines ?? [],
+    voucher_series: localExtras?.voucher_series ?? [],
+    tax_templates: localExtras?.tax_templates ?? [],
+    bill_sundries: localExtras?.bill_sundries ?? [],
+    transport_details: localExtras?.transport_details ?? [],
+    cost_centres: localExtras?.cost_centres ?? [],
+    cost_categories: localExtras?.cost_categories ?? [],
   };
 }
 
