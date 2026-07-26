@@ -5,8 +5,15 @@ import { wrapBackup, isBackupEnvelope, verifyEnvelope } from "@/lib/backup-polic
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 // ---------- Types ----------
+// Schema v2 (Round-1 completeness upgrade): adds 14 previously-uncaptured
+// collections so backups round-trip 100% of company data — e-invoicing,
+// period locks, BOMs, tax templates, bill sundries, transport, cost
+// centres, custom voucher series, account-group overrides.
+//
+// Backwards-compatibility: readers accept v1 files verbatim — missing
+// collections are treated as empty arrays. Writers always emit v2.
 export interface CompanyBackup {
-  schema_version: 1;
+  schema_version: 1 | 2;
   exported_at: string;
   company: Record<string, unknown> | null;
   settings: Record<string, unknown> | null;
@@ -17,10 +24,25 @@ export interface CompanyBackup {
   voucher_entries: Record<string, unknown>[];
   bill_allocations: Record<string, unknown>[];
   recurring_invoices: Record<string, unknown>[];
+  // ---- v2 additions (all optional so v1 backups still parse) ----
+  account_subgroups?: Record<string, unknown>[];
+  ledger_group_mappings?: Record<string, unknown>[];
+  account_group_overrides?: Record<string, unknown>[];
+  voucher_export_details?: Record<string, unknown>[];
+  einvoice_details?: Record<string, unknown>[];
+  period_locks?: Record<string, unknown>[];
+  bom_templates?: Record<string, unknown>[];
+  bom_template_lines?: Record<string, unknown>[];
+  voucher_series?: Record<string, unknown>[];
+  tax_templates?: Record<string, unknown>[];
+  bill_sundries?: Record<string, unknown>[];
+  transport_details?: Record<string, unknown>[];
+  cost_centres?: Record<string, unknown>[];
+  cost_categories?: Record<string, unknown>[];
 }
 
 export interface MultiCompanyBackup {
-  schema_version: 1;
+  schema_version: 1 | 2;
   kind: "all_companies";
   exported_at: string;
   companies: CompanyBackup[];
