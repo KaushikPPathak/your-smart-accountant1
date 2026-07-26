@@ -258,10 +258,9 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
       // Pre-restore integrity scan on current data (advisory only).
       await preflightIntegrityToast(companyId, "restore");
       // Rule 5 — take a silent pre-restore snapshot for 24h "Undo restore".
-      const snap = await savePreRestoreSnapshot(companyId, companyName);
-      if (!snap.ok) {
-        toast.warning("Could not create safety snapshot — proceeding without undo option.");
-      }
+      const { assertPreRestoreSnapshotOrConfirm } = await import("@/lib/restore-safety");
+      const proceed = await assertPreRestoreSnapshotOrConfirm(companyId, companyName);
+      if (!proceed) { toast.info("Restore cancelled."); return; }
       const r = await restoreCompanyBackup(companyId, parsed.data, { wipeExisting: true });
       setSummary(r);
       toast.success("Restore complete");

@@ -119,8 +119,9 @@ export function RestoreNowButton() {
     if (!isAdmin) { toast.error("Only admins can restore."); return; }
     setRestoring(true);
     try {
-      const snap = await savePreRestoreSnapshot(companyId, companyName);
-      if (!snap.ok) toast.warning("Could not create safety snapshot — proceeding without undo.");
+      const { assertPreRestoreSnapshotOrConfirm } = await import("@/lib/restore-safety");
+      const proceed = await assertPreRestoreSnapshotOrConfirm(companyId, companyName);
+      if (!proceed) { toast.info("Restore cancelled."); setRestoring(false); return; }
       const summary = await restoreCompanyBackup(companyId, picked, { wipeExisting: true });
       toast.success(
         `Restored "${companyName}": ${summary.ledgers} ledgers, ${summary.items} items, ${summary.vouchers} vouchers`,
