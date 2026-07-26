@@ -29,6 +29,7 @@ import { UpdateRecoveryBanner } from "@/components/UpdateRecoveryBanner";
 import { InstallAppButton } from "@/components/InstallAppButton";
 import { KeyboardProvider, useShortcut } from "@/lib/keyboard";
 import { CalculatorDialog } from "@/components/CalculatorDialog";
+import { RestoreInterruptedBanner } from "@/components/RestoreInterruptedBanner";
 
 import { getLicenseState, isReadOnlyLocked } from "@/lib/license/state";
 
