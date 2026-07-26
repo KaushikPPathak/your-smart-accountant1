@@ -41,6 +41,13 @@ interface Props {
 
 type Mode = "new" | "overwrite";
 
+interface DiffPreview {
+  ledgers: { current: number; incoming: number };
+  items: { current: number; incoming: number };
+  vouchers: { current: number; incoming: number };
+  settingsWillRevert: boolean;
+}
+
 export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [parsing, setParsing] = useState(false);
@@ -51,6 +58,9 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
   const [newName, setNewName] = useState("");
   const [targetId, setTargetId] = useState<string>("");
   const [confirmText, setConfirmText] = useState("");
+  const [checksumOk, setChecksumOk] = useState<boolean | undefined>(undefined);
+  const [trustCorrupt, setTrustCorrupt] = useState(false);
+  const [diff, setDiff] = useState<DiffPreview | null>(null);
 
   function reset() {
     setBackup(null);
@@ -59,6 +69,9 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
     setNewName("");
     setTargetId("");
     setConfirmText("");
+    setChecksumOk(undefined);
+    setTrustCorrupt(false);
+    setDiff(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -80,8 +93,16 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
         toast.error("This is a multi-company backup. Open Housekeeping inside a company to restore individual companies from it.");
         return;
       }
+      // Round 3 — checksum is a HARD gate. If the envelope was wrapped
+      // (all new exports are) and the SHA-256 doesn't match, the file has
+      // been edited or corrupted since export. Refuse silently-destructive
+      // restores unless the user explicitly overrides.
+      setChecksumOk(parsed.checksumOk);
       if (parsed.checksumOk === false) {
-        toast.warning("Backup checksum mismatch — file may be edited. Proceed carefully.");
+        toast.error("Backup checksum FAILED — the file has been edited or is corrupted.", {
+          description: "Tick 'Trust this file anyway' below only if you understand the risk.",
+          duration: 10000,
+        });
       }
       const srcName =
         ((parsed.data.company as { name?: string } | null)?.name) ?? "Unknown company";
@@ -93,6 +114,28 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
     } finally {
       setParsing(false);
     }
+  }
+
+  // Recompute the diff preview whenever the user picks an overwrite target.
+  async function refreshDiff(target: string) {
+    if (!backup || !target) { setDiff(null); return; }
+    try {
+      const { offlineDb: db } = await import("@/lib/offline/db");
+      const [led, itm, vch, cs] = await Promise.all([
+        db.cache_ledgers.where("company_id").equals(target).count(),
+        db.cache_items.where("company_id").equals(target).count(),
+        db.cache_vouchers.where("company_id").equals(target).count(),
+        db.cache_company_settings.where("company_id").equals(target).first(),
+      ]);
+      const localTs = Date.parse(String((cs as { updated_at?: string } | undefined)?.updated_at ?? "")) || 0;
+      const backupTs = Date.parse(String((backup.settings as { updated_at?: string } | null)?.updated_at ?? "")) || 0;
+      setDiff({
+        ledgers: { current: led, incoming: backup.ledgers?.length ?? 0 },
+        items: { current: itm, incoming: backup.items?.length ?? 0 },
+        vouchers: { current: vch, incoming: backup.vouchers?.length ?? 0 },
+        settingsWillRevert: !!cs && backupTs > 0 && backupTs < localTs,
+      });
+    } catch { setDiff(null); }
   }
 
   async function createNewCompanyFrom(b: CompanyBackup, name: string): Promise<string> {
