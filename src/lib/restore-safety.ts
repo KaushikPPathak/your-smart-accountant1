@@ -25,9 +25,10 @@ function key(companyId: string): string {
 
 /**
  * Build and store a full snapshot of the target company BEFORE a destructive
- * restore. Non-fatal on failure — restore should never be blocked because the
- * safety net could not be created (e.g. offline, quota exceeded). Instead we
- * log and continue; the destructive restore still proceeds.
+ * restore. Returns `{ ok, error }`. Callers MUST decide what to do when
+ * `ok === false`: either abort the restore, or ask the user to confirm
+ * proceeding without an undo net (recommended). See
+ * `assertPreRestoreSnapshotOrConfirm` for the standard prompt.
  */
 export async function savePreRestoreSnapshot(
   companyId: string,
@@ -46,6 +47,35 @@ export async function savePreRestoreSnapshot(
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/**
+ * Standard "safety snapshot failed" gate. Returns true if the caller may
+ * proceed with the destructive restore, false if the user aborted.
+ *
+ * When the snapshot was created successfully -> proceeds silently.
+ * When the snapshot failed -> shows a blocking confirm() so the user knows
+ * the 24-hour Undo Restore option will NOT be available and can bail out.
+ * This is the primary way we honour "financial data retrieval is a risky
+ * affair" — never wipe live data without an escape hatch unless the user
+ * has explicitly acknowledged the risk.
+ */
+export async function assertPreRestoreSnapshotOrConfirm(
+  companyId: string,
+  companyName: string,
+): Promise<boolean> {
+  const snap = await savePreRestoreSnapshot(companyId, companyName);
+  if (snap.ok) return true;
+  if (typeof window === "undefined" || typeof window.confirm !== "function") {
+    // Non-interactive context (server / test) — fail closed.
+    return false;
+  }
+  return window.confirm(
+    `Could not create the safety snapshot for "${companyName}".\n\n` +
+    `Reason: ${snap.error ?? "unknown"}\n\n` +
+    `If you continue, the 24-hour "Undo restore" option will NOT be available. ` +
+    `Free some disk space and retry, or click OK to proceed anyway.`,
+  );
 }
 
 export interface AvailableSnapshot {
