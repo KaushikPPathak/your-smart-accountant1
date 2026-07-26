@@ -626,6 +626,17 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     [focusRowItemCombo],
   );
 
+  const onAddItemDlg = useCallback((idx: number) => {
+    setFocusedLine(idx);
+    setItemDlg({ open: true, editId: null, lineIdx: idx });
+  }, []);
+  const onEditItemDlg = useCallback((idx: number, itemId: string) => {
+    setFocusedLine(idx);
+    setItemDlg({ open: true, editId: itemId, lineIdx: idx });
+  }, []);
+
+
+
   const canWrite = activeMembership?.role === "admin" || activeMembership?.role === "accountant";
 
   const performSave = useCallback(async () => {
