@@ -5,8 +5,15 @@ import { wrapBackup, isBackupEnvelope, verifyEnvelope } from "@/lib/backup-polic
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 // ---------- Types ----------
+// Schema v2 (Round-1 completeness upgrade): adds 14 previously-uncaptured
+// collections so backups round-trip 100% of company data — e-invoicing,
+// period locks, BOMs, tax templates, bill sundries, transport, cost
+// centres, custom voucher series, account-group overrides.
+//
+// Backwards-compatibility: readers accept v1 files verbatim — missing
+// collections are treated as empty arrays. Writers always emit v2.
 export interface CompanyBackup {
-  schema_version: 1;
+  schema_version: 1 | 2;
   exported_at: string;
   company: Record<string, unknown> | null;
   settings: Record<string, unknown> | null;
@@ -17,10 +24,25 @@ export interface CompanyBackup {
   voucher_entries: Record<string, unknown>[];
   bill_allocations: Record<string, unknown>[];
   recurring_invoices: Record<string, unknown>[];
+  // ---- v2 additions (all optional so v1 backups still parse) ----
+  account_subgroups?: Record<string, unknown>[];
+  ledger_group_mappings?: Record<string, unknown>[];
+  account_group_overrides?: Record<string, unknown>[];
+  voucher_export_details?: Record<string, unknown>[];
+  einvoice_details?: Record<string, unknown>[];
+  period_locks?: Record<string, unknown>[];
+  bom_templates?: Record<string, unknown>[];
+  bom_template_lines?: Record<string, unknown>[];
+  voucher_series?: Record<string, unknown>[];
+  tax_templates?: Record<string, unknown>[];
+  bill_sundries?: Record<string, unknown>[];
+  transport_details?: Record<string, unknown>[];
+  cost_centres?: Record<string, unknown>[];
+  cost_categories?: Record<string, unknown>[];
 }
 
 export interface MultiCompanyBackup {
-  schema_version: 1;
+  schema_version: 1 | 2;
   kind: "all_companies";
   exported_at: string;
   companies: CompanyBackup[];
@@ -56,29 +78,54 @@ function browserDownload(fileName: string, contents: string): void {
 // manifest and disable auto-restore. See Bug 1.1 audit.
 async function buildCompanyBackupFromLocal(companyId: string): Promise<CompanyBackup> {
   const { offlineDb: db } = await import("./offline/db");
-  const [company, settings, ledgers, items, vouchers, voucher_entries, voucher_items, bill_allocations, recurring_invoices] = await Promise.all([
+  const byCompany = <T>(table: { where: (i: string) => { equals: (v: string) => { toArray: () => Promise<T[]> } } }) =>
+    table.where("company_id").equals(companyId).toArray().catch(() => [] as T[]);
+
+  const [
+    company, settings,
+    ledgers, items,
+    vouchers, voucher_entries, voucher_items, bill_allocations, recurring_invoices,
+    account_subgroups, ledger_group_mappings, account_group_overrides,
+    voucher_export_details, einvoice_details, period_locks,
+    bom_templates, bom_template_lines,
+    voucher_series, tax_templates, bill_sundries, transport_details,
+    cost_centres, cost_categories,
+  ] = await Promise.all([
     db.cache_companies.get(companyId).catch(() => null),
     db.cache_company_settings.where("company_id").equals(companyId).first().catch(() => null),
-    db.cache_ledgers.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_items.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_vouchers.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_voucher_entries.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_voucher_items.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_bill_allocations.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_recurring_invoices.where("company_id").equals(companyId).toArray().catch(() => []),
+    byCompany<Record<string, unknown>>(db.cache_ledgers),
+    byCompany<Record<string, unknown>>(db.cache_items),
+    byCompany<Record<string, unknown>>(db.cache_vouchers),
+    byCompany<Record<string, unknown>>(db.cache_voucher_entries),
+    byCompany<Record<string, unknown>>(db.cache_voucher_items),
+    byCompany<Record<string, unknown>>(db.cache_bill_allocations),
+    byCompany<Record<string, unknown>>(db.cache_recurring_invoices),
+    byCompany<Record<string, unknown>>(db.cache_account_subgroups),
+    byCompany<Record<string, unknown>>(db.cache_ledger_group_mappings),
+    byCompany<Record<string, unknown>>(db.cache_account_group_overrides),
+    byCompany<Record<string, unknown>>(db.cache_voucher_export_details),
+    byCompany<Record<string, unknown>>(db.cache_einvoice_details),
+    byCompany<Record<string, unknown>>(db.cache_period_locks),
+    byCompany<Record<string, unknown>>(db.cache_bom_templates),
+    byCompany<Record<string, unknown>>(db.cache_bom_template_lines),
+    byCompany<Record<string, unknown>>(db.cache_voucher_series),
+    byCompany<Record<string, unknown>>(db.cache_tax_templates),
+    byCompany<Record<string, unknown>>(db.cache_bill_sundries),
+    byCompany<Record<string, unknown>>(db.cache_transport_details),
+    byCompany<Record<string, unknown>>(db.cache_cost_centres),
+    byCompany<Record<string, unknown>>(db.cache_cost_categories),
   ]);
   return {
-    schema_version: 1,
+    schema_version: 2,
     exported_at: new Date().toISOString(),
     company: (company as Record<string, unknown> | null) ?? null,
     settings: (settings as Record<string, unknown> | null) ?? null,
-    ledgers: (ledgers as Record<string, unknown>[]) ?? [],
-    items: (items as Record<string, unknown>[]) ?? [],
-    vouchers: (vouchers as Record<string, unknown>[]) ?? [],
-    voucher_entries: (voucher_entries as Record<string, unknown>[]) ?? [],
-    voucher_items: (voucher_items as Record<string, unknown>[]) ?? [],
-    bill_allocations: (bill_allocations as Record<string, unknown>[]) ?? [],
-    recurring_invoices: (recurring_invoices as Record<string, unknown>[]) ?? [],
+    ledgers, items, vouchers, voucher_entries, voucher_items, bill_allocations, recurring_invoices,
+    account_subgroups, ledger_group_mappings, account_group_overrides,
+    voucher_export_details, einvoice_details, period_locks,
+    bom_templates, bom_template_lines,
+    voucher_series, tax_templates, bill_sundries, transport_details,
+    cost_centres, cost_categories,
   };
 }
 
@@ -109,8 +156,16 @@ export async function buildCompanyBackup(companyId: string): Promise<CompanyBack
   ]);
   const strip = <T extends Record<string, unknown>>(rows: T[] | null) =>
     (rows ?? []).map(({ vouchers: _v, ...rest }) => rest as Record<string, unknown>);
+
+  // Cloud path also augments with the local-only tables (BOM, cost centres,
+  // period locks, etc.) so a cloud-mode backup is a full superset of the
+  // company's actual state, matching the local-only path's completeness.
+  const localExtras = (typeof indexedDB !== "undefined")
+    ? await buildCompanyBackupFromLocal(companyId).catch(() => null)
+    : null;
+
   return {
-    schema_version: 1,
+    schema_version: 2,
     exported_at: new Date().toISOString(),
     company: (c.data as Record<string, unknown> | null) ?? null,
     settings: (s.data as Record<string, unknown> | null) ?? null,
@@ -121,6 +176,20 @@ export async function buildCompanyBackup(companyId: string): Promise<CompanyBack
     voucher_entries: strip(ve.data as Record<string, unknown>[] | null),
     bill_allocations: (ba.data as Record<string, unknown>[] | null) ?? [],
     recurring_invoices: (ri.data as Record<string, unknown>[] | null) ?? [],
+    account_subgroups: localExtras?.account_subgroups ?? [],
+    ledger_group_mappings: localExtras?.ledger_group_mappings ?? [],
+    account_group_overrides: localExtras?.account_group_overrides ?? [],
+    voucher_export_details: localExtras?.voucher_export_details ?? [],
+    einvoice_details: localExtras?.einvoice_details ?? [],
+    period_locks: localExtras?.period_locks ?? [],
+    bom_templates: localExtras?.bom_templates ?? [],
+    bom_template_lines: localExtras?.bom_template_lines ?? [],
+    voucher_series: localExtras?.voucher_series ?? [],
+    tax_templates: localExtras?.tax_templates ?? [],
+    bill_sundries: localExtras?.bill_sundries ?? [],
+    transport_details: localExtras?.transport_details ?? [],
+    cost_centres: localExtras?.cost_centres ?? [],
+    cost_categories: localExtras?.cost_categories ?? [],
   };
 }
 
@@ -162,7 +231,7 @@ export async function exportAllCompaniesBackup(
     all.push(await buildCompanyBackup(c.id));
   }
   const payload: MultiCompanyBackup = {
-    schema_version: 1,
+    schema_version: 2,
     kind: "all_companies",
     exported_at: new Date().toISOString(),
     companies: all,
@@ -190,6 +259,21 @@ export interface RestoreSummary {
   voucher_entries: number;
   bill_allocations: number;
   recurring_invoices: number;
+  // v2 additions — silently 0 for v1 backups.
+  account_subgroups?: number;
+  ledger_group_mappings?: number;
+  account_group_overrides?: number;
+  voucher_export_details?: number;
+  einvoice_details?: number;
+  period_locks?: number;
+  bom_templates?: number;
+  bom_template_lines?: number;
+  voucher_series?: number;
+  tax_templates?: number;
+  bill_sundries?: number;
+  transport_details?: number;
+  cost_centres?: number;
+  cost_categories?: number;
 }
 
 /**
@@ -198,13 +282,11 @@ export interface RestoreSummary {
  * - Does NOT touch the target company's settings or member list.
  * - Skips rows that fail (e.g. duplicate voucher numbers).
  */
-// Current schema version this build writes. Older backups are accepted
-// verbatim; newer backups are accepted with a "forward compatibility" warning
-// (unknown fields are ignored, known tables are restored). This mirrors the
-// bidirectional version tolerance users expect from established accounting
-// software — never refuse a legitimate backup just because the version number
-// differs.
-export const CURRENT_BACKUP_SCHEMA = 1;
+// Current schema version this build writes. Older backups (v1) are accepted
+// verbatim — v2-only collections default to empty and are not wiped, so
+// downgraded/legacy backups never delete data the app already knows about.
+// Newer backups: unknown fields ignored, known tables restored, warning logged.
+export const CURRENT_BACKUP_SCHEMA = 2;
 
 export async function restoreCompanyBackup(
   targetCompanyId: string,
@@ -552,10 +634,33 @@ async function mirrorRestoreToLocalCache(
     db.cache_voucher_items,
     db.cache_bill_allocations,
     db.cache_recurring_invoices,
+    // v2 additions — kept in the SAME transaction so atomicity extends
+    // to every collection the backup carries. If any bulkPut fails,
+    // the whole restore rolls back (per Bug 3.1 comment above).
+    db.cache_account_subgroups,
+    db.cache_ledger_group_mappings,
+    db.cache_account_group_overrides,
+    db.cache_voucher_export_details,
+    db.cache_einvoice_details,
+    db.cache_period_locks,
+    db.cache_bom_templates,
+    db.cache_bom_template_lines,
+    db.cache_voucher_series,
+    db.cache_tax_templates,
+    db.cache_bill_sundries,
+    db.cache_transport_details,
+    db.cache_cost_centres,
+    db.cache_cost_categories,
   ];
 
+  // v2 backups carry these tables; older v1 backups leave them undefined,
+  // in which case we DO NOT wipe them (preserves any local data the app
+  // has for these features so a v1 restore doesn't nuke settings the user
+  // never intended to touch).
+  const hasV2 = (backup.schema_version ?? 1) >= 2;
+
   await db.transaction("rw", tables, async () => {
-    await Promise.all([
+    const wipes: Promise<unknown>[] = [
       db.cache_ledgers.where("company_id").equals(targetCompanyId).delete(),
       db.cache_items.where("company_id").equals(targetCompanyId).delete(),
       db.cache_vouchers.where("company_id").equals(targetCompanyId).delete(),
@@ -564,7 +669,26 @@ async function mirrorRestoreToLocalCache(
       db.cache_bill_allocations.where("company_id").equals(targetCompanyId).delete(),
       db.cache_recurring_invoices.where("company_id").equals(targetCompanyId).delete(),
       db.cache_company_settings.where("company_id").equals(targetCompanyId).delete(),
-    ]);
+    ];
+    if (hasV2) {
+      wipes.push(
+        db.cache_account_subgroups.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_ledger_group_mappings.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_account_group_overrides.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_voucher_export_details.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_einvoice_details.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_period_locks.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_bom_templates.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_bom_template_lines.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_voucher_series.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_tax_templates.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_bill_sundries.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_transport_details.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_cost_centres.where("company_id").equals(targetCompanyId).delete(),
+        db.cache_cost_categories.where("company_id").equals(targetCompanyId).delete(),
+      );
+    }
+    await Promise.all(wipes);
 
     if (backup.company) {
       const companyRow = stamp({ ...(backup.company as Record<string, unknown>), id: targetCompanyId });
@@ -667,6 +791,105 @@ async function mirrorRestoreToLocalCache(
         backup.recurring_invoices.length,
       );
     }
+
+    // ---------- v2 additions ----------
+    // Same-company restore (auto-restore, undo, re-import) -> shouldRemapIds
+    // is false, so IDs pass through unchanged and every FK stays valid.
+    // Cross-company restore (recovery wizard "restore into new company") ->
+    // IDs get remapped consistently with vouchers/ledgers/items above.
+    const bomTemplateId = (id: unknown) => remapId("bom-template", id);
+    const subgroupId = (id: unknown) => remapId("subgroup", id);
+    const mappingId = (id: unknown) => remapId("group-mapping", id);
+    const overrideId = (id: unknown) => remapId("group-override", id);
+    const periodLockId = (id: unknown) => remapId("period-lock", id);
+    const seriesId = (id: unknown) => remapId("voucher-series", id);
+    const taxTplId = (id: unknown) => remapId("tax-template", id);
+    const sundryId = (id: unknown) => remapId("bill-sundry", id);
+    const centreId = (id: unknown) => remapId("cost-centre", id);
+    const categoryId = (id: unknown) => remapId("cost-category", id);
+    const exportDetId = (voucher: unknown) => voucherId(voucher);
+    const einvDetId = (voucher: unknown) => voucherId(voucher);
+    const transportDetId = (voucher: unknown) => voucherId(voucher);
+
+    const putArr = async (
+      arr: Record<string, unknown>[] | undefined,
+      table: { bulkPut: (rows: unknown[]) => Promise<unknown> },
+      mapRow: (row: Record<string, unknown>) => Record<string, unknown>,
+    ): Promise<number> => {
+      if (!arr || !arr.length) return 0;
+      const rows = arr.map((r) => mapRow(r));
+      await table.bulkPut(rows);
+      return rows.length;
+    };
+
+    summary.account_subgroups = await putArr(backup.account_subgroups, db.cache_account_subgroups, (r) =>
+      withId(r, subgroupId(r.id)),
+    );
+    summary.ledger_group_mappings = await putArr(backup.ledger_group_mappings, db.cache_ledger_group_mappings, (r) =>
+      withId(r, mappingId(r.id), {
+        ledger_id: r.ledger_id ? ledgerId(r.ledger_id) ?? r.ledger_id : r.ledger_id,
+        subgroup_id: r.subgroup_id ? subgroupId(r.subgroup_id) ?? r.subgroup_id : r.subgroup_id,
+      }),
+    );
+    summary.account_group_overrides = await putArr(backup.account_group_overrides, db.cache_account_group_overrides, (r) =>
+      withId(r, overrideId(r.id), {
+        ledger_id: r.ledger_id ? ledgerId(r.ledger_id) ?? r.ledger_id : r.ledger_id,
+      }),
+    );
+    summary.voucher_export_details = await putArr(backup.voucher_export_details, db.cache_voucher_export_details, (r) => {
+      const row = withId(r, undefined, {
+        voucher_id: exportDetId(r.voucher_id) ?? r.voucher_id,
+      });
+      // table is keyed by voucher_id, not id — use it as the primary key
+      row.voucher_id = row.voucher_id ?? r.voucher_id;
+      return row;
+    });
+    summary.einvoice_details = await putArr(backup.einvoice_details, db.cache_einvoice_details, (r) => {
+      const row = withId(r, undefined, {
+        voucher_id: einvDetId(r.voucher_id) ?? r.voucher_id,
+      });
+      row.voucher_id = row.voucher_id ?? r.voucher_id;
+      return row;
+    });
+    summary.period_locks = await putArr(backup.period_locks, db.cache_period_locks, (r) =>
+      withId(r, periodLockId(r.id)),
+    );
+    summary.bom_templates = await putArr(backup.bom_templates, db.cache_bom_templates, (r) =>
+      withId(r, bomTemplateId(r.id), {
+        output_item_id: r.output_item_id ? itemId(r.output_item_id) ?? r.output_item_id : r.output_item_id,
+      }),
+    );
+    summary.bom_template_lines = await putArr(backup.bom_template_lines, db.cache_bom_template_lines, (r) =>
+      withId(r, remapId("bom-template-line", r.id), {
+        template_id: r.template_id ? bomTemplateId(r.template_id) ?? r.template_id : r.template_id,
+        item_id: r.item_id ? itemId(r.item_id) ?? r.item_id : r.item_id,
+      }),
+    );
+    summary.voucher_series = await putArr(backup.voucher_series, db.cache_voucher_series, (r) =>
+      withId(r, seriesId(r.id)),
+    );
+    summary.tax_templates = await putArr(backup.tax_templates, db.cache_tax_templates, (r) =>
+      withId(r, taxTplId(r.id)),
+    );
+    summary.bill_sundries = await putArr(backup.bill_sundries, db.cache_bill_sundries, (r) =>
+      withId(r, sundryId(r.id), {
+        voucher_id: r.voucher_id ? voucherId(r.voucher_id) ?? r.voucher_id : r.voucher_id,
+        ledger_id: r.ledger_id ? ledgerId(r.ledger_id) ?? r.ledger_id : r.ledger_id,
+      }),
+    );
+    summary.transport_details = await putArr(backup.transport_details, db.cache_transport_details, (r) => {
+      const row = withId(r, undefined, {
+        voucher_id: transportDetId(r.voucher_id) ?? r.voucher_id,
+      });
+      row.voucher_id = row.voucher_id ?? r.voucher_id;
+      return row;
+    });
+    summary.cost_centres = await putArr(backup.cost_centres, db.cache_cost_centres, (r) =>
+      withId(r, centreId(r.id)),
+    );
+    summary.cost_categories = await putArr(backup.cost_categories, db.cache_cost_categories, (r) =>
+      withId(r, categoryId(r.id)),
+    );
   });
 }
 

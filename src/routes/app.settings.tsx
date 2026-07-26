@@ -343,8 +343,9 @@ function SettingsPage() {
       const single = parsed.data;
       if (!single) throw new Error("Backup file is empty");
       // Rule 5 — silent pre-restore snapshot for 24h undo (Housekeeping → Undo restore).
-      const snap = await savePreRestoreSnapshot(activeCompanyId, targetName);
-      if (!snap.ok) toast.warning("Could not create safety snapshot — proceeding without undo option.");
+      const { assertPreRestoreSnapshotOrConfirm } = await import("@/lib/restore-safety");
+      const proceed = await assertPreRestoreSnapshotOrConfirm(activeCompanyId, targetName);
+      if (!proceed) { toast.info("Restore cancelled."); return; }
       const summary = await restoreCompanyBackup(activeCompanyId, single, { wipeExisting: true });
       toast.success(
         `Restored: ${summary.ledgers} ledgers, ${summary.items} items, ${summary.vouchers} vouchers`,

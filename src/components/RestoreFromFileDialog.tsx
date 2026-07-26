@@ -161,10 +161,11 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
         }
         target = targetId;
         // Rule 5 — pre-restore safety snapshot (24h undo from Housekeeping).
-        const snap = await savePreRestoreSnapshot(target, targetName);
-        if (!snap.ok) {
-          toast.warning("Could not create safety snapshot — proceeding without undo option.");
-        }
+        // Blocking confirm if snapshot can't be created — user must
+        // acknowledge that Undo will be unavailable before we destroy data.
+        const { assertPreRestoreSnapshotOrConfirm } = await import("@/lib/restore-safety");
+        const proceed = await assertPreRestoreSnapshotOrConfirm(target, targetName);
+        if (!proceed) { toast.info("Restore cancelled."); return; }
       }
       if (mode !== "new") await preflightIntegrityToast(target, "restore");
       const summary = await restoreCompanyBackup(target, backup, { wipeExisting: true });

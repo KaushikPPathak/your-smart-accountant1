@@ -122,10 +122,9 @@ export function BackupInspectDialog({
     if (!isAdmin) { toast.error("Only admins can restore."); return; }
     setRestoring(true);
     try {
-      const snap = await savePreRestoreSnapshot(targetCompanyId, targetCompanyName);
-      if (!snap.ok) {
-        toast.warning("Could not create safety snapshot — proceeding without undo option.");
-      }
+      const { assertPreRestoreSnapshotOrConfirm } = await import("@/lib/restore-safety");
+      const proceed = await assertPreRestoreSnapshotOrConfirm(targetCompanyId, targetCompanyName);
+      if (!proceed) { toast.info("Restore cancelled."); setRestoring(false); return; }
       const summary = await restoreCompanyBackup(targetCompanyId, picked, { wipeExisting: true });
       toast.success(
         `Restored into "${targetCompanyName}": ${summary.ledgers} ledgers, ${summary.items} items, ${summary.vouchers} vouchers`,
