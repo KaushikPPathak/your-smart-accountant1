@@ -78,27 +78,6 @@ function browserDownload(fileName: string, contents: string): void {
 // manifest and disable auto-restore. See Bug 1.1 audit.
 async function buildCompanyBackupFromLocal(companyId: string): Promise<CompanyBackup> {
   const { offlineDb: db } = await import("./offline/db");
-  const [company, settings, ledgers, items, vouchers, voucher_entries, voucher_items, bill_allocations, recurring_invoices] = await Promise.all([
-    db.cache_companies.get(companyId).catch(() => null),
-    db.cache_company_settings.where("company_id").equals(companyId).first().catch(() => null),
-    db.cache_ledgers.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_items.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_vouchers.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_voucher_entries.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_voucher_items.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_bill_allocations.where("company_id").equals(companyId).toArray().catch(() => []),
-    db.cache_recurring_invoices.where("company_id").equals(companyId).toArray().catch(() => []),
-  ]);
-  return {
-    schema_version: 1,
-    exported_at: new Date().toISOString(),
-    company: (company as Record<string, unknown> | null) ?? null,
-    settings: (settings as Record<string, unknown> | null) ?? null,
-    ledgers: (ledgers as Record<string, unknown>[]) ?? [],
-    items: (items as Record<string, unknown>[]) ?? [],
-    vouchers: (vouchers as Record<string, unknown>[]) ?? [],
-async function buildCompanyBackupFromLocal(companyId: string): Promise<CompanyBackup> {
-  const { offlineDb: db } = await import("./offline/db");
   const byCompany = <T>(table: { where: (i: string) => { equals: (v: string) => { toArray: () => Promise<T[]> } } }) =>
     table.where("company_id").equals(companyId).toArray().catch(() => [] as T[]);
 
