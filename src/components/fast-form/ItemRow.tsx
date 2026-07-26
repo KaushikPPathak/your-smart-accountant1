@@ -249,9 +249,9 @@ function ItemRowImpl({
             inputMode="decimal"
             autoComplete="off"
             maxLength={12}
-            value={row.qty}
-            onChange={(e) => onCommit(idx, { qty: cleanDecimal(e.target.value) })}
+            defaultValue={row.qty}
             onFocus={(e) => e.currentTarget.select()}
+            onBlur={(e) => onCommit(idx, { qty: cleanDecimal(e.target.value) })}
             onKeyDown={(e) => commitOnEnter(e, "qty")}
           />
           <span
@@ -270,9 +270,9 @@ function ItemRowImpl({
           inputMode="decimal"
           autoComplete="off"
           maxLength={12}
-          value={row.rate}
-          onChange={(e) => onCommit(idx, { rate: cleanDecimal(e.target.value) })}
+          defaultValue={row.rate}
           onFocus={(e) => e.currentTarget.select()}
+          onBlur={(e) => onCommit(idx, { rate: cleanDecimal(e.target.value) })}
           onKeyDown={(e) => commitOnEnter(e, "rate")}
         />
       </TableCell>
@@ -284,13 +284,13 @@ function ItemRowImpl({
           inputMode="decimal"
           autoComplete="off"
           maxLength={10}
-          value={row.discount}
-          onChange={(e) => onCommit(idx, { discount: cleanDecimal(e.target.value) })}
+          defaultValue={row.discount}
           onFocus={(e) => e.currentTarget.select()}
+          onBlur={(e) => onCommit(idx, { discount: cleanDecimal(e.target.value) })}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !showGstColumn) {
               e.preventDefault();
-              onCommit(idx, { discount: e.currentTarget.value });
+              onCommit(idx, { discount: cleanDecimal(e.currentTarget.value) });
               onAdvanceToNextRow?.(idx);
               return;
             }
