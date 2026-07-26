@@ -360,7 +360,7 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
               <div className="space-y-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Target company to overwrite</Label>
-                  <Select value={targetId} onValueChange={setTargetId}>
+                  <Select value={targetId} onValueChange={(v) => { setTargetId(v); void refreshDiff(v); }}>
                     <SelectTrigger><SelectValue placeholder="Choose target…" /></SelectTrigger>
                     <SelectContent>
                       {memberships.map((m) => (
@@ -371,6 +371,21 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
                     </SelectContent>
                   </Select>
                 </div>
+                {targetId && diff && (
+                  <div className="rounded-md border bg-muted/30 p-2 text-[11px]">
+                    <div className="mb-1 font-medium">Change preview (current → after restore):</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>Ledgers: <strong>{diff.ledgers.current} → {diff.ledgers.incoming}</strong></div>
+                      <div>Items: <strong>{diff.items.current} → {diff.items.incoming}</strong></div>
+                      <div>Vouchers: <strong>{diff.vouchers.current} → {diff.vouchers.incoming}</strong></div>
+                    </div>
+                    {diff.settingsWillRevert && (
+                      <div className="mt-1 text-amber-600 dark:text-amber-400">
+                        ⚠ Backup settings are OLDER than local — newer local settings will be preserved automatically.
+                      </div>
+                    )}
+                  </div>
+                )}
                 {targetId && (
                   <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs">
                     <div className="flex items-start gap-2">
