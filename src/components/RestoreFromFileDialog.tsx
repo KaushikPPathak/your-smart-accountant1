@@ -251,6 +251,7 @@ export function RestoreFromFileDialog({ open, onOpenChange, memberships, onDone 
   const canRestore =
     !!backup &&
     !busy &&
+    (checksumOk !== false || trustCorrupt) &&
     (mode === "new"
       ? newName.trim().length > 0
       : !!targetId && confirmText.trim() === targetName);
