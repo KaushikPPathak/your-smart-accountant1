@@ -160,11 +160,68 @@ function companyNameFromBackup(backup: CompanyBackup): string {
 }
 
 function voucherFingerprint(row: Record<string, unknown>): string {
+  // Hardened fingerprint (Round 2). The previous key was
+  //   [date, type, number, total]
+  // which collided any time two vouchers shared a series+total (common in
+  // repeat monthly bills, split cash payments, or a re-entered receipt for
+  // the same amount). Collisions let a smaller backup *appear* to contain
+  // every live voucher — so `isBackupSafeSuperset` would green-light an
+  // overwrite that silently lost work.
+  //
+  // We now include: party, narration hash, entry count, and either the
+  // stable id (same-installation) or amount+lines (cross-installation).
+  // Every field is normalised so trivial whitespace/case drift does not
+  // break the match.
+  const norm = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase();
+  const narration = norm(row.narration ?? row.remarks ?? row.description ?? "").slice(0, 120);
+  const party = norm(row.party_name ?? row.party_ledger_id ?? "");
+  const entriesLen = Array.isArray(row.entries) ? row.entries.length
+    : Number(row.entry_count ?? row.entries_count ?? 0);
+  const itemsLen = Array.isArray(row.items) ? row.items.length
+    : Number(row.item_count ?? row.items_count ?? 0);
   return JSON.stringify([
-    row.voucher_date ?? row.date ?? "",
-    String(row.voucher_type ?? row.type ?? "").toLocaleLowerCase(),
-    String(row.voucher_number ?? row.number ?? "").trim(),
+    norm(row.voucher_date ?? row.date),
+    norm(row.voucher_type ?? row.type),
+    norm(row.voucher_number ?? row.number),
     Number(row.total_amount_paise ?? row.total_paise ?? row.total_amount ?? row.amount ?? row.grand_total ?? 0),
+    party,
+    narration,
+    entriesLen,
+    itemsLen,
+    norm(row.id ?? ""),
+  ]);
+}
+
+function ledgerFingerprint(row: Record<string, unknown>): string {
+  // Ledger identity = normalised name + group. Two "Cash" ledgers under
+  // different groups (Cash-in-Hand vs Bank) must not collapse into one.
+  const norm = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
+  return JSON.stringify([norm(row.name), norm(row.group_name ?? row.group ?? "")]);
+}
+
+function itemFingerprint(row: Record<string, unknown>): string {
+  const norm = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
+  return JSON.stringify([norm(row.name), norm(row.unit ?? ""), norm(row.hsn ?? row.hsn_code ?? "")]);
+}
+
+function entryFingerprint(row: Record<string, unknown>): string {
+  const norm = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase();
+  return JSON.stringify([
+    norm(row.voucher_id),
+    norm(row.ledger_id),
+    norm(row.entry_type ?? row.dc ?? row.dr_cr ?? ""),
+    Number(row.amount_paise ?? row.amount ?? 0),
+  ]);
+}
+
+function voucherItemFingerprint(row: Record<string, unknown>): string {
+  const norm = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase();
+  return JSON.stringify([
+    norm(row.voucher_id),
+    norm(row.item_id),
+    Number(row.quantity ?? row.qty ?? 0),
+    Number(row.rate_paise ?? row.rate ?? 0),
+    Number(row.amount_paise ?? row.amount ?? 0),
   ]);
 }
 
@@ -189,19 +246,36 @@ function multisetContains(
 
 /**
  * A snapshot may silently replace live books only when it demonstrably
- * contains every live voucher, ledger and item plus additional vouchers.
- * This prevents an older but larger backup from deleting newer work.
+ * contains every live voucher, ledger, item, entry and voucher-item plus
+ * additional data. This prevents an older but larger backup from deleting
+ * newer work — even when the newer work happens inside child tables
+ * (voucher_entries, voucher_items) that the previous check ignored.
  */
 export function isBackupSafeSuperset(candidate: CompanyBackup, live: CompanyBackup): boolean {
-  const candidateCounts = [candidate.vouchers?.length ?? 0, candidate.ledgers?.length ?? 0, candidate.items?.length ?? 0];
-  const liveCounts = [live.vouchers?.length ?? 0, live.ledgers?.length ?? 0, live.items?.length ?? 0];
+  const candidateCounts = [
+    candidate.vouchers?.length ?? 0,
+    candidate.ledgers?.length ?? 0,
+    candidate.items?.length ?? 0,
+    candidate.voucher_entries?.length ?? 0,
+    candidate.voucher_items?.length ?? 0,
+  ];
+  const liveCounts = [
+    live.vouchers?.length ?? 0,
+    live.ledgers?.length ?? 0,
+    live.items?.length ?? 0,
+    live.voucher_entries?.length ?? 0,
+    live.voucher_items?.length ?? 0,
+  ];
+  // Every collection must be at least as large as live.
   if (candidateCounts.some((count, index) => count < liveCounts[index])) return false;
+  // At least one collection must be strictly larger (otherwise nothing to gain).
   if (!candidateCounts.some((count, index) => count > liveCounts[index])) return false;
-  const byName = (row: Record<string, unknown>) => normalizedIdentity(row.name);
   return (
     multisetContains(candidate.vouchers ?? [], live.vouchers ?? [], voucherFingerprint) &&
-    multisetContains(candidate.ledgers ?? [], live.ledgers ?? [], byName) &&
-    multisetContains(candidate.items ?? [], live.items ?? [], byName)
+    multisetContains(candidate.ledgers ?? [], live.ledgers ?? [], ledgerFingerprint) &&
+    multisetContains(candidate.items ?? [], live.items ?? [], itemFingerprint) &&
+    multisetContains(candidate.voucher_entries ?? [], live.voucher_entries ?? [], entryFingerprint) &&
+    multisetContains(candidate.voucher_items ?? [], live.voucher_items ?? [], voucherItemFingerprint)
   );
 }
 
