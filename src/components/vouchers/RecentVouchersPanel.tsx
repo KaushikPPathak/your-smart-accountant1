@@ -38,9 +38,10 @@ export function RecentVouchersPanel({
   const navigate = useNavigate();
   const [rows, setRows] = useState<RecentRow[]>([]);
   const [partyNames, setPartyNames] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!activeCompanyId) return;
+    if (!activeCompanyId || !open) return;
     let cancelled = false;
     (async () => {
       if (isLocalOnlyMode()) {
