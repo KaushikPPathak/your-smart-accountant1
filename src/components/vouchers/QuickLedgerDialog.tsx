@@ -207,6 +207,8 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         msme_registered: isParty ? msme : false,
         msme_udyam_no: isParty && msme ? (msmeNo.trim() || null) : null,
         msme_classification: isParty && msme ? msmeClass : null,
+        group_code: groupCode || defaultGroupCodeForType(type as LedgerTypeValue),
+        subgroup_id: subgroupId || null,
       };
 
       if (editId) {
