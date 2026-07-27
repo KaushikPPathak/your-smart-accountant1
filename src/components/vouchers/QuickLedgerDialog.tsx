@@ -76,11 +76,19 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   const [msme, setMsme] = useState(false);
   const [msmeNo, setMsmeNo] = useState("");
   const [msmeClass, setMsmeClass] = useState<string>("micro");
+  const [groupCode, setGroupCode] = useState<string>("");
+  const [subgroupId, setSubgroupId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const verifiedForRef = useRef<string>("");
 
   const profile = useMemo(() => profileFor(type), [type]);
+  const { subgroups, overrides } = useAccountGroups();
+  // Groups whose ledgerTypes include the current selected type — offered first.
+  const compatibleGroups = useMemo(
+    () => ACCOUNT_GROUPS.filter((g) => g.ledgerTypes.includes(type as LedgerTypeValue)),
+    [type],
+  );
 
   useEffect(() => {
     if (!open) return;
