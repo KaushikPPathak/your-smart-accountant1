@@ -137,6 +137,7 @@ export function RecentVouchersPanel({
             </li>
           ))}
         </ul>
+        )}
       </CardContent>
     </Card>
   );
