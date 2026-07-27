@@ -608,15 +608,19 @@ function LedgersPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <Label htmlFor="credit_limit">Credit limit (₹)</Label>
-                    <Input id="credit_limit" type="number" step="0.01" value={form.credit_limit} onChange={(e) => setForm({ ...form, credit_limit: e.target.value })} placeholder="0.00" />
-                  </div>
+                  {(form.type === "sundry_debtor" || form.type === "sundry_creditor") && (
+                    <>
+                      <div className="space-y-1">
+                        <Label htmlFor="credit_limit">Credit limit (₹)</Label>
+                        <Input id="credit_limit" type="number" step="0.01" value={form.credit_limit} onChange={(e) => setForm({ ...form, credit_limit: e.target.value })} placeholder="0.00" />
+                      </div>
 
-                  <div className="space-y-1">
-                    <Label htmlFor="credit_days">Credit days</Label>
-                    <Input id="credit_days" type="number" value={form.credit_days} onChange={(e) => setForm({ ...form, credit_days: e.target.value })} placeholder="0" />
-                  </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="credit_days">Credit days</Label>
+                        <Input id="credit_days" type="number" value={form.credit_days} onChange={(e) => setForm({ ...form, credit_days: e.target.value })} placeholder="0" />
+                      </div>
+                    </>
+                  )}
 
                   {(form.type === "sundry_debtor" || form.type === "sundry_creditor") && (
                     <>
