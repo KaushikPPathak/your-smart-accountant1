@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { LEDGER_TYPES, INDIAN_STATES } from "@/lib/constants";
+import { LEDGER_TYPES, INDIAN_STATES, type LedgerTypeValue } from "@/lib/constants";
 import { GST_REGISTRATION_TYPES, MSME_CLASSIFICATIONS } from "@/lib/schemas/ledger";
 import { GstinPortalWindow } from "@/components/GstinPortalWindow";
 import { GstinInlineError } from "@/components/GstinInlineError";
@@ -20,6 +20,13 @@ import { lookupGstinViaSetu } from "@/lib/setu";
 import { validateGSTIN } from "@/utils/gstinValidator";
 import { toTitleCaseOnType } from "@/lib/text-case";
 import { paiseToRupees, rupeesToPaise } from "@/lib/money";
+import {
+  ACCOUNT_GROUPS,
+  GROUP_BY_CODE,
+  defaultGroupCodeForType,
+  groupLabel as builtinGroupLabel,
+} from "@/lib/account-groups";
+import { useAccountGroups, resolveGroupLabel, subgroupsFor } from "@/lib/account-groups-runtime";
 
 export interface QuickLedger {
   id: string;
