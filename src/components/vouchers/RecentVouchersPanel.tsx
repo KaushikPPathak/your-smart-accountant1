@@ -83,17 +83,37 @@ export function RecentVouchersPanel({
     return () => {
       cancelled = true;
     };
-  }, [activeCompanyId, voucherType, refreshKey, limit]);
+  }, [activeCompanyId, voucherType, refreshKey, limit, open]);
 
-  if (rows.length === 0) return null;
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title={`Show recent ${voucherType.replace(/_/g, " ")}s`}
+        className="inline-flex items-center rounded border border-dashed px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        Edit
+      </button>
+    );
+  }
 
   return (
     <Card>
       <CardContent className="p-3">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-semibold uppercase text-muted-foreground">Recent {voucherType.replace(/_/g, " ")}s</span>
-          <span className="text-[10px] text-muted-foreground">click to edit</span>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+          >
+            hide
+          </button>
         </div>
+        {rows.length === 0 ? (
+          <div className="py-4 text-center text-xs text-muted-foreground">No recent entries.</div>
+        ) : (
         <ul className="divide-y text-sm">
           {rows.map((r) => (
             <li key={r.id}>
