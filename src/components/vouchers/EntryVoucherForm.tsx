@@ -592,7 +592,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const enterTab = useEnterAsTab(() => { if (!saving && balanced) save(); });
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div className="grid gap-4 lg:grid-cols-1 lg:has-[[data-recent-open]]:grid-cols-[minmax(0,1fr)_300px]">
       <div
         ref={(el) => { enterTab.ref.current = el; formRootRef.current = el; }}
         onKeyDown={enterTab.onKeyDown}

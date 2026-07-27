@@ -895,7 +895,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   });
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div className="grid gap-4 lg:grid-cols-1 lg:has-[[data-recent-open]]:grid-cols-[minmax(0,1fr)_300px]">
       <div ref={enterTab.ref} onKeyDown={enterTab.onKeyDown} className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
