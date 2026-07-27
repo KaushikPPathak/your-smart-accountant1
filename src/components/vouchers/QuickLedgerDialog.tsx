@@ -281,6 +281,54 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
             )}
           </div>
 
+          {/* Group (Schedule III / Income-Tax classification) — always editable */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label className="text-slate-600 text-xs font-semibold">Group *</Label>
+              <Select value={groupCode} onValueChange={(v) => { setGroupCode(v); setSubgroupId(""); }}>
+                <SelectTrigger className="border-slate-200 focus:ring-indigo-500"><SelectValue placeholder="Select group" /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {compatibleGroups.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400">Suggested for this type</div>
+                      {compatibleGroups.map((g) => (
+                        <SelectItem key={g.code} value={g.code}>
+                          {resolveGroupLabel(g.code, overrides)}
+                        </SelectItem>
+                      ))}
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 border-t mt-1">All groups</div>
+                    </>
+                  )}
+                  {ACCOUNT_GROUPS.filter((g) => !compatibleGroups.includes(g)).map((g) => (
+                    <SelectItem key={g.code} value={g.code}>
+                      {resolveGroupLabel(g.code, overrides)}
+                      <span className="text-[10px] text-slate-400 ml-1">({builtinGroupLabel(g.code)})</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-slate-500 pt-0.5">
+                Controls Balance Sheet / P&amp;L placement (Nominal, Real or Personal).
+              </p>
+            </div>
+            {groupCode && subgroupsFor(groupCode, subgroups).length > 0 && (
+              <div className="space-y-1">
+                <Label className="text-slate-600 text-xs font-semibold">Sub-group</Label>
+                <Select value={subgroupId || "__none__"} onValueChange={(v) => setSubgroupId(v === "__none__" ? "" : v)}>
+                  <SelectTrigger className="border-slate-200"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    {subgroupsFor(groupCode, subgroups).map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+
+
           {/* PARTY-ONLY block: GSTIN, GST reg type, PAN, State, Address, Contact, Credit terms, MSME */}
           {profile === "party" && (
             <>
