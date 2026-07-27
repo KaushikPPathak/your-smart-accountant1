@@ -14,6 +14,14 @@
 // row self-repairs.
 
 import { GST_STATE_CODES } from "@/utils/stateCodes";
+import { LEDGER_TYPES, type LedgerTypeValue } from "@/lib/constants";
+import {
+  ACCOUNT_GROUPS,
+  GROUP_BY_CODE,
+  defaultGroupCodeForType,
+  defaultLedgerTypeForGroup,
+  guessGroupCode,
+} from "@/lib/account-groups";
 
 type AnyRow = Record<string, unknown>;
 
@@ -66,7 +74,44 @@ export function normalizeLedger<T extends AnyRow>(row: T | null | undefined): T 
   if (out.is_active == null) out.is_active = true;
   if (out.is_deleted == null) out.is_deleted = false;
   if (out.opening_balance_paise == null) out.opening_balance_paise = 0;
+  if (out.opening_balance_is_debit == null) out.opening_balance_is_debit = true;
+  if (out.credit_limit_paise == null) out.credit_limit_paise = 0;
+  if (out.credit_days == null) out.credit_days = 0;
   if (out.gst_treatment == null && out.gstin) out.gst_treatment = "regular";
+
+  // Backups/imports created before account classification was introduced can
+  // omit `type`, `group_code`, or the opening Dr/Cr flag. Those rows rendered
+  // correctly but failed ledger edit validation with the unhelpful "Required"
+  // message. Recover the strongest available classification without changing
+  // already-valid values.
+  const validType = LEDGER_TYPES.some((candidate) => candidate.value === out.type);
+  let groupCode = typeof out.group_code === "string" && GROUP_BY_CODE[out.group_code]
+    ? out.group_code
+    : null;
+  if (!groupCode && typeof out.group_name === "string") {
+    const legacyGroup = out.group_name.trim().toLowerCase();
+    groupCode = ACCOUNT_GROUPS.find((group) =>
+      group.code.toLowerCase() === legacyGroup || group.label.toLowerCase() === legacyGroup
+    )?.code ?? null;
+  }
+  if (!validType) {
+    const side = out.opening_balance_is_debit === false ? "Cr" : "Dr";
+    const hasPartyDetails = Boolean(
+      out.gstin || out.pan || out.credit_days || out.credit_limit_paise || out.msme_registered,
+    );
+    if (!groupCode && hasPartyDetails) {
+      groupCode = side === "Dr" ? "SUNDRY_DEBTORS" : "SUNDRY_CREDITORS";
+    }
+    if (!groupCode) {
+      groupCode = guessGroupCode(
+        `${String(out.name ?? "")} ${String(out.group_name ?? "")}`,
+        side,
+      );
+    }
+    out.type = defaultLedgerTypeForGroup(groupCode);
+  }
+  if (!groupCode) groupCode = defaultGroupCodeForType(out.type as LedgerTypeValue);
+  out.group_code = groupCode;
   return out as T;
 }
 
