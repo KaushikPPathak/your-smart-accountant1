@@ -3,7 +3,7 @@ import { normalizeLedger } from "@/lib/offline/cache-normalizers";
 
 describe("legacy ledger cache normalization", () => {
   it("restores required edit fields for an older party ledger", () => {
-    const row = normalizeLedger({
+    const row = normalizeLedger<Record<string, unknown>>({
       id: "legacy-party",
       company_id: "zaveri-and-co",
       name: "Zaveri And Co",
@@ -20,7 +20,7 @@ describe("legacy ledger cache normalization", () => {
   });
 
   it("keeps an existing valid classification and credit opening side", () => {
-    const row = normalizeLedger({
+    const row = normalizeLedger<Record<string, unknown>>({
       id: "legacy-supplier",
       name: "Supplier",
       type: "sundry_creditor",
