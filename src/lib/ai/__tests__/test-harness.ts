@@ -227,7 +227,7 @@ export class AiTestHarness {
     const before = answerCacheStats().entries;
 
     // A ledger change must drop trial_balance and gst entries but preserve stock.
-    emitDataChange(TEST_COMPANY_ID, "ledger");
+    emitDataChange(TEST_COMPANY_ID, "ledger", undefined, { sync: true });
     const stockStillThere = lookupAnswer(TEST_COMPANY_ID, "stock", "item:widget", "stock q") === "STOCK-ANSWER";
     const tbGone = lookupAnswer(TEST_COMPANY_ID, "trial_balance", "period:2026-Q4", "tb q1") === null;
     const after = answerCacheStats().entries;
