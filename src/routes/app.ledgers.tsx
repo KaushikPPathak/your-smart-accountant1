@@ -465,102 +465,119 @@ function LedgersPage() {
                     </div>
                   )}
 
-                  {/* SIDE-BY-SIDE NEIGHBORHOOD CONTAINER: GSTIN AND STATE COMBINATION */}
-                  <div className="space-y-1 flex flex-col justify-end">
-                    <Label htmlFor="gstin">GSTIN</Label>
-                    <div className="flex items-center gap-2 w-full">
+                  {/* Party-only identity fields (GSTIN / State / PAN / Email).
+                      Income, expense, duty, capital and other internal ledgers
+                      do not transact with an external party, so exposing these
+                      fields on those forms is misleading and clutters entry. */}
+                  {(form.type === "sundry_debtor" || form.type === "sundry_creditor") && (
+                    <>
+                      <div className="space-y-1 flex flex-col justify-end">
+                        <Label htmlFor="gstin">GSTIN</Label>
+                        <div className="flex items-center gap-2 w-full">
+                          <Input
+                            id="gstin"
+                            value={form.gstin}
+                            onChange={(e) =>
+                              setForm({ ...form, gstin: e.target.value.toUpperCase().trim() })
+                            }
+                            maxLength={15}
+                            placeholder="24AAAAA0000A1Z5"
+                            className="font-mono uppercase tracking-wider flex-1"
+                          />
+                          <GstinPortalButton
+                            gstin={form.gstin}
+                            onDataFetched={(d) => {
+                              setForm((prev) => ({
+                                ...prev,
+                                name: prev.name?.trim() ? prev.name : (d.legalName || d.tradeName || prev.name),
+                                gstin: d.gstin || prev.gstin,
+                                address: d.address && !prev.address?.trim() ? d.address : prev.address,
+                                state_code:
+                                  prev.state_code ||
+                                  (d.gstin ? (INDIAN_STATES.find((s) => s.code === d.gstin.substring(0, 2))?.code ?? prev.state_code) : prev.state_code),
+                              }));
+                            }}
+                          />
+                        </div>
+                        <GstinInlineError value={form.gstin} />
+                      </div>
+
+                      <div className="space-y-1 flex flex-col justify-end">
+                        <Label htmlFor="state_code">State</Label>
+                        <Select value={form.state_code} onValueChange={onStateCodeChange}>
+                          <SelectTrigger id="state_code" className="bg-white">
+                            <SelectValue placeholder="Select state" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INDIAN_STATES.map((s) => (
+                              <SelectItem key={s.code} value={s.code}>
+                                {s.code} — {s.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="h-4" />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Contact + address: relevant to parties AND bank ledgers
+                      (branch address / relationship-manager phone). Hidden for
+                      income/expense/duty/capital ledgers. */}
+                  {(form.type === "sundry_debtor" || form.type === "sundry_creditor" || form.type === "bank") && (
+                    <>
+                      <div className="space-y-1">
+                        <Label htmlFor="phone">Phone</Label>
+                        <Input
+                          id="phone"
+                          value={form.phone}
+                          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                          maxLength={20}
+                          placeholder="Contact number"
+                        />
+                      </div>
+
+                      {(form.type === "sundry_debtor" || form.type === "sundry_creditor") && (
+                        <div className="space-y-1">
+                          <Label htmlFor="email">Email</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={form.email}
+                            onChange={(e) => setForm({ ...form, email: e.target.value })}
+                            maxLength={255}
+                            placeholder="email@domain.com"
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-1 col-span-2">
+                        <Label htmlFor="address">Address</Label>
+                        <Textarea
+                          id="address"
+                          value={form.address}
+                          onChange={(e) => setForm({ ...form, address: e.target.value })}
+                          maxLength={500}
+                          rows={2}
+                          placeholder={form.type === "bank" ? "Branch address" : "Registered business or delivery address"}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {(form.type === "sundry_debtor" || form.type === "sundry_creditor") && (
+                    <div className="space-y-1 col-span-2 sm:col-span-1">
+                      <Label htmlFor="pan">PAN</Label>
                       <Input
-                        id="gstin"
-                        value={form.gstin}
-                        onChange={(e) =>
-                          setForm({ ...form, gstin: e.target.value.toUpperCase().trim() })
-                        }
-                        maxLength={15}
-                        placeholder="24AAAAA0000A1Z5"
-                        className="font-mono uppercase tracking-wider flex-1"
-                      />
-                      <GstinPortalButton
-                        gstin={form.gstin}
-                        onDataFetched={(d) => {
-                          setForm((prev) => ({
-                            ...prev,
-                            name: prev.name?.trim() ? prev.name : (d.legalName || d.tradeName || prev.name),
-                            gstin: d.gstin || prev.gstin,
-                            address: d.address && !prev.address?.trim() ? d.address : prev.address,
-                            state_code:
-                              prev.state_code ||
-                              (d.gstin ? (INDIAN_STATES.find((s) => s.code === d.gstin.substring(0, 2))?.code ?? prev.state_code) : prev.state_code),
-                          }));
-                        }}
+                        id="pan"
+                        value={form.pan}
+                        onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase().trim() })}
+                        maxLength={10}
+                        placeholder="ABCDE1234F"
+                        className="font-mono bg-slate-50/50 text-slate-700"
                       />
                     </div>
-                    <GstinInlineError value={form.gstin} />
-                  </div>
-
-                  <div className="space-y-1 flex flex-col justify-end">
-                    <Label htmlFor="state_code">State</Label>
-                    <Select value={form.state_code} onValueChange={onStateCodeChange}>
-                      <SelectTrigger id="state_code" className="bg-white">
-                        <SelectValue placeholder="Select state" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {INDIAN_STATES.map((s) => (
-                          <SelectItem key={s.code} value={s.code}>
-                            {s.code} — {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* Visual spacer to align cleanly with the inline error height */}
-                    <div className="h-4" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input
-                      id="phone"
-                      value={form.phone}
-                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                      maxLength={20}
-                      placeholder="Contact number"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      maxLength={255}
-                      placeholder="email@domain.com"
-                    />
-                  </div>
-
-                  <div className="space-y-1 col-span-2">
-                    <Label htmlFor="address">Address</Label>
-                    <Textarea
-                      id="address"
-                      value={form.address}
-                      onChange={(e) => setForm({ ...form, address: e.target.value })}
-                      maxLength={500}
-                      rows={2}
-                      placeholder="Registered business or delivery address"
-                    />
-                  </div>
-
-                  <div className="space-y-1 col-span-2 sm:col-span-1">
-                    <Label htmlFor="pan">PAN</Label>
-                    <Input 
-                      id="pan" 
-                      value={form.pan} 
-                      onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase().trim() })} 
-                      maxLength={10} 
-                      placeholder="ABCDE1234F" 
-                      className="font-mono bg-slate-50/50 text-slate-700"
-                    />
-                  </div>
+                  )}
 
                   <div className="grid grid-cols-3 gap-2 col-span-2 sm:col-span-1">
                     <div className="space-y-1 col-span-2">
