@@ -111,6 +111,9 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         setMsme(Boolean(data.msme_registered));
         setMsmeNo((data.msme_udyam_no as string) || "");
         setMsmeClass((data.msme_classification as string) || "micro");
+        const gc = (data.group_code as string) || defaultGroupCodeForType(((data.type as string) || "sundry_debtor") as LedgerTypeValue);
+        setGroupCode(gc);
+        setSubgroupId((data.subgroup_id as string) || "");
       };
       if (isLocalOnlyMode()) {
         offlineDb.cache_ledgers.get(editId).then((d) => apply(d as Record<string, unknown>));
@@ -118,7 +121,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
       }
       supabase
         .from("ledgers")
-        .select("name, type, gstin, pan, state_code, address, phone, email, credit_limit_paise, credit_days, gst_treatment")
+        .select("name, type, gstin, pan, state_code, address, phone, email, credit_limit_paise, credit_days, gst_treatment, group_code, subgroup_id")
         .eq("id", editId)
         .single()
         .then(({ data }) => apply(data as Record<string, unknown>));
@@ -126,8 +129,20 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
       setName(""); setType("sundry_debtor"); setGstin(""); setGstRegType("regular");
       setPan(""); setStateCode(""); setAddress(""); setPhone(""); setEmail("");
       setCreditLimit(""); setCreditDays(""); setMsme(false); setMsmeNo(""); setMsmeClass("micro");
+      setGroupCode(defaultGroupCodeForType("sundry_debtor")); setSubgroupId("");
     }
   }, [open, editId]);
+
+  // Keep group in sync when type changes: if current group no longer matches
+  // this ledger type, snap to the default group for the new type.
+  useEffect(() => {
+    if (!groupCode) { setGroupCode(defaultGroupCodeForType(type as LedgerTypeValue)); return; }
+    const g = GROUP_BY_CODE[groupCode];
+    if (!g || !g.ledgerTypes.includes(type as LedgerTypeValue)) {
+      setGroupCode(defaultGroupCodeForType(type as LedgerTypeValue));
+      setSubgroupId("");
+    }
+  }, [type, groupCode]);
 
   // GSTIN → auto-fill state
   useEffect(() => {
