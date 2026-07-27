@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { LEDGER_TYPES, INDIAN_STATES } from "@/lib/constants";
+import { LEDGER_TYPES, INDIAN_STATES, type LedgerTypeValue } from "@/lib/constants";
 import { GST_REGISTRATION_TYPES, MSME_CLASSIFICATIONS } from "@/lib/schemas/ledger";
 import { GstinPortalWindow } from "@/components/GstinPortalWindow";
 import { GstinInlineError } from "@/components/GstinInlineError";
@@ -20,6 +20,13 @@ import { lookupGstinViaSetu } from "@/lib/setu";
 import { validateGSTIN } from "@/utils/gstinValidator";
 import { toTitleCaseOnType } from "@/lib/text-case";
 import { paiseToRupees, rupeesToPaise } from "@/lib/money";
+import {
+  ACCOUNT_GROUPS,
+  GROUP_BY_CODE,
+  defaultGroupCodeForType,
+  groupLabel as builtinGroupLabel,
+} from "@/lib/account-groups";
+import { useAccountGroups, resolveGroupLabel, subgroupsFor } from "@/lib/account-groups-runtime";
 
 export interface QuickLedger {
   id: string;
@@ -69,11 +76,19 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   const [msme, setMsme] = useState(false);
   const [msmeNo, setMsmeNo] = useState("");
   const [msmeClass, setMsmeClass] = useState<string>("micro");
+  const [groupCode, setGroupCode] = useState<string>("");
+  const [subgroupId, setSubgroupId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const verifiedForRef = useRef<string>("");
 
   const profile = useMemo(() => profileFor(type), [type]);
+  const { subgroups, overrides } = useAccountGroups();
+  // Groups whose ledgerTypes include the current selected type — offered first.
+  const compatibleGroups = useMemo(
+    () => ACCOUNT_GROUPS.filter((g) => g.ledgerTypes.includes(type as LedgerTypeValue)),
+    [type],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -96,6 +111,9 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         setMsme(Boolean(data.msme_registered));
         setMsmeNo((data.msme_udyam_no as string) || "");
         setMsmeClass((data.msme_classification as string) || "micro");
+        const gc = (data.group_code as string) || defaultGroupCodeForType(((data.type as string) || "sundry_debtor") as LedgerTypeValue);
+        setGroupCode(gc);
+        setSubgroupId((data.subgroup_id as string) || "");
       };
       if (isLocalOnlyMode()) {
         offlineDb.cache_ledgers.get(editId).then((d) => apply(d as Record<string, unknown>));
@@ -103,7 +121,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
       }
       supabase
         .from("ledgers")
-        .select("name, type, gstin, pan, state_code, address, phone, email, credit_limit_paise, credit_days, gst_treatment")
+        .select("name, type, gstin, pan, state_code, address, phone, email, credit_limit_paise, credit_days, gst_treatment, group_code, subgroup_id")
         .eq("id", editId)
         .single()
         .then(({ data }) => apply(data as Record<string, unknown>));
@@ -111,8 +129,20 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
       setName(""); setType("sundry_debtor"); setGstin(""); setGstRegType("regular");
       setPan(""); setStateCode(""); setAddress(""); setPhone(""); setEmail("");
       setCreditLimit(""); setCreditDays(""); setMsme(false); setMsmeNo(""); setMsmeClass("micro");
+      setGroupCode(defaultGroupCodeForType("sundry_debtor")); setSubgroupId("");
     }
   }, [open, editId]);
+
+  // Keep group in sync when type changes: if current group no longer matches
+  // this ledger type, snap to the default group for the new type.
+  useEffect(() => {
+    if (!groupCode) { setGroupCode(defaultGroupCodeForType(type as LedgerTypeValue)); return; }
+    const g = GROUP_BY_CODE[groupCode];
+    if (!g || !g.ledgerTypes.includes(type as LedgerTypeValue)) {
+      setGroupCode(defaultGroupCodeForType(type as LedgerTypeValue));
+      setSubgroupId("");
+    }
+  }, [type, groupCode]);
 
   // GSTIN → auto-fill state
   useEffect(() => {
@@ -177,6 +207,8 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         msme_registered: isParty ? msme : false,
         msme_udyam_no: isParty && msme ? (msmeNo.trim() || null) : null,
         msme_classification: isParty && msme ? msmeClass : null,
+        group_code: groupCode || defaultGroupCodeForType(type as LedgerTypeValue),
+        subgroup_id: subgroupId || null,
       };
 
       if (editId) {
@@ -248,6 +280,54 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
               </p>
             )}
           </div>
+
+          {/* Group (Schedule III / Income-Tax classification) — always editable */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label className="text-slate-600 text-xs font-semibold">Group *</Label>
+              <Select value={groupCode} onValueChange={(v) => { setGroupCode(v); setSubgroupId(""); }}>
+                <SelectTrigger className="border-slate-200 focus:ring-indigo-500"><SelectValue placeholder="Select group" /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {compatibleGroups.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400">Suggested for this type</div>
+                      {compatibleGroups.map((g) => (
+                        <SelectItem key={g.code} value={g.code}>
+                          {resolveGroupLabel(g.code, overrides)}
+                        </SelectItem>
+                      ))}
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 border-t mt-1">All groups</div>
+                    </>
+                  )}
+                  {ACCOUNT_GROUPS.filter((g) => !compatibleGroups.includes(g)).map((g) => (
+                    <SelectItem key={g.code} value={g.code}>
+                      {resolveGroupLabel(g.code, overrides)}
+                      <span className="text-[10px] text-slate-400 ml-1">({builtinGroupLabel(g.code)})</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-slate-500 pt-0.5">
+                Controls Balance Sheet / P&amp;L placement (Nominal, Real or Personal).
+              </p>
+            </div>
+            {groupCode && subgroupsFor(groupCode, subgroups).length > 0 && (
+              <div className="space-y-1">
+                <Label className="text-slate-600 text-xs font-semibold">Sub-group</Label>
+                <Select value={subgroupId || "__none__"} onValueChange={(v) => setSubgroupId(v === "__none__" ? "" : v)}>
+                  <SelectTrigger className="border-slate-200"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    {subgroupsFor(groupCode, subgroups).map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+
 
           {/* PARTY-ONLY block: GSTIN, GST reg type, PAN, State, Address, Contact, Credit terms, MSME */}
           {profile === "party" && (
