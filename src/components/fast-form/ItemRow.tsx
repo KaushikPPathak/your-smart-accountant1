@@ -196,18 +196,8 @@ function ItemRowImpl({
           >
             <PackagePlus className="h-4 w-4" />
           </Button>
-          {row.item_id && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0"
-              title="Edit item (Shift+F4)"
-              onClick={() => onEditItemDlg(idx, row.item_id)}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-          )}
+          {/* Edit item removed from row — edit is available from Sales Register / Ledger / Items list */}
+
         </div>
       </TableCell>
       {showHsnColumn && (
