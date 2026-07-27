@@ -78,27 +78,21 @@ export function LedgerBalanceChip({ ledgerId, prefix, className, compact }: Prop
     className,
   );
 
-  // Default state: chip is inert (no popover trigger). User must press Edit to unlock history.
+  // Default state: EVERYTHING hidden except a tiny "Bal" toggle. Keeps voucher columns uncluttered.
   if (!unlocked) {
     return (
-      <span className="inline-flex items-center gap-1">
-        <span className={chipClasses} aria-label={`${balance.name} balance ${formatINR(abs)} ${drCr}`}>
-          {prefix && <span className="text-muted-foreground">{prefix}:</span>}
-          <span className={tone}>{formatINR(abs)}</span>
-          <span className={cn("font-semibold", tone)}>{drCr}</span>
-        </span>
-        <button
-          type="button"
-          onClick={() => { setUnlocked(true); setOpen(true); }}
-          title="Show last 10 entries"
-          className={cn(
-            "inline-flex items-center rounded border border-dashed px-1.5 py-0.5 text-[10px] font-medium",
-            "text-muted-foreground hover:bg-muted hover:text-foreground",
-          )}
-        >
-          Edit
-        </button>
-      </span>
+      <button
+        type="button"
+        onClick={() => { setUnlocked(true); setOpen(true); }}
+        title={`Show balance & last 10 entries for ${balance.name}`}
+        className={cn(
+          "inline-flex items-center rounded border border-dashed px-1.5 py-0.5 text-[10px] font-medium",
+          "text-muted-foreground hover:bg-muted hover:text-foreground",
+          className,
+        )}
+      >
+        Bal
+      </button>
     );
   }
 
@@ -107,7 +101,7 @@ export function LedgerBalanceChip({ ledgerId, prefix, className, compact }: Prop
       <PopoverTrigger asChild>
         <button
           type="button"
-          title="Click for last 10 entries"
+          title="Click to hide"
           className={cn(chipClasses, "hover:bg-muted")}
         >
           {prefix && <span className="text-muted-foreground">{prefix}:</span>}
@@ -115,6 +109,7 @@ export function LedgerBalanceChip({ ledgerId, prefix, className, compact }: Prop
           <span className={cn("font-semibold", tone)}>{drCr}</span>
         </button>
       </PopoverTrigger>
+
 
       <PopoverContent className="w-[420px] p-0" align="start">
         <div className="border-b px-3 py-2">
