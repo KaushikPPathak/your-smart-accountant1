@@ -226,11 +226,14 @@ function LedgersPage() {
   };
 
   const openEdit = (l: Ledger) => {
+    const safeType = LEDGER_TYPES.some((candidate) => candidate.value === l.type)
+      ? l.type
+      : defaultLedgerTypeForGroup(l.group_code ?? "");
     setEditing(l);
     setForm({
-      name: l.name,
-      type: l.type,
-      group_code: l.group_code ?? defaultGroupCodeForType(l.type),
+      name: l.name ?? "",
+      type: safeType,
+      group_code: l.group_code ?? defaultGroupCodeForType(safeType),
       subgroup_id: l.subgroup_id ?? "",
       gstin: l.gstin ?? "",
       pan: l.pan ?? "",
@@ -242,7 +245,7 @@ function LedgersPage() {
       opening_balance: l.opening_balance_paise
         ? String(paiseToRupees(l.opening_balance_paise))
         : "",
-      opening_balance_is_debit: l.opening_balance_is_debit,
+      opening_balance_is_debit: l.opening_balance_is_debit ?? true,
       credit_limit: l.credit_limit_paise ? String(paiseToRupees(l.credit_limit_paise)) : "",
       credit_days: l.credit_days ? String(l.credit_days) : "",
       gst_registration_type: l.gst_registration_type ?? l.gst_treatment ?? "regular",
