@@ -192,7 +192,12 @@ export function routeQuery(question: string): RoutedQuery {
   // OR a leading "<Name> balance" clause matched. In that case, party lookup wins
   // over generic cash_bank routing even if the word "cash" appears (e.g. the user
   // asked "cash balance of Madhuben" = party balance, settled in cash).
-  const strongPartyHint = Boolean(balOf || leading);
+  // A "leading" match on the bare words "cash"/"bank" is not a party hint —
+  // those are ledger-type keywords, not party names. Only treat as strong
+  // party hint when the leading name is something other than cash/bank.
+  const leadingName = leading?.[1]?.trim().toLowerCase() ?? "";
+  const leadingIsCashBank = /^(cash|bank)\b/.test(leadingName);
+  const strongPartyHint = Boolean(balOf || (leading && !leadingIsCashBank));
 
   if (latestKind) {
     intent = "latest_voucher";
@@ -206,12 +211,12 @@ export function routeQuery(question: string): RoutedQuery {
     intent = "trial_balance";
   } else if (/\b(p&l|p and l|profit|loss|trading|gross profit|net profit)\b/.test(lower)) {
     intent = "profit_loss";
+  } else if (/\b(cash|bank)\s+(book|balance|position|in\s*hand|on\s*hand|at\s*bank)\b|\bcash\s*[- ]?in[- ]?hand\b|\bcash\s*[- ]?on[- ]?hand\b|\bbrs\b/.test(lower)) {
+    intent = "cash_bank";
   } else if (strongPartyHint && /\b(ledger|statement|account)\b/.test(lower)) {
     intent = "party_ledger";
   } else if (strongPartyHint) {
     intent = "party_balance";
-  } else if (/\b(cash|bank) (book|balance|position|in hand|on hand|at bank)\b|\bcash\s*[- ]?in[- ]?hand\b|\bcash\s*[- ]?on[- ]?hand\b|\bbrs\b/.test(lower)) {
-    intent = "cash_bank";
   } else if (/\b(stock|inventory|closing stock|opening stock|item)\b/.test(lower)) {
     intent = "stock_query";
   } else if (/\b(balance|owes?|owed|payable|receivable|outstanding|due)\b/.test(lower) && entityHints.length > 0) {
