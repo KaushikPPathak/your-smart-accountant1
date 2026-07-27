@@ -42,6 +42,7 @@ function fmtDate(d: string) {
 
 export function LedgerBalanceChip({ ledgerId, prefix, className, compact }: Props) {
   const balance = useLedgerBalance(ledgerId);
+  const [unlocked, setUnlocked] = React.useState(false);
   const [open, setOpen] = React.useState(false);
   const [recent, setRecent] = React.useState<LedgerRecentEntry[]>([]);
 
@@ -54,6 +55,12 @@ export function LedgerBalanceChip({ ledgerId, prefix, className, compact }: Prop
     return () => { cancelled = true; };
   }, [open, ledgerId]);
 
+  // Re-lock whenever the target ledger changes so history stays hidden by default.
+  React.useEffect(() => {
+    setUnlocked(false);
+    setOpen(false);
+  }, [ledgerId]);
+
   if (!ledgerId || !balance) return null;
 
   const abs = Math.abs(balance.paise);
@@ -65,23 +72,50 @@ export function LedgerBalanceChip({ ledgerId, prefix, className, compact }: Prop
         ? "text-emerald-700 dark:text-emerald-400"
         : "text-rose-700 dark:text-rose-400";
 
+  const chipClasses = cn(
+    "inline-flex items-center gap-1 rounded border bg-muted/40 font-mono",
+    compact ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-xs",
+    className,
+  );
+
+  // Default state: chip is inert (no popover trigger). User must press Edit to unlock history.
+  if (!unlocked) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className={chipClasses} aria-label={`${balance.name} balance ${formatINR(abs)} ${drCr}`}>
+          {prefix && <span className="text-muted-foreground">{prefix}:</span>}
+          <span className={tone}>{formatINR(abs)}</span>
+          <span className={cn("font-semibold", tone)}>{drCr}</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => { setUnlocked(true); setOpen(true); }}
+          title="Show last 10 entries"
+          className={cn(
+            "inline-flex items-center rounded border border-dashed px-1.5 py-0.5 text-[10px] font-medium",
+            "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+        >
+          Edit
+        </button>
+      </span>
+    );
+  }
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setUnlocked(false); }}>
       <PopoverTrigger asChild>
         <button
           type="button"
           title="Click for last 10 entries"
-          className={cn(
-            "inline-flex items-center gap-1 rounded border bg-muted/40 font-mono hover:bg-muted",
-            compact ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-xs",
-            className,
-          )}
+          className={cn(chipClasses, "hover:bg-muted")}
         >
           {prefix && <span className="text-muted-foreground">{prefix}:</span>}
           <span className={tone}>{formatINR(abs)}</span>
           <span className={cn("font-semibold", tone)}>{drCr}</span>
         </button>
       </PopoverTrigger>
+
       <PopoverContent className="w-[420px] p-0" align="start">
         <div className="border-b px-3 py-2">
           <div className="text-sm font-semibold">{balance.name}</div>
