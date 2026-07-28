@@ -36,6 +36,11 @@ jobs:
       - name: Build web app (relative base for file://)
         run: npx vite build --base=./
 
+      - name: Transpile CSS for Chromium 108 compatibility
+        shell: pwsh
+        run: |
+          npx lightningcss-cli --targets "chrome 108" dist/assets/*.css -o dist/assets/
+
       - name: Stage web build into electron-legacy/app
         shell: pwsh
         run: |
