@@ -36,11 +36,11 @@ jobs:
       - name: Build web app (relative base for file://)
         run: npx vite build --base=./
 
-      - name: Stage web build into electron-legacy
+      - name: Stage web build into electron-legacy/app
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path electron-legacy/dist | Out-Null
-          Copy-Item -Recurse -Force dist/* electron-legacy/dist/
+          New-Item -ItemType Directory -Force -Path electron-legacy/app | Out-Null
+          Copy-Item -Recurse -Force dist/* electron-legacy/app/
 
       - name: Install electron-legacy dependencies
         working-directory: electron-legacy
