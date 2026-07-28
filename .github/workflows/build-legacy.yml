@@ -39,7 +39,8 @@ jobs:
       - name: Transpile CSS for Chromium 108 compatibility
         shell: pwsh
         run: |
-          npx lightningcss-cli --targets "chrome 108" dist/assets/*.css -o dist/assets/
+          $cssFile = (Get-ChildItem -Path "dist/assets/*.css").FullName
+          npx lightningcss-cli --targets "chrome 108" "$cssFile" -o "$cssFile"
 
       - name: Stage web build into electron-legacy/app
         shell: pwsh
