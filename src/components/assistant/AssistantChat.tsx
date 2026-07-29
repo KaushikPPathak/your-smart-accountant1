@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff, FileText, Paperclip, ScanLine, BrainCircuit } from "lucide-react";
+import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff, FileText, Paperclip, ScanLine, BrainCircuit, Volume2, VolumeX, Headphones } from "lucide-react";
 import { extractInvoiceOcr, type OcrDraft } from "@/lib/ai/ocr-invoice";
 import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
 import { Link } from "@tanstack/react-router";
 import { useVoiceInput } from "@/lib/ai/voice-input";
+import { useVoiceOutput } from "@/lib/ai/voice-output";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -117,9 +118,21 @@ export function AssistantChat() {
   // follow-ups like "and as on 31/12/2025?" work without repeating names.
   const memoryRef = useRef<ConversationMemory | undefined>(undefined);
 
-  // Tier 3 #11 — Web Speech API voice input. Transcript is appended to the
-  // composer so the user can review/edit before hitting send.
+  // Phase D — Voice + hands-free flow. Voice input uses the Web Speech
+  // Recognition API; voice output uses SpeechSynthesis. Both are fully
+  // in-browser (offline, free, private). When hands-free is on, the mic
+  // auto-restarts after each spoken reply for a walkie-talkie loop.
+  const [handsFree, setHandsFree] = useState(false);
+  const [ttsOn, setTtsOn] = useState(false);
+  const handsFreeRef = useRef(false);
+  useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
+  const tts = useVoiceOutput();
+  const askRef = useRef<((t: string) => void) | null>(null);
   const voice = useVoiceInput((text) => {
+    if (handsFreeRef.current) {
+      askRef.current?.(text);
+      return;
+    }
     const el = inputRef.current;
     if (!el) return;
     const cur = el.value.trim();
@@ -136,6 +149,38 @@ export function AssistantChat() {
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  // Keep a stable ref to `ask` so the voice-input callback (defined once)
+  // can reach the latest closure without stale-state bugs.
+  useEffect(() => { askRef.current = ask; });
+
+  // Phase D — speak assistant replies aloud when TTS or hands-free is on,
+  // then re-arm the mic so the user can just keep talking.
+  const lastSpokenIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ttsOn && !handsFree) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant" || !last.text) return;
+    if (lastSpokenIdRef.current === last.id) return;
+    lastSpokenIdRef.current = last.id;
+    tts.onEnd(() => {
+      if (handsFreeRef.current && voice.supported && !voice.listening) {
+        try { voice.start(); } catch { /* noop */ }
+      }
+    });
+    tts.speak(last.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, ttsOn, handsFree]);
+
+  // Turning hands-free off should silence any in-flight speech and stop
+  // listening so the mic light doesn't stay on.
+  useEffect(() => {
+    if (!handsFree) { tts.stop(); voice.stop(); return; }
+    if (voice.supported && !voice.listening) {
+      try { voice.start(); } catch { /* noop */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handsFree]);
 
   const browseEntries = useMemo(() => {
     if (activeCat === "All") return ASSISTANT_KB;
@@ -865,6 +910,37 @@ export function AssistantChat() {
               disabled={creating || thinking}
             >
               {voice.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
+          ) : null}
+          {tts.supported ? (
+            <Button
+              type="button"
+              size="icon"
+              variant={ttsOn ? "default" : "outline"}
+              aria-label={ttsOn ? "Mute read-aloud" : "Read replies aloud"}
+              title={ttsOn ? "Read-aloud on — click to mute" : "Read replies aloud (offline TTS)"}
+              onClick={() => {
+                setTtsOn((v) => {
+                  const next = !v;
+                  if (!next) tts.stop();
+                  return next;
+                });
+              }}
+            >
+              {ttsOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </Button>
+          ) : null}
+          {voice.supported && tts.supported ? (
+            <Button
+              type="button"
+              size="icon"
+              variant={handsFree ? "default" : "outline"}
+              aria-label={handsFree ? "Turn off hands-free" : "Turn on hands-free"}
+              title={handsFree ? "Hands-free on — mic re-arms after each reply" : "Hands-free mode: speak, listen, repeat"}
+              onClick={() => setHandsFree((v) => !v)}
+              disabled={creating || thinking}
+            >
+              <Headphones className="h-4 w-4" />
             </Button>
           ) : null}
           <Button type="submit" size="icon" aria-label="Send" disabled={creating || thinking || ocrLoading}>
