@@ -108,6 +108,9 @@ class OfflineDatabase extends Dexie {
   account_creds!: Table<any, any>;
   meta!: Table<any, any>;
   activity_log!: Table<any, any>;
+  // E1 — Bank reconciliation (local-only, never synced).
+  cache_bank_statements!: Table<any, any>;
+  cache_bank_statement_lines!: Table<any, any>;
 
   constructor() {
     super("ym_offline_cache_v3");
@@ -202,6 +205,15 @@ class OfflineDatabase extends Dexie {
     this.version(9).stores({
       activity_log: "++id, company_id, ts, entity_type, action, [company_id+ts]",
     });
+    // v10 — Bank reconciliation stores (E1). Local-only, excluded from sync
+    // and from cloud backup by design (raw statements can be re-imported).
+    this.version(10).stores({
+      cache_bank_statements:
+        "id, company_id, bank_ledger_id, imported_at, [company_id+bank_ledger_id]",
+      cache_bank_statement_lines:
+        "id, statement_id, company_id, txn_date, match_status, " +
+        "[company_id+bank_ledger_id+txn_date], [statement_id+txn_date]",
+    });
   }
 }
 
@@ -244,6 +256,7 @@ function makeStubDb(): OfflineDatabase {
     "cache_cost_centres", "cache_cost_categories",
     "outbox", "dead_letter", "sync_cursors", "account_creds", "meta",
     "activity_log",
+    "cache_bank_statements", "cache_bank_statement_lines",
   ];
   const stub: Record<string, unknown> = {
     async transaction(_mode: string, ...args: unknown[]) {
