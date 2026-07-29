@@ -496,6 +496,29 @@ export async function retrieveForQuery(routed: RoutedQuery, companyIdIn?: string
   if (routed.companyHint) {
     const resolved = await resolveCompanyFromHints([routed.companyHint], companyId);
     if (resolved && resolved !== companyId) companyId = resolved;
+  } else if (routed.entityHints.length > 0) {
+    // Fallback: if the user typed a company name inline (e.g. "cash on hand
+    // from AVNI JENISH SHAH balance sheet"), promote it to a company switch
+    // when it matches a real company much better than any ledger would.
+    try {
+      const companies = (await readCompanies()) as any[];
+      if (companies.length > 1) {
+        const phrase = routed.entityHints.join(" ").trim();
+        const nPhrase = normalizeName(phrase);
+        let best: any = null;
+        let bestScore = 0;
+        for (const c of companies) {
+          const nName = normalizeName(String(c.name ?? ""));
+          const sim = similarity(String(c.name ?? ""), phrase);
+          const contains = nName.includes(nPhrase) || nPhrase.includes(nName) ? 0.95 : 0;
+          const s = Math.max(sim, contains);
+          if (s > bestScore) { bestScore = s; best = c; }
+        }
+        if (best && bestScore >= 0.85 && String(best.id) !== String(companyId)) {
+          companyId = String(best.id);
+        }
+      }
+    } catch { /* ignore */ }
   }
   let slice: RetrievedSlice;
   switch (routed.intent) {
