@@ -442,7 +442,15 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   // without a focused menubar (Companies, dashboard, empty routes) can
   // exit in a single keypress instead of hopping through the menubar.
   useEffect(() => {
-    const onExit = () => { if (onLock) setExitConfirmOpen(true); };
+    const onExit = () => {
+      if (!onLock) return;
+      // Close any open menubar dropdown and blur the trigger so Enter can't
+      // fall through to a menubar button while the confirmation is open.
+      setOpenMenuKey("");
+      const active = document.activeElement as HTMLElement | null;
+      if (active && typeof active.blur === "function") active.blur();
+      setExitConfirmOpen(true);
+    };
     window.addEventListener("app:exit-request", onExit);
     return () => window.removeEventListener("app:exit-request", onExit);
   }, [onLock]);
