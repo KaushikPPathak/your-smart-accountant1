@@ -171,6 +171,10 @@ export interface AssistantPrefill {
 export function writeAssistantPrefill(p: AssistantPrefill) {
   try {
     sessionStorage.setItem(ASSISTANT_PREFILL_KEY, JSON.stringify(p));
+    // Fire-and-forget: register a correction watch so the assistant can
+    // learn from any edits the user makes before saving. Dynamic import
+    // keeps the voucher-intent module free of AI-layer dependencies.
+    void import("@/lib/ai/correction-watcher").then((m) => m.armCorrectionWatch(p)).catch(() => undefined);
   } catch {
     /* ignore quota */
   }
@@ -191,6 +195,7 @@ export function consumeAssistantPrefill(
     return null;
   }
 }
+
 
 /**
  * After the form has prefilled itself, send focus to the primary "Save"
