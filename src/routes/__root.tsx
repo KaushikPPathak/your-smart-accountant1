@@ -15,7 +15,11 @@ import { isDesktopRuntime } from "@/lib/native-bridge";
 import { WebDemoLanding } from "@/components/WebDemoLanding";
 import { installCrashHandlers } from "@/lib/crash-log";
 import { installErrorRing } from "@/lib/ai/error-ring";
+import { installNativeDialogShim } from "@/lib/native-dialog-shim";
 
+// Neutralise Tauri's window.alert/confirm/prompt override before any code
+// path (auth boot, restore banner, voucher discard guards) can trip its ACL.
+installNativeDialogShim();
 // Layer 5 — install global crash + rejection handlers once at module load
 // (browser only; no-op on SSR). Failures land in a bounded local ring buffer.
 installCrashHandlers();
