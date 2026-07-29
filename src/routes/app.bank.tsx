@@ -1,18 +1,22 @@
 import { fmtIndianDate } from "@/lib/format-date";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Link2, X, FileScan } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Link2, X, FileScan, Trash2 } from "lucide-react";
 import { useCompany } from "@/lib/company-context";
-import { useAuth } from "@/lib/auth-context";
 import { formatINR } from "@/lib/money";
-import { parseBankCsv, suggestMatch, type ParsedBankLine, type VoucherCandidate } from "@/lib/bank-rec";
+import { readLedgers } from "@/lib/offline/cache-read";
+import { parseStatementFile, type ParseResponse } from "@/lib/bank/parse-client";
+import {
+  commitStatement, listLines, loadVoucherCandidates, updateLine, deleteStatement,
+  type LocalBankLine, type VoucherCandidate,
+} from "@/lib/bank/local-store";
+import { BankImportPreviewDialog } from "@/components/bank/BankImportPreviewDialog";
 import { BankOcrImportDialog } from "@/components/bank/BankOcrImportDialog";
 import { toast } from "sonner";
 
@@ -22,82 +26,65 @@ export const Route = createFileRoute("/app/bank")({
 });
 
 interface BankLedger { id: string; name: string }
-interface Line {
-  id: string;
-  txn_date: string;
-  description: string | null;
-  reference: string | null;
-  debit_paise: number;
-  credit_paise: number;
-  matched_voucher_id: string | null;
-  match_status: string;
-}
 
 function BankRecPage() {
   const { activeCompanyId } = useCompany();
-  const { user } = useAuth();
   const [bankLedgers, setBankLedgers] = useState<BankLedger[]>([]);
   const [bankLedgerId, setBankLedgerId] = useState<string>("");
-  const [lines, setLines] = useState<Line[]>([]);
+  const [lines, setLines] = useState<LocalBankLine[]>([]);
   const [candidates, setCandidates] = useState<VoucherCandidate[]>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
   const [ocrOpen, setOcrOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [parseResult, setParseResult] = useState<ParseResponse | null>(null);
+  const [pendingFileName, setPendingFileName] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
 
+  // Load bank/cash ledgers from local cache.
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase.from("ledgers").select("id, name").eq("company_id", activeCompanyId).in("type", ["bank", "cash"]).order("name")
-      .then(({ data }) => setBankLedgers((data || []) as BankLedger[]));
-  }, [activeCompanyId]);
-
-  useEffect(() => {
-    if (!activeCompanyId) return;
-    supabase.from("vouchers").select("id, voucher_date, voucher_number, reference_no, total_paise, voucher_type")
-      .eq("company_id", activeCompanyId).order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false }).limit(2000)
-      .then(({ data }) => setCandidates((data || []) as VoucherCandidate[]));
-  }, [activeCompanyId]);
-
-  async function loadLines() {
-    if (!activeCompanyId || !bankLedgerId) { setLines([]); return; }
-    const { data } = await supabase.from("bank_statement_lines")
-      .select("id, txn_date, description, reference, debit_paise, credit_paise, matched_voucher_id, match_status, statement_id, bank_statements!inner(bank_ledger_id)")
-      .eq("company_id", activeCompanyId).eq("bank_statements.bank_ledger_id", bankLedgerId)
-      .order("txn_date", { ascending: false });
-    setLines((data || []) as unknown as Line[]);
-  }
-
-  useEffect(() => { loadLines(); }, [activeCompanyId, bankLedgerId]);
-
-  async function onUpload(file: File) {
-    if (!activeCompanyId || !bankLedgerId || !user) { toast.error("Pick a bank ledger first"); return; }
-    const text = await file.text();
-    const parsed = parseBankCsv(text);
-    if (parsed.length === 0) { toast.error("Could not parse this CSV. Expected Date, Description, Debit, Credit columns."); return; }
-    const dates = parsed.map((p) => p.txn_date).sort();
-    const { data: stmt, error } = await supabase.from("bank_statements").insert({
-      company_id: activeCompanyId, bank_ledger_id: bankLedgerId, file_name: file.name,
-      from_date: dates[0], to_date: dates[dates.length - 1],
-      total_lines: parsed.length, imported_by: user.id,
-    }).select("id").single();
-    if (error || !stmt) { toast.error(error?.message || "Import failed"); return; }
-    const rows = parsed.map((p: ParsedBankLine) => {
-      const matchId = suggestMatch(p, candidates);
-      return {
-        statement_id: stmt.id, company_id: activeCompanyId,
-        txn_date: p.txn_date, description: p.description, reference: p.reference,
-        debit_paise: p.debit_paise, credit_paise: p.credit_paise, balance_paise: p.balance_paise,
-        matched_voucher_id: matchId, match_status: matchId ? "suggested" : "unmatched",
-      };
+    readLedgers(activeCompanyId).then((rows: any[]) => {
+      const bs = rows
+        .filter((l) => !l.is_deleted && ["bank", "cash"].includes(String(l.type || "").toLowerCase()))
+        .map((l) => ({ id: String(l.id), name: String(l.name) }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setBankLedgers(bs);
     });
-    const { error: lineErr } = await supabase.from("bank_statement_lines").insert(rows);
-    if (lineErr) { toast.error(lineErr.message); return; }
-    toast.success(`Imported ${parsed.length} lines · ${rows.filter((r) => r.matched_voucher_id).length} suggested matches`);
+  }, [activeCompanyId]);
+
+  const reloadLines = useCallback(async () => {
+    if (!activeCompanyId || !bankLedgerId) { setLines([]); return; }
+    const [ls, cs] = await Promise.all([
+      listLines(activeCompanyId, bankLedgerId),
+      loadVoucherCandidates(activeCompanyId, bankLedgerId),
+    ]);
+    setLines(ls);
+    setCandidates(cs);
+  }, [activeCompanyId, bankLedgerId]);
+
+  useEffect(() => { reloadLines(); }, [reloadLines]);
+
+  async function onFilePicked(file: File) {
+    if (!activeCompanyId || !bankLedgerId) { toast.error("Pick a bank ledger first"); return; }
+    setPendingFileName(file.name);
+    setParseResult(null);
+    setPreviewOpen(true);
+    const res = await parseStatementFile(file);
+    setParseResult(res);
     if (fileRef.current) fileRef.current.value = "";
-    loadLines();
   }
 
-  async function setStatus(id: string, status: "matched" | "ignored", voucherId?: string | null) {
-    await supabase.from("bank_statement_lines").update({ match_status: status, matched_voucher_id: voucherId ?? null }).eq("id", id);
-    loadLines();
+  async function onConfirmImport(rows: import("@/lib/bank/parse-client").ParsedBankLine[]) {
+    if (!activeCompanyId || !bankLedgerId) return;
+    const res = await commitStatement(activeCompanyId, bankLedgerId, pendingFileName, rows, candidates);
+    toast.success(`Imported ${rows.length} lines · ${res.matched} auto-matched`);
+    setPreviewOpen(false);
+    setParseResult(null);
+    reloadLines();
+  }
+
+  async function setStatus(id: string, status: LocalBankLine["match_status"], voucherId?: string | null) {
+    await updateLine(id, { match_status: status, matched_voucher_id: voucherId ?? null });
+    reloadLines();
   }
 
   const counts = useMemo(() => {
@@ -106,11 +93,24 @@ function BankRecPage() {
     return o;
   }, [lines]);
 
+  const statementIds = useMemo(() => Array.from(new Set(lines.map((l) => l.statement_id))), [lines]);
+
+  async function onDeleteAll() {
+    if (!statementIds.length) return;
+    if (!window.confirm(`Delete ${lines.length} imported lines for this ledger?`)) return;
+    for (const sid of statementIds) await deleteStatement(sid);
+    toast.success("Cleared imported statement lines.");
+    reloadLines();
+  }
+
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Bank Reconciliation</h1>
-        <p className="text-xs text-muted-foreground">Import bank CSV or scan a PDF/photo of a statement → auto-match → confirm or ignore.</p>
+        <p className="text-xs text-muted-foreground">
+          Import bank CSV / Excel → preview → auto-match against local vouchers → confirm.
+          Statements stay on this device only.
+        </p>
       </div>
       <Card>
         <CardContent className="p-3">
@@ -125,9 +125,9 @@ function BankRecPage() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Upload statement (CSV)</Label>
-              <input ref={fileRef} type="file" accept=".csv,text/csv" disabled={!bankLedgerId}
-                onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
+              <Label className="text-xs">Upload statement (CSV / XLSX)</Label>
+              <input ref={fileRef} type="file" accept=".csv,.xls,.xlsx,text/csv" disabled={!bankLedgerId}
+                onChange={(e) => e.target.files?.[0] && onFilePicked(e.target.files[0])}
                 className="block text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground" />
             </div>
             <div className="space-y-1">
@@ -136,10 +136,15 @@ function BankRecPage() {
                 <FileScan className="mr-2 h-3.5 w-3.5" /> Import from PDF / Image
               </Button>
             </div>
-            <div className="ml-auto flex gap-2 text-xs">
+            <div className="ml-auto flex flex-wrap gap-2 text-xs items-center">
               <Badge variant="outline">Matched: {counts.matched || 0}</Badge>
               <Badge variant="outline">Suggested: {counts.suggested || 0}</Badge>
               <Badge variant="outline">Unmatched: {counts.unmatched || 0}</Badge>
+              {lines.length > 0 && (
+                <Button size="sm" variant="ghost" onClick={onDeleteAll} title="Clear imported lines">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -193,14 +198,23 @@ function BankRecPage() {
         </CardContent>
       </Card>
 
-      {activeCompanyId && bankLedgerId && user && (
+      <BankImportPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        fileName={pendingFileName}
+        parseResult={parseResult}
+        candidates={candidates}
+        onConfirm={onConfirmImport}
+      />
+
+      {activeCompanyId && bankLedgerId && (
         <BankOcrImportDialog
           open={ocrOpen}
           onOpenChange={setOcrOpen}
           companyId={activeCompanyId}
           bankLedgerId={bankLedgerId}
-          userId={user.id}
-          onPosted={loadLines}
+          userId=""
+          onPosted={reloadLines}
         />
       )}
     </div>
