@@ -442,7 +442,15 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   // without a focused menubar (Companies, dashboard, empty routes) can
   // exit in a single keypress instead of hopping through the menubar.
   useEffect(() => {
-    const onExit = () => { if (onLock) setExitConfirmOpen(true); };
+    const onExit = () => {
+      if (!onLock) return;
+      // Close any open menubar dropdown and blur the trigger so Enter can't
+      // fall through to a menubar button while the confirmation is open.
+      setOpenMenuKey("");
+      const active = document.activeElement as HTMLElement | null;
+      if (active && typeof active.blur === "function") active.blur();
+      setExitConfirmOpen(true);
+    };
     window.addEventListener("app:exit-request", onExit);
     return () => window.removeEventListener("app:exit-request", onExit);
   }, [onLock]);
@@ -651,7 +659,32 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       </div>
 
       <AlertDialog open={exitConfirmOpen} onOpenChange={setExitConfirmOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            // Focus the Cancel ("Stay") button explicitly so keyboard users
+            // land on the safe default and Enter can't fall through to any
+            // still-focused menubar trigger behind the dialog.
+            requestAnimationFrame(() => {
+              const stay = document.querySelector<HTMLButtonElement>(
+                '[data-exit-confirm="stay"]',
+              );
+              stay?.focus();
+            });
+          }}
+          onCloseAutoFocus={(e) => {
+            // Don't let Radix restore focus to a menubar trigger — that's how
+            // the follow-up Enter kept opening the Masters dropdown.
+            e.preventDefault();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              // Enter inside the dialog must act on the focused dialog button
+              // only. Stop it before any global/menubar handler sees it.
+              e.stopPropagation();
+            }
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Exit application?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -659,8 +692,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel autoFocus>Stay</AlertDialogCancel>
+            <AlertDialogCancel data-exit-confirm="stay" autoFocus>Stay</AlertDialogCancel>
             <AlertDialogAction
+              data-exit-confirm="exit"
               onClick={() => {
                 setExitConfirmOpen(false);
                 onLock?.();
