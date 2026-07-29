@@ -205,6 +205,15 @@ class OfflineDatabase extends Dexie {
     this.version(9).stores({
       activity_log: "++id, company_id, ts, entity_type, action, [company_id+ts]",
     });
+    // v10 — Bank reconciliation stores (E1). Local-only, excluded from sync
+    // and from cloud backup by design (raw statements can be re-imported).
+    this.version(10).stores({
+      cache_bank_statements:
+        "id, company_id, bank_ledger_id, imported_at, [company_id+bank_ledger_id]",
+      cache_bank_statement_lines:
+        "id, statement_id, company_id, txn_date, match_status, " +
+        "[company_id+bank_ledger_id+txn_date], [statement_id+txn_date]",
+    });
   }
 }
 
