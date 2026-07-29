@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff, FileText, Paperclip, ScanLine, BrainCircuit } from "lucide-react";
+import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff, FileText, Paperclip, ScanLine, BrainCircuit, Volume2, VolumeX, Headphones } from "lucide-react";
 import { extractInvoiceOcr, type OcrDraft } from "@/lib/ai/ocr-invoice";
 import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
 import { Link } from "@tanstack/react-router";
