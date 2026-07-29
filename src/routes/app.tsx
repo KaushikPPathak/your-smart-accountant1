@@ -30,6 +30,7 @@ import { InstallAppButton } from "@/components/InstallAppButton";
 import { KeyboardProvider, useShortcut } from "@/lib/keyboard";
 import { CalculatorDialog } from "@/components/CalculatorDialog";
 import { RestoreInterruptedBanner } from "@/components/RestoreInterruptedBanner";
+import { SilentWatchers } from "@/components/assistant/SilentWatchers";
 
 import { getLicenseState, isReadOnlyLocked } from "@/lib/license/state";
 
@@ -336,6 +337,7 @@ function AppLayout() {
         <CalculatorDialog open={calcOpen} onOpenChange={setCalcOpen} />
         <DataOwnershipDialog />
         <RestoreInterruptedBanner />
+        <SilentWatchers />
       </div>
     </KeyboardProvider>
   );
