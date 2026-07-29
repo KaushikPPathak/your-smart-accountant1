@@ -26,7 +26,7 @@ export const companyFormSchema = z
     annual_turnover_lakhs: z.string().optional(),
     borrowings_lakhs: z.string().optional(),
     nce_level_override: z.boolean().optional(),
-    nce_level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+    nce_level: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
     presumptive_scheme: z.enum(["none", "44ad", "44ada"]).optional(),
     presumptive_mode: z.enum(["digital", "cash", "professional"]).optional(),
     trial_local: z.boolean(),
