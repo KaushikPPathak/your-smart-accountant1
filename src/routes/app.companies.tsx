@@ -295,7 +295,26 @@ function CompaniesPage() {
     e.preventDefault();
     const parsed = schema.safeParse(form);
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0].message);
+      // Surface the exact field(s) that failed instead of Zod's generic
+      // "Invalid input" — otherwise users can't tell what to correct.
+      const issues = parsed.error.issues.slice(0, 3).map((i) => {
+        const field = i.path.join(".") || "form";
+        const msg = i.message && i.message !== "Invalid input" ? i.message : `${field} is invalid`;
+        return `${field}: ${msg}`;
+      });
+      toast.error("Please fix the highlighted fields", {
+        description: issues.join(" • "),
+        duration: 8000,
+      });
+      // Scroll the first invalid field into view when possible.
+      try {
+        const first = parsed.error.issues[0]?.path?.[0];
+        if (first && typeof document !== "undefined") {
+          const el = document.querySelector(`[name="${String(first)}"]`) as HTMLElement | null;
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          el?.focus?.();
+        }
+      } catch { /* ignore */ }
       return;
     }
     setSubmitting(true);
