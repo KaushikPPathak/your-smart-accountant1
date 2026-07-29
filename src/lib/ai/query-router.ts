@@ -209,7 +209,9 @@ export function routeQuery(question: string): RoutedQuery {
     intent = "gst_query";
   } else if (/\btrial balance|\btb\b/.test(lower)) {
     intent = "trial_balance";
-  } else if (/\b(p&l|p and l|profit|loss|trading|gross profit|net profit)\b/.test(lower)) {
+  } else if (/\b(p&l|p and l|profit|loss|trading|gross profit|net profit)\b/.test(lower)
+             || /\b(total|net)\s+(sales|purchases?|turnover|revenue)\b/.test(lower)
+             || /\b(sales|purchases?|turnover|revenue)\s+total\b/.test(lower)) {
     intent = "profit_loss";
   } else if (/\b(cash|bank)\s+(book|balance|position|in\s*hand|on\s*hand|at\s*bank)\b|\bcash\s*[- ]?in[- ]?hand\b|\bcash\s*[- ]?on[- ]?hand\b|\bbrs\b/.test(lower)) {
     intent = "cash_bank";
