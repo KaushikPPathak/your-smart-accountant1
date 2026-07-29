@@ -58,12 +58,13 @@ function extractEntity(fragment: string): string | null {
 function toolForIntent(intent: QueryIntent): string | null {
   switch (intent) {
     case "party_balance":     return "get_party_balance";
+    case "party_ledger":      return "get_party_balance";
     case "cash_bank":         return "get_cash_balance";
     case "voucher_lookup":    return "get_voucher";
+    case "latest_voucher":    return "list_vouchers";
     case "trial_balance":     return "get_trial_balance";
-    case "profit_loss":       return "get_trial_balance"; // planner uses TB, retriever composes P&L
-    case "sales_summary":
-    case "purchase_summary":  return "list_vouchers";
+    case "profit_loss":       return "get_trial_balance"; // retriever composes P&L on top
+    case "date_range_report": return "list_vouchers";
     default:                  return null;
   }
 }
@@ -74,19 +75,22 @@ function argsForFragment(intent: QueryIntent, fragment: string): Record<string, 
   const asOn = fragment.match(/\b(\d{2}\/\d{2}\/\d{2,4}|\d{4}-\d{2}-\d{2})\b/)?.[1];
   if (asOn) args.asOn = normaliseDate(asOn);
 
-  if (intent === "party_balance" && entity) args.name = entity;
+  if ((intent === "party_balance" || intent === "party_ledger") && entity) args.name = entity;
   if (intent === "cash_bank") {
     if (/bank/i.test(fragment) && entity) args.account = entity;
     else args.account = "cash";
   }
-  if (intent === "sales_summary")     args.kind = "sales";
-  if (intent === "purchase_summary")  args.kind = "purchase";
+  if (intent === "date_range_report") {
+    if (/purchase/i.test(fragment))  args.kind = "purchase";
+    else if (/sale/i.test(fragment)) args.kind = "sales";
+  }
   if (intent === "voucher_lookup") {
     const num = fragment.match(/#?\s*([A-Z0-9\-/]{2,})/i)?.[1];
     if (num) args.number = num;
   }
   return args;
 }
+
 
 function normaliseDate(raw: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
