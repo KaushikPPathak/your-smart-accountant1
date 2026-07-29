@@ -438,7 +438,6 @@ export function AssistantChat() {
 
 
   function ask(rawText: string) {
-    askRef.current = ask;
     const text = rawText.trim();
     if (!text) return;
     const userMsg: ChatMessage = {
