@@ -150,6 +150,38 @@ export function AssistantChat() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
+  // Keep a stable ref to `ask` so the voice-input callback (defined once)
+  // can reach the latest closure without stale-state bugs.
+  useEffect(() => { askRef.current = ask; });
+
+  // Phase D — speak assistant replies aloud when TTS or hands-free is on,
+  // then re-arm the mic so the user can just keep talking.
+  const lastSpokenIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ttsOn && !handsFree) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant" || !last.text) return;
+    if (lastSpokenIdRef.current === last.id) return;
+    lastSpokenIdRef.current = last.id;
+    tts.onEnd(() => {
+      if (handsFreeRef.current && voice.supported && !voice.listening) {
+        try { voice.start(); } catch { /* noop */ }
+      }
+    });
+    tts.speak(last.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, ttsOn, handsFree]);
+
+  // Turning hands-free off should silence any in-flight speech and stop
+  // listening so the mic light doesn't stay on.
+  useEffect(() => {
+    if (!handsFree) { tts.stop(); voice.stop(); return; }
+    if (voice.supported && !voice.listening) {
+      try { voice.start(); } catch { /* noop */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handsFree]);
+
   const browseEntries = useMemo(() => {
     if (activeCat === "All") return ASSISTANT_KB;
     return ASSISTANT_KB.filter((e) => e.category === activeCat);
