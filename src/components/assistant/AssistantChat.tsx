@@ -118,9 +118,21 @@ export function AssistantChat() {
   // follow-ups like "and as on 31/12/2025?" work without repeating names.
   const memoryRef = useRef<ConversationMemory | undefined>(undefined);
 
-  // Tier 3 #11 — Web Speech API voice input. Transcript is appended to the
-  // composer so the user can review/edit before hitting send.
+  // Phase D — Voice + hands-free flow. Voice input uses the Web Speech
+  // Recognition API; voice output uses SpeechSynthesis. Both are fully
+  // in-browser (offline, free, private). When hands-free is on, the mic
+  // auto-restarts after each spoken reply for a walkie-talkie loop.
+  const [handsFree, setHandsFree] = useState(false);
+  const [ttsOn, setTtsOn] = useState(false);
+  const handsFreeRef = useRef(false);
+  useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
+  const tts = useVoiceOutput();
+  const askRef = useRef<((t: string) => void) | null>(null);
   const voice = useVoiceInput((text) => {
+    if (handsFreeRef.current) {
+      askRef.current?.(text);
+      return;
+    }
     const el = inputRef.current;
     if (!el) return;
     const cur = el.value.trim();
