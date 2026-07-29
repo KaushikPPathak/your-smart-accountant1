@@ -256,6 +256,7 @@ function makeStubDb(): OfflineDatabase {
     "cache_cost_centres", "cache_cost_categories",
     "outbox", "dead_letter", "sync_cursors", "account_creds", "meta",
     "activity_log",
+    "cache_bank_statements", "cache_bank_statement_lines",
   ];
   const stub: Record<string, unknown> = {
     async transaction(_mode: string, ...args: unknown[]) {
