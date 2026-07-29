@@ -12,6 +12,7 @@ import { optimiseSlice } from "./slice-optimizer";
 import { createRedactionMap, redactDeep, redactString, unredact, type RedactionMap } from "./redactor";
 import type { ConversationMemory } from "./conversation-memory";
 import { toolCatalogPrompt } from "./tools";
+import { buildMemorySnapshot } from "./persistent-memory";
 
 export interface AccountingContext {
   companyId?: string;
@@ -157,6 +158,10 @@ export async function buildCompressedContext(
     }
   }
 
+  const memorySnapshot = await buildMemorySnapshot(
+    (slice.facts as any)?.company_id ?? resolveContextCompanyId(companyId),
+  );
+
   const systemMessage = {
     role: "system" as const,
     content: [
@@ -189,6 +194,18 @@ export async function buildCompressedContext(
       "8. The client will render a verified balance card ABOVE your reply using values",
       "   from `facts`. Keep your prose short — explain, don't repeat the numbers.",
       "",
+      "DOMAIN STYLE GUIDE — write like an Indian CA, not like ChatGPT:",
+      "  • Indian numbering only: lakh / crore (never million / billion).",
+      "  • Suffix balances with 'Dr' or 'Cr' — e.g. '₹ 5,42,300.00 Dr'.",
+      "  • Use 'as on <date>' (never 'as of'). Use DD/MM/YYYY.",
+      "  • Cite tax provisions as §-form: '§44AD', '§16(1) MSMED', 'AS-2', 'Ind AS 115' —",
+      "    never 'Section 44AD of the Income-tax Act, 1961'.",
+      "  • Preserve regional-script party names verbatim (Gujarati/Hindi/Marathi); do NOT",
+      "    transliterate or translate them.",
+      "  • Bilingual OK: financial vocabulary in English, party names in their native script.",
+      "  • Prefer 'RCM', 'ITC', 'B2B/B2C', 'HSN/SAC', 'UQC' over spelling them out.",
+      "  • Do NOT read out the ₹ symbol as a word when answering aloud; write it visually only.",
+      "",
       "CITATIONS — every numeric or factual claim MUST be followed by a citation in one",
       "of these exact forms, drawn only from the attached payload:",
       "  [V:<voucher_number> <YYYY-MM-DD>]   — for a voucher shown in `data`",
@@ -196,6 +213,7 @@ export async function buildCompressedContext(
       "  [F:<fact key>]                       — for a value in the `facts` object",
       "Do not cite anything not present in the payload. Uncited numeric claims are",
       "treated as hallucination and are forbidden.",
+      memorySnapshot ? "\n" + memorySnapshot : "",
       "",
       toolCatalogPrompt(),
     ].join("\n"),
