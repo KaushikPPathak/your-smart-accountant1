@@ -369,10 +369,42 @@ async function retrieveProfitLoss(companyId: string, routed: RoutedQuery): Promi
   const sum = (arr: any[]) => arr.reduce((s, r) => s + r.amount_paise, 0);
   const gross = sum(buckets.direct_income) - sum(buckets.direct_expense);
   const net = gross + sum(buckets.indirect_income) - sum(buckets.indirect_expense);
+
+  // Also compute explicit sales/purchase totals from voucher headers in the
+  // window so the AI can answer "total sales" / "total purchases" verbatim
+  // without needing to sum arrays itself (which the strict prompt forbids).
+  let salesTotal = 0, purchaseTotal = 0, salesCount = 0, purchaseCount = 0;
+  let creditNoteTotal = 0, debitNoteTotal = 0;
+  for (const v of vouchers as any[]) {
+    const t = String(v.voucher_type ?? "");
+    const amt = Number(v.total_paise ?? 0);
+    if (t === "sales") { salesTotal += amt; salesCount++; }
+    else if (t === "purchase") { purchaseTotal += amt; purchaseCount++; }
+    else if (t === "credit_note") { creditNoteTotal += amt; }
+    else if (t === "debit_note") { debitNoteTotal += amt; }
+  }
+  const netSales = salesTotal - creditNoteTotal;
+  const netPurchases = purchaseTotal - debitNoteTotal;
+
   return {
-    scope: `P&L ${routed.from ?? "all-time"} → ${routed.to ?? "..."}`,
+    scope: `P&L / Trading ${routed.from ?? "all-time"} → ${routed.to ?? "..."}`,
     data: buckets as unknown as Record<string, unknown[]>,
-    facts: { gross_profit_paise: gross, net_profit_paise: net },
+    facts: {
+      gross_profit_paise: gross,
+      net_profit_paise: net,
+      sales_total_paise: salesTotal,
+      purchase_total_paise: purchaseTotal,
+      credit_notes_paise: creditNoteTotal,
+      debit_notes_paise: debitNoteTotal,
+      net_sales_paise: netSales,
+      net_purchases_paise: netPurchases,
+      sales_voucher_count: salesCount,
+      purchase_voucher_count: purchaseCount,
+      direct_income_total_paise: sum(buckets.direct_income),
+      direct_expense_total_paise: sum(buckets.direct_expense),
+      indirect_income_total_paise: sum(buckets.indirect_income),
+      indirect_expense_total_paise: sum(buckets.indirect_expense),
+    },
   };
 }
 
