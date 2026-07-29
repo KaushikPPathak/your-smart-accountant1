@@ -108,6 +108,9 @@ class OfflineDatabase extends Dexie {
   account_creds!: Table<any, any>;
   meta!: Table<any, any>;
   activity_log!: Table<any, any>;
+  // E1 — Bank reconciliation (local-only, never synced).
+  cache_bank_statements!: Table<any, any>;
+  cache_bank_statement_lines!: Table<any, any>;
 
   constructor() {
     super("ym_offline_cache_v3");
