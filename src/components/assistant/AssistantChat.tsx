@@ -912,6 +912,37 @@ export function AssistantChat() {
               {voice.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
           ) : null}
+          {tts.supported ? (
+            <Button
+              type="button"
+              size="icon"
+              variant={ttsOn ? "default" : "outline"}
+              aria-label={ttsOn ? "Mute read-aloud" : "Read replies aloud"}
+              title={ttsOn ? "Read-aloud on — click to mute" : "Read replies aloud (offline TTS)"}
+              onClick={() => {
+                setTtsOn((v) => {
+                  const next = !v;
+                  if (!next) tts.stop();
+                  return next;
+                });
+              }}
+            >
+              {ttsOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </Button>
+          ) : null}
+          {voice.supported && tts.supported ? (
+            <Button
+              type="button"
+              size="icon"
+              variant={handsFree ? "default" : "outline"}
+              aria-label={handsFree ? "Turn off hands-free" : "Turn on hands-free"}
+              title={handsFree ? "Hands-free on — mic re-arms after each reply" : "Hands-free mode: speak, listen, repeat"}
+              onClick={() => setHandsFree((v) => !v)}
+              disabled={creating || thinking}
+            >
+              <Headphones className="h-4 w-4" />
+            </Button>
+          ) : null}
           <Button type="submit" size="icon" aria-label="Send" disabled={creating || thinking || ocrLoading}>
             <Send className="h-4 w-4" />
           </Button>
