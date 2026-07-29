@@ -5,6 +5,7 @@ import { extractInvoiceOcr, type OcrDraft } from "@/lib/ai/ocr-invoice";
 import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
 import { Link } from "@tanstack/react-router";
 import { useVoiceInput } from "@/lib/ai/voice-input";
+import { useVoiceOutput } from "@/lib/ai/voice-output";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
