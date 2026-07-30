@@ -7,17 +7,18 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Link2, X, FileScan, Trash2 } from "lucide-react";
+import { Link2, X, FileScan, Trash2, BookPlus } from "lucide-react";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { readLedgers } from "@/lib/offline/cache-read";
 import { parseStatementFile, type ParseResponse } from "@/lib/bank/parse-client";
 import {
-  commitStatement, listLines, loadVoucherCandidates, updateLine, deleteStatement,
+  commitStatement, listLines, loadVoucherCandidates, updateLine, deleteStatement, suggestMatch,
   type LocalBankLine, type VoucherCandidate,
 } from "@/lib/bank/local-store";
 import { BankImportPreviewDialog } from "@/components/bank/BankImportPreviewDialog";
 import { BankOcrImportDialog } from "@/components/bank/BankOcrImportDialog";
+import { BankLinePostDialog } from "@/components/bank/BankLinePostDialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/bank")({
@@ -37,6 +38,8 @@ function BankRecPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResponse | null>(null);
   const [pendingFileName, setPendingFileName] = useState("");
+  const [postLine, setPostLine] = useState<LocalBankLine | null>(null);
+  const [postOpen, setPostOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Load bank/cash ledgers from local cache.
@@ -86,6 +89,29 @@ function BankRecPage() {
     await updateLine(id, { match_status: status, matched_voucher_id: voucherId ?? null });
     reloadLines();
   }
+
+  // After posting a receipt/payment from an unmatched line, re-run matching so
+  // the freshly created voucher links back to that statement line.
+  async function onPosted(line: LocalBankLine) {
+    if (!activeCompanyId || !bankLedgerId) return;
+    const cs = await loadVoucherCandidates(activeCompanyId, bankLedgerId);
+    const m = suggestMatch(
+      {
+        txn_date: line.txn_date,
+        description: line.description,
+        reference: line.reference,
+        debit_paise: line.debit_paise,
+        credit_paise: line.credit_paise,
+        balance_paise: line.balance_paise,
+      } as any,
+      cs,
+    );
+    await updateLine(line.id, { match_status: "matched", matched_voucher_id: m?.id ?? null });
+    setCandidates(cs);
+    reloadLines();
+  }
+
+
 
   const counts = useMemo(() => {
     const o = { matched: 0, suggested: 0, unmatched: 0, ignored: 0 } as Record<string, number>;
@@ -183,12 +209,18 @@ function BankRecPage() {
                             <Link2 className="h-3 w-3 mr-1" />Confirm
                           </Button>
                         )}
+                        {l.match_status !== "matched" && (
+                          <Button size="sm" variant="outline" onClick={() => { setPostLine(l); setPostOpen(true); }} title="Post to books against a ledger">
+                            <BookPlus className="h-3 w-3 mr-1" />Post
+                          </Button>
+                        )}
                         {l.match_status !== "ignored" && (
                           <Button size="icon" variant="ghost" onClick={() => setStatus(l.id, "ignored", null)} title="Ignore">
                             <X className="h-4 w-4" />
                           </Button>
                         )}
                       </div>
+
                     </TableCell>
                   </TableRow>
                 );
@@ -217,6 +249,19 @@ function BankRecPage() {
           onPosted={reloadLines}
         />
       )}
+
+      {activeCompanyId && bankLedgerId && (
+        <BankLinePostDialog
+          open={postOpen}
+          onOpenChange={setPostOpen}
+          companyId={activeCompanyId}
+          bankLedgerId={bankLedgerId}
+          bankLedgerName={bankLedgers.find((b) => b.id === bankLedgerId)?.name || "Bank"}
+          line={postLine}
+          onPosted={onPosted}
+        />
+      )}
+
     </div>
   );
 }

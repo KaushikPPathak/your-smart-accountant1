@@ -147,3 +147,51 @@ export async function deleteStatement(statementId: string): Promise<void> {
   await offlineDb.cache_bank_statement_lines.bulkDelete(lines.map((l: any) => l.id));
   await offlineDb.cache_bank_statements.delete(statementId);
 }
+
+// ---- Description → ledger memory (local device only) ------------------------
+// Bank narrations rarely carry the real party name, so once the user tells us
+// which account a narration belongs to we remember its signature tokens and
+// pre-pick that ledger next time a similar line is imported.
+
+const MEM_KEY = (companyId: string) => `bank_desc_ledger:${companyId}`;
+
+function descTokens(description: string): string[] {
+  return String(description || "")
+    .toUpperCase()
+    .split(/[^A-Z]+/)
+    .filter((t) => t.length >= 4 && !["NEFT", "IMPS", "RTGS", "BANK", "TRANSACTIO", "PAYMENT"].includes(t));
+}
+
+function readMem(companyId: string): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(MEM_KEY(companyId)) || "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+export function rememberDescriptionLedger(companyId: string, description: string, ledgerId: string): void {
+  const tokens = descTokens(description);
+  if (!tokens.length) return;
+  const mem = readMem(companyId);
+  for (const t of tokens.slice(0, 4)) mem[t] = ledgerId;
+  try {
+    localStorage.setItem(MEM_KEY(companyId), JSON.stringify(mem));
+  } catch {
+    /* storage full — memory is a convenience only */
+  }
+}
+
+export function suggestLedgerForDescription(companyId: string, description: string): string | null {
+  const mem = readMem(companyId);
+  const counts = new Map<string, number>();
+  for (const t of descTokens(description)) {
+    const id = mem[t];
+    if (id) counts.set(id, (counts.get(id) || 0) + 1);
+  }
+  let best: string | null = null;
+  let max = 0;
+  for (const [id, n] of counts) if (n > max) { max = n; best = id; }
+  return best;
+}
+
