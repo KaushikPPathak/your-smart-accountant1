@@ -7,17 +7,18 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Link2, X, FileScan, Trash2 } from "lucide-react";
+import { Link2, X, FileScan, Trash2, BookPlus } from "lucide-react";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { readLedgers } from "@/lib/offline/cache-read";
 import { parseStatementFile, type ParseResponse } from "@/lib/bank/parse-client";
 import {
-  commitStatement, listLines, loadVoucherCandidates, updateLine, deleteStatement,
+  commitStatement, listLines, loadVoucherCandidates, updateLine, deleteStatement, suggestMatch,
   type LocalBankLine, type VoucherCandidate,
 } from "@/lib/bank/local-store";
 import { BankImportPreviewDialog } from "@/components/bank/BankImportPreviewDialog";
 import { BankOcrImportDialog } from "@/components/bank/BankOcrImportDialog";
+import { BankLinePostDialog } from "@/components/bank/BankLinePostDialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/bank")({
