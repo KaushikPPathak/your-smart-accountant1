@@ -249,6 +249,19 @@ function BankRecPage() {
           onPosted={reloadLines}
         />
       )}
+
+      {activeCompanyId && bankLedgerId && (
+        <BankLinePostDialog
+          open={postOpen}
+          onOpenChange={setPostOpen}
+          companyId={activeCompanyId}
+          bankLedgerId={bankLedgerId}
+          bankLedgerName={bankLedgers.find((b) => b.id === bankLedgerId)?.name || "Bank"}
+          line={postLine}
+          onPosted={onPosted}
+        />
+      )}
+
     </div>
   );
 }
