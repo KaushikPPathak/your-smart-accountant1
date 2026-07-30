@@ -38,6 +38,8 @@ function BankRecPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResponse | null>(null);
   const [pendingFileName, setPendingFileName] = useState("");
+  const [postLine, setPostLine] = useState<LocalBankLine | null>(null);
+  const [postOpen, setPostOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Load bank/cash ledgers from local cache.
