@@ -209,12 +209,18 @@ function BankRecPage() {
                             <Link2 className="h-3 w-3 mr-1" />Confirm
                           </Button>
                         )}
+                        {l.match_status !== "matched" && (
+                          <Button size="sm" variant="outline" onClick={() => { setPostLine(l); setPostOpen(true); }} title="Post to books against a ledger">
+                            <BookPlus className="h-3 w-3 mr-1" />Post
+                          </Button>
+                        )}
                         {l.match_status !== "ignored" && (
                           <Button size="icon" variant="ghost" onClick={() => setStatus(l.id, "ignored", null)} title="Ignore">
                             <X className="h-4 w-4" />
                           </Button>
                         )}
                       </div>
+
                     </TableCell>
                   </TableRow>
                 );
