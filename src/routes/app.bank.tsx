@@ -90,6 +90,29 @@ function BankRecPage() {
     reloadLines();
   }
 
+  // After posting a receipt/payment from an unmatched line, re-run matching so
+  // the freshly created voucher links back to that statement line.
+  async function onPosted(line: LocalBankLine) {
+    if (!activeCompanyId || !bankLedgerId) return;
+    const cs = await loadVoucherCandidates(activeCompanyId, bankLedgerId);
+    const m = suggestMatch(
+      {
+        txn_date: line.txn_date,
+        description: line.description,
+        reference: line.reference,
+        debit_paise: line.debit_paise,
+        credit_paise: line.credit_paise,
+        balance_paise: line.balance_paise,
+      } as any,
+      cs,
+    );
+    await updateLine(line.id, { match_status: "matched", matched_voucher_id: m?.id ?? null });
+    setCandidates(cs);
+    reloadLines();
+  }
+
+
+
   const counts = useMemo(() => {
     const o = { matched: 0, suggested: 0, unmatched: 0, ignored: 0 } as Record<string, number>;
     for (const l of lines) o[l.match_status] = (o[l.match_status] || 0) + 1;
