@@ -1113,7 +1113,11 @@ function MessageBubble({
         }`}
       >
         {!isUser && msg.card ? <BalanceCard card={msg.card} /> : null}
-        <RichText text={msg.text} />
+        {isUser ? (
+          <RichText text={msg.text} />
+        ) : (
+          <StreamingText text={msg.text} render={(t) => <RichText text={t} />} />
+        )}
         {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {msg.toolCalls.map((tc, i) => (
