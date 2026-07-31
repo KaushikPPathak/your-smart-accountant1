@@ -152,6 +152,15 @@ export function AssistantChat() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
+  // Drop any pending speculation when the company context changes or the
+  // panel unmounts — a stale slice must never leak into another company.
+  useEffect(() => {
+    clearSpeculation();
+    return () => clearSpeculation();
+  }, [activeCompanyId]);
+
+
+
   // Keep a stable ref to `ask` so the voice-input callback (defined once)
   // can reach the latest closure without stale-state bugs.
   useEffect(() => { askRef.current = ask; });
