@@ -8,6 +8,7 @@
 import { cacheRowsForCcr, compressMessages } from "./headroom";
 import { routeQuery, type QueryIntent, type RoutedQuery } from "./query-router";
 import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
+import { takeSpeculation } from "./prefetch";
 import { optimiseSlice } from "./slice-optimizer";
 import { createRedactionMap, redactDeep, redactString, unredact, type RedactionMap } from "./redactor";
 import type { ConversationMemory } from "./conversation-memory";
@@ -143,7 +144,20 @@ export async function buildCompressedContext(
 ): Promise<CompressedContext> {
   const routedRaw = routeQuery(userQuestion);
   const routed = enrichWithPrior(routedRaw, prior);
-  const slice: RetrievedSlice = optimiseSlice(await retrieveForQuery(routed, resolveContextCompanyId(companyId)));
+
+  // Phase I — reuse the slice speculatively retrieved while the user typed,
+  // but only when the final routing is byte-identical to what we guessed.
+  let rawSlice: RetrievedSlice | null = null;
+  try {
+    const spec = await takeSpeculation(companyId, userQuestion);
+    if (spec && spec.slice && JSON.stringify(spec.routed) === JSON.stringify(routedRaw)) {
+      rawSlice = spec.slice;
+    }
+  } catch {
+    rawSlice = null;
+  }
+  if (!rawSlice) rawSlice = await retrieveForQuery(routed, resolveContextCompanyId(companyId));
+  const slice: RetrievedSlice = optimiseSlice(rawSlice);
 
   const card = buildStructuredCard(routed, slice);
 

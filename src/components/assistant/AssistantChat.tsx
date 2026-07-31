@@ -36,6 +36,8 @@ import {
   type VoucherIntent,
 } from "@/lib/voucher-intent";
 import { detectVoucherAction } from "@/lib/ai/voucher-actions";
+import { StreamingText } from "@/components/assistant/StreamingText";
+import { clearSpeculation, speculate } from "@/lib/ai/prefetch";
 
 interface ChatMessage {
   id: string;
@@ -149,6 +151,15 @@ export function AssistantChat() {
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  // Drop any pending speculation when the company context changes or the
+  // panel unmounts — a stale slice must never leak into another company.
+  useEffect(() => {
+    clearSpeculation();
+    return () => clearSpeculation();
+  }, [activeCompanyId]);
+
+
 
   // Keep a stable ref to `ask` so the voice-input callback (defined once)
   // can reach the latest closure without stale-state bugs.
@@ -871,6 +882,8 @@ export function AssistantChat() {
               const el = e.currentTarget;
               el.style.height = "auto";
               el.style.height = Math.min(el.scrollHeight, 240) + "px";
+              // Phase I — warm routing + retrieval while the user is typing.
+              speculate(activeCompanyId ?? null, el.value);
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
@@ -1113,7 +1126,11 @@ function MessageBubble({
         }`}
       >
         {!isUser && msg.card ? <BalanceCard card={msg.card} /> : null}
-        <RichText text={msg.text} />
+        {isUser ? (
+          <RichText text={msg.text} />
+        ) : (
+          <StreamingText text={msg.text} render={(t) => <RichText text={t} />} />
+        )}
         {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {msg.toolCalls.map((tc, i) => (
