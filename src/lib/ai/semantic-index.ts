@@ -34,6 +34,8 @@ interface CompanyIndex {
   builtAt: number;
   signature: string;
   docs: IndexedDoc[];
+  /** Lazily built ANN structure (Phase I) — absent for small corpora. */
+  ann?: AnnIndex;
 }
 
 interface PersistedIndex {
