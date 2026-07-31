@@ -236,10 +236,77 @@ export function invalidateSemanticIndex(companyId?: string) {
   }
 }
 
-// Auto-invalidate on relevant master changes.
+// --------- Phase I: incremental (surgical) index maintenance ----------------
+
+/**
+ * Re-embed only the docs of one master kind instead of dropping the whole
+ * index. Keeps the ANN structure in sync so a voucher/master save costs
+ * microseconds rather than a full corpus rebuild.
+ */
+export async function patchSemanticIndex(
+  companyId: string,
+  kind: "ledger" | "item",
+): Promise<void> {
+  const idx = CACHE.get(companyId);
+  if (!idx) return; // nothing warm → next getIndex() builds fresh anyway
+  try {
+    const rows = kind === "ledger"
+      ? ((await readLedgers(companyId)) as any[])
+      : ((await readItems(companyId)) as any[]);
+
+    const isTargetKind = (d: IndexedDoc) =>
+      kind === "item" ? d.kind === "item" : d.kind !== "item";
+
+    const prev = new Map<string, IndexedDoc>();
+    for (const d of idx.docs) if (isTargetKind(d)) prev.set(d.id, d);
+
+    const next: IndexedDoc[] = [];
+    for (const r of rows) {
+      if (kind === "ledger") {
+        const docKind: IndexedDoc["kind"] =
+          /debtor|creditor|sundry/i.test(String(r.group_name ?? "")) ? "party" : "ledger";
+        const name = String(r.name ?? "");
+        const existing = prev.get(String(r.id));
+        const text = `${name} ${r.group_name ?? ""}`;
+        const unchanged = existing && existing.name === name && existing.group === r.group_name && existing.kind === docKind;
+        next.push(unchanged ? existing! : { id: String(r.id), kind: docKind, name, group: r.group_name, vec: embed(text) });
+      } else {
+        const name = String(r.name ?? "");
+        const existing = prev.get(String(r.id));
+        const unchanged = existing && existing.name === name;
+        next.push(unchanged ? existing! : { id: String(r.id), kind: "item", name, vec: embed(name) });
+      }
+    }
+
+    // Apply the diff to the ANN structure.
+    if (idx.ann) {
+      const nextIds = new Set(next.map((d) => d.id));
+      for (const [id, doc] of prev) {
+        if (!nextIds.has(id)) annRemove(idx.ann, id);
+        else {
+          const nd = next.find((n) => n.id === id);
+          if (nd && nd !== doc) annAdd(idx.ann, id, nd.vec);
+        }
+      }
+      for (const d of next) if (!prev.has(d.id)) annAdd(idx.ann, d.id, d.vec);
+    }
+
+    idx.docs = [...idx.docs.filter((d) => !isTargetKind(d)), ...next];
+    idx.builtAt = Date.now();
+    const [ledgers, items] = await Promise.all([readLedgers(companyId), readItems(companyId)]);
+    idx.signature = computeSignature([...(ledgers as any[]), ...(items as any[])]);
+    void savePersisted(companyId, idx);
+  } catch {
+    // On any failure fall back to the safe (slow) path.
+    invalidateSemanticIndex(companyId);
+  }
+}
+
+// Auto-maintain on relevant master changes — surgical patch, full rebuild
+// only when the patch itself fails.
 onDataChange((e) => {
   if (e.kind === "ledger" || e.kind === "item") {
-    invalidateSemanticIndex(e.companyId);
+    void patchSemanticIndex(e.companyId, e.kind);
   }
 });
 
@@ -251,6 +318,11 @@ export interface SemanticHit {
   score: number;
 }
 
+function ensureAnn(idx: CompanyIndex): void {
+  if (idx.ann || idx.docs.length < ANN_MIN_DOCS) return;
+  idx.ann = annBuild(DIM, idx.docs);
+}
+
 export async function semanticSearch(
   companyId: string,
   query: string,
@@ -260,8 +332,17 @@ export async function semanticSearch(
   const min = opts.minScore ?? 0.15;
   const idx = await getIndex(companyId);
   const q = embed(query);
+
+  // Big corpus → ANN candidate generation instead of scanning every doc.
+  ensureAnn(idx);
+  let pool: IndexedDoc[] = idx.docs;
+  if (idx.ann) {
+    const cands = annCandidates(idx.ann, q, k);
+    if (cands) pool = idx.docs.filter((d) => cands.has(d.id));
+  }
+
   const scored: SemanticHit[] = [];
-  for (const d of idx.docs) {
+  for (const d of pool) {
     if (opts.kinds && !opts.kinds.includes(d.kind)) continue;
     const s = cosine(q, d.vec);
     if (s >= min) scored.push({ id: d.id, kind: d.kind, name: d.name, group: d.group, score: s });
@@ -269,3 +350,4 @@ export async function semanticSearch(
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, k);
 }
+
