@@ -15,6 +15,7 @@
 import { readItems, readLedgers } from "@/lib/offline/cache-read";
 import { getMeta, setMeta } from "@/lib/offline/db";
 import { onDataChange } from "./cache-events";
+import { ANN_MIN_DOCS, annAdd, annBuild, annCandidates, annRemove, type AnnIndex } from "./vector-index";
 
 const INDEX_VERSION = 2; // bump when vectorizer or serialisation changes
 const DIM = 256;
