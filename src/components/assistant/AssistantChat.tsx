@@ -873,6 +873,8 @@ export function AssistantChat() {
               const el = e.currentTarget;
               el.style.height = "auto";
               el.style.height = Math.min(el.scrollHeight, 240) + "px";
+              // Phase I — warm routing + retrieval while the user is typing.
+              speculate(activeCompanyId ?? null, el.value);
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
