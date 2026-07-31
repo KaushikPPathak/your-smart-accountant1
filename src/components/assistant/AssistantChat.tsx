@@ -36,6 +36,8 @@ import {
   type VoucherIntent,
 } from "@/lib/voucher-intent";
 import { detectVoucherAction } from "@/lib/ai/voucher-actions";
+import { StreamingText } from "@/components/assistant/StreamingText";
+import { clearSpeculation, speculate } from "@/lib/ai/prefetch";
 
 interface ChatMessage {
   id: string;
