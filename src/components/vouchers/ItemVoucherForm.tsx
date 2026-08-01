@@ -395,10 +395,46 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     };
   }, [isNote, voucherType, activeCompanyId, partyId]);
 
+  // Sales-cycle carry-forward: pending earlier-stage documents for this party
+  // (Quotation → Sales Order → Delivery Challan → Sales Invoice).
+  useEffect(() => {
+    if (isNote || !activeCompanyId || !partyId || !SOURCE_STAGES[voucherType]) {
+      setSourceDocs([]);
+      return;
+    }
+    let cancelled = false;
+    listSourceDocs(activeCompanyId, voucherType, partyId)
+      .then((rows) => { if (!cancelled) setSourceDocs(rows); })
+      .catch(() => { if (!cancelled) setSourceDocs([]); });
+    return () => { cancelled = true; };
+  }, [isNote, voucherType, activeCompanyId, partyId, savedTick]);
+
+  /** Pull the picked source document's lines into this voucher. */
+  const pullSourceDoc = useCallback(async (id: string) => {
+    setOriginalVoucherId(id || null);
+    if (!id) return;
+    const doc = sourceDocs.find((d) => d.id === id);
+    setRefNo(doc?.voucher_number ?? "");
+    try {
+      const docLines = await loadDocLines(id);
+      if (docLines.length === 0) {
+        toast.info("That document has no item lines");
+        return;
+      }
+      setLines(docLines.map((l) => ({ id: crypto.randomUUID(), ...l })));
+      toast.success(
+        `Carried forward ${docLines.length} line${docLines.length > 1 ? "s" : ""} from ${STAGE_LABEL[doc?.voucher_type ?? ""] ?? "document"} ${doc?.voucher_number ?? ""}`,
+      );
+    } catch {
+      toast.error("Could not read that document");
+    }
+  }, [sourceDocs]);
+
   // Clear the original-invoice link whenever the party changes
   useEffect(() => {
     setOriginalVoucherId(null);
   }, [partyId]);
+
 
   const partyOpts = useMemo(
     () => ledgers.filter((l) => cfg.partyTypes.includes(l.type)),
