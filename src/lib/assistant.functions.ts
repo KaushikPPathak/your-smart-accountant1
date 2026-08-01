@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { buildCompressedContext, unredactAnswer, type StructuredCard } from "./ai/sqliteContext";
 import { retrieveOriginal } from "./ai/headroom";
 import { isWebGpuAvailable, webLlmChat } from "./ai/webllm";
+import { getModelPreference } from "./ai/model-preference";
 import { recentErrors, questionMentionsError } from "./ai/error-ring";
 import { lookupAnswer, storeAnswer } from "./ai/answer-cache";
 import type { ConversationMemory } from "./ai/conversation-memory";
@@ -97,14 +98,28 @@ async function smartChat(
   temperature = 0.3,
   extra?: { route?: string; recentErrors?: unknown[] },
 ): Promise<string> {
-  if (isWebGpuAvailable()) {
+  const pref = getModelPreference();
+
+  if (pref !== "cloud" && isWebGpuAvailable()) {
     try {
       return await webLlmChat(messages as never, { temperature });
     } catch (err) {
-      // WebGPU adapter missing / engine init failed — fall through to cloud.
-      console.warn("[assistant] WebGPU local LLM failed, falling back to cloud:", err);
+      // WebGPU adapter missing / engine init failed.
+      console.warn("[assistant] WebGPU local LLM failed:", err);
+      if (pref === "local") {
+        throw new Error(
+          "On-device AI could not start and you have chosen device-only mode. " +
+          "Switch the model setting to Auto to allow the cloud model.",
+        );
+      }
     }
+  } else if (pref === "local") {
+    throw new Error(
+      "Device-only AI mode is on, but this machine has no WebGPU support. " +
+      "Switch the model setting to Auto or Cloud to get an answer.",
+    );
   }
+
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     throw new Error("Offline: cloud AI is not reachable and WebGPU local AI is unavailable.");
   }
