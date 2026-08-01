@@ -435,13 +435,27 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       });
       partyLedgerId = partyLine?.ledger_id ?? null;
     }
+    // Bill-wise adjustments for the party lines actually filled in.
+    const allocations = isSimple
+      ? simpleLines.flatMap((l) =>
+          (allocs[l.id] ?? [])
+            .filter((a) => a.amount_paise > 0 && l.ledger_id)
+            .map((a) => ({
+              invoice_voucher_id: a.invoice_voucher_id,
+              ledger_id: l.ledger_id,
+              amount_paise: a.amount_paise,
+            })),
+        )
+      : [];
     // Snapshot payload then INSTANTLY reset. DB write happens in background.
     const snap = {
       companyId: activeCompanyId, voucherType,
       voucherDate: date, partyLedgerId,
       refNo, narration, total: totalForVoucher,
       entries: entriesToInsert,
+      allocations,
     };
+
     // Shared validation (same schema would run server-side via createServerFn).
     const check = validateEntryVoucher({
       company_id: snap.companyId,
