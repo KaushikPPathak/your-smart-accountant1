@@ -23,7 +23,7 @@ import { Layers } from "lucide-react";
 import { wrapBackup } from "@/lib/backup-policy";
 import {
   saveWithPickerNative, isDesktopRuntime, showInFolderNative, openPathNative,
-  pickFolderNative, pickFileNative, readAbsoluteTextFileNative,
+  pickFolderNative, pickFileNative, readAbsoluteTextFileNative, NO_NATIVE_PICKER,
 } from "@/lib/native-bridge";
 import { getAppPaths } from "@/lib/app-paths";
 import { BACKUP_POLICY } from "@/lib/backup-policy";
