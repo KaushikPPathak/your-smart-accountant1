@@ -548,7 +548,17 @@ export interface EntryVoucherSnap {
     narration: string | null;
     line_no: number;
   }>;
+  /**
+   * Bill-wise adjustment: which sales / purchase bills this receipt or payment
+   * settles, and by how much. Optional — omitted means "on account".
+   */
+  allocations?: Array<{
+    invoice_voucher_id: string;
+    ledger_id: string;
+    amount_paise: number;
+  }>;
 }
+
 
 // ---------- Item voucher executor -------------------------------------------
 
