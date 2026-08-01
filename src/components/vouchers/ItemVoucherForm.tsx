@@ -408,10 +408,20 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
     let cancelled = false;
     listSourceDocs(activeCompanyId, voucherType, partyId)
-      .then((rows) => { if (!cancelled) setSourceDocs(rows); })
+      .then((rows) => {
+        if (cancelled) return;
+        setSourceDocs(rows);
+        if (rows.length > 0) {
+          const kinds = Array.from(new Set(rows.map((r) => STAGE_LABEL[r.voucher_type] ?? r.voucher_type)));
+          toast.info(
+            `${rows.length} pending ${kinds.join(" / ")} for this party — use "Carry forward from" to pull the lines.`,
+          );
+        }
+      })
       .catch(() => { if (!cancelled) setSourceDocs([]); });
     return () => { cancelled = true; };
   }, [isNote, voucherType, activeCompanyId, partyId, savedTick]);
+
 
   /** Pull the picked source document's lines into this voucher. */
   const pullSourceDoc = useCallback(async (id: string) => {
@@ -1100,6 +1110,14 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   <div className="space-y-1 pt-2">
                     <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       Carry forward from
+                      {partyId && sourceDocs.length > 0 && (
+                        <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold normal-case text-primary">
+                          {sourceDocs.length} pending{" "}
+                          {SOURCE_STAGES[voucherType]
+                            .map((s) => STAGE_LABEL[s] ?? s)
+                            .join(" / ")}
+                        </span>
+                      )}
                     </Label>
                     <Combo
                       value={originalVoucherId ?? ""}
@@ -1120,6 +1138,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     />
                   </div>
                 )}
+
               </div>
 
               <div className="md:pb-0.5">
