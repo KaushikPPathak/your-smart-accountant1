@@ -408,10 +408,20 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
     let cancelled = false;
     listSourceDocs(activeCompanyId, voucherType, partyId)
-      .then((rows) => { if (!cancelled) setSourceDocs(rows); })
+      .then((rows) => {
+        if (cancelled) return;
+        setSourceDocs(rows);
+        if (rows.length > 0) {
+          const kinds = Array.from(new Set(rows.map((r) => STAGE_LABEL[r.voucher_type] ?? r.voucher_type)));
+          toast.info(
+            `${rows.length} pending ${kinds.join(" / ")} for this party — use "Carry forward from" to pull the lines.`,
+          );
+        }
+      })
       .catch(() => { if (!cancelled) setSourceDocs([]); });
     return () => { cancelled = true; };
   }, [isNote, voucherType, activeCompanyId, partyId, savedTick]);
+
 
   /** Pull the picked source document's lines into this voucher. */
   const pullSourceDoc = useCallback(async (id: string) => {
