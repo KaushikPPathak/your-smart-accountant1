@@ -883,6 +883,25 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           onSaved={onLedgerSaved}
         />
       )}
+
+      {activeCompanyId && allocDlg.lineId && (() => {
+        const line = simpleLines.find((l) => l.id === allocDlg.lineId);
+        const lg = line ? ledgers.find((x) => x.id === line.ledger_id) : undefined;
+        if (!line || !lg || (lg.type !== "sundry_debtor" && lg.type !== "sundry_creditor")) return null;
+        return (
+          <BillAllocationDialog
+            open={allocDlg.open}
+            onOpenChange={(o) => setAllocDlg((s) => ({ ...s, open: o }))}
+            companyId={activeCompanyId}
+            ledgerId={lg.id}
+            partyType={lg.type as "sundry_debtor" | "sundry_creditor"}
+            totalAvailablePaise={rupeesToPaise(parseFloat(line.amount) || 0)}
+            initial={allocs[line.id] ?? []}
+            onSave={(rows) => setAllocs((cur) => ({ ...cur, [line.id]: rows }))}
+          />
+        );
+      })()}
+
       </div>
       <div className="space-y-3">
         <RecentVouchersPanel voucherType={voucherType} refreshKey={savedTick} />
