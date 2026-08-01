@@ -122,7 +122,7 @@ async function nextLocalVoucherNumber(
 async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
   const db = await getOfflineDb();
   const voucherId = crypto.randomUUID();
-  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType);
+  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
   const stamp = nowIso();
   const lines = snap.lines.map(({ l, c }) => ({ l, c }));
 
@@ -279,7 +279,7 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
 async function runLocalEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void> {
   const db = await getOfflineDb();
   const voucherId = crypto.randomUUID();
-  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType);
+  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
   const stamp = nowIso();
   const entries = snap.entries.map((e) => ({
     id: crypto.randomUUID(),
