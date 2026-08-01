@@ -88,7 +88,7 @@ async function time<T>(label: string, fn: () => Promise<T>): Promise<{ ms: numbe
   return { ms, value };
 }
 
-describe(`stress: ${N.toLocaleString()} vouchers`, () => {
+describe.skipIf(!process.env.STRESS_N)(`stress: ${N.toLocaleString()} vouchers`, () => {
   beforeAll(async () => { await wipe(); }, 30_000);
 
   it("seed → count → snapshot → restore → count all stay within budget", async () => {
