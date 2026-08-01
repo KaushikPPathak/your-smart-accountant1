@@ -295,31 +295,52 @@ async function runLocalEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void>
   const { assertVoucherBalanced } = await import("@/lib/voucher-invariants");
   assertVoucherBalanced(entries, { voucherType: snap.voucherType, companyId: snap.companyId });
 
-  await db.transaction("rw", db.cache_vouchers, db.cache_voucher_entries, async () => {
-    await db.cache_vouchers.put({
-      id: voucherId,
+  const allocRows = (snap.allocations ?? [])
+    .filter((a) => a.invoice_voucher_id && a.amount_paise > 0)
+    .map((a) => ({
+      id: crypto.randomUUID(),
       company_id: snap.companyId,
-      voucher_type: snap.voucherType,
-      voucher_number: voucherNumber,
-      voucher_date: snap.voucherDate,
-      party_ledger_id: snap.partyLedgerId,
-      reference_no: snap.refNo || null,
-      narration: snap.narration || null,
-      is_interstate: false,
-      subtotal_paise: snap.total,
-      cgst_paise: 0,
-      sgst_paise: 0,
-      igst_paise: 0,
-      round_off_paise: 0,
-      total_paise: snap.total,
-      is_deleted: false,
-      is_synced: true,
+      invoice_voucher_id: a.invoice_voucher_id,
+      payment_voucher_id: voucherId,
+      ledger_id: a.ledger_id,
+      amount_paise: a.amount_paise,
       created_at: stamp,
       updated_at: stamp,
-    });
-    await db.cache_voucher_entries.bulkPut(entries);
-  });
+    }));
+
+  await db.transaction(
+    "rw",
+    db.cache_vouchers,
+    db.cache_voucher_entries,
+    db.cache_bill_allocations,
+    async () => {
+      await db.cache_vouchers.put({
+        id: voucherId,
+        company_id: snap.companyId,
+        voucher_type: snap.voucherType,
+        voucher_number: voucherNumber,
+        voucher_date: snap.voucherDate,
+        party_ledger_id: snap.partyLedgerId,
+        reference_no: snap.refNo || null,
+        narration: snap.narration || null,
+        is_interstate: false,
+        subtotal_paise: snap.total,
+        cgst_paise: 0,
+        sgst_paise: 0,
+        igst_paise: 0,
+        round_off_paise: 0,
+        total_paise: snap.total,
+        is_deleted: false,
+        is_synced: true,
+        created_at: stamp,
+        updated_at: stamp,
+      });
+      await db.cache_voucher_entries.bulkPut(entries);
+      if (allocRows.length > 0) await db.cache_bill_allocations.bulkPut(allocRows);
+    },
+  );
 }
+
 
 function uniqueIds(ids: Array<string | null | undefined>): string[] {
   return Array.from(new Set(ids.filter((id): id is string => Boolean(id))));
