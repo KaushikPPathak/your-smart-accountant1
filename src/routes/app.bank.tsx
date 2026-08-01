@@ -16,6 +16,8 @@ import {
   commitStatement, listLines, loadVoucherCandidates, updateLine, deleteStatement, suggestMatch,
   type LocalBankLine, type VoucherCandidate,
 } from "@/lib/bank/local-store";
+import { buildReconSummary, type ReconSummary } from "@/lib/bank/reconcile";
+import { ReconSummaryCard } from "@/components/bank/ReconSummaryCard";
 import { BankImportPreviewDialog } from "@/components/bank/BankImportPreviewDialog";
 import { BankOcrImportDialog } from "@/components/bank/BankOcrImportDialog";
 import { BankLinePostDialog } from "@/components/bank/BankLinePostDialog";
@@ -40,6 +42,8 @@ function BankRecPage() {
   const [pendingFileName, setPendingFileName] = useState("");
   const [postLine, setPostLine] = useState<LocalBankLine | null>(null);
   const [postOpen, setPostOpen] = useState(false);
+  const [summary, setSummary] = useState<ReconSummary | null>(null);
+  const [filter, setFilter] = useState<"all" | "suggested" | "unmatched" | "matched">("all");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Load bank/cash ledgers from local cache.
@@ -65,6 +69,21 @@ function BankRecPage() {
   }, [activeCompanyId, bankLedgerId]);
 
   useEffect(() => { reloadLines(); }, [reloadLines]);
+
+  // Recompute the BRS summary whenever the lines change.
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeCompanyId || !bankLedgerId || lines.length === 0) { setSummary(null); return; }
+    buildReconSummary(activeCompanyId, bankLedgerId, lines).then((s) => {
+      if (!cancelled) setSummary(s);
+    });
+    return () => { cancelled = true; };
+  }, [activeCompanyId, bankLedgerId, lines]);
+
+  const visibleLines = useMemo(
+    () => (filter === "all" ? lines : lines.filter((l) => l.match_status === filter)),
+    [lines, filter],
+  );
 
   async function onFilePicked(file: File) {
     if (!activeCompanyId || !bankLedgerId) { toast.error("Pick a bank ledger first"); return; }
@@ -121,6 +140,17 @@ function BankRecPage() {
 
   const statementIds = useMemo(() => Array.from(new Set(lines.map((l) => l.statement_id))), [lines]);
 
+  // Bulk-accept every high-confidence suggestion in one click.
+  async function acceptAllSuggested() {
+    const targets = lines.filter((l) => l.match_status === "suggested" && l.matched_voucher_id);
+    if (!targets.length) { toast.info("No suggestions to accept."); return; }
+    for (const l of targets) {
+      await updateLine(l.id, { match_status: "matched", matched_voucher_id: l.matched_voucher_id });
+    }
+    toast.success(`Confirmed ${targets.length} matched line${targets.length > 1 ? "s" : ""}.`);
+    reloadLines();
+  }
+
   async function onDeleteAll() {
     if (!statementIds.length) return;
     if (!window.confirm(`Delete ${lines.length} imported lines for this ledger?`)) return;
@@ -163,9 +193,17 @@ function BankRecPage() {
               </Button>
             </div>
             <div className="ml-auto flex flex-wrap gap-2 text-xs items-center">
-              <Badge variant="outline">Matched: {counts.matched || 0}</Badge>
-              <Badge variant="outline">Suggested: {counts.suggested || 0}</Badge>
-              <Badge variant="outline">Unmatched: {counts.unmatched || 0}</Badge>
+              {(["all", "matched", "suggested", "unmatched"] as const).map((f) => (
+                <Button key={f} size="sm" variant={filter === f ? "default" : "outline"}
+                  className="h-7 px-2 text-xs capitalize" onClick={() => setFilter(f)}>
+                  {f}{f === "all" ? ` (${lines.length})` : ` (${counts[f] || 0})`}
+                </Button>
+              ))}
+              {(counts.suggested || 0) > 0 && (
+                <Button size="sm" variant="secondary" className="h-7 px-2 text-xs" onClick={acceptAllSuggested}>
+                  <Link2 className="mr-1 h-3 w-3" />Accept all suggested
+                </Button>
+              )}
               {lines.length > 0 && (
                 <Button size="sm" variant="ghost" onClick={onDeleteAll} title="Clear imported lines">
                   <Trash2 className="h-3.5 w-3.5" />
@@ -176,6 +214,8 @@ function BankRecPage() {
         </CardContent>
       </Card>
 
+      <ReconSummaryCard summary={summary} />
+
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -185,9 +225,9 @@ function BankRecPage() {
               <TableHead>Status</TableHead><TableHead>Match</TableHead><TableHead className="text-right">Action</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {lines.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">No imported lines yet.</TableCell></TableRow>
-              ) : lines.map((l) => {
+              {visibleLines.length === 0 ? (
+                <TableRow><TableCell colSpan={8} className="p-6 text-center text-sm text-muted-foreground">{lines.length === 0 ? "No imported lines yet." : "No lines in this filter."}</TableCell></TableRow>
+              ) : visibleLines.map((l) => {
                 const v = candidates.find((c) => c.id === l.matched_voucher_id);
                 return (
                   <TableRow key={l.id}>
