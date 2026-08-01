@@ -63,6 +63,8 @@ import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-st
 import { AutoTaxChip } from "./AutoTaxChip";
 import { SundryStrip } from "./SundryStrip";
 import { netSundryPaise, resolveSundryPaise, splitSundriesByStage, type Sundry } from "@/lib/sundries";
+import { SOURCE_STAGES, STAGE_LABEL, listSourceDocs, loadDocLines, type LinkedDoc } from "@/lib/doc-linking";
+
 
 type VoucherType =
   | "sales"
