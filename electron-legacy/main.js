@@ -101,8 +101,80 @@ ipcMain.handle('sa:openPath', async (_e, filePath) => {
 
 ipcMain.handle('sa:closeApp', async () => { app.quit(); return { ok: true }; });
 
+function toBuffer(contents) {
+  if (typeof contents === 'string') return Buffer.from(contents, 'utf8');
+  if (contents instanceof Uint8Array) return Buffer.from(contents);
+  if (contents && contents.byteLength != null) return Buffer.from(new Uint8Array(contents));
+  return Buffer.from(String(contents || ''), 'utf8');
+}
+
+ipcMain.handle('sa:pickFolder', async (_e, defaultPath) => {
+  try {
+    const r = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+      defaultPath: defaultPath || undefined,
+    });
+    if (r.canceled || !r.filePaths || !r.filePaths[0]) return { ok: false, error: 'cancelled' };
+    return { ok: true, path: r.filePaths[0] };
+  } catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
+});
+
+ipcMain.handle('sa:pickFile', async (_e, args) => {
+  try {
+    const { defaultPath, filters } = args || {};
+    const r = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      defaultPath: defaultPath || undefined,
+      filters: filters || undefined,
+    });
+    if (r.canceled || !r.filePaths || !r.filePaths[0]) return { ok: false, error: 'cancelled' };
+    return { ok: true, path: r.filePaths[0] };
+  } catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
+});
+
+ipcMain.handle('sa:saveWithPicker', async (_e, args) => {
+  try {
+    const { defaultFileName, contents, filters } = args || {};
+    const r = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: defaultFileName || undefined,
+      filters: filters || undefined,
+    });
+    if (r.canceled || !r.filePath) return { ok: false, error: 'cancelled' };
+    fs.writeFileSync(r.filePath, toBuffer(contents));
+    return { ok: true, path: r.filePath };
+  } catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
+});
+
+ipcMain.handle('sa:readTextFile', async (_e, absPath) => {
+  try { return { ok: true, text: fs.readFileSync(String(absPath), 'utf8') }; }
+  catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
+});
+
+ipcMain.handle('sa:writeAbsoluteFile', async (_e, args) => {
+  try {
+    const { absDir, subFolder, fileName, contents } = args || {};
+    const segs = String(subFolder || '')
+      .split(/[\\/]+/)
+      .map((x) => x.trim())
+      .filter((x) => x && x !== '.' && x !== '..')
+      .map(safeSeg);
+    const dir = segs.length ? path.join(absDir, ...segs) : absDir;
+    fs.mkdirSync(dir, { recursive: true });
+    const full = path.join(dir, safeFileName(fileName));
+    fs.writeFileSync(full, toBuffer(contents));
+    return { ok: true, path: full };
+  } catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
+});
+
 ipcMain.handle('sa:getDataRoot', async () => {
-  try { return { ok: true, path: exportRoot() }; }
+  try {
+    const root = path.join(app.getPath('userData'), 'Data');
+    fs.mkdirSync(root, { recursive: true });
+    for (const sub of ['mirror', 'exports', 'backups', 'state', 'logs']) {
+      fs.mkdirSync(path.join(root, sub), { recursive: true });
+    }
+    return { ok: true, path: root };
+  }
   catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
 });
 
