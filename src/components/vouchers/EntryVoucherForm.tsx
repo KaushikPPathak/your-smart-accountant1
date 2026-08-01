@@ -120,6 +120,10 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(0);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
+  // Bill-wise adjustment: line id → allocations against open bills.
+  const [allocs, setAllocs] = useState<Record<string, BillAllocation[]>>({});
+  const [allocDlg, setAllocDlg] = useState<{ open: boolean; lineId: string | null }>({ open: false, lineId: null });
+
   const { lock, locked } = usePeriodLock(date);
   const formRootRef = useRef<HTMLDivElement | null>(null);
 
