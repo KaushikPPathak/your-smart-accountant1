@@ -745,8 +745,50 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                 <Plus className="mr-1 h-4 w-4" /> Add line
               </Button>
             </div>
+            {/* ---- Bill-wise adjustment against open sales / purchase bills ---- */}
+            {simpleLines.some((l) => {
+              const lg = ledgers.find((x) => x.id === l.ledger_id);
+              return lg && (lg.type === "sundry_debtor" || lg.type === "sundry_creditor");
+            }) && (
+              <div className="space-y-2 border-t p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Bill-wise adjustment
+                </p>
+                {simpleLines.map((l) => {
+                  const lg = ledgers.find((x) => x.id === l.ledger_id);
+                  if (!lg || (lg.type !== "sundry_debtor" && lg.type !== "sundry_creditor")) return null;
+                  const rows = allocs[l.id] ?? [];
+                  const adjusted = rows.reduce((s, a) => s + a.amount_paise, 0);
+                  const lineAmt = rupeesToPaise(parseFloat(l.amount) || 0);
+                  return (
+                    <div key={l.id} className="flex flex-wrap items-center gap-2 rounded-md border p-2 text-sm">
+                      <span className="font-medium">{lg.name}</span>
+                      <span className="text-muted-foreground">{formatINR(lineAmt)}</span>
+                      {rows.length > 0 ? (
+                        <span className="font-mono text-xs text-primary">
+                          {rows.map((a) => a.voucher_number).join(", ")} · {formatINR(adjusted)} adjusted
+                          {lineAmt > adjusted ? ` · ${formatINR(lineAmt - adjusted)} on account` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">On account (no bill selected)</span>
+                      )}
+                      <Button
+                        className="ml-auto"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAllocDlg({ open: true, lineId: l.id })}
+                        disabled={lineAmt <= 0}
+                      >
+                        {rows.length > 0 ? "Change bills" : "Adjust bills"}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
+
       ) : (
       <Card>
         <CardContent className="p-0">
