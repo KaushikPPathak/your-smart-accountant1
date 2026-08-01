@@ -1053,7 +1053,32 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     placeholder="PO / Bill no."
                   />
                 )}
+                {!isNote && SOURCE_STAGES[voucherType] && (
+                  <div className="space-y-1 pt-2">
+                    <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Carry forward from
+                    </Label>
+                    <Combo
+                      value={originalVoucherId ?? ""}
+                      onChange={(id) => void pullSourceDoc(id)}
+                      options={sourceDocs.map((v) => ({
+                        value: v.id,
+                        label: `${v.voucher_number} · ${STAGE_LABEL[v.voucher_type] ?? v.voucher_type}`,
+                        hint: `${v.voucher_date} · ₹${(v.total_paise / 100).toFixed(2)}`,
+                      }))}
+                      placeholder={
+                        partyId
+                          ? sourceDocs.length === 0
+                            ? "No pending documents for this party"
+                            : "Pick quotation / order / challan"
+                          : "Select party first"
+                      }
+                      emptyText="Nothing pending"
+                    />
+                  </div>
+                )}
               </div>
+
               <div className="md:pb-0.5">
                 <NextVoucherNumberCard
                   companyId={activeCompanyId}
