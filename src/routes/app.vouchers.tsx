@@ -35,6 +35,8 @@ import { formatINR } from "@/lib/money";
 import { EmptyState } from "@/components/EmptyState";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
+import { useVoucherPrefs } from "@/hooks/useVoucherPrefs";
+import { hiddenVoucherTypes } from "@/lib/voucher-prefs";
 
 export const Route = createFileRoute("/app/vouchers")({
   head: () => ({ meta: [{ title: "Vouchers — Your Mehtaji" }] }),
@@ -78,6 +80,8 @@ function VouchersHub() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [search, setSearch] = useState("");
+  const { prefs: voucherPrefs } = useVoucherPrefs(activeCompanyId);
+  const hiddenTypes = useMemo(() => hiddenVoucherTypes(voucherPrefs), [voucherPrefs]);
 
   const isNested = location.pathname !== "/app/vouchers";
   const canDelete = activeMembership?.role === "admin";
@@ -216,7 +220,7 @@ function VouchersHub() {
       <div>
         <h1 className="text-2xl font-semibold">Vouchers</h1>
         <p className="text-sm text-muted-foreground">
-          Create entries with Busy-style hotkeys. Press <kbd className="rounded border px-1">Ctrl+S</kbd> to save, <kbd className="rounded border px-1">Esc</kbd> to cancel.
+          Create entries with single-key hotkeys. Press <kbd className="rounded border px-1">Ctrl+S</kbd> to save, <kbd className="rounded border px-1">Esc</kbd> to cancel.
         </p>
       </div>
 
@@ -225,6 +229,8 @@ function VouchersHub() {
           if ((q as { requires?: string }).requires === "inventory") {
             return !!activeMembership?.companies.inventory_enabled;
           }
+          // Sales-cycle stages the company has not opted into stay hidden.
+          if (hiddenTypes.has(q.type)) return false;
           return true;
         }).map((q) => (
           <Link key={q.type} to={q.to}>
