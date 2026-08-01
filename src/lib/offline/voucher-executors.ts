@@ -780,8 +780,36 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
     _items: [] as any,
   });
   if (saveErr) throw saveErr;
+
+  // Bill-wise adjustment rows (cloud path). The atomic RPC does not return the
+  // new voucher id, so resolve it by (company, type, number).
+  const allocs = (snap.allocations ?? []).filter((a) => a.invoice_voucher_id && a.amount_paise > 0);
+  if (allocs.length > 0) {
+    const { data: created } = await supabase
+      .from("vouchers")
+      .select("id")
+      .eq("company_id", snap.companyId)
+      .eq("voucher_type", snap.voucherType as never)
+      .eq("voucher_number", header.voucher_number)
+      .maybeSingle();
+    const payId = (created as { id?: string } | null)?.id;
+    if (payId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from("bill_allocations").insert(
+        allocs.map((a) => ({
+          company_id: snap.companyId,
+          invoice_voucher_id: a.invoice_voucher_id,
+          payment_voucher_id: payId,
+          ledger_id: remapId(a.ledger_id, ledgerRemap),
+          amount_paise: a.amount_paise,
+        })),
+      );
+    }
+  }
+
   emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`]);
   void logActivity({ company_id: snap.companyId, entity_type: "voucher", entity_id: null, entity_label: `${snap.voucherType} ${header.voucher_number}`, action: "create" });
+
 }
 
 // ---------- Registration -----------------------------------------------------
