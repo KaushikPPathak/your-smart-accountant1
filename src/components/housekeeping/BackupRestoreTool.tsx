@@ -87,7 +87,13 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
   async function chooseBackupFolder(): Promise<string | null> {
     const r = await pickFolderNative(backupFolder ?? undefined);
     if (!r.ok || !r.path) {
-      if (r.error && r.error !== "cancelled") toast.error(r.error);
+      if (r.error === NO_NATIVE_PICKER) {
+        toast.info("This build can't open a folder chooser", {
+          description: "Backups will be saved with a Save-as dialog / to your Downloads folder instead.",
+        });
+      } else if (r.error && r.error !== "cancelled") {
+        toast.error(r.error);
+      }
       return null;
     }
     setBackupFolder(companyId, r.path);
@@ -100,8 +106,15 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     if (!companyId) return;
     if (isDesktopRuntime() && !backupFolder) {
       const picked = await chooseBackupFolder();
-      if (!picked) return;
+      // No folder (cancelled or picker unavailable) — fall through and let
+      // exportCompanyBackup use its own Save-as / download fallback rather
+      // than dead-ending the user.
+      if (!picked) {
+        await doExportAs();
+        return;
+      }
     }
+
     setExporting(true);
     try {
       await preflightIntegrityToast(companyId, "backup");
