@@ -655,7 +655,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       <Card>
         <CardContent className="space-y-3 p-4">
           <div className="flex justify-end">
-            <NextVoucherNumberCard companyId={activeCompanyId} voucherType={voucherType} refreshKey={savedTick} />
+            <NextVoucherNumberCard companyId={activeCompanyId} voucherType={voucherType} refreshKey={savedTick} voucherDate={date} />
           </div>
           <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1">

@@ -78,13 +78,39 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-async function nextLocalVoucherNumber(companyId: string, voucherType: string): Promise<string> {
+async function nextLocalVoucherNumber(
+  companyId: string,
+  voucherType: string,
+  voucherDate?: string,
+): Promise<string> {
   const db = await getOfflineDb();
   const rows = await db.cache_vouchers
     .where("company_id")
     .equals(companyId)
     .filter((v: any) => v?.is_deleted !== true && v?.voucher_type === voucherType)
     .toArray();
+  const date = voucherDate || new Date().toISOString().slice(0, 10);
+
+  // Company-configured numbering format (prefix / FY / month / padding).
+  try {
+    const [{ loadVoucherPrefs, ruleFor }, { nextVoucherNumberFor }] = await Promise.all([
+      import("@/lib/voucher-prefs"),
+      import("@/lib/voucher-numbering"),
+    ]);
+    const prefs = await loadVoucherPrefs(companyId);
+    const rule = ruleFor(prefs, voucherType);
+    return nextVoucherNumberFor(
+      rule,
+      (rows as Array<{ voucher_number?: unknown; voucher_date?: unknown }>).map((r) => ({
+        voucher_number: String(r.voucher_number ?? ""),
+        voucher_date: String(r.voucher_date ?? date),
+      })),
+      date,
+    );
+  } catch {
+    /* fall through to the plain serial below */
+  }
+
   let max = 0;
   for (const row of rows as Array<{ voucher_number?: unknown }>) {
     const n = parseInt(String(row.voucher_number ?? "").replace(/\D/g, ""), 10);
@@ -96,7 +122,7 @@ async function nextLocalVoucherNumber(companyId: string, voucherType: string): P
 async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
   const db = await getOfflineDb();
   const voucherId = crypto.randomUUID();
-  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType);
+  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
   const stamp = nowIso();
   const lines = snap.lines.map(({ l, c }) => ({ l, c }));
 
@@ -253,7 +279,7 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
 async function runLocalEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void> {
   const db = await getOfflineDb();
   const voucherId = crypto.randomUUID();
-  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType);
+  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
   const stamp = nowIso();
   const entries = snap.entries.map((e) => ({
     id: crypto.randomUUID(),

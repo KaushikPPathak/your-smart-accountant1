@@ -698,6 +698,7 @@ export function ManufacturingVoucherForm() {
               companyId={activeCompanyId}
               voucherType="manufacturing"
               refreshKey={savedTick}
+              voucherDate={date}
             />
           </div>
           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">

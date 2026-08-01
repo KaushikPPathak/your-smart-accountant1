@@ -415,6 +415,21 @@ function SettingsPage() {
       </Card>
 
       <Card>
+        <CardHeader><CardTitle className="text-base">Voucher numbering &amp; sales cycle</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Choose the numbering format per voucher type (prefix, financial year, month,
+            zero padding, yearly/monthly restart) and tick which sales-cycle documents you
+            raise — quotation, sales order, delivery challan.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => navigate({ to: "/app/settings/numbering" })}>
+            Configure
+          </Button>
+        </CardContent>
+      </Card>
+
+
+      <Card>
         <CardHeader><CardTitle className="text-base">Tax templates</CardTitle></CardHeader>
         <CardContent className="flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">

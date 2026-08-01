@@ -21,10 +21,12 @@ interface Props {
   voucherType: string;
   /** Re-peek when this changes (e.g. after saving). */
   refreshKey?: number;
+  /** Voucher date — drives FY / month tokens and per-period restarts. */
+  voucherDate?: string;
 }
 
-export function NextVoucherNumberCard({ companyId, voucherType, refreshKey = 0 }: Props) {
-  const [next, setNext] = useState<number | null>(null);
+export function NextVoucherNumberCard({ companyId, voucherType, refreshKey = 0, voucherDate }: Props) {
+  const [next, setNext] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -33,16 +35,27 @@ export function NextVoucherNumberCard({ companyId, voucherType, refreshKey = 0 }
     setLoading(true);
     (async () => {
       try {
+        const date = voucherDate || new Date().toISOString().slice(0, 10);
+        const [{ loadVoucherPrefs, ruleFor }, { nextVoucherNumberFor }] = await Promise.all([
+          import("@/lib/voucher-prefs"),
+          import("@/lib/voucher-numbering"),
+        ]);
+        const rule = ruleFor(await loadVoucherPrefs(companyId), voucherType);
+
         if (isLocalOnlyMode()) {
           const rows = await readVouchers(companyId, { voucher_type: voucherType });
-          let maxNum = 0;
-          for (const row of rows ?? []) {
-            const n = parseInt(String(row.voucher_number).replace(/\D/g, ""), 10);
-            if (Number.isFinite(n) && n > maxNum) maxNum = n;
-          }
-          if (!cancelled) setNext(maxNum + 1);
+          const peek = nextVoucherNumberFor(
+            rule,
+            (rows ?? []).map((r: { voucher_number?: unknown; voucher_date?: unknown }) => ({
+              voucher_number: String(r.voucher_number ?? ""),
+              voucher_date: String(r.voucher_date ?? date),
+            })),
+            date,
+          );
+          if (!cancelled) setNext(peek);
           return;
         }
+
         const [seqRes, maxRes] = await Promise.all([
           supabase
             .from("voucher_number_seq")
@@ -52,20 +65,23 @@ export function NextVoucherNumberCard({ companyId, voucherType, refreshKey = 0 }
             .maybeSingle(),
           supabase
             .from("vouchers")
-            .select("voucher_number")
+            .select("voucher_number, voucher_date")
             .eq("company_id", companyId)
             .eq("voucher_type", voucherType as never)
             .order("created_at", { ascending: false })
             .limit(500),
         ]);
 
+        const existing = (maxRes.data ?? []).map((r: { voucher_number?: unknown; voucher_date?: unknown }) => ({
+          voucher_number: String(r.voucher_number ?? ""),
+          voucher_date: String(r.voucher_date ?? date),
+        }));
         const seqNext = (seqRes.data?.next_number as number | undefined) ?? 1;
-        let maxNum = 0;
-        for (const row of maxRes.data ?? []) {
-          const n = parseInt(String(row.voucher_number).replace(/\D/g, ""), 10);
-          if (Number.isFinite(n) && n > maxNum) maxNum = n;
-        }
-        const peek = Math.max(seqNext, maxNum + 1);
+        const peek = nextVoucherNumberFor(
+          { ...rule, start: Math.max(rule.start, seqNext) },
+          existing,
+          date,
+        );
         if (!cancelled) setNext(peek);
       } catch {
         if (!cancelled) setNext(null);
@@ -74,7 +90,7 @@ export function NextVoucherNumberCard({ companyId, voucherType, refreshKey = 0 }
       }
     })();
     return () => { cancelled = true; };
-  }, [companyId, voucherType, refreshKey]);
+  }, [companyId, voucherType, refreshKey, voucherDate]);
 
   return (
     <div
