@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BookOpen, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { Badge } from "@/components/ui/badge";
 import { findCitations, toolsToSources } from "@/lib/ai/citations";
 
@@ -46,7 +46,7 @@ export function AnswerProvenance({ answer, question = "", toolNames = [] }: Prop
                   <button
                     key={i}
                     type="button"
-                    onClick={() => navigate(s.to!)}
+                    onClick={() => navigate({ to: s.to! })}
                     className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-accent"
                   >
                     {s.label}
