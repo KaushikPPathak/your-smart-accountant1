@@ -39,6 +39,11 @@ import {
 import { detectVoucherAction } from "@/lib/ai/voucher-actions";
 import { StreamingText } from "@/components/assistant/StreamingText";
 import { AnswerProvenance } from "@/components/assistant/AnswerProvenance";
+import {
+  getModelPreference, setModelPreference, modelPreferenceLabel,
+  type ModelPreference,
+} from "@/lib/ai/model-preference";
+import { isWebGpuAvailable } from "@/lib/ai/webllm";
 import { clearSpeculation, speculate } from "@/lib/ai/prefetch";
 
 interface ChatMessage {
@@ -114,6 +119,15 @@ export function AssistantChat() {
   const [pendingCompany, setPendingCompany] = useState<ParsedCompany | null>(null);
   const [pendingVoucher, setPendingVoucher] = useState<ParsedVoucher | null>(null);
   const [aiMode, setAiMode] = useState(true);
+  const [modelPref, setModelPref] = useState<ModelPreference>(() => getModelPreference());
+  const webGpuOk = isWebGpuAvailable();
+
+  function cycleModelPref() {
+    const order: ModelPreference[] = ["auto", "local", "cloud"];
+    const next = order[(order.indexOf(modelPref) + 1) % order.length];
+    setModelPref(next);
+    setModelPreference(next);
+  }
   const [thinking, setThinking] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [pendingOcr, setPendingOcr] = useState<OcrDraft | null>(null);
@@ -739,6 +753,23 @@ export function AssistantChat() {
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {aiMode && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-[11px]"
+                onClick={cycleModelPref}
+                title={
+                  webGpuOk
+                    ? "Where answers are generated — click to change"
+                    : "This device has no WebGPU, so on-device answering is unavailable"
+                }
+              >
+                {modelPref === "cloud" ? <Cloud className="h-3 w-3" /> : <Cpu className="h-3 w-3" />}
+                {modelPreferenceLabel(modelPref)}
+                {!webGpuOk && modelPref !== "cloud" ? " · no GPU" : ""}
+              </Button>
+            )}
             <Button
               variant={aiMode ? "default" : "outline"}
               size="sm"
