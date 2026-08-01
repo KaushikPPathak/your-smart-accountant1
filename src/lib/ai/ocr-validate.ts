@@ -8,7 +8,7 @@
 // The result downgrades confidence and shows plain-language warnings instead of
 // silently booking a wrong bill.
 import type { OcrExtracted } from "./ocr-invoice";
-import { isValidGstin } from "@/utils/gstinValidator";
+import { validateGSTIN } from "@/utils/gstinValidator";
 
 export type OcrIssueLevel = "error" | "warning";
 
@@ -86,7 +86,7 @@ export function validateOcrExtract(e: OcrExtracted): OcrValidation {
   // GSTIN structure.
   if (e.party_gstin) {
     const g = String(e.party_gstin).replace(/\s+/g, "").toUpperCase();
-    if (!isValidGstin(g)) {
+    if (!validateGSTIN(g).valid) {
       issues.push({ level: "warning", field: "party_gstin", message: `GSTIN "${g}" fails the checksum — re-read or clear it.` });
     }
   }
