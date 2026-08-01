@@ -111,6 +111,9 @@ class OfflineDatabase extends Dexie {
   // E1 — Bank reconciliation (local-only, never synced).
   cache_bank_statements!: Table<any, any>;
   cache_bank_statement_lines!: Table<any, any>;
+  // E4 — GSTR-2B reconciliation (local-only, never synced).
+  cache_gstr2b_imports!: Table<any, any>;
+  cache_gstr2b_lines!: Table<any, any>;
 
   constructor() {
     super("ym_offline_cache_v3");
@@ -214,6 +217,14 @@ class OfflineDatabase extends Dexie {
         "id, statement_id, company_id, txn_date, match_status, " +
         "[company_id+bank_ledger_id+txn_date], [statement_id+txn_date]",
     });
+    // v11 — GSTR-2B reconciliation stores (E4). Local-only: the downloaded 2B
+    // file and its match decisions stay on this device.
+    this.version(11).stores({
+      cache_gstr2b_imports: "id, company_id, period, created_at, [company_id+period]",
+      cache_gstr2b_lines:
+        "id, import_id, company_id, match_status, supplier_gstin, " +
+        "[company_id+import_id], [import_id+match_status]",
+    });
   }
 }
 
@@ -257,6 +268,7 @@ function makeStubDb(): OfflineDatabase {
     "outbox", "dead_letter", "sync_cursors", "account_creds", "meta",
     "activity_log",
     "cache_bank_statements", "cache_bank_statement_lines",
+    "cache_gstr2b_imports", "cache_gstr2b_lines",
   ];
   const stub: Record<string, unknown> = {
     async transaction(_mode: string, ...args: unknown[]) {
