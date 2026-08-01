@@ -65,20 +65,23 @@ export function NextVoucherNumberCard({ companyId, voucherType, refreshKey = 0, 
             .maybeSingle(),
           supabase
             .from("vouchers")
-            .select("voucher_number")
+            .select("voucher_number, voucher_date")
             .eq("company_id", companyId)
             .eq("voucher_type", voucherType as never)
             .order("created_at", { ascending: false })
             .limit(500),
         ]);
 
+        const existing = (maxRes.data ?? []).map((r: { voucher_number?: unknown; voucher_date?: unknown }) => ({
+          voucher_number: String(r.voucher_number ?? ""),
+          voucher_date: String(r.voucher_date ?? date),
+        }));
         const seqNext = (seqRes.data?.next_number as number | undefined) ?? 1;
-        let maxNum = 0;
-        for (const row of maxRes.data ?? []) {
-          const n = parseInt(String(row.voucher_number).replace(/\D/g, ""), 10);
-          if (Number.isFinite(n) && n > maxNum) maxNum = n;
-        }
-        const peek = Math.max(seqNext, maxNum + 1);
+        const peek = nextVoucherNumberFor(
+          { ...rule, start: Math.max(rule.start, seqNext) },
+          existing,
+          date,
+        );
         if (!cancelled) setNext(peek);
       } catch {
         if (!cancelled) setNext(null);
@@ -87,7 +90,7 @@ export function NextVoucherNumberCard({ companyId, voucherType, refreshKey = 0, 
       }
     })();
     return () => { cancelled = true; };
-  }, [companyId, voucherType, refreshKey]);
+  }, [companyId, voucherType, refreshKey, voucherDate]);
 
   return (
     <div
