@@ -39,6 +39,7 @@ import {
 import { detectVoucherAction } from "@/lib/ai/voucher-actions";
 import { StreamingText } from "@/components/assistant/StreamingText";
 import { AnswerProvenance } from "@/components/assistant/AnswerProvenance";
+import { logAiAction } from "@/lib/ai/audit-log";
 import {
   getModelPreference, setModelPreference, modelPreferenceLabel,
   type ModelPreference,
@@ -386,6 +387,14 @@ export function AssistantChat() {
   }
 
   function confirmPostVoucher(draft: ParsedVoucher) {
+    if (activeCompanyId) {
+      void logAiAction({
+        companyId: activeCompanyId,
+        kind: "voucher_draft_accepted",
+        label: `${draft.intent} draft`,
+        detail: { amount: draft.amount, date: draft.date, narration: draft.narration },
+      });
+    }
     writeAssistantPrefill({
       voucherType: draft.intent,
       date: draft.date,
