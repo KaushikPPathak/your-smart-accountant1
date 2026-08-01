@@ -692,6 +692,7 @@ export function AssistantChat() {
           id: `a-${Date.now()}`,
           role: "assistant",
           text: `**${top.title}**\n\n${top.answer}${more}`,
+          question: text,
           matches: matches.map((m) => m.entry),
         };
       }
