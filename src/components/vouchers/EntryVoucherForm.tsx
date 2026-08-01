@@ -531,7 +531,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       },
       { executor: ENTRY_VOUCHER_KEY, snap, companyId: snap.companyId },
     );
-  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg, draftKey]);
+  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg, draftKey, allocs]);
 
   const save = useCallback(() => { void performSave(); }, [performSave]);
 
