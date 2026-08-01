@@ -12,4 +12,11 @@ contextBridge.exposeInMainWorld('yourMehtaji', {
   openPath: (filePath) => ipcRenderer.invoke('sa:openPath', filePath),
   closeApp: () => ipcRenderer.invoke('sa:closeApp'),
   getDataRoot: () => ipcRenderer.invoke('sa:getDataRoot'),
+  pickFolder: (defaultPath) => ipcRenderer.invoke('sa:pickFolder', defaultPath),
+  pickFile: (defaultPath, filters) => ipcRenderer.invoke('sa:pickFile', { defaultPath, filters }),
+  saveWithPicker: (defaultFileName, contents, filters) =>
+    ipcRenderer.invoke('sa:saveWithPicker', { defaultFileName, contents, filters }),
+  readTextFile: (absPath) => ipcRenderer.invoke('sa:readTextFile', absPath),
+  writeAbsoluteFile: (absDir, subFolder, fileName, contents) =>
+    ipcRenderer.invoke('sa:writeAbsoluteFile', { absDir, subFolder, fileName, contents }),
 });
