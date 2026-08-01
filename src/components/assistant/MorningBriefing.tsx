@@ -6,7 +6,9 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, Bell, CalendarClock, CheckCircle2, ChevronRight, Sparkles, X } from "lucide-react";
+import { AlertTriangle, Bell, CalendarClock, CheckCircle2, ChevronRight, Copy, Download, Sparkles, X } from "lucide-react";
+import { toast } from "sonner";
+import { renderDigestText, copyDigest, downloadDigest } from "@/lib/ai/digest";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatINR } from "@/lib/money";
@@ -84,6 +86,26 @@ export function MorningBriefing({ companyId, companyName, userName }: Props) {
               </p>
             </div>
           </div>
+          <div className="flex items-center gap-1">
+          <Button
+            size="icon" variant="ghost"
+            aria-label="Copy digest to clipboard"
+            title="Copy this digest (paste into WhatsApp or email)"
+            onClick={async () => {
+              const ok = await copyDigest(renderDigestText(bundle, companyName));
+              ok ? toast.success("Digest copied") : toast.error("Could not copy — use download instead");
+            }}
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon" variant="ghost"
+            aria-label="Download digest as text file"
+            title="Save this digest as a .txt file"
+            onClick={() => downloadDigest(renderDigestText(bundle, companyName), `digest-${bundle.date}.txt`)}
+          >
+            <Download className="h-4 w-4" />
+          </Button>
           <Button
             size="icon" variant="ghost"
             aria-label="Dismiss briefing for today"
@@ -91,6 +113,7 @@ export function MorningBriefing({ companyId, companyName, userName }: Props) {
           >
             <X className="h-4 w-4" />
           </Button>
+          </div>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs">

@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { toast } from "sonner";
@@ -23,6 +22,9 @@ import {
   normGstin,
   normInvoiceNo,
 } from "@/lib/gstr2b-recon";
+import {
+  loadLocalPurchases, latestImport, loadImportLines, saveImport, patchG2BLine,
+} from "@/lib/gstr2b-local-store";
 
 export const Route = createFileRoute("/app/reports/gstr2b")({
   head: () => ({ meta: [{ title: "GSTR-2B Reconciliation — Reports" }] }),
@@ -81,33 +83,23 @@ function Gstr2BPage() {
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase.from("vouchers")
-      .select("id, voucher_number, voucher_date, total_paise, vendor_invoice_no, ledgers:party_ledger_id(name, gstin)")
-      .eq("company_id", activeCompanyId)
-      .eq("voucher_type", "purchase")
-      .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false })
-      .limit(5000)
-      .then(({ data }) => setPurchases((data || []) as unknown as Purchase[]));
+    loadLocalPurchases(activeCompanyId).then((rows) => setPurchases(rows as unknown as Purchase[]));
   }, [activeCompanyId]);
 
-  // Load most-recent import on mount
+  // Load the most recent local import on mount.
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase.from("gstr2b_imports")
-      .select("id, period")
-      .eq("company_id", activeCompanyId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .then(({ data }) => {
-        const imp = data?.[0];
-        if (imp) { setPeriod(imp.period); loadLines(imp.id); }
-      });
+    latestImport(activeCompanyId).then((imp) => {
+      if (!imp) return;
+      setPeriod(imp.period);
+      loadLines(imp.id);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompanyId]);
 
   async function loadLines(impId: string) {
-    const { data } = await supabase.from("gstr2b_lines").select("*").eq("import_id", impId);
-    setLines((data || []) as G2BLine[]);
+    const rows = await loadImportLines(impId);
+    setLines(rows as unknown as G2BLine[]);
   }
 
   async function onUpload(file: File) {
@@ -119,19 +111,8 @@ function Gstr2BPage() {
       if (!parsed.length) { toast.error("No rows parsed — check file format"); return; }
 
       const results = reconcile(parsed, purchases, tol);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
       const source = ext === "json" ? "json" : ext === "xlsx" || ext === "xls" ? "xlsx" : "csv";
-      const { data: imp, error: ie } = await supabase.from("gstr2b_imports").insert({
-        company_id: activeCompanyId, period, source,
-        file_name: file.name, total_lines: parsed.length, imported_by: user.id,
-      }).select("id").single();
-      if (ie || !imp) { toast.error(ie?.message || "Import failed"); return; }
-
       const rows = results.map((r) => ({
-        company_id: activeCompanyId,
-        import_id: imp.id,
         supplier_gstin: r.row.supplier_gstin,
         supplier_name: r.row.supplier_name,
         invoice_no: r.row.invoice_no,
@@ -145,12 +126,10 @@ function Gstr2BPage() {
         match_status: r.match_status,
         matched_voucher_id: r.matched_voucher_id,
       }));
-      const { error } = await supabase.from("gstr2b_lines").insert(rows);
-      if (error) { toast.error(error.message); return; }
       const matched = rows.filter((r) => MATCHED_STATUSES.has(r.match_status)).length;
-      await supabase.from("gstr2b_imports").update({ matched_lines: matched }).eq("id", imp.id);
+      const imp = await saveImport(activeCompanyId, period, source, file.name, rows, matched);
       await loadLines(imp.id);
-      toast.success(`Imported ${parsed.length} rows · ${matched} matched`);
+      toast.success(`Imported ${parsed.length} rows · ${matched} matched (stored on this device only)`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Import failed");
     } finally {
@@ -186,8 +165,11 @@ function Gstr2BPage() {
   // Inline edit helpers — optimistic + persist
   async function patchLine(id: string, patch: Partial<G2BLine>) {
     setLines((prev) => prev.map((l) => l.id === id ? { ...l, ...patch } : l));
-    const { error } = await supabase.from("gstr2b_lines").update(patch).eq("id", id);
-    if (error) toast.error(error.message);
+    try {
+      await patchG2BLine(id, patch as any);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save the change");
+    }
   }
 
   async function acceptAsMatched(l: G2BLine) {

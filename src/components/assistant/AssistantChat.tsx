@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff, FileText, Paperclip, ScanLine, BrainCircuit, Volume2, VolumeX, Headphones } from "lucide-react";
+import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff, FileText, Paperclip, ScanLine, BrainCircuit, Volume2, VolumeX, Headphones, Cpu, Cloud } from "lucide-react";
 import { extractInvoiceOcr, type OcrDraft } from "@/lib/ai/ocr-invoice";
+import { validateOcrExtract } from "@/lib/ai/ocr-validate";
 import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
 import { Link } from "@tanstack/react-router";
 import { useVoiceInput } from "@/lib/ai/voice-input";
@@ -37,6 +38,13 @@ import {
 } from "@/lib/voucher-intent";
 import { detectVoucherAction } from "@/lib/ai/voucher-actions";
 import { StreamingText } from "@/components/assistant/StreamingText";
+import { AnswerProvenance } from "@/components/assistant/AnswerProvenance";
+import { logAiAction } from "@/lib/ai/audit-log";
+import {
+  getModelPreference, setModelPreference, modelPreferenceLabel,
+  type ModelPreference,
+} from "@/lib/ai/model-preference";
+import { isWebGpuAvailable } from "@/lib/ai/webllm";
 import { clearSpeculation, speculate } from "@/lib/ai/prefetch";
 
 interface ChatMessage {
@@ -50,6 +58,8 @@ interface ChatMessage {
   card?: StructuredCard;
   ocrPreview?: OcrDraft;
   memoryHint?: PartyPattern;
+  /** The user question this answer replied to — used for citation matching. */
+  question?: string;
 }
 
 type ParsedCompany = {
@@ -110,6 +120,15 @@ export function AssistantChat() {
   const [pendingCompany, setPendingCompany] = useState<ParsedCompany | null>(null);
   const [pendingVoucher, setPendingVoucher] = useState<ParsedVoucher | null>(null);
   const [aiMode, setAiMode] = useState(true);
+  const [modelPref, setModelPref] = useState<ModelPreference>(() => getModelPreference());
+  const webGpuOk = isWebGpuAvailable();
+
+  function cycleModelPref() {
+    const order: ModelPreference[] = ["auto", "local", "cloud"];
+    const next = order[(order.indexOf(modelPref) + 1) % order.length];
+    setModelPref(next);
+    setModelPreference(next);
+  }
   const [thinking, setThinking] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [pendingOcr, setPendingOcr] = useState<OcrDraft | null>(null);
@@ -368,6 +387,14 @@ export function AssistantChat() {
   }
 
   function confirmPostVoucher(draft: ParsedVoucher) {
+    if (activeCompanyId) {
+      void logAiAction({
+        companyId: activeCompanyId,
+        kind: "voucher_draft_accepted",
+        label: `${draft.intent} draft`,
+        detail: { amount: draft.amount, date: draft.date, narration: draft.narration },
+      });
+    }
     writeAssistantPrefill({
       voucherType: draft.intent,
       date: draft.date,
@@ -651,6 +678,7 @@ export function AssistantChat() {
                 id: `a-${Date.now()}`,
                 role: "assistant",
                 text: res.text,
+                question: text,
                 toolCalls: res.toolCalls,
                 card: res.card,
               },
@@ -687,6 +715,7 @@ export function AssistantChat() {
           id: `a-${Date.now()}`,
           role: "assistant",
           text: `**${top.title}**\n\n${top.answer}${more}`,
+          question: text,
           matches: matches.map((m) => m.entry),
         };
       }
@@ -733,6 +762,23 @@ export function AssistantChat() {
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {aiMode && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-[11px]"
+                onClick={cycleModelPref}
+                title={
+                  webGpuOk
+                    ? "Where answers are generated — click to change"
+                    : "This device has no WebGPU, so on-device answering is unavailable"
+                }
+              >
+                {modelPref === "cloud" ? <Cloud className="h-3 w-3" /> : <Cpu className="h-3 w-3" />}
+                {modelPreferenceLabel(modelPref)}
+                {!webGpuOk && modelPref !== "cloud" ? " · no GPU" : ""}
+              </Button>
+            )}
             <Button
               variant={aiMode ? "default" : "outline"}
               size="sm"
@@ -1141,6 +1187,14 @@ function MessageBubble({
           </div>
         )}
 
+        {!isUser && msg.text ? (
+          <AnswerProvenance
+            answer={msg.text}
+            question={msg.question ?? ""}
+            toolNames={(msg.toolCalls ?? []).map((t) => t.name)}
+          />
+        ) : null}
+
         {!isUser && msg.preview && (
           <CompanyPreviewCard
             parsed={msg.preview}
@@ -1422,7 +1476,8 @@ function OcrPreviewCard({
   const [overrideId, setOverrideId] = useState<string | undefined>(undefined);
   const [overrideName, setOverrideName] = useState<string | undefined>(undefined);
   const e = draft.extracted;
-  const conf = Math.round((e.confidence ?? 0) * 100);
+  const validation = useMemo(() => validateOcrExtract(e), [e]);
+  const conf = Math.round(validation.adjustedConfidence * 100);
   const confTone =
     conf >= 80 ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" :
     conf >= 60 ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" :
@@ -1448,6 +1503,22 @@ function OcrPreviewCard({
               {memoryHint.note ? ` Note: ${memoryHint.note}` : ""}
             </div>
           </div>
+        </div>
+      )}
+
+      {validation.issues.length > 0 && (
+        <div className="mb-2 space-y-1 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
+          <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+            {validation.blocking ? "Fix these before posting" : "Please verify"}
+          </div>
+          {validation.issues.map((iss, i) => (
+            <div key={i} className="text-[11px] text-muted-foreground">
+              <span className={iss.level === "error" ? "text-rose-600 dark:text-rose-400" : ""}>
+                {iss.level === "error" ? "✕" : "!"}
+              </span>{" "}
+              {iss.message}
+            </div>
+          ))}
         </div>
       )}
 
