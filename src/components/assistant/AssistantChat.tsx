@@ -38,6 +38,7 @@ import {
 } from "@/lib/voucher-intent";
 import { detectVoucherAction } from "@/lib/ai/voucher-actions";
 import { StreamingText } from "@/components/assistant/StreamingText";
+import { AnswerProvenance } from "@/components/assistant/AnswerProvenance";
 import { clearSpeculation, speculate } from "@/lib/ai/prefetch";
 
 interface ChatMessage {
@@ -51,6 +52,8 @@ interface ChatMessage {
   card?: StructuredCard;
   ocrPreview?: OcrDraft;
   memoryHint?: PartyPattern;
+  /** The user question this answer replied to — used for citation matching. */
+  question?: string;
 }
 
 type ParsedCompany = {
@@ -652,6 +655,7 @@ export function AssistantChat() {
                 id: `a-${Date.now()}`,
                 role: "assistant",
                 text: res.text,
+                question: text,
                 toolCalls: res.toolCalls,
                 card: res.card,
               },
@@ -1141,6 +1145,14 @@ function MessageBubble({
             ))}
           </div>
         )}
+
+        {!isUser && msg.text ? (
+          <AnswerProvenance
+            answer={msg.text}
+            question={msg.question ?? ""}
+            toolNames={(msg.toolCalls ?? []).map((t) => t.name)}
+          />
+        ) : null}
 
         {!isUser && msg.preview && (
           <CompanyPreviewCard
