@@ -1059,6 +1059,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   companyId={activeCompanyId}
                   voucherType={voucherType}
                   refreshKey={savedTick}
+                  voucherDate={date}
                 />
               </div>
             </div>
