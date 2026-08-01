@@ -208,9 +208,34 @@ export async function closeNativeApp(): Promise<SaveNativeResult> {
   return { ok: false, error: "No native runtime" };
 }
 
+/** Error code used when the running build cannot show a native folder picker. */
+export const NO_NATIVE_PICKER = "NO_NATIVE_PICKER";
+
+function downloadInBrowser(fileName: string, contents: string | ArrayBuffer | Uint8Array): SaveNativeResult {
+  try {
+    if (typeof document === "undefined") return { ok: false, error: NO_NATIVE_PICKER };
+    const bytes =
+      typeof contents === "string"
+        ? new Blob([contents], { type: "application/json;charset=utf-8" })
+        : new Blob([contents instanceof Uint8Array ? contents : new Uint8Array(contents as ArrayBuffer)]);
+    const url = URL.createObjectURL(bytes);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = safeFileName(fileName);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    return { ok: true, path: "Downloads folder" };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /**
  * Show a native "Save as…" dialog and write the given contents to the chosen path.
- * Tauri only. Returns { ok: false } in Electron / browser so callers can fall back.
+ * Falls back to the browser File System Access API, then to a plain download, so
+ * this never dead-ends with a "no runtime" error.
  */
 export async function saveWithPickerNative(
   defaultFileName: string,
@@ -219,7 +244,37 @@ export async function saveWithPickerNative(
 ): Promise<SaveNativeResult> {
   const eb0 = electronBridge();
   if (eb0?.saveWithPicker) return eb0.saveWithPicker(defaultFileName, contents, filters);
-  if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
+  if (!hasTauri()) {
+    // Chromium 86+ file picker (works in the browser build and in modern webviews).
+    const w = window as unknown as { showSaveFilePicker?: (o: unknown) => Promise<any> };
+    if (typeof w.showSaveFilePicker === "function") {
+      try {
+        const handle = await w.showSaveFilePicker({
+          suggestedName: safeFileName(defaultFileName),
+          types: (filters ?? []).map((f) => ({
+            description: f.name,
+            accept: { "application/octet-stream": f.extensions.map((e) => `.${e}`) },
+          })),
+        });
+        const writable = await handle.createWritable();
+        await writable.write(
+          typeof contents === "string"
+            ? contents
+            : contents instanceof Uint8Array
+              ? contents
+              : new Uint8Array(contents as ArrayBuffer),
+        );
+        await writable.close();
+        return { ok: true, path: handle.name ?? defaultFileName };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/abort/i.test(msg)) return { ok: false, error: "cancelled" };
+        // fall through to download
+      }
+    }
+    return downloadInBrowser(defaultFileName, contents);
+  }
+
   try {
     const w = window as unknown as {
       __TAURI__?: {
