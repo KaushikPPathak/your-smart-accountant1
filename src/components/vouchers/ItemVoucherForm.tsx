@@ -747,7 +747,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       itcClass: isPurchaseSide ? itcClass : "na",
       itcEligible: isPurchaseSide ? itcEligible : true,
       supplyNature,
-      originalVoucherId: isNote ? originalVoucherId : null,
+      // Note → original bill; sales cycle → the quotation / order / challan
+      // this document was carried forward from.
+      originalVoucherId: originalVoucherId,
+
       totals: { ...totals, round_off_paise: roundOffPaise + miscPostGstPaise },
       lines: lines
         .map((l, i) => ({ l, c: computed[i] }))
