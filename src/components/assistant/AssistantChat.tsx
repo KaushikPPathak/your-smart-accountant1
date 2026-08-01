@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff, FileText, Paperclip, ScanLine, BrainCircuit, Volume2, VolumeX, Headphones } from "lucide-react";
 import { extractInvoiceOcr, type OcrDraft } from "@/lib/ai/ocr-invoice";
+import { validateOcrExtract } from "@/lib/ai/ocr-validate";
 import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
 import { Link } from "@tanstack/react-router";
 import { useVoiceInput } from "@/lib/ai/voice-input";
@@ -1422,7 +1423,8 @@ function OcrPreviewCard({
   const [overrideId, setOverrideId] = useState<string | undefined>(undefined);
   const [overrideName, setOverrideName] = useState<string | undefined>(undefined);
   const e = draft.extracted;
-  const conf = Math.round((e.confidence ?? 0) * 100);
+  const validation = useMemo(() => validateOcrExtract(e), [e]);
+  const conf = Math.round(validation.adjustedConfidence * 100);
   const confTone =
     conf >= 80 ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" :
     conf >= 60 ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" :
@@ -1448,6 +1450,22 @@ function OcrPreviewCard({
               {memoryHint.note ? ` Note: ${memoryHint.note}` : ""}
             </div>
           </div>
+        </div>
+      )}
+
+      {validation.issues.length > 0 && (
+        <div className="mb-2 space-y-1 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
+          <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+            {validation.blocking ? "Fix these before posting" : "Please verify"}
+          </div>
+          {validation.issues.map((iss, i) => (
+            <div key={i} className="text-[11px] text-muted-foreground">
+              <span className={iss.level === "error" ? "text-rose-600 dark:text-rose-400" : ""}>
+                {iss.level === "error" ? "✕" : "!"}
+              </span>{" "}
+              {iss.message}
+            </div>
+          ))}
         </div>
       )}
 
