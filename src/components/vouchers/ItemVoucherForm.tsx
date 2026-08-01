@@ -156,6 +156,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   }, [partyId, voucherType]);
   const [refNo, setRefNo] = useState("");
   const [originalVoucherId, setOriginalVoucherId] = useState<string | null>(null);
+  const [sourceDocs, setSourceDocs] = useState<LinkedDoc[]>([]);
+
   const [originalInvoices, setOriginalInvoices] = useState<
     { id: string; voucher_number: string; voucher_date: string; total_paise: number }[]
   >([]);
