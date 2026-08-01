@@ -214,10 +214,16 @@ export const NO_NATIVE_PICKER = "NO_NATIVE_PICKER";
 function downloadInBrowser(fileName: string, contents: string | ArrayBuffer | Uint8Array): SaveNativeResult {
   try {
     if (typeof document === "undefined") return { ok: false, error: NO_NATIVE_PICKER };
-    const bytes =
+    const blobPart: BlobPart =
       typeof contents === "string"
-        ? new Blob([contents], { type: "application/json;charset=utf-8" })
-        : new Blob([contents instanceof Uint8Array ? contents : new Uint8Array(contents as ArrayBuffer)]);
+        ? contents
+        : contents instanceof Uint8Array
+          ? new Uint8Array(contents).buffer
+          : (contents as ArrayBuffer);
+    const bytes = new Blob([blobPart], {
+      type: typeof contents === "string" ? "application/json;charset=utf-8" : "application/octet-stream",
+    });
+
     const url = URL.createObjectURL(bytes);
     const a = document.createElement("a");
     a.href = url;
