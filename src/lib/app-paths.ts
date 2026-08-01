@@ -56,18 +56,32 @@ export async function getAppPaths(): Promise<AppPaths | null> {
     return cached;
   }
 
-  // Electron bridge: the main process owns the path; for now we expose a
-  // logical sentinel so callers can format messages. The actual write still
-  // routes through the IPC bridge (electron/main.cjs).
-  cached = {
-    root: "%LOCALAPPDATA%\\YourMehtaji",
-    mirror: "%LOCALAPPDATA%\\YourMehtaji\\mirror",
-    exports: "%LOCALAPPDATA%\\YourMehtaji\\exports",
-    backups: "%LOCALAPPDATA%\\YourMehtaji\\backups",
-    state: "%LOCALAPPDATA%\\YourMehtaji\\state",
-    logs: "%LOCALAPPDATA%\\YourMehtaji\\logs",
+  // Electron bridge: ask the main process for the real, existing data root
+  // (it creates the sub-folders on demand) so "open folder" actually works.
+  const w = window as unknown as {
+    yourMehtaji?: { getDataRoot?: () => Promise<{ ok: boolean; path?: string }> };
   };
-  return cached;
+  if (w.yourMehtaji?.getDataRoot) {
+    try {
+      const res = await w.yourMehtaji.getDataRoot();
+      if (res?.ok && res.path) {
+        const root = res.path.replace(/[\\/]+$/, "");
+        const sep = root.includes("\\") ? "\\" : "/";
+        cached = {
+          root,
+          mirror: `${root}${sep}mirror`,
+          exports: `${root}${sep}exports`,
+          backups: `${root}${sep}backups`,
+          state: `${root}${sep}state`,
+          logs: `${root}${sep}logs`,
+        };
+        return cached;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  return null;
 }
 
 /** Reset cache (tests). */
