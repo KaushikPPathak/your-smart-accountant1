@@ -324,7 +324,7 @@ export async function saveWithPickerNative(
 export async function pickFolderNative(defaultPath?: string): Promise<SaveNativeResult> {
   const eb = electronBridge();
   if (eb?.pickFolder) return eb.pickFolder(defaultPath);
-  if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
+  if (!hasTauri()) return { ok: false, error: NO_NATIVE_PICKER };
   try {
     const dlg = await import("@tauri-apps/plugin-dialog");
     const chosen = await dlg.open({ directory: true, multiple: false, defaultPath });
@@ -344,7 +344,7 @@ export async function pickFileNative(
 ): Promise<SaveNativeResult> {
   const eb = electronBridge();
   if (eb?.pickFile) return eb.pickFile(defaultPath, filters);
-  if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
+  if (!hasTauri()) return { ok: false, error: NO_NATIVE_PICKER };
   try {
     const dlg = await import("@tauri-apps/plugin-dialog");
     const chosen = await dlg.open({ directory: false, multiple: false, defaultPath, filters });
@@ -361,7 +361,7 @@ export async function pickFileNative(
 export async function readAbsoluteTextFileNative(absPath: string): Promise<{ ok: boolean; text?: string; error?: string }> {
   const eb = electronBridge();
   if (eb?.readTextFile) return eb.readTextFile(absPath);
-  if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
+  if (!hasTauri()) return { ok: false, error: "This build cannot read files directly — use the file chooser instead." };
   try {
     const fs = await import("@tauri-apps/plugin-fs");
     const text = await fs.readTextFile(absPath);
@@ -386,7 +386,7 @@ export async function writeAbsoluteFileNative(
 ): Promise<SaveNativeResult> {
   const eb = electronBridge();
   if (eb?.writeAbsoluteFile) return eb.writeAbsoluteFile(absDir, subFolder, fileName, contents);
-  if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
+  if (!hasTauri()) return { ok: false, error: NO_NATIVE_PICKER };
   try {
     const [{ join }, fs] = await Promise.all([
       import("@tauri-apps/api/path"),
