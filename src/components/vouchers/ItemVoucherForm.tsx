@@ -1100,6 +1100,14 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   <div className="space-y-1 pt-2">
                     <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       Carry forward from
+                      {partyId && sourceDocs.length > 0 && (
+                        <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold normal-case text-primary">
+                          {sourceDocs.length} pending{" "}
+                          {SOURCE_STAGES[voucherType]
+                            .map((s) => STAGE_LABEL[s] ?? s)
+                            .join(" / ")}
+                        </span>
+                      )}
                     </Label>
                     <Combo
                       value={originalVoucherId ?? ""}
@@ -1120,6 +1128,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     />
                   </div>
                 )}
+
               </div>
 
               <div className="md:pb-0.5">
