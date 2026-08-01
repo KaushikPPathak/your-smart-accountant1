@@ -23,6 +23,23 @@ interface ElectronBridge {
   openPath: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
   closeApp?: () => Promise<{ ok: boolean; error?: string }>;
   getDataRoot?: () => Promise<{ ok: boolean; path?: string; error?: string }>;
+  pickFolder?: (defaultPath?: string) => Promise<SaveNativeResult>;
+  pickFile?: (
+    defaultPath?: string,
+    filters?: { name: string; extensions: string[] }[],
+  ) => Promise<SaveNativeResult>;
+  saveWithPicker?: (
+    defaultFileName: string,
+    contents: string | ArrayBuffer | Uint8Array,
+    filters?: { name: string; extensions: string[] }[],
+  ) => Promise<SaveNativeResult>;
+  readTextFile?: (absPath: string) => Promise<{ ok: boolean; text?: string; error?: string }>;
+  writeAbsoluteFile?: (
+    absDir: string,
+    subFolder: string,
+    fileName: string,
+    contents: string | ArrayBuffer | Uint8Array,
+  ) => Promise<SaveNativeResult>;
 }
 
 function electronBridge(): ElectronBridge | null {
@@ -200,6 +217,8 @@ export async function saveWithPickerNative(
   contents: string | ArrayBuffer | Uint8Array,
   filters?: { name: string; extensions: string[] }[],
 ): Promise<SaveNativeResult> {
+  const eb0 = electronBridge();
+  if (eb0?.saveWithPicker) return eb0.saveWithPicker(defaultFileName, contents, filters);
   if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
   try {
     const w = window as unknown as {
@@ -242,6 +261,8 @@ export async function saveWithPickerNative(
  * or { ok: false } if cancelled / not in a desktop runtime.
  */
 export async function pickFolderNative(defaultPath?: string): Promise<SaveNativeResult> {
+  const eb = electronBridge();
+  if (eb?.pickFolder) return eb.pickFolder(defaultPath);
   if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
   try {
     const dlg = await import("@tauri-apps/plugin-dialog");
@@ -260,6 +281,8 @@ export async function pickFileNative(
   defaultPath?: string,
   filters?: { name: string; extensions: string[] }[],
 ): Promise<SaveNativeResult> {
+  const eb = electronBridge();
+  if (eb?.pickFile) return eb.pickFile(defaultPath, filters);
   if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
   try {
     const dlg = await import("@tauri-apps/plugin-dialog");
@@ -275,6 +298,8 @@ export async function pickFileNative(
  * Read a text file from an absolute path (desktop runtimes only).
  */
 export async function readAbsoluteTextFileNative(absPath: string): Promise<{ ok: boolean; text?: string; error?: string }> {
+  const eb = electronBridge();
+  if (eb?.readTextFile) return eb.readTextFile(absPath);
   if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
   try {
     const fs = await import("@tauri-apps/plugin-fs");
@@ -298,6 +323,8 @@ export async function writeAbsoluteFileNative(
   fileName: string,
   contents: string | ArrayBuffer | Uint8Array,
 ): Promise<SaveNativeResult> {
+  const eb = electronBridge();
+  if (eb?.writeAbsoluteFile) return eb.writeAbsoluteFile(absDir, subFolder, fileName, contents);
   if (!hasTauri()) return { ok: false, error: "No Tauri runtime" };
   try {
     const [{ join }, fs] = await Promise.all([
