@@ -89,13 +89,36 @@ ipcMain.handle('sa:saveCompanyFile', async (_e, args) => {
   }
 });
 
+// Windows shell does NOT expand %VAR% for us — do it here, otherwise
+// "open folder" fails with 'Windows cannot find %LOCALAPPDATA%\\...'.
+function expandPath(p) {
+  let out = String(p || '').trim();
+  out = out.replace(/%([^%]+)%/g, (m, name) => process.env[name] || process.env[name.toUpperCase()] || m);
+  out = out.replace(/^~(?=[\\/]|$)/, app.getPath('home'));
+  return out;
+}
+
 ipcMain.handle('sa:showInFolder', async (_e, filePath) => {
-  try { shell.showItemInFolder(String(filePath)); return { ok: true }; }
+  try {
+    const target = expandPath(filePath);
+    if (!fs.existsSync(target)) return { ok: false, error: 'Folder does not exist yet: ' + target };
+    shell.showItemInFolder(target);
+    return { ok: true };
+  }
   catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
 });
 
 ipcMain.handle('sa:openPath', async (_e, filePath) => {
-  try { const r = await shell.openPath(String(filePath)); return r ? { ok: false, error: r } : { ok: true }; }
+  try {
+    const target = expandPath(filePath);
+    // Create the folder on demand so "Open" never shows a Windows error box.
+    if (!fs.existsSync(target) && !path.extname(target)) {
+      try { fs.mkdirSync(target, { recursive: true }); } catch { /* ignore */ }
+    }
+    if (!fs.existsSync(target)) return { ok: false, error: 'Path not found: ' + target };
+    const r = await shell.openPath(target);
+    return r ? { ok: false, error: r } : { ok: true };
+  }
   catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
 });
 
