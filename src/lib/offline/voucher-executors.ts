@@ -295,31 +295,52 @@ async function runLocalEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void>
   const { assertVoucherBalanced } = await import("@/lib/voucher-invariants");
   assertVoucherBalanced(entries, { voucherType: snap.voucherType, companyId: snap.companyId });
 
-  await db.transaction("rw", db.cache_vouchers, db.cache_voucher_entries, async () => {
-    await db.cache_vouchers.put({
-      id: voucherId,
+  const allocRows = (snap.allocations ?? [])
+    .filter((a) => a.invoice_voucher_id && a.amount_paise > 0)
+    .map((a) => ({
+      id: crypto.randomUUID(),
       company_id: snap.companyId,
-      voucher_type: snap.voucherType,
-      voucher_number: voucherNumber,
-      voucher_date: snap.voucherDate,
-      party_ledger_id: snap.partyLedgerId,
-      reference_no: snap.refNo || null,
-      narration: snap.narration || null,
-      is_interstate: false,
-      subtotal_paise: snap.total,
-      cgst_paise: 0,
-      sgst_paise: 0,
-      igst_paise: 0,
-      round_off_paise: 0,
-      total_paise: snap.total,
-      is_deleted: false,
-      is_synced: true,
+      invoice_voucher_id: a.invoice_voucher_id,
+      payment_voucher_id: voucherId,
+      ledger_id: a.ledger_id,
+      amount_paise: a.amount_paise,
       created_at: stamp,
       updated_at: stamp,
-    });
-    await db.cache_voucher_entries.bulkPut(entries);
-  });
+    }));
+
+  await db.transaction(
+    "rw",
+    db.cache_vouchers,
+    db.cache_voucher_entries,
+    db.cache_bill_allocations,
+    async () => {
+      await db.cache_vouchers.put({
+        id: voucherId,
+        company_id: snap.companyId,
+        voucher_type: snap.voucherType,
+        voucher_number: voucherNumber,
+        voucher_date: snap.voucherDate,
+        party_ledger_id: snap.partyLedgerId,
+        reference_no: snap.refNo || null,
+        narration: snap.narration || null,
+        is_interstate: false,
+        subtotal_paise: snap.total,
+        cgst_paise: 0,
+        sgst_paise: 0,
+        igst_paise: 0,
+        round_off_paise: 0,
+        total_paise: snap.total,
+        is_deleted: false,
+        is_synced: true,
+        created_at: stamp,
+        updated_at: stamp,
+      });
+      await db.cache_voucher_entries.bulkPut(entries);
+      if (allocRows.length > 0) await db.cache_bill_allocations.bulkPut(allocRows);
+    },
+  );
 }
+
 
 function uniqueIds(ids: Array<string | null | undefined>): string[] {
   return Array.from(new Set(ids.filter((id): id is string => Boolean(id))));
@@ -548,7 +569,17 @@ export interface EntryVoucherSnap {
     narration: string | null;
     line_no: number;
   }>;
+  /**
+   * Bill-wise adjustment: which sales / purchase bills this receipt or payment
+   * settles, and by how much. Optional — omitted means "on account".
+   */
+  allocations?: Array<{
+    invoice_voucher_id: string;
+    ledger_id: string;
+    amount_paise: number;
+  }>;
 }
+
 
 // ---------- Item voucher executor -------------------------------------------
 
@@ -749,8 +780,36 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
     _items: [] as any,
   });
   if (saveErr) throw saveErr;
+
+  // Bill-wise adjustment rows (cloud path). The atomic RPC does not return the
+  // new voucher id, so resolve it by (company, type, number).
+  const allocs = (snap.allocations ?? []).filter((a) => a.invoice_voucher_id && a.amount_paise > 0);
+  if (allocs.length > 0) {
+    const { data: created } = await supabase
+      .from("vouchers")
+      .select("id")
+      .eq("company_id", snap.companyId)
+      .eq("voucher_type", snap.voucherType as never)
+      .eq("voucher_number", header.voucher_number)
+      .maybeSingle();
+    const payId = (created as { id?: string } | null)?.id;
+    if (payId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from("bill_allocations").insert(
+        allocs.map((a) => ({
+          company_id: snap.companyId,
+          invoice_voucher_id: a.invoice_voucher_id,
+          payment_voucher_id: payId,
+          ledger_id: remapId(a.ledger_id, ledgerRemap),
+          amount_paise: a.amount_paise,
+        })),
+      );
+    }
+  }
+
   emitDataChange(snap.companyId, "voucher", [`voucher_type:${snap.voucherType}`]);
   void logActivity({ company_id: snap.companyId, entity_type: "voucher", entity_id: null, entity_label: `${snap.voucherType} ${header.voucher_number}`, action: "create" });
+
 }
 
 // ---------- Registration -----------------------------------------------------

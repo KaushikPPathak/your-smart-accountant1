@@ -63,6 +63,8 @@ import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-st
 import { AutoTaxChip } from "./AutoTaxChip";
 import { SundryStrip } from "./SundryStrip";
 import { netSundryPaise, resolveSundryPaise, splitSundriesByStage, type Sundry } from "@/lib/sundries";
+import { SOURCE_STAGES, STAGE_LABEL, listSourceDocs, loadDocLines, type LinkedDoc } from "@/lib/doc-linking";
+
 
 type VoucherType =
   | "sales"
@@ -154,6 +156,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   }, [partyId, voucherType]);
   const [refNo, setRefNo] = useState("");
   const [originalVoucherId, setOriginalVoucherId] = useState<string | null>(null);
+  const [sourceDocs, setSourceDocs] = useState<LinkedDoc[]>([]);
+
   const [originalInvoices, setOriginalInvoices] = useState<
     { id: string; voucher_number: string; voucher_date: string; total_paise: number }[]
   >([]);
@@ -395,10 +399,46 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     };
   }, [isNote, voucherType, activeCompanyId, partyId]);
 
+  // Sales-cycle carry-forward: pending earlier-stage documents for this party
+  // (Quotation → Sales Order → Delivery Challan → Sales Invoice).
+  useEffect(() => {
+    if (isNote || !activeCompanyId || !partyId || !SOURCE_STAGES[voucherType]) {
+      setSourceDocs([]);
+      return;
+    }
+    let cancelled = false;
+    listSourceDocs(activeCompanyId, voucherType, partyId)
+      .then((rows) => { if (!cancelled) setSourceDocs(rows); })
+      .catch(() => { if (!cancelled) setSourceDocs([]); });
+    return () => { cancelled = true; };
+  }, [isNote, voucherType, activeCompanyId, partyId, savedTick]);
+
+  /** Pull the picked source document's lines into this voucher. */
+  const pullSourceDoc = useCallback(async (id: string) => {
+    setOriginalVoucherId(id || null);
+    if (!id) return;
+    const doc = sourceDocs.find((d) => d.id === id);
+    setRefNo(doc?.voucher_number ?? "");
+    try {
+      const docLines = await loadDocLines(id);
+      if (docLines.length === 0) {
+        toast.info("That document has no item lines");
+        return;
+      }
+      setLines(docLines.map((l) => ({ id: crypto.randomUUID(), ...l })));
+      toast.success(
+        `Carried forward ${docLines.length} line${docLines.length > 1 ? "s" : ""} from ${STAGE_LABEL[doc?.voucher_type ?? ""] ?? "document"} ${doc?.voucher_number ?? ""}`,
+      );
+    } catch {
+      toast.error("Could not read that document");
+    }
+  }, [sourceDocs]);
+
   // Clear the original-invoice link whenever the party changes
   useEffect(() => {
     setOriginalVoucherId(null);
   }, [partyId]);
+
 
   const partyOpts = useMemo(
     () => ledgers.filter((l) => cfg.partyTypes.includes(l.type)),
@@ -707,7 +747,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       itcClass: isPurchaseSide ? itcClass : "na",
       itcEligible: isPurchaseSide ? itcEligible : true,
       supplyNature,
-      originalVoucherId: isNote ? originalVoucherId : null,
+      // Note → original bill; sales cycle → the quotation / order / challan
+      // this document was carried forward from.
+      originalVoucherId: originalVoucherId,
+
       totals: { ...totals, round_off_paise: roundOffPaise + miscPostGstPaise },
       lines: lines
         .map((l, i) => ({ l, c: computed[i] }))
@@ -1053,7 +1096,32 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     placeholder="PO / Bill no."
                   />
                 )}
+                {!isNote && SOURCE_STAGES[voucherType] && (
+                  <div className="space-y-1 pt-2">
+                    <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Carry forward from
+                    </Label>
+                    <Combo
+                      value={originalVoucherId ?? ""}
+                      onChange={(id) => void pullSourceDoc(id)}
+                      options={sourceDocs.map((v) => ({
+                        value: v.id,
+                        label: `${v.voucher_number} · ${STAGE_LABEL[v.voucher_type] ?? v.voucher_type}`,
+                        hint: `${v.voucher_date} · ₹${(v.total_paise / 100).toFixed(2)}`,
+                      }))}
+                      placeholder={
+                        partyId
+                          ? sourceDocs.length === 0
+                            ? "No pending documents for this party"
+                            : "Pick quotation / order / challan"
+                          : "Select party first"
+                      }
+                      emptyText="Nothing pending"
+                    />
+                  </div>
+                )}
               </div>
+
               <div className="md:pb-0.5">
                 <NextVoucherNumberCard
                   companyId={activeCompanyId}

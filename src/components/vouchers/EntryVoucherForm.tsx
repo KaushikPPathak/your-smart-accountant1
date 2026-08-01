@@ -43,6 +43,8 @@ import type { Resolution, TaxTemplate } from "@/lib/voucher-resolver";
 import { AutoTaxChip } from "./AutoTaxChip";
 import { LedgerBalanceChip } from "./LedgerBalanceChip";
 import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-store";
+import { BillAllocationDialog, type BillAllocation } from "./BillAllocationDialog";
+
 
 type EntryVoucherType = "receipt" | "payment" | "journal";
 
@@ -120,6 +122,10 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(0);
   const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null; lineIdx: number | null }>({ open: false, editId: null, lineIdx: null });
+  // Bill-wise adjustment: line id → allocations against open bills.
+  const [allocs, setAllocs] = useState<Record<string, BillAllocation[]>>({});
+  const [allocDlg, setAllocDlg] = useState<{ open: boolean; lineId: string | null }>({ open: false, lineId: null });
+
   const { lock, locked } = usePeriodLock(date);
   const formRootRef = useRef<HTMLDivElement | null>(null);
 
@@ -435,13 +441,27 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       });
       partyLedgerId = partyLine?.ledger_id ?? null;
     }
+    // Bill-wise adjustments for the party lines actually filled in.
+    const allocations = isSimple
+      ? simpleLines.flatMap((l) =>
+          (allocs[l.id] ?? [])
+            .filter((a) => a.amount_paise > 0 && l.ledger_id)
+            .map((a) => ({
+              invoice_voucher_id: a.invoice_voucher_id,
+              ledger_id: l.ledger_id,
+              amount_paise: a.amount_paise,
+            })),
+        )
+      : [];
     // Snapshot payload then INSTANTLY reset. DB write happens in background.
     const snap = {
       companyId: activeCompanyId, voucherType,
       voucherDate: date, partyLedgerId,
       refNo, narration, total: totalForVoucher,
       entries: entriesToInsert,
+      allocations,
     };
+
     // Shared validation (same schema would run server-side via createServerFn).
     const check = validateEntryVoucher({
       company_id: snap.companyId,
@@ -493,6 +513,8 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     setNarration("");
     setLines(Array.from({ length: cfg.defaultLines }, blank));
     setSimpleLines(Array.from({ length: 2 }, blankSimple));
+    setAllocs({});
+
     // Keep cashBankId as-is — user often enters multiple vouchers into the same book.
     setFocusedLine(0);
     setSavedTick((n) => n + 1);
@@ -509,7 +531,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       },
       { executor: ENTRY_VOUCHER_KEY, snap, companyId: snap.companyId },
     );
-  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg, draftKey]);
+  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg, draftKey, allocs]);
 
   const save = useCallback(() => { void performSave(); }, [performSave]);
 
@@ -723,8 +745,50 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                 <Plus className="mr-1 h-4 w-4" /> Add line
               </Button>
             </div>
+            {/* ---- Bill-wise adjustment against open sales / purchase bills ---- */}
+            {simpleLines.some((l) => {
+              const lg = ledgers.find((x) => x.id === l.ledger_id);
+              return lg && (lg.type === "sundry_debtor" || lg.type === "sundry_creditor");
+            }) && (
+              <div className="space-y-2 border-t p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Bill-wise adjustment
+                </p>
+                {simpleLines.map((l) => {
+                  const lg = ledgers.find((x) => x.id === l.ledger_id);
+                  if (!lg || (lg.type !== "sundry_debtor" && lg.type !== "sundry_creditor")) return null;
+                  const rows = allocs[l.id] ?? [];
+                  const adjusted = rows.reduce((s, a) => s + a.amount_paise, 0);
+                  const lineAmt = rupeesToPaise(parseFloat(l.amount) || 0);
+                  return (
+                    <div key={l.id} className="flex flex-wrap items-center gap-2 rounded-md border p-2 text-sm">
+                      <span className="font-medium">{lg.name}</span>
+                      <span className="text-muted-foreground">{formatINR(lineAmt)}</span>
+                      {rows.length > 0 ? (
+                        <span className="font-mono text-xs text-primary">
+                          {rows.map((a) => a.voucher_number).join(", ")} · {formatINR(adjusted)} adjusted
+                          {lineAmt > adjusted ? ` · ${formatINR(lineAmt - adjusted)} on account` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">On account (no bill selected)</span>
+                      )}
+                      <Button
+                        className="ml-auto"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAllocDlg({ open: true, lineId: l.id })}
+                        disabled={lineAmt <= 0}
+                      >
+                        {rows.length > 0 ? "Change bills" : "Adjust bills"}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
+
       ) : (
       <Card>
         <CardContent className="p-0">
@@ -819,6 +883,25 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           onSaved={onLedgerSaved}
         />
       )}
+
+      {activeCompanyId && allocDlg.lineId && (() => {
+        const line = simpleLines.find((l) => l.id === allocDlg.lineId);
+        const lg = line ? ledgers.find((x) => x.id === line.ledger_id) : undefined;
+        if (!line || !lg || (lg.type !== "sundry_debtor" && lg.type !== "sundry_creditor")) return null;
+        return (
+          <BillAllocationDialog
+            open={allocDlg.open}
+            onOpenChange={(o) => setAllocDlg((s) => ({ ...s, open: o }))}
+            companyId={activeCompanyId}
+            ledgerId={lg.id}
+            partyType={lg.type as "sundry_debtor" | "sundry_creditor"}
+            totalAvailablePaise={rupeesToPaise(parseFloat(line.amount) || 0)}
+            initial={allocs[line.id] ?? []}
+            onSave={(rows) => setAllocs((cur) => ({ ...cur, [line.id]: rows }))}
+          />
+        );
+      })()}
+
       </div>
       <div className="space-y-3">
         <RecentVouchersPanel voucherType={voucherType} refreshKey={savedTick} />
