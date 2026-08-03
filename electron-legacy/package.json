@@ -42,7 +42,8 @@
         }
       ],
       "icon": "assets/app.ico",
-      "artifactName": "SmartAccountantSetup-Win7-${version}-${arch}.${ext}"
+      "artifactName": "SmartAccountantSetup-Win7-${version}-${arch}.${ext}",
+      "publisherName": "Your Mehtaji"
     },
     "nsis": {
       "oneClick": false,
@@ -53,6 +54,7 @@
       "shortcutName": "Smart Accountant",
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true
-    }
+    },
+    "copyright": "\u00a9 2026 Your Mehtaji"
   }
 }
