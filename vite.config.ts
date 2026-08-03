@@ -124,6 +124,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   // Store certification: shipped builds carry no debug console noise.
-  esbuild: { drop: mode === "production" ? (["console", "debugger"] as const) : [] },
+  esbuild: { drop: isProdBuild ? (["console", "debugger"] as const) : [] },
+
 });
 
