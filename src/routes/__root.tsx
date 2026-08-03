@@ -63,12 +63,14 @@ function RootComponent() {
               <CompanyProvider>
                 <BrainProvider>
                   <TooltipProvider delayDuration={200}>
+                    <OfflineBanner />
                     <WebGate>
                       <LockGate>
                         <Outlet />
                       </LockGate>
                     </WebGate>
                   </TooltipProvider>
+
                 </BrainProvider>
                 <Toaster richColors position="top-right" />
                 <ExportShowcase />
