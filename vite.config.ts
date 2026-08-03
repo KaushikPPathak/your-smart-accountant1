@@ -69,9 +69,11 @@ const pwaPlugins = isTauri
 const sharedBuild = {
   target: "es2020" as const,
   cssMinify: true as const,
+  sourcemap: false as const,
   reportCompressedSize: false,
   chunkSizeWarningLimit: 7000,
   assetsInlineLimit: 4096,
+
   rollupOptions: {
     output: {
       manualChunks(id: string) {
