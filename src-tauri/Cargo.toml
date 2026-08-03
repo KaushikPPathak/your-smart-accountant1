@@ -1,7 +1,7 @@
 [package]
 name = "smart-accountant"
-version = "0.1.0"
-description = "Smart Accountant Tauri App"
+version = "1.0.0"
+description = "GST-ready offline accounting for Indian businesses"
 authors = ["you"]
 edition = "2021"
 rust-version = "1.70"

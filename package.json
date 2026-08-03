@@ -1,5 +1,5 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "smart-accountant",
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,7 +20,8 @@
     "smoke": "node scripts/smoke.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:keyboard": "playwright test navigation.spec.ts"
+    "test:e2e:keyboard": "playwright test navigation.spec.ts",
+    "build:store": "cross-env TAURI_ENV_PLATFORM=windows tauri build --bundles nsis msi"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.47",
@@ -127,5 +128,8 @@
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.5"
-  }
+  },
+  "version": "1.0.0",
+  "description": "Smart Accountant (Your Mehtaji) \u2014 GST-ready offline accounting for Indian businesses.",
+  "author": "Your Mehtaji"
 }
