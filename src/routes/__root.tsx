@@ -91,9 +91,17 @@ function WebGate({ children }: { children: React.ReactNode }) {
   // useState so runtime detection is stable across renders and we render the
   // same tree on first paint (avoids a flash of the workspace shell).
   const [isDesktop] = useState<boolean>(() => isDesktopRuntime());
+  const location = useLocation();
+  // Legal pages stay publicly reachable on the web build so store reviewers
+  // and users can read the privacy policy without installing anything.
+  if (PUBLIC_PATHS.has(location.pathname)) return <>{children}</>;
   if (!isDesktop) return <WebDemoLanding />;
   return <>{children}</>;
 }
+
+// Publicly reachable routes (no desktop runtime, no unlock required).
+const PUBLIC_PATHS = new Set(["/privacy"]);
+
 
 // Routes reachable without unlocking — the offline diagnostic assistant is
 // intentionally exempt so users can troubleshoot sign-in / sync issues before
