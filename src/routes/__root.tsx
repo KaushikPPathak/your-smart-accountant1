@@ -107,7 +107,7 @@ const PUBLIC_PATHS = new Set(["/privacy"]);
 // intentionally exempt so users can troubleshoot sign-in / sync issues before
 // they get past the lock screen. `/welcome` is the local-first first-launch
 // landing so it must also bypass the lock gate.
-const LOCK_EXEMPT_PATHS = new Set(["/lock", "/assistant", "/welcome"]);
+const LOCK_EXEMPT_PATHS = new Set(["/lock", "/assistant", "/welcome", "/privacy"]);
 
 function LockGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
