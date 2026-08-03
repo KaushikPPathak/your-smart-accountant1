@@ -49,6 +49,16 @@ pub fn run() {
 
             Ok(())
         })
+        // Clean exit: when the main window is closed, tear the whole process
+        // down so no WebView/renderer child process is left dangling.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                if window.label() == "main" {
+                    window.app_handle().exit(0);
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");
 }
+

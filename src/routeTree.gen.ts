@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WelcomeRouteImport } from './routes/welcome'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as OauthCallbackRouteImport } from './routes/oauth-callback'
 import { Route as LockRouteImport } from './routes/lock'
 import { Route as AssistantRouteImport } from './routes/assistant'
@@ -83,6 +84,11 @@ import { Route as AppVouchersNewCredit_noteRouteImport } from './routes/app.vouc
 const WelcomeRoute = WelcomeRouteImport.update({
   id: '/welcome',
   path: '/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OauthCallbackRoute = OauthCallbackRouteImport.update({
@@ -445,6 +451,7 @@ export interface FileRoutesByFullPath {
   '/assistant': typeof AssistantRoute
   '/lock': typeof LockRoute
   '/oauth-callback': typeof OauthCallbackRoute
+  '/privacy': typeof PrivacyRoute
   '/welcome': typeof WelcomeRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
@@ -516,6 +523,7 @@ export interface FileRoutesByTo {
   '/assistant': typeof AssistantRoute
   '/lock': typeof LockRoute
   '/oauth-callback': typeof OauthCallbackRoute
+  '/privacy': typeof PrivacyRoute
   '/welcome': typeof WelcomeRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
@@ -589,6 +597,7 @@ export interface FileRoutesById {
   '/assistant': typeof AssistantRoute
   '/lock': typeof LockRoute
   '/oauth-callback': typeof OauthCallbackRoute
+  '/privacy': typeof PrivacyRoute
   '/welcome': typeof WelcomeRoute
   '/app/account-groups': typeof AppAccountGroupsRoute
   '/app/assistant': typeof AppAssistantRoute
@@ -663,6 +672,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/lock'
     | '/oauth-callback'
+    | '/privacy'
     | '/welcome'
     | '/app/account-groups'
     | '/app/assistant'
@@ -734,6 +744,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/lock'
     | '/oauth-callback'
+    | '/privacy'
     | '/welcome'
     | '/app/account-groups'
     | '/app/assistant'
@@ -806,6 +817,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/lock'
     | '/oauth-callback'
+    | '/privacy'
     | '/welcome'
     | '/app/account-groups'
     | '/app/assistant'
@@ -879,6 +891,7 @@ export interface RootRouteChildren {
   AssistantRoute: typeof AssistantRoute
   LockRoute: typeof LockRoute
   OauthCallbackRoute: typeof OauthCallbackRoute
+  PrivacyRoute: typeof PrivacyRoute
   WelcomeRoute: typeof WelcomeRoute
 }
 
@@ -889,6 +902,13 @@ declare module '@tanstack/react-router' {
       path: '/welcome'
       fullPath: '/welcome'
       preLoaderRoute: typeof WelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/oauth-callback': {
@@ -1549,6 +1569,7 @@ const rootRouteChildren: RootRouteChildren = {
   AssistantRoute: AssistantRoute,
   LockRoute: LockRoute,
   OauthCallbackRoute: OauthCallbackRoute,
+  PrivacyRoute: PrivacyRoute,
   WelcomeRoute: WelcomeRoute,
 }
 export const routeTree = rootRouteImport

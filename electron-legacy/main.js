@@ -38,6 +38,11 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
 
+  // Clean exit: drop the reference and remove IPC-visible state so no
+  // renderer process or timer is left dangling after close.
+  mainWindow.on('closed', () => { mainWindow = null; });
+
+
   // External links open in the OS default browser, never inside the app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http://') || url.startsWith('https://')) {

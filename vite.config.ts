@@ -6,6 +6,10 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { readFileSync } from "node:fs";
 
 const isTauri = Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_PLATFORM);
+// True only for production `vite build` runs (never dev / `--mode development`).
+const isProdBuild =
+  process.argv.includes("build") && !process.argv.includes("development");
+
 const desktopVersion = isTauri
   ? String(JSON.parse(readFileSync(new URL("./src-tauri/tauri.conf.json", import.meta.url), "utf8")).version)
   : null;
@@ -69,9 +73,11 @@ const pwaPlugins = isTauri
 const sharedBuild = {
   target: "es2020" as const,
   cssMinify: true as const,
+  sourcemap: false as const,
   reportCompressedSize: false,
   chunkSizeWarningLimit: 7000,
   assetsInlineLimit: 4096,
+
   rollupOptions: {
     output: {
       manualChunks(id: string) {
@@ -121,4 +127,8 @@ export default defineConfig({
     outDir: isTauri ? "dist/client" : "dist",
     emptyOutDir: true,
   },
+  // Store certification: shipped builds carry no debug console noise.
+  esbuild: { drop: isProdBuild ? (["console", "debugger"] as const) : [] },
+
 });
+
