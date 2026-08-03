@@ -13,6 +13,8 @@ import { isUnlocked } from "@/lib/staff-session";
 import { BrainProvider } from "@/brain/BrainProvider";
 import { isDesktopRuntime } from "@/lib/native-bridge";
 import { WebDemoLanding } from "@/components/WebDemoLanding";
+import { OfflineBanner } from "@/components/OfflineBanner";
+
 import { installCrashHandlers } from "@/lib/crash-log";
 import { installErrorRing } from "@/lib/ai/error-ring";
 import { installNativeDialogShim } from "@/lib/native-dialog-shim";
