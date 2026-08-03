@@ -502,7 +502,13 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
               ))}
             </div>
           ))}
+          <MenubarSeparator />
+          <MenubarItem onSelect={() => navigate({ to: "/privacy" })} className="gap-2">
+            <span className="w-4" />
+            <span>Privacy Policy</span>
+          </MenubarItem>
         </MenubarContent>
+
       </MenubarMenu>
 
       {/* Menu items */}
