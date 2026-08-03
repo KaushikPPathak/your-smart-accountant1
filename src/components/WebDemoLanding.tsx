@@ -100,6 +100,11 @@ export function WebDemoLanding() {
 
       <footer className="border-t border-border/60 py-4 text-center text-xs text-muted-foreground">
         © {new Date().getFullYear()} Your Mehtaji · Desktop-only accounting for India
+        {" · "}
+        <a href="/privacy" className="text-primary underline underline-offset-4">
+          Privacy Policy
+        </a>
+
       </footer>
     </div>
   );
