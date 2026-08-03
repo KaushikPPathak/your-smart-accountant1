@@ -123,4 +123,7 @@ export default defineConfig({
     outDir: isTauri ? "dist/client" : "dist",
     emptyOutDir: true,
   },
+  // Store certification: shipped builds carry no debug console noise.
+  esbuild: { drop: mode === "production" ? (["console", "debugger"] as const) : [] },
 });
+
