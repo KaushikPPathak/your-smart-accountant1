@@ -6,6 +6,10 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { readFileSync } from "node:fs";
 
 const isTauri = Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_PLATFORM);
+// True only for production `vite build` runs (never dev / `--mode development`).
+const isProdBuild =
+  process.argv.includes("build") && !process.argv.includes("development");
+
 const desktopVersion = isTauri
   ? String(JSON.parse(readFileSync(new URL("./src-tauri/tauri.conf.json", import.meta.url), "utf8")).version)
   : null;
