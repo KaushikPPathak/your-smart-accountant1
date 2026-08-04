@@ -490,6 +490,34 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
     cursorY = by2 + 4;
   }
 
+  // ── UPI payment QR (dynamic amount) ─────────────────────────────────────
+  if (v.voucher_type === "sales") {
+    const upi = loadUpiSettings(companyId);
+    if (upi.printOnInvoice && !validateUpiSettings(upi)) {
+      try {
+        const uri = buildUpiUri({
+          pa: upi.pa,
+          pn: upi.pn,
+          amountPaise: v.total_paise,
+          note: `Invoice ${v.voucher_number}`,
+          ref: v.voucher_number,
+        });
+        const png = await upiQrDataUrl(uri, 240);
+        const qrSize = 72;
+        const qrX = pageW / 2 - 40;
+        doc.addImage(png, "PNG", qrX, cursorY, qrSize, qrSize);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.text("Scan to Pay (UPI)", qrX + qrSize / 2, cursorY + qrSize + 10, { align: "center" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text(upi.pa, qrX + qrSize / 2, cursorY + qrSize + 20, { align: "center" });
+        cursorY += qrSize + 26;
+      } catch { /* QR is optional — never block the invoice */ }
+    }
+  }
+
+
   // Terms / narration
   if (settings.invoice_terms) {
     doc.setFont("helvetica", "bold");
