@@ -6,6 +6,7 @@ import type autoTableType from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import { amountInWords, formatINR } from "@/lib/money";
 import { saveExport } from "@/lib/desktop-save";
+import { buildUpiUri, loadUpiSettings, upiQrDataUrl, validateUpiSettings } from "@/lib/upi";
 import { exportCurrencySymbol } from "@/lib/export-format";
 import {
   withCacheFallback,
