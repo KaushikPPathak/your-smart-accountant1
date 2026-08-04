@@ -572,6 +572,10 @@ function SettingsPage() {
         </CardContent>
       </Card>
 
+      <UpiQrSettingsCard companyId={activeCompanyId} />
+
+
+
       <Card>
         <CardHeader><CardTitle className="text-base">{t("settings.users")}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
