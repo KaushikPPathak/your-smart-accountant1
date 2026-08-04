@@ -26,6 +26,7 @@ import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { EwayBillPrepDialog } from "@/components/vouchers/EwayBillPrepDialog";
 import { ExportInvoiceDialog } from "@/components/vouchers/ExportInvoiceDialog";
 import { Gstr1PostingAudit } from "@/components/vouchers/Gstr1PostingAudit";
+import { UpiPaymentQr } from "@/components/vouchers/UpiPaymentQr";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { toast } from "sonner";
 import { goBackFromVoucher } from "@/lib/voucher-return";
@@ -713,6 +714,16 @@ function VoucherEditPage() {
           </CardContent>
         </Card>
       )}
+
+      {voucher.voucher_type === "sales" && (
+        <UpiPaymentQr
+          companyId={voucher.company_id}
+          amountPaise={totals.total_paise}
+          invoiceNumber={voucher.voucher_number}
+        />
+      )}
+
+
 
       {isEntryKind && (
         <Card>

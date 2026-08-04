@@ -6,6 +6,7 @@ import type autoTableType from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import { amountInWords, formatINR } from "@/lib/money";
 import { saveExport } from "@/lib/desktop-save";
+import { buildUpiUri, loadUpiSettings, upiQrDataUrl, validateUpiSettings } from "@/lib/upi";
 import { exportCurrencySymbol } from "@/lib/export-format";
 import {
   withCacheFallback,
@@ -489,6 +490,34 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
     if (company.bank_branch) { doc.text(`Branch: ${company.bank_branch}`, M + 10, by2); by2 += 10; }
     cursorY = by2 + 4;
   }
+
+  // ── UPI payment QR (dynamic amount) ─────────────────────────────────────
+  if (v.voucher_type === "sales") {
+    const upi = loadUpiSettings(companyId);
+    if (upi.printOnInvoice && !validateUpiSettings(upi)) {
+      try {
+        const uri = buildUpiUri({
+          pa: upi.pa,
+          pn: upi.pn,
+          amountPaise: v.total_paise,
+          note: `Invoice ${v.voucher_number}`,
+          ref: v.voucher_number,
+        });
+        const png = await upiQrDataUrl(uri, 240);
+        const qrSize = 72;
+        const qrX = pageW / 2 - 40;
+        doc.addImage(png, "PNG", qrX, cursorY, qrSize, qrSize);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.text("Scan to Pay (UPI)", qrX + qrSize / 2, cursorY + qrSize + 10, { align: "center" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text(upi.pa, qrX + qrSize / 2, cursorY + qrSize + 20, { align: "center" });
+        cursorY += qrSize + 26;
+      } catch { /* QR is optional — never block the invoice */ }
+    }
+  }
+
 
   // Terms / narration
   if (settings.invoice_terms) {

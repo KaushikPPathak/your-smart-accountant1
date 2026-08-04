@@ -34,6 +34,7 @@ import { StaffPinPanel } from "@/components/StaffPinPanel";
 import { DataLocationCard } from "@/components/settings/DataLocationCard";
 import { CloudBackupCard } from "@/components/settings/CloudBackupCard";
 import { ReleaseChannelPicker } from "@/components/settings/ReleaseChannelPicker";
+import { UpiQrSettingsCard } from "@/components/settings/UpiQrSettingsCard";
 import { ConnectAccountCard } from "@/components/settings/ConnectAccountCard";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
@@ -571,6 +572,10 @@ function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <UpiQrSettingsCard companyId={activeCompanyId} />
+
+
 
       <Card>
         <CardHeader><CardTitle className="text-base">{t("settings.users")}</CardTitle></CardHeader>
