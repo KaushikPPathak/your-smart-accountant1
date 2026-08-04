@@ -714,6 +714,16 @@ function VoucherEditPage() {
         </Card>
       )}
 
+      {voucher.voucher_type === "sales" && (
+        <UpiPaymentQr
+          companyId={voucher.company_id}
+          amountPaise={totals.total_paise}
+          invoiceNumber={voucher.voucher_number}
+        />
+      )}
+
+
+
       {isEntryKind && (
         <Card>
           <CardContent className="p-0">
