@@ -102,7 +102,21 @@ const TYPE_TITLE: Record<string, string> = {
   debit_note: "Debit Note",
 };
 
-export async function downloadInvoicePdf(voucherId: string, companyId: string): Promise<void> {
+export interface InvoicePdfResult {
+  fileName: string;
+  /** Absolute path when saved by a native runtime; null for browser downloads. */
+  path: string | null;
+  voucherNumber: string;
+  totalPaise: number;
+  partyName: string | null;
+  partyPhone: string | null;
+  companyName: string | null;
+}
+
+export async function downloadInvoicePdf(
+  voucherId: string,
+  companyId: string,
+): Promise<InvoicePdfResult> {
   type Bundle = {
     v: VoucherRow & { ledgers: PartyRow | null };
     items: ItemRow[];
