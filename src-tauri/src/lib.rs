@@ -25,14 +25,16 @@ const WEBVIEW_SUBDIR: &str = "EBWebView";
 /// Outlook attaches the real file — not a bitmap render of it.
 #[tauri::command]
 fn copy_files_to_clipboard(paths: Vec<String>) -> Result<(), String> {
+    if paths.is_empty() {
+        return Err("no paths given".into());
+    }
+
     #[cfg(windows)]
     {
-        use clipboard_win::{formats, set_clipboard, Clipboard};
-        if paths.is_empty() {
-            return Err("no paths given".into());
-        }
-        let _clip = Clipboard::new_attempts(10).map_err(|e| format!("clipboard open failed: {e}"))?;
-        set_clipboard(formats::FileList, &paths)
+        use clipboard_win::{set_clipboard_files, Clipboard};
+        let _clip = Clipboard::new_attempts(10)
+            .map_err(|e| format!("clipboard open failed: {e}"))?;
+        set_clipboard_files(&paths)
             .map_err(|e| format!("clipboard write failed: {e}"))?;
         Ok(())
     }
@@ -85,4 +87,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");
 }
-
