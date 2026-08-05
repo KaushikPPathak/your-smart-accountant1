@@ -17,21 +17,57 @@ import { formatINR } from "@/lib/money";
 import { whatsappLink } from "@/lib/reminders";
 import { openPathNative, getNativeRuntime } from "@/lib/native-bridge";
 
+type Invoke = (cmd: string, args?: unknown) => Promise<unknown>;
+
+/** Resolve a Tauri `invoke` across v1 and v2 without throwing on a missing module. */
+async function resolveInvoke(): Promise<Invoke | null> {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as {
+    __TAURI__?: { core?: { invoke?: Invoke }; tauri?: { invoke?: Invoke }; invoke?: Invoke };
+  };
+  // v2 global, v1 global, very old global
+  const globalInvoke = w.__TAURI__?.core?.invoke ?? w.__TAURI__?.tauri?.invoke ?? w.__TAURI__?.invoke;
+  if (typeof globalInvoke === "function") return globalInvoke;
+
+  // Dynamic imports — each guarded so a missing package never rejects upward.
+  try {
+    const m = (await import(/* @vite-ignore */ "@tauri-apps/api/core")) as { invoke?: Invoke };
+    if (typeof m?.invoke === "function") return m.invoke;
+  } catch {
+    /* not a v2 runtime */
+  }
+  return null;
+}
+
 /** Copy absolute file paths to the OS clipboard as a native file reference. */
 export async function copyFilesToClipboardNative(paths: string[]): Promise<boolean> {
   if (getNativeRuntime() !== "tauri" || !paths.length) return false;
   try {
-    const w = window as unknown as {
-      __TAURI__?: { core?: { invoke?: (cmd: string, args?: unknown) => Promise<unknown> } };
-    };
-    const invoke: (cmd: string, args?: unknown) => Promise<unknown> =
-      w.__TAURI__?.core?.invoke ??
-      (await import("@tauri-apps/api/core").then((m) => m.invoke as (c: string, a?: unknown) => Promise<unknown>));
+    const invoke = await resolveInvoke();
+    if (!invoke) return false;
     await invoke("copy_files_to_clipboard", { paths });
     return true;
   } catch {
     return false;
   }
+}
+
+/**
+ * Normalise an Indian phone number for wa.me.
+ * - strips spaces, dashes, brackets, leading `+` / `00`
+ * - 10 digits → prefix `91`
+ * - already country-coded (11-15 digits) → left as-is
+ */
+export function sanitizePhoneForWhatsApp(raw: string | null | undefined): string {
+  let digits = (raw ?? "").replace(/[^0-9+]/g, "");
+  digits = digits.replace(/^\+/, "").replace(/^00/, "");
+  digits = digits.replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  if (digits.length === 10) return `91${digits}`;
+  // 11-digit local form with a leading 0 (e.g. 0XXXXXXXXXX)
+  if (digits.length === 11 && digits.startsWith("0")) return `91${digits.slice(1)}`;
+  if (digits.length < 10 || digits.length > 15) return "";
+  return digits;
 }
 
 function buildMessage(opts: {
@@ -68,7 +104,7 @@ export async function sendInvoiceViaWhatsApp(
 
   const copied = info.path ? await copyFilesToClipboardNative([info.path]) : false;
 
-  const phone = (info.partyPhone || "").replace(/[^0-9]/g, "");
+  const phone = sanitizePhoneForWhatsApp(info.partyPhone);
   const link = phone
     ? whatsappLink(phone, message)
     : `https://wa.me/?text=${encodeURIComponent(message)}`;
