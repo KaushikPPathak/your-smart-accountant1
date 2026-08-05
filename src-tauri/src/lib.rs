@@ -55,7 +55,7 @@ async fn show_whatsapp_web(app: tauri::AppHandle, url: String) -> Result<(), Str
             .inner_size(1024.0, 768.0)
             .min_inner_size(800.0, 600.0)
             .resizable(true)
-            .center(true)
+            .center()
             .visible(true)
             .data_directory(webview_dir)
             .build()
