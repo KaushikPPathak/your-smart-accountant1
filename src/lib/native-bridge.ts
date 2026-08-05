@@ -87,10 +87,9 @@ export function sanitizePhoneNumber(rawPhone: string): string {
 
 /**
  * High-speed WhatsApp opener:
- * 1. Executes native custom URI protocol (`whatsapp://`) via DOM link trigger.
- *    This launches WhatsApp Desktop directly without spawning web tabs.
- * 2. Pre-warmed `whatsapp_web` Tauri background WebView window (if using Tauri).
- * 3. Fallback to direct window location navigation if protocol execution falls through.
+ * 1. Handoff via OS shell (`@tauri-apps/plugin-shell`) if running in Tauri.
+ * 2. DOM anchor link dispatch for native URI scheme (`whatsapp://`).
+ * 3. Browser fallback.
  */
 export async function openWhatsAppChatNative(phone: string, message: string): Promise<SaveNativeResult> {
   const sanitizedPhone = sanitizePhoneNumber(phone);
@@ -104,7 +103,24 @@ export async function openWhatsAppChatNative(phone: string, message: string): Pr
     ? `https://web.whatsapp.com/send?phone=${sanitizedPhone}&text=${encodedText}`
     : `https://web.whatsapp.com`;
 
-  // 1. Dispatch custom URI scheme via DOM anchor click
+  // 1. Tauri Runtime Handoff via Shell
+  if (hasTauri()) {
+    try {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      await open(nativeAppUri);
+      return { ok: true };
+    } catch {
+      try {
+        const { open } = await import("@tauri-apps/plugin-shell");
+        await open(webUrl);
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  }
+
+  // 2. DOM Trigger for Web / Electron
   if (typeof window !== "undefined") {
     const link = document.createElement("a");
     link.href = nativeAppUri;
@@ -117,27 +133,7 @@ export async function openWhatsAppChatNative(phone: string, message: string): Pr
         document.body.removeChild(link);
       }
     }, 500);
-  }
 
-  // 2. Tauri Fallback: Pre-warmed secondary WebView window (`whatsapp_web`)
-  if (hasTauri()) {
-    try {
-      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-      const waWindow = await WebviewWindow.getByLabel("whatsapp_web");
-      if (waWindow) {
-        await waWindow.navigate(webUrl);
-        await waWindow.show();
-        await waWindow.setFocus();
-        return { ok: true };
-      }
-    } catch {
-      // Fall through if Tauri window access fails
-    }
-  }
-
-  // 3. Browser Fallback: Re-use current window location directly instead of window.open()
-  if (typeof window !== "undefined") {
-    window.location.href = webUrl;
     return { ok: true };
   }
 
