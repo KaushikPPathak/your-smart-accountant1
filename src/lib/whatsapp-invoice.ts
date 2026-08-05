@@ -5,12 +5,13 @@
 //   2. Copy the saved PDF onto the Windows clipboard as a native FILE
 //      reference (CF_HDROP via the clipboard-win crate) so pasting into a
 //      WhatsApp chat attaches the real multi-page PDF, not a bitmap.
-//   3. Open a wa.me deep-link with a pre-filled message (WhatsApp Desktop if
-//      installed, otherwise WhatsApp Web).
+//   3. Open a whatsapp:// desktop protocol or wa.me deep-link with a pre-filled
+//      message (WhatsApp Desktop if installed, otherwise WhatsApp Web).
 //   4. Toast telling the user to press Ctrl+V in the chat.
 //
-// A clipboard failure never blocks the flow — the wa.me link still opens so
+// A clipboard failure never blocks the flow — the WhatsApp link still opens so
 // the file can be attached manually.
+
 import { toast } from "sonner";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { formatINR } from "@/lib/money";
@@ -53,7 +54,7 @@ export async function copyFilesToClipboardNative(paths: string[]): Promise<boole
 }
 
 /**
- * Normalise an Indian phone number for wa.me.
+ * Normalise an Indian phone number for WhatsApp deep-linking.
  * - strips spaces, dashes, brackets, leading `+` / `00`
  * - 10 digits → prefix `91`
  * - already country-coded (11-15 digits) → left as-is
@@ -81,6 +82,23 @@ function buildMessage(opts: {
   )} is ready. Please find it attached — ${opts.businessName}`;
 }
 
+/**
+ * Constructs the target WhatsApp link.
+ * Prefers native protocol handler (`whatsapp://`) when a phone number is present
+ * to target WhatsApp Desktop directly without re-navigating or refreshing web tabs.
+ */
+function buildWhatsAppLink(phone: string, message: string): string {
+  const encodedText = encodeURIComponent(message);
+  
+  if (phone) {
+    // Native desktop scheme — opens target chat in installed WhatsApp Desktop app without reloading browser tab
+    return `whatsapp://send?phone=${phone}&text=${encodedText}`;
+  }
+
+  // Fallback for general text sharing without a phone number
+  return `https://wa.me/?text=${encodedText}`;
+}
+
 export async function sendInvoiceViaWhatsApp(
   voucherId: string,
   companyId: string,
@@ -105,14 +123,20 @@ export async function sendInvoiceViaWhatsApp(
   const copied = info.path ? await copyFilesToClipboardNative([info.path]) : false;
 
   const phone = sanitizePhoneForWhatsApp(info.partyPhone);
-  const link = phone
-    ? whatsappLink(phone, message)
-    : `https://wa.me/?text=${encodeURIComponent(message)}`;
+  
+  // Build primary URI (whatsapp:// desktop scheme)
+  const link = buildWhatsAppLink(phone, message);
 
-  // Open WhatsApp Desktop / Web. Native shell first, browser tab as fallback.
-  const opened = await openPathNative(link);
+  // Attempt opening via native shell first (Tauri shell open)
+  let opened = await openPathNative(link);
+
+  // Fallback: If desktop app protocol fails or user is on Web, open web link in standard browser window
   if (!opened.ok && typeof window !== "undefined") {
-    window.open(link, "_blank", "noopener");
+    const webFallbackUrl = phone
+      ? `https://web.whatsapp.com/send/?phone=${phone}&text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+    window.open(webFallbackUrl, "_blank", "noopener");
   }
 
   if (copied) {
