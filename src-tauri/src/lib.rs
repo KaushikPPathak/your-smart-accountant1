@@ -63,15 +63,24 @@ pub fn run() {
             std::fs::create_dir_all(&webview_dir).ok();
 
             // Build the main window here (not in tauri.conf.json) so we can
-            // guarantee it opens with the pinned data_directory. Declaring
-            // it in config and then close/rebuild would exit the app when
-            // the last window closes.
+            // guarantee it opens with the pinned data_directory.
             WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("Smart Accountant")
                 .inner_size(1280.0, 800.0)
                 .resizable(true)
-                .data_directory(webview_dir)
+                .data_directory(webview_dir.clone())
                 .build()?;
+
+            // Pre-warm WhatsApp Web in a hidden background window sharing
+            // the exact same pinned data directory so session logins persist.
+            if let Ok(wa_url) = "https://web.whatsapp.com".parse() {
+                let _ = WebviewWindowBuilder::new(app, "whatsapp_web", WebviewUrl::External(wa_url))
+                    .title("WhatsApp Web")
+                    .inner_size(1024.0, 768.0)
+                    .visible(false)
+                    .data_directory(webview_dir)
+                    .build();
+            }
 
             Ok(())
         })
