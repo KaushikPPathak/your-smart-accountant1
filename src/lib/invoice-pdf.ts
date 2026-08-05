@@ -573,13 +573,24 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
   const { stampWatermarkIfUnlicensed } = await import("./license/pdf-watermark");
   await stampWatermarkIfUnlicensed(doc);
   const buf = doc.output("arraybuffer");
-  await saveExport({
+  const savedPath = await saveExport({
     subFolder: "Invoices",
     fileName,
     contents: buf,
     mime: "application/pdf",
   });
+
+  return {
+    fileName,
+    path: savedPath,
+    voucherNumber: v.voucher_number,
+    totalPaise: v.total_paise,
+    partyName: party?.name ?? null,
+    partyPhone: party?.phone ?? null,
+    companyName: company.name ?? null,
+  };
 }
+
 
 function formatDate(iso: string): string {
   // Turn YYYY-MM-DD into DD-MM-YYYY for Indian invoice convention.
