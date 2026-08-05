@@ -85,24 +85,38 @@ export function sanitizePhoneNumber(rawPhone: string): string {
   return digits;
 }
 
-// Retain browser window handle across shares to avoid duplicate tabs
-let openWaBrowserWindow: Window | null = null;
-
 /**
  * High-speed WhatsApp opener:
- * 1. Native `whatsapp://` scheme (launches desktop app if installed)
- * 2. Pre-warmed `whatsapp_web` Tauri background WebView window
- * 3. Browser fallback reusing the SAME single window/tab instance
+ * 1. Executes native custom URI protocol (`whatsapp://`) via DOM link trigger.
+ *    This launches WhatsApp Desktop directly without spawning web tabs.
+ * 2. Pre-warmed `whatsapp_web` Tauri background WebView window (if using Tauri).
+ * 3. Fallback to direct window location navigation if protocol execution falls through.
  */
 export async function openWhatsAppChatNative(phone: string, message: string): Promise<SaveNativeResult> {
   const sanitizedPhone = sanitizePhoneNumber(phone);
   const encodedText = encodeURIComponent(message);
 
-  // 1. Attempt native desktop protocol scheme (Opens WhatsApp Desktop app directly)
-  if (sanitizedPhone) {
-    const nativeScheme = `whatsapp://send?phone=${sanitizedPhone}&text=${encodedText}`;
-    const openedNative = await openPathNative(nativeScheme);
-    if (openedNative.ok) return openedNative;
+  const nativeAppUri = sanitizedPhone
+    ? `whatsapp://send?phone=${sanitizedPhone}&text=${encodedText}`
+    : `whatsapp://`;
+
+  const webUrl = sanitizedPhone
+    ? `https://web.whatsapp.com/send?phone=${sanitizedPhone}&text=${encodedText}`
+    : `https://web.whatsapp.com`;
+
+  // 1. Dispatch custom URI scheme via DOM anchor click
+  if (typeof window !== "undefined") {
+    const link = document.createElement("a");
+    link.href = nativeAppUri;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+    }, 500);
   }
 
   // 2. Tauri Fallback: Pre-warmed secondary WebView window (`whatsapp_web`)
@@ -111,10 +125,7 @@ export async function openWhatsAppChatNative(phone: string, message: string): Pr
       const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
       const waWindow = await WebviewWindow.getByLabel("whatsapp_web");
       if (waWindow) {
-        const waWebUrl = sanitizedPhone
-          ? `https://web.whatsapp.com/send?phone=${sanitizedPhone}&text=${encodedText}`
-          : `https://web.whatsapp.com`;
-        await waWindow.navigate(waWebUrl);
+        await waWindow.navigate(webUrl);
         await waWindow.show();
         await waWindow.setFocus();
         return { ok: true };
@@ -124,19 +135,9 @@ export async function openWhatsAppChatNative(phone: string, message: string): Pr
     }
   }
 
-  // 3. Browser Fallback: Reuse the existing target window instead of opening new tabs
-  const fallbackUrl = sanitizedPhone
-    ? `https://web.whatsapp.com/send?phone=${sanitizedPhone}&text=${encodedText}`
-    : `https://web.whatsapp.com`;
-
+  // 3. Browser Fallback: Re-use current window location directly instead of window.open()
   if (typeof window !== "undefined") {
-    if (openWaBrowserWindow && !openWaBrowserWindow.closed) {
-      openWaBrowserWindow.location.href = fallbackUrl;
-      openWaBrowserWindow.focus();
-    } else {
-      // Named target "whatsapp_web_tab" instructs browsers to reuse the existing tab
-      openWaBrowserWindow = window.open(fallbackUrl, "whatsapp_web_tab");
-    }
+    window.location.href = webUrl;
     return { ok: true };
   }
 
