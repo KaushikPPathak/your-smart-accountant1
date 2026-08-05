@@ -68,7 +68,7 @@ export interface SaveExportOptions {
  * automatically and opened in the default viewer; a toast offers "Show in folder".
  * In browser mode it triggers a normal download.
  */
-export async function saveExport(opts: SaveExportOptions): Promise<void> {
+export async function saveExport(opts: SaveExportOptions): Promise<string | null> {
   if (!isDesktopRuntime()) {
     browserDownload(opts.fileName, opts.contents, opts.mime);
     const downloadToastId = toast.success(opts.toastTitle || opts.fileName, {
@@ -79,7 +79,7 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
         onClick: () => toast.dismiss(downloadToastId),
       },
     });
-    return;
+    return null;
   }
   const company = activeCompanyName();
   const res = await saveCompanyFileNative(company, opts.subFolder, opts.fileName, opts.contents);
@@ -88,7 +88,7 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
       description: res.error || "Unknown error",
       closeButton: true,
     });
-    return;
+    return null;
   }
   const savedPath = res.path;
   // Compact description: show only the parent folder name, not the full path.
@@ -109,4 +109,5 @@ export async function saveExport(opts: SaveExportOptions): Promise<void> {
       onClick: () => toast.dismiss(exportToastId),
     },
   });
+  return savedPath;
 }

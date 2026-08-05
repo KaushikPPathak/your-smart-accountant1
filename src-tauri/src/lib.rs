@@ -20,6 +20,29 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 const WEBVIEW_SUBDIR: &str = "EBWebView";
 
+/// Put one or more absolute file paths on the OS clipboard as a native file
+/// reference (CF_HDROP on Windows) so that pasting into WhatsApp / Explorer /
+/// Outlook attaches the real file — not a bitmap render of it.
+#[tauri::command]
+fn copy_files_to_clipboard(paths: Vec<String>) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use clipboard_win::{formats, set_clipboard, Clipboard};
+        if paths.is_empty() {
+            return Err("no paths given".into());
+        }
+        let _clip = Clipboard::new_attempts(10).map_err(|e| format!("clipboard open failed: {e}"))?;
+        set_clipboard(formats::FileList, &paths)
+            .map_err(|e| format!("clipboard write failed: {e}"))?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = paths;
+        Err("file clipboard is only supported on Windows".into())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -27,6 +50,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![copy_files_to_clipboard])
         .setup(|app| {
             // Resolve the OS local-data root and freeze the WebView profile
             // path underneath it. `local_data_dir()` already returns a

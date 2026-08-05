@@ -102,7 +102,21 @@ const TYPE_TITLE: Record<string, string> = {
   debit_note: "Debit Note",
 };
 
-export async function downloadInvoicePdf(voucherId: string, companyId: string): Promise<void> {
+export interface InvoicePdfResult {
+  fileName: string;
+  /** Absolute path when saved by a native runtime; null for browser downloads. */
+  path: string | null;
+  voucherNumber: string;
+  totalPaise: number;
+  partyName: string | null;
+  partyPhone: string | null;
+  companyName: string | null;
+}
+
+export async function downloadInvoicePdf(
+  voucherId: string,
+  companyId: string,
+): Promise<InvoicePdfResult> {
   type Bundle = {
     v: VoucherRow & { ledgers: PartyRow | null };
     items: ItemRow[];
@@ -573,13 +587,24 @@ export async function downloadInvoicePdf(voucherId: string, companyId: string): 
   const { stampWatermarkIfUnlicensed } = await import("./license/pdf-watermark");
   await stampWatermarkIfUnlicensed(doc);
   const buf = doc.output("arraybuffer");
-  await saveExport({
+  const savedPath = await saveExport({
     subFolder: "Invoices",
     fileName,
     contents: buf,
     mime: "application/pdf",
   });
+
+  return {
+    fileName,
+    path: savedPath,
+    voucherNumber: v.voucher_number,
+    totalPaise: v.total_paise,
+    partyName: party?.name ?? null,
+    partyPhone: party?.phone ?? null,
+    companyName: company.name ?? null,
+  };
 }
+
 
 function formatDate(iso: string): string {
   // Turn YYYY-MM-DD into DD-MM-YYYY for Indian invoice convention.
