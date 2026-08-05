@@ -24,9 +24,9 @@ export async function copyFilesToClipboardNative(paths: string[]): Promise<boole
     const w = window as unknown as {
       __TAURI__?: { core?: { invoke?: (cmd: string, args?: unknown) => Promise<unknown> } };
     };
-    const invoke =
+    const invoke: (cmd: string, args?: unknown) => Promise<unknown> =
       w.__TAURI__?.core?.invoke ??
-      (await import("@tauri-apps/api/core").then((m) => m.invoke));
+      (await import("@tauri-apps/api/core").then((m) => m.invoke as (c: string, a?: unknown) => Promise<unknown>));
     await invoke("copy_files_to_clipboard", { paths });
     return true;
   } catch {
