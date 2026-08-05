@@ -1,32 +1,18 @@
 // src/lib/whatsapp-invoice.ts
 // Embedded WhatsApp Web via Tauri WebviewWindow.
-// Log in once via QR code or phone number. The window stays open/reused forever.
-// On send, it navigates the existing webview to the target chat and copies the PDF to clipboard.
+// Log in once via QR code. The window stays open/reused forever.
+// On every invoice send, it reuses that same window and navigates to the chat.
 
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { formatINR } from "@/lib/money";
-import { openPathNative, getNativeRuntime } from "@/lib/native-bridge";
+import { getNativeRuntime } from "@/lib/native-bridge";
 
 type Invoke = (cmd: string, args?: unknown) => Promise<unknown>;
 
-// ── Lazy-loaded Tauri v2 API ───────────────────────────────────────────────
-let WebviewWindowCtor: typeof import("@tauri-apps/api/webviewWindow").WebviewWindow | null = null;
+const pdfCache = new Map<string, Awaited<ReturnType<typeof downloadInvoicePdf>>>();
 
-async function loadWebviewApi(): Promise<boolean> {
-  if (typeof window === "undefined") return false;
-  if (WebviewWindowCtor) return true;
-  try {
-    const mod = await import("@tauri-apps/api/webviewWindow");
-    WebviewWindowCtor = mod.WebviewWindow;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ── Invoke resolver (v1 / v2 tolerant) ─────────────────────────────────────
 async function resolveInvoke(): Promise<Invoke | null> {
   if (typeof window === "undefined") return null;
   const w = window as unknown as {
@@ -45,21 +31,6 @@ async function resolveInvoke(): Promise<Invoke | null> {
   return null;
 }
 
-// ── PDF cache ──────────────────────────────────────────────────────────────
-const pdfCache = new Map<string, Awaited<ReturnType<typeof downloadInvoicePdf>>>();
-
-export async function prefetchInvoicePdf(voucherId: string, companyId: string): Promise<void> {
-  const cacheKey = `${companyId}_${voucherId}`;
-  if (pdfCache.has(cacheKey)) return;
-  try {
-    const info = await downloadInvoicePdf(voucherId, companyId);
-    pdfCache.set(cacheKey, info);
-  } catch {
-    /* silent prefetch failure */
-  }
-}
-
-// ── Clipboard (native CF_HDROP) ────────────────────────────────────────────
 export async function copyFilesToClipboardNative(paths: string[]): Promise<boolean> {
   if (getNativeRuntime() !== "tauri" || !paths.length) return false;
   try {
@@ -72,7 +43,6 @@ export async function copyFilesToClipboardNative(paths: string[]): Promise<boole
   }
 }
 
-// ── Audio feedback ─────────────────────────────────────────────────────────
 function playSuccessBeep() {
   try {
     const Ctx =
@@ -82,8 +52,8 @@ function playSuccessBeep() {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08); // A5
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
     gain.gain.setValueAtTime(0.08, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
     osc.connect(gain);
@@ -95,7 +65,6 @@ function playSuccessBeep() {
   }
 }
 
-// ── Phone sanitiser ────────────────────────────────────────────────────────
 export function sanitizePhoneForWhatsApp(raw: string | null | undefined): string {
   let digits = (raw ?? "").replace(/[^0-9+]/g, "");
   digits = digits.replace(/^\+/, "").replace(/^00/, "");
@@ -107,7 +76,6 @@ export function sanitizePhoneForWhatsApp(raw: string | null | undefined): string
   return digits;
 }
 
-// ── Message builder ────────────────────────────────────────────────────────
 function buildMessage(opts: {
   customerName: string;
   invoiceNumber: string;
@@ -119,7 +87,6 @@ function buildMessage(opts: {
   )} is ready. Please find it attached — ${opts.businessName}`;
 }
 
-// ── URL builder ────────────────────────────────────────────────────────────
 function buildWhatsAppWebUrl(phone: string, message: string): string {
   const encodedText = encodeURIComponent(message);
   if (phone) {
@@ -128,75 +95,17 @@ function buildWhatsAppWebUrl(phone: string, message: string): string {
   return `https://web.whatsapp.com/send/?text=${encodedText}`;
 }
 
-// ── Webview lifecycle helpers ──────────────────────────────────────────────
-const WEBVIEW_LABEL = "whatsapp-web";
-
-async function webviewExists(label: string): Promise<boolean> {
-  const invoke = await resolveInvoke();
-  if (!invoke) return false;
+export async function prefetchInvoicePdf(voucherId: string, companyId: string): Promise<void> {
+  const cacheKey = `${companyId}_${voucherId}`;
+  if (pdfCache.has(cacheKey)) return;
   try {
-    return (await invoke("check_webview_window_exists", { label })) as boolean;
+    const info = await downloadInvoicePdf(voucherId, companyId);
+    pdfCache.set(cacheKey, info);
   } catch {
-    return false;
+    /* silent prefetch failure */
   }
 }
 
-async function navigateWebview(label: string, url: string): Promise<void> {
-  const invoke = await resolveInvoke();
-  if (!invoke) throw new Error("Tauri invoke unavailable");
-  await invoke("navigate_webview_window", { label, url });
-}
-
-/**
- * Creates the WhatsApp WebviewWindow on first use.
- * Reuses & navigates the same window on every subsequent call.
- * Session (login) persists because WebView2 shares the app data folder.
- */
-async function ensureWhatsAppWebview(targetUrl?: string): Promise<void> {
-  const hasApi = await loadWebviewApi();
-  if (!hasApi || !WebviewWindowCtor) {
-    throw new Error("Tauri WebviewWindow API unavailable");
-  }
-
-  const exists = await webviewExists(WEBVIEW_LABEL);
-
-  if (exists) {
-    const url = targetUrl || "https://web.whatsapp.com";
-    await navigateWebview(WEBVIEW_LABEL, url);
-    return;
-  }
-
-  // First time: open WhatsApp Web so user can scan QR or link via phone number
-  const webview = new WebviewWindowCtor(WEBVIEW_LABEL, {
-    url: targetUrl || "https://web.whatsapp.com",
-    title: "WhatsApp",
-    width: 1280,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
-    center: true,
-    resizable: true,
-    minimizable: true,
-    maximizable: true,
-    closable: true,
-    focus: true,
-    visible: true,
-    // Chrome-like UA prevents WhatsApp Web from blocking the WebView2 engine
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-  });
-
-  webview.once("tauri://created", () => {
-    console.log("[WhatsApp] Webview created");
-  });
-
-  webview.once("tauri://error", (e: unknown) => {
-    console.error("[WhatsApp] Webview creation failed:", e);
-    toast.error("Failed to open WhatsApp window");
-  });
-}
-
-// ── Main send entry ────────────────────────────────────────────────────────
 export async function sendInvoiceViaWhatsApp(
   voucherId: string,
   companyId: string,
@@ -233,17 +142,17 @@ export async function sendInvoiceViaWhatsApp(
     playSuccessBeep();
   }
 
-  // 2. Open or navigate the embedded WhatsApp Webview
+  // 2. Open or focus the embedded WhatsApp Web window
   const waUrl = buildWhatsAppWebUrl(phone, message);
 
   try {
-    await ensureWhatsAppWebview(waUrl);
+    const invoke = await resolveInvoke();
+    if (!invoke) throw new Error("Tauri not available");
+    await invoke("show_whatsapp_web", { url: waUrl });
   } catch {
-    // Fallback: system browser if Tauri webview fails for any reason
+    // Fallback to system browser if anything fails
     if (typeof window !== "undefined") {
       window.open(waUrl, "_blank");
-    } else {
-      await openPathNative(waUrl);
     }
   }
 
@@ -274,7 +183,6 @@ export async function sendInvoiceViaWhatsApp(
   }
 }
 
-// ── React Hook: Alt + W ────────────────────────────────────────────────────
 export function useWhatsAppShortcut(
   voucherId: string | undefined,
   companyId: string | undefined,
