@@ -84,9 +84,70 @@ export interface SaveNativeResult {
 }
 
 /**
+ * Clean phone numbers to standard format (digits only).
+ * Prepends '91' for standard 10-digit local Indian numbers.
+ */
+export function sanitizePhoneNumber(rawPhone: string): string {
+  const digits = rawPhone.replace(/[^0-9]/g, "");
+  if (digits.length === 10) {
+    return `91${digits}`;
+  }
+  return digits;
+}
+
+/**
+ * High-speed WhatsApp opener with triple fallback:
+ * 1. Native `whatsapp://` scheme (instant Desktop App launching)
+ * 2. Pre-warmed `whatsapp_web` Tauri background WebView window
+ * 3. Browser fallback (`https://wa.me/...`)
+ */
+export async function openWhatsAppChatNative(phone: string, message: string): Promise<SaveNativeResult> {
+  const sanitizedPhone = sanitizePhoneNumber(phone);
+  const encodedText = encodeURIComponent(message);
+
+  // 1. Try native desktop protocol scheme first (Fastest if WhatsApp Desktop is installed)
+  if (sanitizedPhone) {
+    const nativeScheme = `whatsapp://send?phone=${sanitizedPhone}&text=${encodedText}`;
+    const openedNative = await openPathNative(nativeScheme);
+    if (openedNative.ok) return openedNative;
+  }
+
+  // 2. Fallback: Pre-warmed Tauri WhatsApp Web window
+  if (hasTauri()) {
+    try {
+      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+      const waWindow = await WebviewWindow.getByLabel("whatsapp_web");
+      if (waWindow) {
+        const waWebUrl = sanitizedPhone
+          ? `https://web.whatsapp.com/send?phone=${sanitizedPhone}&text=${encodedText}`
+          : `https://web.whatsapp.com`;
+        await waWindow.navigate(waWebUrl);
+        await waWindow.show();
+        await waWindow.setFocus();
+        return { ok: true };
+      }
+    } catch {
+      // Fall through to browser fallback if window access fails
+    }
+  }
+
+  // 3. Fallback: Standard browser opening
+  const fallbackUrl = sanitizedPhone
+    ? `https://wa.me/${sanitizedPhone}?text=${encodedText}`
+    : `https://wa.me/?text=${encodedText}`;
+
+  if (typeof window !== "undefined") {
+    window.open(fallbackUrl, "_blank", "noopener");
+    return { ok: true };
+  }
+
+  return { ok: false, error: "Failed to open WhatsApp target" };
+}
+
+/**
  * Save a file to the platform-native company export folder.
  * - Electron: routes through the preload IPC bridge.
- * - Tauri:   writes under appDataDir/Exports/<company>/<subFolder>/<fileName>.
+ * - Tauri:    writes under appDataDir/Exports/<company>/<subFolder>/<fileName>.
  * - Browser: returns ok=false; callers should fall back to a download.
  */
 export async function saveCompanyFileNative(
@@ -103,8 +164,8 @@ export async function saveCompanyFileNative(
   if (hasTauri()) {
     try {
       // User-facing exports/backups go under a SHORT, memorable root
-      //   C:\smartaccountant\<Company>\<subFolder>\<file>       (Windows)
-      //   ~/smartaccountant/<Company>/<subFolder>/<file>        (macOS/Linux)
+      //   C:\smartaccountant\<Company>\<subFolder>\<file>        (Windows)
+      //   ~/smartaccountant/<Company>/<subFolder>/<file>         (macOS/Linux)
       // The frozen WebView IndexedDB profile at
       //   %LOCALAPPDATA%\com.smartaccountant.app\EBWebView\
       // is a DIFFERENT path and is unaffected by this change.
@@ -392,12 +453,6 @@ export async function writeAbsoluteFileNative(
       import("@tauri-apps/api/path"),
       import("@tauri-apps/plugin-fs"),
     ]);
-    // `subFolder` may intentionally contain several safe path segments
-    // (for example `snapshots/2026-07-19`). Sanitising the whole string used
-    // to turn that into one flattened directory named
-    // `snapshots_2026-07-19`, while readers correctly looked under
-    // `snapshots/2026-07-19`. Split first, then sanitise each segment so path
-    // traversal is still impossible and the writer/reader contract agrees.
     const segments = subFolder
       .split(/[\\/]+/)
       .map((segment) => segment.trim())
@@ -418,4 +473,3 @@ export async function writeAbsoluteFileNative(
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
-
