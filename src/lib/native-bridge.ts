@@ -1,13 +1,7 @@
-// Unified native runtime bridge for Electron + Tauri.
+// Unified native runtime bridge for Electron + Tauri + Web Browser.
 //
-// The app historically shipped as an Electron desktop build that exposed an
-// IPC bridge on `window.yourMehtaji`. We're now also targeting Tauri, which
-// surfaces `window.__TAURI__` and uses `@tauri-apps/api` + plugins for
-// filesystem / shell access.
-//
-// All file-saving / "show in folder" / "open path" callers should go through
-// this module instead of poking at `window.yourMehtaji` directly. Browser
-// callers keep their existing download-fallback behaviour.
+// All file-saving / "show in folder" / "open path" / WhatsApp integration callers 
+// should go through this module instead of poking at global window variables directly.
 
 export type NativeRuntime = "electron" | "tauri" | "browser";
 
@@ -68,10 +62,6 @@ function safeSeg(s: string): string {
   return s.replace(/[^a-zA-Z0-9_\-. ]+/g, "_").slice(0, 80) || "Default";
 }
 
-// Sanitize a filename: strip path separators and other illegal chars so a
-// name like "ledger-Sales A/c-....xlsx" doesn't create a phantom sub-folder
-// "Sales A" (Windows treats both / and \ as separators and would fail with
-// "system cannot find the path specified").
 function safeFileName(s: string): string {
   const cleaned = s.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim();
   return cleaned.slice(0, 180) || "file";
@@ -85,7 +75,7 @@ export interface SaveNativeResult {
 
 /**
  * Clean phone numbers to standard format (digits only).
- * Prepends '91' for standard 10-digit local Indian numbers.
+ * Prepends '91' for standard 10-digit Indian numbers.
  */
 export function sanitizePhoneNumber(rawPhone: string): string {
   const digits = rawPhone.replace(/[^0-9]/g, "");
@@ -95,24 +85,27 @@ export function sanitizePhoneNumber(rawPhone: string): string {
   return digits;
 }
 
+// Retain browser window handle across shares to avoid duplicate tabs
+let openWaBrowserWindow: Window | null = null;
+
 /**
- * High-speed WhatsApp opener with triple fallback:
- * 1. Native `whatsapp://` scheme (instant Desktop App launching)
+ * High-speed WhatsApp opener:
+ * 1. Native `whatsapp://` scheme (launches desktop app if installed)
  * 2. Pre-warmed `whatsapp_web` Tauri background WebView window
- * 3. Browser fallback (`https://wa.me/...`)
+ * 3. Browser fallback reusing the SAME single window/tab instance
  */
 export async function openWhatsAppChatNative(phone: string, message: string): Promise<SaveNativeResult> {
   const sanitizedPhone = sanitizePhoneNumber(phone);
   const encodedText = encodeURIComponent(message);
 
-  // 1. Try native desktop protocol scheme first (Fastest if WhatsApp Desktop is installed)
+  // 1. Attempt native desktop protocol scheme (Opens WhatsApp Desktop app directly)
   if (sanitizedPhone) {
     const nativeScheme = `whatsapp://send?phone=${sanitizedPhone}&text=${encodedText}`;
     const openedNative = await openPathNative(nativeScheme);
     if (openedNative.ok) return openedNative;
   }
 
-  // 2. Fallback: Pre-warmed Tauri WhatsApp Web window
+  // 2. Tauri Fallback: Pre-warmed secondary WebView window (`whatsapp_web`)
   if (hasTauri()) {
     try {
       const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
@@ -127,17 +120,23 @@ export async function openWhatsAppChatNative(phone: string, message: string): Pr
         return { ok: true };
       }
     } catch {
-      // Fall through to browser fallback if window access fails
+      // Fall through if Tauri window access fails
     }
   }
 
-  // 3. Fallback: Standard browser opening
+  // 3. Browser Fallback: Reuse the existing target window instead of opening new tabs
   const fallbackUrl = sanitizedPhone
-    ? `https://wa.me/${sanitizedPhone}?text=${encodedText}`
-    : `https://wa.me/?text=${encodedText}`;
+    ? `https://web.whatsapp.com/send?phone=${sanitizedPhone}&text=${encodedText}`
+    : `https://web.whatsapp.com`;
 
   if (typeof window !== "undefined") {
-    window.open(fallbackUrl, "_blank", "noopener");
+    if (openWaBrowserWindow && !openWaBrowserWindow.closed) {
+      openWaBrowserWindow.location.href = fallbackUrl;
+      openWaBrowserWindow.focus();
+    } else {
+      // Named target "whatsapp_web_tab" instructs browsers to reuse the existing tab
+      openWaBrowserWindow = window.open(fallbackUrl, "whatsapp_web_tab");
+    }
     return { ok: true };
   }
 
@@ -146,9 +145,6 @@ export async function openWhatsAppChatNative(phone: string, message: string): Pr
 
 /**
  * Save a file to the platform-native company export folder.
- * - Electron: routes through the preload IPC bridge.
- * - Tauri:    writes under appDataDir/Exports/<company>/<subFolder>/<fileName>.
- * - Browser: returns ok=false; callers should fall back to a download.
  */
 export async function saveCompanyFileNative(
   company: string,
@@ -163,12 +159,6 @@ export async function saveCompanyFileNative(
   }
   if (hasTauri()) {
     try {
-      // User-facing exports/backups go under a SHORT, memorable root
-      //   C:\smartaccountant\<Company>\<subFolder>\<file>        (Windows)
-      //   ~/smartaccountant/<Company>/<subFolder>/<file>         (macOS/Linux)
-      // The frozen WebView IndexedDB profile at
-      //   %LOCALAPPDATA%\com.smartaccountant.app\EBWebView\
-      // is a DIFFERENT path and is unaffected by this change.
       const [{ appLocalDataDir, join }, fs, { getShortDataRoot }] = await Promise.all([
         import("@tauri-apps/api/path"),
         import("@tauri-apps/plugin-fs"),
@@ -176,7 +166,6 @@ export async function saveCompanyFileNative(
       ]);
       let base = await getShortDataRoot();
       if (!base) {
-        // Fallback: legacy %LOCALAPPDATA%\...\mirror\ location.
         const appBase = await appLocalDataDir();
         base = await join(appBase, "mirror");
       }
@@ -204,7 +193,6 @@ export async function showInFolderNative(filePath: string): Promise<SaveNativeRe
   if (hasTauri()) {
     try {
       const { open } = await import("@tauri-apps/plugin-shell");
-      // No dedicated "reveal" API in plugin-shell — open the parent directory.
       const parent = filePath.replace(/[\\/][^\\/]*$/, "");
       await open(parent || filePath);
       return { ok: true };
@@ -241,8 +229,6 @@ export async function closeNativeApp(): Promise<SaveNativeResult> {
           process?: { exit?: (code?: number) => Promise<void> };
         };
       };
-      // Prefer the injected global (works when the frontend is loaded from a remote URL
-      // because dynamic `import("@tauri-apps/api/window")` may not be reachable there).
       const getCurr = w.__TAURI__?.window?.getCurrentWindow;
       if (typeof getCurr === "function") {
         const win = getCurr();
@@ -253,7 +239,6 @@ export async function closeNativeApp(): Promise<SaveNativeResult> {
         await w.__TAURI__.process.exit(0);
         return { ok: true };
       }
-      // Fallback: dynamic import (works in bundled local builds).
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const currentWindow = getCurrentWindow();
       if (typeof currentWindow.destroy === "function") {
@@ -269,7 +254,6 @@ export async function closeNativeApp(): Promise<SaveNativeResult> {
   return { ok: false, error: "No native runtime" };
 }
 
-/** Error code used when the running build cannot show a native folder picker. */
 export const NO_NATIVE_PICKER = "NO_NATIVE_PICKER";
 
 function downloadInBrowser(fileName: string, contents: string | ArrayBuffer | Uint8Array): SaveNativeResult {
@@ -299,11 +283,6 @@ function downloadInBrowser(fileName: string, contents: string | ArrayBuffer | Ui
   }
 }
 
-/**
- * Show a native "Save as…" dialog and write the given contents to the chosen path.
- * Falls back to the browser File System Access API, then to a plain download, so
- * this never dead-ends with a "no runtime" error.
- */
 export async function saveWithPickerNative(
   defaultFileName: string,
   contents: string | ArrayBuffer | Uint8Array,
@@ -312,7 +291,6 @@ export async function saveWithPickerNative(
   const eb0 = electronBridge();
   if (eb0?.saveWithPicker) return eb0.saveWithPicker(defaultFileName, contents, filters);
   if (!hasTauri()) {
-    // Chromium 86+ file picker (works in the browser build and in modern webviews).
     const w = window as unknown as { showSaveFilePicker?: (o: unknown) => Promise<any> };
     if (typeof w.showSaveFilePicker === "function") {
       try {
@@ -336,7 +314,6 @@ export async function saveWithPickerNative(
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (/abort/i.test(msg)) return { ok: false, error: "cancelled" };
-        // fall through to download
       }
     }
     return downloadInBrowser(defaultFileName, contents);
@@ -378,10 +355,6 @@ export async function saveWithPickerNative(
   }
 }
 
-/**
- * Show a native folder picker. Returns the absolute folder path the user chose,
- * or { ok: false } if cancelled / not in a desktop runtime.
- */
 export async function pickFolderNative(defaultPath?: string): Promise<SaveNativeResult> {
   const eb = electronBridge();
   if (eb?.pickFolder) return eb.pickFolder(defaultPath);
@@ -396,9 +369,6 @@ export async function pickFolderNative(defaultPath?: string): Promise<SaveNative
   }
 }
 
-/**
- * Show a native "Open file" dialog (single file). Returns the absolute path.
- */
 export async function pickFileNative(
   defaultPath?: string,
   filters?: { name: string; extensions: string[] }[],
@@ -416,9 +386,6 @@ export async function pickFileNative(
   }
 }
 
-/**
- * Read a text file from an absolute path (desktop runtimes only).
- */
 export async function readAbsoluteTextFileNative(absPath: string): Promise<{ ok: boolean; text?: string; error?: string }> {
   const eb = electronBridge();
   if (eb?.readTextFile) return eb.readTextFile(absPath);
@@ -432,13 +399,6 @@ export async function readAbsoluteTextFileNative(absPath: string): Promise<{ ok:
   }
 }
 
-/**
- * Write contents to an absolute path under a user-chosen folder. Caller is
- * responsible for ensuring the path was returned by a native picker — silent
- * writes outside %LOCALAPPDATA% are blocked by capability scope otherwise.
- *
- * Creates the parent directory recursively if needed.
- */
 export async function writeAbsoluteFileNative(
   absDir: string,
   subFolder: string,
