@@ -5,8 +5,7 @@
 //   2. Copy the saved PDF onto the Windows clipboard as a native FILE
 //      reference (CF_HDROP via the clipboard-win crate) so pasting into a
 //      WhatsApp chat attaches the real multi-page PDF, not a bitmap.
-//   3. Open a whatsapp:// desktop protocol or wa.me deep-link with a pre-filled
-//      message (WhatsApp Desktop if installed, otherwise WhatsApp Web).
+//   3. Open a clean WhatsApp link via default browser without refreshing active tabs.
 //   4. Toast telling the user to press Ctrl+V in the chat.
 //
 // A clipboard failure never blocks the flow — the WhatsApp link still opens so
@@ -15,7 +14,6 @@
 import { toast } from "sonner";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { formatINR } from "@/lib/money";
-import { whatsappLink } from "@/lib/reminders";
 import { openPathNative, getNativeRuntime } from "@/lib/native-bridge";
 
 type Invoke = (cmd: string, args?: unknown) => Promise<unknown>;
@@ -83,20 +81,17 @@ function buildMessage(opts: {
 }
 
 /**
- * Constructs the target WhatsApp link.
- * Prefers native protocol handler (`whatsapp://`) when a phone number is present
- * to target WhatsApp Desktop directly without re-navigating or refreshing web tabs.
+ * Constructs the WhatsApp link using the official api.whatsapp.com intent handler.
+ * This router handoff prevents forcing a full page reload on web.whatsapp.com.
  */
-function buildWhatsAppLink(phone: string, message: string): string {
+function buildWhatsAppUrl(phone: string, message: string): string {
   const encodedText = encodeURIComponent(message);
   
   if (phone) {
-    // Native desktop scheme — opens target chat in installed WhatsApp Desktop app without reloading browser tab
-    return `whatsapp://send?phone=${phone}&text=${encodedText}`;
+    return `https://api.whatsapp.com/send?phone=${phone}&text=${encodedText}`;
   }
 
-  // Fallback for general text sharing without a phone number
-  return `https://wa.me/?text=${encodedText}`;
+  return `https://api.whatsapp.com/send?text=${encodedText}`;
 }
 
 export async function sendInvoiceViaWhatsApp(
@@ -123,20 +118,13 @@ export async function sendInvoiceViaWhatsApp(
   const copied = info.path ? await copyFilesToClipboardNative([info.path]) : false;
 
   const phone = sanitizePhoneForWhatsApp(info.partyPhone);
-  
-  // Build primary URI (whatsapp:// desktop scheme)
-  const link = buildWhatsAppLink(phone, message);
+  const waUrl = buildWhatsAppUrl(phone, message);
 
-  // Attempt opening via native shell first (Tauri shell open)
-  let opened = await openPathNative(link);
+  // Open via OS default browser with un-named window targeting to prevent reloading existing WhatsApp sessions
+  const opened = await openPathNative(waUrl);
 
-  // Fallback: If desktop app protocol fails or user is on Web, open web link in standard browser window
   if (!opened.ok && typeof window !== "undefined") {
-    const webFallbackUrl = phone
-      ? `https://web.whatsapp.com/send/?phone=${phone}&text=${encodeURIComponent(message)}`
-      : `https://wa.me/?text=${encodeURIComponent(message)}`;
-
-    window.open(webFallbackUrl, "_blank", "noopener");
+    window.open(waUrl, "_blank", "noopener,noreferrer");
   }
 
   if (copied) {
