@@ -104,7 +104,7 @@ export async function sendInvoiceViaWhatsApp(
 
   const copied = info.path ? await copyFilesToClipboardNative([info.path]) : false;
 
-  const phone = (info.partyPhone || "").replace(/[^0-9]/g, "");
+  const phone = sanitizePhoneForWhatsApp(info.partyPhone);
   const link = phone
     ? whatsappLink(phone, message)
     : `https://wa.me/?text=${encodeURIComponent(message)}`;
