@@ -1,10 +1,10 @@
 // "Send via WhatsApp" for invoices — fully client-side and offline optimized.
 //
-// Workflow Optimizations:
+// Workflow:
 //   1. Generates/caches invoice PDF buffer.
 //   2. Copies absolute file path to Windows clipboard as CF_HDROP native reference.
 //   3. Plays audio feedback cue on successful clipboard copy.
-//   4. Opens WhatsApp via non-reloading API link.
+//   4. Targets existing WhatsApp Web tab without launching new tabs.
 //   5. Displays clear Ctrl+V UI cues with action fallback.
 
 import { useEffect } from "react";
@@ -95,9 +95,9 @@ function buildMessage(opts: {
 function buildWhatsAppUrl(phone: string, message: string): string {
   const encodedText = encodeURIComponent(message);
   if (phone) {
-    return `https://api.whatsapp.com/send?phone=${phone}&text=${encodedText}`;
+    return `https://web.whatsapp.com/send/?phone=${phone}&text=${encodedText}`;
   }
-  return `https://api.whatsapp.com/send?text=${encodedText}`;
+  return `https://web.whatsapp.com/send/?text=${encodedText}`;
 }
 
 /** Pre-generate and cache PDF in the background for zero-latency execution */
@@ -149,11 +149,17 @@ export async function sendInvoiceViaWhatsApp(
   const phone = sanitizePhoneForWhatsApp(info.partyPhone);
   const waUrl = buildWhatsAppUrl(phone, message);
 
-  // Open via default browser without tab reloading
-  const opened = await openPathNative(waUrl);
-
-  if (!opened.ok && typeof window !== "undefined") {
-    window.open(waUrl, "_blank", "noopener,noreferrer");
+  // Reuse a named window target ("WhatsAppWebTab") to prevent opening multiple duplicate tabs.
+  // When clicked again, the browser re-uses and focuses the existing tab instead of creating a new one.
+  if (typeof window !== "undefined") {
+    const waWindow = window.open(waUrl, "WhatsAppWebTab");
+    if (waWindow) {
+      waWindow.focus();
+    } else {
+      await openPathNative(waUrl);
+    }
+  } else {
+    await openPathNative(waUrl);
   }
 
   if (copied) {
