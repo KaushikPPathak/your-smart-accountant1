@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, AlertTriangle, Printer, Save, Trash2, Truck, Ship } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Printer, Save, Trash2, Truck, Ship, MessageCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -23,6 +23,7 @@ import { computeLine, sumLines, type GstLineResult } from "@/lib/gst";
 import { GST_RATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
+import { sendInvoiceViaWhatsApp } from "@/lib/whatsapp-invoice";
 import { EwayBillPrepDialog } from "@/components/vouchers/EwayBillPrepDialog";
 import { ExportInvoiceDialog } from "@/components/vouchers/ExportInvoiceDialog";
 import { Gstr1PostingAudit } from "@/components/vouchers/Gstr1PostingAudit";
@@ -603,6 +604,15 @@ function VoucherEditPage() {
           {isEntryKind && (
             <Button variant="outline" size="sm" onClick={printEntryVoucher}>
               <Printer className="h-4 w-4 mr-1" /> Print
+            </Button>
+          )}
+          {printable && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void sendInvoiceViaWhatsApp(voucher.id, voucher.company_id)}
+            >
+              <MessageCircle className="h-4 w-4 mr-1" /> Send via WhatsApp
             </Button>
           )}
           {voucher.voucher_type === "sales" && (
