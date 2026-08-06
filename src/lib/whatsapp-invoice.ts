@@ -1,80 +1,19 @@
 // src/lib/whatsapp-invoice.ts
-// Embedded WhatsApp Web via Tauri WebviewWindow.
-// Log in once via QR code. The window stays open/reused forever.
-// On every invoice send, it reuses that same window and navigates to the chat.
+// Invoice-specific WhatsApp sharing. Alt + W to send.
 
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { formatINR } from "@/lib/money";
-import { getNativeRuntime } from "@/lib/native-bridge";
-
-type Invoke = (cmd: string, args?: unknown) => Promise<unknown>;
+import {
+  copyFilesToClipboardNative,
+  playSuccessBeep,
+  sanitizePhoneForWhatsApp,
+  buildWhatsAppWebUrl,
+  showWhatsAppWeb,
+} from "@/lib/whatsapp-shared";
 
 const pdfCache = new Map<string, Awaited<ReturnType<typeof downloadInvoicePdf>>>();
-
-async function resolveInvoke(): Promise<Invoke | null> {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as {
-    __TAURI__?: { core?: { invoke?: Invoke }; tauri?: { invoke?: Invoke }; invoke?: Invoke };
-  };
-  const globalInvoke =
-    w.__TAURI__?.core?.invoke ?? w.__TAURI__?.tauri?.invoke ?? w.__TAURI__?.invoke;
-  if (typeof globalInvoke === "function") return globalInvoke;
-
-  try {
-    const m = (await import(/* @vite-ignore */ "@tauri-apps/api/core")) as { invoke?: Invoke };
-    if (typeof m?.invoke === "function") return m.invoke;
-  } catch {
-    /* not a v2 runtime */
-  }
-  return null;
-}
-
-export async function copyFilesToClipboardNative(paths: string[]): Promise<boolean> {
-  if (getNativeRuntime() !== "tauri" || !paths.length) return false;
-  try {
-    const invoke = await resolveInvoke();
-    if (!invoke) return false;
-    await invoke("copy_files_to_clipboard", { paths });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function playSuccessBeep() {
-  try {
-    const Ctx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new Ctx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.08, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.25);
-  } catch {
-    /* ignore audio policy blocks */
-  }
-}
-
-export function sanitizePhoneForWhatsApp(raw: string | null | undefined): string {
-  let digits = (raw ?? "").replace(/[^0-9+]/g, "");
-  digits = digits.replace(/^\+/, "").replace(/^00/, "");
-  digits = digits.replace(/[^0-9]/g, "");
-  if (!digits) return "";
-  if (digits.length === 10) return `91${digits}`;
-  if (digits.length === 11 && digits.startsWith("0")) return `91${digits.slice(1)}`;
-  if (digits.length < 10 || digits.length > 15) return "";
-  return digits;
-}
 
 function buildMessage(opts: {
   customerName: string;
@@ -85,14 +24,6 @@ function buildMessage(opts: {
   return `Hi ${opts.customerName}, your invoice ${opts.invoiceNumber} for ${formatINR(
     opts.amountPaise,
   )} is ready. Please find it attached — ${opts.businessName}`;
-}
-
-function buildWhatsAppWebUrl(phone: string, message: string): string {
-  const encodedText = encodeURIComponent(message);
-  if (phone) {
-    return `https://web.whatsapp.com/send/?phone=${phone}&text=${encodedText}`;
-  }
-  return `https://web.whatsapp.com/send/?text=${encodedText}`;
 }
 
 export async function prefetchInvoicePdf(voucherId: string, companyId: string): Promise<void> {
@@ -106,10 +37,15 @@ export async function prefetchInvoicePdf(voucherId: string, companyId: string): 
   }
 }
 
+let isSending = false;
+
 export async function sendInvoiceViaWhatsApp(
   voucherId: string,
   companyId: string,
 ): Promise<void> {
+  if (isSending) return;
+  isSending = true;
+
   const cacheKey = `${companyId}_${voucherId}`;
   let info: Awaited<ReturnType<typeof downloadInvoicePdf>>;
 
@@ -124,6 +60,7 @@ export async function sendInvoiceViaWhatsApp(
     toast.error("Could not prepare the invoice PDF", {
       description: err instanceof Error ? err.message : String(err),
     });
+    isSending = false;
     return;
   }
 
@@ -136,36 +73,31 @@ export async function sendInvoiceViaWhatsApp(
 
   const phone = sanitizePhoneForWhatsApp(info.partyPhone);
 
-  // 1. Copy PDF to OS clipboard as native file reference
+  // 1. Copy PDF to OS clipboard
   const copied = info.path ? await copyFilesToClipboardNative([info.path]) : false;
-  if (copied) {
-    playSuccessBeep();
-  }
+  if (copied) playSuccessBeep();
 
-  // 2. Open or focus the embedded WhatsApp Web window
+  // 2. Focus / navigate WhatsApp Web (never opens a browser popup)
   const waUrl = buildWhatsAppWebUrl(phone, message);
-
   try {
-    const invoke = await resolveInvoke();
-    if (!invoke) throw new Error("Tauri not available");
-    await invoke("show_whatsapp_web", { url: waUrl });
-  } catch {
-    // Fallback to system browser if anything fails
-    if (typeof window !== "undefined") {
-      window.open(waUrl, "_blank");
-    }
+    await showWhatsAppWeb(waUrl);
+  } catch (err) {
+    console.error("showWhatsAppWeb failed:", err);
+    toast.error("WhatsApp window not available", {
+      description: "Please ensure WhatsApp Web is loaded in the app.",
+    });
+    isSending = false;
+    return;
   }
 
-  // 3. Toast feedback
+  // 3. Feedback
   if (copied) {
-    toast.success("PDF Copied to Clipboard!", {
+    toast.success("PDF copied to clipboard!", {
       description: "Focus the WhatsApp window and press Ctrl + V to attach.",
       duration: 5000,
       action: {
         label: "Copy Path",
-        onClick: () => {
-          if (info.path) navigator.clipboard.writeText(info.path);
-        },
+        onClick: () => info.path && navigator.clipboard.writeText(info.path),
       },
     });
   } else {
@@ -181,6 +113,8 @@ export async function sendInvoiceViaWhatsApp(
       description: "Add a phone number in party ledger to target chat directly.",
     });
   }
+
+  isSending = false;
 }
 
 export function useWhatsAppShortcut(
