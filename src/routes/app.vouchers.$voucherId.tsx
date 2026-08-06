@@ -23,7 +23,7 @@ import { computeLine, sumLines, type GstLineResult } from "@/lib/gst";
 import { GST_RATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
-import { sendInvoiceViaWhatsApp } from "@/lib/whatsapp-invoice";
+import { sendInvoiceViaWhatsApp, useWhatsAppShortcut } from "@/lib/whatsapp-invoice";
 import { EwayBillPrepDialog } from "@/components/vouchers/EwayBillPrepDialog";
 import { ExportInvoiceDialog } from "@/components/vouchers/ExportInvoiceDialog";
 import { Gstr1PostingAudit } from "@/components/vouchers/Gstr1PostingAudit";
@@ -106,6 +106,8 @@ function VoucherEditPage() {
     () => ["receipt", "payment", "journal", "contra"].includes(voucher?.voucher_type ?? ""),
     [voucher],
   );
+
+  useWhatsAppShortcut(voucherId, activeCompanyId ?? undefined, !!voucherId && !!activeCompanyId && isItemKind);
 
   const load = useCallback(async () => {
     setLoading(true);
