@@ -311,6 +311,16 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   const menubarRef = useRef<HTMLDivElement | null>(null);
   const menubarId = useId();
   const [openMenuKey, setOpenMenuKey] = useState("");
+  // Timestamp of the last dropdown close. Escape that closes a dropdown must
+  // NOT also trigger the exit confirmation (staged Escape ladder).
+  const lastMenuCloseRef = useRef(0);
+  const handleMenubarValueChange = useCallback((next: string) => {
+    setOpenMenuKey((prev) => {
+      if (prev && !next) lastMenuCloseRef.current = Date.now();
+      return next;
+    });
+  }, []);
+
 
   const orderedMenuKeys = useMemo(
     () => ["file", ...visible.map((menu) => menu.key)],
