@@ -107,7 +107,7 @@ function VoucherEditPage() {
     [voucher],
   );
 
-  useWhatsAppShortcut(voucherId, activeCompanyId, !!voucherId && !!activeCompanyId && isItemKind);
+  useWhatsAppShortcut(voucherId, activeCompanyId ?? undefined, !!voucherId && !!activeCompanyId && isItemKind);
 
   const load = useCallback(async () => {
     setLoading(true);

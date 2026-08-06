@@ -32,17 +32,17 @@ export function LanguageSwitcher() {
 
 Wherever the "Send via WhatsApp" button or action exists in the UI, ensure it calls:
 
-```ts
-import { sendInvoiceViaWhatsApp, useWhatsAppShortcut } from "@/lib/whatsapp-invoice";
+{"```ts"}
+import {"{ sendInvoiceViaWhatsApp, useWhatsAppShortcut }"} from "@/lib/whatsapp-invoice";
 
 // In the invoice detail / voucher view component:
 useWhatsAppShortcut(voucherId, companyId, true);
 
 // On button click:
-<button onClick={() => sendInvoiceViaWhatsApp(voucherId, companyId)}>
+<button onClick={"{"}() => sendInvoiceViaWhatsApp(voucherId, companyId){"}"}>
   Send via WhatsApp
 </button>
-```
+{"```"}
       </div>
     </div>
   );
