@@ -97,7 +97,7 @@ export function RecentVouchersPanel({
           className="gap-1.5"
         >
           <Pencil className="h-4 w-4" />
-          Edit
+          Recent {voucherType.replace(/_/g, " ")}s
         </Button>
       </div>
     );
