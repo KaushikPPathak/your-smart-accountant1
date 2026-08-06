@@ -394,6 +394,19 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
         '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-radix-popper-content-wrapper]',
       );
       if (openOverlay) return;
+      // Radix closes menus/popovers synchronously in its own capture handler,
+      // so by the time this runs the overlay is already gone and the event
+      // target is a detached menu node. That keystroke has been consumed —
+      // it must NOT also trigger the next rung of the ladder.
+      if (
+        target &&
+        (!target.isConnected ||
+          target.closest?.(
+            '[role="menu"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [data-radix-menu-content], [cmdk-root]',
+          ))
+      ) {
+        return;
+      }
       const inField =
         !!target &&
         (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable);
@@ -402,6 +415,7 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
         target?.blur?.();
         return;
       }
+
       // Menubar → let TopMenuBar's Escape binding fire (exit-confirm dialog).
       // Use F6 / Ctrl+F2 to hop menu→ribbon; Escape must exit, not sidestep.
       if (target?.closest?.(".busy-topbar")) {
