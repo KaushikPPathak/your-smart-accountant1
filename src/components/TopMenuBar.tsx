@@ -311,6 +311,16 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   const menubarRef = useRef<HTMLDivElement | null>(null);
   const menubarId = useId();
   const [openMenuKey, setOpenMenuKey] = useState("");
+  // Timestamp of the last dropdown close. Escape that closes a dropdown must
+  // NOT also trigger the exit confirmation (staged Escape ladder).
+  const lastMenuCloseRef = useRef(0);
+  const handleMenubarValueChange = useCallback((next: string) => {
+    setOpenMenuKey((prev) => {
+      if (prev && !next) lastMenuCloseRef.current = Date.now();
+      return next;
+    });
+  }, []);
+
 
   const orderedMenuKeys = useMemo(
     () => ["file", ...visible.map((menu) => menu.key)],
@@ -324,9 +334,11 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     (key: string) => (e: ReactKeyboardEvent<HTMLButtonElement>) => {
       if (e.key === "Escape" && openMenuKey === key) {
         e.preventDefault();
+        lastMenuCloseRef.current = Date.now();
         setOpenMenuKey("");
         return;
       }
+
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
         const currentIndex = orderedMenuKeys.indexOf(key);
@@ -430,10 +442,14 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       if (!active || !active.classList.contains("busy-menu")) return;
       if (active.getAttribute("aria-expanded") === "true") return;
       if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
+      // Same keystroke that just closed a dropdown must not exit the app.
+      if (Date.now() - lastMenuCloseRef.current < 500) return;
+      if (openMenuKey) return;
       if (!onLock) return;
       e.preventDefault();
       setExitConfirmOpen(true);
     },
+
     { scope: "global", allowInField: true, description: "Exit application" },
   );
 
@@ -444,6 +460,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   useEffect(() => {
     const onExit = () => {
       if (!onLock) return;
+      // A dropdown that just closed consumed this Escape — don't exit.
+      if (Date.now() - lastMenuCloseRef.current < 500) return;
+
       // Close any open menubar dropdown and blur the trigger so Enter can't
       // fall through to a menubar button while the confirmation is open.
       setOpenMenuKey("");
@@ -460,7 +479,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     <Menubar
       ref={menubarRef}
       value={openMenuKey}
-      onValueChange={setOpenMenuKey}
+      onValueChange={handleMenubarValueChange}
       className="busy-topbar print:hidden h-auto space-x-0 rounded-none border-x-0 border-t-0 p-0 shadow-none"
       aria-label="Application menu"
     >
