@@ -104,10 +104,19 @@ export function RecentVouchersPanel({
   }
 
   return (
-    <Card data-recent-open>
+    <Card data-recent-open className={
+      voucherType === "sales" ? "bg-blue-50/50 border-blue-100" :
+      voucherType === "purchase" ? "bg-amber-50/50 border-amber-100" :
+      voucherType === "receipt" ? "bg-green-50/50 border-green-100" :
+      voucherType === "payment" ? "bg-rose-50/50 border-rose-100" :
+      ""
+    }>
       <CardContent className="p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase text-muted-foreground">Recent {voucherType.replace(/_/g, " ")}s</span>
+        <div className="mb-2 flex items-center justify-between border-b pb-2">
+          <div className="flex items-center gap-2">
+            <Pencil className="h-4 w-4 opacity-70" />
+            <span className="text-xs font-bold uppercase text-foreground">Recent {voucherType.replace(/_/g, " ")}s</span>
+          </div>
           <Button
             type="button"
             variant="ghost"
