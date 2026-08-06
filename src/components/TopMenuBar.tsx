@@ -476,7 +476,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     <Menubar
       ref={menubarRef}
       value={openMenuKey}
-      onValueChange={setOpenMenuKey}
+      onValueChange={handleMenubarValueChange}
       className="busy-topbar print:hidden h-auto space-x-0 rounded-none border-x-0 border-t-0 p-0 shadow-none"
       aria-label="Application menu"
     >
