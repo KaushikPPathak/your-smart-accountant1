@@ -314,9 +314,6 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   // Timestamp of the last dropdown close. Escape that closes a dropdown must
   // NOT also trigger the exit confirmation (staged Escape ladder).
   const lastMenuCloseRef = useRef(0);
-  // When we intentionally leave a dropdown via ArrowUp/ArrowDown edge
-  // navigation, we must stop Radix from stealing focus back to the trigger.
-  const skipFocusRestoreRef = useRef(false);
   const handleMenubarValueChange = useCallback((next: string) => {
     setOpenMenuKey((prev) => {
       if (prev && !next) lastMenuCloseRef.current = Date.now();
@@ -404,8 +401,8 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   // ---------------------------------------------------------------------------
   // Edge navigation: ArrowUp on the first dropdown item hops focus to the
   // Quick Entry ribbon; ArrowDown on the last item hops focus to <main>.
-  // We prevent Radix from restoring focus to the trigger so the ribbon / main
-  // keeps focus instead.
+  // We blur the currently focused menu item before closing so Radix has
+  // nowhere to return focus to, then we focus the target region.
   // ---------------------------------------------------------------------------
   const handleContentEdgeNav = useCallback(
     (e: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -437,12 +434,14 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       e.preventDefault();
       e.stopPropagation();
 
-      skipFocusRestoreRef.current = true;
+      // Blur BEFORE closing so Radix cannot restore focus to the trigger.
+      const active = document.activeElement as HTMLElement | null;
+      if (active && typeof active.blur === "function") active.blur();
+
       setOpenMenuKey("");
       lastMenuCloseRef.current = Date.now();
 
       requestAnimationFrame(() => {
-        skipFocusRestoreRef.current = false;
         if (isFirstEdge) {
           const ribbonItem = document.querySelector<HTMLElement>(
             '[role="toolbar"] [data-focus-item="true"]'
@@ -569,9 +568,6 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           align="start"
           className="busy-menu-dropdown min-w-[240px]"
           onKeyDown={handleContentEdgeNav}
-          onCloseAutoFocus={(e) => {
-            if (skipFocusRestoreRef.current) e.preventDefault();
-          }}
         >
           {FILE_GROUPS.map((g, gi) => (
             <div key={g.label}>
@@ -627,9 +623,6 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                 align="start"
                 className="busy-menu-dropdown min-w-[240px]"
                 onKeyDown={handleContentEdgeNav}
-                onCloseAutoFocus={(e) => {
-                  if (skipFocusRestoreRef.current) e.preventDefault();
-                }}
               >
                 {m.groups.map((g, gi) => (
                   <div key={g.label}>
