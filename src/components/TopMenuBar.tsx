@@ -442,10 +442,14 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
       if (!active || !active.classList.contains("busy-menu")) return;
       if (active.getAttribute("aria-expanded") === "true") return;
       if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
+      // Same keystroke that just closed a dropdown must not exit the app.
+      if (Date.now() - lastMenuCloseRef.current < 500) return;
+      if (openMenuKey) return;
       if (!onLock) return;
       e.preventDefault();
       setExitConfirmOpen(true);
     },
+
     { scope: "global", allowInField: true, description: "Exit application" },
   );
 
