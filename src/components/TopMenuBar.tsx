@@ -314,6 +314,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   // Timestamp of the last dropdown close. Escape that closes a dropdown must
   // NOT also trigger the exit confirmation (staged Escape ladder).
   const lastMenuCloseRef = useRef(0);
+  // When we intentionally leave a dropdown via ArrowUp/ArrowDown edge
+  // navigation, we must stop Radix from stealing focus back to the trigger.
+  const skipFocusRestoreRef = useRef(false);
   const handleMenubarValueChange = useCallback((next: string) => {
     setOpenMenuKey((prev) => {
       if (prev && !next) lastMenuCloseRef.current = Date.now();
@@ -397,6 +400,65 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   );
 
   const openOnHover = useCallback((key: string) => () => setOpenMenuKey(key), []);
+
+  // ---------------------------------------------------------------------------
+  // Edge navigation: ArrowUp on the first dropdown item hops focus to the
+  // Quick Entry ribbon; ArrowDown on the last item hops focus to <main>.
+  // We prevent Radix from restoring focus to the trigger so the ribbon / main
+  // keeps focus instead.
+  // ---------------------------------------------------------------------------
+  const handleContentEdgeNav = useCallback(
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+
+      const item = (e.target as HTMLElement).closest<HTMLElement>(
+        '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]'
+      );
+      if (!item) return;
+
+      const content = e.currentTarget;
+      const items = Array.from(
+        content.querySelectorAll<HTMLElement>(
+          '[role="menuitem"]:not([disabled]), [role="menuitemcheckbox"]:not([disabled]), [role="menuitemradio"]:not([disabled])'
+        )
+      ).filter(
+        (el) =>
+          !el.hasAttribute("disabled") &&
+          el.getAttribute("aria-disabled") !== "true"
+      );
+
+      const idx = items.indexOf(item);
+      if (idx === -1) return;
+
+      const isFirstEdge = e.key === "ArrowUp" && idx === 0;
+      const isLastEdge = e.key === "ArrowDown" && idx === items.length - 1;
+      if (!isFirstEdge && !isLastEdge) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      skipFocusRestoreRef.current = true;
+      setOpenMenuKey("");
+      lastMenuCloseRef.current = Date.now();
+
+      requestAnimationFrame(() => {
+        skipFocusRestoreRef.current = false;
+        if (isFirstEdge) {
+          const ribbonItem = document.querySelector<HTMLElement>(
+            '[role="toolbar"] [data-focus-item="true"]'
+          );
+          ribbonItem?.focus();
+        } else {
+          const main = document.querySelector<HTMLElement>("main");
+          const focusable = main?.querySelector<HTMLElement>(
+            'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+          );
+          focusable?.focus();
+        }
+      });
+    },
+    []
+  );
 
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
 
@@ -506,6 +568,10 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           data-top-menu-content="file"
           align="start"
           className="busy-menu-dropdown min-w-[240px]"
+          onKeyDown={handleContentEdgeNav}
+          onCloseAutoFocus={(e) => {
+            if (skipFocusRestoreRef.current) e.preventDefault();
+          }}
         >
           {FILE_GROUPS.map((g, gi) => (
             <div key={g.label}>
@@ -560,6 +626,10 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
                 data-top-menu-content={m.key}
                 align="start"
                 className="busy-menu-dropdown min-w-[240px]"
+                onKeyDown={handleContentEdgeNav}
+                onCloseAutoFocus={(e) => {
+                  if (skipFocusRestoreRef.current) e.preventDefault();
+                }}
               >
                 {m.groups.map((g, gi) => (
                   <div key={g.label}>
@@ -733,4 +803,3 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     </Menubar>
   );
 }
-
