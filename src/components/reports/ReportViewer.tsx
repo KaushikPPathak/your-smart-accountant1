@@ -302,10 +302,7 @@ function openPrintPreview(
   }
   const orient = orientation === "landscape" ? "landscape" : "portrait";
   // Pull every stylesheet (Tailwind, design-tokens, component CSS) from the
-  // host document so utility classes (bg-card, text-muted-foreground,
-  // overflow-hidden, etc.) used inside report children resolve in the popup.
-  // Without this, complex children (Cards, tables wrapped in tokenised
-  // containers) can render with white-on-white text or zero-height boxes.
+  // host document so utility classes resolve in the popup.
   const inheritedStyles = Array.from(
     document.head.querySelectorAll('link[rel="stylesheet"], style'),
   )
@@ -365,6 +362,25 @@ function openPrintPreview(
     /* Some report cards use overflow:hidden which can clip the table when
        the popup is narrower than the rendered landscape width. */
     .preview-content .overflow-hidden { overflow: visible !important; }
+    /* ------------------------------------------------------------------
+       CRITICAL FIX: Undo FitToWidth (or any screen-only scale wrapper)
+       so wide / multi-section reports (All Ledgers, Cash Book, Bank Book)
+       don't render as a blank page. The preview copies static HTML; any
+       transform:scale() or fixed-pixel height/width from the on-screen
+       fit helper must be stripped so the content flows naturally.
+       ------------------------------------------------------------------ */
+    .preview-content [style*="transform"] {
+      transform: none !important;
+    }
+    .preview-content > div,
+    .preview-content > div > div,
+    .preview-content > div > div > div {
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      width: auto !important;
+      min-width: 0 !important;
+    }
     @media print {
       .preview-bar { display: none !important; }
       body { padding: 0; }
