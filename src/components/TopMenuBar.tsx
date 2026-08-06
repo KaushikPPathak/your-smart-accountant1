@@ -460,6 +460,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   useEffect(() => {
     const onExit = () => {
       if (!onLock) return;
+      // A dropdown that just closed consumed this Escape — don't exit.
+      if (Date.now() - lastMenuCloseRef.current < 500) return;
+
       // Close any open menubar dropdown and blur the trigger so Enter can't
       // fall through to a menubar button while the confirmation is open.
       setOpenMenuKey("");
