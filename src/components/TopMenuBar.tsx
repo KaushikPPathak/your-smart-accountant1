@@ -334,9 +334,11 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     (key: string) => (e: ReactKeyboardEvent<HTMLButtonElement>) => {
       if (e.key === "Escape" && openMenuKey === key) {
         e.preventDefault();
+        lastMenuCloseRef.current = Date.now();
         setOpenMenuKey("");
         return;
       }
+
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
         const currentIndex = orderedMenuKeys.indexOf(key);
