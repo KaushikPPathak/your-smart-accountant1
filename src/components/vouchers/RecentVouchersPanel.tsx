@@ -97,17 +97,26 @@ export function RecentVouchersPanel({
           className="gap-1.5"
         >
           <Pencil className="h-4 w-4" />
-          Edit
+          Recent {voucherType.replace(/_/g, " ")}s
         </Button>
       </div>
     );
   }
 
   return (
-    <Card data-recent-open>
+    <Card data-recent-open className={
+      voucherType === "sales" ? "bg-blue-50/50 border-blue-100" :
+      voucherType === "purchase" ? "bg-amber-50/50 border-amber-100" :
+      voucherType === "receipt" ? "bg-green-50/50 border-green-100" :
+      voucherType === "payment" ? "bg-rose-50/50 border-rose-100" :
+      ""
+    }>
       <CardContent className="p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase text-muted-foreground">Recent {voucherType.replace(/_/g, " ")}s</span>
+        <div className="mb-2 flex items-center justify-between border-b pb-2">
+          <div className="flex items-center gap-2">
+            <Pencil className="h-4 w-4 opacity-70" />
+            <span className="text-xs font-bold uppercase text-foreground">Recent {voucherType.replace(/_/g, " ")}s</span>
+          </div>
           <Button
             type="button"
             variant="ghost"
@@ -121,24 +130,23 @@ export function RecentVouchersPanel({
         {rows.length === 0 ? (
           <div className="py-4 text-center text-xs text-muted-foreground">No recent entries.</div>
         ) : (
-        <ul className="divide-y text-sm">
+        <ul className="space-y-1 text-sm">
           {rows.map((r) => (
             <li key={r.id}>
               <Button
                 variant="ghost"
-                className="h-auto w-full justify-between px-2 py-1.5 text-left"
+                className="h-auto w-full justify-between px-2 py-1.5 text-left hover:bg-black/5 rounded-md transition-colors"
                 onClick={() => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } }))}
               >
-                <span className="flex flex-col items-start">
-                  <span className="font-mono text-xs">{r.voucher_number}</span>
-                  <span className="text-[11px] text-muted-foreground">
+                <div className="flex flex-col items-start overflow-hidden">
+                  <span className="font-mono text-[11px] font-bold leading-none">{r.voucher_number}</span>
+                  <span className="truncate text-[10px] opacity-80 mt-0.5">
                     {fmtIndianDate(r.voucher_date)}
                     {r.party_ledger_id && partyNames[r.party_ledger_id] ? ` · ${partyNames[r.party_ledger_id]}` : ""}
                   </span>
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="font-mono text-xs">{formatINR(r.total_paise)}</span>
-                  <Pencil className="h-3 w-3 text-muted-foreground" />
+                </div>
+                <span className="font-mono text-xs font-bold whitespace-nowrap ml-2">
+                  {formatINR(r.total_paise)}
                 </span>
               </Button>
             </li>
