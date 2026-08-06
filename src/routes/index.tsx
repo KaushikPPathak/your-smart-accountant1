@@ -633,6 +633,13 @@ function StartScreen() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 max-w-7xl mx-auto mb-8">
+        <LanguageSwitcher voucherType="sales" />
+        <LanguageSwitcher voucherType="purchase" />
+        <LanguageSwitcher voucherType="receipt" />
+        <LanguageSwitcher voucherType="payment" />
+      </div>
+
       <footer className="border-t border-border/60 py-4 text-center text-xs text-muted-foreground">
         © {new Date().getFullYear()} Your Mehtaji
       </footer>
