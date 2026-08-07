@@ -358,15 +358,19 @@ function openPrintPreview(
       border-bottom: 1px solid #ddd; font: 13px system-ui; z-index: 10; }
     .preview-bar button { padding: 6px 12px; border: 1px solid #888;
       background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
-    .preview-content { margin-top: 48px; }
-    /* Force readable colours regardless of design-token resolution in popup. */
+    .preview-content { margin-top: 48px; position: relative; z-index: 1; }
+    /* Force readable colours and visibility regardless of design-token resolution in popup. */
     .preview-content, .preview-content * { 
       color: #000 !important;
       background-color: transparent !important; 
       border-color: #000 !important;
       visibility: visible !important;
       opacity: 1 !important;
+      display: block; /* Ensure container divs aren't collapsed */
     }
+    .preview-content table { display: table !important; }
+    .preview-content tr { display: table-row !important; }
+    .preview-content td, .preview-content th { display: table-cell !important; }
     .preview-content thead th, .preview-content .row-bold,
     .preview-content tfoot { background-color: #f0f0f0 !important;
       -webkit-print-color-adjust: exact; print-color-adjust: exact; }

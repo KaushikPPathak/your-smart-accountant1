@@ -30,16 +30,20 @@ export async function copyFilesToClipboardNative(paths: string[]): Promise<boole
   if (runtime !== "tauri" || !paths.length) return false;
   try {
     const invoke = await resolveInvoke();
-    if (!invoke) return false;
+    if (!invoke) {
+      console.warn("Tauri invoke not found for copyFilesToClipboardNative");
+      return false;
+    }
     
-    // Clear clipboard first to avoid confusion if current copy fails
-    // But we don't have a direct "clear" command, we just rely on success.
-    
-    await invoke("copy_files_to_clipboard", { paths });
-    console.log("Native copy successful for paths:", paths);
+    // Normalize paths to ensure they are strings
+    const validPaths = paths.filter(p => typeof p === 'string' && p.length > 0);
+    if (!validPaths.length) return false;
+
+    console.log("Invoking native copy for:", validPaths);
+    await invoke("copy_files_to_clipboard", { paths: validPaths });
     return true;
   } catch (err) {
-    console.error("Native copy failed:", err);
+    console.error("Native clipboard copy failed:", err);
     return false;
   }
 }
