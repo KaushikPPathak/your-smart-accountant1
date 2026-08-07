@@ -14,6 +14,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import TestDashboard from "@/components/TestDashboard";
+import { FlowStagesPanel } from "@/components/diagnostics/FlowStagesPanel";
 
 export const Route = createFileRoute("/app/diagnostics")({
   head: () => ({
