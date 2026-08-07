@@ -158,7 +158,7 @@ function LedgerStatement() {
   useEffect(() => { setShowBack(hasLedgerOrigin()); }, []);
 
   // WhatsApp shortcut Alt+L
-  useLedgerWhatsAppShortcut(ledgerId, activeCompanyId, from, to, !!ledgerId);
+  useLedgerWhatsAppShortcut(ledgerId || undefined, activeCompanyId || undefined, from, to, !!ledgerId);
 
   // Esc returns to the originating screen (Alt+L launcher or drill-down).
   useShortcut(
