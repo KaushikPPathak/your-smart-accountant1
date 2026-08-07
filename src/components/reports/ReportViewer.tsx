@@ -360,18 +360,31 @@ function openPrintPreview(
       background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
     .preview-content { margin-top: 48px; position: relative; z-index: 1; }
     /* Force readable colours and visibility regardless of design-token resolution in popup. */
-    /* We use a slightly less aggressive selector to avoid breaking table layout */
-    .preview-content { color: #000 !important; visibility: visible !important; opacity: 1 !important; }
+    .preview-content { 
+      color: #000 !important; 
+      visibility: visible !important; 
+      opacity: 1 !important; 
+      display: block !important;
+      background: #fff !important;
+    }
     .preview-content * { 
       color: inherit !important;
       visibility: inherit !important;
       opacity: inherit !important;
+      background: transparent !important;
     }
-    /* Ensure colors that must be black stay black */
-    .report-print-company-name, .report-print-title, .report-print-fy-line { color: #000 !important; }
+    /* Ensure critical text elements are explicitly black */
+    .report-print-company-name, .report-print-title, .report-print-fy-line,
+    .report-print-header, .report-print-header *,
+    table, tr, td, th { 
+      color: #000 !important; 
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
     
-    .preview-content table { border-collapse: collapse !important; width: 100% !important; }
-    .preview-content td, .preview-content th { border: 0.5pt solid #000 !important; }
+    .preview-content table { border-collapse: collapse !important; width: 100% !important; display: table !important; }
+    .preview-content tr { display: table-row !important; }
+    .preview-content td, .preview-content th { border: 0.5pt solid #000 !important; display: table-cell !important; }
     
     .preview-content thead th, .preview-content .row-bold,
     .preview-content tfoot { background-color: #f0f0f0 !important;
