@@ -293,8 +293,9 @@ function escape(s: string): string {
 }
 
 /**
- * Open a new window containing the rendered report HTML with inlined
- * self-contained CSS so the preview is never blank, even in Tauri.
+ * Open a full-screen iframe containing the rendered report HTML.
+ * Tauri's WebView blocks window.open() popups, so we inject an iframe
+ * directly into the current document instead.
  */
 function openPrintPreview(
   el: HTMLElement | null,
@@ -308,6 +309,7 @@ function openPrintPreview(
     node_found: !!el,
     orientation,
   });
+
   if (!el) {
     recordFailure("preview", new Error("Report root node not found — nothing to preview"), {
       stage: "start",
@@ -315,20 +317,21 @@ function openPrintPreview(
     });
     return;
   }
-  // In Tauri/WebView, window.open() + document.write() often results in a blank window.
-  // We use a temporary hidden iframe to prepare the content and then trigger print.
+
+  // Remove any existing preview iframe
+  const existing = document.getElementById("report-preview-iframe");
+  if (existing) existing.remove();
+
   const orient = orientation === "landscape" ? "landscape" : "portrait";
 
   // Clone the live DOM so late-rendered rows are captured.
   const clone = el.cloneNode(true) as HTMLElement;
-  
-  // CRITICAL: Ensure all inputs are converted to static text in the clone so their current values are preserved.
-  // Standard cloneNode does NOT copy the current .value of <input> or <select> elements.
+
+  // Convert inputs to static text so their current values are preserved.
   clone.querySelectorAll("input, textarea, select").forEach((input: any) => {
     const val = input.value || "";
     const span = document.createElement("span");
     span.textContent = val;
-    // Copy some basic layout classes if needed, or just let the container style handle it.
     input.parentNode?.replaceChild(span, input);
   });
 
@@ -337,7 +340,6 @@ function openPrintPreview(
     tables: clone.querySelectorAll("table").length,
     rows: clone.querySelectorAll("tr").length,
   });
-
 
   const css = `
     @page { size: A4 ${orient}; margin: 14mm; }
@@ -351,7 +353,6 @@ function openPrintPreview(
     .preview-bar button { padding: 6px 12px; border: 1px solid #888;
       background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
     .preview-content { margin-top: 48px; position: relative; z-index: 1; }
-
     .preview-content {
       color: #000 !important;
       visibility: visible !important;
@@ -363,8 +364,6 @@ function openPrintPreview(
       visibility: inherit !important;
       opacity: inherit !important;
     }
-
-    /* CRITICAL: Preserve table display types. NEVER use display:block here. */
     .preview-content table,
     .preview-content tbody,
     .preview-content thead,
@@ -381,7 +380,6 @@ function openPrintPreview(
       border-collapse: collapse !important;
       width: 100% !important;
     }
-
     .preview-content [style*="transform"] { transform: none !important; }
     .preview-content,
     .preview-content > div,
@@ -393,7 +391,6 @@ function openPrintPreview(
       width: auto !important;
       min-width: 0 !important;
     }
-
     .preview-content thead th,
     .preview-content .row-bold,
     .preview-content tfoot {
@@ -401,7 +398,6 @@ function openPrintPreview(
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-
     .report-print-header { text-align: center; margin-bottom: 10pt; }
     .report-print-header > div { margin: 1pt 0; }
     .report-print-company-name {
@@ -413,7 +409,6 @@ function openPrintPreview(
     .report-print-fy-line { font-size: 10pt; font-weight: 500; margin-top: 1pt; }
     .report-header-rule { height: 3px; border-top: 1px solid #000;
       border-bottom: 1px solid #000; margin: 4pt 0 8pt; }
-
     table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
     th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
       text-align: left; }
@@ -426,7 +421,6 @@ function openPrintPreview(
     .narration-cell { white-space: normal; word-break: break-word; }
     [class*="print:hidden"] { display: none !important; }
     .overflow-hidden { overflow: visible !important; }
-
     @media print {
       .preview-bar { display: none !important; }
       body { padding: 0; }
@@ -444,7 +438,7 @@ function openPrintPreview(
 <body>
 <div class="preview-bar">
   <button onclick="window.print()">Print</button>
-  <button onclick="window.close()">Close</button>
+  <button onclick="window.parent.document.getElementById('report-preview-iframe').remove()">Close</button>
   <span style="margin-left:auto;color:#666">Print Preview</span>
 </div>
 <div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">
@@ -453,64 +447,27 @@ function openPrintPreview(
 </body>
 </html>`;
 
-  // Use a Blob URL for window.open to bypass document.write blocking in some environments.
-  try {
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    recordStage("preview", "blob", { blob_bytes: blob.size, html_len: html.length });
+  const iframe = document.createElement("iframe");
+  iframe.id = "report-preview-iframe";
+  iframe.style.cssText =
+    "position:fixed;top:0;left:0;width:100vw;height:100vh;border:none;z-index:9999;background:#fff;";
+  document.body.appendChild(iframe);
 
-    const w = window.open(url, "_blank", "width=900,height=1100");
-
-    if (!w) {
-      recordFailure("preview", new Error("Popup blocked — window.open returned null"), {
-        stage: "window",
-        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
-      });
-      toast.error("Print preview window could not be opened", {
-        description: "Falling back to the system print dialog. Press Ctrl+Shift+D for details.",
-        action: { label: "Show details", onClick: () => openDiagnostics() },
-      });
-      // Fallback attempt to print the current page directly
-      window.print();
-      return;
-    }
-
-    recordStage("preview", "window", { opened: true });
-
-    // Confirm the child document actually rendered content — a blank preview
-    // shows up here as body_len ≈ 0.
-    window.setTimeout(() => {
-      try {
-        const bodyLen = w.document?.body?.innerHTML?.length ?? -1;
-        recordStage("preview", "written", {
-          body_len: bodyLen,
-          child_url: w.location?.href ?? "",
-          closed: w.closed,
-        });
-        if (bodyLen <= 0 && !w.closed) {
-          recordFailure("preview", new Error("Preview window opened but rendered empty"), {
-            stage: "written",
-            body_len: bodyLen,
-          });
-        }
-      } catch (err) {
-        // Cross-origin read of a blob window is itself a diagnostic signal.
-        recordStage("preview", "written", {
-          readable: false,
-          reason: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }, 1200);
-
-    // Revoke URL after a delay to ensure it's loaded in the new window
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  } catch (err) {
-    recordFailure("preview", err, { stage: "error" });
-    toast.error("Print preview failed", {
-      description: err instanceof Error ? err.message : String(err),
-      action: { label: "Show details", onClick: () => openDiagnostics() },
-    });
+  const doc = iframe.contentDocument;
+  if (!doc) {
+    iframe.remove();
+    recordFailure("preview", new Error("iframe contentDocument is null"), { stage: "iframe" });
+    return;
   }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  recordStage("preview", "iframe", {
+    opened: true,
+    html_len: html.length,
+  });
 }
 
 /** Navigate to the Diagnostics page from a toast action. */
@@ -521,7 +478,6 @@ function openDiagnostics(): void {
     /* ignore */
   }
 }
-
 
 /**
  * Format the company's financial year start (YYYY-MM-DD, typically
