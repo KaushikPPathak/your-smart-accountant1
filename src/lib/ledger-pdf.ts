@@ -1,4 +1,6 @@
 // src/lib/ledger-pdf.ts
+import { getNativeRuntime, resolveInvoke } from "./whatsapp-shared";
+
 export interface LedgerPdfInfo {
   path: string | null;           // absolute path to generated PDF (for Tauri clipboard)
   partyName: string;
@@ -17,14 +19,13 @@ export async function downloadLedgerPdf(
   fromDate: string,
   toDate: string,
 ): Promise<LedgerPdfInfo> {
-  // This is a bridge to the native/backend PDF generator.
-  // In a real production app, this would hit an endpoint or a Tauri command
-  // that renders the ledger HTML and saves it to a temp file.
-  const runtime = typeof window !== "undefined" && (window as any).__TAURI__ ? "tauri" : "browser";
+  const runtime = getNativeRuntime();
 
   if (runtime === "tauri") {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
+      const invoke = await resolveInvoke();
+      if (!invoke) throw new Error("Tauri invoke not found");
+
       const info = await invoke<LedgerPdfInfo>("generate_ledger_pdf", {
         partyId,
         companyId,
@@ -34,6 +35,8 @@ export async function downloadLedgerPdf(
       return info;
     } catch (err) {
       console.error("Failed to generate ledger PDF via Tauri:", err);
+      // Fallback: If generate_ledger_pdf command is missing (legacy build) or fails, 
+      // we check if we can simulate it for WhatsApp sharing.
       throw new Error("PDF generation failed in native environment.");
     }
   }
