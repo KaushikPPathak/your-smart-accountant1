@@ -53,7 +53,7 @@ export async function sendInvoiceViaWhatsApp(
     if (pdfCache.has(cacheKey)) {
       info = pdfCache.get(cacheKey)!;
     } else {
-      info = await downloadInvoicePdf(voucherId, companyId);
+      info = await downloadInvoicePdf(voucherId, companyId, true);
       pdfCache.set(cacheKey, info);
     }
   } catch (err) {
