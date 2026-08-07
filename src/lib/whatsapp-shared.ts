@@ -73,10 +73,11 @@ export function sanitizePhoneForWhatsApp(raw: string | null | undefined): string
 
 export function buildWhatsAppWebUrl(phone: string, message: string): string {
   const encodedText = encodeURIComponent(message);
+  // Using the more robust send endpoint for targeted chats
   if (phone) {
-    return `https://web.whatsapp.com/send/?phone=${phone}&text=${encodedText}`;
+    return `https://web.whatsapp.com/send?phone=${phone}&text=${encodedText}&type=phone_number&app_absent=0`;
   }
-  return `https://web.whatsapp.com/send/?text=${encodedText}`;
+  return `https://web.whatsapp.com/send?text=${encodedText}&app_absent=0`;
 }
 
 /**

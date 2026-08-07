@@ -94,9 +94,9 @@ export async function sendInvoiceViaWhatsApp(
   if (copied) {
     toast.success("Invoice PDF copied to clipboard!", {
       description: phone 
-        ? "Focus the WhatsApp window and press Ctrl + V to attach." 
+        ? "Waiting for WhatsApp to load. Once ready, press Ctrl + V to attach." 
         : "No phone number found. Focus WhatsApp, select a contact, and press Ctrl + V to attach.",
-      duration: 6000,
+      duration: 8000,
       action: {
         label: "Copy Path",
         onClick: () => info.path && navigator.clipboard.writeText(info.path),
