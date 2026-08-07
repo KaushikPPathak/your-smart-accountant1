@@ -13,23 +13,19 @@
   },
   "permissions": [
     "core:default",
-
     "core:window:allow-close",
     "core:window:allow-destroy",
     "core:window:allow-hide",
     "core:window:allow-show",
     "core:window:allow-set-focus",
-
     "shell:default",
     "shell:allow-open",
-
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-confirm",
     "dialog:allow-message",
     "dialog:allow-ask",
-
     "fs:default",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
@@ -38,22 +34,25 @@
     "fs:allow-read-dir",
     "fs:allow-mkdir",
     "fs:allow-exists",
-
     {
       "identifier": "fs:scope",
       "allow": [
-        {
-          "path": "$APPLOCALDATA"
-        },
-        {
-          "path": "$APPLOCALDATA/**"
-        }
+        { "path": "$APPLOCALDATA" },
+        { "path": "$APPLOCALDATA/**" },
+        { "path": "$TEMP" },
+        { "path": "$TEMP/**" },
+        { "path": "$DOWNLOAD" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$DESKTOP" },
+        { "path": "$DESKTOP/**" }
       ]
     },
-
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
-    "sql:allow-select"
+    "sql:allow-select",
+    "clipboard-manager:default",
+    "clipboard-manager:allow-write-files",
+    "clipboard-manager:allow-read-files"
   ]
 }
