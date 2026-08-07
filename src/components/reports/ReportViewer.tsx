@@ -10,6 +10,8 @@ import { FitToWidth } from "./FitToWidth";
 import { Button } from "@/components/ui/button";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { useShortcut } from "@/lib/keyboard";
+import { toast } from "sonner";
+import { recordFailure, recordStage } from "@/lib/crash-log";
 
 /**
  * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
