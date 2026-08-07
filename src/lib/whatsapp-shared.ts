@@ -3,8 +3,9 @@
 // No business logic — just Tauri bridge, audio, phone sanitisation, and window focus.
 
 import { getNativeRuntime } from "@/lib/native-bridge";
+export { getNativeRuntime };
 
-export type Invoke = (cmd: string, args?: unknown) => Promise<unknown>;
+export type Invoke = <T = unknown>(cmd: string, args?: unknown) => Promise<T>;
 
 export async function resolveInvoke(): Promise<Invoke | null> {
   if (typeof window === "undefined") return null;
@@ -39,14 +40,15 @@ export async function copyFilesToClipboardNative(paths: string[]): Promise<boole
 export function playSuccessBeep() {
   try {
     const Ctx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      (window as any).AudioContext ||
+      (window as any).webkitAudioContext;
+    if (!Ctx) return;
     const ctx = new Ctx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
     osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-  osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
     gain.gain.setValueAtTime(0.08, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
     osc.connect(gain);

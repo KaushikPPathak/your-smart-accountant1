@@ -1155,10 +1155,10 @@ function LedgerStatement() {
           onExportXlsx={onExportXlsx}
           onExportPdf={onExportPdf}
           onPrint={() => {
-            // Give React a frame to ensure any conditional print-only DOM is ready
-            setTimeout(() => {
-              window.print();
-            }, 50);
+            // Trigger a CustomEvent that ReportViewer listens for.
+            // This ensures we always get the robust Print Preview popup
+            // rather than a potentially blank system print dialog.
+            window.dispatchEvent(new CustomEvent("report:preview"));
           }}
           extraButtons={
             <Button
