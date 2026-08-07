@@ -11,12 +11,12 @@
 //  - Bounded (last 100 entries) so it can never grow unbounded.
 
 const STORAGE_KEY = "crash-log.v1";
-const MAX_ENTRIES = 100;
+const MAX_ENTRIES = 200;
 
 export interface CrashEntry {
   id: string;
   ts: number;                          // epoch ms
-  kind: "error" | "unhandledrejection" | "failure";
+  kind: "error" | "unhandledrejection" | "failure" | "stage";
   scope: string;                       // e.g. "restore", "backup", "window"
   message: string;
   stack?: string;
