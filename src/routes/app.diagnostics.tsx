@@ -41,6 +41,9 @@ function kindBadge(kind: CrashEntry["kind"]): string {
       return "bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-100";
     case "unhandledrejection":
       return "bg-orange-100 text-orange-900 dark:bg-orange-900/40 dark:text-orange-100";
+    case "stage":
+    default:
+      return "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100";
   }
 }
 
