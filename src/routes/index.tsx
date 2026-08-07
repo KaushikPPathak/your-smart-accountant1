@@ -118,6 +118,11 @@ function StartScreen() {
     let cancelled = false;
 
     (async () => {
+      // Small intentional delay to let the initial layout stabilize 
+      // and prevent multiple rapid re-renders during boot.
+      await new Promise((r) => setTimeout(r, 100));
+      if (cancelled) return;
+
       setLoading(true);
       try {
         const online = isOnlineNow();

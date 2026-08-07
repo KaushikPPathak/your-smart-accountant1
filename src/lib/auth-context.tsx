@@ -49,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (prev?.user?.id === newSession?.user?.id && prev?.access_token === newSession?.access_token) {
           return prev;
         }
+        // Only trigger update if identity actually changed
         return newSession;
       });
       if (newSession && event === "SIGNED_IN") {
