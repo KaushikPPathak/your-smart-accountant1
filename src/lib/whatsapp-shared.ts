@@ -40,7 +40,14 @@ export async function copyFilesToClipboardNative(paths: string[]): Promise<boole
     if (!validPaths.length) return false;
 
     console.log("Invoking native copy for:", validPaths);
-    await invoke("copy_files_to_clipboard", { paths: validPaths });
+    // Explicitly cast invoke to any and ensure we await the result. 
+    // In Tauri, copy_files_to_clipboard is a custom command we defined in Rust.
+    const result = await (invoke as any)("copy_files_to_clipboard", { paths: validPaths });
+    console.log("Native copy result:", result);
+    return true;
+    
+    // Verify by reading back if possible, but Tauri clipboard is usually write-only for files
+    // So we'll just return true and assume success if no error was thrown
     return true;
   } catch (err) {
     console.error("Native clipboard copy failed:", err);

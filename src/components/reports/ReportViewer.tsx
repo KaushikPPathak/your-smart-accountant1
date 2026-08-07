@@ -360,18 +360,31 @@ function openPrintPreview(
       background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
     .preview-content { margin-top: 48px; position: relative; z-index: 1; }
     /* Force readable colours and visibility regardless of design-token resolution in popup. */
-    /* We use a slightly less aggressive selector to avoid breaking table layout */
-    .preview-content { color: #000 !important; visibility: visible !important; opacity: 1 !important; }
+    .preview-content { 
+      color: #000 !important; 
+      visibility: visible !important; 
+      opacity: 1 !important; 
+      display: block !important;
+      background: #fff !important;
+    }
     .preview-content * { 
       color: inherit !important;
       visibility: inherit !important;
       opacity: inherit !important;
+      background: transparent !important;
     }
-    /* Ensure colors that must be black stay black */
-    .report-print-company-name, .report-print-title, .report-print-fy-line { color: #000 !important; }
+    /* Ensure critical text elements are explicitly black */
+    .report-print-company-name, .report-print-title, .report-print-fy-line,
+    .report-print-header, .report-print-header *,
+    table, tr, td, th { 
+      color: #000 !important; 
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
     
-    .preview-content table { border-collapse: collapse !important; width: 100% !important; }
-    .preview-content td, .preview-content th { border: 0.5pt solid #000 !important; }
+    .preview-content table { border-collapse: collapse !important; width: 100% !important; display: table !important; }
+    .preview-content tr { display: table-row !important; }
+    .preview-content td, .preview-content th { border: 0.5pt solid #000 !important; display: table-cell !important; }
     
     .preview-content thead th, .preview-content .row-bold,
     .preview-content tfoot { background-color: #f0f0f0 !important;
@@ -433,8 +446,7 @@ function openPrintPreview(
     }
   `;
   w.document.open();
-  w.document.write(
-    `<!doctype html><html><head><meta charset="utf-8">` +
+  const html = `<!doctype html><html><head><meta charset="utf-8">` +
       `<title>${escape(company)} — ${escape(heading)} — Preview</title>` +
       inheritedStyles +
       `<style>${css}</style></head><body>` +
@@ -444,9 +456,21 @@ function openPrintPreview(
         `<span style="margin-left:auto;color:#666">Print Preview</span>` +
       `</div>` +
       body +
-      `</body></html>`,
-  );
+      `</body></html>`;
+  w.document.write(html);
   w.document.close();
+  
+  // Extra safeguard: Re-apply visibility after a short delay to override any late-loading scripts
+  setTimeout(() => {
+    try {
+      const doc = w.document;
+      const forceStyles = doc.createElement('style');
+      forceStyles.innerHTML = '.preview-content, .preview-content * { visibility: visible !important; opacity: 1 !important; display: block; } .preview-content table { display: table !important; }';
+      doc.head.appendChild(forceStyles);
+    } catch (e) {
+      console.warn("Could not re-apply preview styles", e);
+    }
+  }, 500);
 }
 
 /**
