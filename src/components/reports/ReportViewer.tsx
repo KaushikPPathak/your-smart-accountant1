@@ -333,20 +333,6 @@ function openPrintPreview(
     .join("\n");
   const innerHtml = el.innerHTML?.trim() || "";
   
-  // Construct the header HTML for the preview window manually to ensure it matches the 3-line requirement
-  const headerHtml = `
-    <div class="report-print-header">
-      <div class="report-print-company-name">${escape(company)}</div>
-      <div class="report-print-title">${escape(heading)}</div>
-      ${fyShort ? `<div class="report-print-fy-line">${escape(fyShort)}</div>` : ""}
-      <div class="report-header-rule"></div>
-    </div>
-  `;
-
-  // We need to inject the header but only if it's not already in the innerHtml in a way that would double it.
-  // The rootRef content ALREADY contains the header from the render method. 
-  // However, we can use the custom header CSS we defined below to style the existing header elements.
-  
   const body = innerHtml
     ? `<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">${innerHtml}</div>`
     : `<div class="preview-content"><p style="padding:24pt;text-align:center;color:#666">Nothing to preview yet — the report has no rendered content.</p></div>`;
