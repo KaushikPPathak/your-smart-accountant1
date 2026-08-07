@@ -100,15 +100,15 @@ export async function saveExport(opts: SaveExportOptions): Promise<string | null
     closeButton: true,
     className: "sa-compact-toast",
     action: {
-      label: "Open",
+      label: "Open Location",
       onClick: () => {
-        void openPathNative(savedPath);
+        void showInFolderNative(savedPath);
       },
     },
     cancel: {
-      label: "Show in folder",
+      label: "Open File",
       onClick: () => {
-        void showInFolderNative(savedPath);
+        void openPathNative(savedPath);
       },
     },
   });
