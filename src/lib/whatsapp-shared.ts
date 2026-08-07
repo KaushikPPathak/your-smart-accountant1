@@ -3,6 +3,7 @@
 // No business logic — just Tauri bridge, audio, phone sanitisation, and window focus.
 
 import { getNativeRuntime } from "@/lib/native-bridge";
+import { recordFailure, recordStage } from "@/lib/crash-log";
 export { getNativeRuntime };
 
 export type Invoke = <T = unknown>(cmd: string, args?: unknown) => Promise<T>;
