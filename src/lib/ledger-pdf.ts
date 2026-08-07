@@ -27,17 +27,22 @@ export async function downloadLedgerPdf(
       const invoke = await resolveInvoke();
       if (!invoke) throw new Error("Tauri invoke not found");
 
+      // We use generate_ledger_pdf to get the metadata AND the PDF path.
       const info = await invoke<LedgerPdfInfo>("generate_ledger_pdf", {
         partyId,
         companyId,
         fromDate,
         toDate,
       });
+
+      // Verification: ensure the path returned is an absolute filesystem path.
+      if (info.path && !/^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(info.path)) {
+        console.warn("Native PDF generator returned non-absolute path:", info.path);
+      }
+
       return info;
     } catch (err) {
       console.error("Failed to generate ledger PDF via Tauri:", err);
-      // If generate_ledger_pdf fails, we fall through to the simulation 
-      // so at least the WhatsApp message works even if PDF attachment fails.
     }
   }
 
