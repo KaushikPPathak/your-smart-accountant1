@@ -39,19 +39,39 @@ export async function downloadLedgerPdf(
       // we check if we can simulate it for WhatsApp sharing.
       throw new Error("PDF generation failed in native environment.");
     }
+    }
   }
 
-  // Browser fallback: simulated result for UI testing/web preview.
-  // In production browser mode, this would be a fetch() to a cloud function.
-  return {
-    path: null,
-    partyName: "Valued Party",
-    partyPhone: null,
-    companyName: "Your Mehtaji",
-    fromDate,
-    toDate,
-    openingBalancePaise: 0,
-    closingBalancePaise: 0,
-    balanceType: "Dr",
-  };
+  // Browser/Simulation fallback: 
+  // We need to return real-looking metadata even in simulation so the 
+  // WhatsApp message doesn't say "Hi there, your ledger is ready".
+  try {
+    const { offlineDb } = await import("./offline/db");
+    const p = await offlineDb.cache_ledgers.get(partyId);
+    const c = await offlineDb.cache_companies.get(companyId);
+
+    return {
+      path: null,
+      partyName: p?.name || "Valued Party",
+      partyPhone: p?.phone || null,
+      companyName: c?.name || "Your Mehtaji",
+      fromDate,
+      toDate,
+      openingBalancePaise: 0, 
+      closingBalancePaise: 0,
+      balanceType: "Dr",
+    };
+  } catch {
+    return {
+      path: null,
+      partyName: "Valued Party",
+      partyPhone: null,
+      companyName: "Your Mehtaji",
+      fromDate,
+      toDate,
+      openingBalancePaise: 0,
+      closingBalancePaise: 0,
+      balanceType: "Dr",
+    };
+  }
 }
