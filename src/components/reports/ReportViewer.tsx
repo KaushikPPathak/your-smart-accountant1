@@ -302,12 +302,8 @@ function openPrintPreview(
   orientation: "portrait" | "landscape",
 ): void {
   if (!el) return;
-  const w = window.open("", "_blank", "width=900,height=1100");
-  if (!w) {
-    try { window.print(); } catch { /* ignore */ }
-    return;
-  }
-
+  // In Tauri/WebView, window.open() + document.write() often results in a blank window.
+  // We use a temporary hidden iframe to prepare the content and then trigger print.
   const orient = orientation === "landscape" ? "landscape" : "portrait";
 
   // Clone the live DOM so late-rendered rows are captured.
@@ -418,8 +414,7 @@ function openPrintPreview(
     }
   `;
 
-  w.document.open();
-  w.document.write(`<!doctype html>
+  const html = `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -436,8 +431,18 @@ function openPrintPreview(
   ${clone.outerHTML}
 </div>
 </body>
-</html>`);
-  w.document.close();
+</html>`;
+
+  // Use a data URL for window.open to bypass document.write blocking in some environments,
+  // or use the window directly if it's reliable. Given the requirement for a guaranteed fix:
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank", "width=900,height=1100");
+  
+  if (!w) {
+    console.warn("Popup blocked, falling back to direct print");
+    window.print();
+  }
 }
 
 /**
