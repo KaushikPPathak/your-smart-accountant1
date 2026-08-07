@@ -1297,7 +1297,7 @@ function LedgerStatement() {
       toolbar={toolbar}
       orientation="landscape"
       onExportPdf={onExportPdf}
-      onExportWord={onExportWord}
+      onExportWord={allMode ? onExportAllWord : undefined}
       exportFileBase={allMode ? `all-ledgers-${view}-${from}_to_${to}` : `${fileBase}-${view}`}
     >
       <div id="ledger-print-area">
