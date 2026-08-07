@@ -89,6 +89,10 @@ function DiagnosticsPage() {
         </p>
       </div>
 
+      <FlowStagesPanel tick={tick} />
+
+
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-base">
