@@ -80,11 +80,11 @@ export function sanitizePhoneForWhatsApp(raw: string | null | undefined): string
 
 export function buildWhatsAppWebUrl(phone: string, message: string): string {
   const encodedText = encodeURIComponent(message);
-  // Using the more robust send endpoint for targeted chats in the embedded view
+  // Using api.whatsapp.com for broad compatibility, including embedded views.
   if (phone) {
-    return `https://web.whatsapp.com/send?phone=${phone}&text=${encodedText}&app_absent=0`;
+    return `https://api.whatsapp.com/send?phone=${phone}&text=${encodedText}`;
   }
-  return `https://web.whatsapp.com/send?text=${encodedText}&app_absent=0`;
+  return `https://api.whatsapp.com/send?text=${encodedText}`;
 }
 
 /**
