@@ -523,6 +523,13 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
   useShortcut("Ctrl+F2", (e) => { e.preventDefault(); focusRegion("ribbon"); },
     { scope: "global", allowInField: true, description: "Jump to Quick Entry ribbon" });
 
+  // Ctrl+Shift+D — open Diagnostics from anywhere. In a packaged desktop
+  // build there is no developer console, so this is the only way to inspect
+  // a print-preview / WhatsApp failure right after it happens.
+  useShortcut("Ctrl+Shift+d", (e) => { e.preventDefault(); navigate({ to: "/app/diagnostics" }); },
+    { scope: "global", allowInField: true, description: "Open Diagnostics" });
+
+
   // Alt+Arrow region hops — mirror F6 but with a mnemonic direction. Alt+Up
   // walks main → ribbon → menu; Alt+Down walks the reverse. This gives users
   // an arrow-key path between regions without stealing plain ArrowUp/Down
