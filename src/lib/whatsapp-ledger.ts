@@ -99,9 +99,12 @@ export async function sendLedgerViaWhatsApp(
   const phone = sanitizePhoneForWhatsApp(info.partyPhone);
 
   // 1. Copy PDF to OS clipboard
-  console.log("Attempting native copy for ledger path:", info.path);
   const copied = info.path ? await copyFilesToClipboardNative([info.path]) : false;
-  console.log("Ledger PDF clipboard copy result:", copied, "Path:", info.path);
+  if (!info.path) {
+    recordFailure("whatsapp", new Error("No PDF path available to copy to clipboard"), {
+      stage: "path-check",
+    });
+  }
   if (copied) playSuccessBeep();
 
 
@@ -110,13 +113,14 @@ export async function sendLedgerViaWhatsApp(
   try {
     await showWhatsAppWeb(waUrl);
   } catch (err) {
-    console.error("showWhatsAppWeb failed:", err);
     toast.error("WhatsApp window not available", {
-      description: "Please ensure WhatsApp Web is loaded in the app.",
+      description: err instanceof Error ? err.message : "Please ensure WhatsApp Web is loaded in the app.",
+      action: { label: "Show details", onClick: () => window.location.assign("/app/diagnostics") },
     });
     isSending = false;
     return;
   }
+
 
   // 3. Feedback
   if (copied) {
