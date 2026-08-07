@@ -413,6 +413,7 @@ function openPrintPreview(
     .preview-content [style*="transform"] {
       transform: none !important;
     }
+    .preview-content,
     .preview-content > div,
     .preview-content > div > div,
     .preview-content > div > div > div {
@@ -421,6 +422,9 @@ function openPrintPreview(
       overflow: visible !important;
       width: auto !important;
       min-width: 0 !important;
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
     }
     @media print {
       .preview-bar { display: none !important; }
