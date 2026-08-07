@@ -1,6 +1,8 @@
 // A4 GST Tax Invoice PDF generator — ink-light layout adopted from the
 // customer-approved ABC Enterprises sample. Six-column item table, HSN-wise
 // tax classification block, right-side totals box. Hairline rules only.
+import { writeFile, BaseDirectory } from "@tauri-apps/plugin-fs";
+import { getNativeRuntime } from "./whatsapp-shared";
 import type jsPDFType from "jspdf";
 import type autoTableType from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
