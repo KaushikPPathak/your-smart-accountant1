@@ -4,14 +4,10 @@ use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 const WEBVIEW_SUBDIR: &str = "EBWebView";
 const WA_WINDOW_LABEL: &str = "whatsapp_web";
 
-/// Shared app state so we remember which chat is already open.
-/// We only compare phone numbers — not the full URL — so sending
-/// multiple invoices/ledgers to the same party never reloads the page.
 pub struct WhatsAppState {
     last_phone: Mutex<Option<String>>,
 }
 
-/// Pull the `phone=…` value out of a WhatsApp Web URL.
 fn extract_phone(url: &str) -> Option<String> {
     url.split("phone=")
         .nth(1)?
@@ -20,9 +16,6 @@ fn extract_phone(url: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-/// Put one or more absolute file paths on the OS clipboard as a native file
-/// reference (CF_HDROP on Windows) so that pasting into WhatsApp / Explorer /
-/// Outlook attaches the real file — not a bitmap render of it.
 #[tauri::command]
 fn copy_files_to_clipboard(paths: Vec<String>) -> Result<(), String> {
     if paths.is_empty() {
@@ -45,12 +38,6 @@ fn copy_files_to_clipboard(paths: Vec<String>) -> Result<(), String> {
     }
 }
 
-/// Show or recreate the WhatsApp Web window.
-///
-/// • If the window exists and the target phone is the same as last time,
-///   we only un-minimize / show / focus — zero reload.
-/// • If the phone changed (or the window was closed), we navigate to the
-///   new chat and remember the new phone number.
 #[tauri::command]
 async fn show_whatsapp_web(
     app: tauri::AppHandle,
@@ -58,7 +45,6 @@ async fn show_whatsapp_web(
     state: State<'_, WhatsAppState>,
 ) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(WA_WINDOW_LABEL) {
-        // Decide whether we really need to navigate
         let should_navigate = {
             let mut last = state.last_phone.lock().map_err(|e| e.to_string())?;
             let new_phone = extract_phone(&url);
@@ -80,7 +66,6 @@ async fn show_whatsapp_web(
         window.show().map_err(|e| format!("show failed: {e}"))?;
         window.set_focus().map_err(|e| format!("focus failed: {e}"))?;
     } else {
-        // User closed the window — recreate it with the same pinned profile
         let local_data = app
             .path()
             .local_data_dir()
@@ -104,7 +89,6 @@ async fn show_whatsapp_web(
             .build()
             .map_err(|e| format!("window build failed: {e}"))?;
 
-        // Remember this chat's phone number
         let mut last = state.last_phone.lock().map_err(|e| e.to_string())?;
         *last = extract_phone(&url);
     }
@@ -126,12 +110,10 @@ pub fn run() {
             show_whatsapp_web,
         ])
         .setup(|app| {
-            // Resolve the OS local-data root and freeze the WebView profile path.
             let local_data = app.path().local_data_dir()?;
             let webview_dir = local_data.join(WEBVIEW_SUBDIR);
             std::fs::create_dir_all(&webview_dir).ok();
 
-            // Main window
             WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("Smart Accountant")
                 .inner_size(1280.0, 800.0)
@@ -139,8 +121,6 @@ pub fn run() {
                 .data_directory(webview_dir.clone())
                 .build()?;
 
-            // Pre-warm WhatsApp Web in a hidden background window sharing
-            // the exact same pinned data directory so session logins persist.
             if let Ok(wa_url) = "https://web.whatsapp.com".parse() {
                 let _ = WebviewWindowBuilder::new(
                     app,
@@ -156,4 +136,19 @@ pub fn run() {
 
             Ok(())
         })
-        // Handle both main-window exit and WhatsApp-window
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                let label = window.label();
+                if label == "main" {
+                    window.app_handle().exit(0);
+                } else if label == WA_WINDOW_LABEL {
+                    let state = window.app_handle().state::<WhatsAppState>();
+                    if let Ok(mut last) = state.last_phone.lock() {
+                        *last = None;
+                    }
+                }
+            }
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running Tauri application");
+}
