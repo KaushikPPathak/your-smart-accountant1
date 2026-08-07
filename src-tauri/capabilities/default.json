@@ -50,6 +50,10 @@
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
-    "sql:allow-select"
+    "sql:allow-select",
+    "clipboard-manager:default",
+    "clipboard-manager:allow-write-files",
+    "clipboard-manager:allow-read-files"
   ]
 }
+

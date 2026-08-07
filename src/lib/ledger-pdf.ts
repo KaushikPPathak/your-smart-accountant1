@@ -36,9 +36,11 @@ export async function downloadLedgerPdf(
       });
 
       // Verification: ensure the path returned is an absolute filesystem path.
+      console.log("Ledger PDF info received:", info);
       if (info.path && !/^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(info.path)) {
         console.warn("Native PDF generator returned non-absolute path:", info.path);
       }
+
 
       return info;
     } catch (err) {
