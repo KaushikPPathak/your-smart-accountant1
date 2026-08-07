@@ -116,6 +116,7 @@ export interface InvoicePdfResult {
 export async function downloadInvoicePdf(
   voucherId: string,
   companyId: string,
+  saveToTemp = false
 ): Promise<InvoicePdfResult> {
   type Bundle = {
     v: VoucherRow & { ledgers: PartyRow | null };
