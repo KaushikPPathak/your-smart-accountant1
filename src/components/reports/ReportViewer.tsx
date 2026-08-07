@@ -433,8 +433,7 @@ function openPrintPreview(
     }
   `;
   w.document.open();
-  w.document.write(
-    `<!doctype html><html><head><meta charset="utf-8">` +
+  const html = `<!doctype html><html><head><meta charset="utf-8">` +
       `<title>${escape(company)} — ${escape(heading)} — Preview</title>` +
       inheritedStyles +
       `<style>${css}</style></head><body>` +
@@ -444,9 +443,21 @@ function openPrintPreview(
         `<span style="margin-left:auto;color:#666">Print Preview</span>` +
       `</div>` +
       body +
-      `</body></html>`,
-  );
+      `</body></html>`;
+  w.document.write(html);
   w.document.close();
+  
+  // Extra safeguard: Re-apply visibility after a short delay to override any late-loading scripts
+  setTimeout(() => {
+    try {
+      const doc = w.document;
+      const forceStyles = doc.createElement('style');
+      forceStyles.innerHTML = '.preview-content, .preview-content * { visibility: visible !important; opacity: 1 !important; display: block; } .preview-content table { display: table !important; }';
+      doc.head.appendChild(forceStyles);
+    } catch (e) {
+      console.warn("Could not re-apply preview styles", e);
+    }
+  }, 500);
 }
 
 /**
