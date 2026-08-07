@@ -8,6 +8,7 @@ import {
   isDesktopRuntime,
   saveCompanyFileNative,
   showInFolderNative,
+  openPathNative,
 } from "./native-bridge";
 
 export function isDesktop(): boolean {

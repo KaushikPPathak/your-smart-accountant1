@@ -1285,19 +1285,19 @@ function LedgerStatement() {
     { id: "balance", header: "Balance", type: "number", width: 140, align: "right", accessor: (x) => x.balance / 100, cell: (x) => fmtBal(x.balance) },
   ], []);
 
-  return (
     <ReportViewer
-  title={allMode ? "All Ledgers" : "Ledger Statement"}
-  subtitle={undefined}
-  accountHeading={allMode ? undefined : ledger ? `Ledger Account: ${ledger.name}` : "Ledger Statement"}
-  companyCity={undefined}
-  companyGstin={undefined}
-  fromDate={from}
-  toDate={to}
-  toolbar={toolbar}
-  orientation="landscape"
-  onExportPdf={onExportPdf}
-  exportFileBase={allMode ? `all-ledgers-${view}-${from}_to_${to}` : `${fileBase}-${view}`}
+      title={allMode ? "All Ledgers" : "Ledger Statement"}
+      subtitle={undefined}
+      accountHeading={allMode ? undefined : ledger ? `Ledger Account: ${ledger.name}` : "Ledger Statement"}
+      companyCity={undefined}
+      companyGstin={undefined}
+      fromDate={from}
+      toDate={to}
+      toolbar={toolbar}
+      orientation="landscape"
+      onExportPdf={onExportPdf}
+      onExportWord={onExportWord}
+      exportFileBase={allMode ? `all-ledgers-${view}-${from}_to_${to}` : `${fileBase}-${view}`}
 >
       <div id="ledger-print-area">
       {autoExpandedNote && !allMode && (
