@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { formatINR } from "@/lib/money";
 import { downloadLedgerPdf } from "@/lib/ledger-pdf";
-import { recordFailure } from "@/lib/crash-log";
+import { recordFailure, recordStage } from "@/lib/crash-log";
 import {
   copyFilesToClipboardNative,
   playSuccessBeep,
@@ -28,8 +28,7 @@ function buildLedgerMessage(opts: {
   const opening = formatINR(Math.abs(opts.openingBalancePaise));
   const closing = formatINR(Math.abs(opts.closingBalancePaise));
   
-  // Clean dates for the message (they might be YYYY-MM-DD from the DB)
-  // Converting from YYYY-MM-DD to DD-MM-YYYY as requested
+  // Clean dates for the message (YYYY-MM-DD → DD-MM-YYYY)
   const f = opts.fromDate.split("-").reverse().join("-");
   const t = opts.toDate.split("-").reverse().join("-");
 
@@ -99,17 +98,27 @@ export async function sendLedgerViaWhatsApp(
 
   const phone = sanitizePhoneForWhatsApp(info.partyPhone);
 
-  // 1. Copy PDF to OS clipboard
-  const copied = info.path ? await copyFilesToClipboardNative([info.path]) : false;
-  if (!info.path) {
-    recordFailure("whatsapp", new Error("No PDF path available to copy to clipboard"), {
+  // Validate PDF path before attempting clipboard copy
+  let copied = false;
+  if (info.path && typeof info.path === "string") {
+    const isAbsolute = /^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(info.path);
+    if (isAbsolute) {
+      recordStage("whatsapp", "path-check", { path: info.path, absolute: true });
+      copied = await copyFilesToClipboardNative([info.path]);
+      recordStage("whatsapp", "clipboard", { copied });
+    } else {
+      recordFailure("whatsapp", new Error(`PDF path is not absolute: ${info.path}`), { stage: "path-check" });
+    }
+  } else {
+    recordFailure("whatsapp", new Error("downloadLedgerPdf returned no path — PDF was not saved to disk"), {
       stage: "path-check",
+      path: info.path ?? null,
     });
   }
+
   if (copied) playSuccessBeep();
 
-
-  // 2. Focus / navigate WhatsApp Web (never opens a browser popup)
+  // 2. Focus / navigate WhatsApp Web
   const waUrl = buildWhatsAppWebUrl(phone, message);
   try {
     await showWhatsAppWeb(waUrl);
@@ -121,7 +130,6 @@ export async function sendLedgerViaWhatsApp(
     isSending = false;
     return;
   }
-
 
   // 3. Feedback
   if (copied) {
@@ -136,10 +144,11 @@ export async function sendLedgerViaWhatsApp(
       },
     });
   } else {
-    toast.message("WhatsApp opened", {
+    toast.error("Could not copy PDF to clipboard", {
       description: info.path
-        ? "Attach PDF manually (Ctrl + V). File saved at: " + info.path
-        : "The ledger PDF was saved — attach it manually in the chat.",
+        ? "The file exists but could not be placed on the clipboard. Try attaching it manually from: " + info.path
+        : "The PDF was not saved to a file path. The bug is in ledger-pdf.ts — it must return an absolute filesystem path.",
+      duration: 10000,
     });
   }
 
