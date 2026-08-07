@@ -23,8 +23,9 @@ import { downloadPdfTable, downloadPdfMultiTable, downloadXlsx, r, type PdfSecti
 import { exportHtmlAsWord } from "@/lib/word-export";
 import { fmtIndianDate } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
-import { FileText, Eye, FileType2, ArrowLeft } from "lucide-react";
+import { FileText, Eye, FileType2, ArrowLeft, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
+import { sendLedgerViaWhatsApp, useLedgerWhatsAppShortcut } from "@/lib/whatsapp-ledger";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { readLedgers, readVoucherEntriesWithVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 import { offlineDb } from "@/lib/offline/db";
@@ -155,6 +156,9 @@ function LedgerStatement() {
   const [openingBeforeFrom, setOpeningBeforeFrom] = useState(0);
   const [showBack, setShowBack] = useState(false);
   useEffect(() => { setShowBack(hasLedgerOrigin()); }, []);
+
+  // WhatsApp shortcut Alt+L
+  useLedgerWhatsAppShortcut(ledgerId || undefined, activeCompanyId || undefined, from, to, !!ledgerId);
 
   // Esc returns to the originating screen (Alt+L launcher or drill-down).
   useShortcut(
@@ -1150,7 +1154,24 @@ function LedgerStatement() {
           onExportCsv={onExportCsv}
           onExportXlsx={onExportXlsx}
           onExportPdf={onExportPdf}
-          onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
+          onPrint={() => {
+            // Give React a frame to ensure any conditional print-only DOM is ready
+            setTimeout(() => {
+              window.print();
+            }, 50);
+          }}
+          extraButtons={
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
+              onClick={() => ledgerId && activeCompanyId && sendLedgerViaWhatsApp(ledgerId, activeCompanyId, from, to)}
+              disabled={!ledgerId}
+              title="Send via WhatsApp (Alt+L)"
+            >
+              <MessageCircle className="mr-1 h-4 w-4" /> WhatsApp
+            </Button>
+          }
           extra={
             <div className="flex flex-wrap items-end gap-3">
               {showBack && (
@@ -1269,6 +1290,7 @@ function LedgerStatement() {
   onExportPdf={onExportPdf}
   exportFileBase={allMode ? `all-ledgers-${view}-${from}_to_${to}` : `${fileBase}-${view}`}
 >
+      <div id="ledger-print-area">
       {autoExpandedNote && !allMode && (
         <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
           {autoExpandedNote}
@@ -1464,6 +1486,7 @@ function LedgerStatement() {
           </CardContent>
         </Card>
       )}
+      </div>
     </ReportViewer>
   );
 }
