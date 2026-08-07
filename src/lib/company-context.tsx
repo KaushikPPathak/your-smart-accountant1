@@ -140,10 +140,18 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const activeStaff = getActiveStaff();
     const applyMemberships = (next: CompanyMembership[]) => {
-      setMemberships(next);
+      setMemberships((prev) => {
+        // Prevent re-setting identical state to avoid flicker
+        if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+        return next;
+      });
       const stored = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_KEY) : null;
       const valid = stored && next.find((m) => m.company_id === stored);
-      setActiveCompanyIdState(valid ? stored : next[0]?.company_id ?? null);
+      const nextActiveId = valid ? stored : next[0]?.company_id ?? null;
+      setActiveCompanyIdState((prev) => {
+        if (prev === nextActiveId) return prev;
+        return nextActiveId;
+      });
     };
 
     // 1) INSTANT PAINT from Dexie cache — never block UI on the network.
