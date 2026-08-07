@@ -153,7 +153,7 @@ function formatFyShort(start: string | null | undefined): string {
 
 function LedgerStatement() {
   const navigate = useNavigate();
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeMembership } = useCompany();
   const pdfHeader = useReportPdfHeader();
   const search = Route.useSearch();
   const { from, to, setFrom, setTo } = useFyRangeState(search.from, search.to);
@@ -1508,3 +1508,5 @@ function LedgerStatement() {
     </ReportViewer>
   );
 }
+
+const escapeWord = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

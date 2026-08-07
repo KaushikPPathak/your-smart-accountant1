@@ -71,7 +71,7 @@ const TYPE_LABEL: Record<string, string> = {
 
 function CashBankBook() {
   const navigate = useNavigate();
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeMembership } = useCompany();
   const pdfHeader = useReportPdfHeader();
   const { view, setView } = useReportView("cash-bank");
   const search = Route.useSearch();
