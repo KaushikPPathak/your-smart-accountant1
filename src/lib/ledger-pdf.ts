@@ -35,10 +35,8 @@ export async function downloadLedgerPdf(
       return info;
     } catch (err) {
       console.error("Failed to generate ledger PDF via Tauri:", err);
-      // Fallback: If generate_ledger_pdf command is missing (legacy build) or fails, 
-      // we check if we can simulate it for WhatsApp sharing.
-      throw new Error("PDF generation failed in native environment.");
-    }
+      // If generate_ledger_pdf fails, we fall through to the simulation 
+      // so at least the WhatsApp message works even if PDF attachment fails.
     }
   }
 
@@ -47,8 +45,8 @@ export async function downloadLedgerPdf(
   // WhatsApp message doesn't say "Hi there, your ledger is ready".
   try {
     const { offlineDb } = await import("./offline/db");
-    const p = await offlineDb.cache_ledgers.get(partyId);
-    const c = await offlineDb.cache_companies.get(companyId);
+    const p = (await offlineDb.cache_ledgers.get(partyId)) as any;
+    const c = (await offlineDb.cache_companies.get(companyId)) as any;
 
     return {
       path: null,
