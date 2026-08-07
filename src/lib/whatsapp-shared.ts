@@ -35,19 +35,34 @@ export async function copyFilesToClipboardNative(paths: string[]): Promise<boole
       return false;
     }
     
-    // Normalize paths to ensure they are strings
-    const validPaths = paths.filter(p => typeof p === 'string' && p.length > 0);
-    if (!validPaths.length) return false;
+    // Normalize and validate paths to ensure they are absolute filesystem paths
+    const validPaths = paths.filter(p => {
+      if (typeof p !== 'string' || p.length === 0) return false;
+      
+      // Reject URLs
+      if (/^(blob:|data:|http:|https:)/i.test(p)) {
+        console.warn("Rejected non-filesystem path (URL):", p);
+        return false;
+      }
+      
+      // Enforce absolute path pattern (Windows drive or root slash)
+      if (!/^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(p)) {
+        console.warn("Rejected non-absolute path:", p);
+        return false;
+      }
+      
+      return true;
+    });
+
+    if (!validPaths.length) {
+      console.error("No valid absolute filesystem paths to copy");
+      return false;
+    }
 
     console.log("Invoking native copy for:", validPaths);
     // Explicitly cast invoke to any and ensure we await the result. 
-    // In Tauri, copy_files_to_clipboard is a custom command we defined in Rust.
-    const result = await (invoke as any)("copy_files_to_clipboard", { paths: validPaths });
-    console.log("Native copy result:", result);
-    return true;
-    
-    // Verify by reading back if possible, but Tauri clipboard is usually write-only for files
-    // So we'll just return true and assume success if no error was thrown
+    // In Tauri, copy_files_to_clipboard is a custom command defined in Rust.
+    await (invoke as any)("copy_files_to_clipboard", { paths: validPaths });
     return true;
   } catch (err) {
     console.error("Native clipboard copy failed:", err);

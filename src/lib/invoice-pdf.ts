@@ -1,6 +1,8 @@
 // A4 GST Tax Invoice PDF generator — ink-light layout adopted from the
 // customer-approved ABC Enterprises sample. Six-column item table, HSN-wise
 // tax classification block, right-side totals box. Hairline rules only.
+import { writeFile, BaseDirectory } from "@tauri-apps/plugin-fs";
+import { getNativeRuntime } from "./whatsapp-shared";
 import type jsPDFType from "jspdf";
 import type autoTableType from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
@@ -116,6 +118,7 @@ export interface InvoicePdfResult {
 export async function downloadInvoicePdf(
   voucherId: string,
   companyId: string,
+  saveToTemp = false
 ): Promise<InvoicePdfResult> {
   type Bundle = {
     v: VoucherRow & { ledgers: PartyRow | null };
@@ -587,6 +590,12 @@ export async function downloadInvoicePdf(
   const { stampWatermarkIfUnlicensed } = await import("./license/pdf-watermark");
   await stampWatermarkIfUnlicensed(doc);
   const buf = doc.output("arraybuffer");
+
+  if (getNativeRuntime() === "tauri") {
+    // For WhatsApp, we might want it in Temp, but saveExport handles subFolder
+    await writeFile(fileName, new Uint8Array(buf), { baseDir: BaseDirectory.Temp });
+  }
+
   const savedPath = await saveExport({
     subFolder: "Invoices",
     fileName,

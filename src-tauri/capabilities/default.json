@@ -47,6 +47,24 @@
         },
         {
           "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "$TEMP"
+        },
+        {
+          "path": "$TEMP/**"
+        },
+        {
+          "path": "$DOWNLOAD"
+        },
+        {
+          "path": "$DOWNLOAD/**"
+        },
+        {
+          "path": "$DESKTOP"
+        },
+        {
+          "path": "$DESKTOP/**"
         }
       ]
     },
@@ -54,6 +72,9 @@
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
-    "sql:allow-select"
+    "sql:allow-select",
+    "clipboard-manager:default",
+    "clipboard-manager:allow-write-files",
+    "clipboard-manager:allow-read-files"
   ]
 }

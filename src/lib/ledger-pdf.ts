@@ -1,5 +1,6 @@
 // src/lib/ledger-pdf.ts
 import { getNativeRuntime, resolveInvoke } from "./whatsapp-shared";
+import { writeFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 
 export interface LedgerPdfInfo {
   path: string | null;           // absolute path to generated PDF (for Tauri clipboard)
