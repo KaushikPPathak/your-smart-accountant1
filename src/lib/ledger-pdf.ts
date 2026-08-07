@@ -37,16 +37,25 @@ export async function downloadLedgerPdf(
       });
 
       // Verification: ensure the path returned is an absolute filesystem path.
-      console.log("Ledger PDF info received:", info);
-      if (info.path && !/^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(info.path)) {
-        console.warn("Native PDF generator returned non-absolute path:", info.path);
+      const absolute = !!info.path && /^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(info.path);
+      recordStage("whatsapp", "pdf", {
+        path: info.path ?? null,
+        absolute,
+        party: info.partyName,
+        source: "native",
+      });
+      if (info.path && !absolute) {
+        recordFailure("whatsapp", new Error("Native PDF generator returned a non-absolute path"), {
+          stage: "pdf",
+          path: info.path,
+        });
       }
-
 
       return info;
     } catch (err) {
-      console.error("Failed to generate ledger PDF via Tauri:", err);
+      recordFailure("whatsapp", err, { stage: "pdf", command: "generate_ledger_pdf" });
     }
+
   }
 
   // Browser/Simulation fallback: 
