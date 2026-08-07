@@ -16,6 +16,7 @@
 import { isDesktopRuntime } from "./native-bridge";
 
 const FOLDER = "smartaccountant";
+const CUSTOM_ROOT_KEY = "ym_custom_data_root";
 
 function isWindows(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -34,18 +35,29 @@ let cached: string | null = null;
 export async function getShortDataRoot(): Promise<string | null> {
   if (cached) return cached;
   if (!isDesktopRuntime()) return null;
+  
   try {
     const [{ join, homeDir }, fs] = await Promise.all([
       import("@tauri-apps/api/path"),
       import("@tauri-apps/plugin-fs"),
     ]);
+
     const candidates: string[] = [];
+    
+    // Priority 0: User-selected custom root
+    const custom = typeof window !== "undefined" ? localStorage.getItem(CUSTOM_ROOT_KEY) : null;
+    if (custom) candidates.push(custom);
+
     if (isWindows()) {
+      // Priority 1: Standard C: drive
       candidates.push(`C:\\${FOLDER}`);
+      // Priority 2: Standard D: drive (fallback if C: is full/restricted or D: was preferred)
+      candidates.push(`D:\\${FOLDER}`);
       try { candidates.push(await join(await homeDir(), FOLDER)); } catch { /* ignore */ }
     } else {
       candidates.push(await join(await homeDir(), FOLDER));
     }
+
     for (const dir of candidates) {
       try {
         await fs.mkdir(dir, { recursive: true });
@@ -55,6 +67,16 @@ export async function getShortDataRoot(): Promise<string | null> {
     }
   } catch { /* fall through */ }
   return null;
+}
+
+export function setCustomDataRoot(path: string | null): void {
+  if (typeof window === "undefined") return;
+  if (path) {
+    localStorage.setItem(CUSTOM_ROOT_KEY, path);
+  } else {
+    localStorage.removeItem(CUSTOM_ROOT_KEY);
+  }
+  _resetShortDataRootCache();
 }
 
 export function _resetShortDataRootCache(): void {

@@ -2,16 +2,41 @@
 // data lives on this device only, and (soon) lets them configure their
 // own cloud backup destination.
 
-import { useEffect, useState } from "react";
-import { HardDrive, ShieldCheck, CloudOff } from "lucide-react";
+import * as React from "react";
+import { HardDrive, ShieldCheck, CloudOff, FolderOpen, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { isLocalOnlyMode, subscribeLocalOnlyMode } from "@/lib/local-only-mode";
+import { getShortDataRoot, setCustomDataRoot } from "@/lib/short-data-root";
+import { pickFolderNative, isDesktopRuntime } from "@/lib/native-bridge";
+import { toast } from "sonner";
 
 export function DataLocationCard() {
-  const [enabled, setEnabled] = useState<boolean>(() => isLocalOnlyMode());
+  const [enabled, setEnabled] = React.useState<boolean>(() => isLocalOnlyMode());
+  const [dataRoot, setDataRoot] = React.useState<string>("");
+  const isDesktop = isDesktopRuntime();
 
-  useEffect(() => subscribeLocalOnlyMode(setEnabled), []);
+  React.useEffect(() => subscribeLocalOnlyMode(setEnabled), []);
+
+  React.useEffect(() => {
+    void getShortDataRoot().then((root) => {
+      if (root) setDataRoot(root);
+    });
+  }, []);
+
+  const handlePickFolder = async () => {
+    const res = await pickFolderNative(dataRoot);
+    if (res.ok && res.path) {
+      setCustomDataRoot(res.path);
+      setDataRoot(res.path);
+      toast.success("Data root updated", {
+        description: `New reports and backups will be saved to: ${res.path}`,
+        icon: <CheckCircle2 className="h-4 w-4 text-green-500" />,
+      });
+    }
+  };
 
   return (
     <Card>
@@ -26,7 +51,7 @@ export function DataLocationCard() {
           ) : null}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm">
+      <CardContent className="space-y-4 text-sm">
         <p className="flex items-start gap-2">
           <CloudOff className="mt-0.5 h-4 w-4 text-muted-foreground shrink-0" />
           <span>
@@ -37,29 +62,41 @@ export function DataLocationCard() {
             accounting data never leaves the device.
           </span>
         </p>
+
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Export & Backup Folder
+          </label>
+          <div className="flex gap-2">
+            <Input 
+              value={dataRoot || "Calculating..."} 
+              readOnly 
+              className="bg-muted font-mono text-xs" 
+            />
+            {isDesktop && (
+              <Button variant="outline" size="sm" onClick={handlePickFolder} className="shrink-0 gap-1.5">
+                <FolderOpen className="h-3.5 w-3.5" />
+                Change
+              </Button>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground italic">
+            Reports, backups, and GST files are saved here. Since your D: drive is currently unavailable, you can switch this to a folder on your C: drive or another working location.
+          </p>
+        </div>
+
         <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
           <strong>Backups are your responsibility.</strong> Use the Backup &
           Restore section below to export a copy — save it to a USB drive, or
           upload it to your own Google Drive / OneDrive / Dropbox. We&apos;re
           adding one-click backup to your own cloud account shortly.
         </div>
+        
         <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-          <strong>Version updates are safe.</strong> Your exports, backups and
-          GST files are saved to a short, easy-to-find folder on this PC:
-          <code className="mx-1">C:\smartaccountant\&lt;Company&gt;\...</code>
-          (or <code>~/smartaccountant/</code> on macOS/Linux). The app&apos;s
+          <strong>Version updates are safe.</strong> The app&apos;s
           internal database is pinned to a fixed system location and the
-          installer leaves both folders untouched on upgrade/uninstall. On
-          every launch we verify the local database is intact and warn you if
-          it looks unexpectedly empty after an update.
+          installer leaves your data root untouched on upgrade/uninstall.
         </div>
-        <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-          <strong>Your data stays forever.</strong> Snapshots and backups on
-          this device are kept permanently — no day count, no auto-purge, no
-          hidden rotation. The app never deletes accounting data on its own.
-          Only you can remove a file, by deleting it from disk yourself.
-        </div>
-
       </CardContent>
     </Card>
   );
