@@ -38,7 +38,7 @@ function fyEndFromStart(start: string | null | undefined): string | null {
   return `${Number(m[1]) + 1}-03-31`;
 }
 
-function formatFyShort(start: string | null | undefined): string {
+export function formatFyShort(start: string | null | undefined): string {
   if (!start) return "";
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
   if (!m) return "";

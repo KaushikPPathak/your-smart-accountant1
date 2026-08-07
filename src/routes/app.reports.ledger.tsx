@@ -16,7 +16,7 @@ import { ReportViewer } from "@/components/reports/ReportViewer";
 import { TAccountColumnar, type TColRow } from "@/components/reports/TAccountColumnar";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
-import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { useReportPdfHeader, formatFyShort } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadPdfMultiTable, downloadXlsx, r, type PdfSection } from "@/lib/exporters";
@@ -140,15 +140,6 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 
-function formatFyShort(start: string | null | undefined): string {
-  if (!start) return "";
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
-  if (!m) return "";
-  const y = Number(m[1]);
-  const endY = y + 1;
-  const shortEnd = String(endY).slice(-2);
-  return `Financial Year ${y}-${shortEnd}`;
-}
 
 
 function LedgerStatement() {
