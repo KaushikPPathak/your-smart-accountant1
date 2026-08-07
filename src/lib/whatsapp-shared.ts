@@ -27,49 +27,69 @@ export async function resolveInvoke(): Promise<Invoke | null> {
 
 export async function copyFilesToClipboardNative(paths: string[]): Promise<boolean> {
   const runtime = getNativeRuntime();
-  if (runtime !== "tauri" || !paths.length) return false;
+  recordStage("whatsapp", "bridge", {
+    runtime,
+    path_count: paths.length,
+  });
+  if (runtime !== "tauri" || !paths.length) {
+    recordFailure("whatsapp", new Error(
+      runtime !== "tauri"
+        ? `Native clipboard unavailable in ${runtime} runtime`
+        : "No file paths supplied to clipboard copy",
+    ), { stage: "bridge", runtime });
+    return false;
+  }
   try {
     const invoke = await resolveInvoke();
     if (!invoke) {
-      console.warn("Tauri invoke not found for copyFilesToClipboardNative");
+      recordFailure("whatsapp", new Error("Tauri invoke not found — native command bridge missing"), {
+        stage: "bridge",
+        runtime,
+      });
       return false;
     }
-    
+
     // Normalize and validate paths to ensure they are absolute filesystem paths
-    const validPaths = paths.filter(p => {
-      if (typeof p !== 'string' || p.length === 0) return false;
-      
+    const rejected: string[] = [];
+    const validPaths = paths.filter((p) => {
+      if (typeof p !== "string" || p.length === 0) { rejected.push(String(p)); return false; }
+
       // Reject URLs
-      if (/^(blob:|data:|http:|https:)/i.test(p)) {
-        console.warn("Rejected non-filesystem path (URL):", p);
-        return false;
-      }
-      
+      if (/^(blob:|data:|http:|https:)/i.test(p)) { rejected.push(`url:${p}`); return false; }
+
       // Enforce absolute path pattern (Windows drive or root slash)
-      if (!/^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(p)) {
-        console.warn("Rejected non-absolute path:", p);
-        return false;
-      }
-      
+      if (!/^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(p)) { rejected.push(`relative:${p}`); return false; }
+
       return true;
     });
 
+    recordStage("whatsapp", "path-check", {
+      valid: validPaths,
+      rejected,
+    });
+
     if (!validPaths.length) {
-      console.error("No valid absolute filesystem paths to copy");
+      recordFailure("whatsapp", new Error("No valid absolute filesystem paths to copy"), {
+        stage: "path-check",
+        rejected,
+      });
       return false;
     }
 
-    console.log("Invoking native copy for:", validPaths);
-    // Explicitly cast invoke to any and ensure we await the result. 
-    // In Tauri, copy_files_to_clipboard is a custom command defined in Rust.
-    await (invoke as any)("copy_files_to_clipboard", { paths: validPaths });
+    const result = await (invoke as Invoke)("copy_files_to_clipboard", { paths: validPaths });
+    recordStage("whatsapp", "clipboard", { ok: true, result: result ?? null });
     return true;
   } catch (err) {
-    console.error("WHATSAPP_CLIPBOARD_FAILED:", err);
-    alert("CRITICAL ERROR: Failed to copy file to clipboard.\n\nTECHNICAL DETAILS:\n- Command: copy_files_to_clipboard\n- Error: " + (err instanceof Error ? err.message : String(err)) + "\n- F12: Check console for 'WHATSAPP_CLIPBOARD_FAILED'");
+    recordFailure("whatsapp", err, {
+      stage: "clipboard",
+      command: "copy_files_to_clipboard",
+      runtime,
+      paths,
+    });
     return false;
   }
 }
+
 
 export function playSuccessBeep() {
   try {
