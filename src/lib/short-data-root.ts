@@ -16,6 +16,7 @@
 import { isDesktopRuntime } from "./native-bridge";
 
 const FOLDER = "smartaccountant";
+const CUSTOM_ROOT_KEY = "ym_custom_data_root";
 
 function isWindows(): boolean {
   if (typeof navigator === "undefined") return false;
