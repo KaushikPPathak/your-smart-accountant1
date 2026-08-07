@@ -114,7 +114,7 @@ export async function sendLedgerViaWhatsApp(
       description: phone 
         ? "Waiting for WhatsApp to load. Once ready, press Ctrl + V to attach." 
         : "No phone number found. Focus WhatsApp, select a contact, and press Ctrl + V to attach.",
-      duration: 8000,
+      duration: 10000,
       action: {
         label: "Copy Path",
         onClick: () => info.path && navigator.clipboard.writeText(info.path),

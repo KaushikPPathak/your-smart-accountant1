@@ -16,7 +16,7 @@ import { ReportViewer } from "@/components/reports/ReportViewer";
 import { TAccountColumnar, type TColRow } from "@/components/reports/TAccountColumnar";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
-import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { useReportPdfHeader, formatFyShort } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadPdfMultiTable, downloadXlsx, r, type PdfSection } from "@/lib/exporters";
@@ -140,9 +140,11 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 
+
+
 function LedgerStatement() {
   const navigate = useNavigate();
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeMembership } = useCompany();
   const pdfHeader = useReportPdfHeader();
   const search = Route.useSearch();
   const { from, to, setFrom, setTo } = useFyRangeState(search.from, search.to);
@@ -1138,7 +1140,14 @@ function LedgerStatement() {
       bodyHtml: sectionsHtml,
       title: "All Ledgers",
       fileName: `all-ledgers-${view === "horizontal" ? "t-format" : "columnar"}-${from}_to_${to}.doc`,
-      headerHtml,
+      headerHtml: `
+        <div style="text-align:center;margin-bottom:10pt">
+          <div style="font-size:14pt;font-weight:bold;color:#002060;text-transform:uppercase">${escapeWord(activeMembership?.companies?.name || "")}</div>
+          <div style="font-size:11pt;font-weight:600">All Ledger Statements</div>
+          <div style="font-size:10pt;font-weight:500">Financial Year ${formatFyShort(activeMembership?.companies?.financial_year_start || "")}</div>
+          <div style="font-size:9pt">${from} to ${to}</div>
+        </div>
+      `,
       orientation: "landscape",
     });
   };
@@ -1490,3 +1499,5 @@ function LedgerStatement() {
     </ReportViewer>
   );
 }
+
+const escapeWord = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

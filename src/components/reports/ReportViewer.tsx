@@ -131,13 +131,13 @@ export function ReportViewer({
     if (!rootRef.current) return;
     const headerHtml = `
       <div class="report-print-header" style="text-align:center;margin-bottom:10pt">
-        <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:.5pt;color:#002060">${escape(company)}</div>
-        <div style="font-size:11pt;font-weight:600;margin-top:2pt">${escape(localizedHeading || localizedTitle)}</div>
-        ${fyShort ? `<div style="font-size:10pt;font-weight:500;margin-top:1pt">${escape(fyShort)}</div>` : ""}
-        ${subtitleText ? `<div style="font-size:9pt;margin-top:1pt">${escape(subtitleText)}</div>` : ""}
-        ${periodText ? `<div style="font-size:9pt;margin-top:1pt">${escape(periodText)}</div>` : ""}
+        <div class="report-print-company-name" style="font-size:13pt;font-weight:700;text-transform:uppercase;letter-spacing:.5pt;color:#002060;margin-bottom:2pt">${escape(company)}</div>
+        <div class="report-print-title" style="font-size:11pt;font-weight:600;margin-top:2pt;color:#000">${escape(localizedHeading || localizedTitle)}</div>
+        ${fyShort ? `<div class="report-print-fy-line" style="font-size:10pt;font-weight:500;margin-top:1pt;color:#000">${escape(fyShort)}</div>` : ""}
+        ${subtitleText ? `<div style="font-size:9pt;margin-top:1pt;color:#000">${escape(subtitleText)}</div>` : ""}
+        ${periodText ? `<div style="font-size:9pt;margin-top:1pt;color:#000">${escape(periodText)}</div>` : ""}
         ${addressLine ? `<div style="font-size:8.5pt;color:#444;margin-top:1pt">${escape(addressLine)}</div>` : ""}
-        <div style="border-top:1pt solid #000;border-bottom:1pt solid #000;height:3pt;margin-top:4pt"></div>
+        <div class="report-header-rule" style="border-top:1pt solid #000;border-bottom:1pt solid #000;height:3pt;margin-top:4pt"></div>
       </div>`;
     const stem = (exportFileBase || title).replace(/[^A-Za-z0-9._-]+/g, "-");
     exportElementAsWord({

@@ -71,7 +71,7 @@ const TYPE_LABEL: Record<string, string> = {
 
 function CashBankBook() {
   const navigate = useNavigate();
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeMembership } = useCompany();
   const pdfHeader = useReportPdfHeader();
   const { view, setView } = useReportView("cash-bank");
   const search = Route.useSearch();
@@ -346,11 +346,15 @@ function CashBankBook() {
           ["Total", "", "", "", r(totals.dr).toFixed(2), r(totals.cr).toFixed(2), ""],
           ["Closing Balance", "", "", "", "", "", fmtBal(closing)],
         ];
+
+    const fyStart = activeMembership?.companies?.financial_year_start;
+    const fyLabel = fyStart ? `Financial Year ${fyStart.split("-")[0]}-${(parseInt(fyStart.split("-")[0]) + 1).toString().slice(-2)}` : "";
+
     downloadPdfTable({
-      title: selectedLedgerName || "Cash & Bank Book",
-      subtitle: pdfHeader.dateRangeSubtitle(from, to),
-      companyName: pdfHeader.companyName,
-      companySubLine: pdfHeader.companySubLine,
+      title: activeMembership?.companies?.name || "Company",
+      subtitle: `${accountHeading}\n${fyLabel}${fyLabel ? "\n" : ""}${pdfHeader.dateRangeSubtitle(from, to)}`,
+      companyName: undefined, // Already in title
+      companySubLine: undefined,
       head: [head],
       body: [opening_row, ...bodyRows],
       foot,
