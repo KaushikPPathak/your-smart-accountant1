@@ -590,6 +590,12 @@ export async function downloadInvoicePdf(
   const { stampWatermarkIfUnlicensed } = await import("./license/pdf-watermark");
   await stampWatermarkIfUnlicensed(doc);
   const buf = doc.output("arraybuffer");
+
+  if (getNativeRuntime() === "tauri") {
+    // For WhatsApp, we might want it in Temp, but saveExport handles subFolder
+    await writeFile(fileName, new Uint8Array(buf), { baseDir: BaseDirectory.Temp });
+  }
+
   const savedPath = await saveExport({
     subFolder: "Invoices",
     fileName,
