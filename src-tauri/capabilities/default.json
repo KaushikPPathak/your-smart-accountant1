@@ -34,7 +34,7 @@
     "fs:allow-read-dir",
     "fs:allow-mkdir",
     "fs:allow-exists",
-       {
+    {
       "identifier": "fs:scope",
       "allow": [
         { "path": "$APPLOCALDATA" },
@@ -50,9 +50,6 @@
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
-    "sql:allow-select",
-    "clipboard-manager:default",
-    "clipboard-manager:allow-write-files",
-    "clipboard-manager:allow-read-files"
+    "sql:allow-select"
   ]
 }
