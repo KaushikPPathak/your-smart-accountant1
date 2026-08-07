@@ -152,15 +152,16 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
         doc.setTextColor(0, 0, 0);
         hy += 15;
       }
+      doc.setFont(FONT, "bold");
+      doc.setFontSize(12);
+      doc.text(title, pageW / 2, hy, { align: "center" });
+      hy += 14;
       if (opts.companySubLine) {
         doc.setFont(FONT, "normal");
         doc.setFontSize(9);
         doc.text(opts.companySubLine, pageW / 2, hy, { align: "center" });
         hy += 12;
       }
-      doc.setFont(FONT, "bold");
-      doc.setFontSize(12);
-      doc.text(title, pageW / 2, hy, { align: "center" });
       if (subtitle) {
         hy += 14;
         doc.setFont(FONT, "normal");
