@@ -107,6 +107,7 @@ export function ReportViewer({
   const gstin = companyGstin ?? activeMembership?.companies?.gstin ?? null;
   const fyStart = activeMembership?.companies?.financial_year_start ?? null;
   const fyText = React.useMemo(() => tt(formatFyRange(fyStart)), [fyStart, tt]);
+  const fyShort = React.useMemo(() => formatFyShort(fyStart), [fyStart]);
   const periodText = asOf
     ? tt(`As on ${fmtIndianDate(asOf)}`)
     : fromDate && toDate
@@ -132,6 +133,7 @@ export function ReportViewer({
       <div class="report-print-header">
         <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:.5pt;color:#002060">${escape(company)}</div>
         <div style="font-size:11pt;font-weight:600">${escape(localizedHeading || localizedTitle)}</div>
+        ${fyShort ? `<div style="font-size:10pt;font-weight:500">${escape(fyShort)}</div>` : ""}
         ${subtitleText ? `<div style="font-size:9pt">${escape(subtitleText)}</div>` : ""}
         ${periodText ? `<div style="font-size:9pt">${escape(periodText)}</div>` : ""}
         ${addressLine ? `<div style="font-size:8.5pt;color:#444">${escape(addressLine)}</div>` : ""}
@@ -241,12 +243,13 @@ export function ReportViewer({
         <div className="report-print-header mb-3 text-center">
           <div className="report-print-company-name text-lg font-bold uppercase tracking-wide leading-tight">{company || "\u00A0"}</div>
           <span className="report-print-company-capture" aria-hidden>{company || "\u00A0"}</span>
-          {fyText && (
-            <span className="report-print-fy-capture" aria-hidden>{fyText}</span>
+          {fyShort && (
+            <span className="report-print-fy-capture" aria-hidden>{fyShort}</span>
           )}
           <div className="report-print-title text-sm font-semibold mt-0.5">
             {localizedHeading || localizedTitle}
           </div>
+          {fyShort && <div className="text-[12px] font-medium text-foreground">{fyShort}</div>}
           {subtitle && <div className="text-xs text-muted-foreground">{typeof subtitle === "string" ? subtitleText : subtitle}</div>}
           {periodText && <div className="text-[11px]">{periodText}</div>}
           {fyText && <div className="text-[10px] text-muted-foreground">{fyText}</div>}
@@ -340,9 +343,10 @@ function openPrintPreview(
       font-size: 13pt; font-weight: 700; text-transform: uppercase;
       letter-spacing: .5pt; }
     .preview-content .report-print-company-name,
-    .preview-content .report-print-header div:first-child {
+    .preview-content .report-print-header div:nth-child(1) {
       color: #002060 !important;
       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .report-print-header div:nth-child(3) { font-size: 10pt; font-weight: 500; }
     .report-print-title { font-size: 11pt; font-weight: 600; }
     .report-print-company-capture, .report-print-fy-capture { display: none; }
     .report-header-rule { height: 3px; border-top: 1px solid #000;
@@ -422,4 +426,17 @@ function formatFyRange(start: string | null | undefined): string {
   const endStr = `31-03-${endY}`;
   const shortEnd = String(endY).slice(-2);
   return `FY ${y}-${shortEnd} (${startStr} to ${endStr})`;
+}
+
+/**
+ * Extract just the "FY 2025-26" part for the primary report header.
+ */
+function formatFyShort(start: string | null | undefined): string {
+  if (!start) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const endY = y + 1;
+  const shortEnd = String(endY).slice(-2);
+  return `Financial Year ${y}-${shortEnd}`;
 }
