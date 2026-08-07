@@ -130,13 +130,13 @@ export function ReportViewer({
     }
     if (!rootRef.current) return;
     const headerHtml = `
-      <div class="report-print-header">
+      <div class="report-print-header" style="text-align:center;margin-bottom:10pt">
         <div style="font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:.5pt;color:#002060">${escape(company)}</div>
-        <div style="font-size:11pt;font-weight:600">${escape(localizedHeading || localizedTitle)}</div>
-        ${fyShort ? `<div style="font-size:10pt;font-weight:500">${escape(fyShort)}</div>` : ""}
-        ${subtitleText ? `<div style="font-size:9pt">${escape(subtitleText)}</div>` : ""}
-        ${periodText ? `<div style="font-size:9pt">${escape(periodText)}</div>` : ""}
-        ${addressLine ? `<div style="font-size:8.5pt;color:#444">${escape(addressLine)}</div>` : ""}
+        <div style="font-size:11pt;font-weight:600;margin-top:2pt">${escape(localizedHeading || localizedTitle)}</div>
+        ${fyShort ? `<div style="font-size:10pt;font-weight:500;margin-top:1pt">${escape(fyShort)}</div>` : ""}
+        ${subtitleText ? `<div style="font-size:9pt;margin-top:1pt">${escape(subtitleText)}</div>` : ""}
+        ${periodText ? `<div style="font-size:9pt;margin-top:1pt">${escape(periodText)}</div>` : ""}
+        ${addressLine ? `<div style="font-size:8.5pt;color:#444;margin-top:1pt">${escape(addressLine)}</div>` : ""}
         <div style="border-top:1pt solid #000;border-bottom:1pt solid #000;height:3pt;margin-top:4pt"></div>
       </div>`;
     const stem = (exportFileBase || title).replace(/[^A-Za-z0-9._-]+/g, "-");
@@ -157,10 +157,10 @@ export function ReportViewer({
         if (mode === "system") window.print();
         else if (mode === "pdf") onExportPdf?.();
         else if (mode === "word") doWord();
-        else if (mode === "preview") openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, orientation);
+        else if (mode === "preview") openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
       }, 50);
     },
-    [onExportPdf, doWord, company, localizedHeading, localizedTitle, orientation],
+    [onExportPdf, doWord, company, localizedHeading, localizedTitle, fyShort, orientation],
   );
 
   // Global Ctrl+P / Cmd+P → open picker. While picker is open, P/D/W/V pick.
@@ -197,10 +197,10 @@ export function ReportViewer({
   // preview even inside Tauri where window.print() may skip the browser's
   // native preview and go straight to the default printer.
   React.useEffect(() => {
-    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, orientation);
+    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
     window.addEventListener("report:preview", handler as EventListener);
     return () => window.removeEventListener("report:preview", handler as EventListener);
-  }, [company, localizedHeading, localizedTitle, orientation]);
+  }, [company, localizedHeading, localizedTitle, fyShort, orientation]);
 
 
   const [autoFit, setAutoFit] = React.useState<boolean>(() => {
@@ -241,21 +241,40 @@ export function ReportViewer({
         )}
       >
         <div className="report-print-header mb-3 text-center">
-          <div className="report-print-company-name text-lg font-bold uppercase tracking-wide leading-tight">{company || "\u00A0"}</div>
-          <span className="report-print-company-capture" aria-hidden>{company || "\u00A0"}</span>
-          {fyShort && (
-            <span className="report-print-fy-capture" aria-hidden>{fyShort}</span>
-          )}
+          {/* Line 1: Client/Company Name */}
+          <div className="report-print-company-name text-lg font-bold uppercase tracking-wide leading-tight text-[#002060]">
+            {company || "\u00A0"}
+          </div>
+          
+          {/* Line 2: Report Name */}
           <div className="report-print-title text-sm font-semibold mt-0.5">
             {localizedHeading || localizedTitle}
           </div>
-          {fyShort && <div className="text-[12px] font-medium text-foreground">{fyShort}</div>}
-          {subtitle && <div className="text-xs text-muted-foreground">{typeof subtitle === "string" ? subtitleText : subtitle}</div>}
-          {periodText && <div className="text-[11px]">{periodText}</div>}
-          {fyText && <div className="text-[10px] text-muted-foreground">{fyText}</div>}
-          {addressLine && (
-            <div className="text-[10px] text-muted-foreground">{addressLine}</div>
+
+          {/* Line 3: Financial Year */}
+          {fyShort && (
+            <div className="report-print-fy-line text-[12px] font-medium text-foreground mt-0.5">
+              {fyShort}
+            </div>
           )}
+
+          {/* Additional Metadata (Subtitle, Period, Address) */}
+          {subtitle && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {typeof subtitle === "string" ? subtitleText : subtitle}
+            </div>
+          )}
+          {periodText && <div className="text-[11px] mt-0.5">{periodText}</div>}
+          {addressLine && (
+            <div className="text-[10px] text-muted-foreground mt-0.5">{addressLine}</div>
+          )}
+          
+          {/* Hidden capture fields for automated scraping/testing if needed */}
+          <span className="report-print-company-capture hidden" aria-hidden>{company || "\u00A0"}</span>
+          {fyShort && (
+            <span className="report-print-fy-capture hidden" aria-hidden>{fyShort}</span>
+          )}
+
           <div className="report-header-rule mt-2" aria-hidden />
         </div>
         {autoFit ? (
@@ -293,6 +312,7 @@ function openPrintPreview(
   el: HTMLElement | null,
   company: string,
   heading: string,
+  fyShort: string,
   orientation: "portrait" | "landscape",
 ): void {
   if (!el) return;
@@ -312,6 +332,7 @@ function openPrintPreview(
     .map((n) => n.outerHTML)
     .join("\n");
   const innerHtml = el.innerHTML?.trim() || "";
+  
   const body = innerHtml
     ? `<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">${innerHtml}</div>`
     : `<div class="preview-content"><p style="padding:24pt;text-align:center;color:#666">Nothing to preview yet — the report has no rendered content.</p></div>`;
@@ -338,16 +359,13 @@ function openPrintPreview(
       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .report-print-header { text-align: center; margin-bottom: 10pt; }
     .report-print-header > div { margin: 1pt 0; }
-    .report-print-header .text-lg,
-    .report-print-header div:first-child {
+    .report-print-header .report-print-company-name {
       font-size: 13pt; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .5pt; }
-    .preview-content .report-print-company-name,
-    .preview-content .report-print-header div:nth-child(1) {
-      color: #002060 !important;
-      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .report-print-header div:nth-child(3) { font-size: 10pt; font-weight: 500; }
-    .report-print-title { font-size: 11pt; font-weight: 600; }
+      letter-spacing: .5pt; color: #002060 !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .report-print-title { font-size: 11pt; font-weight: 600; margin-top: 2pt; }
+    .report-print-fy-line { font-size: 10pt; font-weight: 500; margin-top: 1pt; }
     .report-print-company-capture, .report-print-fy-capture { display: none; }
     .report-header-rule { height: 3px; border-top: 1px solid #000;
       border-bottom: 1px solid #000; margin: 4pt 0 8pt; }
