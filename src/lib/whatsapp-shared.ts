@@ -141,12 +141,24 @@ export function buildWhatsAppWebUrl(phone: string, message: string): string {
  */
 export async function showWhatsAppWeb(url: string): Promise<void> {
   const runtime = getNativeRuntime();
+  recordStage("whatsapp", "url", { runtime, url_len: url.length, has_phone: url.includes("phone=") });
   if (runtime !== "tauri") {
-    throw new Error("WhatsApp sharing is only available in the desktop app.");
+    const err = new Error("WhatsApp sharing is only available in the desktop app.");
+    recordFailure("whatsapp", err, { stage: "url", runtime });
+    throw err;
   }
   const invoke = await resolveInvoke();
-  if (!invoke) throw new Error("Tauri runtime not available.");
-  console.log("Opening WhatsApp URL native:", url);
-  await (invoke as any)("show_whatsapp_web", { url });
+  if (!invoke) {
+    const err = new Error("Tauri runtime not available.");
+    recordFailure("whatsapp", err, { stage: "url", runtime });
+    throw err;
+  }
+  try {
+    await (invoke as Invoke)("show_whatsapp_web", { url });
+    recordStage("whatsapp", "window", { opened: true });
+  } catch (err) {
+    recordFailure("whatsapp", err, { stage: "window", command: "show_whatsapp_web" });
+    throw err;
+  }
 
 }
