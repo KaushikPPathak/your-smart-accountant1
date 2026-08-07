@@ -154,22 +154,18 @@ export function ReportViewer({
       setPickerOpen(false);
       // Allow the dialog to close before invoking blocking print/save APIs.
       window.setTimeout(() => {
-        if (mode === "system") window.print();
-        else if (mode === "pdf") {
+        if (mode === "system") {
+          window.print();
+        } else if (mode === "pdf") {
           onExportPdf?.();
-          // After a short delay, also open the preview if it's a PDF export
-          // but we actually want to "show" it.
-          // However, the user asked to "open window and show me in pdf format".
-          // In web, onExportPdf eventually calls saveExport which does a download.
-          // In desktop, it saves and opens.
-          // To "show" it immediately in a window, we can also trigger the preview.
+          // Open high-fidelity preview for visual confirmation
           openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
-        }
-        else if (mode === "word") {
+        } else if (mode === "word") {
           doWord();
           openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+        } else if (mode === "preview") {
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
         }
-        else if (mode === "preview") openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
       }, 50);
     },
     [onExportPdf, doWord, company, localizedHeading, localizedTitle, fyShort, orientation],
@@ -364,8 +360,13 @@ function openPrintPreview(
       background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
     .preview-content { margin-top: 48px; }
     /* Force readable colours regardless of design-token resolution in popup. */
-    .preview-content, .preview-content * { color: #000 !important;
-      background-color: transparent !important; border-color: #000 !important; }
+    .preview-content, .preview-content * { 
+      color: #000 !important;
+      background-color: transparent !important; 
+      border-color: #000 !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
     .preview-content thead th, .preview-content .row-bold,
     .preview-content tfoot { background-color: #f0f0f0 !important;
       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
