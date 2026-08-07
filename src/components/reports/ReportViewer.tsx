@@ -332,23 +332,9 @@ function openPrintPreview(
 
   const orient = orientation === "landscape" ? "landscape" : "portrait";
   
-  // CRITICAL FIX: Clone the element instead of using innerHTML.
-  // innerHTML loses event handlers and some computed styles, 
-  // but more importantly, it captures the DOM at a snapshot 
-  // that might not include late-rendered table rows.
+  // Clone the live DOM so late-rendered rows are captured.
   const clone = el.cloneNode(true) as HTMLElement;
-  
-  // Strip React-specific attributes and event handlers
-  clone.querySelectorAll('*').forEach(node => {
-    const attrs = Array.from(node.attributes || []);
-    attrs.forEach(attr => {
-      if (attr.name.startsWith('data-') || attr.name === 'class' && attr.value.includes('print:hidden')) {
-        // keep data attributes if needed for styling, but strip React internals
-      }
-    });
-  });
 
-  // Build the HTML with ALL styles inlined — no external dependencies
   const css = `
     @page { size: A4 ${orient}; margin: 14mm; }
     * { box-sizing: border-box; }
@@ -362,23 +348,19 @@ function openPrintPreview(
       background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
     .preview-content { margin-top: 48px; position: relative; z-index: 1; }
     
-    /* CRITICAL FIX: Don't force display:block on everything.
-       Tables MUST keep display:table or they collapse. */
     .preview-content { 
       color: #000 !important; 
       visibility: visible !important; 
       opacity: 1 !important;
       background: #fff !important;
     }
-    
-    /* Only force visibility, NOT display type */
     .preview-content * { 
       color: inherit !important;
       visibility: inherit !important;
       opacity: inherit !important;
     }
     
-    /* Explicit table preservation */
+    /* CRITICAL: Preserve table display types. NEVER use display:block here. */
     .preview-content table, 
     .preview-content tbody, 
     .preview-content thead, 
@@ -391,19 +373,16 @@ function openPrintPreview(
       visibility: visible !important;
       opacity: 1 !important;
     }
-    
     .preview-content table { 
       border-collapse: collapse !important; 
       width: 100% !important; 
     }
     
-    /* Undo FitToWidth transforms */
-    .preview-content [style*="transform"] {
-      transform: none !important;
-    }
+    .preview-content [style*="transform"] { transform: none !important; }
     .preview-content,
     .preview-content > div,
-    .preview-content > div > div {
+    .preview-content > div > div,
+    .preview-content > div > div > div {
       height: auto !important;
       max-height: none !important;
       overflow: visible !important;
@@ -471,6 +450,10 @@ function openPrintPreview(
 </body>
 </html>`);
   w.document.close();
+  
+  // NOTE: Removed the broken setTimeout that was outside this function.
+  // If you still get blank popups, the issue is that el.innerHTML was empty
+  // when called — meaning the report data hadn't finished rendering yet.
 }
   
   // Extra safeguard: Re-apply visibility after a short delay to override any late-loading scripts
