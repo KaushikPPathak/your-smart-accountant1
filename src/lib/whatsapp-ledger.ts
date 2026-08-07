@@ -26,7 +26,12 @@ function buildLedgerMessage(opts: {
 }): string {
   const opening = formatINR(Math.abs(opts.openingBalancePaise));
   const closing = formatINR(Math.abs(opts.closingBalancePaise));
-  return `Hi ${opts.customerName}, your ledger statement (${opts.fromDate} – ${opts.toDate}) is ready.
+  
+  // Clean dates for the message (they might be YYYY-MM-DD from the DB)
+  const f = opts.fromDate.split("-").reverse().join("-");
+  const t = opts.toDate.split("-").reverse().join("-");
+
+  return `Hi ${opts.customerName}, your ledger statement (${f} – ${t}) is ready.
 
 Opening Balance: ${opening} ${opts.openingBalancePaise >= 0 ? "Dr" : "Cr"}
 Closing Balance: ${closing} ${opts.balanceType}
