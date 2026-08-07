@@ -100,6 +100,7 @@ export async function sendLedgerViaWhatsApp(
 
   // 1. Copy PDF to OS clipboard
   const copied = info.path ? await copyFilesToClipboardNative([info.path]) : false;
+  console.log("Ledger PDF clipboard copy result:", copied, "Path:", info.path);
   if (copied) playSuccessBeep();
 
   // 2. Focus / navigate WhatsApp Web (never opens a browser popup)

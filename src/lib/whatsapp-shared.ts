@@ -124,5 +124,6 @@ export async function showWhatsAppWeb(url: string): Promise<void> {
   }
   const invoke = await resolveInvoke();
   if (!invoke) throw new Error("Tauri runtime not available.");
+  console.log("Opening WhatsApp URL native:", url);
   await invoke("show_whatsapp_web", { url });
 }

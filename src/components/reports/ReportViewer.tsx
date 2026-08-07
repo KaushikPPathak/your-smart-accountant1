@@ -312,6 +312,16 @@ function openPrintPreview(
 
   // Clone the live DOM so late-rendered rows are captured.
   const clone = el.cloneNode(true) as HTMLElement;
+  
+  // CRITICAL: Ensure all inputs are converted to static text in the clone so their current values are preserved.
+  // Standard cloneNode does NOT copy the current .value of <input> or <select> elements.
+  clone.querySelectorAll("input, textarea, select").forEach((input: any) => {
+    const val = input.value || "";
+    const span = document.createElement("span");
+    span.textContent = val;
+    // Copy some basic layout classes if needed, or just let the container style handle it.
+    input.parentNode?.replaceChild(span, input);
+  });
 
   const css = `
     @page { size: A4 ${orient}; margin: 14mm; }
