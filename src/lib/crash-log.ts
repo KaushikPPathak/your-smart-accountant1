@@ -86,7 +86,66 @@ function currentRoute(): string | undefined {
   }
 }
 
+/**
+ * Record a non-fatal progress stage of a multi-step flow (print preview,
+ * WhatsApp share, ...). These are the breadcrumbs that make a packaged-build
+ * failure diagnosable without a developer console.
+ *
+ * `scope` is a flow id such as "preview" or "whatsapp"; `stage` is the step
+ * name such as "start", "blob", "window".
+ */
+export function recordStage(
+  scope: string,
+  stage: string,
+  context?: Record<string, unknown>,
+): void {
+  try {
+    const entries = readAll();
+    entries.push({
+      id: makeId(),
+      ts: Date.now(),
+      kind: "stage",
+      scope,
+      message: stage,
+      context: {
+        ...(context ? (jsonSafe(context) as Record<string, unknown>) : {}),
+        runtime: detectRuntime(),
+      },
+      route: currentRoute(),
+    });
+    writeAll(entries);
+  } catch {
+    /* telemetry must never break a flow */
+  }
+}
+
+/** Best-effort runtime label for stage entries. */
+export function detectRuntime(): string {
+  try {
+    if (typeof window === "undefined") return "ssr";
+    const w = window as unknown as {
+      __TAURI__?: unknown;
+      __TAURI_INTERNALS__?: unknown;
+      yourMehtaji?: { isDesktop?: boolean };
+    };
+    if (w.yourMehtaji?.isDesktop) return "electron";
+    if (w.__TAURI__ || w.__TAURI_INTERNALS__) return "tauri";
+    return "browser";
+  } catch {
+    return "unknown";
+  }
+}
+
+/** Most recent stage entries for a flow, oldest-first. */
+export function listStages(scope?: string, limit = 40): CrashEntry[] {
+  const all = readAll().filter(
+    (e) => e.kind === "stage" && (!scope || e.scope === scope),
+  );
+  return all.slice(-limit);
+}
+
 /** Record a named failure (business flow — e.g. restore, backup). */
+
 export function recordFailure(
   scope: string,
   err: unknown,
