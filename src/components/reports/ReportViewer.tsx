@@ -158,7 +158,6 @@ export function ReportViewer({
           window.print();
         } else if (mode === "pdf") {
           onExportPdf?.();
-          // Open high-fidelity preview for visual confirmation
           openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
         } else if (mode === "word") {
           doWord();
@@ -171,8 +170,6 @@ export function ReportViewer({
     [onExportPdf, doWord, company, localizedHeading, localizedTitle, fyShort, orientation],
   );
 
-  // Global Ctrl+P / Cmd+P → open picker. While picker is open, P/D/W/V pick.
-  // Honour explicit opt-out and the GST-route exception list.
   const [pathname, setPathname] = React.useState(() =>
     typeof window === "undefined" ? "" : window.location.pathname,
   );
@@ -189,8 +186,6 @@ export function ReportViewer({
   useShortcut("Meta+p", (e) => { e.preventDefault(); setPickerOpen(true); },
     { scope: "global", allowInField: true, enabled: shortcutsEnabled, description: "Print / export report" });
 
-  // Quick-pick keys while the picker is open. Use "dialog" scope so they only
-  // fire when the picker (which pushes dialog scope) is active.
   useShortcut("p", (e) => { e.preventDefault(); handlePick("system"); },
     { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "System print" });
   useShortcut("d", (e) => { e.preventDefault(); handlePick("pdf"); },
@@ -199,17 +194,12 @@ export function ReportViewer({
     { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "Word export" });
   useShortcut("v", (e) => { e.preventDefault(); handlePick("preview"); },
     { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "Print preview" });
-  // Cross-component hook: any toolbar (e.g. Ledger, Day Book) can dispatch a
-  // "report:preview" CustomEvent to open the print-preview popup directly,
-  // bypassing the picker. This gives every report a consistent, reliable
-  // preview even inside Tauri where window.print() may skip the browser's
-  // native preview and go straight to the default printer.
+
   React.useEffect(() => {
     const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
     window.addEventListener("report:preview", handler as EventListener);
     return () => window.removeEventListener("report:preview", handler as EventListener);
   }, [company, localizedHeading, localizedTitle, fyShort, orientation]);
-
 
   const [autoFit, setAutoFit] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -249,24 +239,17 @@ export function ReportViewer({
         )}
       >
         <div className="report-print-header mb-3 text-center">
-          {/* Line 1: Client/Company Name */}
           <div className="report-print-company-name text-lg font-bold uppercase tracking-wide leading-tight text-[#002060]">
             {company || "\u00A0"}
           </div>
-          
-          {/* Line 2: Report Name */}
           <div className="report-print-title text-sm font-semibold mt-0.5">
             {localizedHeading || localizedTitle}
           </div>
-
-          {/* Line 3: Financial Year */}
           {fyShort && (
             <div className="report-print-fy-line text-[12px] font-medium text-foreground mt-0.5">
               {fyShort}
             </div>
           )}
-
-          {/* Additional Metadata (Subtitle, Period, Address) */}
           {subtitle && (
             <div className="text-xs text-muted-foreground mt-0.5">
               {typeof subtitle === "string" ? subtitleText : subtitle}
@@ -276,13 +259,10 @@ export function ReportViewer({
           {addressLine && (
             <div className="text-[10px] text-muted-foreground mt-0.5">{addressLine}</div>
           )}
-          
-          {/* Hidden capture fields for automated scraping/testing if needed */}
           <span className="report-print-company-capture hidden" aria-hidden>{company || "\u00A0"}</span>
           {fyShort && (
             <span className="report-print-fy-capture hidden" aria-hidden>{fyShort}</span>
           )}
-
           <div className="report-header-rule mt-2 w-full border-t border-b border-black h-[3px]" aria-hidden />
         </div>
         {autoFit ? (
@@ -311,10 +291,8 @@ function escape(s: string): string {
 }
 
 /**
- * Open a new window containing the rendered report HTML with the same
- * stylesheets so the user can preview the print layout before sending it
- * to the printer / PDF / Word. The window auto-invokes window.print()
- * once content is ready; the user can cancel and just inspect.
+ * Open a new window containing the rendered report HTML with inlined
+ * self-contained CSS so the preview is never blank, even in Tauri.
  */
 function openPrintPreview(
   el: HTMLElement | null,
@@ -331,7 +309,7 @@ function openPrintPreview(
   }
 
   const orient = orientation === "landscape" ? "landscape" : "portrait";
-  
+
   // Clone the live DOM so late-rendered rows are captured.
   const clone = el.cloneNode(true) as HTMLElement;
 
@@ -347,37 +325,37 @@ function openPrintPreview(
     .preview-bar button { padding: 6px 12px; border: 1px solid #888;
       background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
     .preview-content { margin-top: 48px; position: relative; z-index: 1; }
-    
-    .preview-content { 
-      color: #000 !important; 
-      visibility: visible !important; 
+
+    .preview-content {
+      color: #000 !important;
+      visibility: visible !important;
       opacity: 1 !important;
       background: #fff !important;
     }
-    .preview-content * { 
+    .preview-content * {
       color: inherit !important;
       visibility: inherit !important;
       opacity: inherit !important;
     }
-    
+
     /* CRITICAL: Preserve table display types. NEVER use display:block here. */
-    .preview-content table, 
-    .preview-content tbody, 
-    .preview-content thead, 
+    .preview-content table,
+    .preview-content tbody,
+    .preview-content thead,
     .preview-content tfoot,
-    .preview-content tr, 
-    .preview-content td, 
-    .preview-content th { 
+    .preview-content tr,
+    .preview-content td,
+    .preview-content th {
       display: revert !important;
       color: #000 !important;
       visibility: visible !important;
       opacity: 1 !important;
     }
-    .preview-content table { 
-      border-collapse: collapse !important; 
-      width: 100% !important; 
+    .preview-content table {
+      border-collapse: collapse !important;
+      width: 100% !important;
     }
-    
+
     .preview-content [style*="transform"] { transform: none !important; }
     .preview-content,
     .preview-content > div,
@@ -389,15 +367,15 @@ function openPrintPreview(
       width: auto !important;
       min-width: 0 !important;
     }
-    
-    .preview-content thead th, 
+
+    .preview-content thead th,
     .preview-content .row-bold,
-    .preview-content tfoot { 
+    .preview-content tfoot {
       background-color: #f0f0f0 !important;
-      -webkit-print-color-adjust: exact; 
-      print-color-adjust: exact; 
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    
+
     .report-print-header { text-align: center; margin-bottom: 10pt; }
     .report-print-header > div { margin: 1pt 0; }
     .report-print-company-name {
@@ -409,7 +387,7 @@ function openPrintPreview(
     .report-print-fy-line { font-size: 10pt; font-weight: 500; margin-top: 1pt; }
     .report-header-rule { height: 3px; border-top: 1px solid #000;
       border-bottom: 1px solid #000; margin: 4pt 0 8pt; }
-      
+
     table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
     th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
       text-align: left; }
@@ -422,7 +400,7 @@ function openPrintPreview(
     .narration-cell { white-space: normal; word-break: break-word; }
     [class*="print:hidden"] { display: none !important; }
     .overflow-hidden { overflow: visible !important; }
-    
+
     @media print {
       .preview-bar { display: none !important; }
       body { padding: 0; }
@@ -450,23 +428,6 @@ function openPrintPreview(
 </body>
 </html>`);
   w.document.close();
-  
-  // NOTE: Removed the broken setTimeout that was outside this function.
-  // If you still get blank popups, the issue is that el.innerHTML was empty
-  // when called — meaning the report data hadn't finished rendering yet.
-}
-  
-  // Extra safeguard: Re-apply visibility after a short delay to override any late-loading scripts
-  setTimeout(() => {
-    try {
-      const doc = w.document;
-      const forceStyles = doc.createElement('style');
-      forceStyles.innerHTML = '.preview-content, .preview-content * { visibility: visible !important; opacity: 1 !important; display: block; } .preview-content table { display: table !important; }';
-      doc.head.appendChild(forceStyles);
-    } catch (e) {
-      console.warn("Could not re-apply preview styles", e);
-    }
-  }, 500);
 }
 
 /**
@@ -482,7 +443,6 @@ function formatFyRange(start: string | null | undefined): string {
   const mo = m[2];
   const d = m[3];
   const endY = y + 1;
-  // Indian FY: 1 Apr YYYY to 31 Mar YYYY+1
   const startStr = `${d}-${mo}-${y}`;
   const endStr = `31-03-${endY}`;
   const shortEnd = String(endY).slice(-2);
