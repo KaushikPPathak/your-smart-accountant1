@@ -1154,7 +1154,7 @@ function LedgerStatement() {
           onExportCsv={onExportCsv}
           onExportXlsx={onExportXlsx}
           onExportPdf={onExportPdf}
-          onPrint={() => { window.dispatchEvent(new CustomEvent("report:preview"));
+          onPrint={() => {
             // Give React a frame to ensure any conditional print-only DOM is ready
             setTimeout(() => {
               window.print();
