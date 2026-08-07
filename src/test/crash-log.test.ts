@@ -46,16 +46,17 @@ describe("crash-log", () => {
     expect(list.map((e) => e.scope)).toEqual(["c", "b", "a"]);
   });
 
-  it("caps ring buffer at 100 entries", () => {
-    for (let i = 0; i < 150; i++) {
+  it("caps ring buffer at 200 entries", () => {
+    for (let i = 0; i < 250; i++) {
       recordFailure("stress", new Error(`e${i}`));
     }
     const list = listCrashes();
-    expect(list).toHaveLength(100);
-    // Newest first: the very newest is e149; the oldest kept is e50.
-    expect(list[0].message).toBe("e149");
+    expect(list).toHaveLength(200);
+    // Newest first: the very newest is e249; the oldest kept is e50.
+    expect(list[0].message).toBe("e249");
     expect(list[list.length - 1].message).toBe("e50");
   });
+
 
   it("clearCrashes empties the buffer", () => {
     recordFailure("x", new Error("y"));
