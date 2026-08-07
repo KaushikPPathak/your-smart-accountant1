@@ -110,7 +110,7 @@ export async function downloadLedgerPdf(
       balanceType: closingPaise >= 0 ? "Dr" : "Cr",
     };
   } catch (err) {
-    console.error("Simulation fallback failed:", err);
+    recordFailure("whatsapp", err, { stage: "pdf-fallback" });
     return {
       path: null,
       partyName: "Valued Party",
