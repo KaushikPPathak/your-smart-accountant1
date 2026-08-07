@@ -137,18 +137,18 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                let label = window.label();
-                if label == "main" {
-                    window.app_handle().exit(0);
-                } else if label == WA_WINDOW_LABEL {
-                    let state = window.app_handle().state::<WhatsAppState>();
-                    if let Ok(mut last) = state.last_phone.lock() {
-                        *last = None;
-                    }
-                }
-            }
-        })
+    if let tauri::WindowEvent::Destroyed = event {
+        let label = window.label();
+        if label == "main" {
+            window.app_handle().exit(0);
+        } else if label == WA_WINDOW_LABEL {
+            let state = window.app_handle().state::<WhatsAppState>();
+            let _ = state.last_phone.lock().map(|mut last| {
+                *last = None;
+            });
+        }
+    }
+})
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");
 }
