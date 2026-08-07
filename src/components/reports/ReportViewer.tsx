@@ -253,7 +253,7 @@ export function ReportViewer({
 
           {/* Line 3: Financial Year */}
           {fyShort && (
-            <div className="text-[12px] font-medium text-foreground mt-0.5">
+            <div className="report-print-fy-line text-[12px] font-medium text-foreground mt-0.5">
               {fyShort}
             </div>
           )}
