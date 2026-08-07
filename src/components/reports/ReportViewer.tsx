@@ -436,6 +436,9 @@ function openPrintPreview(
   // Use a Blob URL for window.open to bypass document.write blocking in some environments.
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
+  // LOG: Attempting to open window
+  console.log("REPORT_PREVIEW_OPEN_START", { url, orientation });
+
   const w = window.open(url, "_blank", "width=900,height=1100");
   
   if (!w) {
@@ -443,7 +446,12 @@ function openPrintPreview(
     alert("CRITICAL ERROR: The print preview window could not be opened.\n\nTECHNICAL DETAILS:\n- Popup Blocker: Likely active\n- Browser: " + navigator.userAgent + "\n- F12: Check console for 'REPORT_PREVIEW_FAILED'");
     // Fallback attempt to print the current page directly
     window.print();
+  } else {
+    console.log("REPORT_PREVIEW_OPEN_SUCCESS");
+    // Revoke URL after a delay to ensure it's loaded in the new window
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
+
 }
 
 /**
