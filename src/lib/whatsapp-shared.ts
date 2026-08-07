@@ -2,7 +2,8 @@
 // Shared utilities for all WhatsApp integrations.
 // No business logic — just Tauri bridge, audio, phone sanitisation, and window focus.
 
-export { getNativeRuntime } from "@/lib/native-bridge";
+import { getNativeRuntime } from "@/lib/native-bridge";
+export { getNativeRuntime };
 
 export type Invoke = <T = unknown>(cmd: string, args?: unknown) => Promise<T>;
 
