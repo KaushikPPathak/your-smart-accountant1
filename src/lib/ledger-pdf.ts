@@ -67,7 +67,7 @@ export async function downloadLedgerPdf(
       const v = vMap.get(String(e.voucher_id));
       if (!v) continue;
       const vDate = v.voucher_date || v.date || "";
-      if (vDate < fromDate) {
+      if (vDate && vDate < fromDate) {
         movementBefore += (e.debit_paise || 0) - (e.credit_paise || 0);
       } else if (vDate <= toDate) {
         totalDr += (e.debit_paise || 0);
