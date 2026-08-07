@@ -155,8 +155,20 @@ export function ReportViewer({
       // Allow the dialog to close before invoking blocking print/save APIs.
       window.setTimeout(() => {
         if (mode === "system") window.print();
-        else if (mode === "pdf") onExportPdf?.();
-        else if (mode === "word") doWord();
+        else if (mode === "pdf") {
+          onExportPdf?.();
+          // After a short delay, also open the preview if it's a PDF export
+          // but we actually want to "show" it.
+          // However, the user asked to "open window and show me in pdf format".
+          // In web, onExportPdf eventually calls saveExport which does a download.
+          // In desktop, it saves and opens.
+          // To "show" it immediately in a window, we can also trigger the preview.
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+        }
+        else if (mode === "word") {
+          doWord();
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+        }
         else if (mode === "preview") openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
       }, 50);
     },
