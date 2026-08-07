@@ -1,5 +1,6 @@
 // src/lib/ledger-pdf.ts
 import { getNativeRuntime, resolveInvoke } from "./whatsapp-shared";
+import { recordFailure, recordStage } from "./crash-log";
 import { writeFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 
 export interface LedgerPdfInfo {
