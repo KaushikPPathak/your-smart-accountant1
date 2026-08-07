@@ -1149,7 +1149,14 @@ function LedgerStatement() {
       bodyHtml: sectionsHtml,
       title: "All Ledgers",
       fileName: `all-ledgers-${view === "horizontal" ? "t-format" : "columnar"}-${from}_to_${to}.doc`,
-      headerHtml,
+      headerHtml: `
+        <div style="text-align:center;margin-bottom:10pt">
+          <div style="font-size:14pt;font-weight:bold;color:#002060;text-transform:uppercase">${escapeWord(activeMembership?.companies?.name || "")}</div>
+          <div style="font-size:11pt;font-weight:600">All Ledger Statements</div>
+          <div style="font-size:10pt;font-weight:500">Financial Year ${formatFyShort(activeMembership?.companies?.financial_year_start || "")}</div>
+          <div style="font-size:9pt">${from} to ${to}</div>
+        </div>
+      `,
       orientation: "landscape",
     });
   };
