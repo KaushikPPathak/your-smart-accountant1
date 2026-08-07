@@ -28,13 +28,15 @@ function buildLedgerMessage(opts: {
   const closing = formatINR(Math.abs(opts.closingBalancePaise));
   
   // Clean dates for the message (they might be YYYY-MM-DD from the DB)
+  // Converting from YYYY-MM-DD to DD-MM-YYYY as requested
   const f = opts.fromDate.split("-").reverse().join("-");
   const t = opts.toDate.split("-").reverse().join("-");
 
   return `Hi ${opts.customerName}, your ledger statement (${f} – ${t}) is ready.
 
-Opening Balance: ${opening} ${opts.openingBalancePaise >= 0 ? "Dr" : "Cr"}
-Closing Balance: ${closing} ${opts.balanceType}
+Opening Balance: ₹ ${opening} ${opts.openingBalancePaise >= 0 ? "Dr" : "Cr"}
+
+Closing Balance: ₹ ${closing} ${opts.balanceType}
 
 Please find the detailed statement attached — ${opts.businessName}`;
 }
@@ -115,11 +117,11 @@ export async function sendLedgerViaWhatsApp(
 
   // 3. Feedback
   if (copied) {
-    toast.success("Ledger PDF copied to clipboard!", {
+    toast.success("Ledger PDF ready to attach!", {
       description: phone 
-        ? "Waiting for WhatsApp to load. Once ready, press Ctrl + V to attach." 
+        ? "WhatsApp is opening. Please focus the chat and press Ctrl + V to attach the PDF." 
         : "No phone number found. Focus WhatsApp, select a contact, and press Ctrl + V to attach.",
-      duration: 10000,
+      duration: 12000,
       action: {
         label: "Copy Path",
         onClick: () => info.path && navigator.clipboard.writeText(info.path),
@@ -128,7 +130,7 @@ export async function sendLedgerViaWhatsApp(
   } else {
     toast.message("WhatsApp opened", {
       description: info.path
-        ? `Attach PDF manually from: ${info.path}`
+        ? "Attach PDF manually (Ctrl + V). File saved at: " + info.path
         : "The ledger PDF was saved — attach it manually in the chat.",
     });
   }
