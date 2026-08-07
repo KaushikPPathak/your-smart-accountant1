@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { formatINR } from "@/lib/money";
 import { downloadLedgerPdf } from "@/lib/ledger-pdf";
+import { recordFailure } from "@/lib/crash-log";
 import {
   copyFilesToClipboardNative,
   playSuccessBeep,
