@@ -48,6 +48,37 @@ export async function downloadLedgerPdf(
     const p = (await offlineDb.cache_ledgers.get(partyId)) as any;
     const c = (await offlineDb.cache_companies.get(companyId)) as any;
 
+    // Calculate real opening balance from IndexedDB if in simulation
+    const entries = await offlineDb.cache_voucher_entries
+      .where("[company_id+ledger_id]")
+      .equals([companyId, partyId])
+      .toArray();
+    
+    const liveEntries = (entries as any[]).filter(e => e.is_deleted !== true);
+    const voucherIds = Array.from(new Set(liveEntries.map(e => e.voucher_id)));
+    const vouchers = await offlineDb.cache_vouchers.where("id").anyOf(voucherIds).toArray();
+    const vMap = new Map(vouchers.filter((v: any) => v.is_deleted !== true).map((v: any) => [String(v.id), v]));
+
+    let movementBefore = 0;
+    let totalDr = 0;
+    let totalCr = 0;
+
+    for (const e of liveEntries) {
+      const v = vMap.get(String(e.voucher_id));
+      if (!v) continue;
+      const vDate = v.voucher_date || v.date || "";
+      if (vDate < fromDate) {
+        movementBefore += (e.debit_paise || 0) - (e.credit_paise || 0);
+      } else if (vDate <= toDate) {
+        totalDr += (e.debit_paise || 0);
+        totalCr += (e.credit_paise || 0);
+      }
+    }
+
+    const obSigned = (p?.opening_balance_is_debit ? 1 : -1) * (p?.opening_balance_paise || 0);
+    const openingPaise = obSigned + movementBefore;
+    const closingPaise = openingPaise + totalDr - totalCr;
+
     return {
       path: null,
       partyName: p?.name || "Valued Party",
@@ -55,11 +86,12 @@ export async function downloadLedgerPdf(
       companyName: c?.name || "Your Mehtaji",
       fromDate,
       toDate,
-      openingBalancePaise: 0, 
-      closingBalancePaise: 0,
-      balanceType: "Dr",
+      openingBalancePaise: openingPaise,
+      closingBalancePaise: closingPaise,
+      balanceType: closingPaise >= 0 ? "Dr" : "Cr",
     };
-  } catch {
+  } catch (err) {
+    console.error("Simulation fallback failed:", err);
     return {
       path: null,
       partyName: "Valued Party",

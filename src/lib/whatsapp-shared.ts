@@ -26,13 +26,20 @@ export async function resolveInvoke(): Promise<Invoke | null> {
 }
 
 export async function copyFilesToClipboardNative(paths: string[]): Promise<boolean> {
-  if (getNativeRuntime() !== "tauri" || !paths.length) return false;
+  const runtime = getNativeRuntime();
+  if (runtime !== "tauri" || !paths.length) return false;
   try {
     const invoke = await resolveInvoke();
     if (!invoke) return false;
+    
+    // Clear clipboard first to avoid confusion if current copy fails
+    // But we don't have a direct "clear" command, we just rely on success.
+    
     await invoke("copy_files_to_clipboard", { paths });
+    console.log("Native copy successful for paths:", paths);
     return true;
-  } catch {
+  } catch (err) {
+    console.error("Native copy failed:", err);
     return false;
   }
 }

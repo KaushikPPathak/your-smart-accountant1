@@ -287,7 +287,7 @@ export function ReportViewer({
             <span className="report-print-fy-capture hidden" aria-hidden>{fyShort}</span>
           )}
 
-          <div className="report-header-rule mt-2" aria-hidden />
+          <div className="report-header-rule mt-2 w-full border-t border-b border-black h-[3px]" aria-hidden />
         </div>
         {autoFit ? (
           <FitToWidth className="print:!h-auto print:!overflow-visible">
