@@ -140,6 +140,16 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 
+function formatFyShort(start: string | null | undefined): string {
+  if (!start) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const endY = y + 1;
+  const shortEnd = String(endY).slice(-2);
+  return `${y}-${shortEnd}`;
+}
+
 function LedgerStatement() {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
