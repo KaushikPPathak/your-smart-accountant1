@@ -61,6 +61,7 @@ export async function downloadLedgerPdf(
   // Browser/Simulation fallback: 
   // We need to return real-looking metadata even in simulation so the 
   // WhatsApp message doesn't say "Hi there, your ledger is ready".
+  recordStage("whatsapp", "pdf", { path: null, absolute: false, source: "fallback", runtime });
   try {
     const { offlineDb } = await import("./offline/db");
     const p = (await offlineDb.cache_ledgers.get(partyId)) as any;
