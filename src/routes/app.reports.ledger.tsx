@@ -1480,6 +1480,7 @@ function LedgerStatement() {
           </CardContent>
         </Card>
       )}
+      </div>
     </ReportViewer>
   );
 }
