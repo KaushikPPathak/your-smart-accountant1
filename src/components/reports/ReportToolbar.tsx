@@ -19,6 +19,7 @@ interface Props {
   onExportXlsx?: () => void;
   onPrint?: () => void;
   extra?: React.ReactNode;
+  extraButtons?: React.ReactNode;
   hideDates?: boolean;
 }
 
@@ -32,6 +33,7 @@ export function ReportToolbar({
   onExportXlsx,
   onPrint,
   extra,
+  extraButtons,
   hideDates,
 }: Props) {
   const { lang } = useI18n();
@@ -113,6 +115,7 @@ export function ReportToolbar({
       )}
       {extra}
       <div className="ml-auto flex gap-2">
+        {extraButtons}
         {onExportCsv && (
           <Button variant="outline" size="sm" onClick={onExportCsv}>
             <Download className="mr-1 h-4 w-4" /> {tt("CSV")}
