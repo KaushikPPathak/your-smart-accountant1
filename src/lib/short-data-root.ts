@@ -42,6 +42,8 @@ export async function getShortDataRoot(): Promise<string | null> {
     const candidates: string[] = [];
     if (isWindows()) {
       candidates.push(`C:\\${FOLDER}`);
+      // Priority 2: Standard D: drive if it's the secondary storage preference
+      candidates.push(`D:\\${FOLDER}`);
       try { candidates.push(await join(await homeDir(), FOLDER)); } catch { /* ignore */ }
     } else {
       candidates.push(await join(await homeDir(), FOLDER));
