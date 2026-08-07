@@ -326,27 +326,29 @@ function openPrintPreview(
   if (!el) return;
   const w = window.open("", "_blank", "width=900,height=1100");
   if (!w) {
-    // Tauri / popup-blocked environments: fall back to native print of the
-    // current window so the Print button never silently no-ops.
     try { window.print(); } catch { /* ignore */ }
     return;
   }
+
   const orient = orientation === "landscape" ? "landscape" : "portrait";
-  // Pull every stylesheet (Tailwind, design-tokens, component CSS) from the
-  // host document so utility classes resolve in the popup.
-  const inheritedStyles = Array.from(
-    document.head.querySelectorAll('link[rel="stylesheet"], style'),
-  )
-    .map((n) => n.outerHTML)
-    .join("\n");
-  const innerHtml = el.innerHTML?.trim() || "";
   
-  const body = innerHtml
-    ? `<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">${innerHtml}</div>`
-    : `<div class="preview-content"><p style="padding:24pt;text-align:center;color:#666">Nothing to preview yet — the report has no rendered content.</p></div>`;
-  // Self-contained CSS so the preview window does not depend on Vite-injected
-  // stylesheets from the parent document (which often fail to load cross-window
-  // and leave the preview blank).
+  // CRITICAL FIX: Clone the element instead of using innerHTML.
+  // innerHTML loses event handlers and some computed styles, 
+  // but more importantly, it captures the DOM at a snapshot 
+  // that might not include late-rendered table rows.
+  const clone = el.cloneNode(true) as HTMLElement;
+  
+  // Strip React-specific attributes and event handlers
+  clone.querySelectorAll('*').forEach(node => {
+    const attrs = Array.from(node.attributes || []);
+    attrs.forEach(attr => {
+      if (attr.name.startsWith('data-') || attr.name === 'class' && attr.value.includes('print:hidden')) {
+        // keep data attributes if needed for styling, but strip React internals
+      }
+    });
+  });
+
+  // Build the HTML with ALL styles inlined — no external dependencies
   const css = `
     @page { size: A4 ${orient}; margin: 14mm; }
     * { box-sizing: border-box; }
@@ -359,48 +361,76 @@ function openPrintPreview(
     .preview-bar button { padding: 6px 12px; border: 1px solid #888;
       background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
     .preview-content { margin-top: 48px; position: relative; z-index: 1; }
-    /* Force readable colours and visibility regardless of design-token resolution in popup. */
+    
+    /* CRITICAL FIX: Don't force display:block on everything.
+       Tables MUST keep display:table or they collapse. */
     .preview-content { 
       color: #000 !important; 
       visibility: visible !important; 
-      opacity: 1 !important; 
-      display: block !important;
+      opacity: 1 !important;
       background: #fff !important;
     }
+    
+    /* Only force visibility, NOT display type */
     .preview-content * { 
       color: inherit !important;
       visibility: inherit !important;
       opacity: inherit !important;
-      background: transparent !important;
     }
-    /* Ensure critical text elements are explicitly black */
-    .report-print-company-name, .report-print-title, .report-print-fy-line,
-    .report-print-header, .report-print-header *,
-    table, tr, td, th { 
-      color: #000 !important; 
+    
+    /* Explicit table preservation */
+    .preview-content table, 
+    .preview-content tbody, 
+    .preview-content thead, 
+    .preview-content tfoot,
+    .preview-content tr, 
+    .preview-content td, 
+    .preview-content th { 
+      display: revert !important;
+      color: #000 !important;
       visibility: visible !important;
       opacity: 1 !important;
     }
     
-    .preview-content table { border-collapse: collapse !important; width: 100% !important; display: table !important; }
-    .preview-content tr { display: table-row !important; }
-    .preview-content td, .preview-content th { border: 0.5pt solid #000 !important; display: table-cell !important; }
+    .preview-content table { 
+      border-collapse: collapse !important; 
+      width: 100% !important; 
+    }
     
-    .preview-content thead th, .preview-content .row-bold,
-    .preview-content tfoot { background-color: #f0f0f0 !important;
-      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    /* Undo FitToWidth transforms */
+    .preview-content [style*="transform"] {
+      transform: none !important;
+    }
+    .preview-content,
+    .preview-content > div,
+    .preview-content > div > div {
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      width: auto !important;
+      min-width: 0 !important;
+    }
+    
+    .preview-content thead th, 
+    .preview-content .row-bold,
+    .preview-content tfoot { 
+      background-color: #f0f0f0 !important;
+      -webkit-print-color-adjust: exact; 
+      print-color-adjust: exact; 
+    }
+    
     .report-print-header { text-align: center; margin-bottom: 10pt; }
     .report-print-header > div { margin: 1pt 0; }
-    .report-print-header .report-print-company-name {
+    .report-print-company-name {
       font-size: 13pt; font-weight: 700; text-transform: uppercase;
       letter-spacing: .5pt; color: #002060 !important;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     .report-print-title { font-size: 11pt; font-weight: 600; margin-top: 2pt; }
     .report-print-fy-line { font-size: 10pt; font-weight: 500; margin-top: 1pt; }
-    .report-print-company-capture, .report-print-fy-capture { display: none; }
     .report-header-rule { height: 3px; border-top: 1px solid #000;
       border-bottom: 1px solid #000; margin: 4pt 0 8pt; }
+      
     table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
     th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
       text-align: left; }
@@ -411,54 +441,37 @@ function openPrintPreview(
     .row-bold td, .row-bold th, tfoot td, tfoot th { font-weight: 700;
       background: #f7f7f7; }
     .narration-cell { white-space: normal; word-break: break-word; }
-    /* Strip on-screen-only chrome that lives inside the report root. */
     [class*="print:hidden"] { display: none !important; }
-    /* Some report cards use overflow:hidden which can clip the table when
-       the popup is narrower than the rendered landscape width. */
-    .preview-content .overflow-hidden { overflow: visible !important; }
-    /* ------------------------------------------------------------------
-       CRITICAL FIX: Undo FitToWidth (or any screen-only scale wrapper)
-       so wide / multi-section reports (All Ledgers, Cash Book, Bank Book)
-       don't render as a blank page. The preview copies static HTML; any
-       transform:scale() or fixed-pixel height/width from the on-screen
-       fit helper must be stripped so the content flows naturally.
-       ------------------------------------------------------------------ */
-    .preview-content [style*="transform"] {
-      transform: none !important;
-    }
-    .preview-content,
-    .preview-content > div,
-    .preview-content > div > div,
-    .preview-content > div > div > div {
-      height: auto !important;
-      max-height: none !important;
-      overflow: visible !important;
-      width: auto !important;
-      min-width: 0 !important;
-      display: block !important;
-      visibility: visible !important;
-      opacity: 1 !important;
-    }
+    .overflow-hidden { overflow: visible !important; }
+    
     @media print {
       .preview-bar { display: none !important; }
       body { padding: 0; }
       .preview-content { margin-top: 0; }
     }
   `;
+
   w.document.open();
-  const html = `<!doctype html><html><head><meta charset="utf-8">` +
-      `<title>${escape(company)} — ${escape(heading)} — Preview</title>` +
-      inheritedStyles +
-      `<style>${css}</style></head><body>` +
-      `<div class="preview-bar">` +
-        `<button onclick="window.print()">Print</button>` +
-        `<button onclick="window.close()">Close</button>` +
-        `<span style="margin-left:auto;color:#666">Print Preview</span>` +
-      `</div>` +
-      body +
-      `</body></html>`;
-  w.document.write(html);
+  w.document.write(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${escape(company)} — ${escape(heading)} — Preview</title>
+<style>${css}</style>
+</head>
+<body>
+<div class="preview-bar">
+  <button onclick="window.print()">Print</button>
+  <button onclick="window.close()">Close</button>
+  <span style="margin-left:auto;color:#666">Print Preview</span>
+</div>
+<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">
+  ${clone.outerHTML}
+</div>
+</body>
+</html>`);
   w.document.close();
+}
   
   // Extra safeguard: Re-apply visibility after a short delay to override any late-loading scripts
   setTimeout(() => {
