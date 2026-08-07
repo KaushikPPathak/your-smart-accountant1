@@ -433,14 +433,15 @@ function openPrintPreview(
 </body>
 </html>`;
 
-  // Use a data URL for window.open to bypass document.write blocking in some environments,
-  // or use the window directly if it's reliable. Given the requirement for a guaranteed fix:
+  // Use a Blob URL for window.open to bypass document.write blocking in some environments.
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   const w = window.open(url, "_blank", "width=900,height=1100");
   
   if (!w) {
-    console.warn("Popup blocked, falling back to direct print");
+    console.error("REPORT_PREVIEW_FAILED: Popup blocked or window.open returned null");
+    alert("CRITICAL ERROR: The print preview window could not be opened.\n\nTECHNICAL DETAILS:\n- Popup Blocker: Likely active\n- Browser: " + navigator.userAgent + "\n- F12: Check console for 'REPORT_PREVIEW_FAILED'");
+    // Fallback attempt to print the current page directly
     window.print();
   }
 }

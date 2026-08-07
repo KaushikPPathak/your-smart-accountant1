@@ -65,7 +65,8 @@ export async function copyFilesToClipboardNative(paths: string[]): Promise<boole
     await (invoke as any)("copy_files_to_clipboard", { paths: validPaths });
     return true;
   } catch (err) {
-    console.error("Native clipboard copy failed:", err);
+    console.error("WHATSAPP_CLIPBOARD_FAILED:", err);
+    alert("CRITICAL ERROR: Failed to copy file to clipboard.\n\nTECHNICAL DETAILS:\n- Command: copy_files_to_clipboard\n- Error: " + (err instanceof Error ? err.message : String(err)) + "\n- F12: Check console for 'WHATSAPP_CLIPBOARD_FAILED'");
     return false;
   }
 }
