@@ -301,7 +301,18 @@ function openPrintPreview(
   fyShort: string,
   orientation: "portrait" | "landscape",
 ): void {
-  if (!el) return;
+  recordStage("preview", "start", {
+    report: heading,
+    node_found: !!el,
+    orientation,
+  });
+  if (!el) {
+    recordFailure("preview", new Error("Report root node not found — nothing to preview"), {
+      stage: "start",
+      report: heading,
+    });
+    return;
+  }
   // In Tauri/WebView, window.open() + document.write() often results in a blank window.
   // We use a temporary hidden iframe to prepare the content and then trigger print.
   const orient = orientation === "landscape" ? "landscape" : "portrait";
@@ -318,6 +329,13 @@ function openPrintPreview(
     // Copy some basic layout classes if needed, or just let the container style handle it.
     input.parentNode?.replaceChild(span, input);
   });
+
+  recordStage("preview", "clone", {
+    clone_html_len: clone.outerHTML.length,
+    tables: clone.querySelectorAll("table").length,
+    rows: clone.querySelectorAll("tr").length,
+  });
+
 
   const css = `
     @page { size: A4 ${orient}; margin: 14mm; }
