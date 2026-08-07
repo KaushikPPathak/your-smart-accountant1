@@ -1287,18 +1287,19 @@ function LedgerStatement() {
 
   return (
     <ReportViewer
-  title={allMode ? "All Ledgers" : "Ledger Statement"}
-  subtitle={undefined}
-  accountHeading={allMode ? undefined : ledger ? `Ledger Account: ${ledger.name}` : "Ledger Statement"}
-  companyCity={undefined}
-  companyGstin={undefined}
-  fromDate={from}
-  toDate={to}
-  toolbar={toolbar}
-  orientation="landscape"
-  onExportPdf={onExportPdf}
-  exportFileBase={allMode ? `all-ledgers-${view}-${from}_to_${to}` : `${fileBase}-${view}`}
->
+      title={allMode ? "All Ledgers" : "Ledger Statement"}
+      subtitle={undefined}
+      accountHeading={allMode ? undefined : ledger ? `Ledger Account: ${ledger.name}` : "Ledger Statement"}
+      companyCity={undefined}
+      companyGstin={undefined}
+      fromDate={from}
+      toDate={to}
+      toolbar={toolbar}
+      orientation="landscape"
+      onExportPdf={onExportPdf}
+      onExportWord={allMode ? onExportAllWord : undefined}
+      exportFileBase={allMode ? `all-ledgers-${view}-${from}_to_${to}` : `${fileBase}-${view}`}
+    >
       <div id="ledger-print-area">
       {autoExpandedNote && !allMode && (
         <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">

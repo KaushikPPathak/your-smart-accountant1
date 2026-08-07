@@ -8,6 +8,7 @@ import {
   isDesktopRuntime,
   saveCompanyFileNative,
   showInFolderNative,
+  openPathNative,
 } from "./native-bridge";
 
 export function isDesktop(): boolean {
@@ -99,14 +100,16 @@ export async function saveExport(opts: SaveExportOptions): Promise<string | null
     closeButton: true,
     className: "sa-compact-toast",
     action: {
-      label: "Open folder",
+      label: "Open",
       onClick: () => {
-        void showInFolderNative(savedPath);
+        void openPathNative(savedPath);
       },
     },
     cancel: {
-      label: "Dismiss",
-      onClick: () => toast.dismiss(exportToastId),
+      label: "Show in folder",
+      onClick: () => {
+        void showInFolderNative(savedPath);
+      },
     },
   });
   return savedPath;
