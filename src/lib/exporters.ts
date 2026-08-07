@@ -115,16 +115,16 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
       doc.setTextColor(0, 0, 0);
       y += 15;
     }
+    doc.setFont(FONT, "bold");
+    doc.setFontSize(12);
+    doc.text(title, pageW / 2, y, { align: "center" });
+    y += 14;
     if (opts.companySubLine) {
       doc.setFont(FONT, "normal");
       doc.setFontSize(9);
       doc.text(opts.companySubLine, pageW / 2, y, { align: "center" });
       y += 12;
     }
-    doc.setFont(FONT, "bold");
-    doc.setFontSize(12);
-    doc.text(title, pageW / 2, y, { align: "center" });
-    y += 14;
     if (subtitle) {
       doc.setFont(FONT, "normal");
       doc.setFontSize(10);
@@ -425,16 +425,16 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
         doc.setTextColor(0, 0, 0);
         y += 15;
       }
+      doc.setFont(FONT, "bold");
+      doc.setFontSize(12);
+      doc.text(title, pageW / 2, y, { align: "center" });
+      y += 14;
       if (opts.companySubLine) {
         doc.setFont(FONT, "normal");
         doc.setFontSize(9);
         doc.text(opts.companySubLine, pageW / 2, y, { align: "center" });
         y += 12;
       }
-      doc.setFont(FONT, "bold");
-      doc.setFontSize(12);
-      doc.text(title, pageW / 2, y, { align: "center" });
-      y += 14;
       if (subtitle) {
         doc.setFont(FONT, "normal");
         doc.setFontSize(10);
