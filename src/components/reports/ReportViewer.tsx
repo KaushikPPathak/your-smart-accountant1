@@ -157,10 +157,10 @@ export function ReportViewer({
         if (mode === "system") window.print();
         else if (mode === "pdf") onExportPdf?.();
         else if (mode === "word") doWord();
-        else if (mode === "preview") openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, orientation);
+        else if (mode === "preview") openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
       }, 50);
     },
-    [onExportPdf, doWord, company, localizedHeading, localizedTitle, orientation],
+    [onExportPdf, doWord, company, localizedHeading, localizedTitle, fyShort, orientation],
   );
 
   // Global Ctrl+P / Cmd+P → open picker. While picker is open, P/D/W/V pick.
@@ -197,10 +197,10 @@ export function ReportViewer({
   // preview even inside Tauri where window.print() may skip the browser's
   // native preview and go straight to the default printer.
   React.useEffect(() => {
-    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, orientation);
+    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
     window.addEventListener("report:preview", handler as EventListener);
     return () => window.removeEventListener("report:preview", handler as EventListener);
-  }, [company, localizedHeading, localizedTitle, orientation]);
+  }, [company, localizedHeading, localizedTitle, fyShort, orientation]);
 
 
   const [autoFit, setAutoFit] = React.useState<boolean>(() => {
@@ -312,6 +312,7 @@ function openPrintPreview(
   el: HTMLElement | null,
   company: string,
   heading: string,
+  fyShort: string,
   orientation: "portrait" | "landscape",
 ): void {
   if (!el) return;
@@ -331,6 +332,21 @@ function openPrintPreview(
     .map((n) => n.outerHTML)
     .join("\n");
   const innerHtml = el.innerHTML?.trim() || "";
+  
+  // Construct the header HTML for the preview window manually to ensure it matches the 3-line requirement
+  const headerHtml = `
+    <div class="report-print-header">
+      <div class="report-print-company-name">${escape(company)}</div>
+      <div class="report-print-title">${escape(heading)}</div>
+      ${fyShort ? `<div class="report-print-fy-line">${escape(fyShort)}</div>` : ""}
+      <div class="report-header-rule"></div>
+    </div>
+  `;
+
+  // We need to inject the header but only if it's not already in the innerHtml in a way that would double it.
+  // The rootRef content ALREADY contains the header from the render method. 
+  // However, we can use the custom header CSS we defined below to style the existing header elements.
+  
   const body = innerHtml
     ? `<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">${innerHtml}</div>`
     : `<div class="preview-content"><p style="padding:24pt;text-align:center;color:#666">Nothing to preview yet — the report has no rendered content.</p></div>`;
