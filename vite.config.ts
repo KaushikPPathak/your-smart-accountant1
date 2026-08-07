@@ -126,7 +126,12 @@ export default defineConfig({
     ...sharedBuild,
     outDir: isTauri ? "dist/client" : "dist",
     emptyOutDir: true,
+    // Hidden source maps: emitted next to the bundle but not referenced from
+    // it, so crash stacks in the packaged desktop build can be resolved to
+    // real file/line without shipping a debug-looking app.
+    sourcemap: isTauri ? "hidden" : (sharedBuild as { sourcemap?: boolean }).sourcemap,
   },
+
   // Store certification: shipped builds carry no debug console noise.
   esbuild: { drop: isProdBuild ? (["console", "debugger"] as const) : [] },
 

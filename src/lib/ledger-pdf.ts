@@ -1,5 +1,6 @@
 // src/lib/ledger-pdf.ts
 import { getNativeRuntime, resolveInvoke } from "./whatsapp-shared";
+import { recordFailure, recordStage } from "./crash-log";
 import { writeFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 
 export interface LedgerPdfInfo {
@@ -36,21 +37,31 @@ export async function downloadLedgerPdf(
       });
 
       // Verification: ensure the path returned is an absolute filesystem path.
-      console.log("Ledger PDF info received:", info);
-      if (info.path && !/^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(info.path)) {
-        console.warn("Native PDF generator returned non-absolute path:", info.path);
+      const absolute = !!info.path && /^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(info.path);
+      recordStage("whatsapp", "pdf", {
+        path: info.path ?? null,
+        absolute,
+        party: info.partyName,
+        source: "native",
+      });
+      if (info.path && !absolute) {
+        recordFailure("whatsapp", new Error("Native PDF generator returned a non-absolute path"), {
+          stage: "pdf",
+          path: info.path,
+        });
       }
-
 
       return info;
     } catch (err) {
-      console.error("Failed to generate ledger PDF via Tauri:", err);
+      recordFailure("whatsapp", err, { stage: "pdf", command: "generate_ledger_pdf" });
     }
+
   }
 
   // Browser/Simulation fallback: 
   // We need to return real-looking metadata even in simulation so the 
   // WhatsApp message doesn't say "Hi there, your ledger is ready".
+  recordStage("whatsapp", "pdf", { path: null, absolute: false, source: "fallback", runtime });
   try {
     const { offlineDb } = await import("./offline/db");
     const p = (await offlineDb.cache_ledgers.get(partyId)) as any;
@@ -99,7 +110,7 @@ export async function downloadLedgerPdf(
       balanceType: closingPaise >= 0 ? "Dr" : "Cr",
     };
   } catch (err) {
-    console.error("Simulation fallback failed:", err);
+    recordFailure("whatsapp", err, { stage: "pdf-fallback" });
     return {
       path: null,
       partyName: "Valued Party",

@@ -10,6 +10,8 @@ import { FitToWidth } from "./FitToWidth";
 import { Button } from "@/components/ui/button";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { useShortcut } from "@/lib/keyboard";
+import { toast } from "sonner";
+import { recordFailure, recordStage } from "@/lib/crash-log";
 
 /**
  * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
@@ -301,7 +303,18 @@ function openPrintPreview(
   fyShort: string,
   orientation: "portrait" | "landscape",
 ): void {
-  if (!el) return;
+  recordStage("preview", "start", {
+    report: heading,
+    node_found: !!el,
+    orientation,
+  });
+  if (!el) {
+    recordFailure("preview", new Error("Report root node not found — nothing to preview"), {
+      stage: "start",
+      report: heading,
+    });
+    return;
+  }
   // In Tauri/WebView, window.open() + document.write() often results in a blank window.
   // We use a temporary hidden iframe to prepare the content and then trigger print.
   const orient = orientation === "landscape" ? "landscape" : "portrait";
@@ -318,6 +331,13 @@ function openPrintPreview(
     // Copy some basic layout classes if needed, or just let the container style handle it.
     input.parentNode?.replaceChild(span, input);
   });
+
+  recordStage("preview", "clone", {
+    clone_html_len: clone.outerHTML.length,
+    tables: clone.querySelectorAll("table").length,
+    rows: clone.querySelectorAll("tr").length,
+  });
+
 
   const css = `
     @page { size: A4 ${orient}; margin: 14mm; }
@@ -434,25 +454,74 @@ function openPrintPreview(
 </html>`;
 
   // Use a Blob URL for window.open to bypass document.write blocking in some environments.
-  const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  // LOG: Attempting to open window
-  console.log("REPORT_PREVIEW_OPEN_START", { url, orientation });
+  try {
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    recordStage("preview", "blob", { blob_bytes: blob.size, html_len: html.length });
 
-  const w = window.open(url, "_blank", "width=900,height=1100");
-  
-  if (!w) {
-    console.error("REPORT_PREVIEW_FAILED: Popup blocked or window.open returned null");
-    alert("CRITICAL ERROR: The print preview window could not be opened.\n\nTECHNICAL DETAILS:\n- Popup Blocker: Likely active\n- Browser: " + navigator.userAgent + "\n- F12: Check console for 'REPORT_PREVIEW_FAILED'");
-    // Fallback attempt to print the current page directly
-    window.print();
-  } else {
-    console.log("REPORT_PREVIEW_OPEN_SUCCESS");
+    const w = window.open(url, "_blank", "width=900,height=1100");
+
+    if (!w) {
+      recordFailure("preview", new Error("Popup blocked — window.open returned null"), {
+        stage: "window",
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      });
+      toast.error("Print preview window could not be opened", {
+        description: "Falling back to the system print dialog. Press Ctrl+Shift+D for details.",
+        action: { label: "Show details", onClick: () => openDiagnostics() },
+      });
+      // Fallback attempt to print the current page directly
+      window.print();
+      return;
+    }
+
+    recordStage("preview", "window", { opened: true });
+
+    // Confirm the child document actually rendered content — a blank preview
+    // shows up here as body_len ≈ 0.
+    window.setTimeout(() => {
+      try {
+        const bodyLen = w.document?.body?.innerHTML?.length ?? -1;
+        recordStage("preview", "written", {
+          body_len: bodyLen,
+          child_url: w.location?.href ?? "",
+          closed: w.closed,
+        });
+        if (bodyLen <= 0 && !w.closed) {
+          recordFailure("preview", new Error("Preview window opened but rendered empty"), {
+            stage: "written",
+            body_len: bodyLen,
+          });
+        }
+      } catch (err) {
+        // Cross-origin read of a blob window is itself a diagnostic signal.
+        recordStage("preview", "written", {
+          readable: false,
+          reason: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }, 1200);
+
     // Revoke URL after a delay to ensure it's loaded in the new window
     setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (err) {
+    recordFailure("preview", err, { stage: "error" });
+    toast.error("Print preview failed", {
+      description: err instanceof Error ? err.message : String(err),
+      action: { label: "Show details", onClick: () => openDiagnostics() },
+    });
   }
-
 }
+
+/** Navigate to the Diagnostics page from a toast action. */
+function openDiagnostics(): void {
+  try {
+    window.location.assign("/app/diagnostics");
+  } catch {
+    /* ignore */
+  }
+}
+
 
 /**
  * Format the company's financial year start (YYYY-MM-DD, typically

@@ -14,6 +14,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import TestDashboard from "@/components/TestDashboard";
+import { FlowStagesPanel } from "@/components/diagnostics/FlowStagesPanel";
 
 export const Route = createFileRoute("/app/diagnostics")({
   head: () => ({
@@ -41,6 +42,9 @@ function kindBadge(kind: CrashEntry["kind"]): string {
       return "bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-100";
     case "unhandledrejection":
       return "bg-orange-100 text-orange-900 dark:bg-orange-900/40 dark:text-orange-100";
+    case "stage":
+    default:
+      return "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100";
   }
 }
 
@@ -84,6 +88,10 @@ function DiagnosticsPage() {
           Share the exported file with support if a restore or import ever fails.
         </p>
       </div>
+
+      <FlowStagesPanel tick={tick} />
+
+
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
