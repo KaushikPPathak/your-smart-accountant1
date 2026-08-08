@@ -71,6 +71,7 @@ export async function downloadLedgerPdf(
 
   // ── 2. In Tauri, generate a real PDF and save to disk ──
   if (runtime === "tauri") {
+    let iframe: HTMLIFrameElement | null = null;
     try {
       const html2pdf = (await import("html2pdf.js")).default;
       const { appLocalDataDir, join } = await import("@tauri-apps/api/path");
@@ -80,37 +81,51 @@ export async function downloadLedgerPdf(
       const fileName = `ledger-${partyId}-${Date.now()}.pdf`;
       const filePath = await join(appDir, fileName);
 
-      // Build clean HTML with NO Tailwind / oklch — only inline styles
+      // Build HTML
       const html = buildLedgerHtml(info, liveEntries, vMap, fromDate, toDate);
 
-      // CRITICAL FIX: Render inside an iframe to isolate html2pdf from
-      // Tailwind's oklch() colors which crash html2canvas.
-      const iframe = document.createElement("iframe");
-      iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;visibility:hidden;";
+      // Render into an ISOLATED iframe document. Rendering inside the app
+      // document made html2canvas inherit the app's oklch() design tokens,
+      // which its colour parser cannot read ("unsupported color function").
+      // An iframe with no app stylesheet only ever computes plain hex colours.
+      iframe = document.createElement("iframe");
+      iframe.setAttribute("aria-hidden", "true");
+      iframe.style.position = "fixed";
+      iframe.style.left = "-10000px";
+      iframe.style.top = "0";
+      iframe.style.width = "800px";
+      iframe.style.height = "1200px";
+      iframe.style.border = "0";
+      iframe.style.visibility = "hidden";
       document.body.appendChild(iframe);
 
-      const doc = iframe.contentDocument!;
-      doc.open();
-      doc.write(html);
-      doc.close();
+      const idoc = iframe.contentDocument;
+      if (!idoc) throw new Error("Could not create isolated render document");
+      idoc.open();
+      idoc.write(html);
+      idoc.close();
 
-      // Wait for iframe to settle
-      await new Promise(r => setTimeout(r, 300));
+      // Let the isolated document lay out before rasterising.
+      await new Promise((r) => setTimeout(r, 60));
 
-      // Generate PDF from the iframe body (clean, no oklch leakage)
+      const target = idoc.body;
+
+      // Generate PDF blob
       const pdfBlob = await html2pdf()
         .set({
           margin: [10, 10],
           filename: fileName,
           image: { type: "jpeg", quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: "#ffffff",
+            windowWidth: 800,
+          },
           jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
         })
-        .from(doc.body)
+        .from(target)
         .output("blob");
-
-      // Cleanup iframe
-      document.body.removeChild(iframe);
 
       // Write to disk
       const arrayBuffer = await pdfBlob.arrayBuffer();
@@ -123,13 +138,25 @@ export async function downloadLedgerPdf(
         absolute: true,
         party: info.partyName,
         source: "html2pdf",
+        isolated: true,
       });
     } catch (err) {
-      recordFailure("whatsapp", err, { stage: "pdf-write", runtime: "tauri" });
+      const msg = err instanceof Error ? err.message : String(err);
+      recordFailure("whatsapp", err, {
+        stage: "pdf-write",
+        runtime: "tauri",
+        isolated: true,
+        unsupported_color: /unsupported color function/i.test(msg)
+          ? (msg.match(/"([^"]+)"/)?.[1] ?? "unknown")
+          : undefined,
+      });
+    } finally {
+      if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
     }
   } else {
     recordStage("whatsapp", "pdf", { path: null, absolute: false, source: "browser", runtime });
   }
+
 
   return info;
 }
@@ -171,8 +198,11 @@ function buildLedgerHtml(
 <meta charset="utf-8">
 <title>Ledger Statement - ${info.partyName}</title>
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; margin: 40px; color: #000; background: #fff; }
+  /* Hard colour reset — html2canvas cannot parse oklch(), so every colour
+     inside this document must be a plain hex/rgb value. */
+  html, body, * { color: #000000; border-color: #333333; }
+  html, body { background: #ffffff; }
+  body { font-family: Arial, sans-serif; margin: 40px; color: #000; }
   h1 { font-size: 18px; text-align: center; margin-bottom: 4px; }
   h2 { font-size: 14px; text-align: center; font-weight: normal; margin-top: 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
