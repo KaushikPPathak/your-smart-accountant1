@@ -1,4 +1,6 @@
 // src/lib/ledger-pdf.ts
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { getNativeRuntime } from "./whatsapp-shared";
 import { recordFailure, recordStage } from "./crash-log";
 
@@ -71,120 +73,110 @@ export async function downloadLedgerPdf(
   };
 
   // ── 2. Direct PDF Generation (no HTML/Canvas) ──
-  if (runtime === "tauri" || runtime === "electron") {
-    try {
-      const { jsPDF } = await import("jspdf");
-      const autoTable = (await import("jspdf-autotable")).default;
-      
-      const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  try {
+    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
-      // Company Header
-      doc.setFontSize(16);
-      doc.setFont("helvetica", "bold");
-      doc.text(info.companyName, 105, 15, { align: "center" });
-      
-      // Ledger Details
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Ledger Account: ${info.partyName}`, 105, 22, { align: "center" });
-      doc.setFontSize(10);
-      doc.text(`Period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 105, 28, { align: "center" });
+    // Company Header
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(info.companyName, 105, 15, { align: "center" });
 
-      // Data Preparation
-      const tableBody: (string | number)[][] = [];
+    // Ledger Details
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Ledger Account: ${info.partyName}`, 105, 22, { align: "center" });
+    doc.setFontSize(10);
+    doc.text(`Period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 105, 28, { align: "center" });
 
-      // Opening Balance Row
+    // Data Preparation
+    const tableBody: (string | number)[][] = [];
+
+    // Opening Balance Row
+    tableBody.push([
+      "",
+      "Opening Balance",
+      openingPaise >= 0 ? formatMoney(openingPaise) : "",
+      openingPaise < 0 ? formatMoney(openingPaise) : "",
+    ]);
+
+    // Transaction Rows
+    const sortedEntries = liveEntries
+      .map(e => ({ e, v: vMap.get(String(e.voucher_id)) }))
+      .filter(x => x.v && (x.v.voucher_date || x.v.date) >= fromDate && (x.v.voucher_date || x.v.date) <= toDate)
+      .sort((a, b) => ((a.v.voucher_date || a.v.date) > (b.v.voucher_date || b.v.date) ? 1 : -1));
+
+    for (const { e, v } of sortedEntries) {
       tableBody.push([
-        "",
-        "Opening Balance",
-        openingPaise >= 0 ? formatMoney(openingPaise) : "",
-        openingPaise < 0 ? formatMoney(openingPaise) : "",
+        formatDate(v.voucher_date || v.date || ""),
+        v.narration || v.voucher_number || `Voucher #${v.id}`,
+        e.debit_paise ? formatMoney(e.debit_paise) : "",
+        e.credit_paise ? formatMoney(e.credit_paise) : "",
       ]);
-
-      // Transaction Rows
-      const sortedEntries = liveEntries
-        .map(e => ({ e, v: vMap.get(String(e.voucher_id)) }))
-        .filter(x => x.v && (x.v.voucher_date || x.v.date) >= fromDate && (x.v.voucher_date || x.v.date) <= toDate)
-        .sort((a, b) => ((a.v.voucher_date || a.v.date) > (b.v.voucher_date || b.v.date) ? 1 : -1));
-
-      for (const { e, v } of sortedEntries) {
-        tableBody.push([
-          formatDate(v.voucher_date || v.date || ""),
-          v.narration || v.voucher_number || `Voucher #${v.id}`,
-          e.debit_paise ? formatMoney(e.debit_paise) : "",
-          e.credit_paise ? formatMoney(e.credit_paise) : "",
-        ]);
-      }
-
-      // Closing Balance Row
-      tableBody.push([
-        "",
-        "Closing Balance",
-        closingPaise >= 0 ? formatMoney(closingPaise) : "",
-        closingPaise < 0 ? formatMoney(closingPaise) : "",
-      ]);
-
-      autoTable(doc, {
-        startY: 35,
-        head: [["Date", "Particulars", "Debit (₹)", "Credit (₹)"]],
-        body: tableBody,
-        theme: "grid",
-        headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
-        styles: { fontSize: 9, cellPadding: 3 },
-        columnStyles: {
-          0: { cellWidth: 25 },
-          1: { cellWidth: "auto" },
-          2: { cellWidth: 30, halign: "right" },
-          3: { cellWidth: 30, halign: "right" },
-        },
-        foot: [
-          [
-            { content: "Summary", colSpan: 2, styles: { halign: "right", fontStyle: "bold" } },
-            { content: `Op: ${formatMoney(openingPaise)} ${openingPaise >= 0 ? "Dr" : "Cr"}`, colSpan: 1, styles: { halign: "right" } },
-            { content: `Cl: ${formatMoney(closingPaise)} ${info.balanceType}`, colSpan: 1, styles: { halign: "right" } }
-          ]
-        ],
-        footStyles: { fillColor: [240, 240, 240], textColor: 0, fontSize: 8 },
-      });
-
-      // Save to File
-      if (runtime === "tauri") {
-        const { appLocalDataDir, join } = await import("@tauri-apps/api/path");
-        const { writeFile } = await import("@tauri-apps/plugin-fs");
-        
-        const appDir = await appLocalDataDir();
-        const fileName = `ledger-${partyId}-${Date.now()}.pdf`;
-        const filePath = await join(appDir, fileName);
-        
-        const pdfArrayBuffer = await doc.output("arraybuffer");
-        await writeFile(filePath, new Uint8Array(pdfArrayBuffer));
-        info.path = filePath;
-      } else if (runtime === "electron") {
-        // Fallback for Electron if bridge exists
-        const fileName = `ledger-${partyId}-${Date.now()}.pdf`;
-        const pdfBase64 = doc.output("datauristring").split(",")[1];
-        const filePath = await (window as any).yourMehtaji?.savePdf(fileName, pdfBase64);
-        if (filePath) info.path = filePath;
-      }
-
-      recordStage("whatsapp", "pdf", {
-        path: info.path,
-        source: "jspdf-autotable-direct",
-        runtime
-      });
-
-    } catch (err) {
-      recordFailure("whatsapp", err, { stage: "pdf-write", runtime });
-      throw err;
     }
-  } else {
-    // Browser fallback: just download
-    const { jsPDF } = await import("jspdf");
-    const autoTable = (await import("jspdf-autotable")).default;
-    const doc = new jsPDF();
-    // Simplified browser preview text
-    doc.text("Browser preview not supported for full export yet. Use Desktop App.", 10, 10);
-    recordStage("whatsapp", "pdf", { path: null, source: "browser-nop", runtime });
+
+    // Closing Balance Row
+    tableBody.push([
+      "",
+      "Closing Balance",
+      closingPaise >= 0 ? formatMoney(closingPaise) : "",
+      closingPaise < 0 ? formatMoney(closingPaise) : "",
+    ]);
+
+    autoTable(doc, {
+      startY: 35,
+      head: [["Date", "Particulars", "Debit (₹)", "Credit (₹)"]],
+      body: tableBody,
+      theme: "grid",
+      headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: 30, halign: "right" },
+        3: { cellWidth: 30, halign: "right" },
+      },
+      foot: [
+        [
+          { content: "Summary", colSpan: 2, styles: { halign: "right", fontStyle: "bold" } },
+          { content: `Op: ${formatMoney(openingPaise)} ${openingPaise >= 0 ? "Dr" : "Cr"}`, colSpan: 1, styles: { halign: "right" } },
+          { content: `Cl: ${formatMoney(closingPaise)} ${info.balanceType}`, colSpan: 1, styles: { halign: "right" } },
+        ],
+      ],
+      footStyles: { fillColor: [240, 240, 240], textColor: 0, fontSize: 8 },
+    });
+
+    // ── 3. Save / Download based on runtime ──
+    if (runtime === "tauri") {
+      const { appLocalDataDir, join } = await import("@tauri-apps/api/path");
+      const { writeFile, mkdir } = await import("@tauri-apps/plugin-fs");
+
+      const appDir = await appLocalDataDir();
+      await mkdir(appDir, { recursive: true });
+
+      const fileName = `ledger-${partyId}-${Date.now()}.pdf`;
+      const filePath = await join(appDir, fileName);
+
+      const pdfArrayBuffer = doc.output("arraybuffer");
+      await writeFile(filePath, new Uint8Array(pdfArrayBuffer));
+      info.path = filePath;
+    } else if (runtime === "electron") {
+      const fileName = `ledger-${partyId}-${Date.now()}.pdf`;
+      const pdfBase64 = doc.output("datauristring").split(",")[1];
+      const filePath = await (window as any).yourMehtaji?.savePdf(fileName, pdfBase64);
+      if (filePath) info.path = filePath;
+    } else {
+      // Browser: trigger actual download of the full PDF
+      doc.save(`ledger-${partyId}-${Date.now()}.pdf`);
+    }
+
+    recordStage("whatsapp", "pdf", {
+      path: info.path,
+      source: "jspdf-autotable-direct",
+      runtime,
+    });
+  } catch (err) {
+    recordFailure("whatsapp", err, { stage: "pdf-write", runtime });
+    throw err;
   }
 
   return info;
