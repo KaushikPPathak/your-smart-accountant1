@@ -3,14 +3,14 @@ import { getNativeRuntime } from "./whatsapp-shared";
 import { recordFailure, recordStage } from "./crash-log";
 
 export interface LedgerPdfInfo {
-  path: string | null;           // absolute path to generated file (for Tauri clipboard)
+  path: string | null;
   partyName: string;
   partyPhone: string | null;
   companyName: string;
-  fromDate: string;              // e.g. "01-Apr-2025"
-  toDate: string;                // e.g. "07-Aug-2026"
-  openingBalancePaise: number;   // positive = Dr, negative = Cr
-  closingBalancePaise: number;   // positive = Dr, negative = Cr
+  fromDate: string;
+  toDate: string;
+  openingBalancePaise: number;
+  closingBalancePaise: number;
   balanceType: "Dr" | "Cr";
 }
 
@@ -22,7 +22,7 @@ export async function downloadLedgerPdf(
 ): Promise<LedgerPdfInfo> {
   const runtime = getNativeRuntime();
 
-  // ── 1. Calculate real ledger data from IndexedDB (works in Tauri AND browser) ──
+  // ── 1. Fetch data from IndexedDB ──
   const { offlineDb } = await import("./offline/db");
   const p = (await offlineDb.cache_ledgers.get(partyId)) as any;
   const c = (await offlineDb.cache_companies.get(companyId)) as any;
@@ -69,31 +69,57 @@ export async function downloadLedgerPdf(
     balanceType: closingPaise >= 0 ? "Dr" : "Cr",
   };
 
-  // ── 2. In Tauri, write the statement to disk so it can be attached ──
+  // ── 2. In Tauri, generate a real PDF and save to disk ──
   if (runtime === "tauri") {
     try {
+      const html2pdf = (await import("html2pdf.js")).default;
       const { appLocalDataDir, join } = await import("@tauri-apps/api/path");
       const { writeFile } = await import("@tauri-apps/plugin-fs");
 
       const appDir = await appLocalDataDir();
-      const fileName = `ledger-${partyId}-${Date.now()}.html`;
+      const fileName = `ledger-${partyId}-${Date.now()}.pdf`;
       const filePath = await join(appDir, fileName);
 
+      // Build HTML
       const html = buildLedgerHtml(info, liveEntries, vMap, fromDate, toDate);
-      await writeFile(filePath, new TextEncoder().encode(html));
+
+      // Render into hidden container
+      const container = document.createElement("div");
+      container.innerHTML = html;
+      container.style.position = "fixed";
+      container.style.left = "-9999px";
+      container.style.top = "0";
+      document.body.appendChild(container);
+
+      // Generate PDF blob
+      const pdfBlob = await html2pdf()
+        .set({
+          margin: [10, 10],
+          filename: fileName,
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        })
+        .from(container)
+        .output("blob");
+
+      // Write to disk
+      const arrayBuffer = await pdfBlob.arrayBuffer();
+      await writeFile(filePath, new Uint8Array(arrayBuffer));
+
+      // Cleanup
+      document.body.removeChild(container);
 
       info.path = filePath;
 
-      const absolute = /^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(filePath);
       recordStage("whatsapp", "pdf", {
         path: filePath,
-        absolute,
+        absolute: true,
         party: info.partyName,
-        source: "frontend-fs",
+        source: "html2pdf",
       });
     } catch (err) {
       recordFailure("whatsapp", err, { stage: "pdf-write", runtime: "tauri" });
-      // path stays null, WhatsApp will show manual-attach fallback
     }
   } else {
     recordStage("whatsapp", "pdf", { path: null, absolute: false, source: "browser", runtime });
@@ -102,7 +128,6 @@ export async function downloadLedgerPdf(
   return info;
 }
 
-/** Build a simple HTML ledger statement that can be attached to WhatsApp. */
 function buildLedgerHtml(
   info: LedgerPdfInfo,
   entries: any[],
@@ -124,10 +149,10 @@ function buildLedgerHtml(
     if (vDate < fromDate || vDate > toDate) continue;
 
     rows += `<tr>
-      <td>${formatDate(vDate)}</td>
-      <td>${v.narration || v.voucher_number || ""}</td>
-      <td style="text-align:right">${e.debit_paise ? formatMoney(e.debit_paise) : ""}</td>
-      <td style="text-align:right">${e.credit_paise ? formatMoney(e.credit_paise) : ""}</td>
+      <td style="border:1px solid #333;padding:6px">${formatDate(vDate)}</td>
+      <td style="border:1px solid #333;padding:6px">${v.narration || v.voucher_number || ""}</td>
+      <td style="border:1px solid #333;padding:6px;text-align:right">${e.debit_paise ? formatMoney(e.debit_paise) : ""}</td>
+      <td style="border:1px solid #333;padding:6px;text-align:right">${e.credit_paise ? formatMoney(e.credit_paise) : ""}</td>
     </tr>`;
   }
 
@@ -144,8 +169,7 @@ function buildLedgerHtml(
   h1 { font-size: 18px; text-align: center; margin-bottom: 4px; }
   h2 { font-size: 14px; text-align: center; font-weight: normal; margin-top: 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
-  th, td { border: 1px solid #333; padding: 6px; text-align: left; }
-  th { background: #f0f0f0; }
+  th { border: 1px solid #333; padding: 6px; text-align: left; background: #f0f0f0; }
   .num { text-align: right; }
   .summary { margin-top: 20px; font-size: 13px; }
   .summary div { margin: 4px 0; }
@@ -155,7 +179,6 @@ function buildLedgerHtml(
   <h1>${info.companyName}</h1>
   <h2>Ledger Account: ${info.partyName}</h2>
   <h2>Period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}</h2>
-
   <table>
     <thead>
       <tr>
@@ -167,19 +190,18 @@ function buildLedgerHtml(
     </thead>
     <tbody>
       <tr>
-        <td colspan="2"><strong>Opening Balance</strong></td>
-        <td class="num">${info.openingBalancePaise >= 0 ? formatMoney(info.openingBalancePaise) : ""}</td>
-        <td class="num">${info.openingBalancePaise < 0 ? formatMoney(info.openingBalancePaise) : ""}</td>
+        <td colspan="2" style="border:1px solid #333;padding:6px"><strong>Opening Balance</strong></td>
+        <td style="border:1px solid #333;padding:6px;text-align:right">${info.openingBalancePaise >= 0 ? formatMoney(info.openingBalancePaise) : ""}</td>
+        <td style="border:1px solid #333;padding:6px;text-align:right">${info.openingBalancePaise < 0 ? formatMoney(info.openingBalancePaise) : ""}</td>
       </tr>
       ${rows}
       <tr>
-        <td colspan="2"><strong>Closing Balance</strong></td>
-        <td class="num">${info.closingBalancePaise >= 0 ? formatMoney(info.closingBalancePaise) : ""}</td>
-        <td class="num">${info.closingBalancePaise < 0 ? formatMoney(info.closingBalancePaise) : ""}</td>
+        <td colspan="2" style="border:1px solid #333;padding:6px"><strong>Closing Balance</strong></td>
+        <td style="border:1px solid #333;padding:6px;text-align:right">${info.closingBalancePaise >= 0 ? formatMoney(info.closingBalancePaise) : ""}</td>
+        <td style="border:1px solid #333;padding:6px;text-align:right">${info.closingBalancePaise < 0 ? formatMoney(info.closingBalancePaise) : ""}</td>
       </tr>
     </tbody>
   </table>
-
   <div class="summary">
     <div><strong>Opening Balance:</strong> ₹ ${formatMoney(info.openingBalancePaise)} ${obSign}</div>
     <div><strong>Closing Balance:</strong> ₹ ${formatMoney(info.closingBalancePaise)} ${cbSign}</div>
