@@ -71,6 +71,7 @@ export async function downloadLedgerPdf(
 
   // ── 2. In Tauri, generate a real PDF and save to disk ──
   if (runtime === "tauri") {
+    let iframe: HTMLIFrameElement | null = null;
     try {
       const html2pdf = (await import("html2pdf.js")).default;
       const { appLocalDataDir, join } = await import("@tauri-apps/api/path");
@@ -83,13 +84,31 @@ export async function downloadLedgerPdf(
       // Build HTML
       const html = buildLedgerHtml(info, liveEntries, vMap, fromDate, toDate);
 
-      // Render into hidden container
-      const container = document.createElement("div");
-      container.innerHTML = html;
-      container.style.position = "fixed";
-      container.style.left = "-9999px";
-      container.style.top = "0";
-      document.body.appendChild(container);
+      // Render into an ISOLATED iframe document. Rendering inside the app
+      // document made html2canvas inherit the app's oklch() design tokens,
+      // which its colour parser cannot read ("unsupported color function").
+      // An iframe with no app stylesheet only ever computes plain hex colours.
+      iframe = document.createElement("iframe");
+      iframe.setAttribute("aria-hidden", "true");
+      iframe.style.position = "fixed";
+      iframe.style.left = "-10000px";
+      iframe.style.top = "0";
+      iframe.style.width = "800px";
+      iframe.style.height = "1200px";
+      iframe.style.border = "0";
+      iframe.style.visibility = "hidden";
+      document.body.appendChild(iframe);
+
+      const idoc = iframe.contentDocument;
+      if (!idoc) throw new Error("Could not create isolated render document");
+      idoc.open();
+      idoc.write(html);
+      idoc.close();
+
+      // Let the isolated document lay out before rasterising.
+      await new Promise((r) => setTimeout(r, 60));
+
+      const target = idoc.body;
 
       // Generate PDF blob
       const pdfBlob = await html2pdf()
@@ -97,18 +116,20 @@ export async function downloadLedgerPdf(
           margin: [10, 10],
           filename: fileName,
           image: { type: "jpeg", quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: "#ffffff",
+            windowWidth: 800,
+          },
           jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
         })
-        .from(container)
+        .from(target)
         .output("blob");
 
       // Write to disk
       const arrayBuffer = await pdfBlob.arrayBuffer();
       await writeFile(filePath, new Uint8Array(arrayBuffer));
-
-      // Cleanup
-      document.body.removeChild(container);
 
       info.path = filePath;
 
@@ -117,13 +138,25 @@ export async function downloadLedgerPdf(
         absolute: true,
         party: info.partyName,
         source: "html2pdf",
+        isolated: true,
       });
     } catch (err) {
-      recordFailure("whatsapp", err, { stage: "pdf-write", runtime: "tauri" });
+      const msg = err instanceof Error ? err.message : String(err);
+      recordFailure("whatsapp", err, {
+        stage: "pdf-write",
+        runtime: "tauri",
+        isolated: true,
+        unsupported_color: /unsupported color function/i.test(msg)
+          ? (msg.match(/"([^"]+)"/)?.[1] ?? "unknown")
+          : undefined,
+      });
+    } finally {
+      if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
     }
   } else {
     recordStage("whatsapp", "pdf", { path: null, absolute: false, source: "browser", runtime });
   }
+
 
   return info;
 }
