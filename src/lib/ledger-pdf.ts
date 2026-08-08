@@ -80,18 +80,24 @@ export async function downloadLedgerPdf(
       const fileName = `ledger-${partyId}-${Date.now()}.pdf`;
       const filePath = await join(appDir, fileName);
 
-      // Build HTML
+      // Build clean HTML with NO Tailwind / oklch — only inline styles
       const html = buildLedgerHtml(info, liveEntries, vMap, fromDate, toDate);
 
-      // Render into hidden container
-      const container = document.createElement("div");
-      container.innerHTML = html;
-      container.style.position = "fixed";
-      container.style.left = "-9999px";
-      container.style.top = "0";
-      document.body.appendChild(container);
+      // CRITICAL FIX: Render inside an iframe to isolate html2pdf from
+      // Tailwind's oklch() colors which crash html2canvas.
+      const iframe = document.createElement("iframe");
+      iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;visibility:hidden;";
+      document.body.appendChild(iframe);
 
-      // Generate PDF blob
+      const doc = iframe.contentDocument!;
+      doc.open();
+      doc.write(html);
+      doc.close();
+
+      // Wait for iframe to settle
+      await new Promise(r => setTimeout(r, 300));
+
+      // Generate PDF from the iframe body (clean, no oklch leakage)
       const pdfBlob = await html2pdf()
         .set({
           margin: [10, 10],
@@ -100,15 +106,15 @@ export async function downloadLedgerPdf(
           html2canvas: { scale: 2, useCORS: true },
           jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
         })
-        .from(container)
+        .from(doc.body)
         .output("blob");
+
+      // Cleanup iframe
+      document.body.removeChild(iframe);
 
       // Write to disk
       const arrayBuffer = await pdfBlob.arrayBuffer();
       await writeFile(filePath, new Uint8Array(arrayBuffer));
-
-      // Cleanup
-      document.body.removeChild(container);
 
       info.path = filePath;
 
@@ -165,7 +171,8 @@ function buildLedgerHtml(
 <meta charset="utf-8">
 <title>Ledger Statement - ${info.partyName}</title>
 <style>
-  body { font-family: Arial, sans-serif; margin: 40px; color: #000; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; margin: 40px; color: #000; background: #fff; }
   h1 { font-size: 18px; text-align: center; margin-bottom: 4px; }
   h2 { font-size: 14px; text-align: center; font-weight: normal; margin-top: 0; }
   table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
