@@ -1,3 +1,4 @@
+// src/lib/voucher-intent.ts
 // Lightweight, fully-local intent detection for the AI assistant.
 // Predicts the voucher type from the user's natural-language input BEFORE
 // any LLM call, so we can (a) skip the LLM entirely for unambiguous inputs
@@ -7,9 +8,39 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
-export type VoucherIntent = "payment" | "receipt" | "sales" | "purchase";
+// ═════════════════════════════════════════════════════════════════════════════
+//  TYPES
+// ═════════════════════════════════════════════════════════════════════════════
 
-type Rule = { intent: VoucherIntent; patterns: RegExp[] };
+export type VoucherIntentType = "payment" | "receipt" | "sales" | "purchase";
+
+export interface ParsedVoucherIntent {
+  type: VoucherIntentType;
+  amountPaise: number;
+  primaryParty: string;
+  bankOrCash: string;
+  narration: string;
+  date: string;
+  confidence: number;
+  missingFields: string[];
+  additionalEntries?: Array<{
+    ledger: string;
+    amountPaise: number;
+    isDebit: boolean;
+  }>;
+}
+
+export interface ContextLedger {
+  id: string;
+  name: string;
+  type: string;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  INTENT DETECTION RULES
+// ═════════════════════════════════════════════════════════════════════════════
+
+type Rule = { intent: VoucherIntentType; patterns: RegExp[] };
 
 const RULES: Rule[] = [
   {
@@ -22,6 +53,8 @@ const RULES: Rule[] = [
       /\bgave\s+to\b/i,
       /\bsettled\b/i,
       /\btransfer(?:red)?\s+to\b/i,
+      /\bpay\s+(?:to|for)\b/i,
+      /\bpaid\s+(?:to|for)\b/i,
     ],
   },
   {
@@ -33,6 +66,7 @@ const RULES: Rule[] = [
       /\bcash\s+in\b/i,
       /\bgot\s+from\b/i,
       /\bcredited\s+by\b/i,
+      /\breceipt\s+from\b/i,
     ],
   },
   {
@@ -43,6 +77,7 @@ const RULES: Rule[] = [
       /\binvoice(?:d)?\s+to\b/i,
       /\braised\s+(?:an?\s+)?invoice\b/i,
       /\bsales?\s+to\b/i,
+      /\bsell\s+to\b/i,
     ],
   },
   {
@@ -53,25 +88,25 @@ const RULES: Rule[] = [
       /\breceived\s+from\s+supplier\b/i,
       /\bvendor\s+bill\b/i,
       /\bsupplier\s+invoice\b/i,
+      /\bbuy\s+from\b/i,
     ],
   },
 ];
 
-// Read-only question phrases — we must NEVER draft a voucher when the user is
-// just asking about existing books ("what is the cash balance ...", "show me
-// receivables", "closing balance of ...", etc.). Without this guard, phrases
-// like "cash in <party>" wrongly matched the receipt rule.
-const READ_ONLY_QUESTION = /^\s*(what|which|who|whom|whose|when|where|why|how|is|are|was|were|do|does|did|show|list|tell|give|display|find|fetch|get|report|view|see|check|explain|summar[iy]se?)\b/i;
-const READ_ONLY_TERMS = /\b(closing balance|opening balance|trial balance|balance sheet|balance as on|balance of|outstanding|receivable|payable|ageing|aging|statement of|ledger of|p&l|profit and loss|gross profit|net profit|how much|report|summary|total sales|total purchase|list of)\b/i;
+const READ_ONLY_QUESTION =
+  /^\s*(what|which|who|whom|whose|when|where|why|how|is|are|was|were|do|does|did|show|list|tell|give|display|find|fetch|get|report|view|see|check|explain|summar[iy]se?)\b/i;
+const READ_ONLY_TERMS =
+  /\b(closing balance|opening balance|trial balance|balance sheet|balance as on|balance of|outstanding|receivable|payable|ageing|aging|statement of|ledger of|p&l|profit and loss|gross profit|net profit|how much|report|summary|total sales|total purchase|list of)\b/i;
 
-export function detectVoucherIntent(text: string): VoucherIntent | null {
+// ═════════════════════════════════════════════════════════════════════════════
+//  INTENT DETECTION
+// ═════════════════════════════════════════════════════════════════════════════
+
+export function detectVoucherIntent(text: string): VoucherIntentType | null {
   if (!text) return null;
-  // Skip when the user is asking a question about existing books rather than
-  // recording a new transaction.
   if (READ_ONLY_QUESTION.test(text) || READ_ONLY_TERMS.test(text)) return null;
-  // Score by number of matched patterns so "received from supplier" → purchase
-  // beats the generic "received" → receipt rule.
-  let best: { intent: VoucherIntent; score: number } | null = null;
+
+  let best: { intent: VoucherIntentType; score: number } | null = null;
   for (const r of RULES) {
     let s = 0;
     for (const p of r.patterns) if (p.test(text)) s++;
@@ -80,57 +115,32 @@ export function detectVoucherIntent(text: string): VoucherIntent | null {
   return best?.intent ?? null;
 }
 
-/**
- * Returns the minimal set of ledger types relevant to the intent. Used both
- * to scope DB fetches and to filter the in-memory masters cache.
- */
-export function ledgerTypesForIntent(intent: VoucherIntent): string[] {
+export function isReadOnlyQuery(text: string): boolean {
+  if (!text) return true;
+  return READ_ONLY_QUESTION.test(text) || READ_ONLY_TERMS.test(text);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  LEDGER TYPE SCOPING
+// ═════════════════════════════════════════════════════════════════════════════
+
+export function ledgerTypesForIntent(intent: VoucherIntentType): string[] {
   switch (intent) {
     case "payment":
-      return [
-        "cash",
-        "bank",
-        "expense_direct",
-        "expense_indirect",
-        "sundry_creditor",
-        "duties_taxes",
-      ];
+      return ["cash", "bank", "expense_direct", "expense_indirect", "sundry_creditor", "duties_taxes"];
     case "receipt":
-      return [
-        "cash",
-        "bank",
-        "income_direct",
-        "income_indirect",
-        "sundry_debtor",
-      ];
+      return ["cash", "bank", "income_direct", "income_indirect", "sundry_debtor"];
     case "sales":
       return ["sundry_debtor", "income_direct", "duties_taxes"];
     case "purchase":
-      return [
-        "sundry_creditor",
-        "stock_in_hand",
-        "expense_direct",
-        "expense_indirect",
-        "duties_taxes",
-      ];
+      return ["sundry_creditor", "stock_in_hand", "expense_direct", "expense_indirect", "duties_taxes"];
   }
 }
 
-export interface ContextLedger {
-  id: string;
-  name: string;
-  type: string;
-}
-
-/**
- * Fetch ONLY the ledgers that are relevant to the predicted voucher intent.
- * RLS keeps us inside the active company. We cap the count to keep prompt
- * size small.
- */
 export async function fetchContextLedgers(
   supabase: SupabaseClient<Database>,
   companyId: string,
-  intent: VoucherIntent,
+  intent: VoucherIntentType,
   cap = 60,
 ): Promise<ContextLedger[]> {
   const types = ledgerTypesForIntent(intent);
@@ -146,24 +156,196 @@ export async function fetchContextLedgers(
   return data.map((l) => ({ id: l.id, name: l.name, type: l.type }));
 }
 
-/**
- * Map an intent to the voucher route path used by the app.
- */
-export function intentToRoute(intent: VoucherIntent): string {
+export function intentToRoute(intent: VoucherIntentType): string {
   return `/app/vouchers/new/${intent}`;
 }
 
-// -------- Prefill bridge: assistant → voucher form ---------------------------
+// ═════════════════════════════════════════════════════════════════════════════
+//  VOICE NORMALIZATION
+// ═════════════════════════════════════════════════════════════════════════════
+
+export function normalizeVoiceInput(text: string): string {
+  return (
+    text
+      .replace(/\b(rupees|rs|are es)\b/gi, "₹")
+      .replace(/\b(thousand|k)\b/gi, "000")
+      .replace(/\b(lakh|lac)\b/gi, "00000")
+      .replace(/\b(crore|cr)\b/gi, "0000000")
+      .replace(/\b(point|dot)\b/gi, ".")
+      .replace(/\b(zero|oh)\b/gi, "0")
+      .replace(/\b(one|two|three|four|five|six|seven|eight|nine)\s+thousand\b/gi, (_, digit) => {
+        const map: Record<string, string> = {
+          one: "1",
+          two: "2",
+          three: "3",
+          four: "4",
+          five: "5",
+          six: "6",
+          seven: "7",
+          eight: "8",
+          nine: "9",
+        };
+        return `${map[digit.toLowerCase()] || "1"}000`;
+      })
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  ENTITY EXTRACTION
+// ═════════════════════════════════════════════════════════════════════════════
+
+function parseAmount(text: string): number | null {
+  let normalized = text
+    .replace(/,/g, "")
+    .replace(/\b(thousand|k)\b/gi, "000")
+    .replace(/\b(lakh|lac)\b/gi, "00000")
+    .replace(/\b(crore|cr)\b/gi, "0000000")
+    .replace(/\b(point|dot)\b/gi, ".");
+
+  const match =
+    normalized.match(/(?:₹|rs|rupees)?\s*(\d+(?:\.\d{1,2})?)/i) ||
+    normalized.match(/\b(\d{4,})\b/);
+
+  if (!match) return null;
+  return Math.round(parseFloat(match[1]) * 100);
+}
+
+function parseDate(text: string): string {
+  const today = new Date();
+  if (/today/i.test(text)) return today.toISOString().split("T")[0];
+  if (/yesterday/i.test(text)) {
+    const yest = new Date(today);
+    yest.setDate(yest.getDate() - 1);
+    return yest.toISOString().split("T")[0];
+  }
+
+  const dayMatch = text.match(/(?:on\s+)?(\d{1,2})(?:st|nd|rd|th)?/i);
+  if (dayMatch) {
+    const day = parseInt(dayMatch[1]);
+    const date = new Date(today.getFullYear(), today.getMonth(), day);
+    return date.toISOString().split("T")[0];
+  }
+
+  const fullMatch = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (fullMatch) {
+    const [, d, m, y] = fullMatch;
+    const year = y.length === 2 ? `20${y}` : y;
+    return `${year}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  return today.toISOString().split("T")[0];
+}
+
+function extractParty(text: string, type: VoucherIntentType): string | null {
+  const patterns: Record<VoucherIntentType, RegExp[]> = {
+    payment: [
+      /(?:paid|payment to|give to|sent to|transfer to|pay to)\s+([A-Z][A-Za-z0-9\s&.,]{2,40})/i,
+      /(?:to|for)\s+([A-Z][A-Za-z0-9\s&.,]{2,40})/i,
+    ],
+    receipt: [
+      /(?:received from|got from|collected from)\s+([A-Z][A-Za-z0-9\s&.,]{2,40})/i,
+      /(?:from)\s+([A-Z][A-Za-z0-9\s&.,]{2,40})/i,
+    ],
+    sales: [
+      /(?:sold to|sales to|invoice to|bill to)\s+([A-Z][A-Za-z0-9\s&.,]{2,40})/i,
+    ],
+    purchase: [
+      /(?:bought from|purchase from|from)\s+([A-Z][A-Za-z0-9\s&.,]{2,40})/i,
+    ],
+  };
+
+  for (const pattern of patterns[type]) {
+    const match = text.match(pattern);
+    if (match) return match[1].trim();
+  }
+  return null;
+}
+
+function extractBankOrCash(text: string): string {
+  const bankMatch = text.match(/\b(hdfc|sbi|icici|axis|pnb|bob|kotak|yes bank|union bank|canara|idbi)\b/i);
+  if (bankMatch) {
+    const name = bankMatch[1];
+    return name.length <= 4 ? `${name.toUpperCase()} Bank` : name;
+  }
+  if (/\bcash\b/i.test(text)) return "Cash";
+  if (/\bbank\b/i.test(text)) return "Bank";
+  return "Cash";
+}
+
+function generateNarration(intent: ParsedVoucherIntent, originalText: string): string {
+  const amount = `₹${(intent.amountPaise / 100).toFixed(2)}`;
+  switch (intent.type) {
+    case "payment":
+      return `Payment of ${amount} to ${intent.primaryParty} via ${intent.bankOrCash}`;
+    case "receipt":
+      return `Receipt of ${amount} from ${intent.primaryParty} via ${intent.bankOrCash}`;
+    case "sales":
+      return `Sales of ${amount} to ${intent.primaryParty}`;
+    case "purchase":
+      return `Purchase of ${amount} from ${intent.primaryParty}`;
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  MAIN PARSER
+// ═════════════════════════════════════════════════════════════════════════════
+
+export function parseVoucherIntent(text: string): {
+  intent: ParsedVoucherIntent | null;
+  confidence: number;
+  missingFields: string[];
+} {
+  const missingFields: string[] = [];
+
+  const type = detectVoucherIntent(text);
+  if (!type) {
+    return { intent: null, confidence: 0, missingFields: ["unrecognized intent"] };
+  }
+
+  const amountPaise = parseAmount(text);
+  const primaryParty = extractParty(text, type);
+  const bankOrCash = extractBankOrCash(text);
+  const date = parseDate(text);
+
+  if (!amountPaise) missingFields.push("amount");
+  if (!primaryParty) missingFields.push("party");
+
+  const confidence = missingFields.length === 0 ? 0.95 : missingFields.length === 1 ? 0.7 : 0.4;
+
+  if (missingFields.length > 1) {
+    return { intent: null, confidence, missingFields };
+  }
+
+  const intent: ParsedVoucherIntent = {
+    type,
+    amountPaise: amountPaise || 0,
+    primaryParty: primaryParty || "Unknown Party",
+    bankOrCash,
+    date,
+    confidence,
+    missingFields,
+    narration: "",
+  };
+
+  intent.narration = generateNarration(intent, text);
+  return { intent, confidence, missingFields };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  PREFILL BRIDGE
+// ═════════════════════════════════════════════════════════════════════════════
 
 export const ASSISTANT_PREFILL_KEY = "assistant-voucher-prefill";
 
 export interface AssistantPrefill {
-  voucherType: VoucherIntent;
-  date?: string; // ISO YYYY-MM-DD
+  voucherType: VoucherIntentType;
+  date?: string;
   partyLedgerId?: string;
   cashBankLedgerId?: string;
   counterLedgerId?: string;
-  amount?: number; // rupees
+  amount?: number;
   narration?: string;
   refNo?: string;
 }
@@ -171,18 +353,15 @@ export interface AssistantPrefill {
 export function writeAssistantPrefill(p: AssistantPrefill) {
   try {
     sessionStorage.setItem(ASSISTANT_PREFILL_KEY, JSON.stringify(p));
-    // Fire-and-forget: register a correction watch so the assistant can
-    // learn from any edits the user makes before saving. Dynamic import
-    // keeps the voucher-intent module free of AI-layer dependencies.
-    void import("@/lib/ai/correction-watcher").then((m) => m.armCorrectionWatch(p)).catch(() => undefined);
+    void import("@/lib/ai/correction-watcher")
+      .then((m) => m.armCorrectionWatch(p))
+      .catch(() => undefined);
   } catch {
     /* ignore quota */
   }
 }
 
-export function consumeAssistantPrefill(
-  expected: VoucherIntent,
-): AssistantPrefill | null {
+export function consumeAssistantPrefill(expected: VoucherIntentType): AssistantPrefill | null {
   if (typeof sessionStorage === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(ASSISTANT_PREFILL_KEY);
@@ -196,21 +375,11 @@ export function consumeAssistantPrefill(
   }
 }
 
-
-/**
- * After the form has prefilled itself, send focus to the primary "Save"
- * button so the operator only has to press Enter to commit the voucher.
- * The button is identified by `data-assistant-save` (preferred) or by the
- * aria-label "Save voucher" as a fallback.
- */
 export function focusSaveButton(root: Document | HTMLElement = document) {
-  // Defer one frame so the DOM has the latest state.
   requestAnimationFrame(() => {
     const el =
       (root.querySelector("[data-assistant-save]") as HTMLElement | null) ??
-      (root.querySelector(
-        'button[aria-label="Save voucher" i], button[type="submit"]',
-      ) as HTMLElement | null);
+      (root.querySelector('button[aria-label="Save voucher" i], button[type="submit"]') as HTMLElement | null);
     if (el) {
       el.focus();
       el.scrollIntoView({ block: "nearest", behavior: "smooth" });
