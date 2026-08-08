@@ -198,6 +198,10 @@ function buildLedgerHtml(
 <meta charset="utf-8">
 <title>Ledger Statement - ${info.partyName}</title>
 <style>
+  /* Hard colour reset — html2canvas cannot parse oklch(), so every colour
+     inside this document must be a plain hex/rgb value. */
+  html, body, * { color: #000000; border-color: #333333; }
+  html, body { background: #ffffff; }
   body { font-family: Arial, sans-serif; margin: 40px; color: #000; }
   h1 { font-size: 18px; text-align: center; margin-bottom: 4px; }
   h2 { font-size: 14px; text-align: center; font-weight: normal; margin-top: 0; }
