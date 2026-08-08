@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2, Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff, FileText, Paperclip, ScanLine, BrainCircuit, Volume2, VolumeX, Headphones, Cpu, Cloud } from "lucide-react";
+import {
+  Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2,
+  Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff,
+  FileText, Paperclip, ScanLine, BrainCircuit, Volume2, VolumeX,
+  Headphones, Cpu, Cloud, RotateCcw, Zap
+} from "lucide-react";
 import { extractInvoiceOcr, type OcrDraft } from "@/lib/ai/ocr-invoice";
 import { validateOcrExtract } from "@/lib/ai/ocr-validate";
 import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
@@ -36,7 +41,16 @@ import {
   writeAssistantPrefill,
   type VoucherIntent,
 } from "@/lib/voucher-intent";
-import { detectVoucherAction } from "@/lib/ai/voucher-actions";
+import {
+  detectVoucherAction,
+  executeVoucherAction,
+  undoLastVoucher,
+  type VoucherAction,
+  type VoucherExecutionResult,
+} from "@/lib/ai/voucher-actions";
+import { localFirstAnswer } from "@/lib/ai/local-first";
+import { routeQuery } from "@/lib/ai/query-router";
+import { runToolCallBlock } from "@/lib/ai/tools";
 import { StreamingText } from "@/components/assistant/StreamingText";
 import { AnswerProvenance } from "@/components/assistant/AnswerProvenance";
 import { logAiAction } from "@/lib/ai/audit-log";
@@ -47,19 +61,25 @@ import {
 import { isWebGpuAvailable } from "@/lib/ai/webllm";
 import { clearSpeculation, speculate } from "@/lib/ai/prefetch";
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  TYPES
+// ═════════════════════════════════════════════════════════════════════════════
+
 interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   text: string;
   matches?: KbEntry[];
   preview?: ParsedCompany;
   voucherPreview?: ParsedVoucher;
+  voucherAction?: VoucherAction;
+  voucherResult?: VoucherExecutionResult;
   toolCalls?: { name: string; input: string }[];
   card?: StructuredCard;
   ocrPreview?: OcrDraft;
   memoryHint?: PartyPattern;
-  /** The user question this answer replied to — used for citation matching. */
   question?: string;
+  latencyMs?: number;
 }
 
 type ParsedCompany = {
@@ -90,6 +110,10 @@ type ParsedVoucher = {
   };
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  CONSTANTS
+// ═════════════════════════════════════════════════════════════════════════════
+
 const WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
@@ -106,6 +130,12 @@ const SUGGESTIONS = [
   "Invite a team member",
 ];
 
+const DIRECT_EXECUTE_CONFIDENCE = 0.85;
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  COMPONENT
+// ═════════════════════════════════════════════════════════════════════════════
+
 export function AssistantChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -116,39 +146,33 @@ export function AssistantChat() {
   const { user } = useAuth();
   const { memberships, activeCompanyId, setActiveCompanyId, refresh } = useCompany();
   const hasCompany = memberships.length > 0;
+
   const [creating, setCreating] = useState(false);
   const [pendingCompany, setPendingCompany] = useState<ParsedCompany | null>(null);
   const [pendingVoucher, setPendingVoucher] = useState<ParsedVoucher | null>(null);
+  const [pendingVoucherAction, setPendingVoucherAction] = useState<VoucherAction | null>(null);
+  const [lastVoucherResult, setLastVoucherResult] = useState<VoucherExecutionResult | null>(null);
+
   const [aiMode, setAiMode] = useState(true);
   const [modelPref, setModelPref] = useState<ModelPreference>(() => getModelPreference());
   const webGpuOk = isWebGpuAvailable();
 
-  function cycleModelPref() {
-    const order: ModelPreference[] = ["auto", "local", "cloud"];
-    const next = order[(order.indexOf(modelPref) + 1) % order.length];
-    setModelPref(next);
-    setModelPreference(next);
-  }
   const [thinking, setThinking] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [pendingOcr, setPendingOcr] = useState<OcrDraft | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
-  // Per-session conversation memory — last resolved party/company/asOn so
-  // follow-ups like "and as on 31/12/2025?" work without repeating names.
   const memoryRef = useRef<ConversationMemory | undefined>(undefined);
 
-  // Phase D — Voice + hands-free flow. Voice input uses the Web Speech
-  // Recognition API; voice output uses SpeechSynthesis. Both are fully
-  // in-browser (offline, free, private). When hands-free is on, the mic
-  // auto-restarts after each spoken reply for a walkie-talkie loop.
+  // Voice + hands-free
   const [handsFree, setHandsFree] = useState(false);
   const [ttsOn, setTtsOn] = useState(false);
   const handsFreeRef = useRef(false);
   useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
   const tts = useVoiceOutput();
   const askRef = useRef<((t: string) => void) | null>(null);
+
   const voice = useVoiceInput((text) => {
     if (handsFreeRef.current) {
       askRef.current?.(text);
@@ -166,26 +190,22 @@ export function AssistantChat() {
   const callAssistant = assistantChat;
   const callDraftVoucher = assistantDraftVoucher;
 
+  // Scroll to bottom
   useEffect(() => {
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  // Drop any pending speculation when the company context changes or the
-  // panel unmounts — a stale slice must never leak into another company.
+  // Clear speculation on company change
   useEffect(() => {
     clearSpeculation();
     return () => clearSpeculation();
   }, [activeCompanyId]);
 
-
-
-  // Keep a stable ref to `ask` so the voice-input callback (defined once)
-  // can reach the latest closure without stale-state bugs.
+  // Stable ask ref
   useEffect(() => { askRef.current = ask; });
 
-  // Phase D — speak assistant replies aloud when TTS or hands-free is on,
-  // then re-arm the mic so the user can just keep talking.
+  // TTS for assistant replies
   const lastSpokenIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!ttsOn && !handsFree) return;
@@ -202,8 +222,7 @@ export function AssistantChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, ttsOn, handsFree]);
 
-  // Turning hands-free off should silence any in-flight speech and stop
-  // listening so the mic light doesn't stay on.
+  // Hands-free mic control
   useEffect(() => {
     if (!handsFree) { tts.stop(); voice.stop(); return; }
     if (voice.supported && !voice.listening) {
@@ -217,8 +236,22 @@ export function AssistantChat() {
     return ASSISTANT_KB.filter((e) => e.category === activeCat);
   }, [activeCat]);
 
-  const COMPANY_HELP_TEXT =
-    "**Create a company**\n\nI can create one for you right here. Just paste the details (any order works). The only **required** field is the company name — everything else can be added later.\n\n**You can include:**\n- **Name** (required) — e.g. *Name: ABC Traders*\n- **GSTIN** (15 chars) — auto-detects state & marks you as Registered\n- **PAN** (10 chars)\n- **State** — e.g. *State: Maharashtra* or *State code: 27*\n- **Phone**, **Email**, **Address**\n- **FY start** — e.g. *FY: 2025-04-01* (defaults to 1-Apr current year)\n- **Inventory: yes/no** (default yes)\n\n**Example — paste this and edit:**\n`Name: ABC Traders, GSTIN: 27ABCDE1234F1Z5, PAN: ABCDE1234F, Phone: 9876543210, Email: hi@abc.in, Address: 12 MG Road Pune, Inventory: yes`";
+  function cycleModelPref() {
+    const order: ModelPreference[] = ["auto", "local", "cloud"];
+    const next = order[(order.indexOf(modelPref) + 1) % order.length];
+    setModelPref(next);
+    setModelPreference(next);
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  //  HELPERS
+  // ═════════════════════════════════════════════════════════════════════════
+
+  function addMessage(msg: Omit<ChatMessage, "id">): string {
+    const id = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    setMessages((m) => [...m, { ...msg, id }]);
+    return id;
+  }
 
   function detectCreateCompanyIntent(t: string): boolean {
     const s = t.toLowerCase();
@@ -282,20 +315,14 @@ export function AssistantChat() {
     return Object.keys(out).length === 0 ? null : (out as ParsedCompany);
   }
 
+  // ═════════════════════════════════════════════════════════════════════════
+  //  COMPANY CREATION
+  // ═════════════════════════════════════════════════════════════════════════
+
   async function confirmCreateCompany(parsed: ParsedCompany) {
-    if (!parsed.name) {
-      toast.error("Company name is required");
-      return;
-    }
+    if (!parsed.name) { toast.error("Company name is required"); return; }
     if (!user) {
-      setMessages((m) => [
-        ...m,
-        {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          text: "You need to be signed in to create a company. Please sign in first.",
-        },
-      ]);
+      addMessage({ role: "assistant", text: "You need to be signed in to create a company. Please sign in first." });
       return;
     }
     setCreating(true);
@@ -310,38 +337,27 @@ export function AssistantChat() {
         address: parsed.address ?? null,
         email: parsed.email ?? null,
         phone: parsed.phone ?? null,
-        financial_year_start:
-          parsed.financial_year_start || `${new Date().getFullYear()}-04-01`,
+        financial_year_start: parsed.financial_year_start || `${new Date().getFullYear()}-04-01`,
         gst_registered: isGst,
         gst_filing_frequency: "monthly" as const,
         inventory_enabled: parsed.inventory_enabled ?? true,
         annual_turnover_paise: 0,
         created_by: user.id,
       };
-      const { data, error } = await supabase
-        .from("companies")
-        .insert(payload)
-        .select("id")
-        .maybeSingle();
+      const { data, error } = await supabase.from("companies").insert(payload).select("id").maybeSingle();
       if (error || !data) {
-        setMessages((m) => [
-          ...m,
-          {
-            id: `a-${Date.now()}`,
-            role: "assistant",
-            text: `I couldn't create the company: **${error?.message ?? "Unknown error"}**.\n\nYou can also open the full form with the button below Toggle Engine.`,
-            matches: [
-              {
-                id: "open-create",
-                category: "Settings",
-                title: "Open create company form",
-                answer: "",
-                keywords: [],
-                actions: [{ kind: "navigate", to: "/app/companies?new=1", label: "Open form" }],
-              } as KbEntry,
-            ],
-          },
-        ]);
+        addMessage({
+          role: "assistant",
+          text: `I couldn't create the company: **${error?.message ?? "Unknown error"}**.\n\nYou can also open the full form with the button below Toggle Engine.`,
+          matches: [{
+            id: "open-create",
+            category: "Settings",
+            title: "Open create company form",
+            answer: "",
+            keywords: [],
+            actions: [{ kind: "navigate", to: "/app/companies?new=1", label: "Open form" }],
+          } as KbEntry],
+        });
         return;
       }
       setActiveCompanyId(data.id);
@@ -356,37 +372,98 @@ export function AssistantChat() {
         parsed.phone ? `- Phone: ${parsed.phone}` : null,
         parsed.email ? `- Email: ${parsed.email}` : null,
         `\nYou can fine-tune anything later from **Company Settings**.`,
-      ]
-        .filter(Boolean)
-        .join("\n");
-      setMessages((m) => [
-        ...m,
-        {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          text: summary,
-          matches: [
-            {
-              id: "post-create",
-              category: "Settings",
-              title: "Post create",
-              answer: "",
-              keywords: [],
-              actions: [
-                { kind: "navigate", to: "/app", label: "Open dashboard" },
-                { kind: "navigate", to: "/app/settings", label: "Company settings" },
-                { kind: "navigate", to: "/app/ledgers", label: "Add ledgers" },
-              ],
-            } as KbEntry,
+      ].filter(Boolean).join("\n");
+      addMessage({
+        role: "assistant",
+        text: summary,
+        matches: [{
+          id: "post-create",
+          category: "Settings",
+          title: "Post create",
+          answer: "",
+          keywords: [],
+          actions: [
+            { kind: "navigate", to: "/app", label: "Open dashboard" },
+            { kind: "navigate", to: "/app/settings", label: "Company settings" },
+            { kind: "navigate", to: "/app/ledgers", label: "Add ledgers" },
           ],
-        },
-      ]);
+        } as KbEntry],
+      });
     } finally {
       setCreating(false);
     }
   }
 
-  function confirmPostVoucher(draft: ParsedVoucher) {
+  // ═════════════════════════════════════════════════════════════════════════
+  //  VOUCHER EXECUTION (direct save + undo)
+  // ═════════════════════════════════════════════════════════════════════════
+
+  async function handleExecuteVoucher(action: VoucherAction, opts?: { skipConfirmation?: boolean }) {
+    if (!activeCompanyId) {
+      toast.error("No active company");
+      return;
+    }
+    const start = performance.now();
+    const result = await executeVoucherAction(action, activeCompanyId, opts);
+    const latency = Math.round(performance.now() - start);
+
+    if (result.success && result.voucher) {
+      setLastVoucherResult(result);
+      if (activeCompanyId) {
+        void logAiAction({
+          companyId: activeCompanyId,
+          kind: "voucher_executed",
+          label: `${action.kind} voucher`,
+          detail: { voucherId: result.voucher.id, amount: action.draft.amount, type: action.draft.intent },
+        });
+      }
+
+      const amountStr = `₹${(action.draft.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+      const header = action.kind === "reverse"
+        ? `✅ Reversed voucher #${action.source?.number} — compensating entry saved.`
+        : action.kind === "duplicate"
+          ? `✅ Duplicated voucher onto ${action.draft.date} — saved.`
+          : `✅ Saved ${action.draft.intent} voucher ${result.voucher.voucher_number} for ${amountStr}.`;
+
+      addMessage({
+        role: "assistant",
+        text: `${header}\n\n**Narration:** ${result.voucher.narration}\n**Date:** ${result.voucher.voucher_date}\n**Entries:** ${result.voucher.entries.length} ledgers`,
+        voucherResult: result,
+        latencyMs: latency,
+      });
+
+      if (handsFreeRef.current || ttsOn) {
+        tts.speak(`${action.draft.intent} voucher saved for ${amountStr}`);
+      }
+
+      setPendingVoucher(null);
+      setPendingVoucherAction(null);
+    } else if (result.confirmationRequired) {
+      addMessage({
+        role: "assistant",
+        text: result.confirmationMessage || "Please confirm this voucher.",
+        voucherAction: action,
+      });
+    } else {
+      addMessage({
+        role: "assistant",
+        text: `❌ ${result.error || "Failed to save voucher"}`,
+      });
+    }
+  }
+
+  async function handleUndoLast() {
+    const ok = await undoLastVoucher();
+    if (ok) {
+      setLastVoucherResult(null);
+      toast.success("Last voucher undone");
+      addMessage({ role: "assistant", text: "↩️ Last voucher has been undone." });
+    } else {
+      toast.error("Nothing to undo");
+    }
+  }
+
+  function openVoucherForm(draft: ParsedVoucher) {
     if (activeCompanyId) {
       void logAiAction({
         companyId: activeCompanyId,
@@ -405,71 +482,43 @@ export function AssistantChat() {
       narration: draft.narration,
       refNo: draft.refNo,
     });
-    
-    setMessages((m) => [
-      ...m,
-      {
-        id: `a-${Date.now()}`,
-        role: "assistant",
-        text: `Opening the **${draft.intent}** workspace. Press **Enter** or use keyboard shortcuts (Ctrl+S) to commit to local system files safely.`,
-      },
-    ]);
-    
+    addMessage({
+      role: "assistant",
+      text: `Opening the **${draft.intent}** workspace. Press **Enter** or use keyboard shortcuts (Ctrl+S) to commit.`,
+    });
     setPendingVoucher(null);
+    setPendingVoucherAction(null);
     navigate({ to: intentToRoute(draft.intent) });
   }
 
-  // ---------- Phase 3: OCR bill → voucher draft --------------------------
+  // ═════════════════════════════════════════════════════════════════════════
+  //  OCR
+  // ═════════════════════════════════════════════════════════════════════════
+
   async function handleFileUpload(file: File, intent: "purchase" | "sales" = "purchase") {
-    if (!activeCompanyId) {
-      toast.error("Select or create a company first.");
-      return;
-    }
+    if (!activeCompanyId) { toast.error("Select or create a company first."); return; }
     const isImage = file.type.startsWith("image/");
     const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
-    if (!isImage && !isPdf) {
-      toast.error("Only images (JPG/PNG) and PDF files are supported.");
-      return;
-    }
-    setMessages((m) => [
-      ...m,
-      {
-        id: `u-${Date.now()}`,
-        role: "user",
-        text: `📎 Uploaded **${file.name}** — extracting invoice data…`,
-      },
-    ]);
+    if (!isImage && !isPdf) { toast.error("Only images (JPG/PNG) and PDF files are supported."); return; }
+    addMessage({ role: "user", text: `📎 Uploaded **${file.name}** — extracting invoice data…` });
     setOcrLoading(true);
     try {
       const draft = await extractInvoiceOcr(file, activeCompanyId, intent);
       const partyName = draft.matchedPartyName ?? draft.extracted.party_name;
-      const memoryHint = partyName
-        ? (await recallPartyPattern(activeCompanyId, partyName)) ?? undefined
-        : undefined;
+      const memoryHint = partyName ? (await recallPartyPattern(activeCompanyId, partyName)) ?? undefined : undefined;
       setPendingOcr(draft);
-      setMessages((m) => [
-        ...m,
-        {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          text: memoryHint
-            ? `I extracted the invoice. I also **remember** this party — see the note below. Confirm to open the ${intent} form.`
-            : `I extracted the invoice. Review the details below and confirm to open the ${intent} form pre-filled.`,
-          ocrPreview: draft,
-          memoryHint,
-        },
-      ]);
+      addMessage({
+        role: "assistant",
+        text: memoryHint
+          ? `I extracted the invoice. I also **remember** this party — see the note below. Confirm to open the ${intent} form.`
+          : `I extracted the invoice. Review the details below and confirm to open the ${intent} form pre-filled.`,
+        ocrPreview: draft,
+        memoryHint,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`OCR failed: ${msg}`);
-      setMessages((m) => [
-        ...m,
-        {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          text: `I couldn't read that file — ${msg}. Try a clearer photo, or type the invoice details in chat.`,
-        },
-      ]);
+      addMessage({ role: "assistant", text: `I couldn't read that file — ${msg}. Try a clearer photo, or type the invoice details in chat.` });
     } finally {
       setOcrLoading(false);
     }
@@ -495,69 +544,64 @@ export function AssistantChat() {
       toast.success(`Remembered: ${partyName} → ${draft.intent}`);
     }
     setPendingOcr(null);
-    setMessages((m) => [
-      ...m,
-      {
-        id: `a-${Date.now()}`,
-        role: "assistant",
-        text: `Opening the **${draft.intent}** form. Review the line items, HSN, and GST split before saving.`,
-      },
-    ]);
+    addMessage({ role: "assistant", text: `Opening the **${draft.intent}** form. Review the line items, HSN, and GST split before saving.` });
     navigate({ to: intentToRoute(draft.intent) });
   }
 
+  // ═════════════════════════════════════════════════════════════════════════
+  //  MAIN ASK HANDLER
+  // ═════════════════════════════════════════════════════════════════════════
 
   function ask(rawText: string) {
     const text = rawText.trim();
     if (!text) return;
-    const userMsg: ChatMessage = {
-      id: `u-${Date.now()}`,
-      role: "user",
-      text,
-    };
+
+    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text };
     setMessages((m) => [...m, userMsg]);
     if (inputRef.current) inputRef.current.value = "";
 
     void (async () => {
+      const startTime = performance.now();
+
+      // ── Local-first: deterministic balance / trial balance / voucher lookup
+      if (activeCompanyId) {
+        const route = routeQuery(text);
+        if (!route.requiresLLM && !route.requiresTools && route.deterministicAnswer) {
+          const latency = Math.round(performance.now() - startTime);
+          addMessage({ role: "assistant", text: route.deterministicAnswer, latencyMs: latency });
+          return;
+        }
+      }
+
+      // ── Company creation
       const parsed = parseCompanyDetails(text);
       if (parsed && parsed.name) {
         setPendingCompany(parsed);
-        const preview: ChatMessage = {
-          id: `a-${Date.now()}`,
+        addMessage({
           role: "assistant",
-          text:
-            "Here's what I understood from your message. Please review the details below — I'll only create the company after you confirm.",
+          text: "Here's what I understood from your message. Please review the details below — I'll only create the company after you confirm.",
           preview: parsed,
-        };
-        setMessages((m) => [...m, preview]);
+        });
         return;
       }
 
       if (detectCreateCompanyIntent(text) || (!hasCompany && /company/i.test(text))) {
-        const guide: ChatMessage = {
-          id: `a-${Date.now()}`,
+        addMessage({
           role: "assistant",
           text: COMPANY_HELP_TEXT,
-          matches: [
-            {
-              id: "open-create-form",
-              category: "Settings",
-              title: "Open create company form",
-              answer: "",
-              keywords: [],
-              actions: [
-                { kind: "navigate", to: "/app/companies?new=1", label: "Open full form" },
-              ],
-            } as KbEntry,
-          ],
-        };
-        setMessages((m) => [...m, guide]);
+          matches: [{
+            id: "open-create-form",
+            category: "Settings",
+            title: "Open create company form",
+            answer: "",
+            keywords: [],
+            actions: [{ kind: "navigate", to: "/app/companies?new=1", label: "Open full form" }],
+          } as KbEntry],
+        });
         return;
       }
 
-      // Phase 2 — local draft-first path. Handles reverse / duplicate and
-      // fully-parseable "pay 12000 rent to landlord cash today" style
-      // commands without calling the LLM.
+      // ── Phase 2: Local draft-first path (direct execution for high confidence)
       if (activeCompanyId) {
         try {
           const action = await detectVoucherAction(text, activeCompanyId);
@@ -574,22 +618,29 @@ export function AssistantChat() {
               counterLedgerId: d.counterLedgerId,
               displayDetails: d.displayDetails,
             };
+
+            // HIGH CONFIDENCE → EXECUTE DIRECTLY
+            if (action.confidence >= DIRECT_EXECUTE_CONFIDENCE && action.kind === "new") {
+              await handleExecuteVoucher(action, { skipConfirmation: true });
+              return;
+            }
+
+            // MEDIUM CONFIDENCE → SHOW PREVIEW
             setPendingVoucher(voucherPayload);
-            const header =
-              action.kind === "reverse"
-                ? `Reversing **${action.source.type}** voucher #${action.source.number} dated ${action.source.date}. Review and press **Enter** to open the compensating entry.`
-                : action.kind === "duplicate"
-                  ? `Duplicating ${action.source.type} voucher${action.source.number ? ` #${action.source.number}` : ""} from ${action.source.date} onto **${d.date}**. Review and press **Enter** to open.`
-                  : `Drafted locally from your instruction — review the ledgers and press **Enter** to open the ${d.intent} form.`;
-            setMessages((m) => [
-              ...m,
-              {
-                id: `a-${Date.now()}`,
-                role: "assistant",
-                text: header,
-                voucherPreview: voucherPayload,
-              },
-            ]);
+            setPendingVoucherAction(action);
+
+            const header = action.kind === "reverse"
+              ? `Reversing **${action.source!.type}** voucher #${action.source!.number} dated ${action.source!.date}. Review and confirm.`
+              : action.kind === "duplicate"
+                ? `Duplicating ${action.source!.type} voucher${action.source!.number ? ` #${action.source!.number}` : ""} from ${action.source!.date} onto **${d.date}**. Review and confirm.`
+                : `Drafted **${d.intent}** voucher — review the details and confirm to save instantly.`;
+
+            addMessage({
+              role: "assistant",
+              text: header,
+              voucherPreview: voucherPayload,
+              voucherAction: action,
+            });
             return;
           }
         } catch (err) {
@@ -597,25 +648,17 @@ export function AssistantChat() {
         }
       }
 
-      const intent: VoucherIntent | null = activeCompanyId
-        ? detectVoucherIntent(text)
-        : null;
+      // ── LLM-based draft path (fallback for ambiguous inputs)
+      const intent: VoucherIntent | null = activeCompanyId ? detectVoucherIntent(text) : null;
       if (intent && activeCompanyId && user) {
         setThinking(true);
         try {
           const ledgers = await fetchContextLedgers(supabase, activeCompanyId, intent);
           const res = await callDraftVoucher({
-            data: {
-              voucherType: intent,
-              text,
-              today: new Date().toISOString().slice(0, 10),
-              ledgers,
-            },
+            data: { voucherType: intent, text, today: new Date().toISOString().slice(0, 10), ledgers },
           });
           if (res.ok && res.draft) {
             const d = res.draft;
-            
-            // Resolve ledger names for descriptive preview architecture 
             const targetParty = ledgers.find(l => l.id === d.partyLedgerId)?.name || d.partyLedgerId;
             const targetAccount = ledgers.find(l => l.id === d.cashBankLedgerId || l.id === d.counterLedgerId)?.name;
 
@@ -628,23 +671,14 @@ export function AssistantChat() {
               partyLedgerId: d.partyLedgerId ?? undefined,
               cashBankLedgerId: d.cashBankLedgerId ?? undefined,
               counterLedgerId: d.counterLedgerId ?? undefined,
-              displayDetails: {
-                partyName: targetParty ?? undefined,
-                accountName: targetAccount ?? undefined
-              }
+              displayDetails: { partyName: targetParty ?? undefined, accountName: targetAccount ?? undefined },
             };
-
             setPendingVoucher(voucherPayload);
-
-            setMessages((m) => [
-              ...m,
-              {
-                id: `a-${Date.now()}`,
-                role: "assistant",
-                text: `I've analyzed your intent and generated an accounting voucher preview. please review the ledger distribution balances before routing into the manual journal interface:`,
-                voucherPreview: voucherPayload,
-              },
-            ]);
+            addMessage({
+              role: "assistant",
+              text: `I've analyzed your intent and generated a voucher preview. Please review before saving:`,
+              voucherPreview: voucherPayload,
+            });
             setThinking(false);
             return;
           }
@@ -656,37 +690,77 @@ export function AssistantChat() {
         }
       }
 
+      // ── AI mode with tool-call loop
       if (aiMode && user) {
         setThinking(true);
         try {
-          const history = [...messages, userMsg]
+          let history = [...messages, userMsg]
             .filter((m) => m.id !== "welcome")
             .slice(-12)
             .map((m) => ({ role: m.role, content: m.text }));
-          const res = await callAssistant({
-            data: {
-              companyId: activeCompanyId ?? null,
-              messages: history,
-              prior: memoryRef.current,
-            },
-          });
-          if (res.memory) memoryRef.current = res.memory;
-          if (res.ok && res.text) {
-            setMessages((m) => [
-              ...m,
-              {
-                id: `a-${Date.now()}`,
-                role: "assistant",
-                text: res.text,
-                question: text,
-                toolCalls: res.toolCalls,
-                card: res.card,
+
+          let toolIterations = 0;
+          const maxToolIterations = 3;
+          let finalText = "";
+          let finalCard: StructuredCard | undefined;
+          let finalToolCalls: { name: string; input: string }[] = [];
+
+          while (toolIterations < maxToolIterations) {
+            const res = await callAssistant({
+              data: {
+                companyId: activeCompanyId ?? null,
+                messages: history,
+                prior: memoryRef.current,
               },
-            ]);
+            });
+
+            if (res.memory) memoryRef.current = res.memory;
+
+            if (res.text) {
+              const toolRun = await runToolCallBlock(res.text);
+              if (toolRun && toolRun.result.success) {
+                finalToolCalls.push({
+                  name: (toolRun.result.data as any)?.name || "tool",
+                  input: JSON.stringify((toolRun.result.data as any)?.args || {}),
+                });
+                history.push({ role: "assistant", content: toolRun.strippedText });
+                history.push({ role: "user", content: `Tool result: ${JSON.stringify(toolRun.result.data)}` });
+                toolIterations++;
+                continue;
+              } else if (toolRun && !toolRun.result.success) {
+                history.push({ role: "assistant", content: toolRun.strippedText });
+                history.push({ role: "user", content: `Tool error: ${toolRun.result.error}` });
+                toolIterations++;
+                continue;
+              }
+              finalText = res.text;
+            }
+
+            if (res.card) finalCard = res.card;
+            break;
+          }
+
+          if (finalText || finalCard) {
+            let displayText = finalText;
+            if (finalCard) {
+              const localAnswer = localFirstAnswer(finalCard);
+              if (localAnswer) displayText = localAnswer;
+            }
+
+            const latency = Math.round(performance.now() - startTime);
+            addMessage({
+              role: "assistant",
+              text: displayText,
+              question: text,
+              toolCalls: finalToolCalls.length ? finalToolCalls : undefined,
+              card: finalCard,
+              latencyMs: latency,
+            });
             return;
           }
-          if (!res.ok && res.error) {
-            toast.error(res.error);
+
+          if (!finalText) {
+            toast.error("AI unavailable, falling back to offline guide.");
           }
         } catch (err) {
           console.error("[assistant] call failed", err);
@@ -696,45 +770,37 @@ export function AssistantChat() {
         }
       }
 
+      // ── Offline KB fallback
       const matches = searchKb(text, { limit: 3 });
-      let reply: ChatMessage;
       if (matches.length === 0) {
-        reply = {
-          id: `a-${Date.now()}`,
+        addMessage({
           role: "assistant",
-          text:
-            "I couldn't find that in my offline knowledge yet. Try different words, or browse topics from the panel on the right. You can also ask about: vouchers, GST returns, ledgers, items, backup, Tally import, settings, theme, or language.",
-        };
+          text: "I couldn't find that in my offline knowledge yet. Try different words, or browse topics from the panel on the right. You can also ask about: vouchers, GST returns, ledgers, items, backup, Tally import, settings, theme, or language.",
+        });
       } else {
         const top = matches[0].entry;
-        const more =
-          matches.length > 1
-            ? `\n\n_Related:_ ${matches.slice(1).map((m) => `**${m.entry.title}**`).join(" · ")}`
-            : "";
-        reply = {
-          id: `a-${Date.now()}`,
+        const more = matches.length > 1
+          ? `\n\n_Related:_ ${matches.slice(1).map((m) => `**${m.entry.title}**`).join(" · ")}`
+          : "";
+        addMessage({
           role: "assistant",
           text: `**${top.title}**\n\n${top.answer}${more}`,
           question: text,
           matches: matches.map((m) => m.entry),
-        };
+        });
       }
-      setMessages((m) => [...m, reply]);
-
     })();
   }
 
+  // ═════════════════════════════════════════════════════════════════════════
+  //  ACTION RUNNER
+  // ═════════════════════════════════════════════════════════════════════════
+
   function runAction(a: AssistantAction) {
     if (a.kind === "navigate" && a.to) {
-      // Split path + query so TanStack Router can navigate client-side.
-      // Using window.location.href here broke inside the Tauri desktop
-      // shell (blank white screen) because the browser resolved the
-      // relative URL against the file:// origin.
       const [path, qs] = a.to.split("?");
       const search: Record<string, string> = {};
-      if (qs) {
-        for (const [k, v] of new URLSearchParams(qs)) search[k] = v;
-      }
+      if (qs) for (const [k, v] of new URLSearchParams(qs)) search[k] = v;
       navigate({ to: path, search: search as never });
       toast.success(`Opening ${a.label}`);
     } else if (a.kind === "set-theme" && a.theme) {
@@ -746,9 +812,17 @@ export function AssistantChat() {
     }
   }
 
+  const COMPANY_HELP_TEXT =
+    "**Create a company**\n\nI can create one for you right here. Just paste the details (any order works). The only **required** field is the company name — everything else can be added later.\n\n**You can include:**\n- **Name** (required) — e.g. *Name: ABC Traders*\n- **GSTIN** (15 chars) — auto-detects state & marks you as Registered\n- **PAN** (10 chars)\n- **State** — e.g. *State: Maharashtra* or *State code: 27*\n- **Phone**, **Email**, **Address**\n- **FY start** — e.g. *FY: 2025-04-01* (defaults to 1-Apr current year)\n- **Inventory: yes/no** (default yes)\n\n**Example — paste this and edit:**\n`Name: ABC Traders, GSTIN: 27ABCDE1234F1Z5, PAN: ABCDE1234F, Phone: 9876543210, Email: hi@abc.in, Address: 12 MG Road Pune, Inventory: yes`";
+
+  // ═════════════════════════════════════════════════════════════════════════
+  //  RENDER
+  // ═════════════════════════════════════════════════════════════════════════
+
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <Card className="flex h-[calc(100vh-12rem)] flex-col">
+        {/* Header */}
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Bot className="h-4 w-4" />
@@ -757,22 +831,29 @@ export function AssistantChat() {
             <span className="text-sm font-semibold">Mate — your in-app assistant</span>
             <span className="text-[11px] text-muted-foreground">
               {aiMode
-                ? "AI-powered · reads your books AND can draft entries (always previews before posting)"
+                ? "AI-powered · reads your books AND drafts entries (always previews before posting)"
                 : "Offline guide · settings, screens & options"}
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {lastVoucherResult?.voucher && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-[11px]"
+                onClick={handleUndoLast}
+                title="Undo last voucher"
+              >
+                <RotateCcw className="h-3 w-3" /> Undo
+              </Button>
+            )}
             {aiMode && (
               <Button
                 variant="outline"
                 size="sm"
                 className="h-7 gap-1 text-[11px]"
                 onClick={cycleModelPref}
-                title={
-                  webGpuOk
-                    ? "Where answers are generated — click to change"
-                    : "This device has no WebGPU, so on-device answering is unavailable"
-                }
+                title={webGpuOk ? "Where answers are generated — click to change" : "No WebGPU on this device"}
               >
                 {modelPref === "cloud" ? <Cloud className="h-3 w-3" /> : <Cpu className="h-3 w-3" />}
                 {modelPreferenceLabel(modelPref)}
@@ -792,6 +873,7 @@ export function AssistantChat() {
           </div>
         </div>
 
+        {/* Messages */}
         <ScrollArea className="flex-1">
           <div ref={scrollerRef} className="flex flex-col gap-3 p-4">
             {messages.map((m) => (
@@ -802,38 +884,31 @@ export function AssistantChat() {
                 onConfirmCompany={confirmCreateCompany}
                 onCancelCompany={() => {
                   setPendingCompany(null);
-                  setMessages((mm) => [
-                    ...mm,
-                    {
-                      id: `a-${Date.now()}`,
-                      role: "assistant",
-                      text:
-                        "No problem — I won't create it. Send a new message with corrected details, or open the full form to fine-tune.",
-                    },
-                  ]);
+                  addMessage({ role: "assistant", text: "No problem — I won't create it. Send a new message with corrected details, or open the full form to fine-tune." });
                 }}
-                onConfirmVoucher={confirmPostVoucher}
+                onConfirmVoucher={(draft) => {
+                  if (pendingVoucherAction) {
+                    void handleExecuteVoucher(pendingVoucherAction);
+                  } else {
+                    openVoucherForm(draft);
+                  }
+                }}
+                onEditVoucher={(draft) => openVoucherForm(draft)}
                 onCancelVoucher={() => {
                   setPendingVoucher(null);
-                  setMessages((mm) => [
-                    ...mm,
-                    {
-                      id: `a-${Date.now()}`,
-                      role: "assistant",
-                      text: "Voucher posting canceled. Let me know if you need to adjust parameters or structure different operational entries.",
-                    }
-                  ]);
+                  setPendingVoucherAction(null);
+                  addMessage({ role: "assistant", text: "Voucher posting canceled. Let me know if you need to adjust parameters." });
                 }}
+                onUndoVoucher={handleUndoLast}
                 creating={creating}
                 isPendingCompany={!!pendingCompany && m.preview === pendingCompany}
                 isPendingVoucher={!!pendingVoucher && m.voucherPreview === pendingVoucher}
+                isPendingVoucherAction={!!pendingVoucherAction && m.voucherAction === pendingVoucherAction}
+                lastVoucherResult={lastVoucherResult}
                 onConfirmOcr={confirmOcrDraft}
                 onCancelOcr={() => {
                   setPendingOcr(null);
-                  setMessages((mm) => [
-                    ...mm,
-                    { id: `a-${Date.now()}`, role: "assistant", text: "OCR draft discarded. Drop another bill anytime." },
-                  ]);
+                  addMessage({ role: "assistant", text: "OCR draft discarded. Drop another bill anytime." });
                 }}
                 isPendingOcr={!!pendingOcr && m.ocrPreview === pendingOcr}
               />
@@ -846,24 +921,11 @@ export function AssistantChat() {
           </div>
         </ScrollArea>
 
+        {/* Suggestions */}
         {messages.length <= 1 && (
           <div className="flex flex-wrap gap-2 border-t border-border px-4 py-2">
-            {(hasCompany
-              ? SUGGESTIONS
-              : [
-                  "Create a company",
-                  "What info do I need to create a company?",
-                  "Open the create-company form",
-                  ...SUGGESTIONS,
-                ]
-            ).map((s) => (
-              <Button
-                key={s}
-                variant="outline"
-                size="sm"
-                className="h-7 rounded-full text-xs"
-                onClick={() => ask(s)}
-              >
+            {(hasCompany ? SUGGESTIONS : ["Create a company", "What info do I need to create a company?", "Open the create-company form", ...SUGGESTIONS]).map((s) => (
+              <Button key={s} variant="outline" size="sm" className="h-7 rounded-full text-xs" onClick={() => ask(s)}>
                 {s}
               </Button>
             ))}
@@ -873,33 +935,17 @@ export function AssistantChat() {
         {!hasCompany && messages.length <= 1 && (
           <div className="mx-3 mb-2 flex items-center gap-3 rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-xs">
             <Building2 className="h-4 w-4 text-primary" />
-            <span className="flex-1">
-              You don't have a company yet. I can create one for you — type the
-              details, or open the form.
-            </span>
-            <Button
-              size="sm"
-              variant="default"
-              className="h-7 text-xs"
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  window.location.href = "/app/companies?new=1";
-                } else {
-                  navigate({ to: "/app/companies" });
-                }
-              }}
-            >
+            <span className="flex-1">You don't have a company yet. I can create one for you — type the details, or open the form.</span>
+            <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => { window.location.href = "/app/companies?new=1"; }}>
               Create company
             </Button>
           </div>
         )}
 
+        {/* Input */}
         <form
           className={`flex items-end gap-2 border-t border-border p-3 transition-colors ${isDragging ? "bg-primary/5 ring-2 ring-primary/40 ring-inset" : ""}`}
-          onSubmit={(e) => {
-            e.preventDefault();
-            ask(inputRef.current?.value ?? "");
-          }}
+          onSubmit={(e) => { e.preventDefault(); ask(inputRef.current?.value ?? ""); }}
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={(e) => {
@@ -909,17 +955,8 @@ export function AssistantChat() {
             if (file) void handleFileUpload(file, "purchase");
           }}
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,application/pdf"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void handleFileUpload(file, "purchase");
-              e.target.value = "";
-            }}
-          />
+          <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden"
+            onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleFileUpload(file, "purchase"); e.target.value = ""; }} />
           <Textarea
             ref={inputRef}
             defaultValue=""
@@ -928,7 +965,6 @@ export function AssistantChat() {
               const el = e.currentTarget;
               el.style.height = "auto";
               el.style.height = Math.min(el.scrollHeight, 240) + "px";
-              // Phase I — warm routing + retrieval while the user is typing.
               speculate(activeCompanyId ?? null, el.value);
             }}
             onKeyDown={(e) => {
@@ -938,67 +974,35 @@ export function AssistantChat() {
                 if (inputRef.current) inputRef.current.style.height = "auto";
               }
             }}
-            placeholder={
-              hasCompany
-                ? "Ask anything, or drop a bill/invoice here to auto-extract. Enter to send, Shift+Enter for new line."
-                : "Type or paste: Name: ABC Traders\nGSTIN: 27ABCDE1234F1Z5\nPhone: 9876543210"
-            }
+            placeholder={hasCompany
+              ? "Ask anything, or drop a bill/invoice here to auto-extract. Enter to send, Shift+Enter for new line."
+              : "Type or paste: Name: ABC Traders\nGSTIN: 27ABCDE1234F1Z5\nPhone: 9876543210"}
             autoFocus
             disabled={creating || thinking || ocrLoading}
             className="min-h-[60px] max-h-[240px] resize-none text-sm"
           />
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            aria-label="Upload bill / invoice"
-            title="Upload bill or invoice (image/PDF) — I'll extract party, GSTIN, HSN & tax"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={creating || thinking || ocrLoading || !hasCompany}
-          >
+          <Button type="button" size="icon" variant="outline" aria-label="Upload bill / invoice" title="Upload bill or invoice"
+            onClick={() => fileInputRef.current?.click()} disabled={creating || thinking || ocrLoading || !hasCompany}>
             {ocrLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
           </Button>
           {voice.supported ? (
-            <Button
-              type="button"
-              size="icon"
-              variant={voice.listening ? "default" : "outline"}
+            <Button type="button" size="icon" variant={voice.listening ? "default" : "outline"}
               aria-label={voice.listening ? "Stop voice input" : "Start voice input"}
-              title={voice.listening ? "Listening… click to stop" : "Speak your question"}
-              onClick={() => (voice.listening ? voice.stop() : voice.start())}
-              disabled={creating || thinking}
-            >
+              onClick={() => (voice.listening ? voice.stop() : voice.start())} disabled={creating || thinking}>
               {voice.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
           ) : null}
           {tts.supported ? (
-            <Button
-              type="button"
-              size="icon"
-              variant={ttsOn ? "default" : "outline"}
+            <Button type="button" size="icon" variant={ttsOn ? "default" : "outline"}
               aria-label={ttsOn ? "Mute read-aloud" : "Read replies aloud"}
-              title={ttsOn ? "Read-aloud on — click to mute" : "Read replies aloud (offline TTS)"}
-              onClick={() => {
-                setTtsOn((v) => {
-                  const next = !v;
-                  if (!next) tts.stop();
-                  return next;
-                });
-              }}
-            >
+              onClick={() => { setTtsOn((v) => { const next = !v; if (!next) tts.stop(); return next; }); }}>
               {ttsOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
           ) : null}
           {voice.supported && tts.supported ? (
-            <Button
-              type="button"
-              size="icon"
-              variant={handsFree ? "default" : "outline"}
+            <Button type="button" size="icon" variant={handsFree ? "default" : "outline"}
               aria-label={handsFree ? "Turn off hands-free" : "Turn on hands-free"}
-              title={handsFree ? "Hands-free on — mic re-arms after each reply" : "Hands-free mode: speak, listen, repeat"}
-              onClick={() => setHandsFree((v) => !v)}
-              disabled={creating || thinking}
-            >
+              onClick={() => setHandsFree((v) => !v)} disabled={creating || thinking}>
               <Headphones className="h-4 w-4" />
             </Button>
           ) : null}
@@ -1008,22 +1012,15 @@ export function AssistantChat() {
         </form>
       </Card>
 
+      {/* Sidebar */}
       <Card className="hidden h-[calc(100vh-12rem)] flex-col lg:flex">
         <div className="border-b border-border px-4 py-3">
           <div className="text-sm font-semibold">Browse topics</div>
-          <div className="text-[11px] text-muted-foreground">
-            {ASSISTANT_KB.length} guides · 100% local
-          </div>
+          <div className="text-[11px] text-muted-foreground">{ASSISTANT_KB.length} guides · 100% local</div>
         </div>
         <div className="flex flex-wrap gap-1 border-b border-border px-3 py-2">
           {(["All", ...KB_CATEGORIES] as const).map((c) => (
-            <Button
-              key={c}
-              variant={activeCat === c ? "default" : "ghost"}
-              size="sm"
-              className="h-6 rounded-full px-2 text-[11px]"
-              onClick={() => setActiveCat(c)}
-            >
+            <Button key={c} variant={activeCat === c ? "default" : "ghost"} size="sm" className="h-6 rounded-full px-2 text-[11px]" onClick={() => setActiveCat(c)}>
               {c}
             </Button>
           ))}
@@ -1031,11 +1028,8 @@ export function AssistantChat() {
         <ScrollArea className="flex-1">
           <CardContent className="space-y-1 p-2">
             {browseEntries.map((e) => (
-              <button
-                key={e.id}
-                onClick={() => ask(e.title)}
-                className="group flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent hover:text-accent-foreground"
-              >
+              <button key={e.id} onClick={() => ask(e.title)}
+                className="group flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent hover:text-accent-foreground">
                 <span className="truncate">{e.title}</span>
                 <ArrowRight className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
@@ -1046,6 +1040,10 @@ export function AssistantChat() {
     </div>
   );
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  SUB-COMPONENTS
+// ═════════════════════════════════════════════════════════════════════════════
 
 function formatInrCard(paise: number): string {
   const rupees = Math.abs(paise) / 100;
@@ -1069,48 +1067,24 @@ function BalanceCard({ card }: { card: StructuredCard }) {
         {card.companyName ? ` · ${card.companyName}` : ""}
       </div>
       <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
-        <div>
-          <div className="text-muted-foreground">Opening</div>
-          <div className="font-mono">{formatInrCard(card.openingPaise)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Debits</div>
-          <div className="font-mono text-emerald-600">{formatInrCard(card.debitPaise)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Credits</div>
-          <div className="font-mono text-rose-600">{formatInrCard(card.creditPaise)}</div>
-        </div>
+        <div><div className="text-muted-foreground">Opening</div><div className="font-mono">{formatInrCard(card.openingPaise)}</div></div>
+        <div><div className="text-muted-foreground">Debits</div><div className="font-mono text-emerald-600">{formatInrCard(card.debitPaise)}</div></div>
+        <div><div className="text-muted-foreground">Credits</div><div className="font-mono text-rose-600">{formatInrCard(card.creditPaise)}</div></div>
       </div>
       {card.modeSplit ? (
         <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] border-t border-border/40 pt-2">
-          <div>
-            <div className="text-muted-foreground">Cash</div>
-            <div className="font-mono">{formatInrCard(card.modeSplit.cashPaise)}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Bank</div>
-            <div className="font-mono">{formatInrCard(card.modeSplit.bankPaise)}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">Other</div>
-            <div className="font-mono">{formatInrCard(card.modeSplit.otherPaise)}</div>
-          </div>
+          <div><div className="text-muted-foreground">Cash</div><div className="font-mono">{formatInrCard(card.modeSplit.cashPaise)}</div></div>
+          <div><div className="text-muted-foreground">Bank</div><div className="font-mono">{formatInrCard(card.modeSplit.bankPaise)}</div></div>
+          <div><div className="text-muted-foreground">Other</div><div className="font-mono">{formatInrCard(card.modeSplit.otherPaise)}</div></div>
         </div>
       ) : null}
       {card.recentVouchers && card.recentVouchers.length > 0 ? (
         <div className="mt-2 border-t border-border/40 pt-2">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
-            Recent vouchers — click to open
-          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Recent vouchers — click to open</div>
           <div className="space-y-0.5">
             {card.recentVouchers.slice(0, 6).map((v) => (
-              <Link
-                key={v.id}
-                to="/app/vouchers/$voucherId"
-                params={{ voucherId: v.id }}
-                className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-[11px] hover:bg-accent hover:text-accent-foreground"
-              >
+              <Link key={v.id} to="/app/vouchers/$voucherId" params={{ voucherId: v.id }}
+                className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-[11px] hover:bg-accent hover:text-accent-foreground">
                 <span className="flex items-center gap-1.5 min-w-0">
                   <FileText className="h-3 w-3 shrink-0 opacity-60" />
                   <span className="font-mono">{v.number || "—"}</span>
@@ -1127,12 +1101,11 @@ function BalanceCard({ card }: { card: StructuredCard }) {
       ) : null}
       <div className="mt-2 text-[10px] text-muted-foreground">
         Verified from your books · {card.voucherCount} voucher{card.voucherCount === 1 ? "" : "s"}
+        {card.latencyMs !== undefined && card.latencyMs < 100 ? ` · ⚡ ${card.latencyMs}ms` : ""}
       </div>
-
     </div>
   );
 }
-
 
 function MessageBubble({
   msg,
@@ -1140,10 +1113,14 @@ function MessageBubble({
   onConfirmCompany,
   onCancelCompany,
   onConfirmVoucher,
+  onEditVoucher,
   onCancelVoucher,
+  onUndoVoucher,
   creating,
   isPendingCompany,
   isPendingVoucher,
+  isPendingVoucherAction,
+  lastVoucherResult,
   onConfirmOcr,
   onCancelOcr,
   isPendingOcr,
@@ -1153,10 +1130,14 @@ function MessageBubble({
   onConfirmCompany: (p: ParsedCompany) => void;
   onCancelCompany: () => void;
   onConfirmVoucher: (d: ParsedVoucher) => void;
+  onEditVoucher: (d: ParsedVoucher) => void;
   onCancelVoucher: () => void;
+  onUndoVoucher: () => void;
   creating: boolean;
   isPendingCompany: boolean;
   isPendingVoucher: boolean;
+  isPendingVoucherAction: boolean;
+  lastVoucherResult: VoucherExecutionResult | null;
   onConfirmOcr: (d: OcrDraft, opts: { remember: boolean; overrideLedgerId?: string; overrideLedgerName?: string }) => void;
   onCancelOcr: () => void;
   isPendingOcr: boolean;
@@ -1164,78 +1145,65 @@ function MessageBubble({
   const isUser = msg.role === "user";
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
-          isUser
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-foreground"
-        }`}
-      >
-        {!isUser && msg.card ? <BalanceCard card={msg.card} /> : null}
-        {isUser ? (
-          <RichText text={msg.text} />
-        ) : (
-          <StreamingText text={msg.text} render={(t) => <RichText text={t} />} />
+      <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${isUser ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
+        {/* Latency badge */}
+        {!isUser && msg.latencyMs !== undefined && msg.latencyMs < 100 && (
+          <div className="mb-1 flex items-center gap-1 text-[10px] text-emerald-600 opacity-70">
+            <Zap className="h-2.5 w-2.5" /> {msg.latencyMs}ms
+          </div>
         )}
+
+        {!isUser && msg.card ? <BalanceCard card={msg.card} /> : null}
+
+        {isUser ? <RichText text={msg.text} /> : <StreamingText text={msg.text} render={(t) => <RichText text={t} />} />}
+
         {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {msg.toolCalls.map((tc, i) => (
-              <Badge key={i} variant="outline" className="gap-1 text-[10px]">
-                <Wrench className="h-2.5 w-2.5" /> {tc.name}
-              </Badge>
+              <Badge key={i} variant="outline" className="gap-1 text-[10px]"><Wrench className="h-2.5 w-2.5" /> {tc.name}</Badge>
             ))}
           </div>
         )}
 
-        {!isUser && msg.text ? (
-          <AnswerProvenance
-            answer={msg.text}
-            question={msg.question ?? ""}
-            toolNames={(msg.toolCalls ?? []).map((t) => t.name)}
-          />
-        ) : null}
+        {!isUser && msg.text ? <AnswerProvenance answer={msg.text} question={msg.question ?? ""} toolNames={(msg.toolCalls ?? []).map((t) => t.name)} /> : null}
+
+        {/* Voucher execution success */}
+        {!isUser && msg.voucherResult?.voucher && (
+          <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 dark:bg-emerald-950/30">
+            <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+              <Check className="h-3.5 w-3.5" /> Saved {msg.voucherResult.voucher.voucher_type} voucher #{msg.voucherResult.voucher.voucher_number}
+            </div>
+            <div className="mt-1.5 flex gap-1.5">
+              <Button size="sm" variant="outline" className="h-6 gap-1 text-[11px]" onClick={onUndoVoucher}>
+                <RotateCcw className="h-3 w-3" /> Undo
+              </Button>
+            </div>
+          </div>
+        )}
 
         {!isUser && msg.preview && (
-          <CompanyPreviewCard
-            parsed={msg.preview}
-            disabled={!isPendingCompany || creating}
-            creating={creating}
-            onConfirm={() => onConfirmCompany(msg.preview!)}
-            onCancel={onCancelCompany}
-          />
+          <CompanyPreviewCard parsed={msg.preview} disabled={!isPendingCompany} creating={creating} onConfirm={() => onConfirmCompany(msg.preview!)} onCancel={onCancelCompany} />
         )}
 
         {!isUser && msg.voucherPreview && (
           <VoucherPreviewCard
             draft={msg.voucherPreview}
-            disabled={!isPendingVoucher}
+            action={msg.voucherAction}
+            disabled={!isPendingVoucher && !isPendingVoucherAction}
             onConfirm={() => onConfirmVoucher(msg.voucherPreview!)}
+            onEdit={() => onEditVoucher(msg.voucherPreview!)}
             onCancel={onCancelVoucher}
           />
         )}
 
         {!isUser && msg.ocrPreview && (
-          <OcrPreviewCard
-            draft={msg.ocrPreview}
-            memoryHint={msg.memoryHint}
-            disabled={!isPendingOcr}
-            onConfirm={(opts) => onConfirmOcr(msg.ocrPreview!, opts)}
-            onCancel={onCancelOcr}
-          />
+          <OcrPreviewCard draft={msg.ocrPreview} memoryHint={msg.memoryHint} disabled={!isPendingOcr} onConfirm={(opts) => onConfirmOcr(msg.ocrPreview!, opts)} onCancel={onCancelOcr} />
         )}
-
-
 
         {!isUser && msg.matches && msg.matches[0]?.actions && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {msg.matches[0].actions.map((a, i) => (
-              <Button
-                key={i}
-                size="sm"
-                variant="secondary"
-                className="h-7 gap-1 text-xs"
-                onClick={() => onAction(a)}
-              >
+              <Button key={i} size="sm" variant="secondary" className="h-7 gap-1 text-xs" onClick={() => onAction(a)}>
                 {iconForAction(a)}
                 {a.label}
               </Button>
@@ -1249,26 +1217,29 @@ function MessageBubble({
 
 function VoucherPreviewCard({
   draft,
+  action,
   disabled,
   onConfirm,
+  onEdit,
   onCancel,
 }: {
   draft: ParsedVoucher;
+  action?: VoucherAction;
   disabled: boolean;
   onConfirm: () => void;
+  onEdit: () => void;
   onCancel: () => void;
 }) {
-  const formattedAmount = new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-  }).format(draft.amount);
+  const formattedAmount = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(draft.amount);
+  const isReverse = action?.kind === "reverse";
+  const isDuplicate = action?.kind === "duplicate";
 
   const rows: Array<[string, string | undefined]> = [
-    ["Voucher Type", draft.intent.toUpperCase()],
+    ["Voucher Type", isReverse ? `REVERSAL of ${action?.source?.type}` : isDuplicate ? `COPY of ${action?.source?.type}` : draft.intent.toUpperCase()],
     ["Date", draft.date],
     ["Amount", formattedAmount],
-    ["Debit/Party Account", draft.displayDetails?.partyName || "Unassigned / Auto-resolve"],
-    ["Credit/Bank Account", draft.displayDetails?.accountName || "Unassigned / Auto-resolve"],
+    ["Party / Debit", draft.displayDetails?.partyName || "Auto-resolve"],
+    ["Account / Credit", draft.displayDetails?.accountName || "Auto-resolve"],
     ["Narration", draft.narration],
     ["Ref / Invoice No", draft.refNo],
   ];
@@ -1276,39 +1247,38 @@ function VoucherPreviewCard({
   return (
     <div className="mt-3 rounded-lg border border-border bg-background/60 p-3">
       <div className="mb-2 flex items-center gap-2">
-        <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
-        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Transaction Draft Preview</span>
+        <FileSpreadsheet className={`h-4 w-4 ${isReverse ? "text-amber-500" : isDuplicate ? "text-blue-500" : "text-emerald-500"}`} />
+        <span className={`text-xs font-semibold ${isReverse ? "text-amber-600" : isDuplicate ? "text-blue-600" : "text-emerald-600"} dark:text-emerald-400`}>
+          {isReverse ? "Reversal Preview" : isDuplicate ? "Duplicate Preview" : "Transaction Draft Preview"}
+        </span>
+        {action && (
+          <Badge variant="outline" className="ml-auto text-[10px]">
+            {(action.confidence * 100).toFixed(0)}% match
+          </Badge>
+        )}
       </div>
       <dl className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-1 text-xs">
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
             <dt className="text-muted-foreground">{k}</dt>
-            <dd className="break-words font-medium">
-              {v ? v : <span className="text-muted-foreground">—</span>}
-            </dd>
+            <dd className="break-words font-medium">{v ? v : <span className="text-muted-foreground">—</span>}</dd>
           </div>
         ))}
       </dl>
       {!disabled ? (
         <div className="mt-3 text-[11px] text-muted-foreground">
-          This transaction draft has been sent to the accounting ledger modules.
+          {isReverse ? "Compensating entry has been prepared." : isDuplicate ? "Copy prepared with today's date." : "This draft has been actioned."}
         </div>
       ) : (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          <Button
-            size="sm"
-            className="h-7 gap-1 text-xs bg-emerald-600 text-white hover:bg-emerald-700"
-            onClick={onConfirm}
-          >
-            <Check className="h-3 w-3" /> Confirm & Open Form
+          <Button size="sm" className="h-7 gap-1 text-xs bg-emerald-600 text-white hover:bg-emerald-700" onClick={onConfirm}>
+            <Check className="h-3 w-3" /> {isReverse ? "Post Reversal" : isDuplicate ? "Post Copy" : "Save Instantly"}
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1 text-xs"
-            onClick={onCancel}
-          >
-            <X className="h-3 w-3" /> Drop Draft
+          <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={onEdit}>
+            <Pencil className="h-3 w-3" /> Edit in Form
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={onCancel}>
+            <X className="h-3 w-3" /> Cancel
           </Button>
         </div>
       )}
@@ -1333,37 +1303,20 @@ function CompanyPreviewCard({
     ["Name", parsed.name],
     ["GSTIN", parsed.gstin],
     ["PAN", parsed.pan],
-    [
-      "State",
-      parsed.state
-        ? `${parsed.state}${parsed.state_code ? ` (${parsed.state_code})` : ""}`
-        : parsed.state_code,
-    ],
+    ["State", parsed.state ? `${parsed.state}${parsed.state_code ? ` (${parsed.state_code})` : ""}` : parsed.state_code],
     ["Phone", parsed.phone],
     ["Email", parsed.email],
     ["Address", parsed.address],
     ["FY start", parsed.financial_year_start],
-    [
-      "Inventory",
-      parsed.inventory_enabled === undefined
-        ? "Yes (default)"
-        : parsed.inventory_enabled
-          ? "Yes"
-          : "No",
-    ],
+    ["Inventory", parsed.inventory_enabled === undefined ? "Yes (default)" : parsed.inventory_enabled ? "Yes" : "No"],
   ];
-  const isGst =
-    !!parsed.gstin &&
-    /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(parsed.gstin);
+  const isGst = !!parsed.gstin && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(parsed.gstin);
   return (
     <div className="mt-3 rounded-lg border border-border bg-background/60 p-3">
       <div className="mb-2 flex items-center gap-2">
         <Building2 className="h-4 w-4 text-primary" />
         <span className="text-xs font-semibold">Company preview</span>
-        <Badge
-          variant={isGst ? "default" : "secondary"}
-          className="ml-auto h-5 text-[10px]"
-        >
+        <Badge variant={isGst ? "default" : "secondary"} className="ml-auto h-5 text-[10px]">
           {isGst ? "GST Registered" : "Unregistered"}
         </Badge>
       </div>
@@ -1371,46 +1324,21 @@ function CompanyPreviewCard({
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
             <dt className="text-muted-foreground">{k}</dt>
-            <dd className="break-words font-medium">
-              {v ? v : <span className="text-muted-foreground">—</span>}
-            </dd>
+            <dd className="break-words font-medium">{v ? v : <span className="text-muted-foreground">—</span>}</dd>
           </div>
         ))}
       </dl>
       {disabled ? (
-        <div className="mt-3 text-[11px] text-muted-foreground">
-          {creating ? "Creating company…" : "This preview has been actioned."}
-        </div>
+        <div className="mt-3 text-[11px] text-muted-foreground">{creating ? "Creating company…" : "This preview has been actioned."}</div>
       ) : (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          <Button
-            size="sm"
-            className="h-7 gap-1 text-xs"
-            onClick={onConfirm}
-            disabled={creating || !parsed.name}
-          >
+          <Button size="sm" className="h-7 gap-1 text-xs" onClick={onConfirm} disabled={creating || !parsed.name}>
             <Check className="h-3 w-3" /> Confirm & create
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1 text-xs"
-            onClick={onCancel}
-            disabled={creating}
-          >
+          <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={onCancel} disabled={creating}>
             <X className="h-3 w-3" /> Cancel
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1 text-xs"
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                window.location.href = "/app/companies?new=1";
-              }
-            }}
-            disabled={creating}
-          >
+          <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => { window.location.href = "/app/companies?new=1"; }} disabled={creating}>
             <Pencil className="h-3 w-3" /> Edit in full form
           </Button>
         </div>
@@ -1458,7 +1386,10 @@ function inlineMd(s: string): string {
     .replace(/`([^`]+)`/g, '<code class="rounded bg-background/60 px-1 text-[11px]">$1</code>');
 }
 
-// ---------- Phase 3: OCR preview card ---------------------------------------
+// ═════════════════════════════════════════════════════════════════════════════
+//  OCR PREVIEW CARD
+// ═════════════════════════════════════════════════════════════════════════════
+
 function OcrPreviewCard({
   draft,
   memoryHint,
@@ -1529,81 +1460,59 @@ function OcrPreviewCard({
         <div><span className="text-muted-foreground">Date:</span> {e.invoice_date || "—"}</div>
         <div><span className="text-muted-foreground">Taxable:</span> ₹ {e.taxable_value?.toLocaleString("en-IN")}</div>
         <div><span className="text-muted-foreground">GST:</span> ₹ {((e.cgst||0)+(e.sgst||0)+(e.igst||0)).toLocaleString("en-IN")} {e.is_interstate ? "(IGST)" : "(CGST+SGST)"}</div>
-        <div className="col-span-2 border-t pt-1"><span className="text-muted-foreground">Total:</span> <b>₹ {e.total_amount?.toLocaleString("en-IN")}</b></div>
+        <div><span className="text-muted-foreground">Total:</span> <b>₹ {e.total_amount?.toLocaleString("en-IN")}</b></div>
+        <div><span className="text-muted-foreground">Items:</span> {e.line_items?.length ?? 0}</div>
       </div>
 
-      {e.items && e.items.length > 0 && (
-        <div className="mt-2">
-          <div className="mb-1 text-[11px] font-medium text-muted-foreground">Line items ({e.items.length})</div>
-          <div className="max-h-32 space-y-0.5 overflow-y-auto rounded-md border bg-muted/30 p-1.5">
-            {e.items.slice(0, 8).map((it, i) => (
-              <div key={i} className="flex items-center gap-2 text-[11px]">
-                <span className="flex-1 truncate">{it.description}</span>
-                {it.hsn && <span className="text-muted-foreground">{it.hsn}</span>}
-                {typeof it.gst_rate === "number" && <span className="text-muted-foreground">{it.gst_rate}%</span>}
-                <span className="tabular-nums">₹ {it.amount?.toLocaleString("en-IN")}</span>
-              </div>
-            ))}
-            {e.items.length > 8 && <div className="text-[10px] text-muted-foreground">…and {e.items.length - 8} more</div>}
-          </div>
+      {matched && (
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
+          <Check className="h-3 w-3" /> Matched to ledger: <b>{draft.matchedPartyName}</b>
         </div>
       )}
 
-      <div className="mt-2 rounded-md border p-2">
-        <div className="mb-1 text-[11px] font-medium text-muted-foreground">Party ledger</div>
-        {matched ? (
-          <div className="flex items-center gap-2">
-            <Check className="h-3 w-3 text-emerald-600" />
-            <span>Matched → <b>{draft.matchedPartyName}</b></span>
-            <Badge variant="outline" className="ml-auto text-[10px]">{Math.round(draft.matchScore * 100)}%</Badge>
-          </div>
-        ) : draft.alternatives.length > 0 ? (
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
-              <span>No confident match. Pick one:</span>
-            </div>
-            {draft.alternatives.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => { setOverrideId(a.id); setOverrideName(a.name); }}
-                className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-muted ${overrideId === a.id ? "bg-primary/10 ring-1 ring-primary" : ""}`}
-              >
-                <span className="flex-1 truncate">{a.name}</span>
-                <span className="text-[10px] text-muted-foreground">{Math.round(a.score * 100)}%</span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="text-muted-foreground">No local ledger match — one will be created in the form.</div>
-        )}
-      </div>
-
-      {(matched || overrideId) && (
-        <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px]">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(ev) => setRemember(ev.target.checked)}
-            className="h-3 w-3"
-          />
-          Remember this party for future bills
-        </label>
+      {!matched && e.party_name && (
+        <div className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
+          ! Party not matched — a new ledger will be created on save.
+        </div>
       )}
 
-      <div className="mt-3 flex gap-2">
-        <Button
-          size="sm"
-          className="h-7 gap-1 text-xs"
-          disabled={disabled}
-          onClick={() => onConfirm({ remember, overrideLedgerId: overrideId, overrideLedgerName: overrideName })}
-        >
-          <Check className="h-3 w-3" /> Open {draft.intent} form
-        </Button>
-        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" disabled={disabled} onClick={onCancel}>
-          <X className="h-3 w-3" /> Discard
-        </Button>
-      </div>
+      {disabled ? (
+        <div className="mt-3 text-[11px] text-muted-foreground">This draft has been actioned.</div>
+      ) : (
+        <>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              id={`remember-${draft.extracted.invoice_number || "ocr"}`}
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-border accent-primary"
+            />
+            <label htmlFor={`remember-${draft.extracted.invoice_number || "ocr"}`} className="text-[11px] text-muted-foreground cursor-pointer">
+              Remember this party pattern for next time
+            </label>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <Button
+              size="sm"
+              className="h-7 gap-1 text-xs bg-emerald-600 text-white hover:bg-emerald-700"
+              onClick={() => onConfirm({ remember, overrideLedgerId: overrideId, overrideLedgerName: overrideName })}
+            >
+              <Check className="h-3 w-3" /> Open {draft.intent} form
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={onCancel}>
+              <X className="h-3 w-3" /> Discard
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  EXPORTS
+// ═════════════════════════════════════════════════════════════════════════════
+
+export default AssistantChat;
