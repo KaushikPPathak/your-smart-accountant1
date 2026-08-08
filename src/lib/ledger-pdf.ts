@@ -69,11 +69,11 @@ export async function downloadLedgerPdf(
     balanceType: closingPaise >= 0 ? "Dr" : "Cr",
   };
 
-  // ── 2. In Tauri, generate a real PDF and save to disk ──
+  // ── 2. In Tauri, generate PDF with jsPDF-autotable ──
   if (runtime === "tauri") {
-    let iframe: HTMLIFrameElement | null = null;
     try {
-      const html2pdf = (await import("html2pdf.js")).default;
+      const { jsPDF } = await import("jspdf");
+      const autoTable = (await import("jspdf-autotable")).default;
       const { appLocalDataDir, join } = await import("@tauri-apps/api/path");
       const { writeFile } = await import("@tauri-apps/plugin-fs");
 
@@ -81,53 +81,73 @@ export async function downloadLedgerPdf(
       const fileName = `ledger-${partyId}-${Date.now()}.pdf`;
       const filePath = await join(appDir, fileName);
 
-      // Build HTML
-      const html = buildLedgerHtml(info, liveEntries, vMap, fromDate, toDate);
+      const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
-      // Render into an ISOLATED iframe document. Rendering inside the app
-      // document made html2canvas inherit the app's oklch() design tokens,
-      // which its colour parser cannot read ("unsupported color function").
-      // An iframe with no app stylesheet only ever computes plain hex colours.
-      iframe = document.createElement("iframe");
-      iframe.setAttribute("aria-hidden", "true");
-      iframe.style.position = "fixed";
-      iframe.style.left = "-10000px";
-      iframe.style.top = "0";
-      iframe.style.width = "800px";
-      iframe.style.height = "1200px";
-      iframe.style.border = "0";
-      iframe.style.visibility = "hidden";
-      document.body.appendChild(iframe);
+      // Header
+      doc.setFontSize(16);
+      doc.text(info.companyName, 105, 15, { align: "center" });
+      doc.setFontSize(12);
+      doc.text(`Ledger Account: ${info.partyName}`, 105, 22, { align: "center" });
+      doc.setFontSize(10);
+      doc.text(`Period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 105, 28, { align: "center" });
 
-      const idoc = iframe.contentDocument;
-      if (!idoc) throw new Error("Could not create isolated render document");
-      idoc.open();
-      idoc.write(html);
-      idoc.close();
+      // Build table body
+      const tableBody: (string | number)[][] = [];
 
-      // Let the isolated document lay out before rasterising.
-      await new Promise((r) => setTimeout(r, 60));
+      tableBody.push([
+        "",
+        "Opening Balance",
+        info.openingBalancePaise >= 0 ? formatMoney(info.openingBalancePaise) : "",
+        info.openingBalancePaise < 0 ? formatMoney(info.openingBalancePaise) : "",
+      ]);
 
-      const target = idoc.body;
+      for (const e of liveEntries) {
+        const v = vMap.get(String(e.voucher_id));
+        if (!v) continue;
+        const vDate = v.voucher_date || v.date || "";
+        if (vDate < fromDate || vDate > toDate) continue;
 
-      // Generate PDF blob
-      const pdfBlob = await html2pdf()
-        .set({
-          margin: [10, 10],
-          filename: fileName,
-          image: { type: "jpeg", quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: "#ffffff",
-            windowWidth: 800,
-          },
-          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        })
-        .from(target)
-        .output("blob");
+        tableBody.push([
+          formatDate(vDate),
+          v.narration || v.voucher_number || "",
+          e.debit_paise ? formatMoney(e.debit_paise) : "",
+          e.credit_paise ? formatMoney(e.credit_paise) : "",
+        ]);
+      }
 
-      // Write to disk
+      tableBody.push([
+        "",
+        "Closing Balance",
+        info.closingBalancePaise >= 0 ? formatMoney(info.closingBalancePaise) : "",
+        info.closingBalancePaise < 0 ? formatMoney(info.closingBalancePaise) : "",
+      ]);
+
+      autoTable(doc, {
+        startY: 35,
+        head: [["Date", "Particulars", "Debit (₹)", "Credit (₹)"]],
+        body: tableBody,
+        theme: "grid",
+        headStyles: { fillColor: [220, 220, 220], textColor: 0, fontStyle: "bold" },
+        styles: { fontSize: 9, cellPadding: 2 },
+        columnStyles: {
+          0: { cellWidth: 25 },
+          1: { cellWidth: "auto" },
+          2: { cellWidth: 30, halign: "right" },
+          3: { cellWidth: 30, halign: "right" },
+        },
+        didDrawPage: (data) => {
+          // Footer on each page
+          doc.setFontSize(8);
+          doc.text(
+            `Opening: ₹ ${formatMoney(info.openingBalancePaise)} ${info.openingBalancePaise >= 0 ? "Dr" : "Cr"}   |   Closing: ₹ ${formatMoney(info.closingBalancePaise)} ${info.balanceType}`,
+            105,
+            doc.internal.pageSize.height - 10,
+            { align: "center" }
+          );
+        },
+      });
+
+      const pdfBlob = doc.output("blob");
       const arrayBuffer = await pdfBlob.arrayBuffer();
       await writeFile(filePath, new Uint8Array(arrayBuffer));
 
@@ -137,112 +157,23 @@ export async function downloadLedgerPdf(
         path: filePath,
         absolute: true,
         party: info.partyName,
-        source: "html2pdf",
-        isolated: true,
+        source: "jspdf-autotable",
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      recordFailure("whatsapp", err, {
-        stage: "pdf-write",
-        runtime: "tauri",
-        isolated: true,
-        unsupported_color: /unsupported color function/i.test(msg)
-          ? (msg.match(/"([^"]+)"/)?.[1] ?? "unknown")
-          : undefined,
-      });
-    } finally {
-      if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      recordFailure("whatsapp", err, { stage: "pdf-write", runtime: "tauri" });
     }
   } else {
     recordStage("whatsapp", "pdf", { path: null, absolute: false, source: "browser", runtime });
   }
 
-
   return info;
 }
 
-function buildLedgerHtml(
-  info: LedgerPdfInfo,
-  entries: any[],
-  vMap: Map<string, any>,
-  fromDate: string,
-  toDate: string,
-): string {
-  const formatDate = (d: string) => d.split("-").reverse().join("-");
-  const formatMoney = (paise: number) => {
-    const rupees = Math.abs(paise) / 100;
-    return rupees.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
+function formatDate(d: string): string {
+  return d.split("-").reverse().join("-");
+}
 
-  let rows = "";
-  for (const e of entries) {
-    const v = vMap.get(String(e.voucher_id));
-    if (!v) continue;
-    const vDate = v.voucher_date || v.date || "";
-    if (vDate < fromDate || vDate > toDate) continue;
-
-    rows += `<tr>
-      <td style="border:1px solid #333;padding:6px">${formatDate(vDate)}</td>
-      <td style="border:1px solid #333;padding:6px">${v.narration || v.voucher_number || ""}</td>
-      <td style="border:1px solid #333;padding:6px;text-align:right">${e.debit_paise ? formatMoney(e.debit_paise) : ""}</td>
-      <td style="border:1px solid #333;padding:6px;text-align:right">${e.credit_paise ? formatMoney(e.credit_paise) : ""}</td>
-    </tr>`;
-  }
-
-  const obSign = info.openingBalancePaise >= 0 ? "Dr" : "Cr";
-  const cbSign = info.balanceType;
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Ledger Statement - ${info.partyName}</title>
-<style>
-  /* Hard colour reset — html2canvas cannot parse oklch(), so every colour
-     inside this document must be a plain hex/rgb value. */
-  html, body, * { color: #000000; border-color: #333333; }
-  html, body { background: #ffffff; }
-  body { font-family: Arial, sans-serif; margin: 40px; color: #000; }
-  h1 { font-size: 18px; text-align: center; margin-bottom: 4px; }
-  h2 { font-size: 14px; text-align: center; font-weight: normal; margin-top: 0; }
-  table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
-  th { border: 1px solid #333; padding: 6px; text-align: left; background: #f0f0f0; }
-  .num { text-align: right; }
-  .summary { margin-top: 20px; font-size: 13px; }
-  .summary div { margin: 4px 0; }
-</style>
-</head>
-<body>
-  <h1>${info.companyName}</h1>
-  <h2>Ledger Account: ${info.partyName}</h2>
-  <h2>Period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Date</th>
-        <th>Particulars</th>
-        <th class="num">Debit (₹)</th>
-        <th class="num">Credit (₹)</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td colspan="2" style="border:1px solid #333;padding:6px"><strong>Opening Balance</strong></td>
-        <td style="border:1px solid #333;padding:6px;text-align:right">${info.openingBalancePaise >= 0 ? formatMoney(info.openingBalancePaise) : ""}</td>
-        <td style="border:1px solid #333;padding:6px;text-align:right">${info.openingBalancePaise < 0 ? formatMoney(info.openingBalancePaise) : ""}</td>
-      </tr>
-      ${rows}
-      <tr>
-        <td colspan="2" style="border:1px solid #333;padding:6px"><strong>Closing Balance</strong></td>
-        <td style="border:1px solid #333;padding:6px;text-align:right">${info.closingBalancePaise >= 0 ? formatMoney(info.closingBalancePaise) : ""}</td>
-        <td style="border:1px solid #333;padding:6px;text-align:right">${info.closingBalancePaise < 0 ? formatMoney(info.closingBalancePaise) : ""}</td>
-      </tr>
-    </tbody>
-  </table>
-  <div class="summary">
-    <div><strong>Opening Balance:</strong> ₹ ${formatMoney(info.openingBalancePaise)} ${obSign}</div>
-    <div><strong>Closing Balance:</strong> ₹ ${formatMoney(info.closingBalancePaise)} ${cbSign}</div>
-  </div>
-</body>
-</html>`;
+function formatMoney(paise: number): string {
+  const rupees = Math.abs(paise) / 100;
+  return rupees.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
