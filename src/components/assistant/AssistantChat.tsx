@@ -39,7 +39,7 @@ import {
   fetchContextLedgers,
   intentToRoute,
   writeAssistantPrefill,
-  type VoucherIntent,
+  type VoucherIntentType,
 } from "@/lib/voucher-intent";
 import {
   detectVoucherAction,
@@ -50,7 +50,7 @@ import {
 } from "@/lib/ai/voucher-actions";
 import { localFirstAnswer } from "@/lib/ai/local-first";
 import { routeQuery } from "@/lib/ai/query-router";
-import { runToolCallBlock } from "@/lib/ai/tools";
+import { runToolCallBlock, executeTool, parseToolCall } from "@/lib/ai/tools";
 import { StreamingText } from "@/components/assistant/StreamingText";
 import { AnswerProvenance } from "@/components/assistant/AnswerProvenance";
 import { logAiAction } from "@/lib/ai/audit-log";
@@ -96,7 +96,7 @@ type ParsedCompany = {
 };
 
 type ParsedVoucher = {
-  intent: VoucherIntent;
+  intent: VoucherIntentType;
   date: string;
   amount: number;
   narration?: string;
@@ -118,7 +118,7 @@ const WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
   text:
-    "Hi! I'm **Mate**, your in-app accounting assistant.\n\nI can:\n- **Read** your books — balances, P&L, trial balance, outstanding, GST data\n- **Draft entries** — ledgers, journals, payments, receipts (I always show a preview and wait for your **yes** before posting)\n- **Guide you** through any setting or screen\n\nTry: *“pay ₹5,000 rent to Sharma from HDFC bank today”*, *“create ledger Electricity Expenses”*, or *“show my receivables”*.",
+    "Hi! I'm **Mate**, your in-app accounting assistant.\n\nI can:\n- **Read** your books — balances, P&L, trial balance, outstanding, GST data\n- **Draft entries** — ledgers, journals, payments, receipts (I always show a preview and wait for your **yes** before posting)\n- **Guide you** through any setting or screen\n\nTry: *\"pay ₹5,000 rent to Sharma from HDFC bank today\"*, *\"create ledger Electricity Expenses\"*, or *\"show my receivables\"*.",
 };
 
 const SUGGESTIONS = [
@@ -131,6 +131,7 @@ const SUGGESTIONS = [
 ];
 
 const DIRECT_EXECUTE_CONFIDENCE = 0.85;
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  COMPONENT
@@ -314,6 +315,118 @@ export function AssistantChat() {
 
     return Object.keys(out).length === 0 ? null : (out as ParsedCompany);
   }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  //  SPEED PATH — direct client-side tool execution (no network)
+  // ═════════════════════════════════════════════════════════════════════════
+
+  async function tryDirectToolAnswer(
+    route: ReturnType<typeof routeQuery>,
+    text: string,
+    startTime: number,
+  ): Promise<boolean> {
+    if (!activeCompanyId || route.requiresLLM || route.confidence < 0.75) return false;
+
+    let toolName: string | null = null;
+    let toolArgs: Record<string, unknown> = {};
+
+    switch (route.intent) {
+      case "party_balance":
+        if (route.entity?.partyName) {
+          toolName = "get_party_balance";
+          toolArgs = { name: route.entity.partyName, asOn: route.entity.dateRange?.to };
+        }
+        break;
+      case "cash_balance":
+        toolName = "get_cash_balance";
+        toolArgs = { account: "cash" };
+        break;
+      case "bank_balance":
+        toolName = "get_cash_balance";
+        toolArgs = { account: route.entity?.accountName || "bank" };
+        break;
+      case "trial_balance":
+        toolName = "get_trial_balance";
+        break;
+      case "voucher_lookup": {
+        const numMatch = text.match(/#?\s*([A-Z0-9\-/]{2,})/i);
+        if (numMatch) {
+          toolName = "get_voucher";
+          toolArgs = { number: numMatch[1] };
+        }
+        break;
+      }
+    }
+
+    if (!toolName) return false;
+
+    try {
+      const result = await executeTool(toolName, toolArgs);
+      if (!result.success || !result.data) return false;
+
+      const data = result.data as any;
+      const facts = data?.facts || {};
+      let card: StructuredCard | undefined;
+
+      if (route.intent === "party_balance") {
+        const closing = Number(facts.closing_balance_paise ?? 0);
+        card = {
+          kind: "party_balance",
+          partyName: route.entity?.partyName || String(facts.resolved_party_name || ""),
+          closingPaise: closing,
+          isDebit: closing >= 0,
+          asOnDate: route.entity?.dateRange?.to || null,
+          openingPaise: Number(facts.opening_balance_paise ?? 0),
+          debitPaise: Number(facts.total_debit_paise ?? 0),
+          creditPaise: Number(facts.total_credit_paise ?? 0),
+          voucherCount: Number(facts.voucher_count ?? 0),
+          modeSplit: facts.mode_split
+            ? {
+                cashPaise: Number(facts.mode_split.cash_paise ?? 0),
+                bankPaise: Number(facts.mode_split.bank_paise ?? 0),
+                otherPaise: Number(facts.mode_split.other_paise ?? 0),
+              }
+            : undefined,
+        };
+      } else if (route.intent === "cash_balance") {
+        const closing = Number(facts.closing_balance_paise ?? 0);
+        card = {
+          kind: "cash_balance",
+          accountName: "Cash",
+          closingPaise: closing,
+          isDebit: closing >= 0,
+        };
+      } else if (route.intent === "bank_balance") {
+        const closing = Number(facts.closing_balance_paise ?? 0);
+        card = {
+          kind: "bank_balance",
+          accountName: route.entity?.accountName || String(facts.account_name || "Bank"),
+          closingPaise: closing,
+          isDebit: closing >= 0,
+        };
+      } else if (route.intent === "trial_balance") {
+        const rows = (data?.data?.rows || data?.rows || []).map((r: any) => ({
+          name: String(r.name || ""),
+          debitPaise: Number(r.debitPaise || r.debit_paise || 0),
+          creditPaise: Number(r.creditPaise || r.credit_paise || 0),
+          closingPaise: Number(r.closingPaise || r.closing_paise || 0),
+        }));
+        card = { kind: "trial_balance", rows };
+      }
+
+      if (!card) return false;
+      const prose = localFirstAnswer(card);
+      if (!prose) return false;
+
+      const latency = Math.round(performance.now() - startTime);
+      addMessage({ role: "assistant", text: prose, card, latencyMs: latency });
+      return true;
+    } catch (e) {
+      console.warn("[assistant.speed-path] direct tool failed, falling back", e);
+      return false;
+    }
+  }
+
 
   // ═════════════════════════════════════════════════════════════════════════
   //  COMPANY CREATION
@@ -548,6 +661,7 @@ export function AssistantChat() {
     navigate({ to: intentToRoute(draft.intent) });
   }
 
+
   // ═════════════════════════════════════════════════════════════════════════
   //  MAIN ASK HANDLER
   // ═════════════════════════════════════════════════════════════════════════
@@ -562,15 +676,19 @@ export function AssistantChat() {
 
     void (async () => {
       const startTime = performance.now();
+      const route = routeQuery(text);
 
-      // ── Local-first: deterministic balance / trial balance / voucher lookup
+      // ── Instant greeting / deterministic text (zero IO)
+      if (!route.requiresLLM && !route.requiresTools && route.deterministicAnswer) {
+        const latency = Math.round(performance.now() - startTime);
+        addMessage({ role: "assistant", text: route.deterministicAnswer, latencyMs: latency });
+        return;
+      }
+
+      // ── Speed path: direct client-side tool execution (~5–50 ms)
       if (activeCompanyId) {
-        const route = routeQuery(text);
-        if (!route.requiresLLM && !route.requiresTools && route.deterministicAnswer) {
-          const latency = Math.round(performance.now() - startTime);
-          addMessage({ role: "assistant", text: route.deterministicAnswer, latencyMs: latency });
-          return;
-        }
+        const handled = await tryDirectToolAnswer(route, text, startTime);
+        if (handled) return;
       }
 
       // ── Company creation
@@ -649,7 +767,7 @@ export function AssistantChat() {
       }
 
       // ── LLM-based draft path (fallback for ambiguous inputs)
-      const intent: VoucherIntent | null = activeCompanyId ? detectVoucherIntent(text) : null;
+      const intent: VoucherIntentType | null = activeCompanyId ? detectVoucherIntent(text) : null;
       if (intent && activeCompanyId && user) {
         setThinking(true);
         try {
@@ -717,12 +835,15 @@ export function AssistantChat() {
             if (res.memory) memoryRef.current = res.memory;
 
             if (res.text) {
+              const parsedCall = parseToolCall(res.text);
               const toolRun = await runToolCallBlock(res.text);
               if (toolRun && toolRun.result.success) {
-                finalToolCalls.push({
-                  name: (toolRun.result.data as any)?.name || "tool",
-                  input: JSON.stringify((toolRun.result.data as any)?.args || {}),
-                });
+                if (parsedCall) {
+                  finalToolCalls.push({
+                    name: parsedCall.name,
+                    input: JSON.stringify(parsedCall.args),
+                  });
+                }
                 history.push({ role: "assistant", content: toolRun.strippedText });
                 history.push({ role: "user", content: `Tool result: ${JSON.stringify(toolRun.result.data)}` });
                 toolIterations++;
@@ -814,6 +935,7 @@ export function AssistantChat() {
 
   const COMPANY_HELP_TEXT =
     "**Create a company**\n\nI can create one for you right here. Just paste the details (any order works). The only **required** field is the company name — everything else can be added later.\n\n**You can include:**\n- **Name** (required) — e.g. *Name: ABC Traders*\n- **GSTIN** (15 chars) — auto-detects state & marks you as Registered\n- **PAN** (10 chars)\n- **State** — e.g. *State: Maharashtra* or *State code: 27*\n- **Phone**, **Email**, **Address**\n- **FY start** — e.g. *FY: 2025-04-01* (defaults to 1-Apr current year)\n- **Inventory: yes/no** (default yes)\n\n**Example — paste this and edit:**\n`Name: ABC Traders, GSTIN: 27ABCDE1234F1Z5, PAN: ABCDE1234F, Phone: 9876543210, Email: hi@abc.in, Address: 12 MG Road Pune, Inventory: yes`";
+
 
   // ═════════════════════════════════════════════════════════════════════════
   //  RENDER
@@ -1050,7 +1172,7 @@ function formatInrCard(paise: number): string {
   return "₹" + new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rupees);
 }
 
-function BalanceCard({ card }: { card: StructuredCard }) {
+function BalanceCard({ card, latencyMs }: { card: StructuredCard; latencyMs?: number }) {
   const drCr = card.isDebit ? "Dr" : "Cr";
   const closingClass = card.isDebit ? "text-emerald-600" : "text-rose-600";
   return (
@@ -1101,7 +1223,7 @@ function BalanceCard({ card }: { card: StructuredCard }) {
       ) : null}
       <div className="mt-2 text-[10px] text-muted-foreground">
         Verified from your books · {card.voucherCount} voucher{card.voucherCount === 1 ? "" : "s"}
-        {card.latencyMs !== undefined && card.latencyMs < 100 ? ` · ⚡ ${card.latencyMs}ms` : ""}
+        {latencyMs !== undefined && latencyMs < 100 ? ` · ⚡ ${latencyMs}ms` : ""}
       </div>
     </div>
   );
@@ -1153,7 +1275,7 @@ function MessageBubble({
           </div>
         )}
 
-        {!isUser && msg.card ? <BalanceCard card={msg.card} /> : null}
+        {!isUser && msg.card ? <BalanceCard card={msg.card} latencyMs={msg.latencyMs} /> : null}
 
         {isUser ? <RichText text={msg.text} /> : <StreamingText text={msg.text} render={(t) => <RichText text={t} />} />}
 
@@ -1361,158 +1483,22 @@ function RichText({ text }: { text: string }) {
       {lines.map((line, i) => {
         if (line.trim().startsWith("- ")) {
           return (
-            <div key={i} className="ml-3 flex gap-1.5">
-              <span aria-hidden>•</span>
-              <span dangerouslySetInnerHTML={{ __html: inlineMd(line.replace(/^- /, "")) }} />
+            <div key={i} className="ml-3 flex gap-1">
+              <span className="text-muted-foreground">•</span>
+              <span>{line.trim().slice(2)}</span>
             </div>
           );
         }
-        if (line.trim() === "") return <div key={i} className="h-1" />;
-        return <div key={i} dangerouslySetInnerHTML={{ __html: inlineMd(line) }} />;
+        if (/^\d+\./.test(line.trim())) {
+          return (
+            <div key={i} className="ml-3 flex gap-1">
+              <span className="text-muted-foreground">{line.trim().match(/^\d+/)?.[0]}.</span>
+              <span>{line.trim().replace(/^\d+\.\s*/, "")}</span>
+            </div>
+          );
+        }
+        return <div key={i}>{line}</div>;
       })}
     </div>
   );
 }
-
-function inlineMd(s: string): string {
-  const esc = s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  return esc
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/_(.+?)_/g, "<em>$1</em>")
-    .replace(/`([^`]+)`/g, '<code class="rounded bg-background/60 px-1 text-[11px]">$1</code>');
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-//  OCR PREVIEW CARD
-// ═════════════════════════════════════════════════════════════════════════════
-
-function OcrPreviewCard({
-  draft,
-  memoryHint,
-  disabled,
-  onConfirm,
-  onCancel,
-}: {
-  draft: OcrDraft;
-  memoryHint?: PartyPattern;
-  disabled: boolean;
-  onConfirm: (opts: { remember: boolean; overrideLedgerId?: string; overrideLedgerName?: string }) => void;
-  onCancel: () => void;
-}) {
-  const [remember, setRemember] = useState(false);
-  const [overrideId, setOverrideId] = useState<string | undefined>(undefined);
-  const [overrideName, setOverrideName] = useState<string | undefined>(undefined);
-  const e = draft.extracted;
-  const validation = useMemo(() => validateOcrExtract(e), [e]);
-  const conf = Math.round(validation.adjustedConfidence * 100);
-  const confTone =
-    conf >= 80 ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" :
-    conf >= 60 ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" :
-                 "bg-rose-500/15 text-rose-700 dark:text-rose-300";
-  const matched = !!draft.matchedPartyLedgerId;
-
-  return (
-    <div className="mt-3 rounded-lg border bg-background/60 p-3 text-xs">
-      <div className="mb-2 flex items-center gap-2">
-        <ScanLine className="h-3.5 w-3.5 text-primary" />
-        <div className="font-semibold">Extracted invoice</div>
-        <Badge className={`ml-auto gap-1 border-0 ${confTone}`}>{conf}% confidence</Badge>
-      </div>
-
-      {memoryHint && (
-        <div className="mb-2 flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2">
-          <BrainCircuit className="mt-0.5 h-3.5 w-3.5 text-primary" />
-          <div className="space-y-0.5">
-            <div className="font-medium text-primary">I remember this party</div>
-            <div className="text-[11px] text-muted-foreground">
-              You booked <b>{memoryHint.displayName}</b> under <b>{memoryHint.counterLedgerName ?? "—"}</b>
-              {memoryHint.rcmPercent ? ` with ${memoryHint.rcmPercent}% RCM` : ""} · seen {memoryHint.hits}×.
-              {memoryHint.note ? ` Note: ${memoryHint.note}` : ""}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {validation.issues.length > 0 && (
-        <div className="mb-2 space-y-1 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
-          <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
-            {validation.blocking ? "Fix these before posting" : "Please verify"}
-          </div>
-          {validation.issues.map((iss, i) => (
-            <div key={i} className="text-[11px] text-muted-foreground">
-              <span className={iss.level === "error" ? "text-rose-600 dark:text-rose-400" : ""}>
-                {iss.level === "error" ? "✕" : "!"}
-              </span>{" "}
-              {iss.message}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-        <div><span className="text-muted-foreground">Party:</span> <b>{e.party_name || "—"}</b></div>
-        <div><span className="text-muted-foreground">GSTIN:</span> {e.party_gstin || "—"}</div>
-        <div><span className="text-muted-foreground">Invoice #:</span> {e.invoice_number || "—"}</div>
-        <div><span className="text-muted-foreground">Date:</span> {e.invoice_date || "—"}</div>
-        <div><span className="text-muted-foreground">Taxable:</span> ₹ {e.taxable_value?.toLocaleString("en-IN")}</div>
-        <div><span className="text-muted-foreground">GST:</span> ₹ {((e.cgst||0)+(e.sgst||0)+(e.igst||0)).toLocaleString("en-IN")} {e.is_interstate ? "(IGST)" : "(CGST+SGST)"}</div>
-        <div><span className="text-muted-foreground">Total:</span> <b>₹ {e.total_amount?.toLocaleString("en-IN")}</b></div>
-        <div><span className="text-muted-foreground">Items:</span> {e.line_items?.length ?? 0}</div>
-      </div>
-
-      {matched && (
-        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
-          <Check className="h-3 w-3" /> Matched to ledger: <b>{draft.matchedPartyName}</b>
-        </div>
-      )}
-
-      {!matched && e.party_name && (
-        <div className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
-          ! Party not matched — a new ledger will be created on save.
-        </div>
-      )}
-
-      {disabled ? (
-        <div className="mt-3 text-[11px] text-muted-foreground">This draft has been actioned.</div>
-      ) : (
-        <>
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              id={`remember-${draft.extracted.invoice_number || "ocr"}`}
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-border accent-primary"
-            />
-            <label htmlFor={`remember-${draft.extracted.invoice_number || "ocr"}`} className="text-[11px] text-muted-foreground cursor-pointer">
-              Remember this party pattern for next time
-            </label>
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <Button
-              size="sm"
-              className="h-7 gap-1 text-xs bg-emerald-600 text-white hover:bg-emerald-700"
-              onClick={() => onConfirm({ remember, overrideLedgerId: overrideId, overrideLedgerName: overrideName })}
-            >
-              <Check className="h-3 w-3" /> Open {draft.intent} form
-            </Button>
-            <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={onCancel}>
-              <X className="h-3 w-3" /> Discard
-            </Button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-//  EXPORTS
-// ═════════════════════════════════════════════════════════════════════════════
-
-export default AssistantChat;
