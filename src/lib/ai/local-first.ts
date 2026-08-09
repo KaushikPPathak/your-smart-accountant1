@@ -23,39 +23,86 @@ function formatInr(paise: number): string {
  * Returns null when we should still call the LLM.
  */
 export function localFirstAnswer(card: StructuredCard | undefined): string | null {
-  if (!card || card.kind !== "party_balance") return null;
-  const drCr = card.isDebit ? "Dr" : "Cr";
-  const asOn = card.asOnDate ? ` as on ${card.asOnDate}` : "";
-  const owes = card.isDebit
-    ? `${card.partyName} owes you ${formatInr(card.closingPaise)}${asOn}.`
-    : `You owe ${card.partyName} ${formatInr(card.closingPaise)}${asOn}.`;
+  if (!card) return null;
 
-  const parts: string[] = [];
-  parts.push(owes);
+  switch (card.kind) {
+    case "party_balance": {
+      const asOn = card.asOnDate ? ` as on ${card.asOnDate}` : "";
+      const owes = card.isDebit
+        ? `${card.partyName} owes you ${formatInr(card.closingPaise)}${asOn}.`
+        : `You owe ${card.partyName} ${formatInr(card.closingPaise)}${asOn}.`;
 
-  // Cash-vs-bank narrative when we have the split.
-  if (card.modeSplit) {
-    const { cashPaise, bankPaise, otherPaise } = card.modeSplit;
-    const total = Math.abs(cashPaise) + Math.abs(bankPaise) + Math.abs(otherPaise);
-    if (total > 0) {
-      const bits: string[] = [];
-      if (Math.abs(cashPaise) > 0) bits.push(`${formatInr(cashPaise)} in cash`);
-      if (Math.abs(bankPaise) > 0) bits.push(`${formatInr(bankPaise)} through bank`);
-      if (Math.abs(otherPaise) > 0) bits.push(`${formatInr(otherPaise)} through other modes`);
-      if (bits.length) parts.push(`Settlement mode split: ${bits.join(", ")}.`);
+      const parts: string[] = [];
+      parts.push(owes);
+
+      if (card.modeSplit) {
+        const { cashPaise, bankPaise, otherPaise } = card.modeSplit;
+        const total = Math.abs(cashPaise) + Math.abs(bankPaise) + Math.abs(otherPaise);
+        if (total > 0) {
+          const bits: string[] = [];
+          if (Math.abs(cashPaise) > 0) bits.push(`${formatInr(cashPaise)} in cash`);
+          if (Math.abs(bankPaise) > 0) bits.push(`${formatInr(bankPaise)} through bank`);
+          if (Math.abs(otherPaise) > 0) bits.push(`${formatInr(otherPaise)} through other modes`);
+          if (bits.length) parts.push(`Settlement mode split: ${bits.join(", ")}.`);
+        }
+      }
+
+      parts.push(
+        `Movement in the period: ${formatInr(card.debitPaise)} Dr, ${formatInr(card.creditPaise)} Cr ` +
+          `across ${card.voucherCount} voucher${card.voucherCount === 1 ? "" : "s"}. ` +
+          `Opening was ${formatInr(card.openingPaise)}.`,
+      );
+
+      parts.push(
+        "_Answered locally from your books — no cloud AI was called. " +
+          'Ask a follow-up like "why?" or "compare with last year" to get a narrative._',
+      );
+
+      return parts.join("\n\n");
     }
+
+    case "cash_balance": {
+      const label = "Cash";
+      return `${label} balance is ${formatInr(card.closingPaise)} ${card.isDebit ? "Dr" : "Cr"}.\n\n_Answered locally._`;
+    }
+
+    case "bank_balance": {
+      const label = card.accountName || "Bank";
+      return `${label} balance is ${formatInr(card.closingPaise)} ${card.isDebit ? "Dr" : "Cr"}.\n\n_Answered locally._`;
+    }
+
+    case "trial_balance": {
+      if (!card.rows?.length) return "Trial balance is empty.";
+      const dr = card.rows.reduce((s, r) => s + (r.debitPaise > 0 ? r.debitPaise : 0), 0);
+      const cr = card.rows.reduce((s, r) => s + (r.creditPaise > 0 ? r.creditPaise : 0), 0);
+      const diff = Math.abs(dr - cr);
+      return [
+        `Trial balance — ${card.rows.length} ledgers.`,
+        `Total Dr: ${formatInr(dr)} | Total Cr: ${formatInr(cr)}`,
+        diff < 1 ? "✅ Balanced." : `⚠️ Off by ${formatInr(diff)}.`,
+        `_Answered locally._`,
+      ].join("\n\n");
+    }
+
+    case "voucher_lookup": {
+      if (!card.voucher) return null;
+      const v = card.voucher;
+      return [
+        `**Voucher ${v.number}** (${v.type}) — ${v.date}`,
+        `Narration: ${v.narration}`,
+        `_Answered locally._`,
+      ].join("\n\n");
+    }
+
+    case "voucher_list": {
+      if (!card.vouchers?.length) return "No vouchers found.";
+      const lines = card.vouchers.map((v: any, i: number) =>
+        `${i + 1}. **${v.number}** — ${v.narration || v.kind}`,
+      );
+      return lines.join("\n") + "\n\n_Answered locally._";
+    }
+
+    default:
+      return null;
   }
-
-  parts.push(
-    `Movement in the period: ${formatInr(card.debitPaise)} Dr, ${formatInr(card.creditPaise)} Cr ` +
-      `across ${card.voucherCount} voucher${card.voucherCount === 1 ? "" : "s"}. ` +
-      `Opening was ${formatInr(card.openingPaise)}.`,
-  );
-
-  parts.push(
-    "_Answered locally from your books — no cloud AI was called. " +
-      "Ask a follow-up like \"why?\" or \"compare with last year\" to get a narrative._",
-  );
-
-  return parts.join("\n\n");
 }
