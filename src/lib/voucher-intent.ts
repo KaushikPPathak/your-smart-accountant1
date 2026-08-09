@@ -214,21 +214,24 @@ function parseAmount(text: string): number | null {
 
 function parseDate(text: string): string {
   const today = new Date();
-  if (/today/i.test(text)) return today.toISOString().split("T")[0];
-  if (/yesterday/i.test(text)) {
+  if (/\btoday\b/i.test(text)) return today.toISOString().split("T")[0];
+  if (/\byesterday\b/i.test(text)) {
     const yest = new Date(today);
     yest.setDate(yest.getDate() - 1);
     return yest.toISOString().split("T")[0];
   }
 
-  const dayMatch = text.match(/(?:on\s+)?(\d{1,2})(?:st|nd|rd|th)?/i);
+  // Word-bounded so "15000" doesn't match as day 15
+  const dayMatch = text.match(/\b(?:on\s+)?(\d{1,2})(?:st|nd|rd|th)?\b/i);
   if (dayMatch) {
     const day = parseInt(dayMatch[1]);
-    const date = new Date(today.getFullYear(), today.getMonth(), day);
-    return date.toISOString().split("T")[0];
+    if (day >= 1 && day <= 31) {
+      const date = new Date(today.getFullYear(), today.getMonth(), day);
+      return date.toISOString().split("T")[0];
+    }
   }
 
-  const fullMatch = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  const fullMatch = text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
   if (fullMatch) {
     const [, d, m, y] = fullMatch;
     const year = y.length === 2 ? `20${y}` : y;
