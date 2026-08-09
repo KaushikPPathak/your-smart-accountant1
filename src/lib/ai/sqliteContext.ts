@@ -6,7 +6,7 @@
 // for the original rows back later via `retrieveOriginal`.
 
 import { cacheRowsForCcr, compressMessages } from "./headroom";
-import { routeQuery, type QueryIntent, type RoutedQuery } from "./query-router";
+import { routeQuery, type IntentType } from "./query-router";
 import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
 import { takeSpeculation } from "./prefetch";
 import { optimiseSlice } from "./slice-optimizer";
@@ -22,25 +22,40 @@ export interface AccountingContext {
   recentVouchers?: number;
 }
 
+export type CardKind =
+  | "party_balance"
+  | "cash_balance"
+  | "bank_balance"
+  | "trial_balance"
+  | "voucher_lookup"
+  | "voucher_list";
+
 /** Structured answer card — the deterministic "ground truth" the client
  *  renders alongside (and above) the model's prose commentary. Built from
  *  local aggregators, never from the LLM. */
 export interface StructuredCard {
-  kind: "party_balance";
+  kind: CardKind;
   companyName?: string | null;
-  partyName: string;
+  partyName?: string;
   partyGroup?: string | null;
-  openingPaise: number;
-  debitPaise: number;
-  creditPaise: number;
-  closingPaise: number;
+  openingPaise?: number;
+  debitPaise?: number;
+  creditPaise?: number;
+  closingPaise?: number;
   /** true if closing is Dr (net debit), false if Cr. */
-  isDebit: boolean;
-  asOnDate: string | null;
+  isDebit?: boolean;
+  asOnDate?: string | null;
   modeSplit?: { cashPaise: number; bankPaise: number; otherPaise: number };
-  voucherCount: number;
+  voucherCount?: number;
   /** Drill-through: recent vouchers touching this party (id + display info). */
   recentVouchers?: { id: string; number: string; date: string; kind: string; totalPaise: number }[];
+  /** Cash / bank / trial balance fields */
+  accountName?: string;
+  rows?: Array<{ name: string; debitPaise: number; creditPaise: number; closingPaise: number }>;
+  /** Voucher lookup fields */
+  voucher?: any;
+  vouchers?: any[];
+  totalPaise?: number;
 }
 
 export interface CompressedContext {
@@ -49,7 +64,7 @@ export interface CompressedContext {
   ccrHashes: Record<string, string>;
   compressed: boolean;
   /** Intent the router picked — surfaced for debugging / analytics. */
-  intent: QueryIntent;
+  intent: IntentType;
   /** Human-readable description of the slice we sent. */
   scope: string;
   /** Reverse-PII map. Keep it local and call `unredactAnswer` on the LLM reply. */
@@ -60,10 +75,29 @@ export interface CompressedContext {
   memory: ConversationMemory;
 }
 
+/** Local shape that retrievers expect — mapped from your RouteResult. */
+interface RoutedQuery {
+  intent: IntentType;
+  entityHints: string[];
+  asOn?: string;
+  from?: string;
+  to?: string;
+}
+
 function resolveContextCompanyId(explicitCompanyId?: string | null): string | null {
   if (explicitCompanyId) return explicitCompanyId;
   if (typeof window === "undefined") return null;
   try { return localStorage.getItem("ym_active_company_id"); } catch { return null; }
+}
+
+function mapRouteResultToRouted(result: ReturnType<typeof routeQuery>): RoutedQuery {
+  return {
+    intent: result.intent,
+    entityHints: result.entity?.partyName ? [result.entity.partyName] : [],
+    asOn: result.entity?.dateRange?.to,
+    from: result.entity?.dateRange?.from,
+    to: result.entity?.dateRange?.to,
+  };
 }
 
 /** Merge previously-resolved context into the routed query so follow-up
@@ -76,9 +110,9 @@ function enrichWithPrior(routed: RoutedQuery, prior?: ConversationMemory): Route
     out.entityHints.push(prior.partyName);
     // If the follow-up has no strong intent signal, inherit the last one so
     // "and as on 31/12/2025?" stays a party_balance lookup instead of falling
-    // back to `general`.
-    if (out.intent === "general" && (prior.intent === "party_balance" || prior.intent === "party_ledger")) {
-      out.intent = prior.intent;
+    // back to `unknown`.
+    if (out.intent === "unknown" && prior.intent === "party_balance") {
+      out.intent = prior.intent as IntentType;
     }
   }
   if (!out.asOn && !out.to && prior.asOnDate) {
@@ -90,7 +124,7 @@ function enrichWithPrior(routed: RoutedQuery, prior?: ConversationMemory): Route
 }
 
 function buildStructuredCard(routed: RoutedQuery, slice: RetrievedSlice): StructuredCard | undefined {
-  if (routed.intent !== "party_balance" && routed.intent !== "party_ledger") return undefined;
+  if (routed.intent !== "party_balance") return undefined;
   const facts = slice.facts as Record<string, unknown> | undefined;
   if (!facts || facts.resolved_party_id == null) return undefined;
   const opening = Number(facts.opening_balance_paise ?? 0);
@@ -142,7 +176,8 @@ export async function buildCompressedContext(
   companyId?: string | null,
   prior?: ConversationMemory,
 ): Promise<CompressedContext> {
-  const routedRaw = routeQuery(userQuestion);
+  const routeResult = routeQuery(userQuestion);
+  const routedRaw = mapRouteResultToRouted(routeResult);
   const routed = enrichWithPrior(routedRaw, prior);
 
   // Phase I — reuse the slice speculatively retrieved while the user typed,
@@ -150,7 +185,7 @@ export async function buildCompressedContext(
   let rawSlice: RetrievedSlice | null = null;
   try {
     const spec = await takeSpeculation(companyId, userQuestion);
-    if (spec && spec.slice && JSON.stringify(spec.routed) === JSON.stringify(routedRaw)) {
+    if (spec && spec.slice && JSON.stringify(mapRouteResultToRouted(spec.routed)) === JSON.stringify(routedRaw)) {
       rawSlice = spec.slice;
     }
   } catch {
