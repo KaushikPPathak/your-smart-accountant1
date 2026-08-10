@@ -160,12 +160,15 @@ export function ReportViewer({
           window.print();
         } else if (mode === "pdf") {
           onExportPdf?.();
-          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation, addressLine);
+
         } else if (mode === "word") {
           doWord();
-          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation, addressLine);
+
         } else if (mode === "preview") {
-          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation, addressLine);
+
         }
       }, 50);
     },
@@ -198,7 +201,7 @@ export function ReportViewer({
     { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "Print preview" });
 
   React.useEffect(() => {
-    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation, addressLine);
     window.addEventListener("report:preview", handler as EventListener);
     return () => window.removeEventListener("report:preview", handler as EventListener);
   }, [company, localizedHeading, localizedTitle, fyShort, orientation]);
@@ -303,7 +306,9 @@ function openPrintPreview(
   heading: string,
   fyShort: string,
   orientation: "portrait" | "landscape",
+  addressLine?: string,
 ): void {
+
   recordStage("preview", "start", {
     report: heading,
     node_found: !!el,
@@ -323,6 +328,7 @@ function openPrintPreview(
   if (existing) existing.remove();
 
   const orient = orientation === "landscape" ? "landscape" : "portrait";
+  const address = addressLine || "";
 
   // Clone the live DOM so late-rendered rows are captured.
   const clone = el.cloneNode(true) as HTMLElement;
@@ -339,7 +345,9 @@ function openPrintPreview(
     clone_html_len: clone.outerHTML.length,
     tables: clone.querySelectorAll("table").length,
     rows: clone.querySelectorAll("tr").length,
+    has_address: !!address,
   });
+
 
   const css = `
     @page { size: A4 ${orient}; margin: 14mm; }
@@ -409,6 +417,8 @@ function openPrintPreview(
     .report-print-fy-line { font-size: 10pt; font-weight: 500; margin-top: 1pt; }
     .report-header-rule { height: 3px; border-top: 1px solid #000;
       border-bottom: 1px solid #000; margin: 4pt 0 8pt; }
+    .report-address-line { font-size: 8.5pt; color: #444; margin-top: 1pt; }
+
     table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
     th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
       text-align: left; }
@@ -441,9 +451,17 @@ function openPrintPreview(
   <button onclick="window.parent.document.getElementById('report-preview-iframe').remove()">Close</button>
   <span style="margin-left:auto;color:#666">Print Preview</span>
 </div>
+<div class="report-print-header" style="text-align:center;margin-bottom:10pt;display:none;print:block">
+  <div class="report-print-company-name" style="font-size:13pt;font-weight:700;text-transform:uppercase;color:#002060">${escape(company)}</div>
+  <div class="report-print-title" style="font-size:11pt;font-weight:600;margin-top:2pt">${escape(heading)}</div>
+  ${fyShort ? `<div class="report-print-fy-line" style="font-size:10pt;font-weight:500;margin-top:1pt">${escape(fyShort)}</div>` : ""}
+  ${address ? `<div class="report-address-line" style="font-size:8.5pt;color:#444;margin-top:1pt">${escape(address)}</div>` : ""}
+  <div class="report-header-rule" style="height:3px;border-top:1px solid #000;border-bottom:1px solid #000;margin:4pt 0 8pt"></div>
+</div>
 <div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">
   ${clone.outerHTML}
 </div>
+
 </body>
 </html>`;
 

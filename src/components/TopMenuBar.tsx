@@ -396,7 +396,10 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     [openMenuKey, orderedMenuKeys],
   );
 
-  const openOnHover = useCallback((key: string) => () => setOpenMenuKey(key), []);
+  const openOnHover = useCallback((key: string) => () => {
+    setOpenMenuKey(key);
+  }, []);
+
 
   // ---------------------------------------------------------------------------
   // Edge navigation: ArrowUp on the first dropdown item hops focus to the
