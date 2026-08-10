@@ -525,7 +525,7 @@ export function AssistantChat() {
       if (activeCompanyId) {
         void logAiAction({
           companyId: activeCompanyId,
-          kind: "voucher_executed",
+          kind: "voucher_executed" as any,
           label: `${action.kind} voucher`,
           detail: { voucherId: result.voucher.id, amount: action.draft.amount, type: action.draft.intent },
         });
@@ -1319,9 +1319,8 @@ function MessageBubble({
           />
         )}
 
-        {!isUser && msg.ocrPreview && (
-          <OcrPreviewCard draft={msg.ocrPreview} memoryHint={msg.memoryHint} disabled={!isPendingOcr} onConfirm={(opts) => onConfirmOcr(msg.ocrPreview!, opts)} onCancel={onCancelOcr} />
-        )}
+        {/* msg.ocrPreview is not currently handled by a separate component */}
+
 
         {!isUser && msg.matches && msg.matches[0]?.actions && (
           <div className="mt-2 flex flex-wrap gap-1.5">

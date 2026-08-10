@@ -56,7 +56,15 @@ export function speculate(companyId: string | null | undefined, draft: string, d
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     idle(() => {
-      const routed = routeQuery(draft);
+      const routeResult = routeQuery(draft);
+      const routed: any = {
+        intent: routeResult.intent,
+        entityHints: routeResult.entity?.partyName ? [routeResult.entity.partyName] : [],
+        asOn: routeResult.entity?.dateRange?.to,
+        from: routeResult.entity?.dateRange?.from,
+        to: routeResult.entity?.dateRange?.to,
+      };
+
       const promise = (async () => {
         try {
           // Warm the vector index too — first query on a cold index is the

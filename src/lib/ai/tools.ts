@@ -240,7 +240,15 @@ async function execGetPartyBalance(args: Record<string, unknown>): Promise<ToolR
   if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
 
   const q = `balance of ${name}${asOn ? ` as on ${asOn}` : ""}`;
-  const routed = routeQuery(q);
+  const routeResult = routeQuery(q);
+  const routed: any = {
+    intent: routeResult.intent,
+    entityHints: routeResult.entity?.partyName ? [routeResult.entity.partyName] : [],
+    asOn: routeResult.entity?.dateRange?.to,
+    from: routeResult.entity?.dateRange?.from,
+    to: routeResult.entity?.dateRange?.to,
+  };
+
   const slice = await retrieveForQuery(routed, cid);
   const result = { scope: slice.scope, facts: slice.facts, vouchers: (slice.data.vouchers as any[])?.slice(0, 10) };
 
@@ -260,8 +268,15 @@ async function execGetCashBalance(args: Record<string, unknown>): Promise<ToolRe
   if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
 
   const q = `balance of ${account}${asOn ? ` as on ${asOn}` : ""}`;
-  const routed = routeQuery(q);
-  routed.intent = "party_balance";
+  const routeResult = routeQuery(q);
+  const routed: any = {
+    intent: "party_balance",
+    entityHints: routeResult.entity?.partyName ? [routeResult.entity.partyName] : [],
+    asOn: routeResult.entity?.dateRange?.to,
+    from: routeResult.entity?.dateRange?.from,
+    to: routeResult.entity?.dateRange?.to,
+  };
+
   const slice = await retrieveForQuery(routed, cid);
   const result = { scope: slice.scope, facts: slice.facts };
 
@@ -314,9 +329,13 @@ async function execGetVoucher(args: Record<string, unknown>): Promise<ToolResult
   const cid = await activeCompanyId();
   if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
 
-  const routed = routeQuery(`voucher ${number}`);
-  (routed as any).voucherNumber = number;
-  routed.intent = "voucher_lookup";
+  const routeResult = routeQuery(`voucher ${number}`);
+  const routed: any = {
+    intent: "voucher_lookup",
+    voucherNumber: number,
+    entityHints: [],
+  };
+
   const slice = await retrieveForQuery(routed, cid);
   const result = { scope: slice.scope, data: slice.data, facts: slice.facts };
 
@@ -332,8 +351,12 @@ async function execGetTrialBalance(): Promise<ToolResult> {
   const cached = await getCached("get_trial_balance", {});
   if (cached) return { success: true, data: cached, cached: true, latencyMs: 0 };
 
-  const routed = routeQuery("trial balance");
-  routed.intent = "trial_balance";
+  const routeResult = routeQuery("trial balance");
+  const routed: any = {
+    intent: "trial_balance",
+    entityHints: [],
+  };
+
   const slice = await retrieveForQuery(routed, cid);
   const result = { scope: slice.scope, data: slice.data, facts: slice.facts };
 
