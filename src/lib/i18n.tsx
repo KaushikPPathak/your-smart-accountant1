@@ -56,7 +56,7 @@ const NAV_KEYS = {
   "nav.brs": "BRS (Book vs Bank)",
   "nav.einvoice": "E-Invoice / EWB",
   // Header / chrome
-  "header.brand": "Your Mehtaji",
+  "header.brand": "Mehtaji",
   "header.tagline": "Accounting Suite",
   // Quick entry ribbon
   "ribbon.quickEntry": "Quick Actions",
@@ -71,7 +71,7 @@ const NAV_KEYS = {
 // Common UI strings. Add keys as needed; missing keys fall back to English then to the key itself.
 const STRINGS: Record<LangCode, Dict> = {
   en: {
-    "app.title": "Your Mehtaji",
+    "app.title": "Mehtaji",
     "app.subtitle": "Open a company",
     "company.select": "Select a company",
     "company.select.desc": "Click a company to open it. Locked companies will ask for a password.",
@@ -92,7 +92,7 @@ const STRINGS: Record<LangCode, Dict> = {
     ...NAV_KEYS,
   },
   hi: {
-    "app.title": "योर मेहताजी",
+    "app.title": "मेहताजी",
     "app.subtitle": "कंपनी खोलें",
     "company.select": "कंपनी चुनें",
     "company.select.desc": "खोलने के लिए कंपनी पर क्लिक करें। लॉक कंपनियाँ पासवर्ड माँगेंगी।",
@@ -144,7 +144,7 @@ const STRINGS: Record<LangCode, Dict> = {
     "nav.bankRecon": "बैंक मिलान",
     "nav.brs": "BRS (बुक बनाम बैंक)",
     "nav.einvoice": "ई-इनवॉइस / EWB",
-    "header.brand": "योर मेहताजी",
+    "header.brand": "मेहताजी",
     "header.tagline": "लेखांकन सुइट",
     "ribbon.quickEntry": "त्वरित क्रियाएं",
     "ribbon.sales": "बिक्री",
@@ -155,7 +155,7 @@ const STRINGS: Record<LangCode, Dict> = {
     "ribbon.contra": "कॉन्ट्रा",
   },
   gu: {
-    "app.title": "યોર મહેતાજી",
+    "app.title": "મહેતાજી",
     "app.subtitle": "કંપની ખોલો",
     "company.select": "કંપની પસંદ કરો",
     "company.select.desc": "ખોલવા માટે કંપની પર ક્લિક કરો. લોક કંપનીઓ પાસવર્ડ માગશે.",
@@ -207,7 +207,7 @@ const STRINGS: Record<LangCode, Dict> = {
     "nav.bankRecon": "બેંક મેળવણી",
     "nav.brs": "BRS (બુક vs બેંક)",
     "nav.einvoice": "ઇ-ઇન્વૉઇસ / EWB",
-    "header.brand": "યોર મહેતાજી",
+    "header.brand": "મહેતાજી",
     "header.tagline": "એકાઉન્ટિંગ સ્યૂટ",
     "ribbon.quickEntry": "ઝડપી એક્શન",
     "ribbon.sales": "વેચાણ",
