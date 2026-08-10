@@ -31,8 +31,9 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
     case "party_balance": {
       const asOn = card.asOnDate ? ` as on ${card.asOnDate}` : "";
       const owes = card.isDebit
-        ? `${card.partyName} owes you ${formatInr(card.closingPaise)}${asOn}.`
-        : `You owe ${card.partyName} ${formatInr(card.closingPaise)}${asOn}.`;
+        ? `${card.partyName} owes you ${formatInr(card.closingPaise ?? 0)}${asOn}.`
+        : `You owe ${card.partyName} ${formatInr(card.closingPaise ?? 0)}${asOn}.`;
+
 
       const parts: string[] = [];
       parts.push(owes);
@@ -52,8 +53,9 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
 
       parts.push(
         `Movement in the period: ${formatInr(card.debitPaise ?? 0)} Dr, ${formatInr(card.creditPaise ?? 0)} Cr ` +
-          `across ${card.voucherCount} voucher${card.voucherCount === 1 ? "" : "s"}. ` +
-          `Opening was ${formatInr(card.openingPaise)}.`,
+          `across ${card.voucherCount ?? 0} voucher${card.voucherCount === 1 ? "" : "s"}. ` +
+          `Opening was ${formatInr(card.openingPaise ?? 0)}.`,
+
       );
 
       parts.push(
@@ -66,12 +68,13 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
 
     case "cash_balance": {
       const label = "Cash";
-      return `${label} balance is ${formatInr(card.closingPaise)} ${card.isDebit ? "Dr" : "Cr"}.\n\n_Answered locally._`;
+      return `${label} balance is ${formatInr(card.closingPaise ?? 0)} ${card.isDebit ? "Dr" : "Cr"}.\n\n_Answered locally._`;
+
     }
 
     case "bank_balance": {
       const label = card.accountName || "Bank";
-      return `${label} balance is ${formatInr(card.closingPaise)} ${card.isDebit ? "Dr" : "Cr"}.\n\n_Answered locally._`;
+      return `${label} balance is ${formatInr(card.closingPaise ?? 0)} ${card.isDebit ? "Dr" : "Cr"}.\n\n_Answered locally._`;
     }
 
     case "trial_balance": {
