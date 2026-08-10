@@ -251,10 +251,11 @@ export function ReportViewer({
             {localizedHeading || localizedTitle}
           </div>
           {fyShort && (
-            <div className="report-print-fy-line text-[12px] font-medium text-foreground mt-0.5">
-              {fyShort}
+            <div className="report-print-fy-line text-[11px] font-medium text-foreground mt-0.5">
+              FY {fyShort.replace("FY ", "")}
             </div>
           )}
+
           {subtitle && (
             <div className="text-xs text-muted-foreground mt-0.5">
               {typeof subtitle === "string" ? subtitleText : subtitle}
@@ -454,7 +455,8 @@ function openPrintPreview(
 <div class="report-print-header" style="text-align:center;margin-bottom:10pt;display:none;print:block">
   <div class="report-print-company-name" style="font-size:13pt;font-weight:700;text-transform:uppercase;color:#002060">${escape(company)}</div>
   <div class="report-print-title" style="font-size:11pt;font-weight:600;margin-top:2pt">${escape(heading)}</div>
-  ${fyShort ? `<div class="report-print-fy-line" style="font-size:10pt;font-weight:500;margin-top:1pt">${escape(fyShort)}</div>` : ""}
+  ${fyShort ? `<div class="report-print-fy-line" style="font-size:9.5pt;font-weight:500;margin-top:1pt">FY ${escape(fyShort.replace("FY ", ""))}</div>` : ""}
+
   ${address ? `<div class="report-address-line" style="font-size:8.5pt;color:#444;margin-top:1pt">${escape(address)}</div>` : ""}
   <div class="report-header-rule" style="height:3px;border-top:1px solid #000;border-bottom:1px solid #000;margin:4pt 0 8pt"></div>
 </div>
