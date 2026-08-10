@@ -17,13 +17,13 @@ fn extract_phone(url: &str) -> Option<String> {
 }
 
 #[tauri::command]
-fn copy_files_to_clipboard(paths: Vec<String>) -> Result<(), String> {
-    if paths.is_empty() {
-        return Err("no paths given".into());
+fn toggle_devtools(window: tauri::WebviewWindow) {
+    if window.is_devtools_open() {
+        let _ = window.close_devtools();
+    } else {
+        let _ = window.open_devtools();
     }
-
-    #[cfg(windows)]
-    {
+}
         use clipboard_win::{raw::set_file_list, Clipboard};
         let _clip = Clipboard::new_attempts(10)
             .map_err(|e| format!("clipboard open failed: {e}"))?;
