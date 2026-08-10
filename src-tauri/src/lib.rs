@@ -17,13 +17,13 @@ fn extract_phone(url: &str) -> Option<String> {
 }
 
 #[tauri::command]
-fn toggle_devtools(window: tauri::WebviewWindow) {
-    if window.is_devtools_open() {
-        let _ = window.close_devtools();
-    } else {
-        let _ = window.open_devtools();
+fn copy_files_to_clipboard(paths: Vec<String>) -> Result<(), String> {
+    if paths.is_empty() {
+        return Err("no paths given".into());
     }
-}
+
+    #[cfg(windows)]
+    {
         use clipboard_win::{raw::set_file_list, Clipboard};
         let _clip = Clipboard::new_attempts(10)
             .map_err(|e| format!("clipboard open failed: {e}"))?;
@@ -31,6 +31,7 @@ fn toggle_devtools(window: tauri::WebviewWindow) {
             .map_err(|e| format!("clipboard write failed: {e}"))?;
         Ok(())
     }
+
     #[cfg(not(windows))]
     {
         let _ = paths;
@@ -95,23 +96,13 @@ async fn show_whatsapp_web(
     Ok(())
 }
 
-// FIXED for Tauri v2:
-// WebviewWindow has .webview() directly (not .get_webview("main")).
-// The devtools methods are on the Webview object.
 #[tauri::command]
-fn toggle_devtools(window: tauri::WebviewWindow) -> Result<(), String> {
-    let webview = window.webview();
-
-    if webview.is_devtools_open() {
-        webview
-            .close_devtools()
-            .map_err(|e| format!("close devtools failed: {e}"))?;
+fn toggle_devtools(window: tauri::WebviewWindow) {
+    if window.is_devtools_open() {
+        let _ = window.close_devtools();
     } else {
-        webview
-            .open_devtools()
-            .map_err(|e| format!("open devtools failed: {e}"))?;
+        let _ = window.open_devtools();
     }
-    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
