@@ -457,6 +457,7 @@ function openPrintPreview(
   <div class="report-print-title" style="font-size:11pt;font-weight:600;margin-top:2pt">${escape(heading)}</div>
   ${fyShort ? `<div class="report-print-fy-line" style="font-size:9.5pt;font-weight:500;margin-top:1pt">FY ${escape(fyShort.replace("FY ", ""))}</div>` : ""}
 
+
   ${address ? `<div class="report-address-line" style="font-size:8.5pt;color:#444;margin-top:1pt">${escape(address)}</div>` : ""}
   <div class="report-header-rule" style="height:3px;border-top:1px solid #000;border-bottom:1px solid #000;margin:4pt 0 8pt"></div>
 </div>
