@@ -88,9 +88,13 @@ const sharedBuild = {
         if (/[\\/]node_modules[\\/](recharts|d3-[^/\\]+)[\\/]/.test(id)) return "charts";
         if (/[\\/]node_modules[\\/]@mlc-ai[\\/]/.test(id)) return "webllm";
         if (/[\\/]node_modules[\\/](tesseract\.js|pdfjs-dist)[\\/]/.test(id)) return "ocr";
+        // Default small chunk for other vendor libs to prevent one massive vendor chunk
+        return "vendor";
       },
-    },
-  },
+      chunkFileNames: "assets/[name]-[hash].js",
+      entryFileNames: "assets/[name]-[hash].js",
+      assetFileNames: "assets/[name]-[hash].[ext]",
+
 
 };
 
