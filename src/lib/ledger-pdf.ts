@@ -260,5 +260,6 @@ function formatDate(d: string): string {
 
 function formatMoney(paise: number): string {
   const rupees = Math.abs(paise) / 100;
-  return `₹ ${rupees.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${rupees.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
