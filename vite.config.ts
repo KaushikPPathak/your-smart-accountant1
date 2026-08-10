@@ -82,15 +82,16 @@ const sharedBuild = {
     output: {
       manualChunks(id: string) {
         if (!id.includes("node_modules")) return;
-        if (/[\\/]node_modules[\\/](jspdf|jspdf-autotable|pdf-lib)[\\/]/.test(id)) return "exports-pdf";
-        if (/[\\/]node_modules[\\/](xlsx|exceljs)[\\/]/.test(id)) return "exports-xlsx";
-        if (/[\\/]node_modules[\\/](docx|html-docx-js)[\\/]/.test(id)) return "exports-docx";
+        if (/[\\/]node_modules[\\/](jspdf|jspdf-autotable|pdf-lib)[\\/]/.test(id)) return "pdf";
+        if (/[\\/]node_modules[\\/](xlsx|exceljs)[\\/]/.test(id)) return "xlsx";
+        if (/[\\/]node_modules[\\/](docx|html-docx-js)[\\/]/.test(id)) return "docx";
         if (/[\\/]node_modules[\\/](recharts|d3-[^/\\]+)[\\/]/.test(id)) return "charts";
         if (/[\\/]node_modules[\\/]@mlc-ai[\\/]/.test(id)) return "webllm";
         if (/[\\/]node_modules[\\/](tesseract\.js|pdfjs-dist)[\\/]/.test(id)) return "ocr";
       },
     },
   },
+
 };
 
 export default defineConfig({
