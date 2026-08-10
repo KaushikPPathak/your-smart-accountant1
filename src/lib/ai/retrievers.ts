@@ -22,7 +22,9 @@ export interface RoutedQuery {
   to?: string;
   voucherNumber?: string;
   latestKind?: string;
+  companyHint?: string;
 }
+
 
 
 export interface RetrievedSlice {
