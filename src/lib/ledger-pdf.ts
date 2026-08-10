@@ -86,8 +86,8 @@ export async function downloadLedgerPdf(
     doc.text(`Ledger Account: ${info.partyName}`, 148.5, 19, { align: "center" });
 
     doc.setFontSize(10);
-    doc.text(`Financial Year 2025-26`, 148.5, 25, { align: "center" });
-    doc.text(`For the period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, 30, { align: "center" });
+    doc.text(`FY 2025-26`, 148.5, 25, { align: "center" });
+    doc.text(`(From ${formatDate(info.fromDate)} to ${formatDate(info.toDate)})`, 148.5, 30, { align: "center" });
 
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
@@ -95,6 +95,7 @@ export async function downloadLedgerPdf(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(`for the period ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, 43, { align: "center" });
+
 
     // Filter & sort entries inside the date range
     const sortedEntries = liveEntries
