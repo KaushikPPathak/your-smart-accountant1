@@ -211,8 +211,9 @@ export async function downloadLedgerPdf(
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setFont("helvetica", "bold");
-    doc.text("Closing balance", leftX, finalY);
-    doc.text(`${formatMoney(closingPaise)} ${info.balanceType}`, rightX + tableW - 3, finalY, { align: "right" });
+    doc.text("Closing balance", leftX + 1, finalY);
+    doc.text(`${formatMoney(closingPaise)} ${info.balanceType}`, rightX + tableW - 1, finalY, { align: "right" });
+
 
 
     // ── 3. Save / Download based on runtime ──
