@@ -403,7 +403,8 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
   // ---------------------------------------------------------------------------
   // Edge navigation: ArrowUp on the first dropdown item hops focus to the
-  // Quick Entry ribbon; ArrowDown on the last item hops focus to <main>.
+  // Quick Actions ribbon; ArrowDown on the last item hops focus to <main>.
+
   // We blur the currently focused menu item before closing so Radix has
   // nowhere to return focus to, then we focus the target region.
   // ---------------------------------------------------------------------------

@@ -383,7 +383,7 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
   //      ribbon. TopMenuBar's Escape binding then only fires if the ribbon
 
   //      isn't present (auth screens, mobile), triggering exit-confirm.
-  //   4. Focus on Quick Entry ribbon → step DOWN to main content.
+  //   4. Focus on Quick Actions ribbon → step DOWN to main content.
   //   5. On a voucher entry route → back to the voucher list.
   //   6. Anywhere else → step UP to the menubar (so a lost user can always
   //      hit Esc to reach the menus, exactly like Busy).

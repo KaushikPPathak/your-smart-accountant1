@@ -86,8 +86,10 @@ export async function downloadLedgerPdf(
     doc.text(`Ledger Account: ${info.partyName}`, 148.5, 19, { align: "center" });
 
     doc.setFontSize(10);
-    doc.text(`Financial Year 2025-26`, 148.5, 25, { align: "center" });
-    doc.text(`For the period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, 30, { align: "center" });
+    doc.text(`FY 2025-26`, 148.5, 25, { align: "center" });
+    doc.text(`(From ${formatDate(info.fromDate)} to ${formatDate(info.toDate)})`, 148.5, 30, { align: "center" });
+
+
 
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
@@ -95,6 +97,7 @@ export async function downloadLedgerPdf(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(`for the period ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, 43, { align: "center" });
+
 
     // Filter & sort entries inside the date range
     const sortedEntries = liveEntries
@@ -146,7 +149,9 @@ export async function downloadLedgerPdf(
       startY,
       margin: { left: leftX, right: 297 - leftX - tableW },
       tableWidth: tableW,
-      head: [["DATE", "PARTICULARS", "VCH TYPE", "VCH NO", "CHQ/REF", "AMOUNT"]],
+      head: [["Date", "Particulars", "Vch Type", "Vch No", "Chq/Ref", "Amount"]],
+
+
       body: drBody,
       theme: "grid",
       showHead: "everyPage",
@@ -188,7 +193,8 @@ export async function downloadLedgerPdf(
       startY,
       margin: { left: rightX, right: 297 - rightX - tableW },
       tableWidth: tableW,
-      head: [["DATE", "PARTICULARS", "VCH TYPE", "VCH NO", "CHQ/REF", "AMOUNT"]],
+      head: [["Date", "Particulars", "Vch Type", "Vch No", "Chq/Ref", "Amount"]],
+
       body: crBody,
       theme: "grid",
       showHead: "everyPage",
@@ -210,8 +216,10 @@ export async function downloadLedgerPdf(
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setFont("helvetica", "bold");
-    doc.text("Closing balance", leftX, finalY);
-    doc.text(`${formatMoney(closingPaise)} ${info.balanceType}`, rightX + tableW - 3, finalY, { align: "right" });
+    doc.text("Closing balance", leftX + 1, finalY);
+    doc.text(`${formatMoney(closingPaise)} ${info.balanceType}`, rightX + tableW - 1, finalY, { align: "right" });
+
+
 
 
     // ── 3. Save / Download based on runtime ──
@@ -258,5 +266,6 @@ function formatDate(d: string): string {
 
 function formatMoney(paise: number): string {
   const rupees = Math.abs(paise) / 100;
-  return `₹ ${rupees.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${rupees.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
