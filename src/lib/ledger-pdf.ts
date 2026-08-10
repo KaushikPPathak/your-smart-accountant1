@@ -147,7 +147,8 @@ export async function downloadLedgerPdf(
       startY,
       margin: { left: leftX, right: 297 - leftX - tableW },
       tableWidth: tableW,
-      head: [["DATE", "PARTICULARS", "VCH TYPE", "VCH NO", "CHQ/REF", "AMOUNT"]],
+      head: [["Date", "Particulars", "Vch Type", "Vch No", "Chq/Ref", "Amount"]],
+
       body: drBody,
       theme: "grid",
       showHead: "everyPage",
@@ -189,7 +190,7 @@ export async function downloadLedgerPdf(
       startY,
       margin: { left: rightX, right: 297 - rightX - tableW },
       tableWidth: tableW,
-      head: [["DATE", "PARTICULARS", "VCH TYPE", "VCH NO", "CHQ/REF", "AMOUNT"]],
+      head: [["Date", "Particulars", "Vch Type", "Vch No", "Chq/Ref", "Amount"]],
       body: crBody,
       theme: "grid",
       showHead: "everyPage",
