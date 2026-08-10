@@ -90,6 +90,7 @@ export async function downloadLedgerPdf(
     doc.text(`(From ${formatDate(info.fromDate)} to ${formatDate(info.toDate)})`, 148.5, 30, { align: "center" });
 
 
+
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
     doc.text(`${info.partyName} Account`, 148.5, 38, { align: "center" });
