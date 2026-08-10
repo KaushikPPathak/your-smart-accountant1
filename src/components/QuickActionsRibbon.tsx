@@ -101,13 +101,16 @@ export function QuickActionsRibbon() {
         }}
         onKeyDown={(e) => {
           if (e.key === "ArrowUp") {
-            const topBtn = document.querySelector<HTMLButtonElement>('.busy-topbar button.busy-menu');
+            const topBtn = document.querySelector<HTMLButtonElement>(
+              ".busy-topbar button.busy-menu",
+            );
             if (topBtn) {
               e.preventDefault();
               topBtn.focus();
             }
             return;
           }
+
           if (e.key === "ArrowDown") {
             const main = document.querySelector<HTMLElement>("main");
             const focusable = main?.querySelector<HTMLElement>(

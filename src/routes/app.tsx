@@ -379,8 +379,9 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
   // Staged Escape (single owner) — Busy/Tally-style "step down one level" ladder:
   //   1. Field focused (input/textarea/select/contentEditable) → blur it.
   //   2. Any Radix overlay open → let Radix close it (no-op here).
-  //   3. Focus on top menubar (dropdown closed) → step DOWN to Quick Entry
+  //   3. Focus on top menubar (dropdown closed) → step DOWN to Quick Actions
   //      ribbon. TopMenuBar's Escape binding then only fires if the ribbon
+
   //      isn't present (auth screens, mobile), triggering exit-confirm.
   //   4. Focus on Quick Entry ribbon → step DOWN to main content.
   //   5. On a voucher entry route → back to the voucher list.

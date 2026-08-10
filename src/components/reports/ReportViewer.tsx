@@ -160,12 +160,15 @@ export function ReportViewer({
           window.print();
         } else if (mode === "pdf") {
           onExportPdf?.();
-          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation, addressLine);
+
         } else if (mode === "word") {
           doWord();
-          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation, addressLine);
+
         } else if (mode === "preview") {
-          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation, addressLine);
+
         }
       }, 50);
     },
@@ -198,7 +201,7 @@ export function ReportViewer({
     { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "Print preview" });
 
   React.useEffect(() => {
-    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation, addressLine);
     window.addEventListener("report:preview", handler as EventListener);
     return () => window.removeEventListener("report:preview", handler as EventListener);
   }, [company, localizedHeading, localizedTitle, fyShort, orientation]);
@@ -303,7 +306,9 @@ function openPrintPreview(
   heading: string,
   fyShort: string,
   orientation: "portrait" | "landscape",
+  addressLine?: string,
 ): void {
+
   recordStage("preview", "start", {
     report: heading,
     node_found: !!el,
@@ -409,6 +414,8 @@ function openPrintPreview(
     .report-print-fy-line { font-size: 10pt; font-weight: 500; margin-top: 1pt; }
     .report-header-rule { height: 3px; border-top: 1px solid #000;
       border-bottom: 1px solid #000; margin: 4pt 0 8pt; }
+    .report-address-line { font-size: 8.5pt; color: #444; margin-top: 1pt; }
+
     table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
     th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
       text-align: left; }
