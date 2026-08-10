@@ -25,6 +25,9 @@ export interface CrashEntry {
   route?: string;
 }
 
+// In-memory fallback for environments without localStorage (e.g. node/tests)
+let memBuffer: CrashEntry[] = [];
+
 function safeLocalStorage(): Storage | null {
   try {
     if (typeof window === "undefined") return null;
@@ -36,11 +39,7 @@ function safeLocalStorage(): Storage | null {
 
 function readAll(): CrashEntry[] {
   const ls = safeLocalStorage();
-  if (!ls) {
-    // In-memory fallback for environments without localStorage (e.g. tests)
-    return (globalThis as any)._crashLogBuffer || [];
-  }
-
+  if (!ls) return memBuffer;
   try {
     const raw = ls.getItem(STORAGE_KEY);
     if (!raw) return [];
@@ -52,17 +51,16 @@ function readAll(): CrashEntry[] {
 }
 
 function writeAll(entries: CrashEntry[]): void {
+  const capped = entries.slice(-MAX_ENTRIES);
   const ls = safeLocalStorage();
   if (!ls) {
-    (globalThis as any)._crashLogBuffer = entries.slice(-MAX_ENTRIES);
+    memBuffer = capped;
     return;
   }
-
   try {
-    const capped = entries.slice(-MAX_ENTRIES);
     ls.setItem(STORAGE_KEY, JSON.stringify(capped));
   } catch {
-    // Storage full or blocked — drop silently. Never let telemetry break the app.
+    // Storage full or blocked — drop silently.
   }
 }
 
@@ -95,12 +93,7 @@ function currentRoute(): string | undefined {
 }
 
 /**
- * Record a non-fatal progress stage of a multi-step flow (print preview,
- * WhatsApp share, ...). These are the breadcrumbs that make a packaged-build
- * failure diagnosable without a developer console.
- *
- * `scope` is a flow id such as "preview" or "whatsapp"; `stage` is the step
- * name such as "start", "blob", "window".
+ * Record a non-fatal progress stage of a multi-step flow.
  */
 export function recordStage(
   scope: string,
@@ -153,7 +146,6 @@ export function listStages(scope?: string, limit = 40): CrashEntry[] {
 }
 
 /** Record a named failure (business flow — e.g. restore, backup). */
-
 export function recordFailure(
   scope: string,
   err: unknown,
@@ -181,13 +173,11 @@ export function listCrashes(): CrashEntry[] {
 
 /** Clear the ring buffer. */
 export function clearCrashes(): void {
+  memBuffer = [];
   const ls = safeLocalStorage();
   if (ls) {
     try { ls.removeItem(STORAGE_KEY); } catch { /* ignore */ }
-  } else {
-    (globalThis as any)._crashLogBuffer = [];
   }
-
 }
 
 /** Serialize to a JSON string for user-driven export ("Send to support"). */
@@ -241,10 +231,6 @@ export function installCrashHandlers(): void {
     writeAll(entries);
   });
 
-  // Diagnose "app closed on its own after idle" reports. Record every
-  // unload/hide with timing + visibility state so the crash log shows WHY
-  // the window went away (user closed, tab hidden, WebView2 discarded,
-  // OS killed the renderer, etc.). Extremely cheap — one localStorage write.
   const bootAt = Date.now();
   let lastActivityAt = Date.now();
   const bumpActivity = () => { lastActivityAt = Date.now(); };
