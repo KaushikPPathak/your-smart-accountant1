@@ -77,7 +77,6 @@ const sharedBuild = {
   reportCompressedSize: false,
   chunkSizeWarningLimit: 7000,
   assetsInlineLimit: 4096,
-
   rollupOptions: {
     output: {
       manualChunks(id: string) {
@@ -88,20 +87,17 @@ const sharedBuild = {
         if (/[\\/]node_modules[\\/](recharts|d3-[^/\\]+)[\\/]/.test(id)) return "charts";
         if (/[\\/]node_modules[\\/]@mlc-ai[\\/]/.test(id)) return "webllm";
         if (/[\\/]node_modules[\\/](tesseract\.js|pdfjs-dist)[\\/]/.test(id)) return "ocr";
-        // Default small chunk for other vendor libs to prevent one massive vendor chunk
         return "vendor";
       },
       chunkFileNames: "assets/[name]-[hash].js",
       entryFileNames: "assets/[name]-[hash].js",
       assetFileNames: "assets/[name]-[hash].[ext]",
-
-
+    },
+  },
 };
 
 export default defineConfig({
   base: isTauri ? "./" : "/",
-  // Keep the frontend's update-safety marker identical to the native bundle
-  // version stamped by CI. Previously every desktop build reported 0.0.0.
   define: desktopVersion
     ? { "import.meta.env.VITE_APP_VERSION": JSON.stringify(desktopVersion) }
     : undefined,
@@ -114,7 +110,6 @@ export default defineConfig({
     ...pwaPlugins,
     tsconfigPaths(),
   ],
-
   server: isTauri
     ? {
         port: 1420,
@@ -131,14 +126,7 @@ export default defineConfig({
     ...sharedBuild,
     outDir: isTauri ? "dist/client" : "dist",
     emptyOutDir: true,
-    // Hidden source maps: emitted next to the bundle but not referenced from
-    // it, so crash stacks in the packaged desktop build can be resolved to
-    // real file/line without shipping a debug-looking app.
     sourcemap: isTauri ? "hidden" : (sharedBuild as { sourcemap?: boolean }).sourcemap,
   },
-
-  // Store certification: shipped builds carry no debug console noise.
   esbuild: { drop: isProdBuild ? (["console", "debugger"] as const) : [] },
-
 });
-
