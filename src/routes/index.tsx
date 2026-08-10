@@ -438,17 +438,12 @@ function StartScreen() {
           background: "none",
         }}
       />
-
-            "radial-gradient(1100px 520px at 15% -10%, hsl(245 90% 62% / 0.20), transparent 60%)," +
-            "radial-gradient(900px 480px at 100% 110%, hsl(330 90% 60% / 0.18), transparent 60%)," +
-            "linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background)) 100%)",
-        }}
-      />
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px"
         style={{ background: "linear-gradient(90deg, transparent, hsl(var(--primary) / .5), transparent)" }}
       />
+
 
       <header className="border-b border-border/60 bg-background/60 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
