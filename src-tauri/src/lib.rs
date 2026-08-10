@@ -95,14 +95,24 @@ async fn show_whatsapp_web(
     Ok(())
 }
 
-// ADDED: Toggle DevTools command (works in dev and release builds)
+// FIXED: Tauri v2 — devtools methods are on Webview, not WebviewWindow.
+// We get the inner webview by its label ("main" matches the window label).
 #[tauri::command]
-fn toggle_devtools(window: tauri::WebviewWindow) {
-    if window.is_devtools_open() {
-        let _ = window.close_devtools();
+fn toggle_devtools(window: tauri::WebviewWindow) -> Result<(), String> {
+    let webview = window
+        .get_webview("main")
+        .map_err(|e| format!("get webview failed: {e}"))?;
+
+    if webview.is_devtools_open() {
+        webview
+            .close_devtools()
+            .map_err(|e| format!("close devtools failed: {e}"))?;
     } else {
-        let _ = window.open_devtools();
+        webview
+            .open_devtools()
+            .map_err(|e| format!("open devtools failed: {e}"))?;
     }
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -118,7 +128,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             copy_files_to_clipboard,
             show_whatsapp_web,
-            toggle_devtools, // ADDED
+            toggle_devtools,
         ])
         .setup(|app| {
             let local_data = app.path().local_data_dir()?;
@@ -148,18 +158,18 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-    if let tauri::WindowEvent::Destroyed = event {
-        let label = window.label();
-        if label == "main" {
-            window.app_handle().exit(0);
-        } else if label == WA_WINDOW_LABEL {
-            let state = window.app_handle().state::<WhatsAppState>();
-            let _ = state.last_phone.lock().map(|mut last| {
-                *last = None;
-            });
-        }
-    }
-})
+            if let tauri::WindowEvent::Destroyed = event {
+                let label = window.label();
+                if label == "main" {
+                    window.app_handle().exit(0);
+                } else if label == WA_WINDOW_LABEL {
+                    let state = window.app_handle().state::<WhatsAppState>();
+                    let _ = state.last_phone.lock().map(|mut last| {
+                        *last = None;
+                    });
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");
 }
