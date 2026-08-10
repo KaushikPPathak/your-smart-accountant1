@@ -10,7 +10,7 @@
 import { AiTestHarness, summariseResults, type TestRunSummary } from "./test-harness";
 import { routeQuery } from "@/lib/ai/query-router";
 import { createRedactionMap, redactString } from "@/lib/ai/redactor";
-import { retrieveForQuery } from "@/lib/ai/retrievers";
+import { retrieveForQuery, type RoutedQuery } from "@/lib/ai/retrievers";
 import { buildCompressedContext } from "@/lib/ai/sqliteContext";
 import { setupTestFixtures, teardownTestFixtures, TEST_COMPANY_ID } from "./setup";
 

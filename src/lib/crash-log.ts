@@ -36,7 +36,11 @@ function safeLocalStorage(): Storage | null {
 
 function readAll(): CrashEntry[] {
   const ls = safeLocalStorage();
-  if (!ls) return [];
+  if (!ls) {
+    // In-memory fallback for environments without localStorage (e.g. tests)
+    return (globalThis as any)._crashLogBuffer || [];
+  }
+
   try {
     const raw = ls.getItem(STORAGE_KEY);
     if (!raw) return [];
@@ -49,7 +53,11 @@ function readAll(): CrashEntry[] {
 
 function writeAll(entries: CrashEntry[]): void {
   const ls = safeLocalStorage();
-  if (!ls) return;
+  if (!ls) {
+    (globalThis as any)._crashLogBuffer = entries.slice(-MAX_ENTRIES);
+    return;
+  }
+
   try {
     const capped = entries.slice(-MAX_ENTRIES);
     ls.setItem(STORAGE_KEY, JSON.stringify(capped));
@@ -176,7 +184,10 @@ export function clearCrashes(): void {
   const ls = safeLocalStorage();
   if (ls) {
     try { ls.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  } else {
+    (globalThis as any)._crashLogBuffer = [];
   }
+
 }
 
 /** Serialize to a JSON string for user-driven export ("Send to support"). */
