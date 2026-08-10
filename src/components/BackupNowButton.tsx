@@ -45,29 +45,35 @@ export function BackupNowButton() {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={runBackup}
-          disabled={busy}
-          aria-label={`Back up ${companyName} now`}
-          className="relative h-11 w-11 rounded-full p-0 hover:bg-transparent"
-        >
-          {busy ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <img
-              src={backupMedallion}
-              alt=""
-              aria-hidden
-              className="h-11 w-11 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-              draggable={false}
-            />
-          )}
-        </Button>
+        <div className="flex flex-col items-center">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={runBackup}
+            disabled={busy}
+            aria-label={`Back up ${companyName} now`}
+            className="relative h-9 w-9 rounded-full p-0 hover:bg-transparent"
+          >
+            {busy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <img
+                src={backupMedallion}
+                alt=""
+                aria-hidden
+                className="h-9 w-9 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+                draggable={false}
+              />
+            )}
+          </Button>
+          <span className="mt-0.5 text-[9px] font-bold text-black tracking-tight leading-none uppercase drop-shadow-sm">
+            Backup
+          </span>
+        </div>
       </TooltipTrigger>
       <TooltipContent side="bottom">Backup {companyName} now</TooltipContent>
     </Tooltip>
   );
 }
+

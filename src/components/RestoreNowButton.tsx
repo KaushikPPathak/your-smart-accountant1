@@ -145,25 +145,31 @@ export function RestoreNowButton() {
     <>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => setOpen(true)}
-            aria-label={`Restore ${companyName} from backup`}
-            className="relative h-11 w-11 rounded-full p-0 hover:bg-transparent"
-          >
-            <img
-              src={restoreMedallion}
-              alt=""
-              aria-hidden
-              className="h-11 w-11 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-              draggable={false}
-            />
-          </Button>
+          <div className="flex flex-col items-center">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setOpen(true)}
+              aria-label={`Restore ${companyName} from backup`}
+              className="relative h-9 w-9 rounded-full p-0 hover:bg-transparent"
+            >
+              <img
+                src={restoreMedallion}
+                alt=""
+                aria-hidden
+                className="h-9 w-9 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+                draggable={false}
+              />
+            </Button>
+            <span className="mt-0.5 text-[9px] font-bold text-black tracking-tight leading-none uppercase drop-shadow-sm">
+              Restore
+            </span>
+          </div>
         </TooltipTrigger>
         <TooltipContent side="bottom">Restore {companyName}</TooltipContent>
       </Tooltip>
+
 
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
         <DialogContent className="max-w-xl">
