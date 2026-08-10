@@ -95,13 +95,12 @@ async fn show_whatsapp_web(
     Ok(())
 }
 
-// FIXED: Tauri v2 — devtools methods are on Webview, not WebviewWindow.
-// We get the inner webview by its label ("main" matches the window label).
+// FIXED for Tauri v2:
+// WebviewWindow has .webview() directly (not .get_webview("main")).
+// The devtools methods are on the Webview object.
 #[tauri::command]
 fn toggle_devtools(window: tauri::WebviewWindow) -> Result<(), String> {
-    let webview = window
-        .get_webview("main")
-        .map_err(|e| format!("get webview failed: {e}"))?;
+    let webview = window.webview();
 
     if webview.is_devtools_open() {
         webview
