@@ -132,9 +132,10 @@ export function QuickActionsRibbon() {
           id={`${ribbonId}-toggle`}
           data-focus-item="true"
           className="mr-2 flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--amber-ink)]/80 hover:bg-[color:var(--amber-dark)]/20 hover:text-[color:var(--amber-ink)]"
-          title={open ? "Collapse Quick Entry" : "Expand Quick Entry"}
+          title={open ? "Collapse Quick Actions" : "Expand Quick Actions"}
           aria-expanded={open}
-          aria-label={open ? "Collapse quick entry ribbon" : "Expand quick entry ribbon"}
+          aria-label={open ? "Collapse quick actions ribbon" : "Expand quick actions ribbon"}
+
           tabIndex={0}
         >
           <Zap className="h-3 w-3" aria-hidden="true" />
