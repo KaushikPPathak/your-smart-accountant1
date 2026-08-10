@@ -7,6 +7,8 @@
 
 import { cacheRowsForCcr, compressMessages } from "./headroom";
 import { routeQuery, type IntentType } from "./query-router";
+import type { RouteResult } from "./query-router";
+
 import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
 import { takeSpeculation } from "./prefetch";
 import { optimiseSlice } from "./slice-optimizer";
@@ -90,7 +92,7 @@ function resolveContextCompanyId(explicitCompanyId?: string | null): string | nu
   try { return localStorage.getItem("ym_active_company_id"); } catch { return null; }
 }
 
-function mapRouteResultToRouted(result: ReturnType<typeof routeQuery>): RoutedQuery {
+function mapRouteResultToRouted(result: RouteResult): RoutedQuery {
   return {
     intent: result.intent,
     entityHints: result.entity?.partyName ? [result.entity.partyName] : [],

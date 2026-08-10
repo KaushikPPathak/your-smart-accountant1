@@ -1,7 +1,8 @@
 // src/lib/ai/query-router.ts
-import { StructuredCard } from "./local-first";
+export type QueryIntent = IntentType;
 
 export type IntentType = 
+
   | "party_balance" 
   | "cash_balance" 
   | "bank_balance" 
@@ -147,7 +148,7 @@ function extractEntities(text: string): RouteResult["entity"] {
   return Object.keys(entity).length > 0 ? entity : undefined;
 }
 
-export function routeQuery(text: string, contextCard?: StructuredCard): RouteResult {
+export function routeQuery(text: string, contextCard?: any): RouteResult {
   const lowerText = text.toLowerCase().trim();
   
   // 1. Check for greetings (instant)

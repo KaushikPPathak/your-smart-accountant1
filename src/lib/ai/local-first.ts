@@ -10,6 +10,8 @@
 // Zero LLM tokens, zero credits, ~5ms round-trip.
 
 import type { StructuredCard } from "./sqliteContext";
+export type { StructuredCard };
+
 
 function formatInr(paise: number): string {
   const rupees = Math.abs(paise) / 100;
