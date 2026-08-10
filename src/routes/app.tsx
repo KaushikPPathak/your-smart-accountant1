@@ -34,6 +34,9 @@ import { SilentWatchers } from "@/components/assistant/SilentWatchers";
 
 import { getLicenseState, isReadOnlyLocked } from "@/lib/license/state";
 
+// ADDED: Tauri v2 invoke for DevTools
+import { invoke } from "@tauri-apps/api/core";
+
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Your Mehtaji — Workspace" }] }),
   component: AppLayout,
@@ -42,12 +45,12 @@ export const Route = createFileRoute("/app")({
 function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  useAuth(); // keeps AuthProvider subscription mounted; we don't gate on it here
+  useAuth();
   const { loading: companyLoading, memberships, activeCompanyId, activeMembership } = useCompany();
   const { t } = useI18n();
   const [bootstrapping, setBootstrapping] = useState(true);
   const [savingMirror, setSavingMirror] = useState(false);
-  const [lastSaveTick, setLastSaveTick] = useState(0); // forces re-render after save
+  const [lastSaveTick, setLastSaveTick] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
@@ -60,8 +63,6 @@ function AppLayout() {
     ?? (activeMembership?.companies as { gstin?: string | null; pan?: string | null } | undefined)?.pan
     ?? null;
 
-  // Manual "Backup now" handler — silent. No toast on success; failures still
-  // surface so the user knows if the disk write failed.
   const onBackupNow = async () => {
     if (!activeCompanyId || !activeMembership) return;
     setSavingMirror(true);
@@ -81,29 +82,21 @@ function AppLayout() {
     }
   };
 
-  // Auto-save on app close for Trial / Local-only companies. This is the ONLY
-  // place where we surface a closing notification — silent during normal work,
-  // visible right before the window closes.
   useEffect(() => {
     if (!isTrial || !activeCompanyId || !activeMembership) return;
     const handler = () => {
-      // Show a brief closing notification (visible until the window unloads).
       try {
         toast.message("Saving local backup before close…", {
           description: `${activeMembership.companies.name}${partyCode ? ` · ${partyCode}` : ""}`,
           duration: 8000,
         });
       } catch { /* ignore */ }
-      // Fire and forget — beforeunload cannot await.
       void writeLocalMirror(activeCompanyId, activeMembership.companies.name, partyCode).catch(() => undefined);
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [isTrial, activeCompanyId, activeMembership, partyCode]);
 
-  // Run one-time desktop data migrations + daily safety snapshot in the
-  // background. The workspace chrome must paint and accept keyboard input
-  // immediately; none of these maintenance jobs is required to navigate it.
   useEffect(() => {
     let cancelled = false;
     let stopIntraday: (() => void) | null = null;
@@ -111,8 +104,6 @@ function AppLayout() {
     (async () => {
 
       try {
-        // Record version transition + detect unexpectedly-empty DB. Runs on
-        // every launch, on every platform.
         try {
           const { checkUpdateSafety } = await import("@/lib/update-safety");
           await checkUpdateSafety();
@@ -125,18 +116,11 @@ function AppLayout() {
               .map((m) => ({ id: m.company_id, name: m.companies?.name ?? "company" }))
               .filter((c) => c.id);
 
-            // 1) Silent auto-restore FIRST — if the live DB is empty but
-            //    a valid snapshot exists on disk, put the data back before
-            //    the UI renders. Toast the outcome; never prompt.
             try {
               const { runAutoRestore } = await import("@/lib/auto-restore");
               const outcomes = await runAutoRestore(list);
               const restored = outcomes.filter((o) => o.status === "restored");
               if (restored.length > 0) {
-                // Providers mount outside this maintenance effect, so refresh
-                // their in-memory views after IndexedDB has been replaced.
-                // Without this, the disk restore succeeded but reports could
-                // continue showing the pre-restore rows until app restart.
                 window.dispatchEvent(new CustomEvent("ym:local-data-restored"));
                 toast.success(
                   restored.length === 1
@@ -144,32 +128,18 @@ function AppLayout() {
                     : `Restored ${restored.length} companies from local safety snapshots`,
                   { description: "Your books were reloaded automatically from your on-device backup." },
                 );
-                // Remount the entire accounting workspace once so every
-                // report and book sees the restored IndexedDB state, including
-                // screens that loaded before recovery finished and do not use
-                // the shared masters/balance caches. The next boot is a no-op
-                // because the live counts now match the integrity manifest.
                 window.setTimeout(() => window.location.reload(), 500);
               }
             } catch { /* silent — banner remains as fallback */ }
 
-            // 2) Then take today's snapshot (respects the "never overwrite
-            //    a good file with an empty one" rule inside auto-snapshot).
             const { runAutoSnapshotOnce } = await import("@/lib/auto-snapshot");
             void runAutoSnapshotOnce(list).catch(() => undefined);
 
-            // 2b) Start the hourly intraday snapshot ring — an in-app,
-            // IndexedDB-only checkpoint every ~1h so an intra-day mistake
-            // never loses more than an hour of typing. Runs in every
-            // runtime, not just desktop. Cleanup registered below.
             try {
               const { scheduleIntradaySnapshots } = await import("@/lib/intraday-snapshot");
               stopIntraday = scheduleIntradaySnapshots(list);
             } catch { /* ignore — intraday is a bonus, never blocks boot */ }
 
-
-            // If a new service worker is waiting to take over, snapshot
-            // FIRST, then let it activate.
             if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
               try {
                 const reg = await navigator.serviceWorker.getRegistration();
@@ -189,21 +159,8 @@ function AppLayout() {
     };
   }, [memberships]);
 
-
-  // No login screen any more — AuthProvider silently signs in a shared
-  // tech user. We just wait for that to finish before rendering.
-
-
-  // Staged Escape is now handled inside <GlobalShortcuts /> via useShortcut,
-  // so this component no longer attaches its own window keydown listener.
-
   const onCompaniesPage = location.pathname.startsWith("/app/companies");
 
-  // Startup focus: after the workspace mounts (company chosen + unlocked),
-  // move focus to the first top-menu trigger so the user can immediately drive
-  // the menubar with arrow keys — no initial Tab press required. We only do
-  // this when focus is still on <body> (i.e. the user hasn't already clicked
-  // or tabbed somewhere), so we never steal focus mid-interaction.
   useEffect(() => {
     if (bootstrapping || companyLoading) return;
     if (!activeCompanyId) return;
@@ -219,18 +176,6 @@ function AppLayout() {
     return () => window.clearTimeout(id);
   }, [bootstrapping, companyLoading, activeCompanyId, onCompaniesPage]);
 
-  // Gate: every page under /app requires a chosen + unlocked company
-  // (except /app/companies, which is reachable when the user clicked "+ New company").
-  // /app/assistant is intentionally NOT exempted — it can read accounting data.
-  // Gate: every page under /app requires a chosen + unlocked company
-  // (except /app/companies, which is reachable when the user clicked "+ New company").
-  // /app/assistant is intentionally NOT exempted — it can read accounting data.
-  //
-  // NOTE: we intentionally do NOT block on `!user` (the silent Supabase
-  // tech-session). Identity for this local-only app comes from the staff PIN
-  // (already enforced by LockGate). Requiring `user` here caused the workspace
-  // to hang on "Loading…" whenever the background tech sign-in stalled on a
-  // slow / stagnant connection, forcing users to hard-refresh.
   useEffect(() => {
     if (bootstrapping || companyLoading) return;
     if (memberships.length === 0) return;
@@ -243,9 +188,6 @@ function AppLayout() {
     }
   }, [bootstrapping, companyLoading, memberships.length, activeCompanyId, onCompaniesPage, navigate]);
 
-  // Read-only lock once the 30-day trial ends and no valid license is
-  // installed: block voucher creation and the e-invoice screen; reports
-  // remain fully readable (watermarked on export).
   useEffect(() => {
     const p = location.pathname;
     const isProtected = p.startsWith("/app/vouchers/new/") || p === "/app/einvoice";
@@ -265,6 +207,60 @@ function AppLayout() {
     return () => { cancelled = true; };
   }, [location.pathname, navigate]);
 
+  // ADDED: Right-click context menu with Inspect Element
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      // Don't override native context menus inside inputs, textareas, or existing menus
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [role="menu"], [role="dialog"]')) return;
+
+      e.preventDefault();
+
+      const existing = document.getElementById("tauri-debug-menu");
+      if (existing) existing.remove();
+
+      const menu = document.createElement("div");
+      menu.id = "tauri-debug-menu";
+      menu.style.cssText = `
+        position:fixed; z-index:99999; background:#fff; border:1px solid #ccc;
+        box-shadow:2px 2px 6px rgba(0,0,0,0.2); border-radius:4px; padding:4px 0;
+        font-family:system-ui,sans-serif; font-size:13px; min-width:160px; color:#000;
+      `;
+      menu.style.left = e.clientX + "px";
+      menu.style.top = e.clientY + "px";
+
+      const items = [
+        { label: "Inspect Element", action: () => invoke("toggle_devtools") },
+        { label: "Reload", action: () => window.location.reload() },
+      ];
+
+      for (const item of items) {
+        const div = document.createElement("div");
+        div.textContent = item.label;
+        div.style.cssText = "padding:6px 16px; cursor:pointer;";
+        div.onmouseenter = () => (div.style.background = "#f0f0f0");
+        div.onmouseleave = () => (div.style.background = "transparent");
+        div.onclick = () => {
+          item.action().catch(() => {});
+          menu.remove();
+        };
+        menu.appendChild(div);
+      }
+
+      document.body.appendChild(menu);
+
+      setTimeout(() => {
+        document.addEventListener("click", function close() {
+          menu.remove();
+          document.removeEventListener("click", close);
+        }, { once: true });
+      }, 10);
+    };
+
+    document.addEventListener("contextmenu", handler);
+    return () => document.removeEventListener("contextmenu", handler);
+  }, []);
+
   if (bootstrapping || companyLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
@@ -273,7 +269,6 @@ function AppLayout() {
     );
   }
 
-  // No companies yet → invite to create one (companies page still reachable).
   if (memberships.length === 0 && !onCompaniesPage) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-muted/30 px-4 text-center">
@@ -343,17 +338,6 @@ function AppLayout() {
   );
 }
 
-// -----------------------------------------------------------------------------
-// Global shortcuts (mounted inside <KeyboardProvider>): F1 help, staged Escape,
-// Alt+L ledger. Kept as a child so useShortcut can access the provider context.
-//
-// Note: Alt+<letter> voucher shortcuts used to live here but were removed —
-// they conflicted with TopMenuBar's Alt+<letter> menu access keys (Alt+P for
-// Print vs Purchase, Alt+R for Reports vs Receipt). The top menus already
-// expose those voucher shortcuts via Transactions.
-// -----------------------------------------------------------------------------
-
-
 function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; onOpenCalc: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -376,17 +360,36 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
     { scope: "global", allowInField: true, description: "Open calculator" },
   );
 
-  // Staged Escape (single owner) — Busy/Tally-style "step down one level" ladder:
-  //   1. Field focused (input/textarea/select/contentEditable) → blur it.
-  //   2. Any Radix overlay open → let Radix close it (no-op here).
-  //   3. Focus on top menubar (dropdown closed) → step DOWN to Quick Actions
-  //      ribbon. TopMenuBar's Escape binding then only fires if the ribbon
+  // ADDED: F12 → Toggle DevTools
+  useShortcut(
+    "F12",
+    (e) => {
+      e.preventDefault();
+      invoke("toggle_devtools").catch(() => {});
+    },
+    { scope: "global", allowInField: true, description: "Toggle Developer Tools" },
+  );
 
-  //      isn't present (auth screens, mobile), triggering exit-confirm.
-  //   4. Focus on Quick Actions ribbon → step DOWN to main content.
-  //   5. On a voucher entry route → back to the voucher list.
-  //   6. Anywhere else → step UP to the menubar (so a lost user can always
-  //      hit Esc to reach the menus, exactly like Busy).
+  // ADDED: Ctrl+Shift+I → Toggle DevTools
+  useShortcut(
+    "Ctrl+Shift+i",
+    (e) => {
+      e.preventDefault();
+      invoke("toggle_devtools").catch(() => {});
+    },
+    { scope: "global", allowInField: true, description: "Toggle Developer Tools" },
+  );
+
+  // ADDED: Ctrl+Shift+C → Toggle DevTools (inspect element cursor)
+  useShortcut(
+    "Ctrl+Shift+c",
+    (e) => {
+      e.preventDefault();
+      invoke("toggle_devtools").catch(() => {});
+    },
+    { scope: "global", allowInField: true, description: "Toggle Developer Tools (inspect)" },
+  );
+
   useShortcut(
     "Escape",
     (e) => {
@@ -395,10 +398,6 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
         '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-radix-popper-content-wrapper]',
       );
       if (openOverlay) return;
-      // Radix closes menus/popovers synchronously in its own capture handler,
-      // so by the time this runs the overlay is already gone and the event
-      // target is a detached menu node. That keystroke has been consumed —
-      // it must NOT also trigger the next rung of the ladder.
       if (
         target &&
         (!target.isConnected ||
@@ -417,12 +416,9 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
         return;
       }
 
-      // Menubar → let TopMenuBar's Escape binding fire (exit-confirm dialog).
-      // Use F6 / Ctrl+F2 to hop menu→ribbon; Escape must exit, not sidestep.
       if (target?.closest?.(".busy-topbar")) {
         return;
       }
-      // Ribbon → Menubar (so the very next Escape triggers exit-confirm).
       if (target?.closest?.(".busy-menubar")) {
         const firstTrigger = document.querySelector<HTMLElement>(
           ".busy-topbar button.busy-menu",
@@ -433,16 +429,11 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
           return;
         }
       }
-      // Voucher entry → back to list
       if (location.pathname.startsWith("/app/vouchers/new/")) {
         e.preventDefault();
         navigate({ to: "/app/vouchers" });
         return;
       }
-      // Main content / body → ask TopMenuBar to open the exit-confirm dialog
-      // directly. Previously we hopped focus to the menubar and required a
-      // second Escape, which failed on pages like Companies where the user
-      // couldn't tell focus had moved.
       e.preventDefault();
       window.dispatchEvent(new CustomEvent("app:exit-request"));
     },
@@ -461,15 +452,6 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
     { scope: "global", description: "Jump to Ledger report" },
   );
 
-  // ---------------------------------------------------------------------------
-  // Region cycler (Tally/Busy-style). F6 = next region, Shift+F6 = previous.
-  // Regions in order: Top menubar → Quick Entry ribbon → Main content.
-  // Report screens push their own "report" F6 handler that cycles toolbar↔grid
-  // and takes precedence, so this global binding only fires elsewhere.
-  //
-  // Ctrl+F1 / Ctrl+F2 are direct jumps for muscle memory (menubar / ribbon).
-  // These make it possible to hop between panes without ever pressing Tab.
-  // ---------------------------------------------------------------------------
   const focusRegion = useCallback((region: "menu" | "ribbon" | "main") => {
     if (region === "menu") {
       const el = document.querySelector<HTMLElement>(".busy-topbar button.busy-menu");
@@ -477,14 +459,12 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
       return !!el;
     }
     if (region === "ribbon") {
-      // Prefer the first ribbon action; fall back to the ribbon's toggle button.
       const el =
         document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"][role="button"]') ??
         document.querySelector<HTMLElement>('.busy-menubar [data-focus-item="true"]');
       el?.focus();
       return !!el;
     }
-    // Main content: first focusable inside <main>.
     const main = document.querySelector<HTMLElement>("main");
     if (!main) return false;
     const focusable = main.querySelector<HTMLElement>(
@@ -524,17 +504,9 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
   useShortcut("Ctrl+F2", (e) => { e.preventDefault(); focusRegion("ribbon"); },
     { scope: "global", allowInField: true, description: "Jump to Quick Entry ribbon" });
 
-  // Ctrl+Shift+D — open Diagnostics from anywhere. In a packaged desktop
-  // build there is no developer console, so this is the only way to inspect
-  // a print-preview / WhatsApp failure right after it happens.
   useShortcut("Ctrl+Shift+d", (e) => { e.preventDefault(); navigate({ to: "/app/diagnostics" }); },
     { scope: "global", allowInField: true, description: "Open Diagnostics" });
 
-
-  // Alt+Arrow region hops — mirror F6 but with a mnemonic direction. Alt+Up
-  // walks main → ribbon → menu; Alt+Down walks the reverse. This gives users
-  // an arrow-key path between regions without stealing plain ArrowUp/Down
-  // from form fields and grids.
   useShortcut("Alt+ArrowUp", (e) => {
     e.preventDefault();
     const here = currentRegion();
@@ -548,7 +520,6 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
     else if (here === "ribbon") focusRegion("main");
   }, { scope: "global", allowInField: true, description: "Region down (menu→ribbon→main)" });
 
-  // Alt+O → open the Company switcher dropdown (no more mouse hunting).
   useShortcut("Alt+o", (e) => {
     e.preventDefault();
     const trigger = document.querySelector<HTMLButtonElement>(
@@ -556,15 +527,11 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
     );
     if (!trigger) return;
     trigger.focus();
-    // Open the Radix dropdown if it isn't already.
     if (trigger.getAttribute("aria-expanded") !== "true") {
       trigger.click();
     }
   }, { scope: "global", allowInField: true, description: "Open Company switcher" });
 
-  // Quick Entry ribbon Alt+<letter> shortcuts. Menu access keys for Reports
-  // and Print were moved to Alt+E / Alt+N (see TopMenuBar) to free Alt+R and
-  // Alt+P for Receipt and Purchase — matching the ribbon hints the user sees.
   const RIBBON_SHORTCUTS: Array<{ combo: string; to: string; desc: string }> = [
     { combo: "Alt+s", to: "/app/vouchers/new/sales", desc: "New Sales voucher" },
     { combo: "Alt+p", to: "/app/vouchers/new/purchase", desc: "New Purchase voucher" },
@@ -586,12 +553,5 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
     );
   }
 
-
-
-
   return null;
 }
-
-
-
-
