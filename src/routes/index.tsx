@@ -430,15 +430,12 @@ function StartScreen() {
       .join("") || "?";
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden">
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
-          background:
-            "radial-gradient(1100px 520px at 15% -10%, hsl(245 90% 62% / 0.20), transparent 60%)," +
-            "radial-gradient(900px 480px at 100% 110%, hsl(330 90% 60% / 0.18), transparent 60%)," +
-            "linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background)) 100%)",
+          background: "none",
         }}
       />
       <div
@@ -446,6 +443,7 @@ function StartScreen() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px"
         style={{ background: "linear-gradient(90deg, transparent, hsl(var(--primary) / .5), transparent)" }}
       />
+
 
       <header className="border-b border-border/60 bg-background/60 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
@@ -638,12 +636,6 @@ function StartScreen() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 max-w-7xl mx-auto mb-8">
-        <LanguageSwitcher voucherType="sales" />
-        <LanguageSwitcher voucherType="purchase" />
-        <LanguageSwitcher voucherType="receipt" />
-        <LanguageSwitcher voucherType="payment" />
-      </div>
 
       <footer className="border-t border-border/60 py-4 text-center text-xs text-muted-foreground">
         © {new Date().getFullYear()} Your Mehtaji

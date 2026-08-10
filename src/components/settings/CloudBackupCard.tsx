@@ -96,15 +96,15 @@ export function CloudBackupCard() {
 
   // ---------- OAuth providers ----------
   const connect = async (id: ProviderId) => {
-    if (!getClientId(id)) {
-      toast.error(
-        `${PROVIDERS[id].label} isn't configured on this build. Ask your operator to set VITE_${id.toUpperCase()}_CLIENT_ID.`,
-        { duration: 8000 },
-      );
-      return;
-    }
     setBusy(id);
     try {
+      if (!getClientId(id)) {
+        toast.error(
+          `${PROVIDERS[id].label} isn't configured on this build. Ask your operator to set VITE_${id.toUpperCase()}_CLIENT_ID.`,
+          { duration: 8000 },
+        );
+        return;
+      }
       await connectProvider(id);
       refreshConnections();
       toast.success(`Connected to ${PROVIDERS[id].label}`);
@@ -246,7 +246,7 @@ export function CloudBackupCard() {
                         </Button>
                       </>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => connect(id)} disabled={busy !== null || !configured}>
+                      <Button size="sm" variant="outline" onClick={() => connect(id)} disabled={busy !== null}>
                         {isBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         {isBusy ? "Connecting…" : "Connect"}
                       </Button>

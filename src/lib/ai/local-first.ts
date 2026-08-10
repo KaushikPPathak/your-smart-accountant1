@@ -10,6 +10,8 @@
 // Zero LLM tokens, zero credits, ~5ms round-trip.
 
 import type { StructuredCard } from "./sqliteContext";
+export type { StructuredCard };
+
 
 function formatInr(paise: number): string {
   const rupees = Math.abs(paise) / 100;
@@ -29,8 +31,9 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
     case "party_balance": {
       const asOn = card.asOnDate ? ` as on ${card.asOnDate}` : "";
       const owes = card.isDebit
-        ? `${card.partyName} owes you ${formatInr(card.closingPaise)}${asOn}.`
-        : `You owe ${card.partyName} ${formatInr(card.closingPaise)}${asOn}.`;
+        ? `${card.partyName} owes you ${formatInr(card.closingPaise ?? 0)}${asOn}.`
+        : `You owe ${card.partyName} ${formatInr(card.closingPaise ?? 0)}${asOn}.`;
+
 
       const parts: string[] = [];
       parts.push(owes);
@@ -40,17 +43,19 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
         const total = Math.abs(cashPaise) + Math.abs(bankPaise) + Math.abs(otherPaise);
         if (total > 0) {
           const bits: string[] = [];
-          if (Math.abs(cashPaise) > 0) bits.push(`${formatInr(cashPaise)} in cash`);
-          if (Math.abs(bankPaise) > 0) bits.push(`${formatInr(bankPaise)} through bank`);
-          if (Math.abs(otherPaise) > 0) bits.push(`${formatInr(otherPaise)} through other modes`);
+          if (Math.abs(cashPaise) > 0) bits.push(`${formatInr(cashPaise ?? 0)} in cash`);
+          if (Math.abs(bankPaise) > 0) bits.push(`${formatInr(bankPaise ?? 0)} through bank`);
+          if (Math.abs(otherPaise) > 0) bits.push(`${formatInr(otherPaise ?? 0)} through other modes`);
+
           if (bits.length) parts.push(`Settlement mode split: ${bits.join(", ")}.`);
         }
       }
 
       parts.push(
-        `Movement in the period: ${formatInr(card.debitPaise)} Dr, ${formatInr(card.creditPaise)} Cr ` +
-          `across ${card.voucherCount} voucher${card.voucherCount === 1 ? "" : "s"}. ` +
-          `Opening was ${formatInr(card.openingPaise)}.`,
+        `Movement in the period: ${formatInr(card.debitPaise ?? 0)} Dr, ${formatInr(card.creditPaise ?? 0)} Cr ` +
+          `across ${card.voucherCount ?? 0} voucher${card.voucherCount === 1 ? "" : "s"}. ` +
+          `Opening was ${formatInr(card.openingPaise ?? 0)}.`,
+
       );
 
       parts.push(
@@ -63,12 +68,13 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
 
     case "cash_balance": {
       const label = "Cash";
-      return `${label} balance is ${formatInr(card.closingPaise)} ${card.isDebit ? "Dr" : "Cr"}.\n\n_Answered locally._`;
+      return `${label} balance is ${formatInr(card.closingPaise ?? 0)} ${card.isDebit ? "Dr" : "Cr"}.\n\n_Answered locally._`;
+
     }
 
     case "bank_balance": {
       const label = card.accountName || "Bank";
-      return `${label} balance is ${formatInr(card.closingPaise)} ${card.isDebit ? "Dr" : "Cr"}.\n\n_Answered locally._`;
+      return `${label} balance is ${formatInr(card.closingPaise ?? 0)} ${card.isDebit ? "Dr" : "Cr"}.\n\n_Answered locally._`;
     }
 
     case "trial_balance": {

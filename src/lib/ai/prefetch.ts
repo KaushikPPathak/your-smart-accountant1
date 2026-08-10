@@ -9,13 +9,14 @@
 // Everything is local-only and idempotent — a wasted speculation costs a
 // few ms of idle CPU and nothing else.
 
-import { routeQuery, type RoutedQuery } from "./query-router";
+import { routeQuery } from "./query-router";
 import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
 import { semanticSearch } from "./semantic-index";
 
 interface Speculation {
   key: string;
-  routed: RoutedQuery;
+  routed: any;
+
   promise: Promise<RetrievedSlice | null>;
   at: number;
 }
@@ -55,7 +56,15 @@ export function speculate(companyId: string | null | undefined, draft: string, d
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     idle(() => {
-      const routed = routeQuery(draft);
+      const routeResult = routeQuery(draft);
+      const routed: any = {
+        intent: routeResult.intent,
+        entityHints: routeResult.entity?.partyName ? [routeResult.entity.partyName] : [],
+        asOn: routeResult.entity?.dateRange?.to,
+        from: routeResult.entity?.dateRange?.from,
+        to: routeResult.entity?.dateRange?.to,
+      };
+
       const promise = (async () => {
         try {
           // Warm the vector index too — first query on a cold index is the
@@ -80,7 +89,7 @@ export function speculate(companyId: string | null | undefined, draft: string, d
 export async function takeSpeculation(
   companyId: string | null | undefined,
   text: string,
-): Promise<{ routed: RoutedQuery; slice: RetrievedSlice | null } | null> {
+): Promise<{ routed: any; slice: RetrievedSlice | null } | null> {
   const spec = current;
   if (!spec) return null;
   if (spec.key !== keyOf(companyId, text)) return null;

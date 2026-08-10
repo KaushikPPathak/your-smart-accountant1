@@ -127,9 +127,10 @@ export class AiTestHarness {
   private async testRouterAccuracy(): Promise<Omit<TestResult, "name" | "durationMs">> {
     const misses: Array<{ q: string; expected: string; got: string }> = [];
     for (const f of ROUTER_FIXTURES) {
-      const routed = routeQuery(f.q);
-      if (routed.intent !== f.intent) misses.push({ q: f.q, expected: f.intent, got: routed.intent });
+      const res = routeQuery(f.q);
+      if (res.intent !== f.intent) misses.push({ q: f.q, expected: f.intent, got: res.intent });
     }
+
     const accuracy = ((ROUTER_FIXTURES.length - misses.length) / ROUTER_FIXTURES.length) * 100;
     const passed = misses.length === 0;
     return {
@@ -140,8 +141,13 @@ export class AiTestHarness {
   }
 
   private async testDataMinimization(): Promise<Omit<TestResult, "name" | "durationMs">> {
-    const routed = routeQuery("trial balance");
+    const res = routeQuery("trial balance");
+    const routed: any = {
+      intent: res.intent,
+      entityHints: [],
+    };
     const slice = await retrieveForQuery(routed, TEST_COMPANY_ID);
+
     const rowCounts: Record<string, number> = {};
     let maxRows = 0;
     for (const [k, v] of Object.entries(slice.data)) {

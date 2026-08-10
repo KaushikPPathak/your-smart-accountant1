@@ -116,10 +116,11 @@ export async function downloadLedgerPdf(
     const cbDr = crSideSum > drSideSum ? crSideSum - drSideSum : 0;
     const cbCr = drSideSum > crSideSum ? drSideSum - crSideSum : 0;
 
-    const startY = 48;
-    const tableW = 135; // mm per side
-    const leftX = 10;
-    const rightX = 152;
+    const startY = 52;
+    const tableW = 138; // mm per side
+    const leftX = 8;
+    const rightX = 151;
+
 
     // ── DR. Table (Left) ──
     doc.setFontSize(10);
@@ -149,7 +150,8 @@ export async function downloadLedgerPdf(
       body: drBody,
       theme: "grid",
       showHead: "everyPage",
-      headStyles: { fillColor: [255, 248, 220], textColor: 0, fontStyle: "bold", fontSize: 8 },
+      headStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold", fontSize: 8 },
+
       styles: { fontSize: 8, cellPadding: 1.5, overflow: "linebreak" },
       columnStyles: {
         0: { cellWidth: 18 },
@@ -190,7 +192,7 @@ export async function downloadLedgerPdf(
       body: crBody,
       theme: "grid",
       showHead: "everyPage",
-      headStyles: { fillColor: [255, 248, 220], textColor: 0, fontStyle: "bold", fontSize: 8 },
+      headStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold", fontSize: 8 },
       styles: { fontSize: 8, cellPadding: 1.5, overflow: "linebreak" },
       columnStyles: {
         0: { cellWidth: 18 },
@@ -207,8 +209,10 @@ export async function downloadLedgerPdf(
     const finalY = Math.max(drFinalY, crFinalY) + 6;
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
+    doc.setFont("helvetica", "bold");
     doc.text("Closing balance", leftX, finalY);
-    doc.text(`${formatMoney(closingPaise)} ${info.balanceType}`, rightX + tableW - 5, finalY, { align: "right" });
+    doc.text(`${formatMoney(closingPaise)} ${info.balanceType}`, rightX + tableW - 3, finalY, { align: "right" });
+
 
     // ── 3. Save / Download based on runtime ──
     if (runtime === "tauri") {

@@ -525,7 +525,7 @@ export function AssistantChat() {
       if (activeCompanyId) {
         void logAiAction({
           companyId: activeCompanyId,
-          kind: "voucher_executed",
+          kind: "voucher_executed" as any,
           label: `${action.kind} voucher`,
           detail: { voucherId: result.voucher.id, amount: action.draft.amount, type: action.draft.intent },
         });
@@ -1180,7 +1180,7 @@ function BalanceCard({ card, latencyMs }: { card: StructuredCard; latencyMs?: nu
       <div className="flex items-baseline justify-between gap-2">
         <div className="font-semibold text-sm">{card.partyName || "—"}</div>
         <div className={`font-mono font-bold text-sm ${closingClass}`}>
-          {formatInrCard(card.closingPaise)} {drCr}
+          {formatInrCard(card.closingPaise ?? 0)} {drCr}
         </div>
       </div>
       <div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -1189,9 +1189,10 @@ function BalanceCard({ card, latencyMs }: { card: StructuredCard; latencyMs?: nu
         {card.companyName ? ` · ${card.companyName}` : ""}
       </div>
       <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
-        <div><div className="text-muted-foreground">Opening</div><div className="font-mono">{formatInrCard(card.openingPaise)}</div></div>
-        <div><div className="text-muted-foreground">Debits</div><div className="font-mono text-emerald-600">{formatInrCard(card.debitPaise)}</div></div>
-        <div><div className="text-muted-foreground">Credits</div><div className="font-mono text-rose-600">{formatInrCard(card.creditPaise)}</div></div>
+        <div><div className="text-muted-foreground">Opening</div><div className="font-mono">{formatInrCard(card.openingPaise ?? 0)}</div></div>
+        <div><div className="text-muted-foreground">Debits</div><div className="font-mono text-emerald-600">{formatInrCard(card.debitPaise ?? 0)}</div></div>
+        <div><div className="text-muted-foreground">Credits</div><div className="font-mono text-rose-600">{formatInrCard(card.creditPaise ?? 0)}</div></div>
+
       </div>
       {card.modeSplit ? (
         <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] border-t border-border/40 pt-2">
@@ -1318,9 +1319,8 @@ function MessageBubble({
           />
         )}
 
-        {!isUser && msg.ocrPreview && (
-          <OcrPreviewCard draft={msg.ocrPreview} memoryHint={msg.memoryHint} disabled={!isPendingOcr} onConfirm={(opts) => onConfirmOcr(msg.ocrPreview!, opts)} onCancel={onCancelOcr} />
-        )}
+        {/* msg.ocrPreview is not currently handled by a separate component */}
+
 
         {!isUser && msg.matches && msg.matches[0]?.actions && (
           <div className="mt-2 flex flex-wrap gap-1.5">

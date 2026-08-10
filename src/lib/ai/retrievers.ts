@@ -12,7 +12,20 @@ import {
 import { forEachEntry, forEachVoucher } from "@/lib/offline/cache-read-paged";
 import { normalizeName, similarity } from "@/lib/tally-busy-import";
 import { scoreNameMatch, stripHonorifics } from "./phonetic";
-import type { RoutedQuery } from "./query-router";
+
+
+export interface RoutedQuery {
+  intent: string;
+  entityHints: string[];
+  asOn?: string;
+  from?: string;
+  to?: string;
+  voucherNumber?: string;
+  latestKind?: string;
+  companyHint?: string;
+}
+
+
 
 export interface RetrievedSlice {
   /** Human-readable label for the slice — appears in the prompt. */
@@ -96,7 +109,7 @@ async function resolveCompanyId(companyId?: string | null): Promise<string | nul
 }
 
 /** Party balance / party ledger — fetch just that party's ledger + its entries. */
-async function retrieveParty(companyId: string, routed: RoutedQuery, opts: { withEntries: boolean }): Promise<RetrievedSlice> {
+async function retrieveParty(companyId: string, routed: any, opts: { withEntries: boolean }): Promise<RetrievedSlice> {
   const ledgers = (await readLedgers(companyId)) as any[];
   let target = fuzzyPickLedger(ledgers, routed.entityHints);
   // Fallback: semantic index (typos, transliteration, word order).
@@ -184,7 +197,7 @@ async function retrieveParty(companyId: string, routed: RoutedQuery, opts: { wit
 }
 
 /** Date-range register — sales/purchase/receipt/payment inside a window. */
-async function retrieveDateRange(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveDateRange(companyId: string, routed: any): Promise<RetrievedSlice> {
   const vouchers = (await readVouchers(companyId, { from: routed.from, to: routed.to })) as any[];
   let total = 0;
   for (const v of vouchers) total += Number(v.total_paise ?? v.total_amount ?? 0);
@@ -201,7 +214,7 @@ async function retrieveDateRange(companyId: string, routed: RoutedQuery): Promis
 }
 
 /** Voucher lookup — one voucher + its entries + items. */
-async function retrieveVoucher(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveVoucher(companyId: string, routed: any): Promise<RetrievedSlice> {
   const vouchers = (await readVouchers(companyId)) as any[];
   const needle = routed.voucherNumber?.toLowerCase() ?? "";
   const match = vouchers.find((v) => String(v.voucher_number ?? "").toLowerCase() === needle)
@@ -221,7 +234,7 @@ async function retrieveVoucher(companyId: string, routed: RoutedQuery): Promise<
 }
 
 /** Latest voucher of a given kind — full detail incl. items, entries, party. */
-async function retrieveLatestVoucher(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveLatestVoucher(companyId: string, routed: any): Promise<RetrievedSlice> {
   const kind = routed.latestKind ?? "sales";
   const all = (await readVouchers(companyId)) as any[];
   const filtered = all.filter((v) => String(v.voucher_type) === kind);
@@ -343,7 +356,7 @@ async function retrieveTrialBalance(companyId: string): Promise<RetrievedSlice> 
 }
 
 /** Profit & Loss — direct vs indirect income/expense grouping. */
-async function retrieveProfitLoss(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveProfitLoss(companyId: string, routed: any): Promise<RetrievedSlice> {
   const [ledgers, entries, vouchers] = await Promise.all([
     readLedgers(companyId),
     readVoucherEntriesForCompany(companyId),
