@@ -68,7 +68,7 @@ import { VoucherPreviewCard, OcrPreviewCard } from "./VoucherPreviewCards";
 //  TYPES
 // ═════════════════════════════════════════════════════════════════════════════
 
-export type AiActionKind = "chat" | "voucher" | "report" | "command";
+export type AiActionKind = "chat" | "voucher" | "report" | "command" | "voucher_executed";
 
 interface ChatMessage {
   id: string;
@@ -532,7 +532,7 @@ export function AssistantChat() {
       if (activeCompanyId) {
         void logAiAction({
           companyId: activeCompanyId,
-          kind: "voucher",
+          kind: "voucher_executed",
           label: `${action.kind} voucher`,
           detail: { voucherId: result.voucher.id, amount: action.draft.amount, type: action.draft.intent },
         });
@@ -736,6 +736,7 @@ export function AssistantChat() {
               intent: d.intent,
               date: d.date,
               amount: d.amount,
+              amountPaise: d.amountPaise,
               narration: d.narration,
               refNo: d.refNo,
               partyLedgerId: d.partyLedgerId,
@@ -743,6 +744,7 @@ export function AssistantChat() {
               counterLedgerId: d.counterLedgerId,
               displayDetails: d.displayDetails,
             };
+
 
             // HIGH CONFIDENCE → EXECUTE DIRECTLY
             if (action.confidence >= DIRECT_EXECUTE_CONFIDENCE && action.kind === "new") {
@@ -791,6 +793,7 @@ export function AssistantChat() {
               intent,
               date: d.date,
               amount: d.amount,
+              amountPaise: Math.round(d.amount * 100),
               narration: d.narration,
               refNo: d.refNo,
               partyLedgerId: d.partyLedgerId ?? undefined,
@@ -798,6 +801,7 @@ export function AssistantChat() {
               counterLedgerId: d.counterLedgerId ?? undefined,
               displayDetails: { partyName: targetParty ?? undefined, accountName: targetAccount ?? undefined },
             };
+
             setPendingVoucher(voucherPayload);
             addMessage({
               role: "assistant",
