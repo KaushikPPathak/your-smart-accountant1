@@ -1036,7 +1036,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     label: p.name,
                     hint: p.state_code ?? undefined,
                   }))}
-                  placeholder={`Select ${cfg.partyLabel.toLowerCase()}`}
+                  disabled={isPartyLocked}
+                  placeholder={isPartyLocked ? "Party is locked to source document" : `Select ${cfg.partyLabel.toLowerCase()}`}
                   emptyText={`No ${cfg.partyLabel.toLowerCase()}s yet — Alt+C to create`}
                   onCreate={() => setLedgerDlg({ open: true, editId: null })}
                   createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
@@ -1130,23 +1131,38 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                         </span>
                       )}
                     </Label>
-                    <Combo
-                      value={originalVoucherId ?? ""}
-                      onChange={(id) => void pullSourceDoc(id)}
-                      options={sourceDocs.map((v) => ({
-                        value: v.id,
-                        label: `${v.voucher_number} · ${STAGE_LABEL[v.voucher_type] ?? v.voucher_type}`,
-                        hint: `${v.voucher_date} · ₹${(v.total_paise / 100).toFixed(2)}`,
-                      }))}
-                      placeholder={
-                        partyId
-                          ? sourceDocs.length === 0
-                            ? "No pending documents for this party"
-                            : "Pick quotation / order / challan"
-                          : "Select party first"
-                      }
-                      emptyText="Nothing pending"
-                    />
+                    <div className="relative">
+                      <Combo
+                        value={originalVoucherId ?? ""}
+                        onChange={(id) => void pullSourceDoc(id)}
+                        options={sourceDocs.map((v) => ({
+                          value: v.id,
+                          label: `${v.voucher_number} · ${STAGE_LABEL[v.voucher_type] ?? v.voucher_type}`,
+                          hint: `${v.voucher_date} · ₹${(v.total_paise / 100).toFixed(2)}`,
+                        }))}
+                        placeholder={
+                          partyId
+                            ? sourceDocs.length === 0
+                              ? "No pending documents for this party"
+                              : "Pick quotation / order / challan"
+                            : "Select party first"
+                        }
+                        emptyText="Nothing pending"
+                      />
+                      {originalVoucherId && (
+                        <button
+                          onClick={() => {
+                            setOriginalVoucherId(null);
+                            setLines([blankLine()]);
+                            setRefNo("");
+                          }}
+                          className="absolute -right-6 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-destructive"
+                          title="Clear link and unlock party"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
