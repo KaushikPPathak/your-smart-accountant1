@@ -9,7 +9,7 @@
 // Everything is local-only and idempotent — a wasted speculation costs a
 // few ms of idle CPU and nothing else.
 
-import { routeQuery, type RoutedQuery } from "./query-router";
+import { routeQuery, type RouteResult as RoutedQuery } from "./query-router";
 import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
 import { semanticSearch } from "./semantic-index";
 

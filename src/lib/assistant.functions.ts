@@ -151,7 +151,7 @@ function extractRupeeFigures(text: string): number[] {
  */
 function verifyAnswer(text: string, card: StructuredCard | undefined): string {
   if (!card) return text;
-  const truthPaise = Math.abs(card.closingPaise);
+  const truthPaise = Math.abs(card.closingPaise ?? 0);
   const figures = extractRupeeFigures(text);
   if (figures.length === 0) return text;
   const off = figures.some((f) => Math.abs(f - truthPaise) > 100);

@@ -1,5 +1,6 @@
 // src/lib/ai/query-router.ts
-import { StructuredCard } from "./local-first";
+import type { StructuredCard } from "./sqliteContext";
+
 
 export type IntentType = 
   | "party_balance" 
@@ -11,7 +12,12 @@ export type IntentType =
   | "comparison"
   | "explanation"
   | "greeting"
+  | "ageing"
+  | "gst_query"
+  | "profit_loss"
+  | "stock_query"
   | "unknown";
+
 
 export interface RouteResult {
   intent: IntentType;
@@ -25,8 +31,15 @@ export interface RouteResult {
     voucherType?: "payment" | "receipt" | "journal" | "contra" | "sales" | "purchase";
     accountName?: string;
   };
+  entityHints: string[]; // Added back for retrievers/prefetch
+  asOn?: string;         // Added back for retrievers
+  from?: string;         // Added back for retrievers
+  to?: string;           // Added back for retrievers
+  latestKind?: string;   // Added back for retrievers
+  companyHint?: string;  // Added back for retrievers
   deterministicAnswer?: string | null; // If local-first can handle it
 }
+
 
 // Fast regex-based intent detection — zero LLM latency
 const INTENT_PATTERNS: { intent: IntentType; patterns: RegExp[]; deterministic: boolean }[] = [
@@ -157,9 +170,11 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
       confidence: 1,
       requiresLLM: false,
       requiresTools: false,
+      entityHints: [],
       deterministicAnswer: "Hello! I'm your AI accounting assistant. Ask me about balances, vouchers, or say something like 'Record a payment of ₹5000 to ABC Suppliers'."
     };
   }
+
   
   // 2. Pattern matching for intent
   let bestMatch: { intent: IntentType; confidence: number; deterministic: boolean } | null = null;
@@ -186,8 +201,10 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
       confidence: 0,
       requiresLLM: true,
       requiresTools: false,
+      entityHints: [],
     };
   }
+
   
   // 4. Extract entities
   const entity = extractEntities(text);
@@ -203,9 +220,17 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
     requiresLLM: !bestMatch.deterministic,
     requiresTools: bestMatch.deterministic && !canAnswerLocal, // Need to fetch data
     entity,
+    entityHints: entity?.partyName ? [entity.partyName] : [],
+    asOn: entity?.dateRange?.to,
+    from: entity?.dateRange?.from,
+    to: entity?.dateRange?.to,
+    companyHint: undefined,
+    latestKind: entity?.voucherType,
     deterministicAnswer: canAnswerLocal ? null : undefined, // Will be filled after tool call
   };
 }
+
+
 
 // Voice-specific: handle transcription artifacts
 export function normalizeVoiceInput(text: string): string {

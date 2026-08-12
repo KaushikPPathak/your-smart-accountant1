@@ -6,8 +6,9 @@
 // for the original rows back later via `retrieveOriginal`.
 
 import { cacheRowsForCcr, compressMessages } from "./headroom";
-import { routeQuery, type IntentType } from "./query-router";
+import { routeQuery, type RouteResult, type IntentType } from "./query-router";
 import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
+
 import { takeSpeculation } from "./prefetch";
 import { optimiseSlice } from "./slice-optimizer";
 import { createRedactionMap, redactDeep, redactString, unredact, type RedactionMap } from "./redactor";
@@ -75,14 +76,9 @@ export interface CompressedContext {
   memory: ConversationMemory;
 }
 
-/** Local shape that retrievers expect — mapped from your RouteResult. */
-interface RoutedQuery {
-  intent: IntentType;
-  entityHints: string[];
-  asOn?: string;
-  from?: string;
-  to?: string;
-}
+export type RoutedQuery = RouteResult;
+
+
 
 function resolveContextCompanyId(explicitCompanyId?: string | null): string | null {
   if (explicitCompanyId) return explicitCompanyId;
@@ -90,15 +86,11 @@ function resolveContextCompanyId(explicitCompanyId?: string | null): string | nu
   try { return localStorage.getItem("ym_active_company_id"); } catch { return null; }
 }
 
-function mapRouteResultToRouted(result: ReturnType<typeof routeQuery>): RoutedQuery {
-  return {
-    intent: result.intent,
-    entityHints: result.entity?.partyName ? [result.entity.partyName] : [],
-    asOn: result.entity?.dateRange?.to,
-    from: result.entity?.dateRange?.from,
-    to: result.entity?.dateRange?.to,
-  };
+function mapRouteResultToRouted(result: RouteResult): RoutedQuery {
+
+  return result;
 }
+
 
 /** Merge previously-resolved context into the routed query so follow-up
  *  questions ("and as on 31/12/2025?", "what about last FY?") re-use the

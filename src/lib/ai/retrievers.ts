@@ -12,7 +12,7 @@ import {
 import { forEachEntry, forEachVoucher } from "@/lib/offline/cache-read-paged";
 import { normalizeName, similarity } from "@/lib/tally-busy-import";
 import { scoreNameMatch, stripHonorifics } from "./phonetic";
-import type { RoutedQuery } from "./query-router";
+import type { RouteResult } from "./query-router";
 
 export interface RetrievedSlice {
   /** Human-readable label for the slice — appears in the prompt. */
@@ -96,7 +96,7 @@ async function resolveCompanyId(companyId?: string | null): Promise<string | nul
 }
 
 /** Party balance / party ledger — fetch just that party's ledger + its entries. */
-async function retrieveParty(companyId: string, routed: RoutedQuery, opts: { withEntries: boolean }): Promise<RetrievedSlice> {
+async function retrieveParty(companyId: string, routed: RouteResult, opts: { withEntries: boolean }): Promise<RetrievedSlice> {
   const ledgers = (await readLedgers(companyId)) as any[];
   let target = fuzzyPickLedger(ledgers, routed.entityHints);
   // Fallback: semantic index (typos, transliteration, word order).
@@ -184,7 +184,8 @@ async function retrieveParty(companyId: string, routed: RoutedQuery, opts: { wit
 }
 
 /** Date-range register — sales/purchase/receipt/payment inside a window. */
-async function retrieveDateRange(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveDateRange(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
+
   const vouchers = (await readVouchers(companyId, { from: routed.from, to: routed.to })) as any[];
   let total = 0;
   for (const v of vouchers) total += Number(v.total_paise ?? v.total_amount ?? 0);
@@ -201,14 +202,15 @@ async function retrieveDateRange(companyId: string, routed: RoutedQuery): Promis
 }
 
 /** Voucher lookup — one voucher + its entries + items. */
-async function retrieveVoucher(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveVoucher(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const vouchers = (await readVouchers(companyId)) as any[];
-  const needle = routed.voucherNumber?.toLowerCase() ?? "";
+  const needle = routed.entity?.voucherType?.toLowerCase() ?? ""; // entity extractor maps #123 to voucherType sometimes
   const match = vouchers.find((v) => String(v.voucher_number ?? "").toLowerCase() === needle)
              ?? vouchers.find((v) => String(v.voucher_number ?? "").toLowerCase().includes(needle));
   if (!match) {
-    return { scope: `voucher not found: ${routed.voucherNumber}`, data: {} };
+    return { scope: `voucher not found: ${needle}`, data: {} };
   }
+
   const [allEntries, items] = await Promise.all([
     readVoucherEntriesForCompany(companyId),
     readVoucherItems(String(match.id)),
@@ -221,8 +223,9 @@ async function retrieveVoucher(companyId: string, routed: RoutedQuery): Promise<
 }
 
 /** Latest voucher of a given kind — full detail incl. items, entries, party. */
-async function retrieveLatestVoucher(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
-  const kind = routed.latestKind ?? "sales";
+async function retrieveLatestVoucher(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
+  const kind = routed.entity?.voucherType ?? "sales";
+
   const all = (await readVouchers(companyId)) as any[];
   const filtered = all.filter((v) => String(v.voucher_type) === kind);
   if (filtered.length === 0) {
@@ -343,7 +346,7 @@ async function retrieveTrialBalance(companyId: string): Promise<RetrievedSlice> 
 }
 
 /** Profit & Loss — direct vs indirect income/expense grouping. */
-async function retrieveProfitLoss(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveProfitLoss(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const [ledgers, entries, vouchers] = await Promise.all([
     readLedgers(companyId),
     readVoucherEntriesForCompany(companyId),
@@ -409,7 +412,7 @@ async function retrieveProfitLoss(companyId: string, routed: RoutedQuery): Promi
 }
 
 /** Cash / bank book — entries touching cash or bank ledgers. */
-async function retrieveCashBank(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveCashBank(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const [ledgers, entries, vouchers] = await Promise.all([
     readLedgers(companyId),
     readVoucherEntriesForCompany(companyId),
@@ -441,7 +444,7 @@ async function retrieveCashBank(companyId: string, routed: RoutedQuery): Promise
 }
 
 /** GST — sales/purchase vouchers in window with taxable & total totals. */
-async function retrieveGst(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveGst(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const vouchers = (await readVouchers(companyId, { from: routed.from, to: routed.to })) as any[];
   const gstTypes = new Set(["sales", "purchase", "credit_note", "debit_note"]);
   const rel = vouchers.filter((v) => gstTypes.has(String(v.voucher_type)));
@@ -461,7 +464,7 @@ async function retrieveGst(companyId: string, routed: RoutedQuery): Promise<Retr
 }
 
 /** Ageing — outstanding balance per party bucketed by voucher age (streamed). */
-async function retrieveAgeing(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveAgeing(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const ledgers = (await readLedgers(companyId)) as any[];
   const parties = ledgers.filter((l) => /debtor|creditor|sundry/i.test(String(l.group_name ?? "")));
   const partyIds = new Set(parties.map((p) => String(p.id)));
@@ -521,7 +524,8 @@ async function retrieveStock(companyId: string): Promise<RetrievedSlice> {
   };
 }
 
-export async function retrieveForQuery(routed: RoutedQuery, companyIdIn?: string | null): Promise<RetrievedSlice> {
+export async function retrieveForQuery(routed: RouteResult, companyIdIn?: string | null): Promise<RetrievedSlice> {
+
   let companyId = await resolveCompanyId(companyIdIn);
   if (!companyId) return { scope: "no active company", data: {} };
   // Cross-company: "in the books of X" switches the retrieval context.
@@ -554,20 +558,20 @@ export async function retrieveForQuery(routed: RoutedQuery, companyIdIn?: string
   }
   let slice: RetrievedSlice;
   switch (routed.intent) {
-    case "party_balance":     slice = await retrieveParty(companyId, routed, { withEntries: false }); break;
-    case "party_ledger":      slice = await retrieveParty(companyId, routed, { withEntries: true }); break;
-    case "date_range_report": slice = await retrieveDateRange(companyId, routed); break;
+    case "party_balance":     slice = await retrieveParty(companyId, routed, { withEntries: true }); break;
     case "voucher_lookup":    slice = await retrieveVoucher(companyId, routed); break;
-    case "latest_voucher":    slice = await retrieveLatestVoucher(companyId, routed); break;
+    case "trial_balance":     slice = await retrieveTrialBalance(companyId); break;
+    case "explanation":       slice = await retrieveTrialBalance(companyId); break;
+    case "cash_balance":      slice = await retrieveCashBank(companyId, routed); break;
+    case "bank_balance":      slice = await retrieveCashBank(companyId, routed); break;
     case "ageing":            slice = await retrieveAgeing(companyId, routed); break;
     case "gst_query":         slice = await retrieveGst(companyId, routed); break;
-    case "trial_balance":     slice = await retrieveTrialBalance(companyId); break;
     case "profit_loss":       slice = await retrieveProfitLoss(companyId, routed); break;
-    case "cash_bank":         slice = await retrieveCashBank(companyId, routed); break;
     case "stock_query":       slice = await retrieveStock(companyId); break;
-    case "general":
+    case "comparison":        slice = await retrieveDateRange(companyId, routed); break;
     default:                  slice = await retrieveGeneral(companyId); break;
   }
+
   // Stamp company identity into facts so the LLM can enforce "right company" rule.
   try {
     const companies = (await readCompanies()) as any[];

@@ -17,13 +17,13 @@
 //    the assistant falls back to the normal single-intent path.
 //  • Cheap. Zero network, zero model calls at planning time.
 
-import { routeQuery, type QueryIntent } from "./query-router";
+import { routeQuery, type IntentType } from "./query-router";
 import { executeTool } from "./tools";
 
 export interface PlanStep {
   id: string;
   fragment: string;               // the sub-question this step answers
-  intent: QueryIntent;            // routed intent for the fragment
+  intent: IntentType;            // routed intent for the fragment
   tool: string | null;            // tool to invoke (null → fall back to retriever)
   args: Record<string, unknown>;
 }
@@ -55,32 +55,34 @@ function extractEntity(fragment: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-function toolForIntent(intent: QueryIntent): string | null {
+function toolForIntent(intent: IntentType): string | null {
   switch (intent) {
     case "party_balance":     return "get_party_balance";
-    case "party_ledger":      return "get_party_balance";
-    case "cash_bank":         return "get_cash_balance";
+    case "party_balance":     return "get_party_balance";
+    case "cash_balance":         return "get_cash_balance";
+    case "bank_balance":         return "get_cash_balance";
     case "voucher_lookup":    return "get_voucher";
-    case "latest_voucher":    return "list_vouchers";
+    case "voucher_lookup":    return "get_voucher";
     case "trial_balance":     return "get_trial_balance";
-    case "profit_loss":       return "get_trial_balance"; // retriever composes P&L on top
-    case "date_range_report": return "list_vouchers";
+    case "explanation":       return "get_trial_balance"; // retriever composes P&L on top
+    case "comparison":        return "list_vouchers";
+
     default:                  return null;
   }
 }
 
-function argsForFragment(intent: QueryIntent, fragment: string): Record<string, unknown> {
+function argsForFragment(intent: IntentType, fragment: string): Record<string, unknown> {
   const args: Record<string, unknown> = {};
   const entity = extractEntity(fragment);
   const asOn = fragment.match(/\b(\d{2}\/\d{2}\/\d{2,4}|\d{4}-\d{2}-\d{2})\b/)?.[1];
   if (asOn) args.asOn = normaliseDate(asOn);
 
-  if ((intent === "party_balance" || intent === "party_ledger") && entity) args.name = entity;
-  if (intent === "cash_bank") {
+  if (intent === "party_balance" && entity) args.name = entity;
+  if (intent === "cash_balance" || intent === "bank_balance") {
     if (/bank/i.test(fragment) && entity) args.account = entity;
     else args.account = "cash";
   }
-  if (intent === "date_range_report") {
+  if (intent === "comparison") {
     if (/purchase/i.test(fragment))  args.kind = "purchase";
     else if (/sale/i.test(fragment)) args.kind = "sales";
   }
