@@ -110,11 +110,13 @@ type ParsedVoucher = {
   partyLedgerId?: string;
   cashBankLedgerId?: string;
   counterLedgerId?: string;
-  displayDetails?: {
+  displayDetails: {
     partyName?: string;
     accountName?: string;
   };
 };
+
+
 
 
 // ═════════════════════════════════════════════════════════════════════════════
