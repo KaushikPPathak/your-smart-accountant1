@@ -59,8 +59,11 @@ import {
   type ModelPreference,
 } from "@/lib/ai/model-preference";
 import { isWebGpuAvailable } from "@/lib/ai/webllm";
-import { clearSpeculation, speculate } from "@/lib/ai/prefetch";
+import { speculate } from "@/lib/ai/prefetch";
 import { VoucherPreviewCard, OcrPreviewCard } from "./VoucherPreviewCards";
+
+import { VoucherPreviewCard, OcrPreviewCard } from "./VoucherPreviewCards";
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  TYPES
