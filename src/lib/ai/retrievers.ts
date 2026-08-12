@@ -204,12 +204,13 @@ async function retrieveDateRange(companyId: string, routed: RouteResult): Promis
 /** Voucher lookup — one voucher + its entries + items. */
 async function retrieveVoucher(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const vouchers = (await readVouchers(companyId)) as any[];
-  const needle = routed.voucherNumber?.toLowerCase() ?? "";
+  const needle = routed.entity?.voucherType?.toLowerCase() ?? ""; // entity extractor maps #123 to voucherType sometimes
   const match = vouchers.find((v) => String(v.voucher_number ?? "").toLowerCase() === needle)
              ?? vouchers.find((v) => String(v.voucher_number ?? "").toLowerCase().includes(needle));
   if (!match) {
-    return { scope: `voucher not found: ${routed.voucherNumber}`, data: {} };
+    return { scope: `voucher not found: ${needle}`, data: {} };
   }
+
   const [allEntries, items] = await Promise.all([
     readVoucherEntriesForCompany(companyId),
     readVoucherItems(String(match.id)),

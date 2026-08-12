@@ -224,9 +224,12 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
     asOn: entity?.dateRange?.to,
     from: entity?.dateRange?.from,
     to: entity?.dateRange?.to,
+    companyHint: undefined,
+    latestKind: entity?.voucherType,
     deterministicAnswer: canAnswerLocal ? null : undefined, // Will be filled after tool call
   };
 }
+
 
 
 // Voice-specific: handle transcription artifacts

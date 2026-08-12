@@ -60,10 +60,13 @@ import {
 } from "@/lib/ai/model-preference";
 import { isWebGpuAvailable } from "@/lib/ai/webllm";
 import { clearSpeculation, speculate } from "@/lib/ai/prefetch";
+import { VoucherPreviewCard, OcrPreviewCard } from "./VoucherPreviewCards";
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  TYPES
 // ═════════════════════════════════════════════════════════════════════════════
+
+export type AiActionKind = "chat" | "voucher" | "report" | "command";
 
 interface ChatMessage {
   id: string;
@@ -98,6 +101,7 @@ type ParsedCompany = {
 type ParsedVoucher = {
   intent: VoucherIntentType;
   date: string;
+
   amount: number;
   narration?: string;
   refNo?: string;

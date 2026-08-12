@@ -47,7 +47,7 @@ export function VoucherPreviewCard({
           </div>
           <div className="col-span-2">
             <div className="text-[10px] uppercase text-muted-foreground">Ledger</div>
-            <div className="truncate font-medium">{draft.partyLedgerName || "Unknown"}</div>
+            <div className="truncate font-medium">{draft.displayDetails?.partyName || draft.partyLedgerId || "Unknown"}</div>
           </div>
         </div>
         <Button className="mt-3 w-full gap-2" size="sm" onClick={onConfirm} disabled={disabled}>
