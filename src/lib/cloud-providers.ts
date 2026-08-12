@@ -48,15 +48,85 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
   },
 };
 
-export function getClientId(id: ProviderId): string | null {
+/**
+ * Where the user registers their own OAuth app, and what settings are needed.
+ * Shown verbatim in the "Configure" dialog — no placeholders, no fake keys.
+ */
+export const PROVIDER_SETUP: Record<ProviderId, {
+  consoleUrl: string;
+  appType: string;
+  steps: string[];
+  envVar: string;
+}> = {
+  gdrive: {
+    consoleUrl: "https://console.cloud.google.com/apis/credentials",
+    appType: "OAuth client ID → Web application",
+    envVar: "VITE_GDRIVE_CLIENT_ID",
+    steps: [
+      "Enable the Google Drive API for your project.",
+      "Create an OAuth client ID of type 'Web application'.",
+      "Add the redirect URI shown below to 'Authorised redirect URIs'.",
+      "Add scope .../auth/drive.file on the OAuth consent screen.",
+      "Copy the Client ID (ends with .apps.googleusercontent.com) and paste it here.",
+    ],
+  },
+  onedrive: {
+    consoleUrl: "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade",
+    appType: "App registration → Single-page application (SPA)",
+    envVar: "VITE_ONEDRIVE_CLIENT_ID",
+    steps: [
+      "Register a new application (accounts: personal + work/school).",
+      "Under Authentication, add a platform of type 'Single-page application'.",
+      "Add the redirect URI shown below to that SPA platform.",
+      "Add delegated permissions Files.ReadWrite.AppFolder and offline_access.",
+      "Copy the Application (client) ID and paste it here.",
+    ],
+  },
+  dropbox: {
+    consoleUrl: "https://www.dropbox.com/developers/apps",
+    appType: "Scoped access → App folder",
+    envVar: "VITE_DROPBOX_CLIENT_ID",
+    steps: [
+      "Create an app with 'Scoped access' and 'App folder' access.",
+      "On the Permissions tab enable files.content.write and files.content.read, then submit.",
+      "On the Settings tab add the redirect URI shown below.",
+      "Copy the App key and paste it here.",
+    ],
+  },
+};
+
+const CLIENT_ID_KEY = (id: ProviderId) => `ym_cloud_client_id:${id}`;
+
+/** Client ID the user configured on THIS device (overrides the build-time env). */
+export function getStoredClientId(id: ProviderId): string | null {
+  try {
+    const v = localStorage.getItem(CLIENT_ID_KEY(id));
+    return v && v.trim().length > 0 ? v.trim() : null;
+  } catch { return null; }
+}
+
+export function setStoredClientId(id: ProviderId, clientId: string): void {
+  try {
+    const v = clientId.trim();
+    if (v) localStorage.setItem(CLIENT_ID_KEY(id), v);
+    else localStorage.removeItem(CLIENT_ID_KEY(id));
+  } catch { /* ignore */ }
+}
+
+export function clearStoredClientId(id: ProviderId): void {
+  try { localStorage.removeItem(CLIENT_ID_KEY(id)); } catch { /* ignore */ }
+}
+
+export function getEnvClientId(id: ProviderId): string | null {
   const env = import.meta.env as Record<string, string | undefined>;
-  const key =
-    id === "gdrive" ? "VITE_GDRIVE_CLIENT_ID"
-    : id === "onedrive" ? "VITE_ONEDRIVE_CLIENT_ID"
-    : "VITE_DROPBOX_CLIENT_ID";
-  const v = env[key];
+  const v = env[PROVIDER_SETUP[id].envVar];
   return v && v.length > 0 ? v : null;
 }
+
+export function getClientId(id: ProviderId): string | null {
+  return getStoredClientId(id) ?? getEnvClientId(id);
+}
+
 
 export function getRedirectUri(): string {
   if (typeof window === "undefined") return "";
