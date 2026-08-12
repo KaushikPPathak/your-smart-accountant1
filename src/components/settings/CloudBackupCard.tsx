@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Cloud, Download, Upload, HardDrive, Info, CheckCircle2, LogOut, Loader2 } from "lucide-react";
+import { Cloud, Download, Upload, HardDrive, Info, CheckCircle2, LogOut, Loader2, Settings2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
