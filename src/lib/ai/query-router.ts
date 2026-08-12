@@ -1,5 +1,6 @@
 // src/lib/ai/query-router.ts
-import { StructuredCard } from "./local-first";
+import type { StructuredCard } from "./sqliteContext";
+
 
 export type IntentType = 
   | "party_balance" 

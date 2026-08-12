@@ -12,7 +12,7 @@ import {
 import { forEachEntry, forEachVoucher } from "@/lib/offline/cache-read-paged";
 import { normalizeName, similarity } from "@/lib/tally-busy-import";
 import { scoreNameMatch, stripHonorifics } from "./phonetic";
-import type { RoutedQuery } from "./query-router";
+import type { RouteResult } from "./query-router";
 
 export interface RetrievedSlice {
   /** Human-readable label for the slice — appears in the prompt. */
@@ -96,7 +96,7 @@ async function resolveCompanyId(companyId?: string | null): Promise<string | nul
 }
 
 /** Party balance / party ledger — fetch just that party's ledger + its entries. */
-async function retrieveParty(companyId: string, routed: RoutedQuery, opts: { withEntries: boolean }): Promise<RetrievedSlice> {
+async function retrieveParty(companyId: string, routed: RouteResult, opts: { withEntries: boolean }): Promise<RetrievedSlice> {
   const ledgers = (await readLedgers(companyId)) as any[];
   let target = fuzzyPickLedger(ledgers, routed.entityHints);
   // Fallback: semantic index (typos, transliteration, word order).

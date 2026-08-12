@@ -11,6 +11,7 @@
 
 import type { StructuredCard } from "./sqliteContext";
 
+
 function formatInr(paise: number): string {
   const rupees = Math.abs(paise) / 100;
   return "₹" + new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rupees);

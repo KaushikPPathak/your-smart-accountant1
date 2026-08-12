@@ -4,7 +4,7 @@
 //
 // Stored client-side only, in the AssistantChat component ref.
 
-import type { QueryIntent } from "./query-router";
+import type { IntentType } from "./query-router";
 
 export interface ConversationMemory {
   companyId?: string | null;
@@ -17,7 +17,7 @@ export interface ConversationMemory {
   from?: string;
   to?: string;
   /** Last classified intent. */
-  intent?: QueryIntent;
+  intent?: IntentType;
 }
 
 export function mergePrior(next: ConversationMemory, prev?: ConversationMemory): ConversationMemory {
