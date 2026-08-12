@@ -1338,9 +1338,11 @@ function MessageBubble({
             ))}
           </div>
         )}
-
+      </div>
+    </div>
   );
 }
+
 
 
 function CompanyPreviewCard({
