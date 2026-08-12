@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Cloud, Download, Upload, HardDrive, Info, CheckCircle2, LogOut, Loader2 } from "lucide-react";
+import { Cloud, Download, Upload, HardDrive, Info, CheckCircle2, LogOut, Loader2, Settings2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,7 @@ import {
   getClientId,
   type ProviderId,
 } from "@/lib/cloud-providers";
+import { CloudProviderSetupDialog } from "./CloudProviderSetupDialog";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "Never";
@@ -51,6 +52,8 @@ export function CloudBackupCard() {
   const [connections, setConnections] = useState<Record<ProviderId, { connected: boolean; label?: string }>>({
     gdrive: { connected: false }, onedrive: { connected: false }, dropbox: { connected: false },
   });
+  const [setupFor, setSetupFor] = useState<ProviderId | null>(null);
+  const [configVersion, setConfigVersion] = useState(0);
   const isAdmin = activeMembership?.role === "admin";
 
   const refreshConnections = () => {
@@ -97,10 +100,9 @@ export function CloudBackupCard() {
   // ---------- OAuth providers ----------
   const connect = async (id: ProviderId) => {
     if (!getClientId(id)) {
-      toast.error(
-        `${PROVIDERS[id].label} isn't configured on this build. Ask your operator to set VITE_${id.toUpperCase()}_CLIENT_ID.`,
-        { duration: 8000 },
-      );
+      // Not configured yet — open the setup dialog instead of dead-ending.
+      setSetupFor(id);
+      toast.info(`${PROVIDERS[id].label} needs a one-time Client ID setup`);
       return;
     }
     setBusy(id);
@@ -208,7 +210,7 @@ export function CloudBackupCard() {
               the provider&apos;s security page.
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2" key={configVersion}>
             {(Object.keys(PROVIDERS) as ProviderId[]).map((id) => {
               const p = PROVIDERS[id];
               const conn = connections[id];
@@ -224,17 +226,26 @@ export function CloudBackupCard() {
                           <CheckCircle2 className="h-3 w-3" /> Connected
                         </Badge>
                       )}
-                      {!configured && <Badge variant="outline">Not configured</Badge>}
+                      {!configured && <Badge variant="outline">Setup needed</Badge>}
                     </div>
                     <div className="text-[11px] text-muted-foreground truncate">
                       {conn.connected
                         ? conn.label ?? "Signed in"
                         : configured
-                        ? "Not connected"
-                        : "Operator must set the client ID for this provider"}
+                        ? "Configured — not connected"
+                        : "Add your own OAuth Client ID to enable"}
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSetupFor(id)}
+                      disabled={busy !== null}
+                      title={`Configure ${p.label} OAuth client ID`}
+                    >
+                      <Settings2 className="h-4 w-4" />
+                    </Button>
                     {conn.connected ? (
                       <>
                         <Button size="sm" onClick={() => pushToProvider(id)} disabled={busy !== null || !activeCompanyId}>
@@ -246,9 +257,9 @@ export function CloudBackupCard() {
                         </Button>
                       </>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => connect(id)} disabled={busy !== null || !configured}>
+                      <Button size="sm" variant="outline" onClick={() => connect(id)} disabled={busy !== null}>
                         {isBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        {isBusy ? "Connecting…" : "Connect"}
+                        {isBusy ? "Connecting…" : configured ? "Connect" : "Set up"}
                       </Button>
                     )}
                   </div>
@@ -268,6 +279,12 @@ export function CloudBackupCard() {
         targetCompanyId={activeCompanyId ?? null}
         targetCompanyName={activeMembership?.companies.name ?? ""}
         isAdmin={isAdmin}
+      />
+      <CloudProviderSetupDialog
+        provider={setupFor}
+        open={setupFor !== null}
+        onOpenChange={(o) => { if (!o) setSetupFor(null); }}
+        onSaved={() => { setConfigVersion((v) => v + 1); refreshConnections(); }}
       />
     </Card>
   );
