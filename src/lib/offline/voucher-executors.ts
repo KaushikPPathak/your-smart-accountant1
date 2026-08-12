@@ -240,6 +240,16 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
     db.cache_voucher_entries,
     db.cache_bill_sundries,
     async () => {
+      // Security/Business Logic: Enforce party locking for carry-forward documents.
+      if (snap.originalVoucherId) {
+        const orig = await db.cache_vouchers.get(snap.originalVoucherId);
+        if (orig && orig.party_ledger_id !== snap.partyId) {
+          throw new Error(
+            `Party mismatch: This document is linked to ${snap.voucherType === "sales_order" ? "Estimate" : "Order"} ${orig.voucher_number}, which was for a different party.`,
+          );
+        }
+      }
+
       await db.cache_vouchers.put({
         id: voucherId,
         company_id: snap.companyId,
