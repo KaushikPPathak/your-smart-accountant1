@@ -128,6 +128,14 @@ export function CloudProviderSetupDialog({
               This exact string must be listed as an allowed redirect URI, otherwise
               sign-in will fail with a redirect_uri_mismatch error.
             </p>
+            {!/^https?:\/\//.test(redirectUri) && (
+              <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                This desktop build serves the app from <code>{redirectUri}</code>, which
+                the provider will not accept as a redirect URI. Use one-click cloud
+                backup from the web/preview build, or run the desktop app behind an
+                http(s) origin.
+              </p>
+            )}
           </div>
 
           <div className="space-y-1">
