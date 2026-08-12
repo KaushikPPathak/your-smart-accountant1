@@ -11,7 +11,9 @@ export type AiActionKind =
   | "voucher_draft_rejected"
   | "ocr_import"
   | "bank_line_posted"
-  | "ledger_created";
+  | "ledger_created"
+  | "voucher_executed";
+
 
 export interface AiActionRecord {
   companyId: string;
@@ -28,7 +30,9 @@ const KIND_TEXT: Record<AiActionKind, string> = {
   ocr_import: "Invoice read by OCR",
   bank_line_posted: "Bank statement line posted",
   ledger_created: "Ledger created from AI suggestion",
+  voucher_executed: "Assistant transaction executed",
 };
+
 
 export async function logAiAction(rec: AiActionRecord): Promise<void> {
   const conf =
