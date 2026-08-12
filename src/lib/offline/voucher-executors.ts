@@ -244,8 +244,10 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
       if (snap.originalVoucherId) {
         const orig = await db.cache_vouchers.get(snap.originalVoucherId);
         if (orig && orig.party_ledger_id !== snap.partyId) {
+          const sourceLabel = orig.voucher_type === "quotation" ? "Estimate" : 
+                            orig.voucher_type === "sales_order" ? "Sales Order" : "Document";
           throw new Error(
-            `Party mismatch: This document is linked to ${snap.voucherType === "sales_order" ? "Estimate" : "Order"} ${orig.voucher_number}, which was for a different party.`,
+            `Party mismatch: This document is linked to ${sourceLabel} ${orig.voucher_number}, which was for a different party.`,
           );
         }
       }
