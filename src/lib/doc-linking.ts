@@ -35,6 +35,7 @@ export interface DocLine {
   rate: string;
   discount: string;
   gst_rate: string;
+  pending_qty?: number; // Added for partial conversion tracking
 }
 
 export interface OpenBill {
@@ -51,7 +52,7 @@ export interface OpenBill {
 export const SOURCE_STAGES: Record<string, string[]> = {
   sales_order: ["quotation"],
   delivery_note: ["sales_order", "quotation"],
-  sales: ["delivery_note", "sales_order", "quotation"],
+  sales: ["sales_order", "delivery_note", "quotation"],
 };
 
 export const STAGE_LABEL: Record<string, string> = {
@@ -255,3 +256,70 @@ export async function putLocalAllocations(
     rows.map((r) => ({ id: crypto.randomUUID(), ...r, created_at: stamp, updated_at: stamp })),
   );
 }
+
+/**
+ * Calculates pending quantities for items in a source voucher by subtracting
+ * quantities already consumed in later vouchers that link back to it.
+ */
+export async function loadDocLinesWithPending(
+  voucherId: string,
+  companyId: string,
+): Promise<DocLine[]> {
+  const allLines = await loadDocLines(voucherId);
+  if (allLines.length === 0) return [];
+
+  // Find all later vouchers that were carried forward from this one
+  let laterVouchers: Array<{ id: string }> = [];
+  if (isLocalOnlyMode()) {
+    const rows = await offlineDb.cache_vouchers
+      .where("original_voucher_id")
+      .equals(voucherId)
+      .and((v) => v.company_id === companyId && v.is_deleted !== true)
+      .toArray();
+    laterVouchers = rows.map((r) => ({ id: String(r.id) }));
+  } else {
+    const { data } = await supabase
+      .from("vouchers")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("original_voucher_id", voucherId);
+    laterVouchers = (data ?? []) as Array<{ id: string }>;
+  }
+
+  if (laterVouchers.length === 0) {
+    return allLines.map((l) => ({ ...l, pending_qty: Number(l.qty) }));
+  }
+
+  // Aggregate quantities consumed by item_id
+  const consumed = new Map<string, number>();
+  for (const v of laterVouchers) {
+    let items: Array<{ item_id: string; qty: number }> = [];
+    if (isLocalOnlyMode()) {
+      const rows = await offlineDb.cache_voucher_items
+        .where("voucher_id")
+        .equals(v.id)
+        .toArray();
+      items = rows.map((r) => ({ item_id: String(r.item_id), qty: Number(r.qty ?? 0) }));
+    } else {
+      const { data } = await supabase
+        .from("voucher_items")
+        .select("item_id, qty")
+        .eq("voucher_id", v.id);
+      items = (data ?? []) as Array<{ item_id: string; qty: number }>;
+    }
+
+    for (const item of items) {
+      consumed.set(item.item_id, (consumed.get(item.item_id) || 0) + item.qty);
+    }
+  }
+
+  return allLines.map((l) => {
+    const totalQty = Number(l.qty);
+    const consumedQty = consumed.get(l.item_id) || 0;
+    return {
+      ...l,
+      pending_qty: Math.max(0, totalQty - consumedQty),
+    };
+  });
+}
+

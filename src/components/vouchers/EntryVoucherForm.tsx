@@ -213,31 +213,44 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     if (missing.length === 0) return;
     let cancelled = false;
     (async () => {
-      const [{ data: ledgerRows }, { data: entryRows }] = await Promise.all([
-        supabase
-          .from("ledgers")
-          .select("id, opening_balance_paise, opening_balance_is_debit")
-          .in("id", missing),
-        supabase
-          .from("voucher_entries")
-          .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-          .in("ledger_id", missing)
-          .eq("vouchers.company_id", activeCompanyId)
-          .lte("vouchers.voucher_date", date),
-      ]);
-      if (cancelled) return;
-      const movement = new Map<string, number>();
-      for (const e of (entryRows || []) as { ledger_id: string; debit_paise: number; credit_paise: number }[]) {
-        movement.set(e.ledger_id, (movement.get(e.ledger_id) || 0) + e.debit_paise - e.credit_paise);
+      // IndexedDB/Cache-first for balance info. Offline mode doesn't support lte joins easily,
+      // so we use a client-side fetch if online or wait for cache to populate.
+      // But actually, we already have LedgerBalanceChip for live values.
+      // For this form, let's keep it simple and just use the offlineDb directly.
+      const { offlineDb } = await import("@/lib/offline/db");
+      const results: Record<string, LedgerBalanceInfo> = {};
+      
+      for (const id of missing) {
+        if (cancelled) return;
+        const ledger = await offlineDb.cache_ledgers.get(id);
+        if (!ledger) continue;
+        
+        const ob = (ledger.opening_balance_is_debit ? 1 : -1) * (ledger.opening_balance_paise || 0);
+        
+        // Sum entries up to current date
+        const entries = await offlineDb.cache_voucher_entries
+          .where("ledger_id")
+          .equals(id)
+          .toArray();
+          
+        const voucherIds = entries.map(e => e.voucher_id);
+        const vouchers = await offlineDb.cache_vouchers
+          .where("id")
+          .anyOf(voucherIds)
+          .filter(v => v.company_id === activeCompanyId && v.voucher_date <= date && v.is_deleted !== true)
+          .toArray();
+          
+        const validVoucherIds = new Set(vouchers.map(v => v.id));
+        const movement = entries
+          .filter(e => validVoucherIds.has(e.voucher_id))
+          .reduce((acc, e) => acc + (e.debit_paise || 0) - (e.credit_paise || 0), 0);
+          
+        results[id] = { paise: ob + movement };
       }
-      setLedgerBalances((prev) => {
-        const next = { ...prev };
-        for (const lg of (ledgerRows || []) as { id: string; opening_balance_paise: number; opening_balance_is_debit: boolean }[]) {
-          const ob = (lg.opening_balance_is_debit ? 1 : -1) * lg.opening_balance_paise;
-          next[lg.id] = { paise: ob + (movement.get(lg.id) || 0) };
-        }
-        return next;
-      });
+      
+      if (!cancelled) {
+        setLedgerBalances(prev => ({ ...prev, ...results }));
+      }
     })();
     return () => {
       cancelled = true;
