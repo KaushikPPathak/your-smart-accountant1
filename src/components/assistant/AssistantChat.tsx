@@ -1343,11 +1343,8 @@ function MessageBubble({
   );
 }
 
-function VoucherPreviewCard({
-  draft,
-  action,
-  disabled,
-  onConfirm,
+// Removed duplicate definition
+
   onEdit,
   onCancel,
 }: {
