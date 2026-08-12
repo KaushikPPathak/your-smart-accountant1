@@ -31,6 +31,7 @@ import {
   getClientId,
   type ProviderId,
 } from "@/lib/cloud-providers";
+import { CloudProviderSetupDialog } from "./CloudProviderSetupDialog";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "Never";
@@ -51,6 +52,8 @@ export function CloudBackupCard() {
   const [connections, setConnections] = useState<Record<ProviderId, { connected: boolean; label?: string }>>({
     gdrive: { connected: false }, onedrive: { connected: false }, dropbox: { connected: false },
   });
+  const [setupFor, setSetupFor] = useState<ProviderId | null>(null);
+  const [configVersion, setConfigVersion] = useState(0);
   const isAdmin = activeMembership?.role === "admin";
 
   const refreshConnections = () => {
