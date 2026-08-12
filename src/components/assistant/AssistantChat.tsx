@@ -59,10 +59,9 @@ import {
   type ModelPreference,
 } from "@/lib/ai/model-preference";
 import { isWebGpuAvailable } from "@/lib/ai/webllm";
-import { speculate } from "@/lib/ai/prefetch";
+import { clearSpeculation, speculate } from "@/lib/ai/prefetch";
 import { VoucherPreviewCard, OcrPreviewCard } from "./VoucherPreviewCards";
 
-import { VoucherPreviewCard, OcrPreviewCard } from "./VoucherPreviewCards";
 
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -104,8 +103,8 @@ type ParsedCompany = {
 type ParsedVoucher = {
   intent: VoucherIntentType;
   date: string;
-
   amount: number;
+  amountPaise: number;
   narration?: string;
   refNo?: string;
   partyLedgerId?: string;
@@ -116,6 +115,7 @@ type ParsedVoucher = {
     accountName?: string;
   };
 };
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  CONSTANTS
