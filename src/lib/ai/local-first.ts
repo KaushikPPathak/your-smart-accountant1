@@ -30,11 +30,15 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
     case "party_balance": {
       const asOn = card.asOnDate ? ` as on ${card.asOnDate}` : "";
       const owes = card.isDebit
-        ? `${card.partyName} owes you ${formatInr(card.closingPaise)}${asOn}.`
+        ? `${card.partyName} owes you ${formatInr(card.closingPaise ?? 0)}${asOn}.`
         : `You owe ${card.partyName} ${formatInr(card.closingPaise ?? 0)}${asOn}.`;
-...
+
+      const parts: string[] = [];
+      parts.push(owes);
+
       if (card.modeSplit) {
         const { cashPaise = 0, bankPaise = 0, otherPaise = 0 } = card.modeSplit;
+
 
         const total = Math.abs(cashPaise) + Math.abs(bankPaise) + Math.abs(otherPaise);
         if (total > 0) {
