@@ -1,0 +1,1409 @@
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useDeferredValue,
+  startTransition,
+} from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
+import { Pencil, Plus, Save, Truck, UserPlus, X } from "lucide-react";
+import { QuickLedgerDialog, type QuickLedger } from "./QuickLedgerDialog";
+import { QuickItemDialog, type QuickItem } from "./QuickItemDialog";
+import { EwayBillPrepDialog } from "./EwayBillPrepDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/lib/company-context";
+import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
+import { formatINR, rupeesToPaise, amountInWords } from "@/lib/money";
+import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/gst";
+
+import { buildItemVoucherPostings } from "@/lib/voucher-postings";
+import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
+import { useEnterAsTab } from "./useEnterAsTab";
+import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
+import { RecentVouchersPanel } from "./RecentVouchersPanel";
+import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
+import { Combo } from "./Combo";
+import {
+  getAllLedgers,
+  getAllItems,
+  upsertCachedLedger,
+  upsertCachedItem,
+  useMastersVersion,
+} from "@/lib/masters-cache";
+import { validateItemVoucher } from "@/lib/schemas/voucher";
+import { enqueueSave } from "@/lib/save-queue";
+import {
+  ITEM_VOUCHER_KEY,
+  runItemVoucherCreate,
+  type ItemVoucherSnap,
+} from "@/lib/offline/voucher-executors";
+import { ItemRow, type ItemRowData } from "@/components/fast-form/ItemRow";
+import { rememberNarration, recallNarration } from "@/lib/recall-store";
+import { HSN_MASTER_DATASET } from "@/lib/hsn/seedHsnData";
+import { useTaxTemplates } from "@/hooks/useVoucherMasters";
+import { useCostCentres } from "@/hooks/useCostCentres";
+import { resolveTaxTemplate } from "@/lib/voucher-resolver";
+import { LedgerBalanceChip } from "./LedgerBalanceChip";
+import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-store";
+import { AutoTaxChip } from "./AutoTaxChip";
+import { SundryStrip } from "./SundryStrip";
+import { netSundryPaise, resolveSundryPaise, splitSundriesByStage, type Sundry } from "@/lib/sundries";
+import { SOURCE_STAGES, STAGE_LABEL, listSourceDocs, loadDocLines, type LinkedDoc } from "@/lib/doc-linking";
+
+
+type VoucherType =
+  | "sales"
+  | "purchase"
+  | "credit_note"
+  | "debit_note"
+  | "sales_order"
+  | "delivery_note"
+  | "quotation";
+
+interface LedgerOpt {
+  id: string;
+  name: string;
+  type: string;
+  state_code: string | null;
+  gstin: string | null;
+  gst_treatment: string | null;
+}
+interface ItemOpt {
+  id: string;
+  name: string;
+  unit: string;
+  gst_rate: number;
+  hsn_code: string | null;
+}
+
+type Line = ItemRowData;
+
+const blankLine = (): Line => ({
+  id: crypto.randomUUID(),
+  item_id: "",
+  description: "",
+  qty: "1",
+  rate: "0",
+  discount: "0",
+  gst_rate: "0",
+});
+
+const TITLES: Record<VoucherType, { title: string; partyLabel: string; partyTypes: string[] }> = {
+  sales: {
+    title: "Sales Invoice",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
+  },
+  purchase: {
+    title: "Purchase Invoice",
+    partyLabel: "Supplier",
+    partyTypes: ["sundry_creditor"],
+  },
+  credit_note: {
+    title: "Credit Note (Sales Return)",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
+  },
+  debit_note: {
+    title: "Debit Note (Purchase Return)",
+    partyLabel: "Supplier",
+    partyTypes: ["sundry_creditor"],
+  },
+  sales_order: {
+    title: "Sales Order",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
+  },
+  delivery_note: {
+    title: "Delivery Challan",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
+  },
+  quotation: {
+    title: "Quotation",
+    partyLabel: "Customer",
+    partyTypes: ["sundry_debtor"],
+  },
+};
+
+export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
+  const navigate = useNavigate();
+  const { activeCompanyId, activeMembership } = useCompany();
+  const cfg = TITLES[voucherType];
+
+  const defaultDate = useDefaultFyDate();
+  const [date, setDate] = useState(defaultDate);
+  const [partyId, setPartyId] = useState("");
+  // Publish party context so the app status-bar balance strip mirrors it.
+  useEffect(() => {
+    setVoucherContext({ partyLedgerId: partyId || null, cashBankLedgerId: null, label: voucherType });
+    return () => clearVoucherContext();
+  }, [partyId, voucherType]);
+  const [refNo, setRefNo] = useState("");
+  const [originalVoucherId, setOriginalVoucherId] = useState<string | null>(null);
+  const [sourceDocs, setSourceDocs] = useState<LinkedDoc[]>([]);
+
+  const [originalInvoices, setOriginalInvoices] = useState<
+    { id: string; voucher_number: string; voucher_date: string; total_paise: number }[]
+  >([]);
+  const isNote = voucherType === "credit_note" || voucherType === "debit_note";
+  const [narration, setNarration] = useState("");
+  const [roundOff, setRoundOff] = useState<boolean>(true);
+  const isPurchaseSide = voucherType === "purchase" || voucherType === "debit_note";
+  const [itcClass, setItcClass] = useState<
+    "inputs" | "capital_goods" | "input_services" | "ineligible" | "na"
+  >(isPurchaseSide ? "inputs" : "na");
+  const [itcEligible, setItcEligible] = useState<boolean>(true);
+  const [supplyNature, setSupplyNature] = useState<
+    "taxable" | "zero_rated_wp" | "zero_rated_wop" | "nil_rated" | "exempt" | "non_gst"
+  >("taxable");
+  const [lines, setLines] = useState<Line[]>([blankLine()]);
+  const [miscPreGst, setMiscPreGst] = useState<string>("0");
+  const [miscPostGst, setMiscPostGst] = useState<string>("0");
+  // Bill sundries — freight, packing, discount, etc. Empty by default;
+  // "+ Add charge" popover in the totals block adds structured entries that
+  // are persisted to cache_bill_sundries and included in postings.
+  const [sundries, setSundries] = useState<import("@/lib/sundries").Sundry[]>([]);
+  const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
+  const [items, setItems] = useState<ItemOpt[]>([]);
+  const [companyStateCode, setCompanyStateCode] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [focusedLine, setFocusedLine] = useState<number>(0);
+  const [savedTick, setSavedTick] = useState(0);
+  const [manualTaxTemplateId, setManualTaxTemplateId] = useState<string | null>(null);
+  const [ledgerDlg, setLedgerDlg] = useState<{ open: boolean; editId: string | null }>({
+    open: false,
+    editId: null,
+  });
+  const [itemDlg, setItemDlg] = useState<{
+    open: boolean;
+    editId: string | null;
+    lineIdx: number | null;
+  }>({ open: false, editId: null, lineIdx: null });
+  const [ewbDlg, setEwbDlg] = useState<{
+    open: boolean;
+    voucher: {
+      id: string;
+      company_id: string;
+      voucher_number: string;
+      voucher_date: string;
+      total_paise: number;
+      subtotal_paise: number;
+      cgst_paise: number;
+      sgst_paise: number;
+      igst_paise: number;
+      is_interstate: boolean;
+      place_of_supply_code: string | null;
+    } | null;
+  }>({ open: false, voucher: null });
+  const { lock, locked } = usePeriodLock(date);
+  const showLineDescription = false;
+  const showGstColumn = false;
+  const [showHsnColumn, setShowHsnColumn] = useState<boolean>(() => {
+    try { return localStorage.getItem("voucher.showHsnColumn") === "1"; } catch { return false; }
+  });
+  const toggleHsnColumn = useCallback(() => {
+    setShowHsnColumn((v) => {
+      const next = !v;
+      try { localStorage.setItem("voucher.showHsnColumn", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+  const hsnDescriptionFor = useCallback((code: string) => {
+    const hit = HSN_MASTER_DATASET.find((s) => s.code === code)
+      ?? HSN_MASTER_DATASET.find((s) => s.code.startsWith(code) || code.startsWith(s.code));
+    return hit?.desc;
+  }, []);
+
+  // ---------- Draft persistence (so leaving the screen doesn't lose entries) ----------
+  const draftKey = activeCompanyId ? `voucher-draft:${activeCompanyId}:${voucherType}` : null;
+  const draftRestored = useState(false);
+  useEffect(() => {
+    if (!draftKey) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const d = JSON.parse(raw) as Partial<{
+        date: string;
+        partyId: string;
+        refNo: string;
+        narration: string;
+        roundOff: boolean;
+        itcClass: typeof itcClass;
+        itcEligible: boolean;
+        supplyNature: typeof supplyNature;
+        lines: Line[];
+        miscPreGst: string;
+        miscPostGst: string;
+      }>;
+      if (d.date) setDate(d.date);
+      if (d.partyId) setPartyId(d.partyId);
+      if (d.refNo) setRefNo(d.refNo);
+      if (d.narration) setNarration(d.narration);
+      
+      if (typeof d.roundOff === "boolean") setRoundOff(d.roundOff);
+      if (d.itcClass) setItcClass(d.itcClass);
+      if (typeof d.itcEligible === "boolean") setItcEligible(d.itcEligible);
+      if (d.supplyNature) setSupplyNature(d.supplyNature);
+      if (Array.isArray(d.lines) && d.lines.length > 0) setLines(d.lines);
+      if (typeof d.miscPreGst === "string") setMiscPreGst(d.miscPreGst);
+      if (typeof d.miscPostGst === "string") setMiscPostGst(d.miscPostGst);
+    } catch {
+      /* ignore corrupt draft */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  // Assistant prefill (from the in-app AI chat). Applied after the localStorage
+  // restore so the assistant always wins when both exist.
+  useEffect(() => {
+    if (voucherType !== "sales" && voucherType !== "purchase") return;
+    void import("@/lib/voucher-intent").then(({ consumeAssistantPrefill, focusSaveButton }) => {
+      const p = consumeAssistantPrefill(voucherType as "sales" | "purchase");
+      if (!p) return;
+      if (p.date) setDate(p.date);
+      if (p.partyLedgerId) setPartyId(p.partyLedgerId);
+      if (p.refNo) setRefNo(p.refNo);
+      if (p.narration) setNarration(p.narration);
+      if (p.amount && Number.isFinite(p.amount)) {
+        setLines((prev) => {
+          const first = prev[0] ?? blankLine();
+          return [{ ...first, rate: String(p.amount), qty: first.qty || "1" }, ...prev.slice(1)];
+        });
+      }
+      focusSaveButton(document);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!draftKey) return;
+    const hasContent =
+      partyId ||
+      refNo ||
+      narration ||
+      lines.some((l) => l.item_id || l.description || l.qty !== "1" || l.rate !== "0");
+    if (!hasContent) {
+      localStorage.removeItem(draftKey);
+      return;
+    }
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            date,
+            partyId,
+            refNo,
+            narration,
+            roundOff,
+            itcClass,
+            itcEligible,
+            supplyNature,
+            lines,
+            miscPreGst,
+            miscPostGst,
+          }),
+        );
+      } catch {
+        /* quota — ignore */
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [
+    draftKey,
+    date,
+    partyId,
+    refNo,
+    narration,
+    roundOff,
+    itcClass,
+    itcEligible,
+    supplyNature,
+    lines,
+    miscPreGst,
+    miscPostGst,
+  ]);
+  void draftRestored;
+
+  // Load company state once; ledgers + items come from the in-memory masters cache.
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    supabase
+      .from("companies")
+      .select("state_code")
+      .eq("id", activeCompanyId)
+      .single()
+      .then(({ data }) => setCompanyStateCode(data?.state_code ?? null));
+  }, [activeCompanyId]);
+  const mastersVersion = useMastersVersion();
+  useEffect(() => {
+    setLedgers(
+      getAllLedgers().map((l) => ({
+        id: l.id,
+        name: l.name,
+        type: l.type,
+        state_code: l.state_code,
+        gstin: l.gstin,
+        gst_treatment: l.gst_treatment,
+      })),
+    );
+    setItems(
+      getAllItems().map((i) => ({
+        id: i.id,
+        name: i.name,
+        unit: i.unit,
+        gst_rate: i.gst_rate,
+        hsn_code: i.hsn_code,
+      })),
+    );
+  }, [mastersVersion, activeCompanyId]);
+
+  // For credit/debit notes, load the party's original invoices so the user can pick
+  // the bill being adjusted (drives original_voucher_id + reference_no).
+  useEffect(() => {
+    if (!isNote || !activeCompanyId || !partyId) {
+      setOriginalInvoices([]);
+      return;
+    }
+    const originalType = voucherType === "credit_note" ? "sales" : "purchase";
+    let cancelled = false;
+    supabase
+      .from("vouchers")
+      .select("id, voucher_number, voucher_date, total_paise")
+      .eq("company_id", activeCompanyId)
+      .eq("party_ledger_id", partyId)
+      .eq("voucher_type", originalType)
+      .order("voucher_date", { ascending: false })
+      .limit(200)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setOriginalInvoices(data ?? []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNote, voucherType, activeCompanyId, partyId]);
+
+  // Sales-cycle carry-forward: pending earlier-stage documents for this party
+  // (Quotation → Sales Order → Delivery Challan → Sales Invoice).
+  useEffect(() => {
+    if (isNote || !activeCompanyId || !partyId || !SOURCE_STAGES[voucherType]) {
+      setSourceDocs([]);
+      return;
+    }
+    let cancelled = false;
+    listSourceDocs(activeCompanyId, voucherType, partyId)
+      .then((rows) => {
+        if (cancelled) return;
+        setSourceDocs(rows);
+        if (rows.length > 0) {
+          const kinds = Array.from(new Set(rows.map((r) => STAGE_LABEL[r.voucher_type] ?? r.voucher_type)));
+          toast.info(
+            `${rows.length} pending ${kinds.join(" / ")} for this party — use "Carry forward from" to pull the lines.`,
+          );
+        }
+      })
+      .catch(() => { if (!cancelled) setSourceDocs([]); });
+    return () => { cancelled = true; };
+  }, [isNote, voucherType, activeCompanyId, partyId, savedTick]);
+
+
+  /** Pull the picked source document's lines into this voucher. */
+  const pullSourceDoc = useCallback(async (id: string) => {
+    setOriginalVoucherId(id || null);
+    if (!id) return;
+    const doc = sourceDocs.find((d) => d.id === id);
+    setRefNo(doc?.voucher_number ?? "");
+    try {
+      const docLines = await loadDocLines(id);
+      if (docLines.length === 0) {
+        toast.info("That document has no item lines");
+        return;
+      }
+      setLines(docLines.map((l) => ({ id: crypto.randomUUID(), ...l })));
+      toast.success(
+        `Carried forward ${docLines.length} line${docLines.length > 1 ? "s" : ""} from ${STAGE_LABEL[doc?.voucher_type ?? ""] ?? "document"} ${doc?.voucher_number ?? ""}`,
+      );
+    } catch {
+      toast.error("Could not read that document");
+    }
+  }, [sourceDocs]);
+
+  // Clear the original-invoice link whenever the party changes
+  useEffect(() => {
+    setOriginalVoucherId(null);
+  }, [partyId]);
+
+
+  const partyOpts = useMemo(
+    () => ledgers.filter((l) => cfg.partyTypes.includes(l.type)),
+    [ledgers, cfg.partyTypes],
+  );
+  const partyLedger = useMemo(() => ledgers.find((l) => l.id === partyId), [ledgers, partyId]);
+  // Place of supply is derived strictly from the party's GSTIN (first 2 digits = state code)
+  // or, if GSTIN is missing, from the party's state code. No manual override — the party
+  // ledger is the single source of truth for IGST vs CGST+SGST routing.
+  const placeOfSupply = useMemo(() => {
+    const fromGstin = partyLedger?.gstin?.slice(0, 2);
+    if (fromGstin && /^\d{2}$/.test(fromGstin)) return fromGstin;
+    return partyLedger?.state_code ?? "";
+  }, [partyLedger]);
+  const interstate = isInterstate(companyStateCode, placeOfSupply);
+
+  // Supplier GST treatment drives ITC eligibility for purchases:
+  //   composition / unregistered / consumer → no ITC (flows to GSTR-3B 4(D), GSTR-9 ineligible)
+  // GSTR-1 / GSTR-3B / GSTR-9 classification (B2B / B2CL / CBW / EXP) is computed in
+  // `src/lib/gst-returns.ts` from the same `ledgers.gst_treatment` value.
+  useEffect(() => {
+    if (!isPurchaseSide) return;
+    const t = partyLedger?.gst_treatment;
+    if (t === "composition" || t === "unregistered" || t === "consumer") {
+      setItcClass("ineligible");
+      setItcEligible(false);
+    }
+  }, [partyLedger, isPurchaseSide]);
+
+  // Phase 1: tax-template auto-resolution (progressive disclosure).
+  // When no templates are configured (default state) or party is
+  // unregistered/composition, resolution returns `hidden` and no UI renders.
+  const taxTemplates = useTaxTemplates(activeCompanyId ?? null);
+  const { centres: costCentres, categories: costCategories } = useCostCentres(activeCompanyId ?? null);
+  const firstItem = useMemo(() => {
+    const first = lines.find((l) => l.item_id);
+    if (!first) return null;
+    const meta = items.find((i) => i.id === first.item_id);
+    return meta ? { hsn_code: meta.hsn_code ?? null, gst_rate: meta.gst_rate ?? null } : null;
+  }, [lines, items]);
+  const taxResolution = useMemo(
+    () =>
+      resolveTaxTemplate(taxTemplates, {
+        companyStateCode,
+        party: partyLedger
+          ? { gst_treatment: partyLedger.gst_treatment ?? null, state_code: partyLedger.state_code ?? null }
+          : null,
+        item: firstItem,
+      }),
+    [taxTemplates, companyStateCode, partyLedger, firstItem],
+  );
+  // Save is blocked only when the picker is required AND the user hasn't picked.
+  const taxTemplateBlocksSave =
+    (taxResolution.status === "ambiguous" || taxResolution.status === "unresolved") &&
+    !manualTaxTemplateId;
+
+  const deferredLines = useDeferredValue(lines);
+  const computed: GstLineResult[] = useMemo(
+    () =>
+      deferredLines.map((l) =>
+        computeLine(
+          {
+            qty: parseFloat(l.qty) || 0,
+            rate: parseFloat(l.rate) || 0,
+            discount: parseFloat(l.discount) || 0,
+            gstRate: parseFloat(l.gst_rate) || 0,
+          },
+          interstate,
+        ),
+      ),
+    [deferredLines, interstate],
+  );
+  const rawTotals = useMemo(() => sumLines(computed), [computed]);
+  // Misc adjustments: pre-GST is added to taxable and taxed at the weighted-avg line GST rate;
+  // post-GST is added straight to the grand total (folded into round_off on save).
+  const miscPreGstPaise = useMemo(() => rupeesToPaise(parseFloat(miscPreGst) || 0), [miscPreGst]);
+  const miscPostGstPaise = useMemo(() => rupeesToPaise(parseFloat(miscPostGst) || 0), [miscPostGst]);
+  const weightedGstRate = useMemo(() => {
+    const taxable = rawTotals.subtotal_paise;
+    if (taxable <= 0) return 0;
+    const taxAmt = rawTotals.cgst_paise + rawTotals.sgst_paise + rawTotals.igst_paise;
+    return (taxAmt / taxable) * 100;
+  }, [rawTotals]);
+  const miscPreTaxPaise = useMemo(
+    () => Math.round((miscPreGstPaise * weightedGstRate) / 100),
+    [miscPreGstPaise, weightedGstRate],
+  );
+  // Resolve each sundry against the correct base, then split into pre-GST
+  // (folded into taxable value) and post-GST (added after tax) buckets. For
+  // % sundries the base is the raw subtotal (pre_gst) or the total before
+  // any post_gst sundry (post_gst) so % applies to the taxed value.
+  const resolvedSundries = useMemo<Sundry[]>(() => {
+    const preBase = rawTotals.subtotal_paise + miscPreGstPaise;
+    const postBase = rawTotals.total_paise + miscPreGstPaise + miscPostGstPaise;
+    return sundries.map((s) => {
+      const stage = s.apply_stage ?? "post_gst";
+      const base = stage === "pre_gst" ? preBase : postBase;
+      const amt = resolveSundryPaise(s, base);
+      return { ...s, amount_paise: amt };
+    });
+  }, [sundries, rawTotals.subtotal_paise, rawTotals.total_paise, miscPreGstPaise, miscPostGstPaise]);
+  const { preGst: preGstSundries, postGst: postGstSundries } = useMemo(
+    () => splitSundriesByStage(resolvedSundries),
+    [resolvedSundries],
+  );
+  const preGstSundryNetPaise = useMemo(() => netSundryPaise(preGstSundries), [preGstSundries]);
+  const postGstSundryNetPaise = useMemo(() => netSundryPaise(postGstSundries), [postGstSundries]);
+  const sundriesNetPaise = preGstSundryNetPaise + postGstSundryNetPaise;
+  // Pre-GST sundries add to taxable base and pull tax at the weighted-avg rate.
+  const preGstSundryTaxPaise = useMemo(
+    () => Math.round((preGstSundryNetPaise * weightedGstRate) / 100),
+    [preGstSundryNetPaise, weightedGstRate],
+  );
+  const adjustedTotals = useMemo(() => {
+    const taxableAdd = miscPreGstPaise + preGstSundryNetPaise;
+    const taxAddTotal = miscPreTaxPaise + preGstSundryTaxPaise;
+    const cgstAdd = interstate ? 0 : Math.floor(taxAddTotal / 2);
+    const sgstAdd = interstate ? 0 : Math.floor(taxAddTotal / 2);
+    const igstAdd = interstate ? taxAddTotal : 0;
+    const taxLeftover = interstate ? 0 : taxAddTotal - cgstAdd - sgstAdd;
+    return {
+      subtotal_paise: rawTotals.subtotal_paise + taxableAdd,
+      cgst_paise: rawTotals.cgst_paise + cgstAdd,
+      sgst_paise: rawTotals.sgst_paise + sgstAdd,
+      igst_paise: rawTotals.igst_paise + igstAdd,
+      rounding_paise: rawTotals.rounding_paise + taxLeftover,
+      total_paise:
+        rawTotals.total_paise + taxableAdd + taxAddTotal + miscPostGstPaise + postGstSundryNetPaise,
+    };
+  }, [rawTotals, miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, preGstSundryNetPaise, preGstSundryTaxPaise, postGstSundryNetPaise, interstate]);
+  const roundOffPaise = useMemo(() => {
+    if (!roundOff) return 0;
+    const rounded = Math.round(adjustedTotals.total_paise / 100) * 100;
+    return rounded - adjustedTotals.total_paise;
+  }, [adjustedTotals.total_paise, roundOff]);
+  const totals = useMemo(
+    () => ({ ...adjustedTotals, total_paise: adjustedTotals.total_paise + roundOffPaise }),
+    [adjustedTotals, roundOffPaise],
+  );
+
+  const updateLine = useCallback((idx: number, patch: Partial<Line>) => {
+    setLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  }, []);
+  const onPickItem = useCallback(
+    (idx: number, itemId: string) => {
+      startTransition(() => {
+        setLines((cur) => {
+          const it = items.find((x) => x.id === itemId);
+          const updated = cur.map((l, i) =>
+            i === idx
+              ? { ...l, item_id: itemId, gst_rate: it ? String(it.gst_rate) : l.gst_rate }
+              : l,
+          );
+          if (itemId && idx === cur.length - 1) return [...updated, blankLine()];
+          return updated;
+        });
+      });
+    },
+    [items],
+  );
+  const addLine = useCallback(() => setLines((cur) => [...cur, blankLine()]), []);
+  const removeLine = useCallback((idx: number) => {
+    setLines((cur) => (cur.length === 1 ? cur : cur.filter((_, i) => i !== idx)));
+  }, []);
+
+  /**
+   * Proportionally scale every line's rate so the bill grand total matches
+   * `targetRupees`. Misc, sundries and round-off are subtracted first, so the
+   * scaler only touches item lines. Used by the "Fit Grand Total" input to
+   * back-solve rates for multi-item bills.
+   */
+  const fitGrandTotal = useCallback((targetRupees: number) => {
+    if (!isFinite(targetRupees) || targetRupees <= 0) return;
+    const targetPaise = Math.round(targetRupees * 100);
+    const extrasPaise = miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise + sundriesNetPaise + roundOffPaise;
+    const targetLinesPaise = targetPaise - extrasPaise;
+    if (targetLinesPaise <= 0) {
+      toast.error("Target is less than the extras (misc / sundries) already added");
+      return;
+    }
+    const currentLinesPaise = rawTotals.total_paise;
+    if (currentLinesPaise <= 0) {
+      toast.error("Enter qty and rate on at least one line before fitting the total");
+      return;
+    }
+    const k = targetLinesPaise / currentLinesPaise;
+    setLines((cur) => cur.map((l) => {
+      const r = parseFloat(l.rate) || 0;
+      if (r <= 0) return l;
+      const scaled = r * k;
+      // Keep up to 4 decimals, strip trailing zeros safely.
+      const s = scaled.toFixed(4).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+      return { ...l, rate: s };
+    }));
+    toast.success(`Rates scaled by ×${k.toFixed(4)} to fit ₹${targetRupees.toFixed(2)}`);
+  }, [miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, sundriesNetPaise, roundOffPaise, rawTotals.total_paise]);
+
+  /** Focus the Item Combo trigger of the row at `idx` (after paint). */
+  const focusRowItemCombo = useCallback((idx: number) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const rows = document.querySelectorAll<HTMLTableRowElement>("tr[data-voucher-row]");
+        const tr = rows[idx];
+        if (!tr) return;
+        const trigger = tr.querySelector<HTMLElement>('[role="combobox"]');
+        trigger?.focus();
+      });
+    });
+  }, []);
+
+  /** Called when Enter is pressed on the last editable cell (GST) of a row. */
+  const onAdvanceToNextRow = useCallback(
+    (idx: number) => {
+      setLines((cur) => {
+        if (idx >= cur.length - 1) {
+          // Last row → append and focus the new row.
+          const next = [...cur, blankLine()];
+          focusRowItemCombo(next.length - 1);
+          return next;
+        }
+        focusRowItemCombo(idx + 1);
+        return cur;
+      });
+    },
+    [focusRowItemCombo],
+  );
+
+  const onAddItemDlg = useCallback((idx: number) => {
+    setFocusedLine(idx);
+    setItemDlg({ open: true, editId: null, lineIdx: idx });
+  }, []);
+  const onEditItemDlg = useCallback((idx: number, itemId: string) => {
+    setFocusedLine(idx);
+    setItemDlg({ open: true, editId: itemId, lineIdx: idx });
+  }, []);
+
+
+
+  const canWrite = activeMembership?.role === "admin" || activeMembership?.role === "accountant";
+
+  const performSave = useCallback(async () => {
+    if (!activeCompanyId || !canWrite) return;
+    if (!partyId) {
+      toast.error(`Select a ${cfg.partyLabel.toLowerCase()}`);
+      return;
+    }
+    const validLines = lines.filter((l, i) => l.item_id && computed[i]?.total_paise > 0);
+    if (validLines.length === 0) {
+      toast.error("Add at least one item line");
+      return;
+    }
+
+    // Shared validation — same schema is the source of truth for any future server fn.
+    const itemRowsForValidation = lines
+      .map((l, i) => {
+        if (!l.item_id || computed[i].total_paise <= 0) return null;
+        const c = computed[i];
+        return {
+          item_id: l.item_id,
+          line_no: i + 1,
+          description: l.description || null,
+          qty: parseFloat(l.qty) || 0,
+          rate_paise: rupeesToPaise(parseFloat(l.rate) || 0),
+          discount_paise: c.discount_paise,
+          amount_paise: c.amount_paise,
+          taxable_paise: c.taxable_paise,
+          gst_rate: c.gst_rate,
+          cgst_paise: c.cgst_paise,
+          sgst_paise: c.sgst_paise,
+          igst_paise: c.igst_paise,
+        };
+      })
+      .filter(Boolean) as Array<Record<string, unknown>>;
+    const check = validateItemVoucher({
+      company_id: activeCompanyId,
+      voucher_type: voucherType,
+      voucher_date: date,
+      party_ledger_id: partyId,
+      reference_no: refNo || null,
+      narration: narration || null,
+      is_interstate: interstate,
+      place_of_supply_code: placeOfSupply || null,
+      subtotal_paise: totals.subtotal_paise,
+      cgst_paise: totals.cgst_paise,
+      sgst_paise: totals.sgst_paise,
+      igst_paise: totals.igst_paise,
+      round_off_paise: roundOffPaise,
+      total_paise: totals.total_paise,
+      items: itemRowsForValidation,
+    });
+    if (!check.ok) {
+      toast.error(check.message);
+      return;
+    }
+
+    // Snapshot for background save
+    const snap = {
+      companyId: activeCompanyId,
+      voucherType,
+      voucherDate: date,
+      partyId,
+      refNo,
+      narration,
+      placeOfSupply,
+      interstate,
+      itcClass: isPurchaseSide ? itcClass : "na",
+      itcEligible: isPurchaseSide ? itcEligible : true,
+      supplyNature,
+      // Note → original bill; sales cycle → the quotation / order / challan
+      // this document was carried forward from.
+      originalVoucherId: originalVoucherId,
+
+      totals: { ...totals, round_off_paise: roundOffPaise + miscPostGstPaise },
+      lines: lines
+        .map((l, i) => ({ l, c: computed[i] }))
+        .filter((x) => x.l.item_id && x.c?.total_paise > 0),
+      sundries: resolvedSundries.map((s) => ({
+        id: s.id,
+        sundry_type: s.sundry_type,
+        ledger_id: s.ledger_id,
+        amount_paise: s.amount_paise,
+        mode: s.mode ?? "amount",
+        rate_bps: s.rate_bps ?? 0,
+        apply_stage: s.apply_stage ?? "post_gst",
+        narration: s.narration ?? null,
+      })),
+    };
+    rememberNarration(voucherType, narration);
+    // Reset form INSTANTLY
+    setPartyId("");
+    setRefNo("");
+    setOriginalVoucherId(null);
+    setNarration("");
+    setLines([blankLine()]);
+    setMiscPreGst("0");
+    setMiscPostGst("0");
+    setSundries([]);
+    setSupplyNature("taxable");
+    setFocusedLine(0);
+    setSavedTick((n) => n + 1);
+    if (draftKey) {
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {
+        /* ignore */
+      }
+    }
+    enqueueSave(
+      `${cfg.title} ${snap.voucherDate}`,
+      async () => {
+        const result = await runItemVoucherCreate(snap as unknown as ItemVoucherSnap);
+        const movesGoods =
+          snap.voucherType === "sales" ||
+          snap.voucherType === "purchase" ||
+          snap.voucherType === "credit_note" ||
+          snap.voucherType === "debit_note";
+        if (movesGoods && snap.totals.total_paise > 5_000_000) {
+          setEwbDlg({
+            open: true,
+            voucher: {
+              id: result.voucherId,
+              company_id: snap.companyId,
+              voucher_number: result.voucherNumber,
+              voucher_date: snap.voucherDate,
+              total_paise: snap.totals.total_paise,
+              subtotal_paise: snap.totals.subtotal_paise,
+              cgst_paise: snap.totals.cgst_paise,
+              sgst_paise: snap.totals.sgst_paise,
+              igst_paise: snap.totals.igst_paise,
+              is_interstate: snap.interstate,
+              place_of_supply_code: snap.placeOfSupply || null,
+            },
+          });
+        }
+      },
+      { executor: ITEM_VOUCHER_KEY, snap, companyId: snap.companyId },
+    );
+  }, [
+    activeCompanyId,
+    canWrite,
+    partyId,
+    lines,
+    computed,
+    voucherType,
+    date,
+    refNo,
+    narration,
+    interstate,
+    totals,
+    roundOffPaise,
+    miscPostGstPaise,
+    placeOfSupply,
+    cfg,
+    isPurchaseSide,
+    itcClass,
+    itcEligible,
+    supplyNature,
+  ]);
+
+  const save = useCallback(() => {
+    void performSave();
+  }, [performSave]);
+
+  // Push "voucher" scope while this form is mounted.
+  const kb = useOptionalKeyboard();
+  useEffect(() => {
+    if (!kb) return;
+    return kb.pushScope("voucher");
+  }, [kb]);
+
+  // Save (Ctrl+S / Cmd+S / Alt+S).
+  const saveHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!saving) save();
+  }, [save, saving]);
+  useShortcut("Ctrl+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+  useShortcut("Meta+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+  useShortcut("Alt+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
+
+  // Ctrl+R — recall last narration.
+  const recallHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    const last = recallNarration(voucherType);
+    if (last) { setNarration(last); toast.message("Narration recalled"); }
+  }, [voucherType]);
+  useShortcut("Ctrl+r", recallHandler, { scope: "voucher", allowInField: true, description: "Recall last narration" });
+  useShortcut("Meta+r", recallHandler, { scope: "voucher", allowInField: true, description: "Recall last narration" });
+
+  // Ctrl+D — delete focused line.
+  const deleteHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    if (lines.length > 1) removeLine(focusedLine);
+  }, [lines.length, focusedLine, removeLine]);
+  useShortcut("Ctrl+d", deleteHandler, { scope: "voucher", allowInField: true, description: "Delete focused line" });
+  useShortcut("Meta+d", deleteHandler, { scope: "voucher", allowInField: true, description: "Delete focused line" });
+
+  // F3 / Shift+F3 — new party / edit party.
+  useShortcut("F3", (e) => {
+    e.preventDefault();
+    setLedgerDlg({ open: true, editId: null });
+  }, { scope: "voucher", allowInField: true, description: "New ledger" });
+  useShortcut("Shift+F3", (e) => {
+    e.preventDefault();
+    if (partyId) setLedgerDlg({ open: true, editId: partyId });
+    else toast.info("Select a party first to edit");
+  }, { scope: "voucher", allowInField: true, description: "Edit selected party" });
+
+  // F4 / Shift+F4 — new item / edit item on focused line.
+  useShortcut("F4", (e) => {
+    e.preventDefault();
+    setItemDlg({ open: true, editId: null, lineIdx: focusedLine });
+  }, { scope: "voucher", allowInField: true, description: "New item" });
+  useShortcut("Shift+F4", (e) => {
+    e.preventDefault();
+    const itemId = lines[focusedLine]?.item_id ?? null;
+    if (itemId) setItemDlg({ open: true, editId: itemId, lineIdx: focusedLine });
+    else toast.info("Pick an item on a line first to edit");
+  }, { scope: "voucher", allowInField: true, description: "Edit item on focused line" });
+
+
+
+  const onLedgerSaved = (lg: QuickLedger) => {
+    upsertCachedLedger({
+      id: lg.id,
+      name: lg.name,
+      type: lg.type,
+      state_code: lg.state_code,
+      gstin: lg.gstin,
+      gst_treatment: lg.gst_treatment,
+      is_active: true,
+    });
+    if (cfg.partyTypes.includes(lg.type)) setPartyId(lg.id);
+  };
+
+  const onItemSaved = (it: QuickItem) => {
+    upsertCachedItem({
+      id: it.id,
+      name: it.name,
+      unit: it.unit,
+      gst_rate: it.gst_rate,
+      hsn_code: it.hsn_code,
+      is_active: true,
+    });
+    const idx = itemDlg.lineIdx;
+    if (idx !== null) {
+      setLines((cur) =>
+        cur.map((l, i) =>
+          i === idx ? { ...l, item_id: it.id, gst_rate: String(it.gst_rate) } : l,
+        ),
+      );
+    }
+  };
+
+  const enterTab = useEnterAsTab(() => {
+    if (!saving) save();
+  });
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-1 lg:has-[[data-recent-open]]:grid-cols-[minmax(0,1fr)_300px]">
+      <div ref={enterTab.ref} onKeyDown={enterTab.onKeyDown} className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">{cfg.title}</h1>
+            <p className="text-xs text-muted-foreground">
+              <kbd className="rounded border px-1">Enter</kbd> next field ·{" "}
+              <kbd className="rounded border px-1">Ctrl+S</kbd> save & next ·{" "}
+              <kbd className="rounded border px-1">F3</kbd> new ledger ·{" "}
+              <kbd className="rounded border px-1">Shift+F3</kbd> edit party ·{" "}
+              <kbd className="rounded border px-1">F4</kbd> new item ·{" "}
+              <kbd className="rounded border px-1">Shift+F4</kbd> edit item
+              {interstate && (
+                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                  Interstate (IGST)
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
+              <X className="mr-1 h-4 w-4" /> Cancel
+            </Button>
+            <Button
+              data-assistant-save
+              data-primary-action="true"
+              onClick={save}
+
+              disabled={saving || !canWrite || locked || taxTemplateBlocksSave}
+              title={taxTemplateBlocksSave ? "Pick a tax template to enable Save" : undefined}
+            >
+              <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </div>
+
+        <PeriodLockBanner lock={lock} />
+
+        <Card className="border-primary/20 bg-gradient-to-br from-card to-muted/30 shadow-sm">
+          <CardContent className="p-3">
+            <div className="grid gap-3 md:grid-cols-[1fr_2fr_1fr_auto] md:items-end">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date</Label>
+                <FyDatePicker value={date} onChange={setDate} autoFocus />
+              </div>
+              <div className="space-y-1">
+                <Label className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <span>{cfg.partyLabel}</span>
+                  <span className="flex gap-2 normal-case">
+                    <button
+                      type="button"
+                      className="text-primary hover:underline text-xs inline-flex items-center gap-0.5"
+                      onClick={() => setLedgerDlg({ open: true, editId: null })}
+                      title="New ledger (F3)"
+                    >
+                      <UserPlus className="h-3 w-3" /> New
+                    </button>
+                    {partyId && (
+                      <button
+                        type="button"
+                        className="text-primary hover:underline text-xs inline-flex items-center gap-0.5"
+                        onClick={() => setLedgerDlg({ open: true, editId: partyId })}
+                        title="Edit party (Shift+F3)"
+                      >
+                        <Pencil className="h-3 w-3" /> Edit
+                      </button>
+                    )}
+                  </span>
+                </Label>
+                <Combo
+                  value={partyId}
+                  onChange={setPartyId}
+                  options={partyOpts.map((p) => ({
+                    value: p.id,
+                    label: p.name,
+                    hint: p.state_code ?? undefined,
+                  }))}
+                  placeholder={`Select ${cfg.partyLabel.toLowerCase()}`}
+                  emptyText={`No ${cfg.partyLabel.toLowerCase()}s yet — Alt+C to create`}
+                  onCreate={() => setLedgerDlg({ open: true, editId: null })}
+                  createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
+                />
+                {partyId && (
+                  <div className="pt-1">
+                    <LedgerBalanceChip ledgerId={partyId} prefix="Bal" />
+                  </div>
+                )}
+                {partyLedger && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground">
+                    {(() => {
+                      const t = partyLedger.gst_treatment ?? "regular";
+                      const labels: Record<string, string> = {
+                        regular: "Regular",
+                        composition: "Composition",
+                        unregistered: "Unregistered",
+                        consumer: "Consumer",
+                        sez: "SEZ",
+                        overseas: "Overseas",
+                      };
+                      return (
+                        <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-foreground/80">
+                          {labels[t] ?? t}
+                        </span>
+                      );
+                    })()}
+                    <span>
+                      PoS {placeOfSupply || "—"} · {interstate ? "IGST (interstate)" : "CGST + SGST"}
+                    </span>
+                    {isPurchaseSide && !itcEligible && (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                        ITC ineligible
+                      </span>
+                    )}
+                    <AutoTaxChip
+                      resolution={taxResolution}
+                      manualId={manualTaxTemplateId}
+                      onManualChange={setManualTaxTemplateId}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {isNote
+                    ? voucherType === "credit_note"
+                      ? "Against Sales Invoice"
+                      : "Against Purchase Bill"
+                    : "Reference No."}
+                </Label>
+                {isNote ? (
+                  <Combo
+                    value={originalVoucherId ?? ""}
+                    onChange={(id) => {
+                      setOriginalVoucherId(id || null);
+                      const inv = originalInvoices.find((x) => x.id === id);
+                      setRefNo(inv?.voucher_number ?? "");
+                    }}
+                    options={originalInvoices.map((v) => ({
+                      value: v.id,
+                      label: v.voucher_number,
+                      hint: `${v.voucher_date} · ₹${(v.total_paise / 100).toFixed(2)}`,
+                    }))}
+                    placeholder={
+                      partyId
+                        ? originalInvoices.length === 0
+                          ? "No invoices for this party"
+                          : "Select original bill"
+                        : "Select party first"
+                    }
+                    emptyText="No matching invoice"
+                  />
+                ) : (
+                  <Input
+                    value={refNo}
+                    onChange={(e) => setRefNo(e.target.value)}
+                    placeholder="PO / Bill no."
+                  />
+                )}
+                {!isNote && SOURCE_STAGES[voucherType] && (
+                  <div className="space-y-1 pt-2">
+                    <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Carry forward from
+                      {partyId && sourceDocs.length > 0 && (
+                        <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold normal-case text-primary">
+                          {sourceDocs.length} pending{" "}
+                          {SOURCE_STAGES[voucherType]
+                            .map((s) => STAGE_LABEL[s] ?? s)
+                            .join(" / ")}
+                        </span>
+                      )}
+                    </Label>
+                    <Combo
+                      value={originalVoucherId ?? ""}
+                      onChange={(id) => void pullSourceDoc(id)}
+                      options={sourceDocs.map((v) => ({
+                        value: v.id,
+                        label: `${v.voucher_number} · ${STAGE_LABEL[v.voucher_type] ?? v.voucher_type}`,
+                        hint: `${v.voucher_date} · ₹${(v.total_paise / 100).toFixed(2)}`,
+                      }))}
+                      placeholder={
+                        partyId
+                          ? sourceDocs.length === 0
+                            ? "No pending documents for this party"
+                            : "Pick quotation / order / challan"
+                          : "Select party first"
+                      }
+                      emptyText="Nothing pending"
+                    />
+                  </div>
+                )}
+
+              </div>
+
+              <div className="md:pb-0.5">
+                <NextVoucherNumberCard
+                  companyId={activeCompanyId}
+                  voucherType={voucherType}
+                  refreshKey={savedTick}
+                  voucherDate={date}
+                />
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">
+              <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Supply Nature
+              </Label>
+              <Select value={supplyNature} onValueChange={(v) => setSupplyNature(v as typeof supplyNature)}>
+                <SelectTrigger className="h-8 w-[220px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="taxable">Taxable</SelectItem>
+                  <SelectItem value="nil_rated">Nil-rated</SelectItem>
+                  <SelectItem value="exempt">Exempt</SelectItem>
+                  <SelectItem value="non_gst">Non-GST</SelectItem>
+                  <SelectItem value="zero_rated_wp">Zero-rated (with payment / LUT-WPAY)</SelectItem>
+                  <SelectItem value="zero_rated_wop">Zero-rated (without payment / LUT-WOPAY)</SelectItem>
+                </SelectContent>
+              </Select>
+              {supplyNature !== "taxable" && (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                  Will be reported under GSTR-1 {supplyNature === "nil_rated" || supplyNature === "exempt" || supplyNature === "non_gst" ? "Nil / Exempt / Non-GST" : "Exports"} section
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-0">
+            <div className="flex items-center justify-end gap-2 border-b px-3 py-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={toggleHsnColumn}
+                title="Toggle HSN/SAC column (display only)"
+              >
+                {showHsnColumn ? "Hide HSN" : "Show HSN"}
+              </Button>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className={showLineDescription ? "w-[32%]" : "w-[40%]"}>
+                    Item
+                  </TableHead>
+                  {showHsnColumn && <TableHead className="w-44">HSN / SAC</TableHead>}
+                  {showLineDescription && <TableHead>Description</TableHead>}
+                  <TableHead className="w-32">Qty / Unit</TableHead>
+                  <TableHead className="w-24">Rate</TableHead>
+                  <TableHead className="w-20">Disc</TableHead>
+                  {showGstColumn && <TableHead className="w-20">GST %</TableHead>}
+                  <TableHead className="w-28 text-right">Amount</TableHead>
+                  <TableHead className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lines.map((l, i) => (
+                  <ItemRow
+                    key={l.id}
+                    idx={i}
+                    row={l}
+                    amountPaise={computed[i]?.total_paise ?? 0}
+                    items={items}
+                    canDelete={lines.length > 1}
+                    onPickItem={onPickItem}
+                    onCommit={updateLine}
+                    onFocusRow={setFocusedLine}
+                    onDelete={removeLine}
+                    onAddItemDlg={onAddItemDlg}
+                    onEditItemDlg={onEditItemDlg}
+                    onAdvanceToNextRow={onAdvanceToNextRow}
+                    showDescription={showLineDescription}
+                    showGstColumn={showGstColumn}
+                    showHsnColumn={showHsnColumn}
+                    hsnDescriptionFor={hsnDescriptionFor}
+                    costCentres={costCentres}
+                    costCategories={costCategories}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+            <div className="border-t p-3">
+              <Button variant="ghost" size="sm" onClick={addLine}>
+                <Plus className="mr-1 h-4 w-4" /> Add line
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardContent className="p-4">
+              <Label>Narration</Label>
+              <Textarea
+                rows={4}
+                value={narration}
+                onChange={(e) => setNarration(e.target.value)}
+                placeholder="Optional notes"
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="space-y-1.5 p-4 text-sm">
+              <Row label="Taxable" value={formatINR(totals.subtotal_paise)} />
+              {interstate ? (
+                <Row label="IGST" value={formatINR(totals.igst_paise)} />
+              ) : (
+                <>
+                  <Row label="CGST" value={formatINR(totals.cgst_paise)} />
+                  <Row label="SGST" value={formatINR(totals.sgst_paise)} />
+                </>
+              )}
+              <div className="my-2 border-t" />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-[11px] text-muted-foreground">
+                    Misc. charge (pre-GST)
+                  </Label>
+                  <Input
+                    value={miscPreGst}
+                    onChange={(e) => setMiscPreGst(e.target.value.replace(/[^0-9.\-]/g, ""))}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="h-8 text-right font-mono"
+                    inputMode="decimal"
+                    title="Added to taxable; taxed at weighted-avg GST of lines"
+                  />
+                </div>
+                <div className="space-y-0.5">
+                  <Label className="text-[11px] text-muted-foreground">
+                    Misc. charge (post-GST)
+                  </Label>
+                  <Input
+                    value={miscPostGst}
+                    onChange={(e) => setMiscPostGst(e.target.value.replace(/[^0-9.\-]/g, ""))}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="h-8 text-right font-mono"
+                    inputMode="decimal"
+                    title="Added straight to the grand total (no GST)"
+                  />
+                </div>
+              </div>
+              {(miscPreGstPaise !== 0 || miscPostGstPaise !== 0) && (
+                <div className="text-[11px] text-muted-foreground">
+                  Adj: {formatINR(miscPreGstPaise + miscPreTaxPaise + miscPostGstPaise)} added
+                </div>
+              )}
+              <div className="my-2 border-t" />
+              <SundryStrip
+                sundries={sundries}
+                onChange={setSundries}
+                ledgerOptions={ledgers.filter((lg) =>
+                  lg.type === "expense_direct" ||
+                  lg.type === "expense_indirect" ||
+                  lg.type === "income_direct" ||
+                  lg.type === "income_indirect"
+                )}
+              />
+              <div className="my-2 border-t" />
+              <div className="flex items-center justify-between text-xs">
+                <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={roundOff}
+                    onChange={(e) => setRoundOff(e.target.checked)}
+                    className="h-3.5 w-3.5 accent-primary"
+                  />
+                  Round off
+                </label>
+                <span className="font-mono">
+                  {roundOffPaise === 0 ? "—" : formatINR(roundOffPaise)}
+                </span>
+              </div>
+              <Row label="Grand Total" value={formatINR(totals.total_paise)} bold />
+              <div className="flex items-center gap-2 pt-1">
+                <Label className="text-[11px] text-muted-foreground shrink-0">Fit total to</Label>
+                <Input
+                  key={`fit-${savedTick}`}
+                  className="h-8 flex-1 text-right font-mono"
+                  inputMode="decimal"
+                  placeholder="e.g. 10000"
+                  title="Enter a target grand total; every line's rate is scaled proportionally so the bill sums to this amount (misc/sundries/round-off are subtracted first)."
+                  onFocus={(e) => e.currentTarget.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const v = parseFloat((e.currentTarget.value || "").replace(/[^0-9.]/g, ""));
+                      if (isFinite(v) && v > 0) fitGrandTotal(v);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const v = parseFloat((e.target.value || "").replace(/[^0-9.]/g, ""));
+                    if (isFinite(v) && v > 0 && Math.abs(Math.round(v * 100) - totals.total_paise) > 1) {
+                      fitGrandTotal(v);
+                    }
+                  }}
+                />
+              </div>
+              <p className="pt-2 text-xs italic text-muted-foreground">
+                {amountInWords(totals.total_paise)}
+              </p>
+              {(voucherType === "sales" ||
+                voucherType === "purchase" ||
+                voucherType === "credit_note" ||
+                voucherType === "debit_note") &&
+                totals.total_paise > 5_000_000 && (
+                  <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                    <Truck className="inline h-3 w-3 mr-1" />
+                    Voucher value exceeds <strong>₹50,000</strong>. An <strong>E-Way Bill</strong>{" "}
+                    is mandatory for inter-state movement, and for intra-state movement beyond city
+                    limits (typically &gt; 50&nbsp;km) per state rules. The E-Way Bill prep tool
+                    will open after save.
+                  </div>
+                )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {activeCompanyId && (
+          <>
+            <QuickLedgerDialog
+              open={ledgerDlg.open}
+              onOpenChange={(o) => setLedgerDlg((s) => ({ ...s, open: o }))}
+              companyId={activeCompanyId}
+              editId={ledgerDlg.editId}
+              onSaved={onLedgerSaved}
+            />
+            <QuickItemDialog
+              open={itemDlg.open}
+              onOpenChange={(o) => setItemDlg((s) => ({ ...s, open: o }))}
+              companyId={activeCompanyId}
+              editId={itemDlg.editId}
+              onSaved={onItemSaved}
+            />
+          </>
+        )}
+        <EwayBillPrepDialog
+          open={ewbDlg.open}
+          onOpenChange={(o) => setEwbDlg((s) => ({ ...s, open: o }))}
+          voucher={ewbDlg.voucher}
+        />
+      </div>
+      <div className="space-y-3">
+        <RecentVouchersPanel voucherType={voucherType} refreshKey={savedTick} />
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className={`flex justify-between ${bold ? "text-base font-semibold" : ""}`}>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono">{value}</span>
+    </div>
+  );
+}

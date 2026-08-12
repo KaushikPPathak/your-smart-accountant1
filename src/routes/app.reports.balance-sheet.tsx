@@ -1,0 +1,254 @@
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { amountHeader } from "@/lib/export-format";
+import { openLedgerReport } from "@/lib/voucher-return";
+import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
+import { TAccount, type TRow } from "@/components/reports/TAccount";
+import { useCompany } from "@/lib/company-context";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { formatINR } from "@/lib/money";
+import { downloadCsv } from "@/lib/csv";
+import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
+import {
+  groupBalances,
+  groupedTRows,
+  groupedExportRows,
+} from "@/lib/report-grouping";
+import { getEntityFeatures } from "@/lib/entity-status";
+import { computeNceReportShape } from "@/lib/nce-report-shape";
+import { NCE_LEVEL_LABEL } from "@/lib/nce-classification";
+import { useAccountGroups } from "@/lib/account-groups-runtime";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { BucketedGrid } from "@/components/reports/BucketedGrid";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Scale } from "lucide-react";
+import { TaxAuditPanel } from "@/components/reports/TaxAuditPanel";
+
+export const Route = createFileRoute("/app/reports/balance-sheet")({
+  head: () => ({ meta: [{ title: "Balance Sheet — Reports" }] }),
+  component: BalanceSheet,
+});
+
+function BalanceSheet() {
+  const { activeCompanyId, activeMembership } = useCompany();
+  const pdfHeader = useReportPdfHeader();
+  const { overrides } = useAccountGroups();
+  const features = getEntityFeatures(activeMembership?.companies?.entity_status ?? "individual");
+  const liabHeader = features.scheduleIII
+    ? "Equity & Liabilities"
+    : `Liabilities (${features.capitalLabel} & Sources of Funds)`;
+  const assetHeader = features.scheduleIII ? "Assets" : "Assets (Application of Funds)";
+  const profitLabelPos = features.plLabel === "Income & Expenditure A/c"
+    ? "Excess of Income over Expenditure"
+    : "Net Profit (current period)";
+  const profitLabelNeg = features.plLabel === "Income & Expenditure A/c"
+    ? "Excess of Expenditure over Income"
+    : "Net Loss (current period)";
+  const navigate = useNavigate();
+  const { from, to, setFrom, setTo } = useFyRangeState();
+  const { view, setView } = useReportView("balance-sheet");
+  const [taxView, setTaxView] = useState(false);
+  const [balances, setBalances] = useState<LedgerBalance[]>([]);
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    fetchLedgerBalances(activeCompanyId, to).then(setBalances);
+  }, [activeCompanyId, to]);
+
+  // Period P/L flows into the BS to balance it (Net Profit on Liabilities, Loss on Assets).
+  const profitPaise = useMemo(() => {
+    const inc = balances.filter((b) => b.type === "income_direct" || b.type === "income_indirect")
+      .reduce((s, b) => s + -b.closing_paise, 0);
+    const exp = balances.filter((b) => b.type === "expense_direct" || b.type === "expense_indirect")
+      .reduce((s, b) => s + b.closing_paise, 0);
+    return inc - exp;
+  }, [balances]);
+
+  const liabBuckets = useMemo(
+    () => groupBalances(balances, "BS_LIAB", (b) => -b.closing_paise),
+    [balances],
+  );
+  const assetBuckets = useMemo(
+    () => groupBalances(balances, "BS_ASSET", (b) => b.closing_paise),
+    [balances],
+  );
+
+  const goLedger = (id: string) =>
+    openLedgerReport(navigate, { ledgerId: id, from, to });
+
+  const labelFor = (code: string, fallback: string) => overrides[code] ?? fallback;
+  const liab = groupedTRows(liabBuckets, goLedger, labelFor);
+  const asset = groupedTRows(assetBuckets, goLedger, labelFor);
+
+  // Append P/L balancing row
+  const liabRows: TRow[] = [...liab.rows];
+  const assetRows: TRow[] = [...asset.rows];
+  if (profitPaise > 0) {
+    liabRows.push({ label: profitLabelPos, amount: "", outerAmount: formatINR(profitPaise), emphasis: "bold" });
+  } else if (profitPaise < 0) {
+    assetRows.push({ label: profitLabelNeg, amount: "", outerAmount: formatINR(-profitPaise), emphasis: "bold" });
+  }
+  const grandL = liab.totalPaise + Math.max(0, profitPaise);
+  const grandA = asset.totalPaise + Math.max(0, -profitPaise);
+  const diffPaise = grandA - grandL;
+
+  // Exports
+  const liabExp = groupedExportRows(liabBuckets);
+  const assetExp = groupedExportRows(assetBuckets);
+  if (profitPaise > 0) liabExp.push({ label: profitLabelPos, paise: 0, outerPaise: profitPaise, isSubtotal: true });
+  if (profitPaise < 0) assetExp.push({ label: profitLabelNeg, paise: 0, outerPaise: -profitPaise, isSubtotal: true });
+
+  const fmtInner = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
+    row && !row.isHeader && row.outerPaise === undefined && row.paise !== 0 ? r(row.paise).toFixed(2) : "";
+  const fmtOuter = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
+    row && !row.isHeader && row.outerPaise !== undefined ? r(row.outerPaise).toFixed(2) : "";
+
+  const exportBody = (): (string | number)[][] => {
+    const max = Math.max(liabExp.length, assetExp.length);
+    return Array.from({ length: max }).map((_, i) => [
+      liabExp[i]?.label ?? "",
+      fmtInner(liabExp[i]),
+      fmtOuter(liabExp[i]),
+      assetExp[i]?.label ?? "",
+      fmtInner(assetExp[i]),
+      fmtOuter(assetExp[i]),
+    ]);
+  };
+
+  const csvRows = (): (string | number)[][] => [
+    [`Balance Sheet as on ${to}`, "", "", "", "", ""],
+    [liabHeader, "", amountHeader(), assetHeader, "", amountHeader()],
+    ...exportBody(),
+    ["Total", "", r(grandL).toFixed(2), "Total", "", r(grandA).toFixed(2)],
+  ];
+
+  const onExportCsv = () => downloadCsv(`balance-sheet-${to}.csv`, csvRows());
+  const onExportXlsx = () =>
+    downloadXlsx(`balance-sheet-${to}.xlsx`, [{ name: "Balance Sheet", rows: csvRows() }]);
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title: "Balance Sheet",
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
+      subtitle: `As on ${to}`,
+      head: [[liabHeader, "", amountHeader(), assetHeader, "", amountHeader()]],
+      body: exportBody(),
+      foot: [["Total", "", r(grandL).toFixed(2), "Total", "", r(grandA).toFixed(2)]],
+      fileName: `balance-sheet-${to}.pdf`,
+      orientation: "l",
+      rightAlignCols: [1, 2, 4, 5],
+    });
+
+  return (
+    <div className="space-y-3">
+      <Card className="print:hidden">
+        <CardContent className="p-3">
+          <ReportToolbar
+            from={from}
+            to={to}
+            onFrom={setFrom}
+            onTo={setTo}
+            onExportCsv={onExportCsv}
+            onExportXlsx={onExportXlsx}
+            onExportPdf={onExportPdf}
+            onPrint={() => window.print()}
+            extra={<div className="flex gap-3 items-end">
+              <div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>
+              <div className="space-y-1"><Label className="text-xs">Tax Audit</Label>
+                <Button size="sm" variant={taxView ? "default" : "outline"} onClick={() => setTaxView((v) => !v)}>
+                  <Scale className="mr-1 h-3.5 w-3.5" />{taxView ? "On" : "Off"}
+                </Button>
+              </div>
+            </div>}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Closing position as on <strong>{to}</strong>. Heads grouped per Income-Tax / Schedule III norms
+            (Capital, Reserves, Loans, Sundry Creditors, Duties &amp; Taxes, Current Liabilities;
+            Fixed Assets, Investments, Stock, Debtors, Cash, Bank, Loans &amp; Advances, Current Assets).
+          </p>
+          {(() => {
+            const c = activeMembership?.companies as unknown as {
+              entity_status?: string | null;
+              annual_turnover_paise?: number | null;
+              borrowings_paise?: number | null;
+              nce_level?: number | null;
+            } | undefined;
+            if (!c) return null;
+            const shape = computeNceReportShape({
+              entity: (c.entity_status ?? "individual") as Parameters<typeof computeNceReportShape>[0]["entity"],
+              turnoverPaise: Number(c.annual_turnover_paise ?? 0),
+              borrowingsPaise: Number(c.borrowings_paise ?? 0),
+              levelOverride: (c.nce_level ?? null) as 1 | 2 | 3 | null,
+            });
+            if (shape.isCorporate) return null;
+            return (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 font-medium text-primary">
+                  ICAI NCE: {NCE_LEVEL_LABEL[shape.level]}
+                </span>
+                {shape.level === 3 ? (
+                  <span className="text-muted-foreground">Simplified disclosures — cash-flow, related-party & segment schedules hidden.</span>
+                ) : shape.level === 2 ? (
+                  <span className="text-muted-foreground">Medium entity — segment & AS 15 detailed disclosures hidden.</span>
+                ) : (
+                  <span className="text-muted-foreground">Large entity — full NCE disclosures apply.</span>
+                )}
+              </div>
+            );
+          })()}
+          <div
+            className={`mt-2 flex items-center justify-between rounded border px-3 py-2 text-sm ${
+              diffPaise === 0
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                : "border-destructive/30 bg-destructive/10 text-destructive"
+            }`}
+          >
+            <span className="font-medium">
+              {diffPaise === 0 ? "Balance Sheet is tallied" : "Difference in Balance Sheet"}
+            </span>
+            <span className="font-mono">
+              {diffPaise === 0
+                ? formatINR(0)
+                : `${formatINR(Math.abs(diffPaise))} ${diffPaise > 0 ? "(Assets > Liabilities)" : "(Liabilities > Assets)"}`}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+      {view === "grid" ? (
+        <Card><CardContent className="p-3">
+          <BucketedGrid
+            reportId="balance-sheet"
+            onLedgerClick={goLedger}
+            sides={[
+              {
+                side: liabHeader,
+                buckets: liabBuckets,
+                extras: profitPaise > 0 ? [{ group: "Result", name: profitLabelPos, valuePaise: profitPaise }] : [],
+              },
+              {
+                side: assetHeader,
+                buckets: assetBuckets,
+                extras: profitPaise < 0 ? [{ group: "Result", name: profitLabelNeg, valuePaise: -profitPaise }] : [],
+              },
+            ]}
+          />
+        </CardContent></Card>
+      ) : (
+      <TAccount
+        title="Balance Sheet"
+        subtitle={`as on ${to}`}
+        leftHeader={liabHeader}
+        rightHeader={assetHeader}
+        leftRows={liabRows}
+        rightRows={assetRows}
+        leftTotal={formatINR(grandL)}
+        rightTotal={formatINR(grandA)}
+      />
+      )}
+      {taxView && <TaxAuditPanel mode="bs" fyStart={from} fyEnd={to} />}
+    </div>
+  );
+}

@@ -1,0 +1,351 @@
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { amountHeader } from "@/lib/export-format";
+import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
+import { TAccount, type TRow } from "@/components/reports/TAccount";
+import { useCompany } from "@/lib/company-context";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { formatINR } from "@/lib/money";
+import { downloadCsv } from "@/lib/csv";
+import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { fetchLedgerBalancesWithMeta, fetchLedgerModeSplits, type LedgerBalance, type ModeSplit } from "@/lib/reports";
+import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
+import { getEntityFeatures } from "@/lib/entity-status";
+import { computeNceReportShape } from "@/lib/nce-report-shape";
+import { NCE_LEVEL_LABEL } from "@/lib/nce-classification";
+import { openLedgerReport } from "@/lib/voucher-return";
+import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { BucketedGrid } from "@/components/reports/BucketedGrid";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Scale } from "lucide-react";
+import { TaxAuditPanel } from "@/components/reports/TaxAuditPanel";
+import { supabase } from "@/integrations/supabase/client";
+import { readLedgers, readItems, withCacheFallback } from "@/lib/offline/cache-read";
+
+export const Route = createFileRoute("/app/reports/profit-loss")({
+  head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
+  component: ProfitLoss,
+});
+
+function ProfitLoss() {
+  const { activeCompanyId, activeMembership } = useCompany();
+  const pdfHeader = useReportPdfHeader();
+  const features = getEntityFeatures(activeMembership?.companies?.entity_status ?? "individual");
+  const isIE = features.plLabel === "Income & Expenditure A/c";
+  const reportTitle = isIE ? "Income & Expenditure Account" : "Profit & Loss Account";
+  const dr = isIE ? "Expenditure" : "Dr. Particulars";
+  const cr = isIE ? "Income" : "Cr. Particulars";
+  const surplusLabel = isIE ? "To Excess of Income over Expenditure" : "To Net Profit c/d";
+  const deficitLabel = isIE ? "By Excess of Expenditure over Income" : "By Net Loss c/d";
+  // When inventory is disabled the Trading Account is not the primary flow, so
+  // direct income (Sales, Job Work) and direct expense (Purchases, Factory
+  // Wages) must appear in P&L — otherwise those ledgers silently disappear
+  // from every profitability report.
+  const inventoryEnabled = !!activeMembership?.companies?.inventory_enabled;
+  const navigate = useNavigate();
+  const { from, to, setFrom, setTo } = useFyRangeState();
+  const { view, setView } = useReportView("profit-loss");
+  const [taxView, setTaxView] = useState(false);
+  const [balances, setBalances] = useState<LedgerBalance[]>([]);
+  const [excludedClosingEntries, setExcludedClosingEntries] = useState(0);
+  const [openingStock, setOpeningStock] = useState(0);
+  const [closingStock, setClosingStock] = useState(0);
+  const [modeSplits, setModeSplits] = useState<Map<string, ModeSplit>>(new Map());
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    fetchLedgerBalancesWithMeta(activeCompanyId, to, from, {
+      excludeProfitLossClosingTransfers: true,
+    }).then((result) => {
+      setBalances(result.balances);
+      setExcludedClosingEntries(result.excludedClosingTransferEntries);
+    });
+    fetchLedgerModeSplits(activeCompanyId, from, to, {
+      excludeProfitLossClosingTransfers: true,
+    }).then(setModeSplits).catch(() => setModeSplits(new Map()));
+  }, [activeCompanyId, from, to]);
+
+  // Opening / Closing stock for gross-profit carry from Trading A/c.
+  useEffect(() => {
+    if (!activeCompanyId || !inventoryEnabled) return;
+    (async () => {
+      try {
+        const { ledgers, items } = await withCacheFallback(
+          async () => {
+            const [sLed, itms] = await Promise.all([
+              supabase
+                .from("ledgers")
+                .select("opening_balance_paise, opening_balance_is_debit")
+                .eq("company_id", activeCompanyId)
+                .eq("type", "stock_in_hand"),
+              supabase
+                .from("items")
+                .select("opening_stock_qty, opening_stock_rate_paise")
+                .eq("company_id", activeCompanyId),
+            ]);
+            return { ledgers: (sLed.data || []) as any[], items: (itms.data || []) as any[] };
+          },
+          async () => {
+            const [ledgers, items] = await Promise.all([readLedgers(activeCompanyId), readItems(activeCompanyId)]);
+            return {
+              ledgers: (ledgers as any[]).filter((l) => l.type === "stock_in_hand"),
+              items: items as any[],
+            };
+          },
+        );
+        const ledOp = (ledgers as any[]).reduce(
+          (s, l) => s + (l.opening_balance_is_debit ? 1 : -1) * Number(l.opening_balance_paise || 0),
+          0,
+        );
+        const itemOp = (items as any[]).reduce(
+          (s, it) => s + Math.round(Number(it.opening_stock_qty || 0) * Number(it.opening_stock_rate_paise || 0)),
+          0,
+        );
+        const stk = ledOp || itemOp;
+        setOpeningStock(stk);
+        setClosingStock(stk);
+      } catch {
+        setOpeningStock(0);
+        setClosingStock(0);
+      }
+    })();
+  }, [activeCompanyId, inventoryEnabled]);
+
+  // Accounting rule: Sales / Purchase / Direct Income / Direct Expense
+  // ALWAYS flow through the Trading A/c — this includes job-work / labour-only
+  // manufacturing concerns that hold zero own-stock (e.g. jewellers turning
+  // customer-supplied gold into ornaments). Only Indirect Income / Indirect
+  // Expense appear in P&L; the Trading A/c's Gross Profit / Loss is carried
+  // here as b/d. The Inventory flag only controls whether Opening / Closing
+  // Stock is added to Trading — it does NOT change which heads belong where.
+  const expenseTypes = new Set(["expense_indirect"]);
+  const incomeTypes = new Set(["income_indirect"]);
+
+  // Inner breakdown: split each P&L ledger by receipt mode (Cash vs Bank/Cheque).
+  // Signed ModeSplit is dr−cr; expenses (Dr-natural) use +, incomes (Cr-natural) flip.
+  const innerForExpense = (b: LedgerBalance) => {
+    const m = modeSplits.get(b.id); if (!m) return undefined;
+    return [
+      { label: "Paid in Cash", valuePaise: m.cashPaise },
+      { label: "Paid via Bank / Cheque", valuePaise: m.bankPaise },
+      { label: "Other (journal / adjustment)", valuePaise: m.otherPaise },
+    ];
+  };
+  const innerForIncome = (b: LedgerBalance) => {
+    const m = modeSplits.get(b.id); if (!m) return undefined;
+    return [
+      { label: "Received in Cash", valuePaise: -m.cashPaise },
+      { label: "Received via Bank / Cheque", valuePaise: -m.bankPaise },
+      { label: "Other (journal / adjustment)", valuePaise: -m.otherPaise },
+    ];
+  };
+
+  const expenseBuckets = useMemo(
+    () => groupBalances(
+      balances.filter((b) => expenseTypes.has(b.type)),
+      "PL",
+      (b) => b.closing_paise,
+      innerForExpense,
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [balances, modeSplits],
+  );
+  const incomeBuckets = useMemo(
+    () => groupBalances(
+      balances.filter((b) => incomeTypes.has(b.type)),
+      "PL",
+      (b) => -b.closing_paise,
+      innerForIncome,
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [balances, modeSplits],
+  );
+
+  const goLedger = (id: string) =>
+    openLedgerReport(navigate, { ledgerId: id, from, to });
+
+  const exp = groupedTRows(expenseBuckets, goLedger);
+  const inc = groupedTRows(incomeBuckets, goLedger);
+
+  // Trading Gross Profit / Gross Loss carry — direct income/expense always
+  // route through Trading, so its net result always carries here as b/d.
+  const tradingGp = useMemo(() => {
+    const directIncome = balances
+      .filter((b) => b.type === "income_direct")
+      .reduce((s, b) => s + -b.closing_paise, 0);
+    const directExpense = balances
+      .filter((b) => b.type === "expense_direct")
+      .reduce((s, b) => s + b.closing_paise, 0);
+    return directIncome + closingStock - (directExpense + openingStock);
+  }, [balances, openingStock, closingStock]);
+
+  const profit = inc.totalPaise - exp.totalPaise + tradingGp;
+
+  const expenseRows: TRow[] = [...exp.rows];
+  const incomeRows: TRow[] = [];
+  if (tradingGp > 0) incomeRows.push({ label: "By Gross Profit b/d", amount: "", outerAmount: formatINR(tradingGp), emphasis: "bold" });
+  if (tradingGp < 0) expenseRows.unshift({ label: "To Gross Loss b/d", amount: "", outerAmount: formatINR(-tradingGp), emphasis: "bold" });
+  incomeRows.push(...inc.rows);
+  if (profit > 0) expenseRows.push({ label: surplusLabel, amount: "", outerAmount: formatINR(profit), emphasis: "bold" });
+  if (profit < 0) incomeRows.push({ label: deficitLabel, amount: "", outerAmount: formatINR(-profit), emphasis: "bold" });
+
+  const grandLeft = exp.totalPaise + Math.max(0, -tradingGp) + Math.max(0, profit);
+  const grandRight = inc.totalPaise + Math.max(0, tradingGp) + Math.max(0, -profit);
+
+  // Exports
+  const drExp = groupedExportRows(expenseBuckets, isIE ? "" : "To ");
+  const crExp = groupedExportRows(incomeBuckets, isIE ? "" : "By ");
+  if (tradingGp > 0) crExp.unshift({ label: "  By Gross Profit b/d", paise: 0, outerPaise: tradingGp, isSubtotal: true });
+  if (tradingGp < 0) drExp.unshift({ label: "  To Gross Loss b/d", paise: 0, outerPaise: -tradingGp, isSubtotal: true });
+  if (profit > 0) drExp.push({ label: `  ${surplusLabel}`, paise: 0, outerPaise: profit, isSubtotal: true });
+  if (profit < 0) crExp.push({ label: `  ${deficitLabel}`, paise: 0, outerPaise: -profit, isSubtotal: true });
+
+  const fmtInner = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
+    row && !row.isHeader && row.outerPaise === undefined && row.paise !== 0 ? r(row.paise).toFixed(2) : "";
+  const fmtOuter = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
+    row && !row.isHeader && row.outerPaise !== undefined ? r(row.outerPaise).toFixed(2) : "";
+
+  const exportBody = (): (string | number)[][] => {
+    const max = Math.max(drExp.length, crExp.length);
+    return Array.from({ length: max }).map((_, i) => [
+      drExp[i]?.label ?? "",
+      fmtInner(drExp[i]),
+      fmtOuter(drExp[i]),
+      crExp[i]?.label ?? "",
+      fmtInner(crExp[i]),
+      fmtOuter(crExp[i]),
+    ]);
+  };
+
+  const csvRows = (): (string | number)[][] => [
+    [`${reportTitle}: ${from} to ${to}`, "", "", "", "", ""],
+    [dr, "", amountHeader(), cr, "", amountHeader()],
+    ...exportBody(),
+    ["Total", "", r(grandLeft).toFixed(2), "Total", "", r(grandRight).toFixed(2)],
+  ];
+
+  const fileSlug = isIE ? "income-expenditure" : "profit-loss";
+  const onExportCsv = () => downloadCsv(`${fileSlug}-${from}_to_${to}.csv`, csvRows());
+  const onExportXlsx = () =>
+    downloadXlsx(`${fileSlug}-${from}_to_${to}.xlsx`, [{ name: isIE ? "I&E" : "P&L", rows: csvRows() }]);
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title: reportTitle,
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
+      subtitle: `${from} to ${to}`,
+      head: [[dr, "", amountHeader(), cr, "", amountHeader()]],
+      body: exportBody(),
+      foot: [["Total", "", r(grandLeft).toFixed(2), "Total", "", r(grandRight).toFixed(2)]],
+      fileName: `${fileSlug}-${from}_to_${to}.pdf`,
+      orientation: "l",
+      rightAlignCols: [1, 2, 4, 5],
+    });
+
+  return (
+    <div className="space-y-3">
+      <Card className="print:hidden">
+        <CardContent className="p-3">
+          <ReportToolbar
+            from={from}
+            to={to}
+            onFrom={setFrom}
+            onTo={setTo}
+            onExportCsv={onExportCsv}
+            onExportXlsx={onExportXlsx}
+            onExportPdf={onExportPdf}
+            onPrint={() => window.print()}
+            extra={<div className="flex gap-3 items-end">
+              <div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>
+              <div className="space-y-1"><Label className="text-xs">Tax Audit</Label>
+                <Button size="sm" variant={taxView ? "default" : "outline"} onClick={() => setTaxView((v) => !v)}>
+                  <Scale className="mr-1 h-3.5 w-3.5" />{taxView ? "On" : "Off"}
+                </Button>
+              </div>
+            </div>}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            {isIE
+              ? <>Income &amp; Expenditure for the period — surplus/deficit transfers to the <strong>Corpus / General Fund</strong>.</>
+              : <>Indirect Income &amp; Indirect Expenses only. Sales / Purchase / Direct Income / Direct Expenses (e.g. Job Work Income, Factory Wages) flow through the <strong>Trading Account</strong> — its Gross Profit / Loss is carried here as b/d.</>}
+          </p>
+          {excludedClosingEntries > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Year-end Profit &amp; Loss transfer entries are excluded here so the period income and expenses remain visible.
+            </p>
+          )}
+          {(() => {
+            const c = activeMembership?.companies as unknown as {
+              entity_status?: string | null;
+              annual_turnover_paise?: number | null;
+              borrowings_paise?: number | null;
+              nce_level?: number | null;
+            } | undefined;
+            if (!c) return null;
+            const shape = computeNceReportShape({
+              entity: (c.entity_status ?? "individual") as Parameters<typeof computeNceReportShape>[0]["entity"],
+              turnoverPaise: Number(c.annual_turnover_paise ?? 0),
+              borrowingsPaise: Number(c.borrowings_paise ?? 0),
+              levelOverride: (c.nce_level ?? null) as 1 | 2 | 3 | null,
+            });
+            if (shape.isCorporate) return null;
+            return (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 font-medium text-primary">
+                  ICAI NCE: {NCE_LEVEL_LABEL[shape.level]}
+                </span>
+                <span className="text-muted-foreground">
+                  {shape.level === 3
+                    ? "Simplified P&L — no cash-flow / related-party / segment / AS 15 disclosures required."
+                    : shape.level === 2
+                    ? "Level 2 disclosures — segment reporting & detailed employee benefits not required."
+                    : "Level 1 — full NCE disclosures apply."}
+                </span>
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
+      {view === "grid" ? (
+        <Card><CardContent className="p-3">
+          <BucketedGrid
+            reportId="profit-loss"
+            onLedgerClick={goLedger}
+            sides={[
+              {
+                side: dr,
+                buckets: expenseBuckets,
+                extras: [
+                  ...(tradingGp < 0 ? [{ group: "Trading", name: "Gross Loss b/d", valuePaise: -tradingGp }] : []),
+                  ...(profit > 0 ? [{ group: "Result", name: surplusLabel, valuePaise: profit }] : []),
+                ],
+              },
+              {
+                side: cr,
+                buckets: incomeBuckets,
+                extras: [
+                  ...(tradingGp > 0 ? [{ group: "Trading", name: "Gross Profit b/d", valuePaise: tradingGp }] : []),
+                  ...(profit < 0 ? [{ group: "Result", name: deficitLabel, valuePaise: -profit }] : []),
+                ],
+              },
+            ]}
+          />
+        </CardContent></Card>
+      ) : (
+      <TAccount
+        title={reportTitle}
+        subtitle={`for the period ${from} to ${to}`}
+        leftHeader={dr}
+        rightHeader={cr}
+        leftRows={expenseRows}
+        rightRows={incomeRows}
+        leftTotal={formatINR(grandLeft)}
+        rightTotal={formatINR(grandRight)}
+      />
+      )}
+      {taxView && <TaxAuditPanel mode="pl" fyStart={from} fyEnd={to} />}
+    </div>
+  );
+}

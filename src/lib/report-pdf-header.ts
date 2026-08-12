@@ -1,0 +1,61 @@
+import { useCompany } from "./company-context";
+import { getStoredLang } from "./i18n";
+import { fmtIndianDate } from "./format-date";
+import { tReportText } from "./report-i18n-rules";
+
+/**
+ * Returns the company / proprietor name and a financial-year sub-line
+ * to inject into every PDF report header. Keeps the proprietor's name on
+ * every printed page (Day Book, Cash/Bank Book, Ledger, etc.).
+ */
+export function useReportPdfHeader(): {
+  companyName: string;
+  companySubLine: string;
+  fyStart: string | null;
+  fyEnd: string | null;
+  /** Returns the date-range subtitle only when it differs from the FY range, to avoid duplicating the line printed under the company name. */
+  dateRangeSubtitle: (from: string, to: string) => string;
+} {
+  const { activeMembership } = useCompany();
+  const lang = getStoredLang();
+  const companyName = activeMembership?.companies?.name ?? "";
+  const fyStart = activeMembership?.companies?.financial_year_start ?? null;
+  const gstin = activeMembership?.companies?.gstin ?? null;
+  const fyText = tReportText(formatFyShort(fyStart), lang);
+  const sub = [fyText, gstin ? `GSTIN: ${gstin}` : null].filter(Boolean).join("  ·  ");
+  const fyEnd = fyEndFromStart(fyStart);
+  const dateRangeSubtitle = (from: string, to: string) => {
+    if (fyStart && fyEnd && from === fyStart && to === fyEnd) return "";
+    return tReportText(`For the period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`, lang);
+  };
+  return { companyName, companySubLine: sub, fyStart, fyEnd, dateRangeSubtitle };
+}
+
+function fyEndFromStart(start: string | null | undefined): string | null {
+  if (!start) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
+  if (!m) return null;
+  return `${Number(m[1]) + 1}-03-31`;
+}
+
+export function formatFyShort(start: string | null | undefined): string {
+  if (!start) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const endY = y + 1;
+  const shortEnd = String(endY).slice(-2);
+  return `Financial Year ${y}-${shortEnd}`;
+}
+
+function formatFyRange(start: string | null | undefined): string {
+  if (!start) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const mo = m[2];
+  const d = m[3];
+  const endY = y + 1;
+  const shortEnd = String(endY).slice(-2);
+  return `FY ${y}-${shortEnd} (${d}-${mo}-${y} to 31-03-${endY})`;
+}

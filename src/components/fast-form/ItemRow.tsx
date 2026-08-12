@@ -1,0 +1,434 @@
+import { memo, useEffect, useRef } from "react";
+import { Pencil, PackagePlus, Trash2, Tag } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
+import { TableCell, TableRow } from "@/components/ui/table";
+import { Combo } from "@/components/vouchers/Combo";
+import { GST_RATES } from "@/lib/constants";
+
+import { useFocusHints } from "./FocusHints";
+
+export interface ItemRowData {
+  id: string;
+  item_id: string;
+  description: string;
+  qty: string;
+  rate: string;
+  discount: string;
+  gst_rate: string;
+  cost_centre_id?: string | null;
+  cost_category_id?: string | null;
+}
+
+interface ItemOpt {
+  id: string;
+  name: string;
+  unit: string;
+  hsn_code?: string | null;
+}
+
+interface CostOpt { id: string; name: string; code?: string | null }
+
+interface Props {
+  idx: number;
+  row: ItemRowData;
+  amountPaise: number;
+  items: ItemOpt[];
+  canDelete: boolean;
+  onPickItem: (idx: number, itemId: string) => void;
+  onCommit: (idx: number, patch: Partial<ItemRowData>) => void;
+  onFocusRow: (idx: number) => void;
+  onDelete: (idx: number) => void;
+  onAddItemDlg: (idx: number) => void;
+  onEditItemDlg: (idx: number, itemId: string) => void;
+  onAdvanceToNextRow?: (idx: number) => void;
+  showDescription?: boolean;
+  showGstColumn?: boolean;
+  showHsnColumn?: boolean;
+  hsnDescriptionFor?: (code: string) => string | undefined;
+  costCentres?: CostOpt[];
+  costCategories?: CostOpt[];
+}
+
+function ItemRowImpl({
+  idx,
+  row,
+  amountPaise,
+  items,
+  canDelete,
+  onPickItem,
+  onCommit,
+  onFocusRow,
+  onDelete,
+  onAddItemDlg,
+  onEditItemDlg,
+  onAdvanceToNextRow,
+  showDescription = true,
+  showGstColumn = true,
+  showHsnColumn = false,
+  hsnDescriptionFor,
+  costCentres = [],
+  costCategories = [],
+}: Props) {
+  const { setHints, clearHints } = useFocusHints();
+  const zone = `item-row`;
+  const handleFocus = () => {
+    onFocusRow(idx);
+    setHints(zone, [
+      "Enter: next",
+      "F4: new item",
+      "Shift+F4: edit item",
+      "Ctrl+D: delete row",
+      "Ctrl+R: recall narration",
+      "Ctrl+S: accept",
+    ]);
+  };
+  const handleBlur = () => clearHints(zone);
+
+  const qtyRef = useRef<HTMLInputElement | null>(null);
+  const rateRef = useRef<HTMLInputElement | null>(null);
+  const discRef = useRef<HTMLInputElement | null>(null);
+  const descRef = useRef<HTMLInputElement | null>(null);
+  const selectedItem = items.find((it) => it.id === row.item_id);
+  const cleanDecimal = (value: string) => {
+    const cleaned = value.replace(/[^0-9.]/g, "");
+    const [first, ...rest] = cleaned.split(".");
+    return rest.length ? `${first}.${rest.join("")}` : first;
+  };
+
+  // Reset uncontrolled inputs when the row id changes (e.g. after voucher accept).
+  useEffect(() => {
+    if (qtyRef.current) qtyRef.current.value = row.qty;
+    if (rateRef.current) rateRef.current.value = row.rate;
+    if (discRef.current) discRef.current.value = row.discount;
+    if (descRef.current) descRef.current.value = row.description;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.id]);
+
+  // Sync programmatic value changes into the uncontrolled inputs — but
+  // only when the input is NOT focused, so we never stomp mid-typing.
+  useEffect(() => {
+    const el = qtyRef.current;
+    if (el && document.activeElement !== el && el.value !== row.qty) el.value = row.qty;
+  }, [row.qty]);
+  useEffect(() => {
+    const el = rateRef.current;
+    if (el && document.activeElement !== el && el.value !== row.rate) el.value = row.rate;
+  }, [row.rate]);
+  useEffect(() => {
+    const el = discRef.current;
+    if (el && document.activeElement !== el && el.value !== row.discount) el.value = row.discount;
+  }, [row.discount]);
+  useEffect(() => {
+    const el = descRef.current;
+    if (el && document.activeElement !== el && el.value !== row.description) el.value = row.description;
+  }, [row.description]);
+
+  const commitOnEnter = (e: React.KeyboardEvent<HTMLInputElement>, field: keyof ItemRowData) => {
+    if (e.key === "Enter") {
+      const v = cleanDecimal((e.currentTarget.value ?? "").toString());
+      onCommit(idx, { [field]: v } as Partial<ItemRowData>);
+    }
+  };
+
+
+  const gstTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleGstKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== "Enter") return;
+    const expanded = e.currentTarget.getAttribute("aria-expanded") === "true";
+    if (expanded) return; // let Radix handle selection
+    if (!row.gst_rate) return; // no value yet — let Radix open
+    e.preventDefault();
+    e.stopPropagation();
+    onAdvanceToNextRow?.(idx);
+  };
+
+  return (
+    <TableRow
+      data-voucher-row
+      data-row-idx={idx}
+      onFocusCapture={handleFocus}
+      onBlurCapture={handleBlur}
+      onClick={() => onFocusRow(idx)}
+    >
+      <TableCell>
+        <div className="flex gap-1">
+          <Combo
+            className="flex-1"
+            value={row.item_id}
+            onChange={(v) => {
+              onFocusRow(idx);
+              onPickItem(idx, v);
+              // Single rAF — lets Radix Popover finish its close-focus,
+              // then we take focus for qty. Rate may have been auto-filled
+              // by onPickItem; sync the uncontrolled input's DOM value.
+              requestAnimationFrame(() => {
+                if (rateRef.current && document.activeElement !== rateRef.current) {
+                  rateRef.current.value = row.rate;
+                }
+                qtyRef.current?.focus();
+                qtyRef.current?.select();
+              });
+            }}
+            options={items.map((it) => ({ value: it.id, label: it.name, hint: it.unit }))}
+            placeholder="Select item"
+            emptyText="No items — Alt+C to create"
+            onCreate={() => onAddItemDlg(idx)}
+            createLabel="New item"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            title="New item (F4)"
+            onClick={() => onAddItemDlg(idx)}
+          >
+            <PackagePlus className="h-4 w-4" />
+          </Button>
+          {/* Edit item removed from row — edit is available from Sales Register / Ledger / Items list */}
+
+        </div>
+      </TableCell>
+      {showHsnColumn && (
+        <TableCell className="align-middle">
+          {(() => {
+            const code = (selectedItem as ItemOpt | undefined)?.hsn_code || "";
+            const desc = code ? hsnDescriptionFor?.(code) : undefined;
+            return (
+              <div className="flex flex-col leading-tight" title={desc || code || "No HSN"}>
+                <span className="font-mono text-xs">{code || "—"}</span>
+                {desc && (
+                  <span className="truncate text-[10px] text-muted-foreground max-w-[14rem]">
+                    {desc}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+        </TableCell>
+      )}
+      {showDescription && (
+        <TableCell>
+          <Input
+            ref={descRef}
+            className="h-9"
+            defaultValue={row.description}
+            onBlur={(e) => onCommit(idx, { description: e.target.value })}
+            onKeyDown={(e) => commitOnEnter(e, "description")}
+          />
+        </TableCell>
+      )}
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <Input
+            ref={qtyRef}
+            data-voucher-qty
+            className="h-9 w-20 text-right font-mono text-foreground"
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            maxLength={12}
+            defaultValue={row.qty}
+            onFocus={(e) => e.currentTarget.select()}
+            onBlur={(e) => onCommit(idx, { qty: cleanDecimal(e.target.value) })}
+            onKeyDown={(e) => commitOnEnter(e, "qty")}
+          />
+          <span
+            className="min-w-10 truncate text-xs text-muted-foreground"
+            title={selectedItem?.unit || undefined}
+          >
+            {selectedItem?.unit || "—"}
+          </span>
+        </div>
+      </TableCell>
+      <TableCell>
+        <Input
+          ref={rateRef}
+          className="h-9 w-20 text-right font-mono text-foreground"
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          maxLength={12}
+          defaultValue={row.rate}
+          onFocus={(e) => e.currentTarget.select()}
+          onBlur={(e) => onCommit(idx, { rate: cleanDecimal(e.target.value) })}
+          onKeyDown={(e) => commitOnEnter(e, "rate")}
+        />
+      </TableCell>
+      <TableCell>
+        <Input
+          ref={discRef}
+          className="h-9 w-16 text-right font-mono text-foreground"
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          maxLength={10}
+          defaultValue={row.discount}
+          onFocus={(e) => e.currentTarget.select()}
+          onBlur={(e) => onCommit(idx, { discount: cleanDecimal(e.target.value) })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !showGstColumn) {
+              e.preventDefault();
+              onCommit(idx, { discount: cleanDecimal(e.currentTarget.value) });
+              onAdvanceToNextRow?.(idx);
+              return;
+            }
+            commitOnEnter(e, "discount");
+          }}
+        />
+      </TableCell>
+      {showGstColumn && (
+        <TableCell>
+          <Select
+            value={row.gst_rate}
+            onValueChange={(v) => {
+              onCommit(idx, { gst_rate: v });
+              requestAnimationFrame(() => onAdvanceToNextRow?.(idx));
+            }}
+          >
+            <SelectTrigger ref={gstTriggerRef} className="h-9" onKeyDown={handleGstKeyDown}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {GST_RATES.map((r) => (
+                <SelectItem key={r} value={String(r)}>
+                  {r}%
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </TableCell>
+      )}
+      <TableCell className="text-right">
+        <Input
+          key={`amt-${row.id}-${amountPaise}`}
+          className="h-9 w-28 text-right font-mono text-foreground"
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          maxLength={14}
+          defaultValue={(amountPaise / 100).toFixed(2)}
+          onFocus={(e) => e.currentTarget.select()}
+          title="Type a final amount (incl. GST) to back-calculate the rate"
+          onBlur={(e) => {
+            const v = parseFloat(cleanDecimal(e.target.value));
+            if (!isFinite(v) || v < 0) return;
+            const qty = parseFloat(row.qty) || 0;
+            if (qty <= 0) return;
+            const gst = parseFloat(row.gst_rate) || 0;
+            const disc = parseFloat(row.discount) || 0;
+            const targetPaise = Math.round(v * 100);
+            if (targetPaise === amountPaise) return;
+            const taxablePaise = Math.round(targetPaise / (1 + gst / 100));
+            const discPaise = Math.round(disc * 100);
+            const ratePaisePerUnit = (taxablePaise + discPaise) / qty;
+            const rate = (ratePaisePerUnit / 100).toFixed(4).replace(/\.?0+$/, "");
+            onCommit(idx, { rate: rate || "0" });
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              (e.target as HTMLInputElement).blur();
+              onAdvanceToNextRow?.(idx);
+            }
+          }}
+        />
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center justify-end gap-1">
+          {costCentres.length > 0 && (() => {
+            const cc = costCentres.find((c) => c.id === row.cost_centre_id);
+            const cat = costCategories.find((c) => c.id === row.cost_category_id);
+            const tagged = !!(cc || cat);
+            return (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={tagged ? "text-indigo-600" : "text-muted-foreground"}
+                    title={tagged
+                      ? `Cost: ${cc?.name ?? "—"}${cat ? " · " + cat.name : ""}`
+                      : "Tag cost centre / category"}
+                  >
+                    <Tag className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-72 space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Cost centre</Label>
+                    <Select
+                      value={row.cost_centre_id ?? "__none__"}
+                      onValueChange={(v) => onCommit(idx, { cost_centre_id: v === "__none__" ? null : v })}
+                    >
+                      <SelectTrigger className="h-8"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— None —</SelectItem>
+                        {costCentres.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}{c.code ? ` (${c.code})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {costCategories.length > 0 && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Category (optional)</Label>
+                      <Select
+                        value={row.cost_category_id ?? "__none__"}
+                        onValueChange={(v) => onCommit(idx, { cost_category_id: v === "__none__" ? null : v })}
+                      >
+                        <SelectTrigger className="h-8"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">— None —</SelectItem>
+                          {costCategories.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            );
+          })()}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onDelete(idx)}
+            disabled={!canDelete}
+            title="Delete row (Ctrl+D)"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+export const ItemRow = memo(ItemRowImpl, (prev, next) => {
+  return (
+    prev.idx === next.idx &&
+    prev.row === next.row &&
+    prev.amountPaise === next.amountPaise &&
+    prev.items === next.items &&
+    prev.canDelete === next.canDelete &&
+    prev.showDescription === next.showDescription &&
+    prev.showGstColumn === next.showGstColumn &&
+    prev.showHsnColumn === next.showHsnColumn
+  );
+});
