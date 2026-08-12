@@ -184,7 +184,7 @@ async function retrieveParty(companyId: string, routed: RouteResult, opts: { wit
 }
 
 /** Date-range register — sales/purchase/receipt/payment inside a window. */
-async function retrieveDateRange(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveDateRange(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const vouchers = (await readVouchers(companyId, { from: routed.from, to: routed.to })) as any[];
   let total = 0;
   for (const v of vouchers) total += Number(v.total_paise ?? v.total_amount ?? 0);
@@ -221,7 +221,7 @@ async function retrieveVoucher(companyId: string, routed: RoutedQuery): Promise<
 }
 
 /** Latest voucher of a given kind — full detail incl. items, entries, party. */
-async function retrieveLatestVoucher(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveLatestVoucher(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const kind = routed.latestKind ?? "sales";
   const all = (await readVouchers(companyId)) as any[];
   const filtered = all.filter((v) => String(v.voucher_type) === kind);
@@ -343,7 +343,7 @@ async function retrieveTrialBalance(companyId: string): Promise<RetrievedSlice> 
 }
 
 /** Profit & Loss — direct vs indirect income/expense grouping. */
-async function retrieveProfitLoss(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveProfitLoss(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const [ledgers, entries, vouchers] = await Promise.all([
     readLedgers(companyId),
     readVoucherEntriesForCompany(companyId),
@@ -409,7 +409,7 @@ async function retrieveProfitLoss(companyId: string, routed: RoutedQuery): Promi
 }
 
 /** Cash / bank book — entries touching cash or bank ledgers. */
-async function retrieveCashBank(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveCashBank(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const [ledgers, entries, vouchers] = await Promise.all([
     readLedgers(companyId),
     readVoucherEntriesForCompany(companyId),
@@ -441,7 +441,7 @@ async function retrieveCashBank(companyId: string, routed: RoutedQuery): Promise
 }
 
 /** GST — sales/purchase vouchers in window with taxable & total totals. */
-async function retrieveGst(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveGst(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const vouchers = (await readVouchers(companyId, { from: routed.from, to: routed.to })) as any[];
   const gstTypes = new Set(["sales", "purchase", "credit_note", "debit_note"]);
   const rel = vouchers.filter((v) => gstTypes.has(String(v.voucher_type)));
@@ -461,7 +461,7 @@ async function retrieveGst(companyId: string, routed: RoutedQuery): Promise<Retr
 }
 
 /** Ageing — outstanding balance per party bucketed by voucher age (streamed). */
-async function retrieveAgeing(companyId: string, routed: RoutedQuery): Promise<RetrievedSlice> {
+async function retrieveAgeing(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const ledgers = (await readLedgers(companyId)) as any[];
   const parties = ledgers.filter((l) => /debtor|creditor|sundry/i.test(String(l.group_name ?? "")));
   const partyIds = new Set(parties.map((p) => String(p.id)));
@@ -521,7 +521,7 @@ async function retrieveStock(companyId: string): Promise<RetrievedSlice> {
   };
 }
 
-export async function retrieveForQuery(routed: RoutedQuery, companyIdIn?: string | null): Promise<RetrievedSlice> {
+export async function retrieveForQuery(routed: RouteResult, companyIdIn?: string | null): Promise<RetrievedSlice> {
   let companyId = await resolveCompanyId(companyIdIn);
   if (!companyId) return { scope: "no active company", data: {} };
   // Cross-company: "in the books of X" switches the retrieval context.

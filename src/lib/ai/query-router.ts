@@ -26,8 +26,15 @@ export interface RouteResult {
     voucherType?: "payment" | "receipt" | "journal" | "contra" | "sales" | "purchase";
     accountName?: string;
   };
+  entityHints: string[]; // Added back for retrievers/prefetch
+  asOn?: string;         // Added back for retrievers
+  from?: string;         // Added back for retrievers
+  to?: string;           // Added back for retrievers
+  latestKind?: string;   // Added back for retrievers
+  companyHint?: string;  // Added back for retrievers
   deterministicAnswer?: string | null; // If local-first can handle it
 }
+
 
 // Fast regex-based intent detection — zero LLM latency
 const INTENT_PATTERNS: { intent: IntentType; patterns: RegExp[]; deterministic: boolean }[] = [
@@ -204,9 +211,14 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
     requiresLLM: !bestMatch.deterministic,
     requiresTools: bestMatch.deterministic && !canAnswerLocal, // Need to fetch data
     entity,
+    entityHints: entity?.partyName ? [entity.partyName] : [],
+    asOn: entity?.dateRange?.to,
+    from: entity?.dateRange?.from,
+    to: entity?.dateRange?.to,
     deterministicAnswer: canAnswerLocal ? null : undefined, // Will be filled after tool call
   };
 }
+
 
 // Voice-specific: handle transcription artifacts
 export function normalizeVoiceInput(text: string): string {
