@@ -1340,8 +1340,6 @@ function MessageBubble({
         )}
       </div>
     </div>
-  );
-}
 
 // Removed duplicate definition
 
