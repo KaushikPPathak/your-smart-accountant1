@@ -6,8 +6,9 @@
 // for the original rows back later via `retrieveOriginal`.
 
 import { cacheRowsForCcr, compressMessages } from "./headroom";
-import { routeQuery, type IntentType } from "./query-router";
+import { routeQuery, type RouteResult, type IntentType } from "./query-router";
 import { retrieveForQuery, type RetrievedSlice } from "./retrievers";
+
 import { takeSpeculation } from "./prefetch";
 import { optimiseSlice } from "./slice-optimizer";
 import { createRedactionMap, redactDeep, redactString, unredact, type RedactionMap } from "./redactor";
@@ -78,6 +79,7 @@ export interface CompressedContext {
 export type RoutedQuery = RouteResult;
 
 
+
 function resolveContextCompanyId(explicitCompanyId?: string | null): string | null {
   if (explicitCompanyId) return explicitCompanyId;
   if (typeof window === "undefined") return null;
@@ -85,6 +87,7 @@ function resolveContextCompanyId(explicitCompanyId?: string | null): string | nu
 }
 
 function mapRouteResultToRouted(result: RouteResult): RoutedQuery {
+
   return result;
 }
 

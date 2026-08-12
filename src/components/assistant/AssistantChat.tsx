@@ -1320,8 +1320,9 @@ function MessageBubble({
         )}
 
         {!isUser && msg.ocrPreview && (
-          <OcrPreviewCard draft={msg.ocrPreview} memoryHint={msg.memoryHint} disabled={!isPendingOcr} onConfirm={(opts) => onConfirmOcr(msg.ocrPreview!, opts)} onCancel={onCancelOcr} />
+          <OcrPreviewCard draft={msg.ocrPreview} disabled={!isPendingOcr} onConfirm={(opts: any) => onConfirmOcr(msg.ocrPreview!, opts)} onCancel={onCancelOcr} />
         )}
+
 
         {!isUser && msg.matches && msg.matches[0]?.actions && (
           <div className="mt-2 flex flex-wrap gap-1.5">

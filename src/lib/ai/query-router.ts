@@ -12,7 +12,12 @@ export type IntentType =
   | "comparison"
   | "explanation"
   | "greeting"
+  | "ageing"
+  | "gst_query"
+  | "profit_loss"
+  | "stock_query"
   | "unknown";
+
 
 export interface RouteResult {
   intent: IntentType;
@@ -165,9 +170,11 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
       confidence: 1,
       requiresLLM: false,
       requiresTools: false,
+      entityHints: [],
       deterministicAnswer: "Hello! I'm your AI accounting assistant. Ask me about balances, vouchers, or say something like 'Record a payment of ₹5000 to ABC Suppliers'."
     };
   }
+
   
   // 2. Pattern matching for intent
   let bestMatch: { intent: IntentType; confidence: number; deterministic: boolean } | null = null;
@@ -194,8 +201,10 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
       confidence: 0,
       requiresLLM: true,
       requiresTools: false,
+      entityHints: [],
     };
   }
+
   
   // 4. Extract entities
   const entity = extractEntities(text);
