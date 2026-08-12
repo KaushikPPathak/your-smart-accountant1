@@ -100,10 +100,9 @@ export function CloudBackupCard() {
   // ---------- OAuth providers ----------
   const connect = async (id: ProviderId) => {
     if (!getClientId(id)) {
-      toast.error(
-        `${PROVIDERS[id].label} isn't configured on this build. Ask your operator to set VITE_${id.toUpperCase()}_CLIENT_ID.`,
-        { duration: 8000 },
-      );
+      // Not configured yet — open the setup dialog instead of dead-ending.
+      setSetupFor(id);
+      toast.info(`${PROVIDERS[id].label} needs a one-time Client ID setup`);
       return;
     }
     setBusy(id);
