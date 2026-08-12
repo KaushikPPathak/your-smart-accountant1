@@ -525,7 +525,7 @@ export function AssistantChat() {
       if (activeCompanyId) {
         void logAiAction({
           companyId: activeCompanyId,
-          kind: "voucher", // Matches AiActionKind in types.ts/schema
+          kind: "voucher",
           label: `${action.kind} voucher`,
           detail: { voucherId: result.voucher.id, amount: action.draft.amount, type: action.draft.intent },
         });

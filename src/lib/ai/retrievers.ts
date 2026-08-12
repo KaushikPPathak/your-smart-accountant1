@@ -185,6 +185,7 @@ async function retrieveParty(companyId: string, routed: RouteResult, opts: { wit
 
 /** Date-range register — sales/purchase/receipt/payment inside a window. */
 async function retrieveDateRange(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
+
   const vouchers = (await readVouchers(companyId, { from: routed.from, to: routed.to })) as any[];
   let total = 0;
   for (const v of vouchers) total += Number(v.total_paise ?? v.total_amount ?? 0);
@@ -222,7 +223,8 @@ async function retrieveVoucher(companyId: string, routed: RouteResult): Promise<
 
 /** Latest voucher of a given kind — full detail incl. items, entries, party. */
 async function retrieveLatestVoucher(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
-  const kind = routed.latestKind ?? "sales";
+  const kind = routed.entity?.voucherType ?? "sales";
+
   const all = (await readVouchers(companyId)) as any[];
   const filtered = all.filter((v) => String(v.voucher_type) === kind);
   if (filtered.length === 0) {
@@ -522,6 +524,7 @@ async function retrieveStock(companyId: string): Promise<RetrievedSlice> {
 }
 
 export async function retrieveForQuery(routed: RouteResult, companyIdIn?: string | null): Promise<RetrievedSlice> {
+
   let companyId = await resolveCompanyId(companyIdIn);
   if (!companyId) return { scope: "no active company", data: {} };
   // Cross-company: "in the books of X" switches the retrieval context.

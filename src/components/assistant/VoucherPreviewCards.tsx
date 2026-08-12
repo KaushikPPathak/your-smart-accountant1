@@ -1,7 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Check, Edit2, X, FileText, Loader2 } from "lucide-react";
-import type { ParsedVoucher, VoucherAction } from "@/lib/assistant-logic";
+import type { LocalVoucherDraft as ParsedVoucher, VoucherAction } from "@/lib/ai/voucher-actions";
 
 
 export function VoucherPreviewCard({
