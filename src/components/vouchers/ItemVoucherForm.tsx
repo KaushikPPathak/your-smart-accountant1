@@ -63,7 +63,7 @@ import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-st
 import { AutoTaxChip } from "./AutoTaxChip";
 import { SundryStrip } from "./SundryStrip";
 import { netSundryPaise, resolveSundryPaise, splitSundriesByStage, type Sundry } from "@/lib/sundries";
-import { SOURCE_STAGES, STAGE_LABEL, listSourceDocs, loadDocLines, type LinkedDoc } from "@/lib/doc-linking";
+import { SOURCE_STAGES, STAGE_LABEL, listSourceDocs, loadDocLinesWithPending, type LinkedDoc } from "@/lib/doc-linking";
 
 
 type VoucherType =
@@ -425,29 +425,40 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
 
   /** Pull the picked source document's lines into this voucher. */
   const pullSourceDoc = useCallback(async (id: string) => {
-    setOriginalVoucherId(id || null);
-    if (!id) return;
+    if (!id) {
+      setOriginalVoucherId(null);
+      return;
+    }
     const doc = sourceDocs.find((d) => d.id === id);
+    setOriginalVoucherId(id);
     setRefNo(doc?.voucher_number ?? "");
     try {
-      const docLines = await loadDocLines(id);
-      if (docLines.length === 0) {
-        toast.info("That document has no item lines");
+      const docLines = await loadDocLinesWithPending(id, activeCompanyId || "");
+      const pendingLines = docLines.filter(l => (l.pending_qty ?? 0) > 0);
+      
+      if (pendingLines.length === 0) {
+        toast.info("That document has already been fully converted/invoiced");
         return;
       }
-      setLines(docLines.map((l) => ({ id: crypto.randomUUID(), ...l })));
+      
+      setLines(pendingLines.map((l) => ({ 
+        id: crypto.randomUUID(), 
+        ...l, 
+        qty: String(l.pending_qty ?? l.qty) 
+      })));
+      
       toast.success(
-        `Carried forward ${docLines.length} line${docLines.length > 1 ? "s" : ""} from ${STAGE_LABEL[doc?.voucher_type ?? ""] ?? "document"} ${doc?.voucher_number ?? ""}`,
+        `Carried forward ${pendingLines.length} line${pendingLines.length > 1 ? "s" : ""} from ${STAGE_LABEL[doc?.voucher_type ?? ""] ?? "document"} ${doc?.voucher_number ?? ""}`,
       );
-    } catch {
+    } catch (err) {
+      console.error("Load doc lines error:", err);
       toast.error("Could not read that document");
     }
-  }, [sourceDocs]);
+  }, [sourceDocs, activeCompanyId]);
 
-  // Clear the original-invoice link whenever the party changes
-  useEffect(() => {
-    setOriginalVoucherId(null);
-  }, [partyId]);
+  // Enforce party locking when an original voucher is linked
+  const isPartyLocked = !!originalVoucherId;
+
 
 
   const partyOpts = useMemo(
