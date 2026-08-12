@@ -158,16 +158,18 @@ export function RestoreNowButton() {
                 src={restoreMedallion}
                 alt=""
                 aria-hidden
-                className="h-8 w-8 object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]"
+                className="h-[25.6px] w-[25.6px] object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]"
                 draggable={false}
               />
+
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Restore {companyName}</TooltipContent>
         </Tooltip>
-        <span className="text-[9px] font-bold text-black uppercase tracking-tighter leading-none">
+        <span className="text-[10px] font-black text-black uppercase tracking-normal leading-none">
           Restore
         </span>
+
       </div>
 
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
