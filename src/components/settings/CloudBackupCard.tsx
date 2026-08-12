@@ -210,7 +210,7 @@ export function CloudBackupCard() {
               the provider&apos;s security page.
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2" key={configVersion}>
             {(Object.keys(PROVIDERS) as ProviderId[]).map((id) => {
               const p = PROVIDERS[id];
               const conn = connections[id];
@@ -226,17 +226,26 @@ export function CloudBackupCard() {
                           <CheckCircle2 className="h-3 w-3" /> Connected
                         </Badge>
                       )}
-                      {!configured && <Badge variant="outline">Not configured</Badge>}
+                      {!configured && <Badge variant="outline">Setup needed</Badge>}
                     </div>
                     <div className="text-[11px] text-muted-foreground truncate">
                       {conn.connected
                         ? conn.label ?? "Signed in"
                         : configured
-                        ? "Not connected"
-                        : "Operator must set the client ID for this provider"}
+                        ? "Configured — not connected"
+                        : "Add your own OAuth Client ID to enable"}
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSetupFor(id)}
+                      disabled={busy !== null}
+                      title={`Configure ${p.label} OAuth client ID`}
+                    >
+                      <Settings2 className="h-4 w-4" />
+                    </Button>
                     {conn.connected ? (
                       <>
                         <Button size="sm" onClick={() => pushToProvider(id)} disabled={busy !== null || !activeCompanyId}>
@@ -248,9 +257,9 @@ export function CloudBackupCard() {
                         </Button>
                       </>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => connect(id)} disabled={busy !== null || !configured}>
+                      <Button size="sm" variant="outline" onClick={() => connect(id)} disabled={busy !== null}>
                         {isBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        {isBusy ? "Connecting…" : "Connect"}
+                        {isBusy ? "Connecting…" : configured ? "Connect" : "Set up"}
                       </Button>
                     )}
                   </div>
@@ -270,6 +279,12 @@ export function CloudBackupCard() {
         targetCompanyId={activeCompanyId ?? null}
         targetCompanyName={activeMembership?.companies.name ?? ""}
         isAdmin={isAdmin}
+      />
+      <CloudProviderSetupDialog
+        provider={setupFor}
+        open={setupFor !== null}
+        onOpenChange={(o) => { if (!o) setSetupFor(null); }}
+        onSaved={() => { setConfigVersion((v) => v + 1); refreshConnections(); }}
       />
     </Card>
   );
