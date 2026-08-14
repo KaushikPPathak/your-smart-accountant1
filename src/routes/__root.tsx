@@ -127,12 +127,14 @@ function LockGate({ children }: { children: React.ReactNode }) {
       discoveryDone.current = true;
       void (async () => {
         try {
-          const [{ discoverCompaniesFromSnapshots }, { offlineDb }, { runAutoRestore }, { checkUpdateSafety }] = await Promise.all([
+          const [{ discoverCompaniesFromSnapshots }, { offlineDb }, { runAutoRestore }, { checkUpdateSafety }, { dedupeLocalCompaniesOnce }] = await Promise.all([
             import("@/lib/offline/snapshot-discovery"),
             import("@/lib/offline/db"),
             import("@/lib/auto-restore"),
             import("@/lib/update-safety"),
+            import("@/lib/dedupe-local-companies"),
           ]);
+
 
           // 1. Scan for orphans/missing companies from disk snapshots first
           const discoveredCount = await discoverCompaniesFromSnapshots();
@@ -147,6 +149,10 @@ function LockGate({ children }: { children: React.ReactNode }) {
 
           // 4. Update safety counters so the app doesn't think it's still "missing"
           await checkUpdateSafety();
+
+          // 5. Safely dedupe only AFTER discovery and restore are done
+          await dedupeLocalCompaniesOnce();
+
         } catch (err) {
           console.warn("Startup discovery/restore cycle failed:", err);
         } finally {
