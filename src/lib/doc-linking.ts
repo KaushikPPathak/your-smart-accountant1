@@ -26,6 +26,7 @@ export interface LinkedDoc {
   voucher_number: string;
   voucher_date: string;
   total_paise: number;
+  party_ledger_id?: string;
 }
 
 export interface DocLine {
@@ -93,6 +94,7 @@ export async function listSourceDocs(
         voucher_number: String(r.voucher_number ?? ""),
         voucher_date: String(r.voucher_date ?? ""),
         total_paise: Number(r.total_paise ?? 0),
+        party_ledger_id: String(r.party_ledger_id ?? ""),
       });
     }
   } else {
@@ -119,6 +121,7 @@ export async function listSourceDocs(
       voucher_number: String(r.voucher_number ?? ""),
       voucher_date: String(r.voucher_date ?? ""),
       total_paise: Number(r.total_paise ?? 0),
+      party_ledger_id: String(r.party_ledger_id ?? ""),
     }));
     consumed = new Set(
       ((laterRows ?? []) as Array<{ original_voucher_id: string | null }>)

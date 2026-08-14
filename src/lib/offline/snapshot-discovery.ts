@@ -125,11 +125,25 @@ async function peekCompanyMetadata(absPath: string): Promise<{ id: string; name:
     if (!res.ok || !res.text) return null;
     
     const j = JSON.parse(res.text) as any;
-    const payload = j.payload || j;
-    const company = payload.company;
-
     
-    if (!company || !company.id || !company.name) return null;
+    // Support both wrapped envelopes (v2) and raw snapshots (v1)
+    const payload = j.payload || j;
+    
+    // Sometimes the 'company' field is an object, sometimes it might be missing
+    // in older/corrupt snapshots, try to find ID/Name in the payload directly too.
+    const company = payload.company || payload;
+
+    if (!company || !company.id || !company.name) {
+       // If still missing, check for legacy 'company_id'/'company_name' keys
+       const id = company.id || payload.company_id || payload.id;
+       const name = company.name || payload.company_name || payload.name;
+       if (!id || !name) return null;
+       return {
+         id: String(id),
+         name: String(name),
+         mode: String(company.mode || payload.mode || "trial_local")
+       };
+    }
     
     return {
       id: String(company.id),

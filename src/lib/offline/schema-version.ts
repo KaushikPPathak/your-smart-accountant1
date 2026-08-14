@@ -16,7 +16,7 @@ import { getMeta, setMeta } from "./db";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { isOnlineNow } from "./online-status";
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 const KEY = "schema_version";
 
 export async function getStoredSchemaVersion(): Promise<number> {
