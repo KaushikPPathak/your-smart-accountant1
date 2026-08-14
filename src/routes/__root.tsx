@@ -1,5 +1,6 @@
 import { Outlet, Link, createRootRoute, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { CompanyProvider } from "@/lib/company-context";
 import { ThemeProvider } from "@/lib/theme-context";
@@ -117,9 +118,49 @@ function LockGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { loading } = useAuth();
+  const [booting, setBooting] = useState(true);
+  const discoveryDone = useRef(false);
 
   useEffect(() => {
-    if (loading) return;
+    // Phase 1: Snapshot Discovery & Auto-Restore (Desktop only)
+    if (!discoveryDone.current && isDesktopRuntime()) {
+      discoveryDone.current = true;
+      void (async () => {
+        try {
+          const [{ discoverCompaniesFromSnapshots }, { offlineDb }, { runAutoRestore }, { checkUpdateSafety }] = await Promise.all([
+            import("@/lib/offline/snapshot-discovery"),
+            import("@/lib/offline/db"),
+            import("@/lib/auto-restore"),
+            import("@/lib/update-safety"),
+          ]);
+
+          // 1. Scan for orphans/missing companies from disk snapshots first
+          const discoveredCount = await discoverCompaniesFromSnapshots();
+          
+          // 2. Load the current (potentially reconstructed) company list
+          const companies = await offlineDb.companies.toArray();
+          
+          // 3. Trigger silent auto-restore for any company with missing data
+          if (companies.length > 0) {
+            await runAutoRestore(companies, { skipTombstoneCheck: true });
+          }
+
+          // 4. Update safety counters so the app doesn't think it's still "missing"
+          await checkUpdateSafety();
+        } catch (err) {
+          console.warn("Startup discovery/restore cycle failed:", err);
+        } finally {
+          setBooting(false);
+        }
+      })();
+    } else if (!isDesktopRuntime()) {
+      setBooting(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loading || booting) return;
+
     if (LOCK_EXEMPT_PATHS.has(location.pathname)) return;
     if (isUnlocked()) return;
 
@@ -152,7 +193,10 @@ function LockGate({ children }: { children: React.ReactNode }) {
         try { navigate({ to: "/welcome" }); } catch { /* ignore */ }
       }
     })();
-  }, [loading, location.pathname, navigate]);
+  }, [loading, booting, location.pathname, navigate]);
+
+  if (booting) return null; // Prevent UI flash during discovery
+
 
   return <>{children}</>;
 }
