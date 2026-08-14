@@ -34,6 +34,7 @@ interface ElectronBridge {
     fileName: string,
     contents: string | ArrayBuffer | Uint8Array,
   ) => Promise<SaveNativeResult>;
+  readDir?: (absPath: string) => Promise<{ ok: boolean; entries?: string[]; error?: string }>;
 }
 
 function electronBridge(): ElectronBridge | null {
