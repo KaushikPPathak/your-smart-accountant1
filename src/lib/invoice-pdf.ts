@@ -113,6 +113,8 @@ export interface InvoicePdfResult {
   partyName: string | null;
   partyPhone: string | null;
   companyName: string | null;
+  /** Safe filename for Windows/Filesystem (sanitized voucher number). */
+  safeFileName: string;
 }
 
 export async function downloadInvoicePdf(
