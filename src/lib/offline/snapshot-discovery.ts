@@ -127,19 +127,17 @@ async function peekCompanyMetadata(absPath: string): Promise<{ id: string; name:
     const j = JSON.parse(res.text) as unknown;
     let payload: CompanyBackup | null = null;
     
-    if (isBackupEnvelope(j)) {
-      payload = (j as BackupEnvelope<CompanyBackup>).payload as CompanyBackup;
-    } else if (j && typeof j === "object" && typeof (j as CompanyBackup).schema_version === "number") {
-      payload = j as CompanyBackup;
-    }
+    const payload = (j as any).payload || j;
+    const company = payload.company;
     
-    if (!payload || !payload.id || !payload.name) return null;
+    if (!company || !company.id || !company.name) return null;
     
     return {
-      id: payload.id,
-      name: payload.name,
-      mode: (payload as any).mode || "trial_local"
+      id: String(company.id),
+      name: String(company.name),
+      mode: String(company.mode || "trial_local")
     };
+
   } catch {
     return null;
   }
