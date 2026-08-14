@@ -26,6 +26,7 @@ export interface LinkedDoc {
   voucher_number: string;
   voucher_date: string;
   total_paise: number;
+  party_ledger_id?: string;
 }
 
 export interface DocLine {
