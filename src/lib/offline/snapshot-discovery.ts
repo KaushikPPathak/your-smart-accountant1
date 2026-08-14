@@ -10,8 +10,9 @@
 import { listDirectoriesNative, readAbsoluteTextFileNative, isDesktopRuntime } from "@/lib/native-bridge";
 import { getAppPaths } from "@/lib/app-paths";
 import { offlineDb } from "./db";
-import { isBackupEnvelope, type BackupEnvelope } from "./backup-policy";
-import type { CompanyBackup } from "./backup";
+import { isBackupEnvelope, type BackupEnvelope } from "@/lib/backup-policy";
+import type { CompanyBackup } from "@/lib/backup";
+
 
 interface DiscoveredCompany {
   id: string;
