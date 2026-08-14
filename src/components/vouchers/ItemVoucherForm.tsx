@@ -431,6 +431,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
     const doc = sourceDocs.find((d) => d.id === id);
     setOriginalVoucherId(id);
+    
+    // Locked party: ensure the current partyId matches the source doc's party.
+    if (doc?.party_ledger_id && doc.party_ledger_id !== partyId) {
+      setPartyId(doc.party_ledger_id);
+    }
+    
     setRefNo(doc?.voucher_number ?? "");
     try {
       const docLines = await loadDocLinesWithPending(id, activeCompanyId || "");
@@ -454,12 +460,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       console.error("Load doc lines error:", err);
       toast.error("Could not read that document");
     }
-  }, [sourceDocs, activeCompanyId]);
+  }, [sourceDocs, activeCompanyId, partyId]);
 
   // Enforce party locking when an original voucher is linked
   const isPartyLocked = !!originalVoucherId;
-
-
 
   const partyOpts = useMemo(
     () => ledgers.filter((l) => cfg.partyTypes.includes(l.type)),
