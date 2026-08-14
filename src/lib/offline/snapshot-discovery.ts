@@ -124,11 +124,10 @@ async function peekCompanyMetadata(absPath: string): Promise<{ id: string; name:
     const res = await readAbsoluteTextFileNative(absPath);
     if (!res.ok || !res.text) return null;
     
-    const j = JSON.parse(res.text) as unknown;
-    let payload: CompanyBackup | null = null;
-    
-    const payload = (j as any).payload || j;
+    const j = JSON.parse(res.text) as any;
+    const payload = j.payload || j;
     const company = payload.company;
+
     
     if (!company || !company.id || !company.name) return null;
     
