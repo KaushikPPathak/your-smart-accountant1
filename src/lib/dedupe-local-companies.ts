@@ -27,11 +27,14 @@
 // deleting picker rows would just reappear on next sync.
 
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { isDesktopRuntime } from "@/lib/native-bridge";
+
 
 const RAN_KEY = "ym_local_dedupe_ran_v1";
 
 export async function dedupeLocalCompaniesOnce(): Promise<{ removed: number } | null> {
-  if (!isLocalOnlyMode()) return null;
+  if (!isLocalOnlyMode() || !isDesktopRuntime()) return null;
+
   try {
     if (typeof window !== "undefined" && window.sessionStorage.getItem(RAN_KEY) === "1") {
       return { removed: 0 };
