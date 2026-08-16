@@ -13,7 +13,7 @@
 import { isDesktopRuntime } from "@/lib/native-bridge";
 import { getAppPaths } from "@/lib/app-paths";
 import { getAllIntegrity, countLive, totalRows, recordIntegrityFromSnapshot, type IntegrityEntry } from "@/lib/integrity";
-import { buildCompanyBackup, parseBackupFile, restoreCompanyBackup, recoverMissingFromSnapshot, type CompanyBackup } from "@/lib/backup";
+import { buildCompanyBackup, parseBackupFile, restoreCompanyBackup, type CompanyBackup } from "@/lib/backup";
 import { setMeta, getMeta } from "@/lib/offline/db";
 
 export interface AutoRestoreOutcome {
@@ -298,21 +298,15 @@ function bestManifestForCompany(
  * per company. Never throws — errors are captured in each outcome.
  */
 export async function runAutoRestore(
-  companies: { id: string; name: string }[]
+  companies: { id: string; name: string }[],
 ): Promise<AutoRestoreOutcome[]> {
   if (companies.length === 0) return [];
   // Respect tombstones: never resurrect a company the user has purged.
   const { isTombstoned } = await import("@/lib/recovery/tombstones");
   const filtered: { id: string; name: string }[] = [];
   for (const c of companies) {
-    // Automatic discovery must distinguish between an orphaned company (missing from IDB)
-    // and an intentionally deleted one. Respect the tombstone.
-    if (await isTombstoned(c.id, c.name)) {
-      continue;
-    }
-    filtered.push(c);
+    if (!(await isTombstoned(c.id, c.name))) filtered.push(c);
   }
-
   if (filtered.length === 0) return [];
   const manifest = await getAllIntegrity();
   const results: AutoRestoreOutcome[] = [];
@@ -387,8 +381,7 @@ export async function runAutoRestore(
       continue;
     }
     try {
-      // Non-destructive recovery: only merge missing rows using their original IDs.
-      await recoverMissingFromSnapshot(c.id, restored.payload);
+      await restoreCompanyBackup(c.id, restored.payload);
       const after = await countLive(c.id);
       // Refresh manifest to reflect the restored state.
       await recordIntegrityFromSnapshot(c.id, c.name, restored.payload, { file: restored.path });

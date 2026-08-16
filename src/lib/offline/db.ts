@@ -135,8 +135,8 @@ class OfflineDatabase extends Dexie {
       meta: "key",
     });
     this.version(2).stores({
-      cache_voucher_entries: "id, voucher_id, company_id, [company_id+voucher_id]",
-      cache_voucher_items: "id, voucher_id, company_id, [company_id+voucher_id]",
+      cache_voucher_entries: "id, voucher_id, company_id",
+      cache_voucher_items: "id, voucher_id, company_id",
       cache_bill_allocations: "id, company_id, invoice_voucher_id, payment_voucher_id",
     });
     this.version(3).stores({

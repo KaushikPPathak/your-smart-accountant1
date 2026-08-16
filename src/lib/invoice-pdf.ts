@@ -113,8 +113,6 @@ export interface InvoicePdfResult {
   partyName: string | null;
   partyPhone: string | null;
   companyName: string | null;
-  /** Safe filename for Windows/Filesystem (sanitized voucher number). */
-  safeFileName: string;
 }
 
 export async function downloadInvoicePdf(
@@ -588,10 +586,7 @@ export async function downloadInvoicePdf(
     doc.setTextColor(0);
   }
 
-  const safeVoucherNumber = String(v.voucher_number ?? "")
-    .replace(/[\\/:*?"<>|]/g, "-")
-    .trim();
-  const fileName = `${TYPE_TITLE[v.voucher_type] || "invoice"}-${safeVoucherNumber}.pdf`;
+  const fileName = `${TYPE_TITLE[v.voucher_type] || "invoice"}-${v.voucher_number}.pdf`;
   const { stampWatermarkIfUnlicensed } = await import("./license/pdf-watermark");
   await stampWatermarkIfUnlicensed(doc);
   const buf = doc.output("arraybuffer");
@@ -616,7 +611,6 @@ export async function downloadInvoicePdf(
     partyName: party?.name ?? null,
     partyPhone: party?.phone ?? null,
     companyName: company.name ?? null,
-    safeFileName: fileName,
   };
 }
 

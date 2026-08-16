@@ -474,23 +474,9 @@ function VoucherEditPage() {
   async function del() {
     if (!voucher || !canDelete) return;
     if (!confirm(`Delete ${voucher.voucher_number}? This cannot be undone.`)) return;
-    
     try {
-      // PART 5: Delete Protection - Block deletion if downstream documents exist.
+      // Local-first delete — never blocked by JWT expiry or network.
       const { offlineDb } = await import("@/lib/offline/db");
-      const downstream = await offlineDb.cache_vouchers
-        .where("original_voucher_id")
-        .equals(voucher.id)
-        .first();
-
-      if (downstream) {
-        const typeLabel = (downstream as any).voucher_type === "sales_order" ? "Sales Order" : 
-                          (downstream as any).voucher_type === "delivery_note" ? "Delivery Challan" : 
-                          (downstream as any).voucher_type === "sales" ? "Sales Invoice" : "downstream document";
-        toast.error(`Cannot delete: This ${voucher.voucher_type.replace("_", " ")} is linked to ${typeLabel} ${(downstream as any).voucher_number}.`);
-        return;
-      }
-
       const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
       const { isOnlineNow } = await import("@/lib/offline/online-status");
       const stamp = new Date().toISOString();
