@@ -288,43 +288,118 @@ export interface RestoreSummary {
 // Newer backups: unknown fields ignored, known tables restored, warning logged.
 export const CURRENT_BACKUP_SCHEMA = 2;
 
+/**
+ * User-initiated full restore: wipes the target company and replaces it with snapshot data.
+ * - This is DESTRUCTIVE and should only be called via manual user action.
+ * - Maps source IDs to new IDs by default to avoid conflicts, but preserves voucher numbers.
+ */
 export async function restoreCompanyBackup(
   targetCompanyId: string,
   backup: CompanyBackup,
   opts: { wipeExisting?: boolean; journalKind?: import("./restore-safety").RestoreKind } = {},
 ): Promise<RestoreSummary> {
-  // Round 3 — journaling flag. Set BEFORE any destructive work; cleared
-  // only after successful return. If the process dies mid-restore, the
-  // marker persists in localStorage and the next boot offers 1-click
-  // recovery from the pre-restore snapshot.
   const { beginRestoreJournal, endRestoreJournal } = await import("./restore-safety");
   const kind = opts.journalKind ?? "file-restore";
-  const companyName =
-    ((backup.company as { name?: string } | null)?.name) ?? undefined;
+  const companyName = ((backup.company as { name?: string } | null)?.name) ?? undefined;
+  
   beginRestoreJournal({ companyId: targetCompanyId, companyName, kind });
   try {
     const summary = await restoreCompanyBackupImpl(targetCompanyId, backup, opts);
     endRestoreJournal();
     return summary;
   } catch (err) {
-    // Layer 5 — record restore failures locally so users / support can see
-    // what went wrong on the device without any network telemetry.
     try {
       const { recordFailure } = await import("./crash-log");
       recordFailure("restore", err, {
         company_id: targetCompanyId,
         schema_version: (backup as { schema_version?: unknown }).schema_version,
-        ledgers: backup.ledgers?.length ?? 0,
-        vouchers: backup.vouchers?.length ?? 0,
       });
-    } catch { /* never let telemetry mask the real error */ }
-    // Deliberately DO NOT clear the journal on failure — a thrown error
-    // usually means the Dexie transaction rolled back cleanly, but we
-    // still want the boot recovery path to give the user visible
-    // confirmation on next launch that something went wrong.
+    } catch { /* ignore */ }
     endRestoreJournal();
     throw err;
   }
+}
+
+/**
+ * Non-destructive recovery: only restores missing rows using their ORIGINAL IDs.
+ * - NEVER wipes existing data.
+ * - NEVER overwrites existing rows (prevents older snapshots from replacing newer data).
+ * - Identity preservation: preserves original UUIDs for companies, ledgers, items, vouchers.
+ */
+export async function recoverMissingFromSnapshot(
+  targetCompanyId: string,
+  backup: CompanyBackup
+): Promise<RestoreSummary> {
+  const { offlineDb: db } = await import("./offline/db");
+  
+  // 1. Identity Guard: Snapshot must match the target company ID.
+  const sourceId = String((backup.company as { id?: unknown } | null)?.id ?? "");
+  if (sourceId && sourceId !== targetCompanyId) {
+    throw new Error(`Recovery identity conflict: snapshot ID ${sourceId} does not match target ${targetCompanyId}`);
+  }
+
+  const summary: RestoreSummary = {
+    companyId: targetCompanyId,
+    ledgers: 0, items: 0, vouchers: 0,
+    voucher_items: 0, voucher_entries: 0,
+    bill_allocations: 0, recurring_invoices: 0
+  };
+
+  await db.transaction("rw", [
+    db.cache_ledgers, db.cache_items, db.cache_vouchers,
+    db.cache_voucher_entries, db.cache_voucher_items,
+    db.cache_bill_allocations, db.cache_recurring_invoices,
+    db.cache_company_settings, db.cache_account_subgroups,
+    db.cache_ledger_group_mappings, db.cache_account_group_overrides,
+    db.cache_voucher_export_details, db.cache_einvoice_details,
+    db.cache_period_locks, db.cache_bom_templates, db.cache_bom_template_lines,
+    db.cache_voucher_series, db.cache_tax_templates, db.cache_bill_sundries,
+    db.cache_transport_details, db.cache_cost_centres, db.cache_cost_categories
+  ], async () => {
+    
+    const restoreMissing = async (table: any, rows: any[], name: keyof RestoreSummary) => {
+      let count = 0;
+      for (const row of rows) {
+        if (!row.id) continue;
+        const exists = await table.get(row.id);
+        if (!exists) {
+          // Preserve original data exactly — no remapping, no timestamp updates.
+          await table.put(row);
+          count++;
+        } else {
+          // Row exists: preserve live data. Conflict logging could be added here.
+        }
+      }
+      if (typeof summary[name] === "number") (summary[name] as number) += count;
+    };
+
+    await Promise.all([
+      restoreMissing(db.cache_ledgers, backup.ledgers, "ledgers"),
+      restoreMissing(db.cache_items, backup.items, "items"),
+      restoreMissing(db.cache_vouchers, backup.vouchers, "vouchers"),
+      restoreMissing(db.cache_voucher_entries, backup.voucher_entries, "voucher_entries"),
+      restoreMissing(db.cache_voucher_items, backup.voucher_items, "voucher_items"),
+      restoreMissing(db.cache_bill_allocations, backup.bill_allocations, "bill_allocations"),
+      restoreMissing(db.cache_recurring_invoices, backup.recurring_invoices, "recurring_invoices"),
+      // v2 additions
+      restoreMissing(db.cache_account_subgroups, backup.account_subgroups ?? [], "account_subgroups" as any),
+      restoreMissing(db.cache_ledger_group_mappings, backup.ledger_group_mappings ?? [], "ledger_group_mappings" as any),
+      restoreMissing(db.cache_account_group_overrides, backup.account_group_overrides ?? [], "account_group_overrides" as any),
+      restoreMissing(db.cache_voucher_export_details, backup.voucher_export_details ?? [], "voucher_export_details" as any),
+      restoreMissing(db.cache_einvoice_details, backup.einvoice_details ?? [], "einvoice_details" as any),
+      restoreMissing(db.cache_period_locks, backup.period_locks ?? [], "period_locks" as any),
+      restoreMissing(db.cache_bom_templates, backup.bom_templates ?? [], "bom_templates" as any),
+      restoreMissing(db.cache_bom_template_lines, backup.bom_template_lines ?? [], "bom_template_lines" as any),
+      restoreMissing(db.cache_voucher_series, backup.voucher_series ?? [], "voucher_series" as any),
+      restoreMissing(db.cache_tax_templates, backup.tax_templates ?? [], "tax_templates" as any),
+      restoreMissing(db.cache_bill_sundries, backup.bill_sundries ?? [], "bill_sundries" as any),
+      restoreMissing(db.cache_transport_details, backup.transport_details ?? [], "transport_details" as any),
+      restoreMissing(db.cache_cost_centres, backup.cost_centres ?? [], "cost_centres" as any),
+      restoreMissing(db.cache_cost_categories, backup.cost_categories ?? [], "cost_categories" as any),
+    ]);
+  });
+
+  return summary;
 }
 
 async function restoreCompanyBackupImpl(
@@ -351,11 +426,9 @@ async function restoreCompanyBackupImpl(
   const { isLocalOnlyMode } = await import("./local-only-mode");
   const localOnly = isLocalOnlyMode();
 
-  // STRICT RESTORE RULE: always wipe the target company's data before restoring.
-  // "Overwrite existing balances and add missing transactions" is only achievable
-  // by replacing the full snapshot — merging by heuristic keys produces
-  // duplicate ledgers / duplicate vouchers / mismatched balances. This is
-  // non-negotiable and ignores any caller that tries to disable it.
+  // DESTRUCTIVE RESTORE RULE: Manually initiated restores wipe the target company's 
+  // data before replacing it. This is intended for "restore from file" scenarios 
+  // where the user wants to explicitly replace their current data.
   void opts.wipeExisting;
   if (!localOnly) {
     // Order matters due to FKs.
