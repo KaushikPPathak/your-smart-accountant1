@@ -71,6 +71,21 @@ const pwaPlugins = isTauri || isLegacyElectron
       })
     ];
 
+const legacyFileProtocolPlugins = isLegacyElectron
+  ? [
+      {
+        name: "legacy-electron-file-protocol",
+        enforce: "post" as const,
+        transformIndexHtml(html: string) {
+          // Chromium treats file:// pages as opaque origins. Vite's generated
+          // crossorigin attributes can therefore block module scripts before
+          // React runs, leaving only the empty root element on screen.
+          return html.replace(/\s+crossorigin(?=[\s>])/g, "");
+        },
+      },
+    ]
+  : [];
+
 const sharedBuild = {
   // Electron 22 (the Win 7 build) embeds Chromium 108. Target that browser
   // explicitly so application code and dependencies are down-levelled to
@@ -112,6 +127,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     ...pwaPlugins,
+    ...legacyFileProtocolPlugins,
     tsconfigPaths(),
   ],
 
