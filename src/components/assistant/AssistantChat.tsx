@@ -127,7 +127,7 @@ const WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
   text:
-    "'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''\n                                        \n                                            \n                                            app screen is blank win 7 64 bit and  code file of failed to load app is attached herewith , why we are failing ? now please check in your environment whether it is correctly build",
+    "'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''\n                                        \n                                            \n                                            can i give any name v-legacy-1 ot win7 built etc",
 };
 
 const SUGGESTIONS = [
