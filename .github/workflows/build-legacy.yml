@@ -33,7 +33,34 @@ jobs:
       - name: Install root dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Verify Supabase build configuration
+        shell: pwsh
+        env:
+          VITE_SUPABASE_PROJECT_ID: ${{ vars.VITE_SUPABASE_PROJECT_ID }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:VITE_SUPABASE_URL)) {
+            throw "VITE_SUPABASE_URL is missing"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:VITE_SUPABASE_PUBLISHABLE_KEY)) {
+            throw "VITE_SUPABASE_PUBLISHABLE_KEY is missing"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:VITE_SUPABASE_PROJECT_ID)) {
+            throw "VITE_SUPABASE_PROJECT_ID is missing"
+          }
+
+          Write-Host "Supabase build configuration is present."
+          Write-Host "Supabase URL: $env:VITE_SUPABASE_URL"
+          Write-Host "Project ID: $env:VITE_SUPABASE_PROJECT_ID"
+
       - name: Build web app (relative base for file://)
+        env:
+          VITE_SUPABASE_PROJECT_ID: ${{ vars.VITE_SUPABASE_PROJECT_ID }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
         run: npm run build:legacy
 
       - name: Transpile CSS for Chromium 108 compatibility
