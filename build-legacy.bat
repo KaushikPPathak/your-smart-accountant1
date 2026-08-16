@@ -19,7 +19,8 @@ if not exist "electron-legacy\assets\app.ico" (
 echo.
 echo === [2/4] Building web app with relative base ===
 call npm ci || exit /b 1
-call npx vite build --base=./ || exit /b 1
+set VITE_LEGACY_ELECTRON=1
+call npx vite build || exit /b 1
 if not exist "dist\index.html" (
   echo ERROR: dist\index.html not produced by build.
   exit /b 1

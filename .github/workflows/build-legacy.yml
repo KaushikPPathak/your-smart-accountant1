@@ -34,7 +34,9 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Build web app (relative base for file://)
-        run: npx vite build --base=./
+        run: npx vite build
+        env:
+          VITE_LEGACY_ELECTRON: '1'
 
       - name: Transpile CSS for Chromium 108 compatibility
         shell: pwsh
