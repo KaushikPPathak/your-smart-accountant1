@@ -83,6 +83,7 @@ export async function dedupeLocalCompaniesOnce(): Promise<{ removed: number } | 
       const winner = scored[0];
       for (const s of scored.slice(1)) {
         // Safety: only delete losers that truly have zero business rows.
+        // We never delete a non-empty company.
         if (s.rows === 0 && winner.rows > 0) toDelete.push(s.id);
       }
     }
