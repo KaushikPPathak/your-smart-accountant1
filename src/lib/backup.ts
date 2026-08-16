@@ -508,8 +508,9 @@ async function restoreCompanyBackupImpl(
       updated_at: _ua,
       created_by: _cb,
       party_ledger_id,
-      original_voucher_id: _ov,
-      linked_voucher_ids: _lv,
+      // preserve links even in remapped cloud path
+      original_voucher_id,
+      linked_voucher_ids,
       ...rest
     } = vRaw as Record<string, unknown>;
     const { data: u } = await supabase.auth.getUser();
@@ -523,6 +524,12 @@ async function restoreCompanyBackupImpl(
         party_ledger_id: party_ledger_id
           ? ledgerIdMap.get(String(party_ledger_id)) ?? null
           : null,
+        original_voucher_id: original_voucher_id
+          ? voucherIdMap.get(String(original_voucher_id)) ?? null
+          : null,
+        linked_voucher_ids: Array.isArray(linked_voucher_ids)
+          ? linked_voucher_ids.map(id => voucherIdMap.get(String(id)) ?? id)
+          : linked_voucher_ids,
       })
       .select("id")
       .single();
