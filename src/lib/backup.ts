@@ -356,6 +356,27 @@ export async function recoverMissingFromSnapshot(
     db.cache_voucher_series, db.cache_tax_templates, db.cache_bill_sundries,
     db.cache_transport_details, db.cache_cost_centres, db.cache_cost_categories
   ], async () => {
+    // 2. Company & Settings Guard: Preserve identities and merge settings safely.
+    if (backup.company) {
+      const cid = String(backup.company.id || backup.company.company_id || "");
+      if (cid && !(await db.cache_companies.get(cid))) {
+        await db.cache_companies.put({ ...backup.company, id: cid, is_synced: true });
+        await db.companies.put({
+          id: cid,
+          name: String(backup.company.name || "Recovered Company"),
+          has_password: Boolean((backup.company as any).has_password),
+          account_id: "local-user"
+        });
+      }
+    }
+
+    if (backup.settings) {
+      const sid = String(backup.settings.id || `settings-${targetCompanyId}`);
+      if (!(await db.cache_company_settings.get(sid))) {
+        await db.cache_company_settings.put({ ...backup.settings, id: sid, company_id: targetCompanyId, is_synced: true });
+      }
+    }
+
     
     const restoreMissing = async (table: any, rows: any[], name: keyof RestoreSummary) => {
       let count = 0;
@@ -364,10 +385,12 @@ export async function recoverMissingFromSnapshot(
         const exists = await table.get(row.id);
         if (!exists) {
           // Preserve original data exactly — no remapping, no timestamp updates.
-          await table.put(row);
+          await table.put({ ...row, is_synced: true });
           count++;
         } else {
-          // Row exists: preserve live data. Conflict logging could be added here.
+          // Conflict: if both live row and snapshot row have the same ID but 
+          // different values, we preserve the live one (it is presumably newer).
+          // We could log the conflict here for recovery diagnostics.
         }
       }
       if (typeof summary[name] === "number") (summary[name] as number) += count;
