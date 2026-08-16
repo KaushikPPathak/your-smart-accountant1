@@ -6,6 +6,7 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { readFileSync } from "node:fs";
 
 const isTauri = Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_PLATFORM);
+const isLegacyElectron = process.env.VITE_LEGACY_ELECTRON === "1";
 // True only for production `vite build` runs (never dev / `--mode development`).
 const isProdBuild =
   process.argv.includes("build") && !process.argv.includes("development");
@@ -14,7 +15,7 @@ const desktopVersion = isTauri
   ? String(JSON.parse(readFileSync(new URL("./src-tauri/tauri.conf.json", import.meta.url), "utf8")).version)
   : null;
 
-const pwaPlugins = isTauri
+const pwaPlugins = isTauri || isLegacyElectron
   ? []
   : [
       (await import("vite-plugin-pwa")).VitePWA({
@@ -70,8 +71,27 @@ const pwaPlugins = isTauri
       })
     ];
 
+const legacyFileProtocolPlugins = isLegacyElectron
+  ? [
+      {
+        name: "legacy-electron-file-protocol",
+        enforce: "post" as const,
+        transformIndexHtml(html: string) {
+          // Chromium treats file:// pages as opaque origins. Vite's generated
+          // crossorigin attributes can therefore block module scripts before
+          // React runs, leaving only the empty root element on screen.
+          return html.replace(/\s+crossorigin(?=[\s>])/g, "");
+        },
+      },
+    ]
+  : [];
+
 const sharedBuild = {
-  target: "es2020" as const,
+  // Electron 22 (the Win 7 build) embeds Chromium 108. Target that browser
+  // explicitly so application code and dependencies are down-levelled to
+  // syntax its renderer can parse before React mounts.
+  target: (isLegacyElectron ? "chrome108" : "es2020") as "chrome108" | "es2020",
+  cssTarget: (isLegacyElectron ? "chrome108" : "es2020") as "chrome108" | "es2020",
   cssMinify: true as const,
   sourcemap: false as const,
   reportCompressedSize: false,
@@ -94,7 +114,7 @@ const sharedBuild = {
 };
 
 export default defineConfig({
-  base: isTauri ? "./" : "/",
+  base: isTauri || isLegacyElectron ? "./" : "/",
   // Keep the frontend's update-safety marker identical to the native bundle
   // version stamped by CI. Previously every desktop build reported 0.0.0.
   define: desktopVersion
@@ -107,6 +127,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     ...pwaPlugins,
+    ...legacyFileProtocolPlugins,
     tsconfigPaths(),
   ],
 
@@ -133,7 +154,9 @@ export default defineConfig({
   },
 
   // Store certification: shipped builds carry no debug console noise.
-  esbuild: { drop: isProdBuild ? (["console", "debugger"] as const) : [] },
+  // Keep renderer errors in the legacy package: Electron's main process
+  // records them locally, which is essential when React fails before mount.
+  esbuild: { drop: isProdBuild && !isLegacyElectron ? (["console", "debugger"] as const) : [] },
 
 });
 

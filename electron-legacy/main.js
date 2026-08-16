@@ -14,7 +14,22 @@ app.commandLine.appendSwitch('disable-features', 'TranslateUI');
 
 let mainWindow = null;
 
+function startupLogPath() {
+  return path.join(app.getPath('userData'), 'logs', 'legacy-startup.log');
+}
+
+function writeStartupLog(message) {
+  try {
+    const file = startupLogPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, new Date().toISOString() + ' ' + String(message) + '\n', 'utf8');
+  } catch {
+    // Diagnostics must never prevent startup.
+  }
+}
+
 function createWindow() {
+  writeStartupLog('Starting Electron ' + process.versions.electron + ', Chromium ' + process.versions.chrome);
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -37,6 +52,45 @@ function createWindow() {
   Menu.setApplicationMenu(null);
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    if (level >= 2) writeStartupLog('Renderer console: ' + message + ' (' + sourceId + ':' + line + ')');
+  });
+
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame) return;
+    const detail = 'Renderer failed to load [' + errorCode + ']: ' + errorDescription + ' — ' + validatedURL;
+    writeStartupLog(detail);
+    dialog.showErrorBox('Smart Accountant could not start', detail + '\n\nDiagnostic log:\n' + startupLogPath());
+  });
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    const detail = 'Renderer stopped: ' + details.reason + ' (exit code ' + details.exitCode + ')';
+    writeStartupLog(detail);
+    dialog.showErrorBox('Smart Accountant stopped', detail + '\n\nDiagnostic log:\n' + startupLogPath());
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    writeStartupLog('index.html loaded; checking React mount');
+    setTimeout(async () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      try {
+        const mounted = await mainWindow.webContents.executeJavaScript(
+          "Boolean(document.getElementById('root') && document.getElementById('root').childElementCount)",
+          true
+        );
+        if (mounted) {
+          writeStartupLog('React mounted successfully');
+          return;
+        }
+        const detail = 'The app files loaded, but React did not start. This normally means the JavaScript bundle failed before initialization.';
+        writeStartupLog(detail);
+        dialog.showErrorBox('Smart Accountant startup error', detail + '\n\nDiagnostic log:\n' + startupLogPath());
+      } catch (err) {
+        writeStartupLog('React mount check failed: ' + ((err && err.message) || String(err)));
+      }
+    }, 8000);
+  });
 
   // Clean exit: drop the reference and remove IPC-visible state so no
   // renderer process or timer is left dangling after close.
