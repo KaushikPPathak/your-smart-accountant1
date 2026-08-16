@@ -127,7 +127,7 @@ const WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
   text:
-    "Hi! I'm **Mate**, your in-app accounting assistant.\n\nI can:\n- **Read** your books — balances, P&L, trial balance, outstanding, GST data\n- **Draft entries** — ledgers, journals, payments, receipts (I always show a preview and wait for your **yes** before posting)\n- **Guide you** through any setting or screen\n\nTry: *\"pay ₹5,000 rent to Sharma from HDFC bank today\"*, *\"create ledger Electricity Expenses\"*, or *\"show my receivables\"*.",
+    "'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''\n                                        \n                                            \n                                            this changes are not reflected in git why",
 };
 
 const SUGGESTIONS = [
