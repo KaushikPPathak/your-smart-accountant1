@@ -633,6 +633,13 @@ async function restoreCompanyBackupImpl(
   // We keep original source IDs (UUIDs) so voucher_entries/items still
   // reference the parent vouchers correctly; company_id is remapped.
   // ------------------------------------------------------------------
+  // ------------------------------------------------------------------
+  // Local-cache mirror (CRITICAL for local-only mode).
+  //
+  // NOTE: This call in restoreCompanyBackupImpl is part of the 
+  // DESTRUCTIVE path. It uses shouldRemapIds logic to potentially 
+  // import a company from a different ID.
+  // ------------------------------------------------------------------
   try {
     await mirrorRestoreToLocalCache(targetCompanyId, backup, summary);
   } catch (err) {
@@ -668,12 +675,15 @@ async function mirrorRestoreToLocalCache(
       (backup.company as Record<string, unknown> | null)?.company_id ??
       ""),
   );
-  const shouldRemapIds = !sourceCompanyId || sourceCompanyId !== targetCompanyId;
+  // During AUTOMATIC recovery (or user-initiated same-ID restore), identities
+  // MUST be preserved exactly. Source accounting IDs (UUIDs) are sacred.
+  const shouldRemapIds = sourceCompanyId && sourceCompanyId !== targetCompanyId;
 
   const remapId = (scope: string, id: unknown): string | undefined => {
     if (id === null || id === undefined || id === "") return undefined;
     const raw = String(id);
     if (!shouldRemapIds) return raw;
+    // Remapping is ONLY for cross-company clones/imports, never for recovery.
     return `local:${targetCompanyId}:${scope}:${raw}`;
   };
 
