@@ -263,6 +263,9 @@ export async function putLocalAllocations(
 /**
  * Calculates pending quantities for items in a source voucher by subtracting
  * quantities already consumed in later vouchers that link back to it.
+ * 
+ * IMPORTANT: Consumption is tracked per-item ID. If the same item occurs on 
+ * multiple source lines, this implementation currently aggregates them.
  */
 export async function loadDocLinesWithPending(
   voucherId: string,
@@ -319,6 +322,10 @@ export async function loadDocLinesWithPending(
   return allLines.map((l) => {
     const totalQty = Number(l.qty);
     const consumedQty = consumed.get(l.item_id) || 0;
+    // Note: This logic assumes one line per item_id in the source document.
+    // If multiple lines exist for the same item_id, the consumed qty is 
+    // subtracted from each line's total, which may lead to incorrect results
+    // if not handled by the UI picking logic.
     return {
       ...l,
       pending_qty: Math.max(0, totalQty - consumedQty),
