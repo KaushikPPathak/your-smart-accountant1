@@ -1,5 +1,6 @@
 import { Outlet, Link, createRootRoute, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { CompanyProvider } from "@/lib/company-context";
 import { ThemeProvider } from "@/lib/theme-context";
@@ -117,42 +118,91 @@ function LockGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { loading } = useAuth();
+  const [booting, setBooting] = useState(true);
+  const discoveryDone = useRef(false);
 
   useEffect(() => {
-    if (loading) return;
+    // Phase 1: Snapshot Discovery & Auto-Restore (Desktop only)
+    if (!discoveryDone.current && isDesktopRuntime()) {
+      discoveryDone.current = true;
+      void (async () => {
+        try {
+          const [{ discoverCompaniesFromSnapshots }, { offlineDb }, { runAutoRestore }, { checkUpdateSafety }, { dedupeLocalCompaniesOnce }] = await Promise.all([
+            import("@/lib/offline/snapshot-discovery"),
+            import("@/lib/offline/db"),
+            import("@/lib/auto-restore"),
+            import("@/lib/update-safety"),
+            import("@/lib/dedupe-local-companies"),
+          ]);
+
+
+          // 1. Scan for orphans/missing companies from disk snapshots first
+          const discoveredCount = await discoverCompaniesFromSnapshots();
+          
+          // 2. Load the current (potentially reconstructed) company list
+          const companies = await offlineDb.companies.toArray();
+          
+          // 3. Trigger silent auto-restore for any company with missing data
+          if (companies.length > 0) {
+            await runAutoRestore(companies);
+          }
+
+          // 4. Update safety counters so the app doesn't think it's still "missing"
+          await checkUpdateSafety();
+
+          // 5. Safely dedupe only AFTER discovery and restore are done
+          await dedupeLocalCompaniesOnce();
+
+        } catch (err) {
+          console.warn("Startup discovery/restore cycle failed:", err);
+        } finally {
+          setBooting(false);
+        }
+      })();
+    } else if (!isDesktopRuntime()) {
+      setBooting(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loading || booting) return;
+
+    // Wait until booting (discovery/restore) is truly finished before deciding
+    // whether to show the welcome screen or lock screen.
+    if (booting) return;
+
     if (LOCK_EXEMPT_PATHS.has(location.pathname)) return;
     if (isUnlocked()) return;
 
-    // Local-first: if the user already onboarded in local mode, silently
-    // re-establish the hidden device profile and continue — never bounce
-    // them to the sign-in screen.
     void (async () => {
       try {
         const { hasLocalDeviceProfile, ensureLocalDeviceProfile } = await import(
           "@/lib/local-device-profile"
         );
+        
+        // If we found companies during discovery, we should have a profile.
         if (hasLocalDeviceProfile()) {
           try { ensureLocalDeviceProfile(); } catch { /* ignore */ }
           return;
         }
-        // Returning cloud-account user? Send them to /lock so they can
-        // log in. Otherwise show the local-first welcome screen.
-        try {
-          const { listCachedAccounts } = await import("@/lib/offline/creds-cache");
-          const cached = await listCachedAccounts();
-          if (cached && cached.length > 0) {
-            navigate({ to: "/lock" });
-            return;
-          }
-        } catch { /* ignore */ }
+
+        const { listCachedAccounts } = await import("@/lib/offline/creds-cache");
+        const cached = await listCachedAccounts();
+        if (cached && cached.length > 0) {
+          navigate({ to: "/lock" });
+          return;
+        }
+        
         navigate({ to: "/welcome" });
       } catch (err) {
-        // Last-ditch fallback: never leave the user stuck on a blank screen.
-        console.warn("LockGate boot failed, falling back to /welcome:", err);
+        console.warn("LockGate transition failed, falling back to /welcome:", err);
         try { navigate({ to: "/welcome" }); } catch { /* ignore */ }
       }
     })();
-  }, [loading, location.pathname, navigate]);
+  }, [loading, booting, location.pathname, navigate]);
+
+  if (booting) return null; // Prevent UI flash during discovery
+
 
   return <>{children}</>;
 }

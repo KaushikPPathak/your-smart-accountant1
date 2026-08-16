@@ -34,6 +34,7 @@ interface ElectronBridge {
     fileName: string,
     contents: string | ArrayBuffer | Uint8Array,
   ) => Promise<SaveNativeResult>;
+  readDir?: (absPath: string) => Promise<{ ok: boolean; entries?: string[]; error?: string }>;
 }
 
 function electronBridge(): ElectronBridge | null {
@@ -430,3 +431,24 @@ export async function writeAbsoluteFileNative(
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+export async function listDirectoriesNative(absPath: string): Promise<{ ok: boolean; entries?: string[]; error?: string }> {
+  const eb = electronBridge();
+  if (eb?.readDir) return eb.readDir(absPath);
+  if (hasTauri()) {
+    try {
+      const fs = await import("@tauri-apps/plugin-fs");
+      const entries = await fs.readDir(absPath);
+      return { 
+        ok: true, 
+        entries: entries
+          .map(e => e.name)
+          .filter((name): name is string => typeof name === "string")
+      };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  return { ok: false, error: "No native runtime" };
+}
+

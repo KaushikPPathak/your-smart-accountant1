@@ -27,11 +27,14 @@
 // deleting picker rows would just reappear on next sync.
 
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { isDesktopRuntime } from "@/lib/native-bridge";
+
 
 const RAN_KEY = "ym_local_dedupe_ran_v1";
 
 export async function dedupeLocalCompaniesOnce(): Promise<{ removed: number } | null> {
-  if (!isLocalOnlyMode()) return null;
+  if (!isLocalOnlyMode() || !isDesktopRuntime()) return null;
+
   try {
     if (typeof window !== "undefined" && window.sessionStorage.getItem(RAN_KEY) === "1") {
       return { removed: 0 };
@@ -80,6 +83,7 @@ export async function dedupeLocalCompaniesOnce(): Promise<{ removed: number } | 
       const winner = scored[0];
       for (const s of scored.slice(1)) {
         // Safety: only delete losers that truly have zero business rows.
+        // We never delete a non-empty company.
         if (s.rows === 0 && winner.rows > 0) toDelete.push(s.id);
       }
     }

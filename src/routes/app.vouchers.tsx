@@ -197,19 +197,39 @@ function VouchersHub() {
 
   const onDelete = async (r: VoucherRow) => {
     if (!confirm(`Delete voucher ${r.voucher_number}? This cannot be undone.`)) return;
-    // Children can go hard — the parent tombstone will cause other devices
-    // to drop this voucher (and any leftover children) from their cache.
-    const { error: e1 } = await supabase.from("voucher_entries").delete().eq("voucher_id", r.id);
-    if (e1) { toast.error(e1.message); return; }
-    const { error: e2 } = await supabase.from("voucher_items").delete().eq("voucher_id", r.id);
-    if (e2) { toast.error(e2.message); return; }
-    // Soft delete the parent so multi-device delta sync can propagate it.
-    const { error: e3 } = await supabase.from("vouchers")
-      .update({ deleted_at: new Date().toISOString() } as never)
-      .eq("id", r.id);
-    if (e3) { toast.error(e3.message); return; }
-    toast.success("Voucher deleted");
-    load();
+    
+    try {
+      // PART 5: Delete Protection
+      const { offlineDb } = await import("@/lib/offline/db");
+      const downstream = await offlineDb.cache_vouchers
+        .where("original_voucher_id")
+        .equals(r.id)
+        .first();
+
+      if (downstream) {
+        const typeLabel = (downstream as any).voucher_type === "sales_order" ? "Sales Order" : 
+                          (downstream as any).voucher_type === "delivery_note" ? "Delivery Challan" : 
+                          (downstream as any).voucher_type === "sales" ? "Sales Invoice" : "downstream document";
+        toast.error(`Cannot delete: This ${r.voucher_type.replace("_", " ")} is linked to ${typeLabel} ${(downstream as any).voucher_number}.`);
+        return;
+      }
+
+      // Children can go hard — the parent tombstone will cause other devices
+      // to drop this voucher (and any leftover children) from their cache.
+      const { error: e1 } = await supabase.from("voucher_entries").delete().eq("voucher_id", r.id);
+      if (e1) { toast.error(e1.message); return; }
+      const { error: e2 } = await supabase.from("voucher_items").delete().eq("voucher_id", r.id);
+      if (e2) { toast.error(e2.message); return; }
+      // Soft delete the parent so multi-device delta sync can propagate it.
+      const { error: e3 } = await supabase.from("vouchers")
+        .update({ deleted_at: new Date().toISOString() } as never)
+        .eq("id", r.id);
+      if (e3) { toast.error(e3.message); return; }
+      toast.success("Voucher deleted");
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete voucher");
+    }
   };
 
 

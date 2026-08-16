@@ -3,8 +3,12 @@
 // Unlike rebuildCompanyCache (which nukes cache_* rows and re-pulls from the
 // server), this function keeps every source row on-device and only recomputes
 // the derived layers: AI semantic index, answer cache, cache-event fanout,
-// and the schema-version stamp. Safe to run in local-only mode because it
-// never deletes user data.
+// and the schema-version stamp. 
+//
+// STRICT REQUIREMENT: rebuildLocalDerived() must ONLY rebuild derived/cache/index/balance/AI/semantic data.
+// It must NEVER mutate, renumber, delete, or transform source accounting records (vouchers, entries, items, ledgers).
+//
+// Safe to run in local-only mode because it never deletes user data.
 
 import { invalidateSemanticIndex, getIndex } from "@/lib/ai/semantic-index";
 import { invalidateAnswerCache } from "@/lib/ai/answer-cache";
