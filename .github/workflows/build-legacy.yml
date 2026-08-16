@@ -15,6 +15,7 @@ jobs:
   build:
     name: Build ${{ matrix.arch }} installer
     runs-on: windows-latest
+
     strategy:
       fail-fast: false
       matrix:
@@ -39,6 +40,7 @@ jobs:
           VITE_SUPABASE_PROJECT_ID: ${{ vars.VITE_SUPABASE_PROJECT_ID }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+
         run: |
           if ([string]::IsNullOrWhiteSpace($env:VITE_SUPABASE_URL)) {
             throw "VITE_SUPABASE_URL is missing"
@@ -61,19 +63,36 @@ jobs:
           VITE_SUPABASE_PROJECT_ID: ${{ vars.VITE_SUPABASE_PROJECT_ID }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+
         run: npm run build:legacy
 
       - name: Transpile CSS for Chromium 108 compatibility
         shell: pwsh
         run: |
-          $cssFile = (Get-ChildItem -Path "dist/assets/*.css").FullName
-          npx lightningcss-cli --targets "chrome 108" "$cssFile" -o "$cssFile"
+          $cssFiles = Get-ChildItem -Path "dist/assets/*.css" -ErrorAction SilentlyContinue
+
+          if (-not $cssFiles) {
+            Write-Host "No CSS files found. Skipping CSS transpilation."
+          }
+          else {
+            foreach ($cssFile in $cssFiles) {
+              Write-Host "Transpiling CSS: $($cssFile.FullName)"
+              npx lightningcss-cli --targets "chrome 108" "$($cssFile.FullName)" -o "$($cssFile.FullName)"
+
+              if ($LASTEXITCODE -ne 0) {
+                throw "CSS transpilation failed for $($cssFile.FullName)"
+              }
+            }
+          }
 
       - name: Stage web build into electron-legacy/app
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path electron-legacy/app | Out-Null
+
           Copy-Item -Recurse -Force dist/* electron-legacy/app/
+
+          Write-Host "Web build staged into electron-legacy/app"
 
       - name: Install electron-legacy dependencies
         working-directory: electron-legacy
@@ -96,10 +115,14 @@ jobs:
   release:
     name: Attach to GitHub Release
     needs: build
+
     if: startsWith(github.ref, 'refs/tags/v')
+
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
+
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
