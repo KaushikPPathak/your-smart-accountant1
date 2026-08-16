@@ -201,7 +201,21 @@ function LockGate({ children }: { children: React.ReactNode }) {
     })();
   }, [loading, booting, location.pathname, navigate]);
 
-  if (booting) return null; // Prevent UI flash during discovery
+  if (booting) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div
+            className="flex h-12 w-12 animate-pulse items-center justify-center rounded-xl text-primary-foreground text-xl font-bold shadow-sm"
+            style={{ background: "linear-gradient(135deg, hsl(245 80% 60%), hsl(330 85% 58%))" }}
+          >
+            म
+          </div>
+          <div className="text-sm text-muted-foreground animate-pulse">Initializing desktop runtime...</div>
+        </div>
+      </div>
+    );
+  }
 
 
   return <>{children}</>;
