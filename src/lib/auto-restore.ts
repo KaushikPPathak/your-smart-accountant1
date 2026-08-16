@@ -298,8 +298,7 @@ function bestManifestForCompany(
  * per company. Never throws — errors are captured in each outcome.
  */
 export async function runAutoRestore(
-  companies: { id: string; name: string }[],
-  options?: { skipTombstoneCheck?: boolean }
+  companies: { id: string; name: string }[]
 ): Promise<AutoRestoreOutcome[]> {
   if (companies.length === 0) return [];
   // Respect tombstones: never resurrect a company the user has purged.
