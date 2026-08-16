@@ -144,7 +144,7 @@ function LockGate({ children }: { children: React.ReactNode }) {
           
           // 3. Trigger silent auto-restore for any company with missing data
           if (companies.length > 0) {
-            await runAutoRestore(companies, { skipTombstoneCheck: true });
+            await runAutoRestore(companies);
           }
 
           // 4. Update safety counters so the app doesn't think it's still "missing"
