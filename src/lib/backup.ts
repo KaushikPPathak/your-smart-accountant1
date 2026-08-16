@@ -354,19 +354,25 @@ export async function recoverMissingFromSnapshot(
     db.cache_voucher_export_details, db.cache_einvoice_details,
     db.cache_period_locks, db.cache_bom_templates, db.cache_bom_template_lines,
     db.cache_voucher_series, db.cache_tax_templates, db.cache_bill_sundries,
-    db.cache_transport_details, db.cache_cost_centres, db.cache_cost_categories
+    db.cache_transport_details, db.cache_cost_centres, db.cache_cost_categories,
+    db.cache_companies, db.companies
   ], async () => {
     // 2. Company & Settings Guard: Preserve identities and merge settings safely.
     if (backup.company) {
       const cid = String(backup.company.id || backup.company.company_id || "");
-      if (cid && !(await db.cache_companies.get(cid))) {
+      if (cid && cid === targetCompanyId && !(await db.cache_companies.get(cid))) {
+        // Recovery MUST preserve original ID and fields exactly.
         await db.cache_companies.put({ ...backup.company, id: cid, is_synced: true });
-        await db.companies.put({
-          id: cid,
-          name: String(backup.company.name || "Recovered Company"),
-          has_password: Boolean((backup.company as any).has_password),
-          account_id: "local-user"
-        });
+        // Also ensure company exists in the picker table.
+        const existingPicker = await db.companies.get(cid);
+        if (!existingPicker) {
+          await db.companies.put({
+            id: cid,
+            name: String(backup.company.name || "Recovered Company"),
+            has_password: Boolean((backup.company as any).has_password),
+            account_id: "local-user"
+          });
+        }
       }
     }
 
@@ -377,20 +383,17 @@ export async function recoverMissingFromSnapshot(
       }
     }
 
-    
     const restoreMissing = async (table: any, rows: any[], name: keyof RestoreSummary) => {
       let count = 0;
       for (const row of rows) {
         if (!row.id) continue;
         const exists = await table.get(row.id);
         if (!exists) {
-          // Preserve original data exactly — no remapping, no timestamp updates.
+          // Rule: recoverMissingFromSnapshot MUST NEVER delete or overwrite existing source rows.
+          // missing source row = insert using ORIGINAL ID.
+          // preserve original_voucher_id and linked_voucher_ids (they are in the row payload).
           await table.put({ ...row, is_synced: true });
           count++;
-        } else {
-          // Conflict: if both live row and snapshot row have the same ID but 
-          // different values, we preserve the live one (it is presumably newer).
-          // We could log the conflict here for recovery diagnostics.
         }
       }
       if (typeof summary[name] === "number") (summary[name] as number) += count;
