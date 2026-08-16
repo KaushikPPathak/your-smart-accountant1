@@ -862,6 +862,7 @@ async function mirrorRestoreToLocalCache(
           const row = r as Record<string, unknown>;
           return withId(row, voucherId(row.id), {
             party_ledger_id: row.party_ledger_id ? ledgerId(row.party_ledger_id) ?? null : row.party_ledger_id,
+            // DO NOT destructure/remove original_voucher_id and linked_voucher_ids during restore.
             original_voucher_id: row.original_voucher_id ? voucherId(row.original_voucher_id) ?? null : row.original_voucher_id,
             linked_voucher_ids: mapLinkedVoucherIds(row.linked_voucher_ids),
           });
