@@ -66,76 +66,86 @@
    teal accent for CTAs, and category chip colors on KPI cards. */
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.985 0.015 84);
-  --foreground: oklch(0.22 0.05 70);
-  --card: oklch(0.995 0.008 84);
-  --card-foreground: oklch(0.22 0.05 70);
-  --popover: oklch(0.97 0.03 84);
-  --popover-foreground: oklch(0.22 0.05 70);
-  --primary: oklch(0.58 0.14 76);
+  --background: oklch(0.985 0.01 80);
+  --foreground: oklch(0.25 0.03 70);
+  --card: oklch(0.99 0.005 80);
+  --card-foreground: oklch(0.25 0.03 70);
+  --popover: oklch(0.98 0.01 80);
+  --popover-foreground: oklch(0.25 0.03 70);
+  --primary: oklch(0.65 0.08 180); /* Soft Sage Green */
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.94 0.05 84);
-  --secondary-foreground: oklch(0.28 0.06 72);
-  --muted: oklch(0.95 0.04 84);
-  --muted-foreground: oklch(0.45 0.05 74);
-  --accent: oklch(0.75 0.13 80);
-  --accent-foreground: oklch(0.22 0.05 70);
-  --destructive: oklch(0.58 0.22 27);
+  --secondary: oklch(0.95 0.02 80);
+  --secondary-foreground: oklch(0.35 0.04 70);
+  --muted: oklch(0.96 0.02 80);
+  --muted-foreground: oklch(0.5 0.03 70);
+  --accent: oklch(0.85 0.05 180);
+  --accent-foreground: oklch(0.25 0.03 70);
+  --destructive: oklch(0.6 0.15 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.62 0.14 155);
+  --success: oklch(0.65 0.1 160);
   --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.78 0.15 75);
-  --warning-foreground: oklch(0.22 0.06 60);
-  --border: oklch(0.82 0.06 80);
-  --input: oklch(0.88 0.05 82);
-  --ring: oklch(0.58 0.14 76);
-  --chart-1: oklch(0.58 0.14 76);
-  --chart-2: oklch(0.72 0.15 75);
-  --chart-3: oklch(0.62 0.14 155);
-  --chart-4: oklch(0.55 0.14 240);
-  --chart-5: oklch(0.55 0.16 30);
+  --warning: oklch(0.85 0.1 85);
+  --warning-foreground: oklch(0.3 0.05 70);
+  --border: oklch(0.9 0.02 80);
+  --input: oklch(0.93 0.02 80);
+  --ring: oklch(0.65 0.08 180);
+  --chart-1: oklch(0.65 0.08 180);
+  --chart-2: oklch(0.75 0.1 160);
+  --chart-3: oklch(0.85 0.1 85);
+  --chart-4: oklch(0.6 0.12 220);
+  --chart-5: oklch(0.6 0.14 40);
 
-  /* Category colors used for KPI accent bars & top-menu chips */
-  --cat-sales: oklch(0.62 0.14 155);
-  --cat-purchase: oklch(0.55 0.16 30);
-  --cat-receipt: oklch(0.55 0.14 240);
-  --cat-payment: oklch(0.55 0.14 300);
-  --cat-report: oklch(0.62 0.10 215);
-  --cat-master: oklch(0.58 0.14 76);
+  /* Category colors - Muted Professional Palette */
+  --cat-sales: oklch(0.65 0.1 160);
+  --cat-purchase: oklch(0.6 0.14 40);
+  --cat-receipt: oklch(0.6 0.12 220);
+  --cat-payment: oklch(0.65 0.1 310);
+  --cat-report: oklch(0.65 0.06 200);
+  --cat-master: oklch(0.65 0.08 180);
 
-  --gradient-brand: linear-gradient(135deg, oklch(0.58 0.14 76), oklch(0.75 0.13 80));
-  --gradient-accent: linear-gradient(135deg, oklch(0.75 0.13 80), oklch(0.86 0.10 82));
-  --gradient-hero: radial-gradient(1200px 600px at 15% 0%, oklch(0.90 0.08 82 / 0.7), transparent 60%),
-    radial-gradient(800px 500px at 95% 10%, oklch(0.58 0.14 76 / 0.18), transparent 65%);
-  --shadow-card: 0 1px 2px oklch(0.22 0.05 70 / 0.08), 0 4px 14px -6px oklch(0.22 0.05 70 / 0.14);
-  --shadow-elevated: 0 12px 36px -14px oklch(0.22 0.05 70 / 0.35);
+  --gradient-brand: linear-gradient(135deg, oklch(0.65 0.08 180), oklch(0.75 0.1 160));
+  --gradient-accent: linear-gradient(135deg, oklch(0.75 0.1 160), oklch(0.85 0.05 180));
+  --gradient-hero: radial-gradient(1200px 600px at 15% 0%, oklch(0.95 0.02 80 / 0.5), transparent 60%),
+    radial-gradient(800px 500px at 95% 10%, oklch(0.65 0.08 180 / 0.1), transparent 65%);
+  --shadow-card: 0 1px 2px oklch(0.25 0.03 70 / 0.05), 0 4px 12px -6px oklch(0.25 0.03 70 / 0.1);
+  --shadow-elevated: 0 10px 30px -14px oklch(0.25 0.03 70 / 0.2);
 
-  /* Amber gold palette — single source of truth.
-     --amber-base  : button color (#E0A82E ≈ oklch 0.75 0.13 80)
-     --amber-light : ~20% lighter — top bar background
-     --amber-dark  : ~20% darker — open/hover / accents
-     --amber-ink   : dark text on gold surfaces
-     --amber-onDark: light text on dark-gold surfaces */
- --amber-base:  oklch(0.75 0.13 80);
- --amber-light: oklch(0.86 0.10 82);
- --amber-pale:  oklch(0.95 0.05 84); /* ~40% lighter than header — for dropdowns */
- --amber-dark:  oklch(0.58 0.14 76);
- --amber-ink:   oklch(0.22 0.05 70);
- --amber-onDark: oklch(0.99 0 0);
-  --backup-badge: oklch(0.43 0.08 55);
-  --backup-badge-highlight: oklch(0.88 0.08 78);
-  --restore-badge: oklch(0.50 0.19 305);
-  --restore-badge-highlight: oklch(0.88 0.11 315);
+  /* New Soft Palette (replacing Amber)
+     --theme-base   : Primary soft green/sage
+     --theme-light  : Header/Ribbon background
+     --theme-pale   : Dropdown backgrounds
+     --theme-dark   : Hovers/Active states
+     --theme-ink    : Professional deep charcoal text
+     --theme-onDark : White text for dark surfaces */
+  --theme-base:  oklch(0.75 0.06 180);
+  --theme-light: oklch(0.94 0.02 180);
+  --theme-pale:  oklch(0.97 0.01 180);
+  --theme-dark:  oklch(0.6 0.08 180);
+  --theme-ink:   oklch(0.25 0.03 70);
+  --theme-onDark: oklch(0.99 0 0);
+
+  /* Backward compatibility for CSS classes using --amber-* */
+  --amber-base:  var(--theme-base);
+  --amber-light: var(--theme-light);
+  --amber-pale:  var(--theme-pale);
+  --amber-dark:  var(--theme-dark);
+  --amber-ink:   var(--theme-ink);
+  --amber-onDark: var(--theme-onDark);
+
+  --backup-badge: oklch(0.5 0.06 180);
+  --backup-badge-highlight: oklch(0.9 0.04 180);
+  --restore-badge: oklch(0.55 0.1 300);
+  --restore-badge-highlight: oklch(0.9 0.06 300);
   --utility-badge-ink: oklch(0.99 0 0);
 
-  --sidebar: var(--amber-light);
-  --sidebar-foreground: var(--amber-ink);
-  --sidebar-primary: var(--amber-dark);
-  --sidebar-primary-foreground: var(--amber-onDark);
-  --sidebar-accent: var(--amber-dark);
-  --sidebar-accent-foreground: var(--amber-onDark);
-  --sidebar-border: color-mix(in oklab, var(--amber-dark) 55%, transparent);
-  --sidebar-ring: var(--amber-dark);
+  --sidebar: var(--theme-light);
+  --sidebar-foreground: var(--theme-ink);
+  --sidebar-primary: var(--theme-dark);
+  --sidebar-primary-foreground: var(--theme-onDark);
+  --sidebar-accent: var(--theme-dark);
+  --sidebar-accent-foreground: var(--theme-onDark);
+  --sidebar-border: oklch(0.85 0.02 180);
+  --sidebar-ring: var(--theme-dark);
 }
 
 .dark {

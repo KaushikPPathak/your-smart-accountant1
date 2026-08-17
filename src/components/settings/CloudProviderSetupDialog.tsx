@@ -89,7 +89,7 @@ export function CloudProviderSetupDialog({
         <DialogHeader>
           <DialogTitle>'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''</DialogTitle>
           <DialogDescription>
-            What is the improvement in loading time after your implementation
+            THIS IS A VERY DARK COLOUR IN WIN-7 BUILD. PLEASE USES SOFT COLUR MATCHING COMBINATION SO IT DOESN'T HURT EYES
           </DialogDescription>
         </DialogHeader>
 
