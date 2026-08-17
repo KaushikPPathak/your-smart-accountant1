@@ -49,6 +49,7 @@ export interface ImportSettings {
   chunkSize: number;
   skipDuplicates: boolean;
   autoCreateMasters: boolean;
+  stripNuls?: boolean;
 }
 
 export const DEFAULT_IMPORT_SETTINGS: ImportSettings = {
@@ -57,6 +58,7 @@ export const DEFAULT_IMPORT_SETTINGS: ImportSettings = {
   chunkSize: 1000,
   skipDuplicates: true,
   autoCreateMasters: true,
+  stripNuls: false,
 };
 
 export interface ImportBatchRow {
@@ -65,19 +67,33 @@ export interface ImportBatchRow {
   created_at: string;
   kind: string;
   status: string;
-  summary: any;
+  summary: {
+    ledgers?: number;
+    items?: number;
+    vouchers?: number;
+    ledgers_created?: number;
+    items_created?: number;
+    vouchers_created?: number;
+  };
+  source?: string;
+  label?: string;
+  file_name?: string;
 }
 
 export interface LedgerMappingRow {
   external_name: string;
   local_ledger_id?: string;
   group_code?: string;
+  ledger_type?: LedgerType;
 }
 
 export interface FuzzySuggestion {
   name: string;
   score: number;
   id: string;
+  index?: number;
+  source?: string;
+  match?: string;
 }
 
 const lc = (s: string) => (s || "").toLowerCase().trim();
@@ -85,9 +101,9 @@ const lc = (s: string) => (s || "").toLowerCase().trim();
 export function normalizeName(s: string) { return lc(s); }
 export function similarity(a: string, b: string) { return a === b ? 1 : 0; }
 
-export async function parseFileOrZip(file: File): Promise<ParsedRow[]> { return []; }
+export async function parseFileOrZip(file: File, options?: any): Promise<ParsedRow[]> { return []; }
 export function estimateBand(sizeBytes: number) { return { band: "medium" as const, label: "Medium", warn: false }; }
-export async function classifyAndMap(rows: ParsedRow[], onProgress?: ProgressCb): Promise<{ ledgers: LedgerRecord[]; items: ItemRecord[]; vouchers: VoucherRecord[]; unknown: number }> {
+export async function classifyAndMap(rows: ParsedRow[], onProgress?: ProgressCb, settings?: any): Promise<{ ledgers: LedgerRecord[]; items: ItemRecord[]; vouchers: VoucherRecord[]; unknown: number }> {
   return { ledgers: [], items: [], vouchers: [], unknown: 0 };
 }
 
@@ -103,14 +119,14 @@ export async function postVouchers(companyId: string, rows: VoucherRecord[], onP
   return { created: 0, updated: 0, skipped: 0, failed: [] };
 }
 
-export async function createImportBatch(companyId: string, kind: string) { return "batch-id"; }
+export async function createImportBatch(companyId: string, info: any): Promise<string> { return "batch-id"; }
 export async function finalizeImportBatch(id: string, summary: any) {}
-export async function fetchLedgerMappings(companyId: string) { return []; }
-export async function saveLedgerMappings(companyId: string, mappings: any) {}
+export async function fetchLedgerMappings(companyId: string): Promise<{ saved: LedgerMappingRow[] }> { return { saved: [] }; }
+export async function saveLedgerMappings(companyId: string, mappings: any) { return { saved: [] }; }
 export function applyMappingsToLedgers(ledgers: LedgerRecord[], mappings: any[]) { return ledgers; }
 export async function listImportBatches(companyId: string): Promise<ImportBatchRow[]> { return []; }
 export async function deleteImportBatch(id: string) {}
-export async function bulkDeleteVouchers(companyId: string, type: VoucherType) { return 0; }
+export async function bulkDeleteVouchers(companyId: string, type: VoucherType, range?: any) { return 0; }
 export function buildFuzzySuggestions(names: string[], target: string[]): FuzzySuggestion[] { return []; }
 export function applyFuzzySuggestions(mappings: any, suggestions: any) { return mappings; }
 export async function yieldToUI() { await new Promise(r => setTimeout(r, 0)); }
