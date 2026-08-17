@@ -413,7 +413,7 @@ function VoucherEditPage() {
             capitalItems = itemLines
               .map((l, i) => {
                 const c = computed[i];
-                if (!l.item_id || c.total_paise <= 0) return null;
+                if (!l.item_id || !c || c.total_paise <= 0) return null;
                 return {
                   name: (nameById.get(l.item_id) || l.description || "Capital Asset").trim(),
                   taxable_paise: c.taxable_paise,
