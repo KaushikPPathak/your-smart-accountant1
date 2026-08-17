@@ -125,5 +125,5 @@ export async function listImportBatches(companyId: string): Promise<ImportBatchR
 export async function deleteImportBatch(id: string): Promise<any> { return {}; }
 export async function bulkDeleteVouchers(companyId: string, type: VoucherType, range?: any): Promise<any> { return 0; }
 export function buildFuzzySuggestions(ledgers: LedgerRecord[], mappings: Map<string, LedgerMappingRow>, threshold: number): FuzzySuggestion[] { return []; }
-export function applyFuzzySuggestions(mappings: Map<string, LedgerMappingRow>, suggestions: FuzzySuggestion[]) { return mappings; }
+export function applyFuzzySuggestions(ledgers: LedgerRecord[], suggestions: FuzzySuggestion[]) { return ledgers; }
 export async function yieldToUI() { await new Promise(r => setTimeout(r, 0)); }
