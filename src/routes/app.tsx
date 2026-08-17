@@ -320,6 +320,7 @@ function AppLayout() {
         </div>
 
         <UpdateRecoveryBanner />
+        <UpdateRollbackBanner />
         <BackupNudgeBanner />
         <AccountGroupsProvider>
           <MastersProvider>
