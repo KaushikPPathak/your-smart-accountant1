@@ -94,10 +94,10 @@ export async function scan40A3(
     for (const [partyId, partyDr] of row.partyDebits) {
       // pro-rate cash credit by party share
       const cashShare = Math.round((partyDr / totalDebit) * row.cashCr);
-      const key = `${v.voucher_date}__${partyId}`;
+      const key = `${((v as any).voucher_date)}__${partyId}`;
       let bucket = agg.get(key);
       if (!bucket) {
-        bucket = { ledger_id: partyId, date: v.voucher_date, amount: 0, voucher_ids: new Set() };
+        bucket = { ledger_id: partyId, date: ((v as any).voucher_date), amount: 0, voucher_ids: new Set() };
         agg.set(key, bucket);
       }
       bucket.amount += cashShare;
@@ -119,8 +119,8 @@ export async function scan40A3(
     const firstVid = Array.from(bucket.voucher_ids)[0];
     const firstV = vMap.get(firstVid)!;
     hits.push({
-      ledger_id: bucket.ledger_id,
-      ledger_name: nameMap.get(bucket.ledger_id) ?? "—",
+      ledger_id: ((bucket as any).ledger_id),
+      ledger_name: nameMap.get(((bucket as any).ledger_id)) ?? "—",
       voucher_id: firstVid,
       voucher_no: firstV.voucher_number,
       date: bucket.date,
