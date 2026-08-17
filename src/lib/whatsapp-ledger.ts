@@ -100,19 +100,22 @@ export async function sendLedgerViaWhatsApp(
 
   // Validate PDF path before attempting clipboard copy
   let copied = false;
+  const runtime = getNativeRuntime();
+
   if (info.path && typeof info.path === "string") {
     const isAbsolute = /^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(info.path);
     if (isAbsolute) {
-      recordStage("whatsapp", "path-check", { path: info.path, absolute: true });
+      recordStage("whatsapp", "path-check", { path: info.path, absolute: true, runtime });
       copied = await copyFilesToClipboardNative([info.path]);
       recordStage("whatsapp", "clipboard", { copied });
     } else {
-      recordFailure("whatsapp", new Error(`PDF path is not absolute: ${info.path}`), { stage: "path-check" });
+      recordFailure("whatsapp", new Error(`PDF path is not absolute: ${info.path}`), { stage: "path-check", runtime });
     }
   } else {
     recordFailure("whatsapp", new Error("downloadLedgerPdf returned no path — PDF was not saved to disk"), {
       stage: "path-check",
       path: info.path ?? null,
+      runtime
     });
   }
 
