@@ -127,7 +127,7 @@ const WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
   text:
-    "'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''\n                                        \n                                            \n                                            please review and give me finding are true and what is uor plan to  improve",
+    "'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''\n                                        \n                                            \n                                            give me full details of improvement  app wise we have implemented, and what is skipped",
 };
 
 const SUGGESTIONS = [
