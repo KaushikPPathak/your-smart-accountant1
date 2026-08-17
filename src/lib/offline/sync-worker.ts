@@ -15,19 +15,60 @@ let started = false;
 function applyGlobalWorkerSecurityInterceptor() {
   if (typeof window === "undefined") return;
 
-  const { isCloudConfigured } = require("@/lib/cloud-adapter");
-  if (!isCloudConfigured()) return;
-
   const SUPABASE_ANON_KEY =
     import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
     import.meta.env?.VITE_SUPABASE_ANON_KEY ||
     "";
+  
+  const SUPABASE_URL = import.meta.env?.VITE_SUPABASE_URL || "";
+  
+  if (!SUPABASE_ANON_KEY || !SUPABASE_URL) {
+    console.log("Sync worker security interceptor skipped: Supabase not configured.");
+    return;
+  }
+
   const originalFetch = window.fetch;
-  // ... rest of implementation (using require for lazy adapter check to avoid circular deps if any)
-  // Re-writing to be safe and clean
-  const { isCloudConfigured: isCloudOk } = require("@/lib/cloud-adapter");
-  if (!isCloudOk()) return;
-  // ... (original content follows)
+
+  window.fetch = async function (input, init) {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+
+    // Silently short-circuit health-probe calls made by browser extensions /
+    // injected scripts (frame_ant.js etc.) — they hit /auth/v1/health WITHOUT
+    // an apikey and spam the console with 401s. We don't need the result.
+    if (url.includes("supabase.co/auth/v1/health")) {
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }
+
+    if (
+      SUPABASE_ANON_KEY &&
+      (url.includes("supabase.co/rest/v1") || url.includes("supabase.co/auth/v1"))
+    ) {
+      const modifiedInit = { ...(init || {}) };
+      const headers = new Headers(modifiedInit.headers || {});
+      if (!headers.has("apikey")) headers.set("apikey", SUPABASE_ANON_KEY);
+      if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${SUPABASE_ANON_KEY}`);
+      modifiedInit.headers = headers;
+      try {
+        return await originalFetch.call(this, input, modifiedInit);
+      } catch (err) {
+        rememberNetworkBlocked();
+        throw err;
+      }
+    }
+
+    try {
+      return await originalFetch.call(this, input, init);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err ?? "");
+      if (/failed to fetch|networkerror|offline/i.test(msg)) rememberNetworkBlocked();
+      throw err;
+    }
+  };
 }
 
 const LAST_MODE_KEY = "ym_last_work_mode"; // "online" | "offline"
