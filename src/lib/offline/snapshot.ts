@@ -781,9 +781,9 @@ export async function pullSnapshot(opts: { full?: boolean; forceExact?: boolean 
         .eq("user_id", user.id);
       if (error) return null;
 
-      const ids = Array.from(new Set((memberships ?? []).map((r) => r.company_id as string)));
+      const ids = Array.from(new Set((memberships ?? []).map((r: any) => r.company_id as string)));
       const results = await Promise.all(
-        ids.map((id) => pullCompanySnapshot(id, { full: opts.full ?? false, forceExact: opts.forceExact, notify: false }).catch(() => null)),
+        ids.map((id: string) => pullCompanySnapshot(id, { full: opts.full ?? false, forceExact: opts.forceExact, notify: false }).catch(() => null)),
       );
 
       const completed = results.filter(Boolean) as SnapshotResult[];

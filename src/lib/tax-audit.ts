@@ -45,7 +45,7 @@ export async function scan40A3(
     .select("id")
     .eq("company_id", companyId)
     .eq("type", "cash");
-  const cashIds = new Set((cashLedgers ?? []).map((l) => l.id));
+  const cashIds = new Set((cashLedgers ?? []).map((l: any) => l.id));
   if (cashIds.size === 0) return [];
 
   // 2. Get all payment/journal voucher entries in window
@@ -57,7 +57,7 @@ export async function scan40A3(
     .lte("voucher_date", toDate)
     .in("voucher_type", ["payment", "journal"]);
   const vMap = new Map(
-    (vouchers ?? []).map((v) => [v.id, v]),
+    (vouchers ?? []).map((v: any) => [v.id, v]),
   );
   if (vMap.size === 0) return [];
 
@@ -111,7 +111,7 @@ export async function scan40A3(
     .from("ledgers")
     .select("id, name")
     .in("id", partyIds);
-  const nameMap = new Map((ledgerNames ?? []).map((l) => [l.id, l.name]));
+  const nameMap = new Map((ledgerNames ?? []).map((l: any) => [l.id, l.name]));
 
   const hits: CashHit[] = [];
   for (const bucket of agg.values()) {

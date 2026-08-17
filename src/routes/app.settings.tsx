@@ -166,12 +166,12 @@ function SettingsPage() {
         .select("user_id, role")
         .eq("company_id", activeCompanyId);
       if (mem) {
-        const ids = mem.map((m) => m.user_id);
+        const ids = mem.map((m: any) => m.user_id);
         const { data: profiles } = await supabase
           .from("profiles")
           .select("user_id, email, full_name")
           .in("user_id", ids);
-        const profMap = new Map((profiles || []).map((p) => [p.user_id, p]));
+        const profMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
         setMembers(
           mem.map((m) => ({
             user_id: m.user_id,
@@ -258,8 +258,8 @@ function SettingsPage() {
     const { data: mem } = await supabase
       .from("company_members").select("user_id, role").eq("company_id", activeCompanyId);
     if (mem) {
-      const { data: profiles } = await supabase.from("profiles").select("user_id, email, full_name").in("user_id", mem.map((m) => m.user_id));
-      const profMap = new Map((profiles || []).map((p) => [p.user_id, p]));
+      const { data: profiles } = await supabase.from("profiles").select("user_id, email, full_name").in("user_id", mem.map((m: any) => m.user_id));
+      const profMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
       setMembers(mem.map((m) => ({
         user_id: m.user_id, role: m.role as Member["role"],
         email: profMap.get(m.user_id)?.email ?? null,
@@ -284,7 +284,7 @@ function SettingsPage() {
       .from("company_members").delete().eq("company_id", activeCompanyId).eq("user_id", userId);
     if (error) { toast.error(error.message); return; }
     toast.success("Removed");
-    setMembers((cur) => cur.filter((m) => m.user_id !== userId));
+    setMembers((cur) => cur.filter((m: any) => m.user_id !== userId));
   };
 
   const exportBackup = async () => {

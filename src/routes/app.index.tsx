@@ -198,7 +198,7 @@ function Dashboard() {
           .eq("company_id", activeCompanyId);
           
         if (!itemsError && items) {
-          const sv = items.reduce((s, i) => s + i.opening_stock_qty * i.opening_stock_rate_paise, 0);
+          const sv = items.reduce((s: number, i: any) => s + i.opening_stock_qty * i.opening_stock_rate_paise, 0);
           setStockValue(sv);
         }
 

@@ -170,14 +170,14 @@ export function MastersProvider({ children }: { children: ReactNode }) {
     if (!activeCompanyId) return;
     if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     const ch = supabase.channel(`masters-${activeCompanyId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "ledgers", filter: `company_id=eq.${activeCompanyId}` }, (payload) => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "ledgers", filter: `company_id=eq.${activeCompanyId}` }, (payload: any) => {
         const row = (payload.new ?? payload.old) as CachedLedger | undefined;
         if (!row) return;
         if (payload.eventType === "DELETE") ledgersMap.delete(row.id);
         else ledgersMap.set((payload.new as CachedLedger).id, payload.new as CachedLedger);
         rebuildSorted(); bump();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "items", filter: `company_id=eq.${activeCompanyId}` }, (payload) => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "items", filter: `company_id=eq.${activeCompanyId}` }, (payload: any) => {
         const row = (payload.new ?? payload.old) as CachedItem | undefined;
         if (!row) return;
         if (payload.eventType === "DELETE") itemsMap.delete(row.id);

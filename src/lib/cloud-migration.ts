@@ -89,7 +89,7 @@ export async function runOneTimeCloudMigrationDown(): Promise<MigrationResult> {
   }
 
   const companyIds = Array.from(
-    new Set((memberships ?? []).map((r) => r.company_id as string)),
+    new Set((memberships ?? []).map((r: any) => r.company_id as string)),
   );
 
   // Nothing on the cloud → mark done immediately.
