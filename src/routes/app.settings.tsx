@@ -176,8 +176,8 @@ function SettingsPage() {
           mem.map((m: any) => ({
             user_id: m.user_id,
             role: m.role as Member["role"],
-            email: profMap.get(m.user_id)?.email ?? null,
-            full_name: profMap.get(m.user_id)?.full_name ?? null,
+            email: (profMap.get(m.user_id) as any)?.email ?? null,
+            full_name: (profMap.get(m.user_id) as any)?.full_name ?? null,
           })),
         );
       }

@@ -818,7 +818,7 @@ export async function postLedgers(
   async function ensureLedger(name: string, type: LedgerType): Promise<string> {
     const k = lc(name);
     const hit = ledgerMap.get(k);
-    if (hit) return hit.id;
+    if (hit) return hit;
     const { data, error } = await supabase
       .from("ledgers").insert({ company_id: companyId, name, type }).select("id").single();
     if (error) throw error;
