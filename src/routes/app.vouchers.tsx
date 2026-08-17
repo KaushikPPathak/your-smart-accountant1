@@ -200,17 +200,14 @@ function VouchersHub() {
     
     try {
       // PART 5: Delete Protection
-      const { offlineDb } = await import("@/lib/offline/db");
-      const downstream = await offlineDb.cache_vouchers
-        .where("original_voucher_id")
-        .equals(r.id)
-        .first();
+      const { VoucherService } = await import("@/lib/services/VoucherService");
+      const dep = await VoucherService.checkDownstreamDependencies(r.id);
 
-      if (downstream) {
-        const typeLabel = (downstream as any).voucher_type === "sales_order" ? "Sales Order" : 
-                          (downstream as any).voucher_type === "delivery_note" ? "Delivery Challan" : 
-                          (downstream as any).voucher_type === "sales" ? "Sales Invoice" : "downstream document";
-        toast.error(`Cannot delete: This ${r.voucher_type.replace("_", " ")} is linked to ${typeLabel} ${(downstream as any).voucher_number}.`);
+      if (dep.linked) {
+        const typeLabel = dep.targetType === "sales_order" ? "Sales Order" : 
+                          dep.targetType === "delivery_note" ? "Delivery Challan" : 
+                          dep.targetType === "sales" ? "Sales Invoice" : "downstream document";
+        toast.error(`Cannot delete: This ${r.voucher_type.replace("_", " ")} is linked to ${typeLabel} ${dep.targetNumber}.`);
         return;
       }
 

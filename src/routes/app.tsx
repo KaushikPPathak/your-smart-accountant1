@@ -1,7 +1,8 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-// (icons for backup button moved into TopMenuBar Administration menu)
+import { useCallback, useEffect, useRef, useState, lazy, Suspense } from "react";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+
 import { TopMenuBar } from "@/components/TopMenuBar";
 import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
 import { Button } from "@/components/ui/button";
@@ -357,6 +358,10 @@ function AppLayout() {
 function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; onOpenCalc: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Lazy load heavy components
+  const ReportViewer = lazy(() => import("@/components/reports/ReportViewer").then(m => ({ default: m.ReportViewer })));
+
 
   useShortcut(
     "F1",
