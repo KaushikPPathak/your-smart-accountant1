@@ -43,7 +43,7 @@ function ItcPartyWise() {
       .in("voucher_type", ["purchase", "debit_note", "sales", "credit_note"])
       .gte("voucher_date", from)
       .lte("voucher_date", to)
-      .then(({ data }) => setVouchers((data || []) as unknown as VRow[]));
+      .then(({ data }: any) => setVouchers((data || []) as unknown as VRow[]));
   }, [activeCompanyId, from, to]);
 
   const rows = useMemo(() => {

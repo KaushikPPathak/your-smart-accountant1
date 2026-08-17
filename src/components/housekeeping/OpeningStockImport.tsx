@@ -74,7 +74,7 @@ export function OpeningStockImport({ companyId, disabled, annualTurnoverPaise }:
       .eq("company_id", companyId)
       .eq("is_active", true)
       .order("name")
-      .then(({ data }) => setItems((data || []) as ItemOpt[]));
+      .then(({ data }: any) => setItems((data || []) as ItemOpt[]));
   }, [companyId]);
 
   useEffect(() => {

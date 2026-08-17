@@ -70,14 +70,14 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
       .eq("company_id", activeCompanyId)
       .eq("type", partyType)
       .order("name")
-      .then(({ data }) => setLedgers((data || []) as Ledger[]));
+      .then(({ data }: any) => setLedgers((data || []) as Ledger[]));
 
     supabase
       .from("company_settings")
       .select("reminder_template")
       .eq("company_id", activeCompanyId)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data }: any) => {
         if (data?.reminder_template) setReminderTpl(data.reminder_template);
       });
   }, [activeCompanyId, partyType]);
@@ -89,7 +89,7 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
       .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
       .eq("vouchers.company_id", activeCompanyId)
       .lte("vouchers.voucher_date", to)
-      .then(({ data }) => setEntries((data || []) as unknown as Entry[]));
+      .then(({ data }: any) => setEntries((data || []) as unknown as Entry[]));
   }, [activeCompanyId, to]);
 
   const today = new Date(to);
