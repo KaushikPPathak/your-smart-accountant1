@@ -313,10 +313,24 @@ function VoucherEditPage() {
   }, [entryLines]);
 
   function updateItem(idx: number, patch: Partial<ItemLine>) {
-    setItemLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+    setItemLines((cur) => {
+      const next = cur.map((l, i) => (i === idx ? { ...l, ...patch } : l));
+      // If the user just touched the last row and it's not empty, add a new row
+      if (idx === cur.length - 1 && (patch.item_id || patch.description)) {
+        next.push({ id: undefined, item_id: "", description: "", qty: "", rate: "", discount: "", gst_rate: "18" });
+      }
+      return next;
+    });
   }
   function updateEntry(idx: number, patch: Partial<EntryLine>) {
-    setEntryLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+    setEntryLines((cur) => {
+      const next = cur.map((l, i) => (i === idx ? { ...l, ...patch } : l));
+      // If the user just touched the last row and it's not empty, add a new row
+      if (idx === cur.length - 1 && (patch.ledger_id || patch.debit || patch.credit)) {
+        next.push({ id: undefined, ledger_id: "", debit: "", credit: "", narration: "" });
+      }
+      return next;
+    });
   }
 
   async function save() {
