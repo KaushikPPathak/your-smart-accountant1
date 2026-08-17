@@ -82,10 +82,14 @@ export function getLastWorkMode(): "online" | "offline" | null {
 }
 
 async function tick(): Promise<void> {
+  // Check cloud config first. If no keys, business data sync is impossible.
+  const { isCloudConfigured } = await import("@/lib/cloud-adapter");
+  const cloudOk = isCloudConfigured();
+
   // Local-only mode: no cloud sync of any business data. Just quietly do
   // nothing so no server calls are made.
   const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
-  if (isLocalOnlyMode()) {
+  if (!cloudOk || isLocalOnlyMode()) {
     try { await materializeLocalOnlyOutbox(); } catch { /* ignore */ }
     rememberWorkMode("offline");
     return;
