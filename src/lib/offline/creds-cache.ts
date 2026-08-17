@@ -9,7 +9,7 @@
 // password. The same hash already lives in the cloud DB.
 
 import bcrypt from "bcryptjs";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "../../integrations/supabase/client";
 
 // Declare interface inline to permanently break the Rollup AST parsing deadlock
 export interface AccountCredCacheRow {

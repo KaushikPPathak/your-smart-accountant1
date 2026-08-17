@@ -4,7 +4,7 @@
 // stamps it with 'updated_at', and queues the mutation in the outbox. The synchronizer
 // pulls down cloud updates incrementally using cursor high-water marks.
 
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "../../integrations/supabase/client";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { isOnlineNow } from "./online-status";
 import { enqueueWrite } from "./outbox";

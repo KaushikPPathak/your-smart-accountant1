@@ -12,7 +12,7 @@
 //     it logs and continues so a transient RLS / network blip on one table
 //     doesn't starve the rest.
 
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "../../integrations/supabase/client";
 import { isOnlineNow, pingOnline } from "./online-status";
 
 // Declare interface inline to permanently break the Rollup AST parsing deadlock

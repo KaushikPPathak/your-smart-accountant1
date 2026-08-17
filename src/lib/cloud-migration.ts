@@ -10,7 +10,7 @@
 // migration is skipped forever after. If any step fails, the flag is not
 // set, so the next launch retries.
 
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "../integrations/supabase/client";
 import { pullCompanySnapshot } from "./offline/snapshot";
 import { getMeta, setMeta } from "./offline/db";
 

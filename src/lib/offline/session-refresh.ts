@@ -24,7 +24,7 @@
 // but the app continues to work offline via the cached login credentials —
 // no data is destroyed and the outbox waits patiently for re-auth.
 
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "../../integrations/supabase/client";
 import { rememberNetworkBlocked } from "./cache-read";
 
 const LAST_REFRESH_KEY = "ym_last_session_refresh_at";

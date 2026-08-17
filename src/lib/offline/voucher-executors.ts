@@ -10,7 +10,7 @@
 // inside the sync worker. Any per-form UI side effects (e.g. opening the
 // EwayBill dialog) stay in the form for the online path only.
 
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "../../integrations/supabase/client";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { emitDataChange } from "@/lib/ai/cache-events";
 import { logActivity } from "@/lib/activity-log";
