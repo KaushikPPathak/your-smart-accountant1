@@ -47,7 +47,7 @@ export function RestoreFromCloudDialog({ open, onOpenChange, onComplete }: Props
           .select("company_id, companies(name, access_password_hash)")
           .eq("user_id", user.id);
         if (error) throw error;
-        const list: CloudCompany[] = (data ?? []).map((r) => {
+        const list: CloudCompany[] = (data ?? []).map((r: any) => {
           const c = r as unknown as { company_id: string; companies: { name: string; access_password_hash: string | null } | null };
           return {
             company_id: c.company_id,

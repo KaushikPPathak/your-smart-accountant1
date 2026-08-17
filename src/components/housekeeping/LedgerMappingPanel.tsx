@@ -307,7 +307,7 @@ export function LedgerMappingPanel({
                         disabled={disabled}
                       >
                         <SelectTrigger className="h-8">
-                          <SelectValue>{GROUP_BY_CODE[r.group_code]?.label || r.group_code}</SelectValue>
+                          <SelectValue>{(r.group_code ? GROUP_BY_CODE[r.group_code]?.label : null) || r.group_code}</SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {ACCOUNT_GROUPS.map((g) => (
@@ -343,7 +343,7 @@ export function LedgerMappingPanel({
                             title="Revert to saved"
                             onClick={() => {
                               const next = ledgers.slice();
-                              next[i] = { ...next[i], group_code: m.group_code, type: m.ledger_type };
+                              next[i] = { ...next[i], group_code: m.group_code, type: (m.ledger_type || next[i].type) };
                               onChange(next);
                             }}
                           >

@@ -365,7 +365,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
                     previewLimit={settings.previewLimit}
                     headers={<><TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Type</TableHead><TableHead>GSTIN</TableHead><TableHead className="text-right">Opening</TableHead></>}
                     render={(r) => <LedgerCols r={r} />}
-                    matches={(r, q) => r.name.toLowerCase().includes(q) || r.gstin.toLowerCase().includes(q)}
+                    matches={(r, q) => r.name.toLowerCase().includes(q) || (r.gstin || "").toLowerCase().includes(q)}
                   />
                 </AccordionContent>
               </AccordionItem>
@@ -383,7 +383,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
                     previewLimit={settings.previewLimit}
                     headers={<><TableHead>Name</TableHead><TableHead>HSN</TableHead><TableHead>Unit</TableHead><TableHead className="text-right">GST %</TableHead><TableHead className="text-right">Op. Qty</TableHead><TableHead className="text-right">Op. Rate</TableHead><TableHead className="text-right">Sale ₹</TableHead></>}
                     render={(r) => <ItemCols r={r} />}
-                    matches={(r, q) => r.name.toLowerCase().includes(q) || r.hsn.toLowerCase().includes(q)}
+                    matches={(r, q) => r.name.toLowerCase().includes(q) || (r.hsn || "").toLowerCase().includes(q)}
                   />
                 </AccordionContent>
               </AccordionItem>
@@ -401,7 +401,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
                     previewLimit={settings.previewLimit}
                     headers={<><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Vch No</TableHead><TableHead>Party</TableHead><TableHead className="text-right">Amount ₹</TableHead></>}
                     render={(r) => <VoucherCols r={r} />}
-                    matches={(r, q) => r.party.toLowerCase().includes(q) || r.voucher_no.toLowerCase().includes(q) || r.date.includes(q)}
+                    matches={(r, q) => (r.party || "").toLowerCase().includes(q) || r.voucher_no.toLowerCase().includes(q) || r.date.includes(q)}
                   />
                 </AccordionContent>
               </AccordionItem>
@@ -558,7 +558,7 @@ function SingleImporter({
           onPost={onPost} posting={posting} disabled={disabled}
           render={(r) => <LedgerCols r={r} />}
           headers={<><TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Type</TableHead><TableHead>GSTIN</TableHead><TableHead className="text-right">Opening</TableHead></>}
-          matches={(r, q) => r.name.toLowerCase().includes(q) || r.gstin.toLowerCase().includes(q)}
+          matches={(r, q) => r.name.toLowerCase().includes(q) || (r.gstin || "").toLowerCase().includes(q)}
           />
         </>
       )}
@@ -569,7 +569,7 @@ function SingleImporter({
           onPost={onPost} posting={posting} disabled={disabled}
           render={(r) => <ItemCols r={r} />}
           headers={<><TableHead>Name</TableHead><TableHead>HSN</TableHead><TableHead>Unit</TableHead><TableHead className="text-right">GST %</TableHead><TableHead className="text-right">Op. Qty</TableHead><TableHead className="text-right">Op. Rate</TableHead><TableHead className="text-right">Sale ₹</TableHead></>}
-          matches={(r, q) => r.name.toLowerCase().includes(q) || r.hsn.toLowerCase().includes(q)}
+          matches={(r, q) => r.name.toLowerCase().includes(q) || (r.hsn || "").toLowerCase().includes(q)}
         />
       )}
       {kind === "voucher" && vouchers.length > 0 && !busy && (
@@ -579,7 +579,7 @@ function SingleImporter({
           onPost={onPost} posting={posting} disabled={disabled}
           render={(r) => <VoucherCols r={r} />}
           headers={<><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Vch No</TableHead><TableHead>Party</TableHead><TableHead className="text-right">Amount ₹</TableHead></>}
-          matches={(r, q) => r.party.toLowerCase().includes(q) || r.voucher_no.toLowerCase().includes(q) || r.date.includes(q)}
+          matches={(r, q) => (r.party || "").toLowerCase().includes(q) || r.voucher_no.toLowerCase().includes(q) || r.date.includes(q)}
         />
       )}
     </div>
@@ -699,12 +699,12 @@ function LedgerCols({ r }: { r: LedgerRecord }) {
     <>
       <TableCell className="font-medium">{r.name}</TableCell>
       <TableCell className="text-xs text-muted-foreground">
-        {GROUP_BY_CODE[r.group_code]?.label || r.group_code}
+        {(r.group_code ? GROUP_BY_CODE[r.group_code]?.label : null) || r.group_code}
       </TableCell>
       <TableCell><Badge variant="secondary" className="text-[10px]">{r.type}</Badge></TableCell>
       <TableCell className="font-mono text-xs">{r.gstin}</TableCell>
       <TableCell className="text-right font-mono text-xs">
-        {r.opening !== 0 ? `${Math.abs(r.opening).toFixed(2)} ${r.opening >= 0 ? "Dr" : "Cr"}` : "—"}
+        {r.opening !== 0 && r.opening !== undefined ? `${Math.abs(r.opening).toFixed(2)} ${r.opening >= 0 ? "Dr" : "Cr"}` : "—"}
       </TableCell>
     </>
   );
@@ -718,8 +718,8 @@ function ItemCols({ r }: { r: ItemRecord }) {
       <TableCell className="text-xs">{r.unit}</TableCell>
       <TableCell className="text-right text-xs">{r.gst_rate}</TableCell>
       <TableCell className="text-right text-xs">{r.opening_qty}</TableCell>
-      <TableCell className="text-right text-xs">{r.opening_rate.toFixed(2)}</TableCell>
-      <TableCell className="text-right text-xs">{r.sale_price.toFixed(2)}</TableCell>
+      <TableCell className="text-right text-xs">{(r.opening_rate || 0).toFixed(2)}</TableCell>
+      <TableCell className="text-right text-xs">{(r.sale_price || 0).toFixed(2)}</TableCell>
     </>
   );
 }

@@ -117,7 +117,7 @@ export function SelfTestPanel({ companyId }: { companyId: string | null }) {
       const { ms, value } = await timed(
         supabase.from("companies").select("id", { count: "exact", head: true }),
       );
-      if (value.error) return { status: "error", message: value.error.message, ms };
+      if ((value as any).error) return { status: "error", message: (value as any).error.message, ms };
       const note =
         ms < 800 ? "" :
         ms < 2000 ? " (slow — cloud only, books are local)" :

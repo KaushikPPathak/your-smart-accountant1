@@ -104,7 +104,7 @@ export async function runOneTimeCloudMigrationDown(): Promise<MigrationResult> {
   //    exactly what we want here.
   for (const companyId of companyIds) {
     try {
-      const snap = await pullCompanySnapshot(companyId, {
+      const snap = await pullCompanySnapshot(companyId as string, {
         full: true,
         forceExact: true,
         notify: false,
