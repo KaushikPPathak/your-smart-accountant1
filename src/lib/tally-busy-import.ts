@@ -814,7 +814,6 @@ export async function postLedgers(
   const map = new Map<string, string>(
     (existing || []).map((l: any) => [lc(l.name), l.id]),
   );
-  );
   async function ensureLedger(name: string, type: LedgerType): Promise<string> {
     const k = lc(name);
     const hit = ledgerMap.get(k);
