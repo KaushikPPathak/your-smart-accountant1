@@ -486,9 +486,34 @@ function SettingsPage() {
           <Button onClick={() => {}} disabled={savingSettings || !isAdmin}>
             <Save className="mr-2 h-4 w-4" /> {savingSettings ? t("settings.invoice.saving") : t("settings.invoice.save")}
           </Button>
-...
+        </CardContent>
+      </Card>
+
+      <UpiQrSettingsCard companyId={activeCompanyId} />
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">{t("settings.users")}</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          {isAdmin && (
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex-1 min-w-[200px] space-y-1.5">
+                <Label>Email</Label>
+                <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="user@example.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as Member["role"])}>
+                  <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="accountant">Accountant</SelectItem>
+                    <SelectItem value="viewer">View only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button onClick={() => {}}><UserPlus className="mr-2 h-4 w-4" /> Add user</Button>
             </div>
+          )}
           )}
           <Table>
             <TableHeader>
