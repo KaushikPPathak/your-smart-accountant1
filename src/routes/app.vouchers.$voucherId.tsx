@@ -382,7 +382,7 @@ function VoucherEditPage() {
           .map((l, i) => {
             if (!l.item_id) return null;
             const c = computed[i];
-            if (c.total_paise <= 0) return null;
+            if (!c || c.total_paise <= 0) return null;
             return {
               id: l.id ?? crypto.randomUUID(),
               voucher_id: voucher.id,
@@ -413,7 +413,7 @@ function VoucherEditPage() {
             capitalItems = itemLines
               .map((l, i) => {
                 const c = computed[i];
-                if (!l.item_id || c.total_paise <= 0) return null;
+                if (!l.item_id || !c || c.total_paise <= 0) return null;
                 return {
                   name: (nameById.get(l.item_id) || l.description || "Capital Asset").trim(),
                   taxable_paise: c.taxable_paise,
@@ -773,7 +773,7 @@ function VoucherEditPage() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm">{formatINR(computed[i]?.total_paise ?? 0)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{formatINR(computed?.[i]?.total_paise ?? 0)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

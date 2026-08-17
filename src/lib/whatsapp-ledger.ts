@@ -134,7 +134,7 @@ export async function sendLedgerViaWhatsApp(
     await showWhatsAppWeb(waUrl);
   } catch (err) {
     toast.error("WhatsApp window not available", {
-      description: err instanceof Error ? err.message : "Please ensure WhatsApp Web is loaded in the app.",
+      description: "Please ensure WhatsApp Web is loaded in the app.",
       action: { label: "Show details", onClick: () => window.location.assign("/app/diagnostics") },
     });
     isSending = false;
