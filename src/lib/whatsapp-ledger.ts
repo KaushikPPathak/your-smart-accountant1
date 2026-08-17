@@ -120,7 +120,13 @@ export async function sendLedgerViaWhatsApp(
     });
   }
 
-  if (copied) playSuccessBeep();
+  if (copied) {
+    playSuccessBeep();
+  } else if (runtime === "electron" && info.path) {
+    // For Electron, since we can't copy the file to clipboard yet, 
+    // we open the folder for the user.
+    await (window as any).yourMehtaji?.showInFolder(info.path);
+  }
 
   // 2. Focus / navigate WhatsApp Web
   const waUrl = buildWhatsAppWebUrl(phone, message);
