@@ -813,10 +813,7 @@ export async function postLedgers(
     .from("ledgers").select("id, name").eq("company_id", companyId);
   const map = new Map<string, string>(
     (existing || []).map((l: any) => [lc(l.name), l.id]),
-...
-  const map = new Map<string, string>((existing || []).map((x: any) => [lc(x.name), x.id]));
-...
-    (ledgers || []).map((l: any) => [lc(l.name), { id: l.id, type: l.type }]),
+  );
   );
   async function ensureLedger(name: string, type: LedgerType): Promise<string> {
     const k = lc(name);
