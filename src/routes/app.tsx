@@ -361,6 +361,8 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
 
   // Lazy load heavy components
   const ReportViewer = lazy(() => import("@/components/reports/ReportViewer").then(m => ({ default: m.ReportViewer })));
+  const ItemVoucherForm = lazy(() => import("@/components/vouchers/ItemVoucherForm").then(m => ({ default: m.ItemVoucherForm })));
+  const AssistantChat = lazy(() => import("@/components/assistant/AssistantChat").then(m => ({ default: m.AssistantChat })));
 
 
   useShortcut(
