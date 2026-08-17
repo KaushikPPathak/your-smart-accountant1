@@ -213,8 +213,8 @@ function VoucherEditPage() {
     setPartyName(vRow.ledgers?.name ?? "");
 
     const [itemsRes, entriesRes, masterItems, masterLedgers] = await Promise.all([
-      supabase.from("voucher_items").select("*").eq("voucher_id", voucherId).order("line_no"),
-      supabase.from("voucher_entries").select("*").eq("voucher_id", voucherId).order("line_no"),
+      supabase.from("voucher_items").select("*").eq("voucher_id", voucherId).order("line_no").limit(1000),
+      supabase.from("voucher_entries").select("*").eq("voucher_id", voucherId).order("line_no").limit(1000),
       supabase.from("items").select("id, name, gst_rate").eq("company_id", vRow.company_id).eq("is_active", true).order("name"),
       supabase.from("ledgers").select("id, name, type").eq("company_id", vRow.company_id).eq("is_active", true).order("name"),
     ]);

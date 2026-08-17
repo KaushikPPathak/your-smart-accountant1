@@ -196,7 +196,7 @@ class OfflineDatabase extends Dexie {
     //     [company_id+ledger_id]                 — Ledger balance, Trial Balance
     this.version(8).stores({
       cache_vouchers:
-        "id, company_id, updated_at, voucher_date, party_id, voucher_type, " +
+        "id, company_id, updated_at, voucher_date, party_id, voucher_type, original_voucher_id, " +
         "[company_id+voucher_date], " +
         "[company_id+voucher_type+voucher_date], " +
         "[company_id+party_id+voucher_date]",

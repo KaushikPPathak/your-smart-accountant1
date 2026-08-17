@@ -127,7 +127,7 @@ const WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
   text:
-    "'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''\n                                        \n                                            \n                                            can i give any name v-legacy-1 ot win7 built etc",
+    "'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''\n                                        \n                                            \n                                            2 query raised during estimate-sales order creation. Please check the bug—keypath original _voucher_id on object store cache_voucher is not indexed, and it could not read the document. screen shot is attached, and while editing any voucher whole vaucher is not available for edit , it shows only 3-4 rows",
 };
 
 const SUGGESTIONS = [
