@@ -154,7 +154,7 @@ function VoucherEditPage() {
           .concat(
             isItemKind 
               ? Array.from({ length: Math.max(0, 10 - itemRows.length) }).map(() => ({
-                  item_id: "", description: "", qty: "", rate: "", discount: "", gst_rate: "18"
+                  id: undefined, item_id: "", description: "", qty: "", rate: "", discount: "", gst_rate: "18"
                 }))
               : []
           )
@@ -173,7 +173,7 @@ function VoucherEditPage() {
           .concat(
             isEntryKind
               ? Array.from({ length: Math.max(0, 10 - entryRows.length) }).map(() => ({
-                  ledger_id: "", debit: "", credit: "", narration: ""
+                  id: undefined, ledger_id: "", debit: "", credit: "", narration: ""
                 }))
               : []
           )
