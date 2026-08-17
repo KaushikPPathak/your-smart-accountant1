@@ -87,8 +87,8 @@ function VoucherEditPage() {
   const canDelete = activeMembership?.role === "admin";
 
   const [voucher, setVoucher] = useState<Voucher | null>(null);
-  const [itemLines, setItemLines] = useState<(ItemLine & { id: string | undefined })[]>([]);
-  const [entryLines, setEntryLines] = useState<(EntryLine & { id: string | undefined })[]>([]);
+  const [itemLines, setItemLines] = useState<ItemLine[]>([]);
+  const [entryLines, setEntryLines] = useState<EntryLine[]>([]);
   const [items, setItems] = useState<ItemOpt[]>([]);
   const [ledgers, setLedgers] = useState<LedgerOpt[]>([]);
   const [partyName, setPartyName] = useState<string>("");
