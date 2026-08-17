@@ -80,7 +80,8 @@ export function startSyncWorker() {
   if (typeof window === "undefined") return;
   started = true;
 
-  applyGlobalWorkerSecurityInterceptor();
+  // Deprecated: Global interceptor removed to resolve S1 security finding.
+  // applyGlobalWorkerSecurityInterceptor();
 
   // Ask the browser to keep our IndexedDB cache under storage pressure.
   // Best-effort: some grant automatically, iOS Safari usually declines but
