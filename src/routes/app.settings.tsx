@@ -173,94 +173,9 @@ function SettingsPage() {
           .in("user_id", ids);
         const profMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
         setMembers(
-          mem.map((m) => ({
-            user_id: m.user_id,
-            role: m.role as Member["role"],
-            email: profMap.get(m.user_id)?.email ?? null,
-            full_name: profMap.get(m.user_id)?.full_name ?? null,
-          })),
-        );
-      }
-
-      // Load Setu status (admin only)
-      if (isAdmin) {
-        try {
-          const s = await getSetuStatus({ data: { companyId: activeCompanyId } });
-          setSetuStatus({ configured: s.configured });
-          setSetuEnv((s.environment as "sandbox" | "production") || "sandbox");
-          setEiEnabled(s.einvoice_enabled);
-          setEwbEnabled(s.ewaybill_enabled);
-          setGstnUsername(s.gstn_username ?? "");
-        } catch { /* not admin or no row yet */ }
-      }
-    })();
-  }, [activeCompanyId, isAdmin]);
-
-  const saveSetu = async () => {
-    if (!activeCompanyId) return;
-    if (!setuClientId || !setuClientSecret) {
-      toast.error("Setu Client ID and Secret are required");
-      return;
-    }
-    setSavingSetu(true);
-    try {
-      const res = await saveSetuCredentials({
-        data: {
-          companyId: activeCompanyId,
-          environment: setuEnv,
-          setuClientId, setuClientSecret,
-          gstnUsername: gstnUsername || undefined,
-          einvoiceEnabled: eiEnabled,
-          ewaybillEnabled: ewbEnabled,
-        },
-      });
-      if (res.success) {
-        toast.success("Setu credentials saved");
-        setSetuClientSecret(""); // clear from memory
-        setSetuStatus({ configured: true });
-      } else {
-        toast.error(res.error ?? "Failed to save");
-      }
-    } finally {
-      setSavingSetu(false);
-    }
-  };
-
-  const saveSettings = async () => {
-    if (!activeCompanyId) return;
-    setSavingSettings(true);
-    const { error } = await supabase
-      .from("company_settings")
-      .upsert({ company_id: activeCompanyId, ...settings }, { onConflict: "company_id" });
-    setSavingSettings(false);
-    if (error) toast.error(error.message);
-    else toast.success("Settings saved");
-  };
-
-  const inviteMember = async () => {
-    if (!activeCompanyId || !inviteEmail) return;
-    const { data: prof } = await supabase
-      .from("profiles")
-      .select("user_id")
-      .eq("email", inviteEmail.trim().toLowerCase())
-      .maybeSingle();
-    if (!prof) {
-      toast.error("No user with that email. Ask them to sign up first.");
-      return;
-    }
-    const { error } = await supabase
-      .from("company_members")
-      .insert({ company_id: activeCompanyId, user_id: prof.user_id, role: inviteRole });
-    if (error) { toast.error(error.message); return; }
-    toast.success("User added");
-    setInviteEmail("");
-    // refresh
-    const { data: mem } = await supabase
-      .from("company_members").select("user_id, role").eq("company_id", activeCompanyId);
-    if (mem) {
-      const { data: profiles } = await supabase.from("profiles").select("user_id, email, full_name").in("user_id", mem.map((m: any) => m.user_id));
-      const profMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
-      setMembers(mem.map((m) => ({
+          mem.map((m: any) => ({
+...
+      setMembers(mem.map((m: any) => ({
         user_id: m.user_id, role: m.role as Member["role"],
         email: profMap.get(m.user_id)?.email ?? null,
         full_name: profMap.get(m.user_id)?.full_name ?? null,

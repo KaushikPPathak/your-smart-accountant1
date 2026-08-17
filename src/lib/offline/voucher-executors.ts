@@ -670,7 +670,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
         .in("id", ids);
       const byId = new Map((itemRecs ?? []).map((r: any) => [r.id, r.name as string]));
       capitalItems = lines.map(({ l, c }) => ({
-        name: (byId.get(l.item_id) || l.description || "Capital Asset").trim(),
+        name: (String(byId.get(l.item_id) || l.description || "Capital Asset")).trim(),
         taxable_paise: c.taxable_paise,
         cgst_paise: c.cgst_paise,
         sgst_paise: c.sgst_paise,

@@ -812,104 +812,11 @@ export async function postLedgers(
   const { data: existing } = await supabase
     .from("ledgers").select("id, name").eq("company_id", companyId);
   const map = new Map<string, string>(
-    (existing || []).map((l) => [lc(l.name), l.id]),
-  );
-  let created = 0, updated = 0, skipped = 0;
-  const failed: { name: string; reason: string }[] = [];
-  let done = 0;
-  for (const r of rows) {
-    if (!r.name) { skipped++; continue; }
-    const payload = {
-      company_id: companyId,
-      name: r.name,
-      type: r.type,
-      group_code: r.group_code,
-      gstin: r.gstin || null,
-      state: r.state || null,
-      email: r.email || null,
-      phone: r.phone || null,
-      opening_balance_paise: Math.abs(paise(r.opening)),
-      opening_balance_is_debit: r.opening >= 0,
-      import_batch_id: batchId || null,
-    };
-    const id = map.get(lc(r.name));
-    if (id) {
-      const { error } = await supabase.from("ledgers").update(payload).eq("id", id);
-      if (error) { skipped++; failed.push({ name: r.name, reason: error.message }); } else updated++;
-    } else {
-      const { data, error } = await supabase
-        .from("ledgers").insert(payload).select("id").single();
-      if (error || !data) {
-        skipped++;
-        failed.push({ name: r.name, reason: error?.message || "insert failed" });
-      } else { created++; map.set(lc(r.name), data.id); }
-    }
-    done++;
-    if (done % 25 === 0) {
-      onProgress?.(done, rows.length, "Posting ledgers");
-      await yieldToUI();
-    }
-  }
-  onProgress?.(rows.length, rows.length, "Posting ledgers");
-  return { created, updated, skipped, failed };
-}
-
-export async function postItems(
-  companyId: string,
-  rows: ItemRecord[],
-  onProgress?: ProgressCb,
-  batchId?: string,
-): Promise<PostResultEx> {
-  const { data: existing } = await supabase
-    .from("items").select("id, name").eq("company_id", companyId);
-  const map = new Map<string, string>((existing || []).map((x) => [lc(x.name), x.id]));
-  let created = 0, updated = 0, skipped = 0;
-  const failed: { name: string; reason: string }[] = [];
-  let done = 0;
-  for (const r of rows) {
-    if (!r.name) { skipped++; continue; }
-    const payload = {
-      company_id: companyId,
-      name: r.name,
-      hsn_code: r.hsn || null,
-      unit: r.unit || "NOS",
-      gst_rate: r.gst_rate || 0,
-      opening_stock_qty: r.opening_qty || 0,
-      opening_stock_rate_paise: paise(r.opening_rate),
-      sale_price_paise: paise(r.sale_price),
-      purchase_price_paise: paise(r.purchase_price),
-      import_batch_id: batchId || null,
-    };
-    const id = map.get(lc(r.name));
-    if (id) {
-      const { error } = await supabase.from("items").update(payload).eq("id", id);
-      if (error) { skipped++; failed.push({ name: r.name, reason: error.message }); } else updated++;
-    } else {
-      const { error } = await supabase.from("items").insert(payload);
-      if (error) { skipped++; failed.push({ name: r.name, reason: error.message }); } else created++;
-    }
-    done++;
-    if (done % 25 === 0) {
-      onProgress?.(done, rows.length, "Posting items");
-      await yieldToUI();
-    }
-  }
-  onProgress?.(rows.length, rows.length, "Posting items");
-  return { created, updated, skipped, failed };
-}
-
-export async function postVouchers(
-  companyId: string,
-  rows: VoucherRecord[],
-  onProgress?: ProgressCb,
-  batchId?: string,
-): Promise<PostResultEx> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Sign in required");
-  const { data: ledgers } = await supabase
-    .from("ledgers").select("id, name, type").eq("company_id", companyId);
-  const ledgerMap = new Map<string, { id: string; type: string }>(
-    (ledgers || []).map((l) => [lc(l.name), { id: l.id, type: l.type }]),
+    (existing || []).map((l: any) => [lc(l.name), l.id]),
+...
+  const map = new Map<string, string>((existing || []).map((x: any) => [lc(x.name), x.id]));
+...
+    (ledgers || []).map((l: any) => [lc(l.name), { id: l.id, type: l.type }]),
   );
   async function ensureLedger(name: string, type: LedgerType): Promise<string> {
     const k = lc(name);
