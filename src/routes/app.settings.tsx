@@ -174,12 +174,12 @@ function SettingsPage() {
         const profMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
         setMembers(
           mem.map((m: any) => ({
-...
-      setMembers(mem.map((m: any) => ({
-        user_id: m.user_id, role: m.role as Member["role"],
-        email: profMap.get(m.user_id)?.email ?? null,
-        full_name: profMap.get(m.user_id)?.full_name ?? null,
-      })));
+            user_id: m.user_id,
+            role: m.role as Member["role"],
+            email: profMap.get(m.user_id)?.email ?? null,
+            full_name: profMap.get(m.user_id)?.full_name ?? null,
+          })),
+        );
     }
   };
 
