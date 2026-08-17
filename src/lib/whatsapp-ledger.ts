@@ -147,11 +147,16 @@ export async function sendLedgerViaWhatsApp(
         onClick: () => info.path && navigator.clipboard.writeText(info.path),
       },
     });
+  } else if (runtime === "electron" && info.path) {
+    toast.success("PDF saved to Exports/PDFs folder!", {
+      description: "Please attach it manually in WhatsApp. The folder has been opened for you.",
+      duration: 10000,
+    });
   } else {
     toast.error("Could not copy PDF to clipboard", {
       description: info.path
         ? "The file exists but could not be placed on the clipboard. Try attaching it manually from: " + info.path
-        : "The PDF was not saved to a file path. The bug is in ledger-pdf.ts — it must return an absolute filesystem path.",
+        : "The PDF was not saved to a file path. Please check diagnostics.",
       duration: 10000,
     });
   }
