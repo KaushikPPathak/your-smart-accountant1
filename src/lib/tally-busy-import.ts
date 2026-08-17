@@ -81,6 +81,7 @@ export interface LedgerMappingRow {
   local_ledger_id?: string;
   group_code?: string;
   ledger_type?: LedgerType;
+  source_name?: string;
 }
 
 export interface FuzzySuggestion {
@@ -116,13 +117,13 @@ export async function postVouchers(companyId: string, rows: VoucherRecord[], onP
 }
 
 export async function createImportBatch(companyId: string, info: any): Promise<string> { return "batch-id"; }
-export async function finalizeImportBatch(id: string, summary: any) { return { ledgers: 0, items: 0, vouchers: 0 }; }
-export async function fetchLedgerMappings(companyId: string): Promise<LedgerMappingRow[]> { return []; }
+export async function finalizeImportBatch(id: string, summary: any): Promise<any> { return { ledgers: 0, items: 0, vouchers: 0 }; }
+export async function fetchLedgerMappings(companyId: string): Promise<Map<string, LedgerMappingRow>> { return new Map(); }
 export async function saveLedgerMappings(companyId: string, mappings: any): Promise<{ saved: number }> { return { saved: 0 }; }
-export function applyMappingsToLedgers(ledgers: LedgerRecord[], mappings: any[]) { return ledgers; }
+export function applyMappingsToLedgers(ledgers: LedgerRecord[], mappings: Map<string, LedgerMappingRow>) { return ledgers; }
 export async function listImportBatches(companyId: string): Promise<ImportBatchRow[]> { return []; }
-export async function deleteImportBatch(id: string) {}
-export async function bulkDeleteVouchers(companyId: string, type: VoucherType, range?: any) { return 0; }
-export function buildFuzzySuggestions(names: string[], target: string[]): FuzzySuggestion[] { return []; }
-export function applyFuzzySuggestions(mappings: any, suggestions: any) { return mappings; }
+export async function deleteImportBatch(id: string): Promise<any> { return {}; }
+export async function bulkDeleteVouchers(companyId: string, type: VoucherType, range?: any): Promise<any> { return 0; }
+export function buildFuzzySuggestions(ledgers: LedgerRecord[], mappings: Map<string, LedgerMappingRow>, threshold: number): FuzzySuggestion[] { return []; }
+export function applyFuzzySuggestions(mappings: Map<string, LedgerMappingRow>, suggestions: FuzzySuggestion[]) { return mappings; }
 export async function yieldToUI() { await new Promise(r => setTimeout(r, 0)); }
