@@ -27,6 +27,7 @@ import { StatusBar } from "@/components/fast-form/StatusBar";
 import { BackupNudgeBanner } from "@/components/BackupNudgeBanner";
 import { DataOwnershipDialog } from "@/components/DataOwnershipDialog";
 import { UpdateRecoveryBanner } from "@/components/UpdateRecoveryBanner";
+import { UpdateRollbackBanner } from "@/components/UpdateRollbackBanner";
 import { InstallAppButton } from "@/components/InstallAppButton";
 import { KeyboardProvider, useShortcut } from "@/lib/keyboard";
 import { CalculatorDialog } from "@/components/CalculatorDialog";
