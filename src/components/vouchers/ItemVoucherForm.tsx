@@ -348,7 +348,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       .select("state_code")
       .eq("id", activeCompanyId)
       .single()
-      .then(({ data }) => setCompanyStateCode(data?.state_code ?? null));
+      .then(({ data }: any) => setCompanyStateCode(data?.state_code ?? null));
   }, [activeCompanyId]);
   const mastersVersion = useMastersVersion();
   useEffect(() => {
@@ -390,7 +390,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       .eq("voucher_type", originalType)
       .order("voucher_date", { ascending: false })
       .limit(200)
-      .then(({ data }) => {
+      .then(({ data }: any) => {
         if (cancelled) return;
         setOriginalInvoices(data ?? []);
       });

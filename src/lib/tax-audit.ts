@@ -45,7 +45,7 @@ export async function scan40A3(
     .select("id")
     .eq("company_id", companyId)
     .eq("type", "cash");
-  const cashIds = new Set((cashLedgers ?? []).map((l) => l.id));
+  const cashIds = new Set((cashLedgers ?? []).map((l: any) => l.id));
   if (cashIds.size === 0) return [];
 
   // 2. Get all payment/journal voucher entries in window
@@ -57,7 +57,7 @@ export async function scan40A3(
     .lte("voucher_date", toDate)
     .in("voucher_type", ["payment", "journal"]);
   const vMap = new Map(
-    (vouchers ?? []).map((v) => [v.id, v]),
+    (vouchers ?? []).map((v: any) => [v.id, v]),
   );
   if (vMap.size === 0) return [];
 
@@ -94,10 +94,10 @@ export async function scan40A3(
     for (const [partyId, partyDr] of row.partyDebits) {
       // pro-rate cash credit by party share
       const cashShare = Math.round((partyDr / totalDebit) * row.cashCr);
-      const key = `${v.voucher_date}__${partyId}`;
+      const key = `${((v as any).voucher_date)}__${partyId}`;
       let bucket = agg.get(key);
       if (!bucket) {
-        bucket = { ledger_id: partyId, date: v.voucher_date, amount: 0, voucher_ids: new Set() };
+        bucket = { ledger_id: partyId, date: ((v as any).voucher_date), amount: 0, voucher_ids: new Set() };
         agg.set(key, bucket);
       }
       bucket.amount += cashShare;
@@ -111,7 +111,7 @@ export async function scan40A3(
     .from("ledgers")
     .select("id, name")
     .in("id", partyIds);
-  const nameMap = new Map((ledgerNames ?? []).map((l) => [l.id, l.name]));
+  const nameMap = new Map((ledgerNames ?? []).map((l: any) => [l.id, l.name]));
 
   const hits: CashHit[] = [];
   for (const bucket of agg.values()) {
@@ -119,8 +119,8 @@ export async function scan40A3(
     const firstVid = Array.from(bucket.voucher_ids)[0];
     const firstV = vMap.get(firstVid)!;
     hits.push({
-      ledger_id: bucket.ledger_id,
-      ledger_name: nameMap.get(bucket.ledger_id) ?? "—",
+      ledger_id: ((bucket as any).ledger_id),
+      ledger_name: nameMap.get(((bucket as any).ledger_id)) ?? "—",
       voucher_id: firstVid,
       voucher_no: firstV.voucher_number,
       date: bucket.date,

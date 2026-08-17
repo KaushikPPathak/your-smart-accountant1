@@ -48,7 +48,7 @@ function ItcItemWise() {
       .select("id, name, unit, hsn_code, gst_rate")
       .eq("company_id", activeCompanyId)
       .order("name")
-      .then(({ data }) => setItems((data || []) as Item[]));
+      .then(({ data }: any) => setItems((data || []) as Item[]));
   }, [activeCompanyId]);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ function ItcItemWise() {
       .eq("vouchers.company_id", activeCompanyId)
       .gte("vouchers.voucher_date", from)
       .lte("vouchers.voucher_date", to)
-      .then(({ data }) => setLines((data || []) as unknown as Line[]));
+      .then(({ data }: any) => setLines((data || []) as unknown as Line[]));
   }, [activeCompanyId, from, to]);
 
   const rows = useMemo(() => {

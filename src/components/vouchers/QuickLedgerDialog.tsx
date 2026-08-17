@@ -124,7 +124,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         .select("name, type, gstin, pan, state_code, address, phone, email, credit_limit_paise, credit_days, gst_treatment, group_code, subgroup_id")
         .eq("id", editId)
         .single()
-        .then(({ data }) => apply(data as Record<string, unknown>));
+        .then(({ data }: any) => apply(data as Record<string, unknown>));
     } else {
       setName(""); setType("sundry_debtor"); setGstin(""); setGstRegType("regular");
       setPan(""); setStateCode(""); setAddress(""); setPhone(""); setEmail("");

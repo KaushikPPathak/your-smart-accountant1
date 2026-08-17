@@ -104,7 +104,7 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
       .eq("company_id", companyId)
       .eq("is_active", true)
       .order("name")
-      .then(({ data }) => setLedgers((data || []) as LedgerOpt[]));
+      .then(({ data }: any) => setLedgers((data || []) as LedgerOpt[]));
   }, [companyId]);
 
   useEffect(() => {

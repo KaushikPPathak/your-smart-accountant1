@@ -57,7 +57,7 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
         .select("name, unit, gst_rate, hsn_code")
         .eq("id", editId)
         .single()
-        .then(({ data }) => {
+        .then(({ data }: any) => {
           if (data) {
             setName(data.name);
             setUnit(data.unit);

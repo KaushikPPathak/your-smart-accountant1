@@ -51,7 +51,7 @@ function HsnSummary() {
       .select("id, name, unit, hsn_code, gst_rate, opening_stock_qty, opening_stock_rate_paise")
       .eq("company_id", activeCompanyId)
       .order("hsn_code")
-      .then(({ data }) => setItems((data || []) as Item[]));
+      .then(({ data }: any) => setItems((data || []) as Item[]));
   }, [activeCompanyId]);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ function HsnSummary() {
       .select("qty, rate_paise, taxable_paise, cgst_paise, sgst_paise, igst_paise, item_id, vouchers!inner(voucher_type, voucher_date, company_id)")
       .eq("vouchers.company_id", activeCompanyId)
       .lte("vouchers.voucher_date", to)
-      .then(({ data }) => setMoves((data || []) as unknown as Move[]));
+      .then(({ data }: any) => setMoves((data || []) as unknown as Move[]));
   }, [activeCompanyId, to]);
 
   const isPurchase = (t: string) => t === "purchase" || t === "credit_note";

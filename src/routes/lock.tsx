@@ -194,7 +194,7 @@ function LockScreen() {
               .select("id, name, has_password");
             if (cloudCompanies && cloudCompanies.length > 0) {
               const { offlineDb } = await import("@/lib/offline/db");
-              const rows = cloudCompanies.map((c) => ({
+              const rows = cloudCompanies.map((c: any) => ({
                 id: c.id as string,
                 name: c.name as string,
                 has_password: Boolean(c.has_password),

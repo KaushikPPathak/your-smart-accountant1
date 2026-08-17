@@ -463,7 +463,7 @@ async function restoreCompanyBackupImpl(
       .from("vouchers")
       .select("id")
       .eq("company_id", targetCompanyId);
-    const ids = (existingVouchers ?? []).map((v) => v.id);
+    const ids = (existingVouchers ?? []).map((v: any) => v.id);
     if (ids.length) {
       await supabase.from("voucher_items").delete().in("voucher_id", ids);
       await supabase.from("voucher_entries").delete().in("voucher_id", ids);
