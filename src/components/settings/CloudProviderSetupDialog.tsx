@@ -89,7 +89,7 @@ export function CloudProviderSetupDialog({
         <DialogHeader>
           <DialogTitle>'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''</DialogTitle>
           <DialogDescription>
-            apply it for one drive and drop box make signing simple
+            I want to load app working speedy and smoothly. Please find way to improve the loading of the app
           </DialogDescription>
         </DialogHeader>
 
