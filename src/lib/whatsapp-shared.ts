@@ -150,10 +150,18 @@ export function buildWhatsAppWebUrl(phone: string, message: string): string {
 export async function showWhatsAppWeb(url: string): Promise<void> {
   const runtime = getNativeRuntime();
   recordStage("whatsapp", "url", { runtime, url_len: url.length, has_phone: url.includes("phone=") });
-  if (runtime !== "tauri") {
+  if (runtime === "browser") {
     const err = new Error("WhatsApp sharing is only available in the desktop app.");
     recordFailure("whatsapp", err, { stage: "url", runtime });
     throw err;
+  }
+  
+  if (runtime === "electron") {
+    // For Electron (Legacy), we use the browser's ability to open external URLs
+    // which is handled by shell.openExternal in the main process.
+    window.open(url, "_blank");
+    recordStage("whatsapp", "window", { opened: true, mode: "electron-external" });
+    return;
   }
   const invoke = await resolveInvoke();
   if (!invoke) {
