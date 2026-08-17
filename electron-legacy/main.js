@@ -248,6 +248,20 @@ ipcMain.handle('sa:writeAbsoluteFile', async (_e, args) => {
   } catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
 });
 
+ipcMain.handle('sa:savePdf', async (_e, args) => {
+  try {
+    const { fileName, pdfBase64 } = args || {};
+    const dir = path.join(exportRoot(), 'PDFs');
+    fs.mkdirSync(dir, { recursive: true });
+    const full = path.join(dir, safeFileName(fileName));
+    fs.writeFileSync(full, Buffer.from(pdfBase64, 'base64'));
+    return full;
+  } catch (err) {
+    writeStartupLog('savePdf error: ' + String(err));
+    return null;
+  }
+});
+
 ipcMain.handle('sa:getDataRoot', async () => {
   try {
     const root = path.join(app.getPath('userData'), 'Data');
