@@ -89,7 +89,7 @@ export function CloudProviderSetupDialog({
         <DialogHeader>
           <DialogTitle>'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''</DialogTitle>
           <DialogDescription>
-            BUT IF SOME ONE WANT TO GO TO PREVIOUS VERSION AND DONT WANT UPDATES WHAT IS THE WAY ? I WANT TO ADD WHILE UPDATE THAT, IF PERSON DONT LIKE UPDATED VERSION HE MAY OPT TO GO TO PREVIOUS VERSION
+            with safe step-by-step guidance) or "Keep this version" WHAT IS THIS STEPS TELL ME IS IT SIMPLE ? LIKE CLICK ?
           </DialogDescription>
         </DialogHeader>
 

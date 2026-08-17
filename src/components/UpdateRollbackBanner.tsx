@@ -105,13 +105,19 @@ export function UpdateRollbackBanner() {
             </DialogDescription>
           </DialogHeader>
 
+          <div className="rounded-md border bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+            <strong>Going back is not one click.</strong> Windows does not allow a
+            running program to uninstall itself and install an older version
+            automatically, so you need to run the previous installer yourself.
+          </div>
+
           <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
             <li>
-              Take a backup first — use the <strong>Backup</strong> button in the top
-              bar. This writes a dated snapshot file you can always restore from.
+              Click <strong>Backup</strong> in the top bar — one click, just to be
+              safe.
             </li>
             <li>
-              Close the application completely.
+              Close this app completely.
             </li>
             <li>
               Uninstall version {offer.toVersion} from Windows{" "}
@@ -129,9 +135,9 @@ export function UpdateRollbackBanner() {
           </ol>
 
           <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
-            Never edit or delete files inside the installation folder by hand. If the
-            program files get damaged, simply reinstall the same version — that
-            repairs the program without touching the accounting data.
+            <strong>Keep this version</strong> is a single click. It stops the device
+            from receiving future automatic updates, so the current build stays
+            exactly as it is.
           </div>
 
           <DialogFooter className="gap-2 sm:justify-between">
