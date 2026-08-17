@@ -91,7 +91,17 @@ export async function checkUpdateSafety(): Promise<UpdateSafetyStatus> {
       localStorage.setItem(LAST_COUNT_KEY, String(nowCount));
     }
     localStorage.setItem(RECOVERY_FLAG_KEY, recoveryRecommended ? "1" : "0");
+    recordVersionHistory(now);
+    // An update just landed — offer a safe way back to the build the user
+    // was happy with. Data is untouched either way.
+    if (versionChanged && prevVersion) {
+      localStorage.setItem(
+        ROLLBACK_OFFER_KEY,
+        JSON.stringify({ fromVersion: prevVersion, toVersion: now, offeredAt: new Date().toISOString() }),
+      );
+    }
   } catch { /* ignore */ }
+
 
   return {
     previousVersion: prevVersion,
