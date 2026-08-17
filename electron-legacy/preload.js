@@ -19,4 +19,6 @@ contextBridge.exposeInMainWorld('yourMehtaji', {
   readTextFile: (absPath) => ipcRenderer.invoke('sa:readTextFile', absPath),
   writeAbsoluteFile: (absDir, subFolder, fileName, contents) =>
     ipcRenderer.invoke('sa:writeAbsoluteFile', { absDir, subFolder, fileName, contents }),
+  savePdf: (fileName, pdfBase64) =>
+    ipcRenderer.invoke('sa:savePdf', { fileName, pdfBase64 }),
 });

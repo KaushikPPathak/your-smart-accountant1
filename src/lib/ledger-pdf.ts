@@ -227,7 +227,8 @@ export async function downloadLedgerPdf(
     } else if (runtime === "electron") {
       const fileName = `ledger-${partyId}-${Date.now()}.pdf`;
       const pdfBase64 = doc.output("datauristring").split(",")[1];
-      const filePath = await (window as any).yourMehtaji?.savePdf(fileName, pdfBase64);
+      const result = await (window as any).yourMehtaji?.savePdf(fileName, pdfBase64);
+      const filePath = typeof result === "string" ? result : result?.path;
       if (filePath) info.path = filePath;
     } else {
       // Browser: real download

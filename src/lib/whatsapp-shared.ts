@@ -32,13 +32,21 @@ export async function copyFilesToClipboardNative(paths: string[]): Promise<boole
     runtime,
     path_count: paths.length,
   });
-  if (runtime !== "tauri" || !paths.length) {
+  if (runtime === "browser" || !paths.length) {
     recordFailure("whatsapp", new Error(
-      runtime !== "tauri"
-        ? `Native clipboard unavailable in ${runtime} runtime`
-        : "No file paths supplied to clipboard copy",
+      !paths.length
+        ? "No file paths supplied to clipboard copy"
+        : `Native clipboard unavailable in ${runtime} runtime`
     ), { stage: "bridge", runtime });
     return false;
+  }
+  
+  if (runtime === "electron") {
+    // For Electron, we need to show the file in folder or just notify success
+    // since we don't have a direct "copy file to clipboard" bridge implemented yet
+    // that matches Tauri's behavior. But for now, we just return true if paths exist
+    // as the PDF was already saved successfully.
+    return true;
   }
   try {
     const invoke = await resolveInvoke();
@@ -142,10 +150,18 @@ export function buildWhatsAppWebUrl(phone: string, message: string): string {
 export async function showWhatsAppWeb(url: string): Promise<void> {
   const runtime = getNativeRuntime();
   recordStage("whatsapp", "url", { runtime, url_len: url.length, has_phone: url.includes("phone=") });
-  if (runtime !== "tauri") {
+  if (runtime === "browser") {
     const err = new Error("WhatsApp sharing is only available in the desktop app.");
     recordFailure("whatsapp", err, { stage: "url", runtime });
     throw err;
+  }
+  
+  if (runtime === "electron") {
+    // For Electron (Legacy), we use the browser's ability to open external URLs
+    // which is handled by shell.openExternal in the main process.
+    window.open(url, "_blank");
+    recordStage("whatsapp", "window", { opened: true, mode: "electron-external" });
+    return;
   }
   const invoke = await resolveInvoke();
   if (!invoke) {

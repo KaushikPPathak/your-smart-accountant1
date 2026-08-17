@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { formatINR } from "@/lib/money";
 import { downloadLedgerPdf } from "@/lib/ledger-pdf";
 import { recordFailure, recordStage } from "@/lib/crash-log";
+import { getNativeRuntime } from "@/lib/native-bridge";
 import {
   copyFilesToClipboardNative,
   playSuccessBeep,
@@ -100,23 +101,32 @@ export async function sendLedgerViaWhatsApp(
 
   // Validate PDF path before attempting clipboard copy
   let copied = false;
+  const runtime = getNativeRuntime();
+
   if (info.path && typeof info.path === "string") {
     const isAbsolute = /^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(info.path);
     if (isAbsolute) {
-      recordStage("whatsapp", "path-check", { path: info.path, absolute: true });
+      recordStage("whatsapp", "path-check", { path: info.path, absolute: true, runtime });
       copied = await copyFilesToClipboardNative([info.path]);
       recordStage("whatsapp", "clipboard", { copied });
     } else {
-      recordFailure("whatsapp", new Error(`PDF path is not absolute: ${info.path}`), { stage: "path-check" });
+      recordFailure("whatsapp", new Error(`PDF path is not absolute: ${info.path}`), { stage: "path-check", runtime });
     }
   } else {
     recordFailure("whatsapp", new Error("downloadLedgerPdf returned no path — PDF was not saved to disk"), {
       stage: "path-check",
       path: info.path ?? null,
+      runtime
     });
   }
 
-  if (copied) playSuccessBeep();
+  if (copied) {
+    playSuccessBeep();
+  } else if (runtime === "electron" && info.path) {
+    // For Electron, since we can't copy the file to clipboard yet, 
+    // we open the folder for the user.
+    await (window as any).yourMehtaji?.showInFolder(info.path);
+  }
 
   // 2. Focus / navigate WhatsApp Web
   const waUrl = buildWhatsAppWebUrl(phone, message);
@@ -143,11 +153,16 @@ export async function sendLedgerViaWhatsApp(
         onClick: () => info.path && navigator.clipboard.writeText(info.path),
       },
     });
+  } else if (runtime === "electron" && info.path) {
+    toast.success("PDF saved to Exports/PDFs folder!", {
+      description: "Please attach it manually in WhatsApp. The folder has been opened for you.",
+      duration: 10000,
+    });
   } else {
     toast.error("Could not copy PDF to clipboard", {
       description: info.path
         ? "The file exists but could not be placed on the clipboard. Try attaching it manually from: " + info.path
-        : "The PDF was not saved to a file path. The bug is in ledger-pdf.ts — it must return an absolute filesystem path.",
+        : "The PDF was not saved to a file path. Please check diagnostics.",
       duration: 10000,
     });
   }
