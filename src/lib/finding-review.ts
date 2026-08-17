@@ -1,36 +1,38 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Finding Report Analysis & Improvement Plan
+ * Audit and Implementation Plan: All-Round Application Assessment (Aug 2026)
  * 
- * I have reviewed your assessment report (file-196) and my findings are below.
- * The report is accurate: our architecture is feature-rich but has critical 
- * security and maintenance debt that must be addressed before production.
+ * I have reviewed the comprehensive assessment report (file-197) and verified 
+ * the findings against our current implementation. Below is the status and 
+ * implementation plan for the identified critical and high-priority items.
  * 
  * ---
  * 
- * 1. ANALYSIS OF FINDINGS:
- * - S0 (CRITICAL): Reusable Supabase credentials (tech-user) in client code. 
- *   This is a major risk. I have already begun shifting to "Local-First" 
- *   desktop mode to remove the mandatory dependency on these keys.
- * - S1 (SECURITY): Broad RPC grants and fetch interception. Deny-by-default 
- *   is necessary for security.
- * - MAINTENANCE: 13,000+ lint errors and 1,000+ line files increase regression risk.
- * - DATA: Over-reliance on multiple stores (Dexie, SQLite, Supabase) creates 
- *   potential source-of-truth divergence.
+ * 1. COMPLETED SECURITY & ARCHITECTURAL FIXES:
+ * - S0 (CRITICAL): TECH-USER REMOVAL. All static technical credentials have 
+ *   been scrubbed. The app now uses a proxy-client pattern in 
+ *   `src/integrations/supabase/client.ts` that safely handles missing 
+ *   environment variables for Local-First autonomy.
+ * - S1 (SECURITY): FETCH INTERCEPTION REMOVED. The global `window.fetch` 
+ *   patching in `sync-worker.ts` has been disabled to resolve network-level 
+ *   fragility and security risks.
+ * - DATA RECOVERY: Automatic startup recovery now uses `recoverMissingFromSnapshot` 
+ *   which respects original UUIDs, preventing data duplication.
+ * - LEGACY SUPPORT: Electron 22 shims and hardware-acceleration disabling 
+ *   are active for Windows 7 support.
  * 
- * 2. IMPROVEMENT PLAN:
- * - PHASE 1 (SECURITY): Remove 'tech-user' credentials from all frontend 
- *   bundles. Move to Local Auth for desktop and User-Specific sessions for cloud.
- * - PHASE 2 (DOMAIN): Consolidate accounting logic into typed "Application 
- *   Services" (e.g., VoucherService, SyncService) to reduce code duplication 
- *   across routes and AI components.
- * - PHASE 3 (STABILITY): Resolve TypeScript 'any' types and 'unknown' errors 
- *   to ensure build reliability. Enforce strict linting on new files.
- * - PHASE 4 (RELEASE): Automate "Restore Drills" in CI to verify that 
- *   automatic recovery never corrupts or deletes live user data.
+ * 2. IMMEDIATE IMPLEMENTATION PLAN (P0/P1):
+ * - ACTION 1: DYNAMIC IMPORT AUDIT. Inspect `src/routes/` to ensure dynamic 
+ *   imports aren't also statically imported, improving desktop cold-start.
+ * - ACTION 2: STATUTORY REPORT GOLDEN FIXTURES. Create a set of anonymized 
+ *   JSON fixtures to validate GST and balance sheet calculations in CI.
+ * - ACTION 3: CI QUALITY GATES. Integrate `tsgo` and linting into the 
+ *   packaging workflow to prevent UI breakage on legacy systems.
  * 
- * I am proceeding with the high-priority TypeScript and architectural fixes now.
+ * 3. MEDIUM TERM (P2):
+ * - DOMAIN SERVICES: Consolidate voucher and ledger logic into a unified 
+ *   "Application Service" layer as recommended in the assessment.
  */
 
-export const ASSISTANT_RESPONSE_TEMPLATE = "FINDING_REVIEW_v1";
+export const FINDING_PLAN_v3 = "IMPLEMENTATION_PLAN_AUG_2026_REVISED";
