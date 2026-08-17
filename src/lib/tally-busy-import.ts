@@ -811,9 +811,10 @@ export async function postLedgers(
 ): Promise<PostResultEx> {
   const { data: existing } = await supabase
     .from("ledgers").select("id, name").eq("company_id", companyId);
-  const map = new Map<string, string>(
+  const ledgerMap = new Map<string, string>(
     (existing || []).map((l: any) => [lc(l.name), l.id]),
   );
+  
   async function ensureLedger(name: string, type: LedgerType): Promise<string> {
     const k = lc(name);
     const hit = ledgerMap.get(k);
@@ -821,14 +822,17 @@ export async function postLedgers(
     const { data, error } = await supabase
       .from("ledgers").insert({ company_id: companyId, name, type }).select("id").single();
     if (error) throw error;
-    ledgerMap.set(k, { id: data.id, type });
+    ledgerMap.set(k, data.id);
     return data.id;
   }
 
   let created = 0, skipped = 0;
   const failed: { name: string; reason: string }[] = [];
   let done = 0;
-  for (const r of rows) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Sign in required");
+
+  for (const r of (rows as any[])) {
     try {
     let partyId: string | null = null;
     if (r.party) {
