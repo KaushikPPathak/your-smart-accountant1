@@ -91,7 +91,6 @@ export function CloudProviderSetupDialog({
           <DialogDescription>
             OK WHAT ABOUT SYSTEM FILES THAT GOT EDITED WHILE RE INSTALLATION AND ANY THING DONT WORK WHAT IS THE WAY ? BECAUSE I AM BUILDER BUT WHAT ABOUT THE PEOPLE WHO PURCHASES SOFTWARE
           </DialogDescription>
-          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 text-sm">
