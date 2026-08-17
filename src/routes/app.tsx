@@ -359,6 +359,11 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Lazy load heavy components
+  const ReportViewer = lazy(() => import("@/components/reports/ReportViewer").then(m => ({ default: m.ReportViewer })));
+  const InventoryDashboard = lazy(() => import("@/components/inventory/InventoryDashboard").then(m => ({ default: m.InventoryDashboard })));
+
+
   useShortcut(
     "F1",
     (e) => {
