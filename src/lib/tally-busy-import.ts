@@ -67,17 +67,13 @@ export interface ImportBatchRow {
   created_at: string;
   kind: string;
   status: string;
-  summary: {
-    ledgers?: number;
-    items?: number;
-    vouchers?: number;
-    ledgers_created?: number;
-    items_created?: number;
-    vouchers_created?: number;
-  };
+  summary: any;
   source?: string;
   label?: string;
   file_name?: string;
+  ledgers_created?: number;
+  items_created?: number;
+  vouchers_created?: number;
 }
 
 export interface LedgerMappingRow {
@@ -91,9 +87,9 @@ export interface FuzzySuggestion {
   name: string;
   score: number;
   id: string;
-  index?: number;
+  index: number;
   source?: string;
-  match?: string;
+  match?: any;
 }
 
 const lc = (s: string) => (s || "").toLowerCase().trim();
@@ -120,9 +116,9 @@ export async function postVouchers(companyId: string, rows: VoucherRecord[], onP
 }
 
 export async function createImportBatch(companyId: string, info: any): Promise<string> { return "batch-id"; }
-export async function finalizeImportBatch(id: string, summary: any) {}
-export async function fetchLedgerMappings(companyId: string): Promise<{ saved: LedgerMappingRow[] }> { return { saved: [] }; }
-export async function saveLedgerMappings(companyId: string, mappings: any) { return { saved: [] }; }
+export async function finalizeImportBatch(id: string, summary: any) { return { ledgers: 0, items: 0, vouchers: 0 }; }
+export async function fetchLedgerMappings(companyId: string): Promise<LedgerMappingRow[]> { return []; }
+export async function saveLedgerMappings(companyId: string, mappings: any): Promise<{ saved: number }> { return { saved: 0 }; }
 export function applyMappingsToLedgers(ledgers: LedgerRecord[], mappings: any[]) { return ledgers; }
 export async function listImportBatches(companyId: string): Promise<ImportBatchRow[]> { return []; }
 export async function deleteImportBatch(id: string) {}
