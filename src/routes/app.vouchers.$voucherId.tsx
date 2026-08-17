@@ -150,7 +150,14 @@ function VoucherEditPage() {
             rate: paiseToRupees(r.rate_paise).toString(),
             discount: paiseToRupees(r.discount_paise).toString(),
             gst_rate: String(r.gst_rate),
-          })),
+          }))
+          .concat(
+            isItemKind 
+              ? Array.from({ length: Math.max(0, 10 - itemRows.length) }).map(() => ({
+                  item_id: "", description: "", qty: "", rate: "", discount: "", gst_rate: "18"
+                }))
+              : []
+          )
       );
       setEntryLines(
         (entryRows as unknown as { id: string; ledger_id: string; debit_paise: number; credit_paise: number; narration: string | null; line_no?: number }[])
@@ -162,7 +169,14 @@ function VoucherEditPage() {
             debit: r.debit_paise ? paiseToRupees(r.debit_paise).toString() : "",
             credit: r.credit_paise ? paiseToRupees(r.credit_paise).toString() : "",
             narration: r.narration ?? "",
-          })),
+          }))
+          .concat(
+            isEntryKind
+              ? Array.from({ length: Math.max(0, 10 - entryRows.length) }).map(() => ({
+                  ledger_id: "", debit: "", credit: "", narration: ""
+                }))
+              : []
+          )
       );
       setItems((masterItems as unknown as ItemOpt[]).filter((i) => (i as unknown as { is_active?: boolean }).is_active !== false));
       const ledgerList = (masterLedgers as unknown as LedgerOpt[]).filter((l) => (l as unknown as { is_active?: boolean }).is_active !== false);
