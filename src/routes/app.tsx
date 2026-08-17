@@ -361,7 +361,6 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
 
   // Lazy load heavy components
   const ReportViewer = lazy(() => import("@/components/reports/ReportViewer").then(m => ({ default: m.ReportViewer })));
-  const InventoryDashboard = lazy(() => import("@/components/inventory/InventoryDashboard").then(m => ({ default: m.InventoryDashboard })));
 
 
   useShortcut(
