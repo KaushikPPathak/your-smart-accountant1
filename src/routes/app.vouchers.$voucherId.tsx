@@ -61,7 +61,7 @@ interface Voucher {
   total_paise: number;
 }
 interface ItemLine {
-  id?: string;
+  id: string | undefined;
   item_id: string;
   description: string;
   qty: string;
@@ -70,7 +70,7 @@ interface ItemLine {
   gst_rate: string;
 }
 interface EntryLine {
-  id?: string;
+  id: string | undefined;
   ledger_id: string;
   debit: string;
   credit: string;
@@ -138,31 +138,48 @@ function VoucherEditPage() {
       ]);
       setVoucher(vRow);
       setPartyName((partyRow as unknown as { name?: string } | null)?.name ?? "");
+      const mappedItems = (itemRows as unknown as { id: string; item_id: string; description: string | null; qty: number; rate_paise: number; discount_paise: number; gst_rate: number; line_no?: number }[])
+        .slice()
+        .sort((a, b) => (a.line_no ?? 0) - (b.line_no ?? 0))
+        .map((r) => ({
+          id: r.id as string | undefined,
+          item_id: r.item_id,
+          description: r.description ?? "",
+          qty: String(r.qty),
+          rate: paiseToRupees(r.rate_paise).toString(),
+          discount: paiseToRupees(r.discount_paise).toString(),
+          gst_rate: String(r.gst_rate),
+        }));
+
       setItemLines(
-        (itemRows as unknown as { id: string; item_id: string; description: string | null; qty: number; rate_paise: number; discount_paise: number; gst_rate: number; line_no?: number }[])
-          .slice()
-          .sort((a, b) => (a.line_no ?? 0) - (b.line_no ?? 0))
-          .map((r) => ({
-            id: r.id,
-            item_id: r.item_id,
-            description: r.description ?? "",
-            qty: String(r.qty),
-            rate: paiseToRupees(r.rate_paise).toString(),
-            discount: paiseToRupees(r.discount_paise).toString(),
-            gst_rate: String(r.gst_rate),
-          })),
+        mappedItems.concat(
+          isItemKind 
+            ? Array.from({ length: Math.max(0, 10 - itemRows.length) }).map(() => ({
+                id: undefined, item_id: "", description: "", qty: "", rate: "", discount: "", gst_rate: "18"
+              }))
+            : []
+        )
       );
+
+      const mappedEntries = (entryRows as unknown as { id: string; ledger_id: string; debit_paise: number; credit_paise: number; narration: string | null; line_no?: number }[])
+        .slice()
+        .sort((a, b) => (a.line_no ?? 0) - (b.line_no ?? 0))
+        .map((r) => ({
+          id: r.id as string | undefined,
+          ledger_id: r.ledger_id,
+          debit: r.debit_paise ? paiseToRupees(r.debit_paise).toString() : "",
+          credit: r.credit_paise ? paiseToRupees(r.credit_paise).toString() : "",
+          narration: r.narration ?? "",
+        }));
+
       setEntryLines(
-        (entryRows as unknown as { id: string; ledger_id: string; debit_paise: number; credit_paise: number; narration: string | null; line_no?: number }[])
-          .slice()
-          .sort((a, b) => (a.line_no ?? 0) - (b.line_no ?? 0))
-          .map((r) => ({
-            id: r.id,
-            ledger_id: r.ledger_id,
-            debit: r.debit_paise ? paiseToRupees(r.debit_paise).toString() : "",
-            credit: r.credit_paise ? paiseToRupees(r.credit_paise).toString() : "",
-            narration: r.narration ?? "",
-          })),
+        mappedEntries.concat(
+          isEntryKind
+            ? Array.from({ length: Math.max(0, 10 - entryRows.length) }).map(() => ({
+                id: undefined, ledger_id: "", debit: "", credit: "", narration: ""
+              }))
+            : []
+        )
       );
       setItems((masterItems as unknown as ItemOpt[]).filter((i) => (i as unknown as { is_active?: boolean }).is_active !== false));
       const ledgerList = (masterLedgers as unknown as LedgerOpt[]).filter((l) => (l as unknown as { is_active?: boolean }).is_active !== false);
@@ -218,25 +235,40 @@ function VoucherEditPage() {
       supabase.from("items").select("id, name, gst_rate").eq("company_id", vRow.company_id).eq("is_active", true).order("name"),
       supabase.from("ledgers").select("id, name, type").eq("company_id", vRow.company_id).eq("is_active", true).order("name"),
     ]);
+    const cloudItems = ((itemsRes.data || []) as unknown as { id: string; item_id: string; description: string | null; qty: number; rate_paise: number; discount_paise: number; gst_rate: number }[]).map((r) => ({
+      id: r.id as string | undefined,
+      item_id: r.item_id,
+      description: r.description ?? "",
+      qty: String(r.qty),
+      rate: paiseToRupees(r.rate_paise).toString(),
+      discount: paiseToRupees(r.discount_paise).toString(),
+      gst_rate: String(r.gst_rate),
+    }));
     setItemLines(
-      ((itemsRes.data || []) as unknown as { id: string; item_id: string; description: string | null; qty: number; rate_paise: number; discount_paise: number; gst_rate: number }[]).map((r) => ({
-        id: r.id,
-        item_id: r.item_id,
-        description: r.description ?? "",
-        qty: String(r.qty),
-        rate: paiseToRupees(r.rate_paise).toString(),
-        discount: paiseToRupees(r.discount_paise).toString(),
-        gst_rate: String(r.gst_rate),
-      })),
+      cloudItems.concat(
+        isItemKind
+          ? Array.from({ length: Math.max(0, 10 - cloudItems.length) }).map(() => ({
+              id: undefined, item_id: "", description: "", qty: "", rate: "", discount: "", gst_rate: "18"
+            }))
+          : []
+      )
     );
+
+    const cloudEntries = ((entriesRes.data || []) as unknown as { id: string; ledger_id: string; debit_paise: number; credit_paise: number; narration: string | null }[]).map((r) => ({
+      id: r.id as string | undefined,
+      ledger_id: r.ledger_id,
+      debit: r.debit_paise ? paiseToRupees(r.debit_paise).toString() : "",
+      credit: r.credit_paise ? paiseToRupees(r.credit_paise).toString() : "",
+      narration: r.narration ?? "",
+    }));
     setEntryLines(
-      ((entriesRes.data || []) as unknown as { id: string; ledger_id: string; debit_paise: number; credit_paise: number; narration: string | null }[]).map((r) => ({
-        id: r.id,
-        ledger_id: r.ledger_id,
-        debit: r.debit_paise ? paiseToRupees(r.debit_paise).toString() : "",
-        credit: r.credit_paise ? paiseToRupees(r.credit_paise).toString() : "",
-        narration: r.narration ?? "",
-      })),
+      cloudEntries.concat(
+        isEntryKind
+          ? Array.from({ length: Math.max(0, 10 - cloudEntries.length) }).map(() => ({
+              id: undefined, ledger_id: "", debit: "", credit: "", narration: ""
+            }))
+          : []
+      )
     );
     setItems((masterItems.data || []) as ItemOpt[]);
     const ledgerList = (masterLedgers.data || []) as LedgerOpt[];
@@ -281,10 +313,24 @@ function VoucherEditPage() {
   }, [entryLines]);
 
   function updateItem(idx: number, patch: Partial<ItemLine>) {
-    setItemLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+    setItemLines((cur) => {
+      const next = cur.map((l, i) => (i === idx ? { ...l, ...patch } : l));
+      // If the user just touched the last row and it's not empty, add a new row
+      if (idx === cur.length - 1 && (patch.item_id || patch.description)) {
+        next.push({ id: undefined, item_id: "", description: "", qty: "", rate: "", discount: "", gst_rate: "18" });
+      }
+      return next;
+    });
   }
   function updateEntry(idx: number, patch: Partial<EntryLine>) {
-    setEntryLines((cur) => cur.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+    setEntryLines((cur) => {
+      const next = cur.map((l, i) => (i === idx ? { ...l, ...patch } : l));
+      // If the user just touched the last row and it's not empty, add a new row
+      if (idx === cur.length - 1 && (patch.ledger_id || patch.debit || patch.credit)) {
+        next.push({ id: undefined, ledger_id: "", debit: "", credit: "", narration: "" });
+      }
+      return next;
+    });
   }
 
   async function save() {
