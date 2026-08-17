@@ -120,7 +120,7 @@ export async function scan40A3(
     const firstV = vMap.get(firstVid)!;
     hits.push({
       ledger_id: String(bucket.ledger_id || ""),
-      ledger_name: nameMap.get(bucket.ledger_id) || "—",
+      ledger_name: (nameMap.get(bucket.ledger_id) as string) || "—",
       voucher_id: firstVid,
       voucher_no: String((firstV as any).voucher_number || ""),
       date: bucket.date,
