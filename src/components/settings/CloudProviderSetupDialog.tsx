@@ -89,7 +89,7 @@ export function CloudProviderSetupDialog({
         <DialogHeader>
           <DialogTitle>'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''</DialogTitle>
           <DialogDescription>
-            OK WHAT ABOUT SYSTEM FILES THAT GOT EDITED WHILE RE INSTALLATION AND ANY THING DONT WORK WHAT IS THE WAY ? BECAUSE I AM BUILDER BUT WHAT ABOUT THE PEOPLE WHO PURCHASES SOFTWARE
+            BUT IF SOME ONE WANT TO GO TO PREVIOUS VERSION AND DONT WANT UPDATES WHAT IS THE WAY ? I WANT TO ADD WHILE UPDATE THAT, IF PERSON DONT LIKE UPDATED VERSION HE MAY OPT TO GO TO PREVIOUS VERSION
           </DialogDescription>
         </DialogHeader>
 

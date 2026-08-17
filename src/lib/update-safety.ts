@@ -91,7 +91,17 @@ export async function checkUpdateSafety(): Promise<UpdateSafetyStatus> {
       localStorage.setItem(LAST_COUNT_KEY, String(nowCount));
     }
     localStorage.setItem(RECOVERY_FLAG_KEY, recoveryRecommended ? "1" : "0");
+    recordVersionHistory(now);
+    // An update just landed — offer a safe way back to the build the user
+    // was happy with. Data is untouched either way.
+    if (versionChanged && prevVersion) {
+      localStorage.setItem(
+        ROLLBACK_OFFER_KEY,
+        JSON.stringify({ fromVersion: prevVersion, toVersion: now, offeredAt: new Date().toISOString() }),
+      );
+    }
   } catch { /* ignore */ }
+
 
   return {
     previousVersion: prevVersion,
@@ -110,6 +120,79 @@ export function isRecoveryRecommended(): boolean {
 export function clearRecoveryFlag(): void {
   try { localStorage.setItem(RECOVERY_FLAG_KEY, "0"); } catch { /* ignore */ }
 }
+
+// ---------------------------------------------------------------------------
+// Version history + rollback ("I don't like this update, take me back")
+// ---------------------------------------------------------------------------
+//
+// The installer never touches the data folder, so going back to an older
+// build is safe: uninstall the new one, install the previous one, data is
+// untouched. To make that practical we (a) remember which versions this
+// device has actually run, and (b) show a rollback offer for a short window
+// right after an update so the user can decide.
+
+const HISTORY_KEY = "ym_version_history";
+const ROLLBACK_OFFER_KEY = "ym_rollback_offer";
+const AUTO_UPDATE_OPT_OUT_KEY = "ym_auto_update_opt_out";
+
+export interface VersionHistoryEntry {
+  version: string;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+export function getVersionHistory(): VersionHistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const parsed = raw ? (JSON.parse(raw) as VersionHistoryEntry[]) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+function recordVersionHistory(version: string): void {
+  try {
+    const now = new Date().toISOString();
+    const hist = getVersionHistory();
+    const existing = hist.find((h) => h.version === version);
+    if (existing) existing.lastSeen = now;
+    else hist.push({ version, firstSeen: now, lastSeen: now });
+    // Keep the last 10 versions only.
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(-10)));
+  } catch { /* ignore */ }
+}
+
+export interface RollbackOffer {
+  fromVersion: string;
+  toVersion: string;
+  offeredAt: string;
+}
+
+/** The previous version the user can safely go back to, if an update just happened. */
+export function getRollbackOffer(): RollbackOffer | null {
+  try {
+    const raw = localStorage.getItem(ROLLBACK_OFFER_KEY);
+    if (!raw) return null;
+    const offer = JSON.parse(raw) as RollbackOffer;
+    if (!offer?.fromVersion || !offer?.toVersion) return null;
+    return offer;
+  } catch { return null; }
+}
+
+export function dismissRollbackOffer(): void {
+  try { localStorage.removeItem(ROLLBACK_OFFER_KEY); } catch { /* ignore */ }
+}
+
+/** User preference: stay on this version, don't offer/apply updates. */
+export function isAutoUpdateOptedOut(): boolean {
+  try { return localStorage.getItem(AUTO_UPDATE_OPT_OUT_KEY) === "1"; }
+  catch { return false; }
+}
+
+export function setAutoUpdateOptOut(optOut: boolean): void {
+  try { localStorage.setItem(AUTO_UPDATE_OPT_OUT_KEY, optOut ? "1" : "0"); }
+  catch { /* ignore */ }
+}
+
 
 /**
  * Fire a pre-update snapshot for every known company. Called right before
