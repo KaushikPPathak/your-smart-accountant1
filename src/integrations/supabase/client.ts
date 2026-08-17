@@ -16,6 +16,20 @@ const noopHandler: ProxyHandler<any> = {
         signOut: async () => {},
       };
     }
+    if (prop === 'from') {
+      return () => ({
+        select: () => ({
+          match: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }), range: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }), range: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }),
+          range: () => ({ order: () => Promise.resolve({ data: [], error: null }) }),
+          order: () => ({ range: () => Promise.resolve({ data: [], error: null }) }),
+          in: () => Promise.resolve({ data: [], error: null }),
+          eq: () => ({ gte: () => ({ is: () => Promise.resolve({ data: [], error: null }) }), is: () => Promise.resolve({ data: [], error: null }) }),
+        }),
+        insert: () => Promise.resolve({ data: null, error: null }),
+        update: () => Promise.resolve({ data: null, error: null }),
+        delete: () => Promise.resolve({ data: null, error: null }),
+      });
+    }
     // Return a dummy function for everything else to avoid "not a function" crashes
     return () => ({
       from: () => ({

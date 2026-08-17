@@ -135,14 +135,14 @@ function LockGate({ children }: { children: React.ReactNode }) {
             import("@/lib/dedupe-local-companies"),
           ]);
 
-
           // 1. Scan for orphans/missing companies from disk snapshots first
-          const discoveredCount = await discoverCompaniesFromSnapshots();
+          await discoverCompaniesFromSnapshots();
           
           // 2. Load the current (potentially reconstructed) company list
           const companies = await offlineDb.companies.toArray();
           
           // 3. Trigger silent auto-restore for any company with missing data
+          // NOTE: auto-restore now uses recoverMissingFromSnapshot which is non-destructive
           if (companies.length > 0) {
             await runAutoRestore(companies);
           }
