@@ -87,7 +87,7 @@ export function CloudProviderSetupDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Configure {info.label}</DialogTitle>
+          <DialogTitle>'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''</DialogTitle>
           <DialogDescription>
             this is too complex make it for ordinary laymen
           </DialogDescription>
