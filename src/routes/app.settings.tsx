@@ -180,8 +180,9 @@ function SettingsPage() {
             full_name: profMap.get(m.user_id)?.full_name ?? null,
           })),
         );
-    }
-  };
+      }
+    })();
+  }, [activeCompanyId]);
 
   const updateRole = async (userId: string, role: Member["role"]) => {
     if (!activeCompanyId) return;
