@@ -61,7 +61,7 @@ interface Voucher {
   total_paise: number;
 }
 interface ItemLine {
-  id?: string;
+  id: string | undefined;
   item_id: string;
   description: string;
   qty: string;
@@ -70,7 +70,7 @@ interface ItemLine {
   gst_rate: string;
 }
 interface EntryLine {
-  id?: string;
+  id: string | undefined;
   ledger_id: string;
   debit: string;
   credit: string;
