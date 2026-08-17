@@ -89,7 +89,7 @@ export function CloudProviderSetupDialog({
         <DialogHeader>
           <DialogTitle>'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''</DialogTitle>
           <DialogDescription>
-            I want to load app working speedy and smoothly. Please find way to improve the loading of the app
+            What is the improvement in loading time after your implementation
           </DialogDescription>
         </DialogHeader>
 
