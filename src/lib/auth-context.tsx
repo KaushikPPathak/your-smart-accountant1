@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import type { Session, AuthChangeEvent, User } from "@supabase/supabase-js";
+import { supabase } from "../integrations/supabase/client";
 import { ensureTechSession } from "./tech-user";
 
 interface AuthContextValue {
@@ -35,13 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     // Listener first (Supabase best practice).
-    // IMPORTANT: ignore TOKEN_REFRESHED and INITIAL_SESSION events. Those fire
-    // every time the tab regains focus (and roughly hourly when the access
-    // token is refreshed). Calling setSession on them swaps the context value
-    // by reference, re-rendering every consumer and blowing away half-filled
-    // forms ("page reload on tab switch" bug). Only react to true identity
-    // transitions.
-    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, newSession: Session | null) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") {
         return;
       }
@@ -53,9 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return newSession;
       });
       if (newSession && event === "SIGNED_IN") {
-        // Seed the "last successful cloud handshake" clock so the offline
-        // session-refresh watcher never false-warns immediately after a
-        // fresh sign-in.
+        // Seed the "last successful cloud handshake" clock
         import("./offline/session-refresh").then(m => m.markSessionFresh()).catch(() => undefined);
         initSyncEngine(newSession);
       }
@@ -69,38 +61,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let activeSession: Session | null = null;
 
       try {
-        // Read any cached session immediately so the lock screen unblocks fast.
-        // Add a small timeout for the initial session check to avoid blocking render on slow networks.
-        const { data } = await Promise.race<Awaited<ReturnType<typeof supabase.auth.getSession>>>([
-          supabase.auth.getSession(),
-          new Promise((resolve) => setTimeout(() => resolve(sessionTimeoutFallback), 700))
-        ]);
-        if (data.session) {
-          activeSession = data.session;
-          setSession(data.session);
+        const { isCloudConfigured } = await import("./cloud-adapter");
+        
+        if (isCloudConfigured()) {
+          // Read any cached session immediately
+          const { data } = await Promise.race<Awaited<ReturnType<typeof supabase.auth.getSession>>>([
+            supabase.auth.getSession(),
+            new Promise((resolve) => setTimeout(() => resolve(sessionTimeoutFallback), 700))
+          ]);
+          if (data?.session) {
+            activeSession = data.session;
+            setSession(data.session);
+          }
+        } else {
+          console.log("Supabase not configured, starting in local-only mode.");
         }
-      } catch {
-        /* ignore — fall through to lock screen */
+      } catch (err) {
+        console.warn("Auth initialization failed:", err);
       } finally {
-        // Release the UI as soon as we know the cached state. Don't block on network.
         setLoading(false);
         if (activeSession) {
-          // Cached session already exists — seed the refresh clock so the
-          // auto-refresh watcher knows when this device last talked to the cloud.
           import("./offline/session-refresh").then(m => m.markSessionFresh()).catch(() => undefined);
           initSyncEngine(activeSession);
+        } else {
+          // In local-only mode or no cloud session, still start worker for local processing
+          import("./local-only-mode").then(m => {
+            if (m.isLocalOnlyMode()) {
+               import("./offline/sync-worker").then(sw => sw.startSyncWorker()).catch(() => undefined);
+            }
+          }).catch(() => undefined);
         }
       }
 
       // Background: only attempt tech sign-in if we're actually online and have no session.
-      if (isOnline && !activeSession) {
+      const { isCloudConfigured: isCloudOk } = await import("./cloud-adapter");
+      if (isOnline && !activeSession && isCloudOk()) {
         Promise.race([
           ensureTechSession(),
           new Promise<void>((resolve) => setTimeout(resolve, 800)),
         ])
           .then(async () => {
             const { data } = await supabase.auth.getSession();
-            if (data.session) {
+            if (data?.session) {
               setSession(data.session);
               initSyncEngine(data.session);
             }
@@ -117,8 +119,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     loading,
     signOut: async () => {
-      // No-op for the client — we never want to actually sign out, that would
-      // just trigger the silent re-sign-in path. Kept as a stable API surface.
       return;
     },
   };

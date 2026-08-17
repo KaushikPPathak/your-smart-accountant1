@@ -1,7 +1,7 @@
 // Write outbox: mutations queued while offline.
 // Includes strict, timestamp-aware delivery matching our Last-Write-Wins pattern.
 
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "../../integrations/supabase/client";
 import { isOnlineNow, pingOnline } from "./online-status";
 
 // Isolated interfaces prevent static AST bundling deadlocks
