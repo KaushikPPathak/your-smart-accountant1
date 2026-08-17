@@ -773,7 +773,7 @@ function VoucherEditPage() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm">{formatINR(computed[i]?.total_paise ?? 0)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{formatINR(computed?.[i]?.total_paise ?? 0)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
