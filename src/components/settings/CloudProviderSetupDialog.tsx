@@ -89,7 +89,8 @@ export function CloudProviderSetupDialog({
         <DialogHeader>
           <DialogTitle>'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''</DialogTitle>
           <DialogDescription>
-            THIS IS PICTURE OF WIN 10 BUILD NSIS NOW IF I INSTALL NEW VERSION DATA WILL BE THERE , NO NEED TO WORRY ON REINSTALLATION ? AND IN THIS BUILD WHATSAPP SHARING ETC WORKING PROPERLY BUT I HAVE TESTED NEXT VERSION IN WIN 7 BUILD WHICH HAS PROBLEMS HOW TO TAKE THIS SYSTEM BACKUP ? I WANT TO ENSURE AND LOCKED THE VERSION SO I CAN SAY THAT DONT EDIT CERTAIN FILES ETC OR ANY OTHER WAY TO DEAL WITH THIS KIND OF SITUATION
+            OK WHAT ABOUT SYSTEM FILES THAT GOT EDITED WHILE RE INSTALLATION AND ANY THING DONT WORK WHAT IS THE WAY ? BECAUSE I AM BUILDER BUT WHAT ABOUT THE PEOPLE WHO PURCHASES SOFTWARE
+          </DialogDescription>
           </DialogDescription>
         </DialogHeader>
 
