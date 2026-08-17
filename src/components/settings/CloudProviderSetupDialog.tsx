@@ -89,8 +89,7 @@ export function CloudProviderSetupDialog({
         <DialogHeader>
           <DialogTitle>Configure {info.label}</DialogTitle>
           <DialogDescription>
-            Register your own OAuth app with {info.label}, then paste its Client ID
-            here. It is saved on this device only.
+            this is too complex make it for ordinary laymen
           </DialogDescription>
         </DialogHeader>
 
