@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "bun x tsgo && vite build",
+    "preview": "vite preview",
+    "test": "vitest"
+  }
+}
