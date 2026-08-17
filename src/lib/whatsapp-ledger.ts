@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { formatINR } from "@/lib/money";
 import { downloadLedgerPdf } from "@/lib/ledger-pdf";
 import { recordFailure, recordStage } from "@/lib/crash-log";
+import { getNativeRuntime } from "@/lib/native-bridge";
 import {
   copyFilesToClipboardNative,
   playSuccessBeep,
