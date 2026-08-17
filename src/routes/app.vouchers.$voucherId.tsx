@@ -382,7 +382,7 @@ function VoucherEditPage() {
           .map((l, i) => {
             if (!l.item_id) return null;
             const c = computed[i];
-            if (c.total_paise <= 0) return null;
+            if (!c || c.total_paise <= 0) return null;
             return {
               id: l.id ?? crypto.randomUUID(),
               voucher_id: voucher.id,
