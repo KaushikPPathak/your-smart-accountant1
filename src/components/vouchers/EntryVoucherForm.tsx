@@ -840,46 +840,6 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           </CardContent>
         </Card>
 
-      ) : (
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[40%]">Ledger</TableHead>
-                <TableHead className="text-right">Debit</TableHead>
-                <TableHead className="text-right">Credit</TableHead>
-                <TableHead>Narration</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lines.map((l, i) => (
-                <EntryRow
-                  key={l.id}
-                  mode="double"
-                  idx={i}
-                  row={{ id: l.id, ledger_id: l.ledger_id, debit: l.debit, credit: l.credit, narration: l.narration }}
-                  ledgerOptions={ledgers}
-                  balance={ledgerBalances[l.ledger_id]}
-                  canDelete={lines.length > 2}
-                  onCommit={(idx, patch) => update(idx, patch as Partial<Line>)}
-                  onFocusRow={setFocusedLine}
-                  onDelete={remove}
-                  onAddLedger={(idx) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: null, lineIdx: idx }); }}
-                  onEditLedger={(idx, lid) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: lid, lineIdx: idx }); }}
-                />
-              ))}
-            </TableBody>
-          </Table>
-          <div className="border-t p-3">
-            <Button variant="ghost" size="sm" onClick={add}>
-              <Plus className="mr-1 h-4 w-4" /> Add line
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
