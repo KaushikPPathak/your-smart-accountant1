@@ -789,18 +789,6 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                         onEditLedgerDlg={(idx, lid) => setLedgerDlg({ open: true, editId: lid, lineIdx: idx })}
                       />
                     ))}
-                    idx={i}
-                    row={{ id: l.id, ledger_id: l.ledger_id, amount: l.amount, narration: l.narration }}
-                    ledgerOptions={ledgers.filter((lg) => lg.id !== cashBankId)}
-                    balance={ledgerBalances[l.ledger_id]}
-                    canDelete={simpleLines.length > 1}
-                    onCommit={(idx, patch) => updateSimple(idx, patch as Partial<SimpleLine>)}
-                    onFocusRow={setFocusedLine}
-                    onDelete={removeSimple}
-                    onAddLedger={(idx) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: null, lineIdx: idx }); }}
-                    onEditLedger={(idx, lid) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: lid, lineIdx: idx }); }}
-                  />
-                ))}
               </TableBody>
             </Table>
             <div className="border-t p-3">
