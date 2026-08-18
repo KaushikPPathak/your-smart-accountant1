@@ -61,6 +61,7 @@ interface Settings {
   gst_filing_frequency: "monthly" | "quarterly";
   reminders_enabled: boolean;
   audit_case_reminders: boolean;
+  gst_check_interval: "always" | "monthly" | "quarterly" | "half_yearly" | "yearly";
 }
 
 interface Member {
