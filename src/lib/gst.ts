@@ -1,11 +1,26 @@
 // GST calculation helpers — all amounts in paise (integer)
 import { rupeesToPaise } from "./money";
+import { offlineDb } from "./offline/db";
 
 export interface GstLineInput {
+  item_id?: string;
+  ledger_id?: string;
   qty: number;
   rate: number; // rupees
   discount: number; // rupees (line-level)
   gstRate: number; // %
+}
+
+/** Precomputed GST result for caching */
+export interface CachedGstRate {
+  item_id: string;
+  ledger_id: string;
+  is_interstate: boolean;
+  gst_rate: number;
+  cgst_paise: number;
+  sgst_paise: number;
+  igst_paise: number;
+  updated_at: string;
 }
 
 export interface GstLineResult {
