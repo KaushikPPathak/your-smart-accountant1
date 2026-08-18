@@ -114,6 +114,8 @@ class OfflineDatabase extends Dexie {
   // E4 — GSTR-2B reconciliation (local-only, never synced).
   cache_gstr2b_imports!: Table<any, any>;
   cache_gstr2b_lines!: Table<any, any>;
+  // E5 — GST Calculation Caching.
+  cache_gst_rates!: Table<any, any>;
 
   constructor() {
     super("ym_offline_cache_v3");
