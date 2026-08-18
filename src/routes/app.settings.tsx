@@ -61,6 +61,7 @@ interface Settings {
   gst_filing_frequency: "monthly" | "quarterly";
   reminders_enabled: boolean;
   audit_case_reminders: boolean;
+  gst_check_interval: "always" | "monthly" | "quarterly" | "half_yearly" | "yearly";
 }
 
 interface Member {
@@ -97,6 +98,7 @@ function SettingsPage() {
     gst_filing_frequency: "monthly",
     reminders_enabled: true,
     audit_case_reminders: false,
+    gst_check_interval: "quarterly",
   });
   const [savingSettings, setSavingSettings] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
@@ -160,7 +162,7 @@ function SettingsPage() {
     (async () => {
       const { data } = await supabase
         .from("company_settings")
-        .select("invoice_prefix, invoice_starting_number, invoice_footer_note, invoice_terms, show_bank_details, show_signatory, gst_filing_frequency, reminders_enabled, audit_case_reminders")
+        .select("invoice_prefix, invoice_starting_number, invoice_footer_note, invoice_terms, show_bank_details, show_signatory, gst_filing_frequency, reminders_enabled, audit_case_reminders, gst_check_interval")
         .eq("company_id", activeCompanyId)
         .maybeSingle();
       if (data) setSettings(data as Settings);
@@ -378,6 +380,35 @@ function SettingsPage() {
               />
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">GST Compliance</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>GSTIN Verification Interval</Label>
+              <p className="text-xs text-muted-foreground">
+                Frequency at which the app prompts to re-verify the company GSTIN.
+              </p>
+            </div>
+            <Select
+              value={settings.gst_check_interval}
+              onValueChange={(v: any) => saveSettings({ gst_check_interval: v })}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="always">Every edit (Always)</SelectItem>
+                <SelectItem value="monthly">Monthly</SelectItem>
+                <SelectItem value="quarterly">Quarterly</SelectItem>
+                <SelectItem value="half_yearly">Six Months</SelectItem>
+                <SelectItem value="yearly">Yearly</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 

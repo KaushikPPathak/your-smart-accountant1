@@ -728,6 +728,7 @@ function CompaniesPage() {
                       placeholder={form.gst_registered ? "" : "Not applicable"}
                     />
                     <GstinPortalButton
+                      companyId={editingId}
                       gstin={form.gstin}
                       disabled={!form.gst_registered}
                       onDataFetched={(d) => {
