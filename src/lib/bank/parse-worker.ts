@@ -4,7 +4,7 @@
 /// <reference lib="webworker" />
 
 import Papa from "papaparse";
-import * as XLSX from "xlsx";
+import type * as XLSXType from "xlsx";
 
 export interface ParsedBankLine {
   txn_date: string;
@@ -31,6 +31,7 @@ function toIsoDate(v: unknown): string | null {
   if (v == null) return null;
   // Excel numeric date
   if (typeof v === "number" && isFinite(v)) {
+    const XLSX = (self as any).XLSX;
     const d = XLSX.SSF.parse_date_code(v);
     if (d) return `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
   }
@@ -128,7 +129,7 @@ function rowsFromMatrix(matrix: string[][]): ParseResponse {
   };
 }
 
-self.onmessage = (ev: MessageEvent<ParseRequest>) => {
+self.onmessage = async (ev: MessageEvent<ParseRequest>) => {
   try {
     const req = ev.data;
     let matrix: string[][] = [];
@@ -136,6 +137,8 @@ self.onmessage = (ev: MessageEvent<ParseRequest>) => {
       const res = Papa.parse<string[]>(req.text, { skipEmptyLines: true });
       matrix = (res.data || []) as string[][];
     } else {
+      const XLSX = await import("xlsx");
+      (self as any).XLSX = XLSX;
       const wb = XLSX.read(req.buffer, { type: "array", cellDates: false });
       const first = wb.SheetNames[0];
       if (!first) throw new Error("Workbook has no sheets.");
