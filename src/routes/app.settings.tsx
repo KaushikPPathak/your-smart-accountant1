@@ -384,6 +384,35 @@ function SettingsPage() {
       </Card>
 
       <Card>
+        <CardHeader><CardTitle className="text-base">GST Compliance</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>GSTIN Verification Interval</Label>
+              <p className="text-xs text-muted-foreground">
+                Frequency at which the app prompts to re-verify the company GSTIN.
+              </p>
+            </div>
+            <Select
+              value={settings.gst_check_interval}
+              onValueChange={(v: any) => saveSettings({ gst_check_interval: v })}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="always">Every edit (Always)</SelectItem>
+                <SelectItem value="monthly">Monthly</SelectItem>
+                <SelectItem value="quarterly">Quarterly</SelectItem>
+                <SelectItem value="half_yearly">Six Months</SelectItem>
+                <SelectItem value="yearly">Yearly</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader><CardTitle className="text-base">Release checklist</CardTitle></CardHeader>
         <CardContent className="flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
