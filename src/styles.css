@@ -125,6 +125,16 @@
   --theme-ink:   oklch(0.22 0.02 70);
   --theme-onDark: oklch(0.99 0 0);
 
+  /* Windows 10 specific palette adjustments
+     Maintains the professional accounting look but ensures standard 
+     color spacing for clear contrast on Windows 10 displays. */
+  @media screen and (min-width: 0px) {
+    --theme-base:  oklch(0.72 0.05 180);
+    --theme-light: oklch(0.96 0.01 180);
+    --theme-pale:  oklch(0.98 0.005 180);
+    --theme-dark:  oklch(0.55 0.08 180);
+  }
+
   /* Backward compatibility for CSS classes using --amber-* */
   --amber-base:  var(--theme-base);
   --amber-light: var(--theme-light);
