@@ -28,7 +28,10 @@ interface Props {
   onCreate?: (typed: string) => void;
   createLabel?: string;
   disabled?: boolean;
+  onQueryChange?: (query: string) => void;
+  externalFiltering?: boolean;
 }
+
 
 /**
  * Tally/Busy-style typeahead picker.
@@ -47,9 +50,16 @@ export function Combo({
   onCreate,
   createLabel = "Create new",
   disabled,
+  onQueryChange,
+  externalFiltering = false,
 }: Props) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+
+  React.useEffect(() => {
+    onQueryChange?.(query);
+  }, [query, onQueryChange]);
+
   const triggerRef = React.useRef<HTMLButtonElement>(null);
 
   const selected = React.useMemo(
@@ -140,7 +150,8 @@ export function Combo({
         }}
       >
         <Command
-          shouldFilter={true}
+          shouldFilter={!externalFiltering}
+
           onKeyDown={(e) => {
             if (e.altKey && e.key.toLowerCase() === "c" && onCreate) {
               e.preventDefault();
