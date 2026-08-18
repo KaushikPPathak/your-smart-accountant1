@@ -58,6 +58,8 @@ import { useCurrency, CURRENCIES } from "@/lib/currency";
 import { useDateFormat, DATE_FORMATS, type DateFormatCode } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
+import { Button } from "@/components/ui/button";
+
 import { BackupNowButton } from "@/components/BackupNowButton";
 import { RestoreNowButton } from "@/components/RestoreNowButton";
 import {
