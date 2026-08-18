@@ -40,10 +40,33 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched, companyId }:
   const autoFetchedRef = React.useRef<string>("");
   React.useEffect(() => {
     if (!isValid || autoFetchedRef.current === cleanGstin) return;
-    autoFetchedRef.current = cleanGstin;
-    void handleSetuFetch(true);
+
+    (async () => {
+      // Check check-interval logic if we have a companyId.
+      if (companyId) {
+        try {
+          const { offlineDb } = await import("@/lib/offline/db");
+          const settings = await offlineDb.cache_company_settings.where("company_id").equals(companyId).first();
+          if (settings && settings.gst_check_interval !== "always") {
+            const lastCheck = Number(localStorage.getItem(`ym_gstin_check:${companyId}`) ?? "0");
+            const now = Date.now();
+            const intervals: Record<string, number> = {
+              monthly: 30 * 86400000,
+              quarterly: 90 * 86400000,
+              half_yearly: 180 * 86400000,
+              yearly: 365 * 86400000,
+            };
+            const limit = intervals[settings.gst_check_interval] ?? 90 * 86400000;
+            if (now - lastCheck < limit) return;
+          }
+        } catch { /* ignore */ }
+      }
+
+      autoFetchedRef.current = cleanGstin;
+      void handleSetuFetch(true);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cleanGstin, isValid]);
+  }, [cleanGstin, isValid, companyId]);
 
   const handleSetuFetch = async (silent = false) => {
     if (!cleanGstin) {
