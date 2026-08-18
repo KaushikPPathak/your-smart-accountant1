@@ -97,17 +97,23 @@ export function startSyncWorker() {
   window.addEventListener("offline", () => { rememberWorkMode("offline"); });
   // Pull again when the tab becomes visible — catches "laptop opened again"
   window.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") void tick();
+    if (document.visibilityState === "visible") scheduleTick();
   });
+
   // Boot run — wait until the UI has painted so sync can never slow launch.
-  setTimeout(() => { void tick(); }, 3_000);
-  // NOTE: Integrity/invariant sweeps are NOT run in the background. They
-  // would compete with the UI on lower-end devices. Scans only run when
-  // triggered explicitly from Data Health, before backup, before restore,
-  // or once after a schema-version upgrade (see checkSchemaVersionOnBoot).
-  // Periodic lightweight sync while the tab is open — keeps offline data fresh
-  // without repeatedly downloading every voucher/report row.
-  setInterval(() => { void tick(); }, 120_000);
+  setTimeout(() => { scheduleTick(); }, 3_000);
+
+  // Periodic lightweight sync while the tab is open.
+  setInterval(() => { scheduleTick(); }, 120_000);
+}
+
+function scheduleTick() {
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    (window as any).requestIdleCallback(() => { void tick(); }, { timeout: 10000 });
+  } else {
+    // Fallback for browsers (or environments) without requestIdleCallback
+    setTimeout(() => { void tick(); }, 1);
+  }
 }
 
 /** Manual trigger for the status drawer. */

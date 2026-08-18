@@ -203,45 +203,64 @@ export async function drainOutbox(): Promise<{ pushed: number; failed: number; p
     const db = await getDbInstance();
     const rows = await db.outbox.orderBy("created_at").toArray() as unknown as OutboxRow[];
 
+    // Group rows by "dependency bucket".
+    // Causal dependency: voucher creation must happen before its line items.
+    // For simplicity, we treat all rows for the SAME table as potentially dependent.
+    // Independent companies or different tables are processed in parallel batches.
+    const buckets: Record<string, OutboxRow[]> = {};
     for (const row of rows) {
-      try {
-        await executeOutboxRow(row);
-        if (row.id !== undefined) await db.outbox.delete(row.id);
-        // Stamp local master cache as synced so UI badges reflect reality.
+      // Key format: "company_id:table" or "global:table"
+      const key = `${row.company_id ?? "global"}:${row.table}`;
+      if (!buckets[key]) buckets[key] = [];
+      buckets[key].push(row);
+    }
+
+    const processBucket = async (bucketRows: OutboxRow[]) => {
+      for (const row of bucketRows) {
         try {
-          if ((row.op === "insert" || row.op === "update") && (row.table === "ledgers" || row.table === "items")) {
-            const table = row.table === "ledgers" ? db.cache_ledgers : db.cache_items;
-            const id = row.op === "insert"
-              ? (row.payload as { id?: string })?.id
-              : (row.payload as { id?: string })?.id;
-            if (id) {
-              const existing = await table.get(id);
-              if (existing) await table.put({ ...existing, is_synced: true });
+          await executeOutboxRow(row);
+          if (row.id !== undefined) await db.outbox.delete(row.id);
+          // Stamp local master cache as synced
+          try {
+            if ((row.op === "insert" || row.op === "update") && (row.table === "ledgers" || row.table === "items")) {
+              const table = row.table === "ledgers" ? db.cache_ledgers : db.cache_items;
+              const id = (row.payload as { id?: string })?.id;
+              if (id) {
+                const existing = await table.get(id);
+                if (existing) await table.put({ ...existing, is_synced: true });
+              }
             }
-          }
-        } catch { /* cosmetic; ignore */ }
-        pushed += 1;
-        emit();
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        const nextAttempts = (row.attempts ?? 0) + 1;
-        if (isPoisonError(message) || nextAttempts >= MAX_TRANSIENT_ATTEMPTS) {
-          // Move out of the hot queue so it stops blocking siblings and can
-          // be inspected / retried / discarded from the Data Sync screen.
-          await moveToDeadLetter(db, row, message);
-          poisoned += 1;
-        } else {
-          failed += 1;
-          if (row.id !== undefined) {
-            await db.outbox.update(row.id, {
-              attempts: nextAttempts,
-              last_error: message,
-            });
+          } catch { /* cosmetic; ignore */ }
+          pushed += 1;
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          const nextAttempts = (row.attempts ?? 0) + 1;
+          if (isPoisonError(message) || nextAttempts >= MAX_TRANSIENT_ATTEMPTS) {
+            await moveToDeadLetter(db, row, message);
+            poisoned += 1;
+          } else {
+            failed += 1;
+            if (row.id !== undefined) {
+              await db.outbox.update(row.id, {
+                attempts: nextAttempts,
+                last_error: message,
+              });
+            }
+            // STOP processing this specific bucket on failure to preserve causal ordering
+            // (e.g., if voucher insert fails, don't try to insert its items)
+            break;
           }
         }
-        // Keep going — one bad row must not block every other pending change.
-        continue;
       }
+      emit();
+    };
+
+    // Run buckets in parallel (limited concurrency to avoid overwhelming network)
+    const bucketKeys = Object.keys(buckets);
+    const CONCURRENCY = 3;
+    for (let i = 0; i < bucketKeys.length; i += CONCURRENCY) {
+      const batch = bucketKeys.slice(i, i + CONCURRENCY).map(key => processBucket(buckets[key]));
+      await Promise.all(batch);
     }
 
 
