@@ -28,6 +28,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "name": string, "asOn"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_party_ledger",
+    description:
+      "Detailed statement/ledger of all transactions for a party, optionally within a date range.",
+    argsHint: `{ "name": string, "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_cash_balance",
     description:
       "Closing balance of the Cash ledger or a named bank account, optionally frozen at a date.",
@@ -49,6 +55,18 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     name: "get_trial_balance",
     description:
       "Trial balance snapshot — every ledger with opening, debit, credit, closing.",
+    argsHint: `{}`,
+  },
+  {
+    name: "get_profit_loss",
+    description:
+      "Profit and Loss account summary, grouped by direct/indirect income and expense.",
+    argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
+  },
+  {
+    name: "get_stock_summary",
+    description:
+      "Closing stock summary for all inventory items.",
     argsHint: `{}`,
   },
 ];
@@ -248,6 +266,70 @@ async function execGetPartyBalance(args: Record<string, unknown>): Promise<ToolR
   return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
 }
 
+async function execGetPartyLedger(args: Record<string, unknown>): Promise<ToolResult> {
+  const start = performance.now();
+  const name = String(args.name ?? "").trim();
+  const from = args.from ? String(args.from) : undefined;
+  const to = args.to ? String(args.to) : undefined;
+  if (!name) return { success: false, error: "missing 'name'", latencyMs: Math.round(performance.now() - start) };
+
+  const cached = await getCached("get_party_ledger", args);
+  if (cached) return { success: true, data: cached, cached: true, latencyMs: 0 };
+
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+
+  const q = `ledger of ${name}${from ? ` from ${from}` : ""}${to ? ` to ${to}` : ""}`;
+  const routed = routeQuery(q);
+  routed.intent = "party_ledger";
+  const slice = await retrieveForQuery(routed, cid);
+  const result = { scope: slice.scope, facts: slice.facts, entries: slice.data.entries };
+
+  await setCached("get_party_ledger", args, result);
+  return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
+}
+
+async function execGetProfitLoss(args: Record<string, unknown>): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+
+  const from = args.from ? String(args.from) : undefined;
+  const to = args.to ? String(args.to) : undefined;
+
+  const cached = await getCached("get_profit_loss", args);
+  if (cached) return { success: true, data: cached, cached: true, latencyMs: 0 };
+
+  const q = "profit and loss";
+  const routed = routeQuery(q);
+  routed.from = from;
+  routed.to = to;
+  routed.intent = "profit_loss";
+  const slice = await retrieveForQuery(routed, cid);
+  const result = { scope: slice.scope, facts: slice.facts, data: slice.data };
+
+  await setCached("get_profit_loss", args, result);
+  return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
+}
+
+async function execGetStockSummary(): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+
+  const cached = await getCached("get_stock_summary", {});
+  if (cached) return { success: true, data: cached, cached: true, latencyMs: 0 };
+
+  const q = "closing stock";
+  const routed = routeQuery(q);
+  routed.intent = "stock_query";
+  const slice = await retrieveForQuery(routed, cid);
+  const result = { scope: slice.scope, facts: slice.facts, data: slice.data };
+
+  await setCached("get_stock_summary", {}, result);
+  return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
+}
+
 async function execGetCashBalance(args: Record<string, unknown>): Promise<ToolResult> {
   const start = performance.now();
   const account = String(args.account ?? "cash").trim();
@@ -349,6 +431,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
   switch (name) {
     case "get_party_balance":
       return execGetPartyBalance(args);
+    case "get_party_ledger":
+      return execGetPartyLedger(args);
     case "get_cash_balance":
       return execGetCashBalance(args);
     case "list_vouchers":
@@ -357,6 +441,10 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetVoucher(args);
     case "get_trial_balance":
       return execGetTrialBalance();
+    case "get_profit_loss":
+      return execGetProfitLoss(args);
+    case "get_stock_summary":
+      return execGetStockSummary();
     default:
       return { success: false, error: `unknown tool: ${name}`, latencyMs: 0 };
   }

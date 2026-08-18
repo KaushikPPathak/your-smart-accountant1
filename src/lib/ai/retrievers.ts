@@ -658,6 +658,7 @@ export async function retrieveForQuery(routed: RouteResult, companyIdIn?: string
   let slice: RetrievedSlice;
   switch (routed.intent) {
     case "party_balance":     slice = await retrieveParty(companyId, routed, { withEntries: true }); break;
+    case "party_ledger":      slice = await retrieveParty(companyId, routed, { withEntries: true }); break;
     case "voucher_lookup":    slice = await retrieveVoucher(companyId, routed); break;
     case "trial_balance":     slice = await retrieveTrialBalance(companyId); break;
     case "explanation":       slice = await retrieveTrialBalance(companyId); break;
@@ -667,6 +668,7 @@ export async function retrieveForQuery(routed: RouteResult, companyIdIn?: string
     case "gst_query":         slice = await retrieveGst(companyId, routed); break;
     case "profit_loss":       slice = await retrieveProfitLoss(companyId, routed); break;
     case "stock_query":       slice = await retrieveStock(companyId); break;
+    case "date_range_report": slice = await retrieveDateRange(companyId, routed); break;
     case "comparison":        slice = await retrieveDateRange(companyId, routed); break;
     default:                  slice = await retrieveGeneral(companyId); break;
   }
