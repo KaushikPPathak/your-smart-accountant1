@@ -740,23 +740,55 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           </CardContent>
         </Card>
 
-      {isSimple ? (
-        <Card>
+        <Card className="border-x-0 border-y shadow-none rounded-none bg-white">
           <CardContent className="p-0">
+            <div className="flex items-center justify-between border-b bg-muted/20 px-3 py-1">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">Particulars</span>
+            </div>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[45%]">Particulars ({voucherType === "receipt" ? "Received From" : "Paid To"})</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Narration</TableHead>
-                  <TableHead className="w-10"></TableHead>
+              <TableHeader className="bg-muted/10">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">Ledger Account</TableHead>
+                  {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Debit</TableHead>}
+                  {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Credit</TableHead>}
+                  {isSimple && <TableHead className="w-40 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Amount</TableHead>}
+                  <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">Narration</TableHead>
+                  <TableHead className="w-10 py-2"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {simpleLines.map((l, i) => (
-                  <EntryRow
-                    key={l.id}
-                    mode="simple"
+                {isSimple
+                  ? simpleLines.map((l, i) => (
+                      <EntryRow
+                        key={l.id}
+                        mode="simple"
+                        idx={i}
+                        row={{ id: l.id, ledger_id: l.ledger_id, amount: l.amount, narration: l.narration }}
+                        ledgerOptions={ledgers.filter((lg) => lg.id !== cashBankId)}
+                        balance={ledgerBalances[l.ledger_id]}
+                        canDelete={simpleLines.length > 1}
+                        onCommit={(idx, patch) => updateSimple(idx, patch as Partial<SimpleLine>)}
+                        onDelete={(idx) => removeSimple(idx)}
+                        onFocus={(idx) => setFocusedLine(idx)}
+                        onAddLedgerDlg={(idx) => setLedgerDlg({ open: true, editId: null, lineIdx: idx })}
+                        onEditLedgerDlg={(idx, lid) => setLedgerDlg({ open: true, editId: lid, lineIdx: idx })}
+                      />
+                    ))
+                  : lines.map((l, i) => (
+                      <EntryRow
+                        key={l.id}
+                        idx={i}
+                        row={l}
+                        ledgerOptions={ledgers}
+                        balance={ledgerBalances[l.ledger_id]}
+                        canDelete={lines.length > 2}
+                        onCommit={(idx, patch) => update(idx, patch)}
+                        onDelete={(idx) => remove(idx)}
+                        onFocus={(idx) => setFocusedLine(idx)}
+                        onAddLedgerDlg={(idx) => setLedgerDlg({ open: true, editId: null, lineIdx: idx })}
+                        onEditLedgerDlg={(idx, lid) => setLedgerDlg({ open: true, editId: lid, lineIdx: idx })}
+                      />
+                    ))}
                     idx={i}
                     row={{ id: l.id, ledger_id: l.ledger_id, amount: l.amount, narration: l.narration }}
                     ledgerOptions={ledgers.filter((lg) => lg.id !== cashBankId)}
