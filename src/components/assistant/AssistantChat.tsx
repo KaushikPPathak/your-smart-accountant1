@@ -7,7 +7,53 @@ import {
   Headphones, Cpu, Cloud, RotateCcw, Zap
 } from "lucide-react";
 import { extractInvoiceOcr, type OcrDraft } from "@/lib/ai/ocr-invoice";
-import { validateOcrExtract } from "@/lib/ai/ocr-validate";
+import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
+import { Link } from "@tanstack/react-router";
+import { useVoiceInput } from "@/lib/ai/voice-input";
+import { useVoiceOutput } from "@/lib/ai/voice-output";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useTheme } from "@/lib/theme-context";
+import { useI18n, type LangCode } from "@/lib/i18n";
+import {
+  ASSISTANT_KB,
+  KB_CATEGORIES,
+  type AssistantAction,
+  type KbEntry,
+} from "@/lib/assistant-knowledge";
+import { assistantChat, type ParsedCompany, type ParsedVoucher } from "@/lib/assistant.functions";
+import type { StructuredCard } from "@/lib/ai/sqliteContext";
+import type { ConversationMemory } from "@/lib/ai/conversation-memory";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth-context";
+import { useCompany } from "@/lib/company-context";
+import { INDIAN_STATES } from "@/lib/constants";
+import {
+  intentToRoute,
+  writeAssistantPrefill,
+} from "@/lib/voucher-intent";
+import {
+  executeVoucherAction,
+  undoLastVoucher,
+  type VoucherAction,
+  type VoucherExecutionResult,
+} from "@/lib/ai/voucher-actions";
+import { localFirstAnswer } from "@/lib/ai/local-first";
+import { StreamingText } from "@/components/assistant/StreamingText";
+import { AnswerProvenance } from "@/components/assistant/AnswerProvenance";
+import { logAiAction } from "@/lib/ai/audit-log";
+import {
+  getModelPreference, setModelPreference, modelPreferenceLabel,
+  type ModelPreference,
+} from "@/lib/ai/model-preference";
+import { isWebGpuAvailable } from "@/lib/ai/webllm";
+import { clearSpeculation } from "@/lib/ai/prefetch";
+import { VoucherPreviewCard, OcrPreviewCard } from "./VoucherPreviewCards";
+
 import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
 import { Link } from "@tanstack/react-router";
 import { useVoiceInput } from "@/lib/ai/voice-input";
