@@ -251,7 +251,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     const prose = localFirstAnswer(card);
     if (!prose) return null;
     return { ok: true, text: prose, card };
-  } catch { return null; }
+  } catch (e) {
+    console.error(`[assistant] tryDirectToolAnswer failed for ${toolName}:`, e);
+    return null;
+  }
 }
 
 function buildCardFromResult(intent: string, data: any, entity: any): StructuredCard | undefined {
@@ -259,15 +262,16 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
   if (intent === "party_balance" || intent === "party_ledger") {
     const closing = Number(facts.closing_balance_paise ?? 0);
     return {
-      kind: "party_balance",
+      kind: intent === "party_ledger" ? "voucher_list" : "party_balance",
       partyName: entity?.partyName || String(facts.resolved_party_name || ""),
       closingPaise: closing,
       isDebit: closing >= 0,
-      asOnDate: entity?.dateRange?.to || null,
+      asOnDate: entity?.dateRange?.to || facts.as_on_date || null,
       openingPaise: Number(facts.opening_balance_paise ?? 0),
       debitPaise: Number(facts.total_debit_paise ?? 0),
       creditPaise: Number(facts.total_credit_paise ?? 0),
       voucherCount: Number(facts.voucher_count ?? 0),
+      vouchers: Array.isArray(data.entries) ? data.entries : (Array.isArray(facts.recent_vouchers) ? facts.recent_vouchers : undefined),
     };
   }
   if (intent === "cash_balance" || intent === "bank_balance") {
