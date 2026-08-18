@@ -526,6 +526,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       deferredLines.map((l) =>
         computeLine(
           {
+            item_id: l.item_id,
+            ledger_id: partyId,
             qty: parseFloat(l.qty) || 0,
             rate: parseFloat(l.rate) || 0,
             discount: parseFloat(l.discount) || 0,
@@ -534,7 +536,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           interstate,
         ),
       ),
-    [deferredLines, interstate],
+    [deferredLines, interstate, partyId],
   );
   const rawTotals = useMemo(() => sumLines(computed), [computed]);
   // Misc adjustments: pre-GST is added to taxable and taxed at the weighted-avg line GST rate;
