@@ -112,23 +112,76 @@ async function retrieveParty(companyId: string, routed: RouteResult, opts: { wit
       data: { candidates: ledgers.slice(0, 20).map((l) => ({ id: l.id, name: l.name })) },
     };
   }
-  const [entries, allVouchers] = await Promise.all([
-    readVoucherEntriesForCompany(companyId),
-    readVouchers(companyId),
-  ]);
-  // Point-in-time: freeze balance at asOn (or `to`) if the user asked "as on <date>".
   const asOnIso = routed.asOn ?? routed.to ?? null;
-  const vDate = new Map((allVouchers as any[]).map((v) => [String(v.id), String(v.voucher_date ?? "")]));
-  const withinAsOn = (e: any) => {
-    if (!asOnIso) return true;
-    const d = vDate.get(String(e.voucher_id));
-    return d ? d <= asOnIso : false;
-  };
-  const scopedEntries = (entries as any[]).filter(withinAsOn);
-  const bal = sumEntriesFor(scopedEntries, target.id);
-  const partyEntries = scopedEntries.filter((e) => String(e.ledger_id) === String(target.id));
-  const voucherIds = new Set(partyEntries.map((e) => String(e.voucher_id)));
-  const vouchers = (allVouchers as any[]).filter((v) => voucherIds.has(String(v.id)));
+  const targetId = String(target.id);
+  
+  // Aggregate balance incrementally using the compound index [company_id+ledger_id]
+  let debit = 0, credit = 0, count = 0;
+  const recentVouchers: any[] = [];
+  const partyEntries: any[] = [];
+
+  const { offlineDb } = await import("@/lib/offline/db");
+  
+  // 1) Pull ONLY relevant entries for this party
+  const entryQuery = offlineDb.cache_voucher_entries
+    .where("[company_id+ledger_id]")
+    .equals([companyId, targetId]);
+
+  // We need voucher dates to respect asOnIso. 
+  // Optimization: If asOnIso exists, we join with vouchers. 
+  // If not, we just sum everything.
+  
+  if (asOnIso) {
+    // We need to check dates. We'll pull vouchers for this party within range first.
+    const vouchers = await offlineDb.cache_vouchers
+      .where("[company_id+party_id+voucher_date]")
+      .between([companyId, targetId, "0000-00-00"], [companyId, targetId, asOnIso], true, true)
+      .reverse()
+      .toArray();
+    
+    const vIds = new Set(vouchers.map(v => String(v.id)));
+    
+    await entryQuery.each((e: any) => {
+      if (!vIds.has(String(e.voucher_id))) return;
+      debit += Number(e.debit_paise ?? 0);
+      credit += Number(e.credit_paise ?? 0);
+      count++;
+      if (partyEntries.length < 200) partyEntries.push(e);
+    });
+
+    recentVouchers.push(...vouchers.slice(0, 8).map(v => ({
+      id: String(v.id),
+      number: String(v.voucher_number ?? ""),
+      date: String(v.voucher_date ?? ""),
+      kind: String(v.voucher_type ?? ""),
+      total_paise: Number(v.total_paise ?? 0),
+    })));
+  } else {
+    // No asOn constraint: sum all entries for this party
+    await entryQuery.each((e: any) => {
+      debit += Number(e.debit_paise ?? 0);
+      credit += Number(e.credit_paise ?? 0);
+      count++;
+      if (partyEntries.length < 200) partyEntries.push(e);
+    });
+
+    const vouchers = await offlineDb.cache_vouchers
+      .where("[company_id+party_id+voucher_date]")
+      .between([companyId, targetId, "0000-00-00"], [companyId, targetId, "9999-99-99"], true, true)
+      .reverse()
+      .limit(8)
+      .toArray();
+
+    recentVouchers.push(...vouchers.map(v => ({
+      id: String(v.id),
+      number: String(v.voucher_number ?? ""),
+      date: String(v.voucher_date ?? ""),
+      kind: String(v.voucher_type ?? ""),
+      total_paise: Number(v.total_paise ?? 0),
+    })));
+  }
+
+  const bal = { debit_paise: debit, credit_paise: credit, balance_paise: debit - credit };
 
   // Optional cash-vs-bank split for the FY window ending at asOn.
   let modeSplit: { cash_paise: number; bank_paise: number; other_paise: number } | undefined;
