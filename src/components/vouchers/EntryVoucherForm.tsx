@@ -79,22 +79,25 @@ const blankSimple = (): SimpleLine => ({ id: crypto.randomUUID(), ledger_id: "",
 
 const CFG: Record<
   EntryVoucherType,
-  { title: string; subtitle: string; defaultLines: number }
+  { title: string; subtitle: string; defaultLines: number; color: string }
 > = {
   receipt: {
     title: "Receipt Voucher",
     subtitle: "Money received — debit Cash/Bank, credit Party",
-    defaultLines: 2,
+    defaultLines: 10,
+    color: "var(--cat-receipt)",
   },
   payment: {
     title: "Payment Voucher",
     subtitle: "Money paid — credit Cash/Bank, debit Party/Expense",
-    defaultLines: 2,
+    defaultLines: 10,
+    color: "var(--cat-payment)",
   },
   journal: {
     title: "Journal / Contra",
     subtitle: "Free double-entry — supports book-to-book (cash↔bank) too",
-    defaultLines: 2,
+    defaultLines: 10,
+    color: "var(--cat-master)",
   },
 };
 

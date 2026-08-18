@@ -1024,15 +1024,15 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
 
         <PeriodLockBanner lock={lock} />
 
-        <Card className="border-primary/20 bg-gradient-to-br from-card to-muted/30 shadow-sm">
-          <CardContent className="p-3">
-            <div className="grid gap-3 md:grid-cols-[1fr_2fr_1fr_auto] md:items-end">
-              <div className="space-y-1">
-                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date</Label>
+        <Card className="border-t-4 border-t-primary border-x-0 border-b-0 bg-theme-pale shadow-sm rounded-none">
+          <CardContent className="p-4">
+            <div className="grid gap-6 md:grid-cols-[1fr_2fr_1fr_auto] md:items-start">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">Date</Label>
                 <FyDatePicker value={date} onChange={setDate} autoFocus />
               </div>
-              <div className="space-y-1">
-                <Label className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <div className="space-y-1.5">
+                <Label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
                   <span>{cfg.partyLabel}</span>
                   <span className="flex gap-2 normal-case">
                     <button

@@ -117,11 +117,12 @@
      --theme-dark   : Hovers/Active states
      --theme-ink    : Professional deep charcoal text
      --theme-onDark : White text for dark surfaces */
-  --theme-base:  oklch(0.75 0.06 180);
-  --theme-light: oklch(0.94 0.02 180);
-  --theme-pale:  oklch(0.97 0.01 180);
-  --theme-dark:  oklch(0.6 0.08 180);
-  --theme-ink:   oklch(0.25 0.03 70);
+  /* Professional Accounting Theme (Tally/Marg inspired soft palette) */
+  --theme-base:  oklch(0.72 0.05 180);
+  --theme-light: oklch(0.96 0.01 180);
+  --theme-pale:  oklch(0.98 0.005 180);
+  --theme-dark:  oklch(0.55 0.08 180);
+  --theme-ink:   oklch(0.22 0.02 70);
   --theme-onDark: oklch(0.99 0 0);
 
   /* Backward compatibility for CSS classes using --amber-* */
