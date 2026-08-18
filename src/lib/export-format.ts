@@ -1,7 +1,7 @@
 // Shared export formatting helpers — keeps PDF/XLSX templates aligned with the
 // company's global currency symbol and date format. Excel cells are emitted
 // as real numbers/dates (with numFmt) so SUM/pivot work in the exported file.
-import * as XLSX from "xlsx";
+import type * as XLSX from "xlsx";
 import { getCurrentCurrencySymbol, getCurrentCurrencyCode } from "./currency";
 import { getCurrentDateFormat, type DateFormatCode } from "./date-format";
 import { parseAppDate } from "./format-date";
@@ -39,20 +39,20 @@ export function excelDateFmt(code: DateFormatCode = getCurrentDateFormat()): str
 }
 
 /** Build a numeric XLSX cell from a paise integer with the company currency numFmt. */
-export function moneyCell(paise: number | null | undefined): XLSX.CellObject {
+export function moneyCell(paise: number | null | undefined): any {
   const n = typeof paise === "number" && Number.isFinite(paise) ? paise / 100 : 0;
   return { t: "n", v: n, z: excelCurrencyFmt() };
 }
 
 /** Build a plain numeric XLSX cell (no currency symbol) from paise. */
-export function numberCell(paise: number | null | undefined, digits = 2): XLSX.CellObject {
+export function numberCell(paise: number | null | undefined, digits = 2): any {
   const n = typeof paise === "number" && Number.isFinite(paise) ? paise / 100 : 0;
   const z = digits === 0 ? "#,##0" : `#,##0.${"0".repeat(digits)}`;
   return { t: "n", v: n, z };
 }
 
 /** Build a real Excel date cell from an ISO string / Date. */
-export function dateCell(d: string | Date | null | undefined): XLSX.CellObject {
+export function dateCell(d: string | Date | null | undefined): any {
   const parsed = d instanceof Date ? d : parseAppDate(d ?? null);
   if (!parsed) return { t: "s", v: "" };
   return { t: "d", v: parsed, z: excelDateFmt() };

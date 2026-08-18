@@ -1,6 +1,6 @@
 // src/lib/ledger-pdf.ts
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import type { jsPDF as jsPDFType } from "jspdf";
+import type autoTableType from "jspdf-autotable";
 import { getNativeRuntime } from "./whatsapp-shared";
 import { recordFailure, recordStage } from "./crash-log";
 
@@ -74,6 +74,10 @@ export async function downloadLedgerPdf(
 
   // ── 2. T-Format PDF Generation (Landscape A4) ──
   try {
+    const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
     const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
 
     // Centered header block
