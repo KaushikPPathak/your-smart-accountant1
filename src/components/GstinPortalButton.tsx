@@ -26,7 +26,7 @@ interface GstinPortalButtonProps {
  * - Sparkles: paste portal response to auto-fill.
  * - Settings: edit Setu credentials.
  */
-export function GstinPortalButton({ gstin, disabled, onDataFetched }: GstinPortalButtonProps) {
+export function GstinPortalButton({ gstin, disabled, onDataFetched, companyId }: GstinPortalButtonProps) {
   const [copied, setCopied] = React.useState(false);
   const [fetching, setFetching] = React.useState(false);
   const [pasteText, setPasteText] = React.useState("");
