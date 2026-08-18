@@ -16,6 +16,7 @@ interface GstinPortalButtonProps {
     gstin: string;
     address?: string;
   }) => void;
+  companyId?: string | null;
 }
 
 /**
