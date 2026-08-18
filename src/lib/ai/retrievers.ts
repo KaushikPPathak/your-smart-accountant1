@@ -319,7 +319,7 @@ function classifyLedger(l: any): LedgerKind {
 async function retrieveTrialBalance(companyId: string): Promise<RetrievedSlice> {
   const ledgers = (await readLedgers(companyId)) as any[];
   const acc = new Map<string, { debit_paise: number; credit_paise: number }>();
-  await forEachEntry(companyId, (e) => {
+  await forEachEntry(companyId, (e: any) => {
     const key = String(e.ledger_id);
     const cur = acc.get(key) ?? { debit_paise: 0, credit_paise: 0 };
     cur.debit_paise += Number(e.debit_paise ?? 0);
@@ -473,7 +473,7 @@ async function retrieveAgeing(companyId: string, routed: RouteResult): Promise<R
   // Stream vouchers → date map, and entries → per-party accumulators in a
   // single pass each. O(parties + vouchers + entries) time, O(parties) memory.
   const vDate = new Map<string, string>();
-  await forEachVoucher(companyId, {}, (v) => {
+  await forEachVoucher(companyId, (v: any) => {
     if (v.voucher_date) vDate.set(String(v.id), String(v.voucher_date));
   });
 
@@ -482,7 +482,7 @@ async function retrieveAgeing(companyId: string, routed: RouteResult): Promise<R
     const opening = Number(p.opening_balance_paise ?? 0) * (p.opening_balance_is_debit ? 1 : -1);
     acc.set(String(p.id), { net: opening, buckets: { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 } });
   }
-  await forEachEntry(companyId, (e) => {
+  await forEachEntry(companyId, (e: any) => {
     const key = String(e.ledger_id);
     if (!partyIds.has(key)) return;
     const cur = acc.get(key)!;
