@@ -295,7 +295,14 @@ function VoucherEditPage() {
     () =>
       itemLines.map((l) =>
         computeLine(
-          { qty: parseFloat(l.qty) || 0, rate: parseFloat(l.rate) || 0, discount: parseFloat(l.discount) || 0, gstRate: parseFloat(l.gst_rate) || 0 },
+          { 
+            item_id: l.item_id,
+            ledger_id: voucher?.party_ledger_id || undefined,
+            qty: parseFloat(l.qty) || 0, 
+            rate: parseFloat(l.rate) || 0, 
+            discount: parseFloat(l.discount) || 0, 
+            gstRate: parseFloat(l.gst_rate) || 0 
+          },
           voucher?.is_interstate ?? false,
         ),
       ),
