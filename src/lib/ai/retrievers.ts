@@ -198,25 +198,13 @@ async function retrieveParty(companyId: string, routed: RouteResult, opts: { wit
   }
 
   const opening = Number(target.opening_balance_paise ?? 0) * (target.opening_balance_is_debit ? 1 : -1);
-  // Recent vouchers (most-recent first) — surfaced on the balance card so
-  // the user can click through to the source voucher for drill-down.
-  const recentVouchers = [...vouchers]
-    .sort((a: any, b: any) => String(b.voucher_date ?? "").localeCompare(String(a.voucher_date ?? "")))
-    .slice(0, 8)
-    .map((v: any) => ({
-      id: String(v.id),
-      number: String(v.voucher_number ?? ""),
-      date: String(v.voucher_date ?? ""),
-      kind: String(v.voucher_type ?? ""),
-      total_paise: Number(v.total_paise ?? 0),
-    }));
   return {
     scope: asOnIso
-      ? `party="${target.name}" as on ${asOnIso} (${vouchers.length} vouchers)`
-      : `party="${target.name}" (${vouchers.length} vouchers)`,
+      ? `party="${target.name}" as on ${asOnIso} (${count} vouchers)`
+      : `party="${target.name}" (${count} vouchers)`,
     data: {
       party: [{ id: target.id, name: target.name, group_name: target.group_name, gstin: target.gstin, state: target.state }],
-      vouchers: opts.withEntries ? vouchers.slice(0, 50) : vouchers.slice(0, 10),
+      vouchers: [], // Vouchers are now summarized in recent_vouchers for LLM efficiency
       entries: opts.withEntries ? partyEntries.slice(0, 200) : [],
     },
     facts: {
@@ -229,7 +217,7 @@ async function retrieveParty(companyId: string, routed: RouteResult, opts: { wit
       current_balance_paise: opening + bal.balance_paise,
       total_debit_paise: bal.debit_paise,
       total_credit_paise: bal.credit_paise,
-      voucher_count: vouchers.length,
+      voucher_count: count,
       recent_vouchers: recentVouchers,
       ...(modeSplit ? { mode_split: modeSplit } : {}),
     },
