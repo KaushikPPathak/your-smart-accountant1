@@ -769,14 +769,15 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                         canDelete={simpleLines.length > 1}
                         onCommit={(idx, patch) => updateSimple(idx, patch as Partial<SimpleLine>)}
                         onDelete={(idx) => removeSimple(idx)}
-                        onFocus={(idx) => setFocusedLine(idx)}
-                        onAddLedgerDlg={(idx) => setLedgerDlg({ open: true, editId: null, lineIdx: idx })}
-                        onEditLedgerDlg={(idx, lid) => setLedgerDlg({ open: true, editId: lid, lineIdx: idx })}
+                        onFocusRow={setFocusedLine}
+                        onAddLedger={(idx) => setLedgerDlg({ open: true, editId: null, lineIdx: idx })}
+                        onEditLedger={(idx, lid) => setLedgerDlg({ open: true, editId: lid, lineIdx: idx })}
                       />
                     ))
                   : lines.map((l, i) => (
                       <EntryRow
                         key={l.id}
+                        mode="double"
                         idx={i}
                         row={l}
                         ledgerOptions={ledgers}
@@ -784,9 +785,9 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                         canDelete={lines.length > 2}
                         onCommit={(idx, patch) => update(idx, patch)}
                         onDelete={(idx) => remove(idx)}
-                        onFocus={(idx) => setFocusedLine(idx)}
-                        onAddLedgerDlg={(idx) => setLedgerDlg({ open: true, editId: null, lineIdx: idx })}
-                        onEditLedgerDlg={(idx, lid) => setLedgerDlg({ open: true, editId: lid, lineIdx: idx })}
+                        onFocusRow={setFocusedLine}
+                        onAddLedger={(idx) => setLedgerDlg({ open: true, editId: null, lineIdx: idx })}
+                        onEditLedger={(idx, lid) => setLedgerDlg({ open: true, editId: lid, lineIdx: idx })}
                       />
                     ))}
               </TableBody>
