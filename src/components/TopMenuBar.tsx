@@ -762,11 +762,24 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
       {/* Right-side extras + Company switcher */}
       <div className="busy-company gap-2">
+        {deadLetterCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => navigate({ to: "/app/data-health" })}
+            title={`${deadLetterCount} sync failures require attention`}
+          >
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-xs font-bold">{deadLetterCount}</span>
+          </Button>
+        )}
         {rightExtras}
         <CompanySwitcher />
         <BackupNowButton />
         <RestoreNowButton />
       </div>
+
 
       <AlertDialog open={exitConfirmOpen} onOpenChange={setExitConfirmOpen}>
         <AlertDialogContent
