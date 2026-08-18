@@ -7,6 +7,7 @@ import { readItems, readLedgers, shouldPreferOfflineCache } from "@/lib/offline/
 export interface CachedLedger {
   id: string;
   name: string;
+  _folded_name?: string; // Precomputed for search performance
   type: string;
   state_code: string | null;
   gstin: string | null;
@@ -22,6 +23,7 @@ export interface CachedLedger {
 export interface CachedItem {
   id: string;
   name: string;
+  _folded_name?: string; // Precomputed for search performance
   unit: string;
   gst_rate: number;
   hsn_code: string | null;
@@ -36,6 +38,8 @@ let currentCompanyId: string | null = null;
 
 let version = 0;
 const listeners = new Set<() => void>();
+let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+
 function bump() {
   version++;
   listeners.forEach((l) => l());
@@ -46,17 +50,26 @@ function subscribe(l: () => void) {
 }
 function getVersion() { return version; }
 
+function fold(s: string) { return s.toLowerCase().normalize("NFKD").replace(/[^\w\s]/g, ""); }
+
 function rebuildSorted() {
   ledgersSorted = Array.from(ledgersMap.values()).filter((l) => l.is_active !== false).sort((a, b) => a.name.localeCompare(b.name));
   itemsSorted = Array.from(itemsMap.values()).filter((i) => i.is_active !== false).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function debouncedRebuild() {
+  if (rebuildTimer) clearTimeout(rebuildTimer);
+  rebuildTimer = setTimeout(() => {
+    rebuildSorted();
+    bump();
+    rebuildTimer = null;
+  }, 16); // ~1 frame delay
 }
 
 export function getLedger(id: string | null | undefined): CachedLedger | undefined { return id ? ledgersMap.get(id) : undefined; }
 export function getItem(id: string | null | undefined): CachedItem | undefined { return id ? itemsMap.get(id) : undefined; }
 export function getAllLedgers(): CachedLedger[] { return ledgersSorted; }
 export function getAllItems(): CachedItem[] { return itemsSorted; }
-
-function fold(s: string) { return s.toLowerCase().normalize("NFKD").replace(/[^\w\s]/g, ""); }
 
 export function searchLedgers(query: string, predicate?: (l: CachedLedger) => boolean, limit = 50): CachedLedger[] {
   const q = fold(query.trim());
@@ -65,7 +78,8 @@ export function searchLedgers(query: string, predicate?: (l: CachedLedger) => bo
   const prefix: CachedLedger[] = [];
   const contains: CachedLedger[] = [];
   for (const l of src) {
-    const n = fold(l.name);
+    if (!l._folded_name) l._folded_name = fold(l.name);
+    const n = l._folded_name;
     if (n.startsWith(q)) prefix.push(l);
     else if (n.includes(q)) contains.push(l);
     if (prefix.length >= limit) break;
@@ -80,7 +94,8 @@ export function searchItems(query: string, predicate?: (i: CachedItem) => boolea
   const prefix: CachedItem[] = [];
   const contains: CachedItem[] = [];
   for (const it of src) {
-    const n = fold(it.name);
+    if (!it._folded_name) it._folded_name = fold(it.name);
+    const n = it._folded_name;
     if (n.startsWith(q)) prefix.push(it);
     else if (n.includes(q)) contains.push(it);
     if (prefix.length >= limit) break;
@@ -174,15 +189,23 @@ export function MastersProvider({ children }: { children: ReactNode }) {
         const row = (payload.new ?? payload.old) as CachedLedger | undefined;
         if (!row) return;
         if (payload.eventType === "DELETE") ledgersMap.delete(row.id);
-        else ledgersMap.set((payload.new as CachedLedger).id, payload.new as CachedLedger);
-        rebuildSorted(); bump();
+        else {
+          const l = payload.new as CachedLedger;
+          l._folded_name = fold(l.name);
+          ledgersMap.set(l.id, l);
+        }
+        debouncedRebuild();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "items", filter: `company_id=eq.${activeCompanyId}` }, (payload: any) => {
         const row = (payload.new ?? payload.old) as CachedItem | undefined;
         if (!row) return;
         if (payload.eventType === "DELETE") itemsMap.delete(row.id);
-        else itemsMap.set((payload.new as CachedItem).id, payload.new as CachedItem);
-        rebuildSorted(); bump();
+        else {
+          const i = payload.new as CachedItem;
+          i._folded_name = fold(i.name);
+          itemsMap.set(i.id, i);
+        }
+        debouncedRebuild();
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -193,8 +216,16 @@ export function MastersProvider({ children }: { children: ReactNode }) {
 
 export function useMasters() { return useContext(MastersCtx); }
 
-export function upsertCachedLedger(l: CachedLedger) { ledgersMap.set(l.id, l); rebuildSorted(); bump(); }
-export function upsertCachedItem(i: CachedItem) { itemsMap.set(i.id, i); rebuildSorted(); bump(); }
-export function removeCachedLedger(id: string) { ledgersMap.delete(id); rebuildSorted(); bump(); }
-export function removeCachedItem(id: string) { itemsMap.delete(id); rebuildSorted(); bump(); }
+export function upsertCachedLedger(l: CachedLedger) { 
+  l._folded_name = fold(l.name);
+  ledgersMap.set(l.id, l); 
+  debouncedRebuild(); 
+}
+export function upsertCachedItem(i: CachedItem) { 
+  i._folded_name = fold(i.name);
+  itemsMap.set(i.id, i); 
+  debouncedRebuild(); 
+}
+export function removeCachedLedger(id: string) { ledgersMap.delete(id); debouncedRebuild(); }
+export function removeCachedItem(id: string) { itemsMap.delete(id); debouncedRebuild(); }
 export function getCurrentCompanyId() { return currentCompanyId; }
