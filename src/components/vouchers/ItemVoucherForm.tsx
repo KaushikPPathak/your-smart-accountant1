@@ -29,7 +29,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/money";
-import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/gst";
+import { computeLine, sumLines, isInterstate, resolveGstWithCache, type GstLineResult } from "@/lib/gst";
 
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
