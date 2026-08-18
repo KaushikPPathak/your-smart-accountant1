@@ -473,7 +473,7 @@ async function retrieveAgeing(companyId: string, routed: RouteResult): Promise<R
   // Stream vouchers → date map, and entries → per-party accumulators in a
   // single pass each. O(parties + vouchers + entries) time, O(parties) memory.
   const vDate = new Map<string, string>();
-  await forEachVoucher(companyId, {}, (v) => {
+  await forEachVoucher(companyId, (v: any) => {
     if (v.voucher_date) vDate.set(String(v.id), String(v.voucher_date));
   });
 
