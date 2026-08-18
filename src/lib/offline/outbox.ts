@@ -37,7 +37,10 @@ function emit() {
   for (const fn of listeners) {
     try { fn(); } catch { /* ignore */ }
   }
+  // Also dispatch a browser event for components not using subscribeOutbox
+  window.dispatchEvent(new CustomEvent("ym:outbox-changed"));
 }
+
 
 export async function queueSize(): Promise<number> {
   const db = await getDbInstance();
