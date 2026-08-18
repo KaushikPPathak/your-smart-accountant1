@@ -111,6 +111,11 @@ function AppLayout() {
     let stopIntraday: (() => void) | null = null;
     setBootstrapping(false);
     (async () => {
+      if (activeCompanyId) {
+        const { scheduleWarmup } = await import("@/lib/ai/cache-warmup");
+        scheduleWarmup(activeCompanyId);
+      }
+
 
       try {
         // Record version transition + detect unexpectedly-empty DB. Runs on

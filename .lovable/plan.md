@@ -1,44 +1,28 @@
-# Assistant Orchestration Consolidation & Performance Plan
+# Restoration Plan: Assistant Chat UI & Logic
 
-Consolidate AI logic into a central backend library, precompute common answers via idle-time cache warmup, and optimize prompts with just-in-time intent-based injection.
+Restore the `AssistantChat.tsx` UI components and logic that were lost during the centralization refactor, while ensuring they use the new `assistantChat` function from `assistant.functions.ts`.
+
+## User Review Required
+- Re-confirmation of the "Soft Sage & Cream" theme consistency (will be maintained).
+- Re-confirmation of the "Mehtaji" naming (will be maintained).
 
 ## Proposed Changes
 
-### 1. Centralize Orchestration (src/lib/assistant.functions.ts)
-- Move all tool-calling loops, intent routing, and company/voucher parsing from `AssistantChat.tsx` to `assistant.functions.ts`.
-- `AssistantChat` will become a "dumb" view that calls `assistantChat()` and displays the returned text/cards/tool-trails.
-- Implement a robust multi-intent router in `assistant.functions.ts` that handles:
-  - Knowledge Base (KB) search (offline).
-  - Deterministic accounting lookups (local-first).
-  - Voucher creation/drafting intent.
-  - LLM-based reasoning (Cloud/Local) with tool support.
+### Assistant Components
+#### [Restoration] `src/components/assistant/AssistantChat.tsx`
+- Re-implement the full UI:
+    - `ScrollArea` for message history.
+    - Message rendering for user, assistant, and system roles.
+    - Integration of `AnswerProvenance`, `StreamingText`, `VoucherPreviewCard`, and `OcrPreviewCard`.
+    - Knowledge Base (KB) browse categories and entries.
+    - Input area with voice support (`useVoiceInput`), file drag-and-drop for OCR, and model preference selection.
+    - Suggestions chip group.
+    - Logic for handling `ParsedCompany` and `ParsedVoucher` previews returned by the new backend.
+- Connect to the centralized `assistantChat` function.
+- Ensure all imports for UI components (Card, Button, Badge, etc.) are correctly restored.
 
-### 2. Cache Warmup (src/lib/ai/cache-warmup.ts)
-- Wire `scheduleWarmup` into `src/routes/app.tsx` so it runs after a company is opened and the browser is idle.
-- The warmup will pre-fill the `answer-cache` with common queries (Cash balance, Bank balance, Sales summary) using `assistantChat`'s local-first path.
-
-### 3. Just-in-Time Prompt Builder (src/lib/ai/sqliteContext.ts)
-- Refactor `buildCompressedContext` to dynamically construct the system prompt.
-- Only inject instructions relevant to the detected intent:
-  - `voucher_create` -> Inject voucher drafting JSON schema and ledger picking rules.
-  - `accounting_query` -> Inject Indian accounting style guide and verification rules.
-  - `greeting` -> Inject minimal persona instructions.
-- This reduces context length, improving local model performance and attention accuracy.
-
-## Technical Details
-
-- **AssistantChat.tsx**: Remove logic for `detectCreateCompanyIntent`, `parseCompanyDetails`, `tryDirectToolAnswer`, and `ask`. Replace with a single call to `assistantChat`.
-- **assistant.functions.ts**:
-  - Update `AssistantChatResult` to include metadata needed for UI state (e.g., `voucherPreview`, `ocrPreview`).
-  - Integrate `searchKb` for offline FAQ support.
-  - Integrate `detectVoucherIntent` for drafting.
-- **sqliteContext.ts**:
-  - Create specialized prompt fragments for each `IntentType`.
-  - Maintain the core "ground truth" verification rules for all intents.
-- **app.tsx**: Add `scheduleWarmup(activeCompanyId)` in the company activation effect.
-
-## User Impact
-
-- **Speed**: Frequent questions like "What is my bank balance?" will answer instantly from cache.
-- **Reliability**: Centralized logic ensures that local-first answers and LLM answers stay consistent.
-- **Efficiency**: Smaller prompts mean faster responses from local models (WebLLM).
+### Technical Details
+- The component will act as a "thin view" as requested in Section 6.
+- It will delegate routing, tool execution, and context building to `assistant.functions.ts`.
+- It will handle the structured results (`card`, `pendingVoucher`, `pendingCompany`) to display appropriate UI fragments.
+- Maintain existing local-only data ownership constraints.
