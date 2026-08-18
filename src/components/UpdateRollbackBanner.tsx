@@ -125,8 +125,11 @@ export function UpdateRollbackBanner() {
               do not delete the data folder if you are asked.
             </li>
             <li>
-              Run the installer for version {offer.fromVersion} again and install it
-              normally.
+              Run the installer for version {offer.fromVersion} again.
+              <p className="mt-1 text-xs font-medium text-primary">
+                If you don't have the previous installer, you can download it from your 
+                order history or the "Previous Versions" link on our website.
+              </p>
             </li>
             <li>
               Start the app. Your data is picked up automatically; if anything is
