@@ -232,6 +232,12 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
         toolArgs = { name: route.entity.partyName, asOn: route.entity.dateRange?.to };
       }
       break;
+    case "party_ledger":
+      if (route.entity?.partyName) {
+        toolName = "get_party_ledger";
+        toolArgs = { name: route.entity.partyName, from: route.entity.dateRange?.from, to: route.entity.dateRange?.to };
+      }
+      break;
     case "cash_balance": toolName = "get_cash_balance"; toolArgs = { account: "cash" }; break;
     case "bank_balance": toolName = "get_cash_balance"; toolArgs = { account: route.entity?.accountName || "bank" }; break;
     case "trial_balance": toolName = "get_trial_balance"; break;
@@ -250,7 +256,7 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
 
 function buildCardFromResult(intent: string, data: any, entity: any): StructuredCard | undefined {
   const facts = data?.facts || {};
-  if (intent === "party_balance") {
+  if (intent === "party_balance" || intent === "party_ledger") {
     const closing = Number(facts.closing_balance_paise ?? 0);
     return {
       kind: "party_balance",

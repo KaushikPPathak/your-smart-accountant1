@@ -16,6 +16,8 @@ export type IntentType =
   | "gst_query"
   | "profit_loss"
   | "stock_query"
+  | "party_ledger"
+  | "date_range_report"
   | "unknown";
 
 
@@ -44,12 +46,60 @@ export interface RouteResult {
 // Fast regex-based intent detection — zero LLM latency
 const INTENT_PATTERNS: { intent: IntentType; patterns: RegExp[]; deterministic: boolean }[] = [
   {
+    intent: "profit_loss",
+    deterministic: false,
+    patterns: [
+      /(?:profit|loss|p&l|p\s+and\s+l|income statement)/i,
+      /how much (?:did we make|is the profit|is the loss)/i,
+    ],
+  },
+  {
+    intent: "ageing",
+    deterministic: false,
+    patterns: [
+      /(?:ageing|aging|receivables|payables|overdue|outstanding).{0,20}(?:90|60|30|days)/i,
+      /who owes.{0,20}over/i,
+    ],
+  },
+  {
+    intent: "gst_query",
+    deterministic: false,
+    patterns: [
+      /(?:gst|gstr|gstr-1|gstr-3b|input tax|itc|tax liability)/i,
+      /gst summary/i,
+    ],
+  },
+  {
+    intent: "stock_query",
+    deterministic: false,
+    patterns: [
+      /(?:stock|inventory|closing stock|items in hand)/i,
+      /how much (?:stock|inventory)/i,
+    ],
+  },
+  {
+    intent: "party_ledger",
+    deterministic: true,
+    patterns: [
+      /(?:ledger|statement|transactions|all entries).{0,20}(?:of|for)/i,
+      /show ledger/i,
+    ],
+  },
+  {
+    intent: "date_range_report",
+    deterministic: true,
+    patterns: [
+      /(?:sales|purchases|receipts|payments).{0,20}(?:in|during|for)\s+(?:january|february|march|april|may|june|july|august|september|october|november|december|last month|this month)/i,
+    ],
+  },
+  {
     intent: "party_balance",
     deterministic: true,
     patterns: [
       /(?:balance|how much|what is).{0,30}(?:party|ledger|account|customer|vendor|supplier)/i,
       /(?:how much|what).{0,20}(?:owe|due|outstanding|pending).{0,20}(?:from|to|by)/i,
       /(?:show|get|tell).{0,10}(?:balance).{0,20}(?:of|for)/i,
+      /balance of/i,
     ],
   },
   {
@@ -124,8 +174,8 @@ function extractEntities(text: string): RouteResult["entity"] {
   
   // Party/Ledger name extraction
   const partyPatterns = [
-    /(?:party|ledger|account|customer|vendor|supplier|from|to|of|for)\s+([A-Z][A-Za-z0-9\s&]{2,40})/i,
-    /([A-Z][A-Za-z0-9\s&]{2,40})(?:\s+(?:ledger|account|party))/i,
+    /(?:party|ledger|account|customer|vendor|supplier|from|to|of|for|balance of|ledger of)\s+([A-Z][A-Za-z0-9\s&]{2,40})/i,
+    /([A-Z][A-Za-z0-9\s&]{2,40})(?:\s+(?:ledger|account|party|balance))/i,
   ];
   for (const p of partyPatterns) {
     const m = text.match(p);
@@ -146,6 +196,8 @@ function extractEntities(text: string): RouteResult["entity"] {
     /(?:to|till|until)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i,
     /(?:as on|as of)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i,
     /(?:this|last|previous)\s+(?:month|week|quarter|year)/i,
+    /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
+    /\b\d{4}\b/,
   ];
   
   // Voucher type
