@@ -18,11 +18,12 @@ import type { ConversationMemory } from "./ai/conversation-memory";
 import { executeTool, parseToolCall, stripToolCall } from "./ai/tools";
 import { localFirstAnswer } from "./ai/local-first";
 import { routeQuery } from "./ai/query-router";
-import { searchKb } from "./lib/assistant-engine";
-import { detectVoucherIntent, fetchContextLedgers, type VoucherIntentType } from "./lib/voucher-intent";
-import { detectVoucherAction, executeVoucherAction, type VoucherAction, type VoucherExecutionResult } from "./lib/ai/voucher-actions";
-import { INDIAN_STATES } from "./lib/constants";
-import type { KbEntry } from "./lib/assistant-knowledge";
+import { searchKb } from "./assistant-engine";
+import { detectVoucherIntent, fetchContextLedgers, type VoucherIntentType, intentToRoute } from "./voucher-intent";
+import { detectVoucherAction, executeVoucherAction, type VoucherAction, type VoucherExecutionResult } from "./ai/voucher-actions";
+import { INDIAN_STATES } from "./constants";
+import type { KbEntry } from "./assistant-knowledge";
+import { writeAssistantPrefill } from "./voucher-intent";
 
 export interface AssistantChatResult {
   ok: boolean;
