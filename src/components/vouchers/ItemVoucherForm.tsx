@@ -988,36 +988,33 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   return (
     <div className="grid gap-4 lg:grid-cols-1 lg:has-[[data-recent-open]]:grid-cols-[minmax(0,1fr)_300px]">
       <div ref={enterTab.ref} onKeyDown={enterTab.onKeyDown} className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">{cfg.title}</h1>
-            <p className="text-xs text-muted-foreground">
-              <kbd className="rounded border px-1">Enter</kbd> next field ·{" "}
-              <kbd className="rounded border px-1">Ctrl+S</kbd> save & next ·{" "}
-              <kbd className="rounded border px-1">F3</kbd> new ledger ·{" "}
-              <kbd className="rounded border px-1">Shift+F3</kbd> edit party ·{" "}
-              <kbd className="rounded border px-1">F4</kbd> new item ·{" "}
-              <kbd className="rounded border px-1">Shift+F4</kbd> edit item
+        <div className="flex items-center justify-between border-b border-border/60 bg-white/50 px-4 py-2" style={{ borderTop: `3px solid var(--cat-${voucherType.split('_')[0]})` }}>
+          <div className="flex flex-col">
+            <h2 className="text-xl font-bold tracking-tight text-foreground">{cfg.title}</h2>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80">
+              <kbd className="rounded border bg-white px-1 shadow-sm">Enter</kbd> next field
+              <kbd className="ml-1 rounded border bg-white px-1 shadow-sm">Ctrl+S</kbd> save
               {interstate && (
-                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 font-bold uppercase tracking-tighter text-primary">
                   Interstate (IGST)
                 </span>
               )}
-            </p>
+            </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => navigate({ to: "/app/vouchers" })}>
-              <X className="mr-1 h-4 w-4" /> Cancel
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => navigate({ to: "/app/vouchers" })}>
+              <X className="mr-1 h-3 w-3" /> Cancel
             </Button>
             <Button
+              size="sm"
+              className="h-8 px-4 text-xs font-bold"
               data-assistant-save
               data-primary-action="true"
               onClick={save}
-
               disabled={saving || !canWrite || locked || taxTemplateBlocksSave}
               title={taxTemplateBlocksSave ? "Pick a tax template to enable Save" : undefined}
             >
-              <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
+              <Save className="mr-1.5 h-3.5 w-3.5" /> {saving ? "Saving…" : "Save"}
             </Button>
           </div>
         </div>

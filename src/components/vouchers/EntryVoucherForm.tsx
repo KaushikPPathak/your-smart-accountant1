@@ -636,41 +636,51 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         onKeyDown={enterTab.onKeyDown}
         className="space-y-4"
       >
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{cfg.title}</h1>
-          <p className="text-xs text-muted-foreground">
-            {cfg.subtitle} · <kbd className="rounded border px-1">Enter</kbd> next field · <kbd className="rounded border px-1">Ctrl+S</kbd> save & next · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit ledger
-          </p>
-          {voucherType === "journal" && taxResolution.status !== "hidden" && (
-            <div className="mt-1.5">
-              <AutoTaxChip
-                resolution={taxResolution}
-                manualId={manualTaxTemplateId}
-                onManualChange={setManualTaxTemplateId}
-              />
+        <div className="flex items-center justify-between border-b border-border/60 bg-white/50 px-4 py-2" style={{ borderTop: `3px solid ${cfg.color}` }}>
+          <div className="flex flex-col">
+            <h2 className="text-xl font-bold tracking-tight text-foreground">{cfg.title}</h2>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80">
+              <kbd className="rounded border bg-white px-1 shadow-sm">Enter</kbd> next field
+              <kbd className="ml-1 rounded border bg-white px-1 shadow-sm">Ctrl+S</kbd> save
+              {voucherType === "journal" && taxResolution.status !== "hidden" && (
+                <div className="ml-2 inline-flex items-center">
+                  <AutoTaxChip
+                    resolution={taxResolution}
+                    manualId={manualTaxTemplateId}
+                    onManualChange={setManualTaxTemplateId}
+                  />
+                </div>
+              )}
             </div>
-          )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => {
+                if (!isDraftEmpty(draftSnap)) {
+                  const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
+                  if (!ok) return;
+                  clearVoucherDraft(draftKey);
+                }
+                navigate({ to: "/app/vouchers" });
+              }}
+            >
+              <X className="mr-1 h-3 w-3" /> Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 px-4 text-xs font-bold"
+              data-assistant-save
+              data-primary-action="true"
+              onClick={save}
+              disabled={saving || !canWrite || !balanced || locked || taxTemplateBlocksSave}
+            >
+              <Save className="mr-1.5 h-3.5 w-3.5" /> {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              if (!isDraftEmpty(draftSnap)) {
-                const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
-                if (!ok) return;
-                clearVoucherDraft(draftKey);
-              }
-              navigate({ to: "/app/vouchers" });
-            }}
-          >
-            <X className="mr-1 h-4 w-4" /> Cancel
-          </Button>
-          <Button data-assistant-save data-primary-action="true" onClick={save} disabled={saving || !canWrite || !balanced || locked || taxTemplateBlocksSave}>
-            <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      </div>
 
 
       {draft.restored && !draftBannerDismissed && (
@@ -690,40 +700,45 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
 
       <PeriodLockBanner lock={lock} />
 
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <div className="flex justify-end">
-            <NextVoucherNumberCard companyId={activeCompanyId} voucherType={voucherType} refreshKey={savedTick} voucherDate={date} />
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-          <div className="space-y-1">
-            <Label>Date</Label>
-            <FyDatePicker value={date} onChange={setDate} autoFocus />
-          </div>
-          {isSimple && (
-            <div className="space-y-1">
-              <Label>{voucherType === "receipt" ? "Received In (Cash/Bank)" : "Paid From (Cash/Bank)"}</Label>
-              <Combo
-                value={cashBankId}
-                onChange={setCashBankId}
-                options={cashBankOptions.map((lg) => ({ value: lg.id, label: lg.name, hint: lg.type }))}
-                placeholder="Select Cash / Bank account"
-                emptyText="No Cash/Bank ledgers found"
-                onCreate={() => setLedgerDlg({ open: true, editId: null, lineIdx: null })}
-                createLabel="New Cash/Bank ledger"
-              />
-              {cashBankId && (
-                <LedgerBalanceChip ledgerId={cashBankId} prefix="Bal" compact />
+        <Card className="border-x-0 border-y shadow-none rounded-none bg-theme-pale">
+          <CardContent className="p-4">
+            <div className="grid gap-6 md:grid-cols-[1fr_2fr_1fr_auto] md:items-start">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">Date</Label>
+                <FyDatePicker value={date} onChange={setDate} autoFocus />
+              </div>
+              {isSimple && (
+                <div className="space-y-1.5">
+                  <Label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                    <span>{voucherType === "receipt" ? "Account (Dr)" : "Account (Cr)"}</span>
+                  </Label>
+                  <Combo
+                    value={cashBankId}
+                    onChange={setCashBankId}
+                    options={cashBankOptions.map((lg) => ({ value: lg.id, label: lg.name, hint: lg.type }))}
+                    placeholder="Select Cash / Bank account"
+                    emptyText="No Cash/Bank ledgers found"
+                    onCreate={() => setLedgerDlg({ open: true, editId: null, lineIdx: null })}
+                    createLabel="New Cash/Bank ledger"
+                  />
+                  {cashBankId && (
+                    <div className="pt-0.5">
+                      <LedgerBalanceChip ledgerId={cashBankId} prefix="Bal" compact />
+                    </div>
+                  )}
+                </div>
               )}
+              <div className={`space-y-1.5 ${isSimple ? "" : "md:col-span-2"}`}>
+                <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">Reference No.</Label>
+                <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="Cheque/UTR/Reference" className="bg-white" />
+              </div>
+
+              <div className="md:pt-5">
+                <NextVoucherNumberCard companyId={activeCompanyId} voucherType={voucherType} refreshKey={savedTick} voucherDate={date} />
+              </div>
             </div>
-          )}
-          <div className={`space-y-1 ${isSimple ? "" : "md:col-span-2"}`}>
-            <Label>Reference No.</Label>
-            <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="Cheque/UTR/Reference" />
-          </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
       {isSimple ? (
         <Card>
