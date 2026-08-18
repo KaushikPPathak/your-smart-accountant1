@@ -2,9 +2,10 @@ import * as React from "react";
 import { Combo, type ComboOption } from "@/components/vouchers/Combo";
 import {
   getAllLedgers, getAllItems, getLedger, getItem,
-  searchLedgers, searchItems, useMastersVersion,
+  useMastersVersion, useMastersSearch,
   type CachedLedger, type CachedItem,
 } from "@/lib/masters-cache";
+
 
 interface BaseProps {
   value: string;
@@ -30,20 +31,33 @@ export const LedgerPicker = React.memo(function LedgerPicker({
     const list = filter ? getAllLedgers().filter(filter) : getAllLedgers();
     return list.map((l) => ({ value: l.id, label: l.name, hint: l.type }));
   }, [filter]);
-  void searchLedgers; // search is handled inside cmdk via shouldFilter; cache supplies list
+
+  // Use worker-based search for UI-responsive filtering
+  const [query, setQuery] = React.useState("");
+  const workerResults = useMastersSearch("ledgers", query);
+  
+  const workerOptions = React.useMemo(() => {
+    const list = filter ? workerResults.filter(filter) : workerResults;
+    return list.map((l: any) => ({ value: l.id, label: l.name, hint: l.type }));
+  }, [workerResults, filter]);
+
   void getLedger;
+
   return (
     <Combo
       value={value}
       onChange={onChange}
-      options={options}
+      options={query ? workerOptions : options}
       placeholder={placeholder}
       emptyText="No ledgers — Alt+C to create"
       className={className}
       onCreate={onCreate}
       createLabel={createLabel}
       disabled={disabled}
+      onQueryChange={setQuery}
+      externalFiltering={true}
     />
+
   );
 });
 
@@ -59,19 +73,31 @@ export const ItemPicker = React.memo(function ItemPicker({
     const list = filter ? getAllItems().filter(filter) : getAllItems();
     return list.map((i) => ({ value: i.id, label: i.name, hint: i.unit }));
   }, [filter]);
-  void searchItems;
+
+  const [query, setQuery] = React.useState("");
+  const workerResults = useMastersSearch("items", query);
+
+  const workerOptions = React.useMemo(() => {
+    const list = filter ? workerResults.filter(filter) : workerResults;
+    return list.map((i: any) => ({ value: i.id, label: i.name, hint: i.unit }));
+  }, [workerResults, filter]);
+
   void getItem;
+
   return (
     <Combo
       value={value}
       onChange={onChange}
-      options={options}
+      options={query ? workerOptions : options}
       placeholder={placeholder}
       emptyText="No items — Alt+C to create"
       className={className}
       onCreate={onCreate}
       createLabel={createLabel}
       disabled={disabled}
+      onQueryChange={setQuery}
+      externalFiltering={true}
     />
+
   );
 });
