@@ -54,6 +54,8 @@ export function normalizeCompany<T extends AnyRow>(row: T | null | undefined): T
   if (out.annual_turnover_paise == null) out.annual_turnover_paise = 0;
   if (out.share_capital_paise == null) out.share_capital_paise = 0;
   if (out.corpus_fund_paise == null) out.corpus_fund_paise = 0;
+  if (out.reminders_enabled == null) out.reminders_enabled = true;
+  if (out.audit_case_reminders == null) out.audit_case_reminders = false;
 
   if (!out.state_code) {
     const derived = deriveStateCodeFromGstin(out.gstin);

@@ -59,6 +59,8 @@ interface Settings {
   show_bank_details: boolean;
   show_signatory: boolean;
   gst_filing_frequency: "monthly" | "quarterly";
+  reminders_enabled: boolean;
+  audit_case_reminders: boolean;
 }
 
 interface Member {
@@ -93,6 +95,8 @@ function SettingsPage() {
     show_bank_details: true,
     show_signatory: true,
     gst_filing_frequency: "monthly",
+    reminders_enabled: true,
+    audit_case_reminders: false,
   });
   const [savingSettings, setSavingSettings] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
@@ -156,7 +160,7 @@ function SettingsPage() {
     (async () => {
       const { data } = await supabase
         .from("company_settings")
-        .select("invoice_prefix, invoice_starting_number, invoice_footer_note, invoice_terms, show_bank_details, show_signatory, gst_filing_frequency")
+        .select("invoice_prefix, invoice_starting_number, invoice_footer_note, invoice_terms, show_bank_details, show_signatory, gst_filing_frequency, reminders_enabled, audit_case_reminders")
         .eq("company_id", activeCompanyId)
         .maybeSingle();
       if (data) setSettings(data as Settings);
@@ -281,6 +285,28 @@ function SettingsPage() {
     }
   };
 
+  const saveSettings = async (overrides: Partial<Settings> = {}) => {
+    if (!activeCompanyId) return;
+    setSavingSettings(true);
+    const next = { ...settings, ...overrides };
+    try {
+      const { error } = await supabase
+        .from("company_settings")
+        .upsert({
+          company_id: activeCompanyId,
+          ...next,
+          updated_at: new Date().toISOString(),
+        });
+      if (error) throw error;
+      setSettings(next);
+      toast.success("Settings saved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save settings");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -316,6 +342,42 @@ function SettingsPage() {
           <Button variant="outline" size="sm" onClick={() => navigate({ to: "/app/diagnostics" })}>
             Open diagnostics
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">App Notifications & Reminders</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Enable Reminders</Label>
+              <p className="text-xs text-muted-foreground">
+                Show notifications regarding GST returns, TDS deposits, and payment deadlines.
+              </p>
+            </div>
+            <Switch
+              checked={settings.reminders_enabled}
+              onCheckedChange={(v) => saveSettings({ reminders_enabled: v })}
+              disabled={savingSettings}
+            />
+          </div>
+
+          {settings.reminders_enabled && (
+            <div className="flex items-center justify-between border-t pt-4">
+              <div className="space-y-0.5">
+                <Label>Audit Case Reminders</Label>
+                <p className="text-xs text-muted-foreground">
+                  Receive advanced reminders for companies requiring a Tax Audit.
+                  (Unregistered dealers or non-audit cases will not receive these).
+                </p>
+              </div>
+              <Switch
+                checked={settings.audit_case_reminders}
+                onCheckedChange={(v) => saveSettings({ audit_case_reminders: v })}
+                disabled={savingSettings}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

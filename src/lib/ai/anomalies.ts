@@ -212,19 +212,38 @@ export async function scanGstHygiene(companyId: string): Promise<Anomaly[]> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Deadline radar — GSTR-1 (11th), GSTR-3B (20th), TDS (7th)
 // ─────────────────────────────────────────────────────────────────────────────
-export function scanDeadlines(now: Date = new Date()): Anomaly[] {
+export function scanDeadlines(companyId: string, now: Date = new Date()): Anomaly[] {
+  // Check notification settings for this company.
+  // Note: Since this is a pure function export, we move the actual logic to getDeadlinesAsync 
+  // which is called by the master runner.
+  return []; 
+}
+
+async function getDeadlinesAsync(companyId: string, now: Date = new Date()): Promise<Anomaly[]> {
+  const { offlineDb } = await import("@/lib/offline/db");
+  const settings = await offlineDb.cache_company_settings.where("company_id").equals(companyId).first();
+  const company = await offlineDb.cache_companies.get(companyId);
+
+  if (settings && settings.reminders_enabled === false) return [];
+
   const out: Anomaly[] = [];
   const y = now.getFullYear();
   const m = now.getMonth();
   const day = now.getDate();
 
-  const targets: { name: string; day: number; href: string; monthLabel: string }[] = [
-    { name: "GSTR-1", day: 11, href: "/app/reports/gstr1", monthLabel: prevMonthLabel(now) },
-    { name: "GSTR-3B", day: 20, href: "/app/reports/gstr3b", monthLabel: prevMonthLabel(now) },
-    { name: "TDS deposit", day: 7, href: "/app/reports/tds", monthLabel: prevMonthLabel(now) },
+  const isGstRegistered = company?.gst_registered || !!company?.gstin;
+  const isAuditCase = settings?.audit_case_reminders;
+
+  const targets: { name: string; day: number; href: string; monthLabel: string; requiresGst?: boolean; requiresAudit?: boolean }[] = [
+    { name: "GSTR-1", day: 11, href: "/app/reports/gstr1", monthLabel: prevMonthLabel(now), requiresGst: true },
+    { name: "GSTR-3B", day: 20, href: "/app/reports/gstr3b", monthLabel: prevMonthLabel(now), requiresGst: true },
+    { name: "TDS deposit", day: 7, href: "/app/reports/tds", monthLabel: prevMonthLabel(now), requiresAudit: true },
   ];
 
   for (const t of targets) {
+    if (t.requiresGst && !isGstRegistered) continue;
+    if (t.requiresAudit && !isAuditCase) continue;
+
     // If we're past the day this month, look at next month's due
     const due = day <= t.day ? new Date(y, m, t.day) : new Date(y, m + 1, t.day);
     const daysLeft = Math.round((due.getTime() - startOfDay(now).getTime()) / 86_400_000);
@@ -259,7 +278,7 @@ export async function scanAllAnomalies(companyId: string): Promise<Anomaly[]> {
     scanMsmeBreaches(companyId),
     scanNegativeStock(companyId),
     scanGstHygiene(companyId),
-    Promise.resolve(scanDeadlines()),
+    getDeadlinesAsync(companyId),
   ]);
   const out: Anomaly[] = [];
   for (const r of results) {
