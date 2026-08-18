@@ -73,6 +73,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useOptionalKeyboard, useShortcut } from "@/lib/keyboard";
+import { getMeta } from "@/lib/offline/db";
 
 
 interface NavItem { title: string; url: string; icon: LucideIcon; i18nKey?: string }
@@ -789,6 +790,18 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           </Button>
         )}
         {rightExtras}
+        {consistencyDrift && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 px-2 text-warning hover:bg-warning/10 hover:text-warning"
+            onClick={() => navigate({ to: "/app/data-health" })}
+            title="Accounting consistency issues detected. Check Data Health."
+          >
+            <ShieldAlert className="h-4 w-4" />
+            <span className="text-xs font-bold">Audit</span>
+          </Button>
+        )}
         <CompanySwitcher />
         <BackupNowButton />
         <RestoreNowButton />
