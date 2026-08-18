@@ -114,6 +114,8 @@ class OfflineDatabase extends Dexie {
   // E4 — GSTR-2B reconciliation (local-only, never synced).
   cache_gstr2b_imports!: Table<any, any>;
   cache_gstr2b_lines!: Table<any, any>;
+  // E5 — GST Calculation Caching.
+  cache_gst_rates!: Table<any, any>;
 
   constructor() {
     super("ym_offline_cache_v3");
@@ -225,6 +227,13 @@ class OfflineDatabase extends Dexie {
         "id, import_id, company_id, match_status, supplier_gstin, " +
         "[company_id+import_id], [import_id+match_status]",
     });
+    this.version(12).stores({
+      // E5 — GST Calculation Caching.
+      // Stores precomputed GST results for (item_id, ledger_id, is_interstate)
+      // to avoid repeated math in hot loops like bulk invoice imports or
+      // high-speed voucher entry.
+      cache_gst_rates: "id, [item_id+ledger_id+is_interstate], company_id, updated_at",
+    });
   }
 }
 
@@ -269,6 +278,7 @@ function makeStubDb(): OfflineDatabase {
     "activity_log",
     "cache_bank_statements", "cache_bank_statement_lines",
     "cache_gstr2b_imports", "cache_gstr2b_lines",
+    "cache_gst_rates",
   ];
   const stub: Record<string, unknown> = {
     async transaction(_mode: string, ...args: unknown[]) {

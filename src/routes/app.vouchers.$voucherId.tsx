@@ -19,7 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR, rupeesToPaise, paiseToRupees, amountInWords } from "@/lib/money";
-import { computeLine, sumLines, type GstLineResult } from "@/lib/gst";
+import { computeLine, sumLines, resolveGstWithCache, type GstLineResult } from "@/lib/gst";
 import { GST_RATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
@@ -295,7 +295,14 @@ function VoucherEditPage() {
     () =>
       itemLines.map((l) =>
         computeLine(
-          { qty: parseFloat(l.qty) || 0, rate: parseFloat(l.rate) || 0, discount: parseFloat(l.discount) || 0, gstRate: parseFloat(l.gst_rate) || 0 },
+          { 
+            item_id: l.item_id,
+            ledger_id: voucher?.party_ledger_id || undefined,
+            qty: parseFloat(l.qty) || 0, 
+            rate: parseFloat(l.rate) || 0, 
+            discount: parseFloat(l.discount) || 0, 
+            gstRate: parseFloat(l.gst_rate) || 0 
+          },
           voucher?.is_interstate ?? false,
         ),
       ),

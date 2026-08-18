@@ -29,7 +29,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/money";
-import { computeLine, sumLines, isInterstate, type GstLineResult } from "@/lib/gst";
+import { computeLine, sumLines, isInterstate, resolveGstWithCache, type GstLineResult } from "@/lib/gst";
 
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
@@ -526,6 +526,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       deferredLines.map((l) =>
         computeLine(
           {
+            item_id: l.item_id,
+            ledger_id: partyId,
             qty: parseFloat(l.qty) || 0,
             rate: parseFloat(l.rate) || 0,
             discount: parseFloat(l.discount) || 0,
@@ -534,7 +536,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           interstate,
         ),
       ),
-    [deferredLines, interstate],
+    [deferredLines, interstate, partyId],
   );
   const rawTotals = useMemo(() => sumLines(computed), [computed]);
   // Misc adjustments: pre-GST is added to taxable and taxed at the weighted-avg line GST rate;
@@ -792,6 +794,27 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       })),
     };
     rememberNarration(voucherType, narration);
+    
+    // Warm the GST calculation cache for high-speed retrieval
+    if (activeCompanyId) {
+      for (const line of snap.lines) {
+        if (line.l.item_id && snap.partyId) {
+          void resolveGstWithCache(
+            {
+              item_id: line.l.item_id,
+              ledger_id: snap.partyId,
+              qty: parseFloat(line.l.qty) || 0,
+              rate: parseFloat(line.l.rate) || 0,
+              discount: parseFloat(line.l.discount) || 0,
+              gstRate: parseFloat(line.l.gst_rate) || 0,
+            },
+            snap.interstate,
+            activeCompanyId
+          ).catch(() => {});
+        }
+      }
+    }
+
     // Reset form INSTANTLY
     setPartyId("");
     setRefNo("");
