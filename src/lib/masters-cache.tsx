@@ -104,6 +104,7 @@ export function getAllLedgers(): CachedLedger[] { return ledgersSorted; }
 export function getAllItems(): CachedItem[] { return itemsSorted; }
 
 export function searchLedgers(query: string, predicate?: (l: CachedLedger) => boolean, limit = 50): CachedLedger[] {
+  // Sync fallback for now, but in UI we should use useMastersSearch
   const q = fold(query.trim());
   const src = predicate ? ledgersSorted.filter(predicate) : ledgersSorted;
   if (!q) return src.slice(0, limit);
@@ -134,6 +135,29 @@ export function searchItems(query: string, predicate?: (i: CachedItem) => boolea
   }
   return [...prefix, ...contains].slice(0, limit);
 }
+
+export function useMastersSearch(type: "ledgers" | "items", query: string, limit = 50) {
+  const [results, setResults] = useState<any[]>([]);
+  const mastersVersion = useMastersVersion();
+
+  useEffect(() => {
+    if (!searchWorker) return;
+    const requestId = Math.random().toString(36).substring(7);
+    pendingRequests.set(requestId, setResults);
+    
+    searchWorker.postMessage({
+      type: type === "ledgers" ? "SEARCH_LEDGERS" : "SEARCH_ITEMS",
+      payload: { query, limit, requestId }
+    });
+
+    return () => {
+      pendingRequests.delete(requestId);
+    };
+  }, [type, query, limit, mastersVersion]);
+
+  return results;
+}
+
 
 export function useMastersVersion(): number {
   return useSyncExternalStore(subscribe, getVersion, getVersion);
