@@ -4,6 +4,31 @@ import { useCompany } from "./company-context";
 import { isLocalOnlyMode } from "./local-only-mode";
 import { readItems, readLedgers, shouldPreferOfflineCache } from "@/lib/offline/cache-read";
 
+// Initialize Search Worker
+let searchWorker: Worker | null = null;
+if (typeof window !== "undefined") {
+  searchWorker = new Worker(new URL("../workers/masters-search.worker.ts", import.meta.url), {
+    type: "module",
+  });
+}
+
+const pendingRequests = new Map<string, (results: any[]) => void>();
+
+if (searchWorker) {
+  searchWorker.onmessage = (e) => {
+    const { type, payload } = e.data;
+    if (type === "SEARCH_RESULTS") {
+      const { results, requestId } = payload;
+      const resolve = pendingRequests.get(requestId);
+      if (resolve) {
+        resolve(results);
+        pendingRequests.delete(requestId);
+      }
+    }
+  };
+}
+
+
 export interface CachedLedger {
   id: string;
   name: string;
