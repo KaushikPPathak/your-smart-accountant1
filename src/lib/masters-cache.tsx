@@ -67,8 +67,15 @@ let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
 
 function bump() {
   version++;
+  if (searchWorker) {
+    searchWorker.postMessage({
+      type: "SET_DATA",
+      payload: { ledgers: ledgersSorted, items: itemsSorted },
+    });
+  }
   listeners.forEach((l) => l());
 }
+
 function subscribe(l: () => void) {
   listeners.add(l);
   return () => { listeners.delete(l); };
