@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Download, RefreshCw, Trash2 } from "lucide-react";
