@@ -98,6 +98,7 @@ function SettingsPage() {
     gst_filing_frequency: "monthly",
     reminders_enabled: true,
     audit_case_reminders: false,
+    gst_check_interval: "quarterly",
   });
   const [savingSettings, setSavingSettings] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
