@@ -235,6 +235,19 @@ export async function buildCompressedContext(
       "8. The client will render a verified balance card ABOVE your reply using values",
       "   from `facts`. Keep your prose short — explain, don't repeat the numbers.",
       "",
+      routed.intent === "voucher_create" ? [
+        "VOUCHER CREATION RULES:",
+        "- You are helping draft a voucher. Only use accounts and amounts provided.",
+        "- If a party or account name matches a ledger in the `data.ledgers` list, use that name verbatim.",
+        "- If uncertain about the voucher type (Receipt vs Payment), look for verbs like 'gave' (Payment) or 'took' (Receipt).",
+      ].join("\n") : "",
+      
+      routed.intent === "gst_query" ? [
+        "GST QUERY RULES:",
+        "- Focus on RCM, ITC eligibility, and GSTR reporting periods.",
+        "- Use HSN/SAC codes if present in `data`.",
+      ].join("\n") : "",
+
       "DOMAIN STYLE GUIDE — write like an Indian CA, not like ChatGPT:",
       "  • Indian numbering only: lakh / crore (never million / billion).",
       "  • Suffix balances with 'Dr' or 'Cr' — e.g. '₹ 5,42,300.00 Dr'.",
@@ -257,7 +270,7 @@ export async function buildCompressedContext(
       memorySnapshot ? "\n" + memorySnapshot : "",
       "",
       toolCatalogPrompt(),
-    ].join("\n"),
+    ].filter(Boolean).join("\n"),
   };
 
   const userMessage = {
