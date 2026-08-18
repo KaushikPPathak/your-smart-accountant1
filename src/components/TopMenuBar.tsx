@@ -269,6 +269,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   const { code: currencyCode, setCode: setCurrencyCode } = useCurrency();
   const { code: dateCode, setCode: setDateCode } = useDateFormat();
   const [deadLetterCount, setDeadLetterCount] = useState(0);
+  const [consistencyDrift, setConsistencyDrift] = useState(false);
 
   useEffect(() => {
     const update = async () => {
