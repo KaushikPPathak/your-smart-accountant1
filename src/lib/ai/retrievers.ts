@@ -539,7 +539,12 @@ async function retrieveCashBank(companyId: string, routed: RouteResult): Promise
 
 /** GST — sales/purchase vouchers in window with taxable & total totals. */
 async function retrieveGst(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
-  const vouchers = (await readVouchers(companyId, { from: routed.from, to: routed.to })) as any[];
+  const { offlineDb } = await import("@/lib/offline/db");
+  const vouchers = await offlineDb.cache_vouchers
+    .where("[company_id+voucher_date]")
+    .between([companyId, routed.from || "0000-00-00"], [companyId, routed.to || "9999-99-99"], true, true)
+    .toArray();
+
   const gstTypes = new Set(["sales", "purchase", "credit_note", "debit_note"]);
   const rel = vouchers.filter((v) => gstTypes.has(String(v.voucher_type)));
   let taxable = 0, total = 0;
