@@ -129,7 +129,7 @@ function rowsFromMatrix(matrix: string[][]): ParseResponse {
   };
 }
 
-self.onmessage = (ev: MessageEvent<ParseRequest>) => {
+self.onmessage = async (ev: MessageEvent<ParseRequest>) => {
   try {
     const req = ev.data;
     let matrix: string[][] = [];
