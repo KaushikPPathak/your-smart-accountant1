@@ -73,6 +73,7 @@ export async function runIntegrityScan(
     voucherWithoutEntries: 0,
     entryUnknownLedger: 0,
     orphanAllocation: 0,
+    ledgerBalanceDrift: 0,
   };
 
   // 1) Companies (single row lookup — no batching needed).

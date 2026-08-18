@@ -114,6 +114,8 @@ function AppLayout() {
       if (activeCompanyId) {
         const { scheduleWarmup } = await import("@/lib/ai/cache-warmup");
         scheduleWarmup(activeCompanyId);
+        const { scheduleWeeklyConsistencyCheck } = await import("@/lib/offline/consistency");
+        scheduleWeeklyConsistencyCheck(activeCompanyId);
       }
 
 
