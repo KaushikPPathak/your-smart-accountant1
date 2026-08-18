@@ -14,6 +14,7 @@ import {
   FileCode2,
   ChevronDown,
   ShieldCheck,
+  ShieldAlert,
   ArrowLeftRight,
   Printer,
   Wrench,
@@ -33,8 +34,10 @@ import {
   Briefcase,
   Lock,
   HardDriveDownload,
+  AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
+
 import {
   Menubar,
   MenubarContent,
@@ -55,6 +58,8 @@ import { useCurrency, CURRENCIES } from "@/lib/currency";
 import { useDateFormat, DATE_FORMATS, type DateFormatCode } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
+import { Button } from "@/components/ui/button";
+
 import { BackupNowButton } from "@/components/BackupNowButton";
 import { RestoreNowButton } from "@/components/RestoreNowButton";
 import {
@@ -263,6 +268,25 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   const { t, lang, setLang } = useI18n();
   const { code: currencyCode, setCode: setCurrencyCode } = useCurrency();
   const { code: dateCode, setCode: setDateCode } = useDateFormat();
+  const [deadLetterCount, setDeadLetterCount] = useState(0);
+
+  useEffect(() => {
+    const update = async () => {
+      try {
+        const { deadLetterCount: getCount } = await import("@/lib/offline/outbox");
+        const count = await getCount();
+        setDeadLetterCount(count);
+      } catch { /* ignore */ }
+    };
+    update();
+    window.addEventListener("ym:outbox-changed", update);
+    window.addEventListener("ym:local-data-restored", update);
+    return () => {
+      window.removeEventListener("ym:outbox-changed", update);
+      window.removeEventListener("ym:local-data-restored", update);
+    };
+  }, []);
+
 
   const gstEnabled = Boolean(activeMembership?.companies?.gst_registered) || Boolean(activeMembership?.companies?.gstin);
   const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
@@ -740,11 +764,24 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
       {/* Right-side extras + Company switcher */}
       <div className="busy-company gap-2">
+        {deadLetterCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => navigate({ to: "/app/data-health" })}
+            title={`${deadLetterCount} sync failures require attention`}
+          >
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-xs font-bold">{deadLetterCount}</span>
+          </Button>
+        )}
         {rightExtras}
         <CompanySwitcher />
         <BackupNowButton />
         <RestoreNowButton />
       </div>
+
 
       <AlertDialog open={exitConfirmOpen} onOpenChange={setExitConfirmOpen}>
         <AlertDialogContent
