@@ -1230,9 +1230,10 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-x-0 border-y shadow-none rounded-none bg-white">
           <CardContent className="p-0">
-            <div className="flex items-center justify-end gap-2 border-b px-3 py-1.5">
+            <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-1">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">Particulars</span>
               <Button
                 type="button"
                 variant="ghost"
