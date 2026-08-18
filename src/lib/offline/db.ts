@@ -25,7 +25,10 @@ interface BaseCacheRow {
 }
 
 export type CompanyCacheRow = BaseCacheRow & { name: string; has_password?: boolean };
-export type CompanySettingsCacheRow = BaseCacheRow;
+export type CompanySettingsCacheRow = BaseCacheRow & {
+  dismissed_notifications?: string[]; // array of anomaly IDs to never show again
+  snoozed_notifications?: Record<string, number>; // ID -> timestamp to remind after
+};
 export type LedgerCacheRow = BaseCacheRow & { name: string; is_active?: boolean };
 export type ItemCacheRow = BaseCacheRow & { name: string; is_active?: boolean };
 
