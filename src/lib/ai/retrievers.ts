@@ -244,19 +244,33 @@ async function retrieveDateRange(companyId: string, routed: RouteResult): Promis
 
 /** Voucher lookup — one voucher + its entries + items. */
 async function retrieveVoucher(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
-  const vouchers = (await readVouchers(companyId)) as any[];
-  const needle = routed.entity?.voucherType?.toLowerCase() ?? ""; // entity extractor maps #123 to voucherType sometimes
-  const match = vouchers.find((v) => String(v.voucher_number ?? "").toLowerCase() === needle)
-             ?? vouchers.find((v) => String(v.voucher_number ?? "").toLowerCase().includes(needle));
+  const { offlineDb } = await import("@/lib/offline/db");
+  const needle = (routed.entity?.voucherType?.toLowerCase() ?? "").trim();
+  
+  if (!needle) return { scope: "no voucher number specified", data: {} };
+
+  // Try exact match on voucher_number
+  let match = await offlineDb.cache_vouchers
+    .where("company_id").equals(companyId)
+    .filter(v => String(v.voucher_number ?? "").toLowerCase() === needle)
+    .first();
+
+  // Partial match fallback
+  if (!match) {
+    match = await offlineDb.cache_vouchers
+      .where("company_id").equals(companyId)
+      .filter(v => String(v.voucher_number ?? "").toLowerCase().includes(needle))
+      .first();
+  }
+
   if (!match) {
     return { scope: `voucher not found: ${needle}`, data: {} };
   }
 
-  const [allEntries, items] = await Promise.all([
-    readVoucherEntriesForCompany(companyId),
+  const [entries, items] = await Promise.all([
+    offlineDb.cache_voucher_entries.where("voucher_id").equals(String(match.id)).toArray(),
     readVoucherItems(String(match.id)),
   ]);
-  const entries = (allEntries as any[]).filter((e) => String(e.voucher_id) === String(match.id));
   return {
     scope: `voucher ${match.voucher_number} (${match.voucher_type})`,
     data: { voucher: [match], entries, items },
