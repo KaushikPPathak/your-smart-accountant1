@@ -454,6 +454,18 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
         navigate({ to: "/app/vouchers" });
         return;
       }
+      // Diagnostics → Company Settings
+      if (location.pathname === "/app/diagnostics") {
+        e.preventDefault();
+        navigate({ to: "/app/settings" });
+        return;
+      }
+      // Settings sub-pages (numbering, opening-bills, etc) → Settings main
+      if (location.pathname.startsWith("/app/settings/") && location.pathname !== "/app/settings") {
+        e.preventDefault();
+        navigate({ to: "/app/settings" });
+        return;
+      }
       // Main content / body → ask TopMenuBar to open the exit-confirm dialog
       // directly. Previously we hopped focus to the menubar and required a
       // second Escape, which failed on pages like Companies where the user

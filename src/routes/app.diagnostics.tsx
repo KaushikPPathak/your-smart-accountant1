@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Download, RefreshCw, Trash2 } from "lucide-react";
@@ -81,12 +81,17 @@ function DiagnosticsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Diagnostics</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Errors and failures recorded on this device only. Nothing here is sent to any server.
-          Share the exported file with support if a restore or import ever fails.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Diagnostics</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Errors and failures recorded on this device only. Nothing here is sent to any server.
+            Share the exported file with support if a restore or import ever fails.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" asChild className="shrink-0 self-start sm:self-center">
+          <Link to="/app/settings">Back to Company Settings</Link>
+        </Button>
       </div>
 
       <FlowStagesPanel tick={tick} />
