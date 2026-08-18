@@ -89,7 +89,7 @@ export function CloudProviderSetupDialog({
         <DialogHeader>
           <DialogTitle>'''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''</DialogTitle>
           <DialogDescription>
-            with safe step-by-step guidance) or "Keep this version" WHAT IS THIS STEPS TELL ME IS IT SIMPLE ? LIKE CLICK ?
+            reinstalling the previous installe ? IF PERSOND DONT HAVE PREVIOUS VERSION EXE WHAT WILL HAPPEN ?
           </DialogDescription>
         </DialogHeader>
 
