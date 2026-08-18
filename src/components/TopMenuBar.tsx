@@ -14,6 +14,7 @@ import {
   FileCode2,
   ChevronDown,
   ShieldCheck,
+  ShieldAlert,
   ArrowLeftRight,
   Printer,
   Wrench,
@@ -33,8 +34,10 @@ import {
   Briefcase,
   Lock,
   HardDriveDownload,
+  AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
+
 import {
   Menubar,
   MenubarContent,
