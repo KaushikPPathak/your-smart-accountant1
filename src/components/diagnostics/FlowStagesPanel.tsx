@@ -2,6 +2,8 @@ import * as React from "react";
 import { listCrashes, type CrashEntry } from "@/lib/crash-log";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2, XCircle, Activity } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * "Last run" panel — replays the most recent stage sequence of a flow
@@ -54,15 +56,25 @@ export function FlowStagesPanel({ tick }: { tick?: number }) {
     steps: lastRun(all, scope),
   }));
 
+  const [showDetails, setShowDetails] = React.useState(false);
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 py-3 sm:py-4">
         <CardTitle className="flex items-center gap-2 text-base">
           <Activity className="h-4 w-4" />
           Last run — Print preview &amp; WhatsApp
         </CardTitle>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-8 px-2 text-xs"
+          onClick={() => setShowDetails(!showDetails)}
+        >
+          {showDetails ? "Hide details" : "View details"}
+        </Button>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className={cn("space-y-5", !showDetails && "pb-4")}>
         {flows.map((f) => (
           <div key={f.scope}>
             <div className="mb-2 text-sm font-medium">{f.label}</div>
@@ -72,7 +84,7 @@ export function FlowStagesPanel({ tick }: { tick?: number }) {
               </div>
             ) : (
               <ol className="space-y-1">
-                {f.steps.map((s) => {
+                {(showDetails ? f.steps : f.steps.filter(s => s.kind !== "stage")).map((s) => {
                   const failed = s.kind !== "stage";
                   return (
                     <li key={s.id} className="flex items-start gap-2 text-xs">
@@ -83,7 +95,7 @@ export function FlowStagesPanel({ tick }: { tick?: number }) {
                       )}
                       <span className={failed ? "text-destructive" : ""}>
                         {describe(s)}
-                        {s.context ? (
+                        {showDetails && s.context ? (
                           <span className="ml-2 font-mono text-[10px] text-muted-foreground">
                             {JSON.stringify(s.context).slice(0, 160)}
                           </span>
@@ -92,6 +104,12 @@ export function FlowStagesPanel({ tick }: { tick?: number }) {
                     </li>
                   );
                 })}
+                {!showDetails && f.steps.every(s => s.kind === "stage") && f.steps.length > 0 && (
+                  <li className="flex items-center gap-2 text-[10px] text-emerald-600">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>All steps completed successfully</span>
+                  </li>
+                )}
               </ol>
             )}
           </div>
