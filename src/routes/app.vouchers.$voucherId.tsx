@@ -19,7 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR, rupeesToPaise, paiseToRupees, amountInWords } from "@/lib/money";
-import { computeLine, sumLines, type GstLineResult } from "@/lib/gst";
+import { computeLine, sumLines, resolveGstWithCache, type GstLineResult } from "@/lib/gst";
 import { GST_RATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
