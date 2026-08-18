@@ -227,6 +227,13 @@ class OfflineDatabase extends Dexie {
         "id, import_id, company_id, match_status, supplier_gstin, " +
         "[company_id+import_id], [import_id+match_status]",
     });
+    this.version(12).stores({
+      // E5 — GST Calculation Caching.
+      // Stores precomputed GST results for (item_id, ledger_id, is_interstate)
+      // to avoid repeated math in hot loops like bulk invoice imports or
+      // high-speed voucher entry.
+      cache_gst_rates: "id, [item_id+ledger_id+is_interstate], company_id, updated_at",
+    });
   }
 }
 
