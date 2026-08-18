@@ -101,8 +101,8 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
 
     case "voucher_list": {
       if (!card.vouchers?.length) return "No vouchers found.";
-      const lines = card.vouchers.map((v: any, i: number) =>
-        `${i + 1}. **${v.number}** — ${v.narration || v.kind}`,
+      const lines = card.vouchers.slice(0, 15).map((v: any, i: number) =>
+        `${i + 1}. **${v.date || v.voucher_date}**: ${v.number || v.voucher_number || v.kind || ""} — ${formatInr(v.total_paise || v.debit_paise || v.credit_paise || 0)}`,
       );
       return lines.join("\n") + "\n\n_Answered locally._";
     }
