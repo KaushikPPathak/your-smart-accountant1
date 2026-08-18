@@ -278,6 +278,7 @@ function makeStubDb(): OfflineDatabase {
     "activity_log",
     "cache_bank_statements", "cache_bank_statement_lines",
     "cache_gstr2b_imports", "cache_gstr2b_lines",
+    "cache_gst_rates",
   ];
   const stub: Record<string, unknown> = {
     async transaction(_mode: string, ...args: unknown[]) {
