@@ -266,6 +266,25 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   const { t, lang, setLang } = useI18n();
   const { code: currencyCode, setCode: setCurrencyCode } = useCurrency();
   const { code: dateCode, setCode: setDateCode } = useDateFormat();
+  const [deadLetterCount, setDeadLetterCount] = useState(0);
+
+  useEffect(() => {
+    const update = async () => {
+      try {
+        const { deadLetterCount: getCount } = await import("@/lib/offline/outbox");
+        const count = await getCount();
+        setDeadLetterCount(count);
+      } catch { /* ignore */ }
+    };
+    update();
+    window.addEventListener("ym:outbox-changed", update);
+    window.addEventListener("ym:local-data-restored", update);
+    return () => {
+      window.removeEventListener("ym:outbox-changed", update);
+      window.removeEventListener("ym:local-data-restored", update);
+    };
+  }, []);
+
 
   const gstEnabled = Boolean(activeMembership?.companies?.gst_registered) || Boolean(activeMembership?.companies?.gstin);
   const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
