@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2,
@@ -6,7 +6,7 @@ import {
   FileText, Paperclip, ScanLine, BrainCircuit, Volume2, VolumeX,
   Headphones, Cpu, Cloud, RotateCcw, Zap, History, MessageSquare, Trash2
 } from "lucide-react";
-import { extractInvoiceOcr, type OcrDraft } from "@/lib/ai/ocr-invoice";
+import { extractInvoiceOcr, type OcrDraft, type OcrExtracted } from "@/lib/ai/ocr-invoice";
 import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
 import { Link } from "@tanstack/react-router";
 import { useVoiceInput } from "@/lib/ai/voice-input";
@@ -194,10 +194,10 @@ export function AssistantChat() {
 
   const onFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !activeCompanyId) return;
     setOcrLoading(true);
     try {
-      const draft = await extractInvoiceOcr(file);
+      const draft = await extractInvoiceOcr(file, activeCompanyId);
       setPendingOcr(draft);
       addMessage({
         role: "user",
@@ -205,7 +205,7 @@ export function AssistantChat() {
         ocrPreview: draft
       });
       // Automatically prompt the assistant about the OCR draft
-      ask(`I have attached an invoice for ${draft.party_name || 'a party'} for ₹${draft.total}. Please draft a voucher.`);
+      ask(`I have attached an invoice from ${draft.extracted.party_name || 'a party'} for ₹${draft.extracted.total_amount}. Please draft a voucher.`);
     } catch (err) {
       toast.error("Failed to read invoice");
     } finally {
@@ -230,10 +230,11 @@ export function AssistantChat() {
 
   const undoVoucher = async (msgId: string) => {
     const msg = messages.find(m => m.id === msgId);
-    if (!msg?.voucherResult?.voucherId || !activeCompanyId) return;
+    if (!msg?.voucherResult?.voucher?.id || !activeCompanyId) return;
     
     try {
-      await undoLastVoucher(msg.voucherResult.voucherId, activeCompanyId);
+      const { undoLastVoucher } = await import("@/lib/ai/voucher-actions");
+      await undoLastVoucher(msg.voucherResult.voucher.id, activeCompanyId);
       setMessages(prev => prev.map(m => 
         m.id === msgId ? { ...m, voucherResult: undefined, text: msg.text + "\n\n*(Transaction Undone)*" } : m
       ));
@@ -333,7 +334,10 @@ export function AssistantChat() {
                 )}
               >
                 {msg.role === "assistant" ? (
-                  <StreamingText text={msg.text} />
+                  <StreamingText 
+                    text={msg.text} 
+                    render={(shown: string) => <div className="whitespace-pre-wrap">{shown}</div>} 
+                  />
                 ) : (
                   <div className="whitespace-pre-wrap">{msg.text}</div>
                 )}
@@ -350,7 +354,11 @@ export function AssistantChat() {
                 <div className="flex w-full flex-col gap-3">
                   {msg.card && (
                     <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                      <AnswerProvenance card={msg.card} />
+                      <AnswerProvenance 
+                        answer={msg.text} 
+                        question={msg.question || ""} 
+                        toolNames={msg.toolCalls?.map(tc => tc.name)} 
+                      />
                     </div>
                   )}
 
@@ -364,7 +372,7 @@ export function AssistantChat() {
                         const route = msg.voucherPreview?.intent ? `/app/vouchers/new/${msg.voucherPreview.intent.toLowerCase()}` : '/app/vouchers/new/journal';
                         navigate({ 
                           to: route as any,
-                          search: { prefill: JSON.stringify(msg.voucherPreview) } 
+                          // @ts-ignore - prefill is handled by consumeAssistantPrefill via writeAssistantPrefill which was called in assistantChat
                         });
                       }}
                       onCancel={() => setMessages(m => m.filter(x => x.id !== msg.id))}
@@ -376,7 +384,7 @@ export function AssistantChat() {
                       <CardContent className="flex items-center justify-between p-3 text-xs">
                         <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
                           <Check className="h-4 w-4" />
-                          <span>Voucher #{msg.voucherResult.voucherNumber} posted</span>
+                          <span>Voucher #{msg.voucherResult.voucher?.voucher_number} posted</span>
                         </div>
                         <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={() => undoVoucher(msg.id)}>
                           <RotateCcw className="mr-1 h-3 w-3" /> Undo
@@ -504,12 +512,12 @@ export function AssistantChat() {
                 size="icon"
                 className={cn(
                   "h-8 w-8 transition-colors",
-                  voice.isListening ? "text-destructive animate-pulse" : "text-muted-foreground hover:text-primary"
+                  voice.listening ? "text-destructive animate-pulse" : "text-muted-foreground hover:text-primary"
                 )}
-                onClick={() => voice.isListening ? voice.stop() : voice.start()}
+                onClick={() => voice.listening ? voice.stop() : voice.start()}
                 title="Voice Input"
               >
-                {voice.isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                {voice.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               </Button>
               
               <Button
