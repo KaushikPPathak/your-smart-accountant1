@@ -89,6 +89,9 @@ export function GstinPortalButton({ gstin, disabled, onDataFetched, companyId }:
           address: res.principalPlaceOfBusiness,
         });
         toast.success(`Fetched: ${res.legalName || res.tradeName}`);
+        if (companyId) {
+          localStorage.setItem(`ym_gstin_check:${companyId}`, String(Date.now()));
+        }
       } else {
         if (!silent) {
           toast.error(res.error || "Setu lookup failed", {
