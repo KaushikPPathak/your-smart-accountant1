@@ -11,6 +11,9 @@
 // toast; "info" waits for the next morning briefing.
 
 import { scanAllAnomalies, type Anomaly } from "./anomalies";
+import { offlineDb } from "../offline/db";
+
+const SNOOZE_DURATION = 4 * 60 * 60 * 1000; // 4 hours snooze default
 
 const SEEN_KEY = (companyId: string, date: string) => `ai.watcher.seen:${companyId}:${date}`;
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -46,7 +49,7 @@ export interface WatcherHandle {
 export interface WatcherOptions {
   intervalMs?: number;
   /** Called for each freshly-observed danger/warn anomaly. */
-  onNew: (anomaly: Anomaly) => void;
+  onNew: (anomaly: Anomaly, actions: { snooze: () => Promise<void>; never: () => Promise<void> }) => void;
   /** Optional: full list callback for status bars / debug panels. */
   onScan?: (all: Anomaly[]) => void;
 }
@@ -71,21 +74,45 @@ export function startWatchers(companyId: string, opts: WatcherOptions): WatcherH
     }
     running = true;
     try {
+      const settings = await offlineDb.cache_company_settings.where("company_id").equals(companyId).first();
+      const dismissed = settings?.dismissed_notifications || [];
+      const snoozed = settings?.snoozed_notifications || {};
+      const now = Date.now();
+
       const all = await scanAllAnomalies(companyId);
-      lastRun = Date.now();
+      lastRun = now;
       if (stopped) return;
       opts.onScan?.(all);
 
       const seen = loadSeen(companyId);
-      let mutated = false;
+      let mutatedSeen = false;
+
       for (const a of all) {
         if (a.severity === "info") continue;
+        if (dismissed.includes(a.id)) continue;
+        if (snoozed[a.id] && now < snoozed[a.id]) continue;
         if (seen.has(a.id)) continue;
+
         seen.add(a.id);
-        mutated = true;
-        try { opts.onNew(a); } catch { /* consumer errors mustn't break the loop */ }
+        mutatedSeen = true;
+
+        const snooze = async () => {
+          const current = await offlineDb.cache_company_settings.where("company_id").equals(companyId).first();
+          const nextSnoozed = { ...(current?.snoozed_notifications || {}), [a.id]: Date.now() + SNOOZE_DURATION };
+          await offlineDb.cache_company_settings.update(current.id, { snoozed_notifications: nextSnoozed });
+        };
+
+        const never = async () => {
+          const current = await offlineDb.cache_company_settings.where("company_id").equals(companyId).first();
+          const nextDismissed = Array.from(new Set([...(current?.dismissed_notifications || []), a.id]));
+          await offlineDb.cache_company_settings.update(current.id, { dismissed_notifications: nextDismissed });
+        };
+
+        try { 
+          opts.onNew(a, { snooze, never }); 
+        } catch { /* consumer errors mustn't break the loop */ }
       }
-      if (mutated) saveSeen(companyId, seen);
+      if (mutatedSeen) saveSeen(companyId, seen);
     } catch {
       // Swallow — we retry on the next tick. Never let a scanner bug
       // take down the whole app.

@@ -88,7 +88,7 @@ function SettingsPage() {
   const [exportingAll, setExportingAll] = useState(false);
   const [wipeBeforeRestore, setWipeBeforeRestore] = useState(false);
   const { theme, setTheme } = useTheme();
-  const [settings, setSettings] = useState<Settings>({
+  const [settings, setSettings] = useState<Settings & { dismissed_notifications?: string[] }>({
     invoice_prefix: "INV",
     invoice_starting_number: 1,
     invoice_footer_note: "",
@@ -99,6 +99,7 @@ function SettingsPage() {
     reminders_enabled: true,
     audit_case_reminders: false,
     gst_check_interval: "quarterly",
+    dismissed_notifications: [],
   });
   const [savingSettings, setSavingSettings] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
