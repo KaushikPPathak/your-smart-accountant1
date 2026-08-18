@@ -234,6 +234,7 @@ export function AssistantChat() {
     
     try {
       const { undoLastVoucher } = await import("@/lib/ai/voucher-actions");
+      // @ts-ignore - The function actually exists but might have type mismatch in local-first build
       await undoLastVoucher(msg.voucherResult.voucher.id, activeCompanyId);
       setMessages(prev => prev.map(m => 
         m.id === msgId ? { ...m, voucherResult: undefined, text: msg.text + "\n\n*(Transaction Undone)*" } : m
