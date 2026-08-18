@@ -279,14 +279,25 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
         setDeadLetterCount(count);
       } catch { /* ignore */ }
     };
+    const checkConsistency = async () => {
+      if (!activeMembership?.company_id) return;
+      try {
+        const report = await getMeta<any>(`consistency_report:${activeMembership.company_id}`);
+        setConsistencyDrift(report && !report.is_healthy);
+      } catch { /* ignore */ }
+    };
+
     update();
+    checkConsistency();
     window.addEventListener("ym:outbox-changed", update);
     window.addEventListener("ym:local-data-restored", update);
+    window.addEventListener("ym:consistency-alert", checkConsistency as any);
     return () => {
       window.removeEventListener("ym:outbox-changed", update);
       window.removeEventListener("ym:local-data-restored", update);
+      window.removeEventListener("ym:consistency-alert", checkConsistency as any);
     };
-  }, []);
+  }, [activeMembership?.company_id]);
 
 
   const gstEnabled = Boolean(activeMembership?.companies?.gst_registered) || Boolean(activeMembership?.companies?.gstin);
