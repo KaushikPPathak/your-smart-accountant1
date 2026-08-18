@@ -73,6 +73,7 @@ export async function runIntegrityScan(
     voucherWithoutEntries: 0,
     entryUnknownLedger: 0,
     orphanAllocation: 0,
+    ledgerBalanceDrift: 0,
   };
 
   // 1) Companies (single row lookup — no batching needed).
@@ -170,12 +171,21 @@ export async function runIntegrityScan(
     opts,
   );
 
+  // 7) Consistency check (Ledger balance vs entries sum).
+  // We run this as part of the full integrity scan.
+  const { runConsistencyCheck } = await import("./consistency");
+  const consistency = await runConsistencyCheck(companyId);
+  if (!consistency.is_healthy) {
+    counts.ledgerBalanceDrift = consistency.issues.length;
+  }
+
   return [
     { table: "Companies", issue: "gst_registered=false but GSTIN present", count: counts.companyGstinNoFlag },
     { table: "Companies", issue: "missing state_code", count: counts.companyNoState },
     { table: "Companies", issue: "missing financial_year_start", count: counts.companyNoFy },
     { table: "Ledgers", issue: "missing type (account group)", count: counts.ledgerNoGroup },
     { table: "Ledgers", issue: "GSTIN present but no gst_treatment", count: counts.ledgerGstinNoTreatment },
+    { table: "Ledgers", issue: "balance drift (cached balance != sum of entries)", count: counts.ledgerBalanceDrift || 0 },
     { table: "Items", issue: "missing hsn_code", count: counts.itemNoHsn },
     { table: "Items", issue: "gst_rate is null/undefined", count: counts.itemNoRate },
     { table: "Vouchers", issue: "without any voucher_entries", count: counts.voucherWithoutEntries },

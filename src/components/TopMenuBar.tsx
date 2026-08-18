@@ -73,6 +73,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useOptionalKeyboard, useShortcut } from "@/lib/keyboard";
+import { getMeta } from "@/lib/offline/db";
 
 
 interface NavItem { title: string; url: string; icon: LucideIcon; i18nKey?: string }
@@ -269,6 +270,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   const { code: currencyCode, setCode: setCurrencyCode } = useCurrency();
   const { code: dateCode, setCode: setDateCode } = useDateFormat();
   const [deadLetterCount, setDeadLetterCount] = useState(0);
+  const [consistencyDrift, setConsistencyDrift] = useState(false);
 
   useEffect(() => {
     const update = async () => {
@@ -278,14 +280,25 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
         setDeadLetterCount(count);
       } catch { /* ignore */ }
     };
+    const checkConsistency = async () => {
+      if (!activeMembership?.company_id) return;
+      try {
+        const report = await getMeta<any>(`consistency_report:${activeMembership.company_id}`);
+        setConsistencyDrift(report && !report.is_healthy);
+      } catch { /* ignore */ }
+    };
+
     update();
+    checkConsistency();
     window.addEventListener("ym:outbox-changed", update);
     window.addEventListener("ym:local-data-restored", update);
+    window.addEventListener("ym:consistency-alert", checkConsistency as any);
     return () => {
       window.removeEventListener("ym:outbox-changed", update);
       window.removeEventListener("ym:local-data-restored", update);
+      window.removeEventListener("ym:consistency-alert", checkConsistency as any);
     };
-  }, []);
+  }, [activeMembership?.company_id]);
 
 
   const gstEnabled = Boolean(activeMembership?.companies?.gst_registered) || Boolean(activeMembership?.companies?.gstin);
@@ -777,6 +790,18 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           </Button>
         )}
         {rightExtras}
+        {consistencyDrift && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 px-2 text-warning hover:bg-warning/10 hover:text-warning"
+            onClick={() => navigate({ to: "/app/data-health" })}
+            title="Accounting consistency issues detected. Check Data Health."
+          >
+            <ShieldAlert className="h-4 w-4" />
+            <span className="text-xs font-bold">Audit</span>
+          </Button>
+        )}
         <CompanySwitcher />
         <BackupNowButton />
         <RestoreNowButton />
