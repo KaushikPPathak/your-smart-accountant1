@@ -794,6 +794,27 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       })),
     };
     rememberNarration(voucherType, narration);
+    
+    // Warm the GST calculation cache for high-speed retrieval
+    if (activeCompanyId) {
+      for (const line of snap.lines) {
+        if (line.l.item_id && snap.partyId) {
+          void resolveGstWithCache(
+            {
+              item_id: line.l.item_id,
+              ledger_id: snap.partyId,
+              qty: parseFloat(line.l.qty) || 0,
+              rate: parseFloat(line.l.rate) || 0,
+              discount: parseFloat(line.l.discount) || 0,
+              gstRate: parseFloat(line.l.gst_rate) || 0,
+            },
+            snap.interstate,
+            activeCompanyId
+          ).catch(() => {});
+        }
+      }
+    }
+
     // Reset form INSTANTLY
     setPartyId("");
     setRefNo("");
