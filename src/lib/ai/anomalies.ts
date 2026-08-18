@@ -259,7 +259,7 @@ export async function scanAllAnomalies(companyId: string): Promise<Anomaly[]> {
     scanMsmeBreaches(companyId),
     scanNegativeStock(companyId),
     scanGstHygiene(companyId),
-    Promise.resolve(scanDeadlines()),
+    getDeadlinesAsync(companyId),
   ]);
   const out: Anomaly[] = [];
   for (const r of results) {

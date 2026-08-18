@@ -31,6 +31,8 @@ export interface CompanyMembership {
     corpus_fund_paise: number;
     currency_code: string | null;
     date_format: DateFormatCode | null;
+    reminders_enabled: boolean;
+    audit_case_reminders: boolean;
   };
 }
 
@@ -64,6 +66,8 @@ const COMPANY_DEFAULTS: Omit<CompanyMembership["companies"], "id" | "name"> = {
   corpus_fund_paise: 0,
   currency_code: "INR",
   date_format: "dd-mm-yyyy",
+  reminders_enabled: true,
+  audit_case_reminders: false,
 };
 
 function mapCompanyRowToMembership(
