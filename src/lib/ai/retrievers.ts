@@ -402,38 +402,62 @@ async function retrieveTrialBalance(companyId: string): Promise<RetrievedSlice> 
 
 /** Profit & Loss — direct vs indirect income/expense grouping. */
 async function retrieveProfitLoss(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
-  const [ledgers, entries, vouchers] = await Promise.all([
-    readLedgers(companyId),
-    readVoucherEntriesForCompany(companyId),
-    readVouchers(companyId, { from: routed.from, to: routed.to }),
-  ]);
-  const inWindow = new Set((vouchers as any[]).map((v) => String(v.id)));
+  const { offlineDb } = await import("@/lib/offline/db");
+  const ledgers = (await readLedgers(companyId)) as any[];
+  
+  // 1) Identify vouchers in the window
+  const vouchers = await offlineDb.cache_vouchers
+    .where("[company_id+voucher_date]")
+    .between([companyId, routed.from || "0000-00-00"], [companyId, routed.to || "9999-99-99"], true, true)
+    .toArray();
+
+  const inWindow = new Set(vouchers.map((v) => String(v.id)));
+
   const buckets: Record<string, { name: string; group: string; amount_paise: number }[]> = {
     direct_income: [], direct_expense: [], indirect_income: [], indirect_expense: [],
   };
-  for (const l of ledgers as any[]) {
+
+  // 2) Classify ledgers into P&L buckets
+  const ledgerMap = new Map<string, { kind: string; name: string; group: string }>();
+  for (const l of ledgers) {
     const kind = classifyLedger(l);
-    if (!(kind in buckets)) continue;
-    let dr = 0, cr = 0;
-    for (const e of entries as any[]) {
-      if (String(e.ledger_id) !== String(l.id)) continue;
-      if (!inWindow.has(String(e.voucher_id))) continue;
-      dr += Number(e.debit_paise ?? 0);
-      cr += Number(e.credit_paise ?? 0);
+    if (kind in buckets) {
+      ledgerMap.set(String(l.id), { kind, name: l.name, group: l.group_name });
     }
-    const amt = kind.endsWith("income") ? cr - dr : dr - cr;
-    if (amt !== 0) buckets[kind].push({ name: l.name, group: l.group_name, amount_paise: amt });
   }
+
+  // 3) Aggregate entries for ONLY these ledgers in ONE pass
+  const balances = new Map<string, { dr: number; cr: number }>();
+  await offlineDb.cache_voucher_entries
+    .where("company_id")
+    .equals(companyId)
+    .each((e: any) => {
+      const lid = String(e.ledger_id);
+      if (!ledgerMap.has(lid)) return;
+      if (!inWindow.has(String(e.voucher_id))) return;
+
+      const b = balances.get(lid) ?? { dr: 0, cr: 0 };
+      b.dr += Number(e.debit_paise ?? 0);
+      b.cr += Number(e.credit_paise ?? 0);
+      balances.set(lid, b);
+    });
+
+  // 4) Fill buckets
+  for (const [lid, bal] of balances.entries()) {
+    const l = ledgerMap.get(lid)!;
+    const amt = l.kind.endsWith("income") ? bal.cr - bal.dr : bal.dr - bal.cr;
+    if (amt !== 0) {
+      buckets[l.kind].push({ name: l.name, group: l.group, amount_paise: amt });
+    }
+  }
+
   const sum = (arr: any[]) => arr.reduce((s, r) => s + r.amount_paise, 0);
   const gross = sum(buckets.direct_income) - sum(buckets.direct_expense);
   const net = gross + sum(buckets.indirect_income) - sum(buckets.indirect_expense);
 
-  // Also compute explicit sales/purchase totals from voucher headers in the
-  // window so the AI can answer "total sales" / "total purchases" verbatim
-  // without needing to sum arrays itself (which the strict prompt forbids).
   let salesTotal = 0, purchaseTotal = 0, salesCount = 0, purchaseCount = 0;
   let creditNoteTotal = 0, debitNoteTotal = 0;
-  for (const v of vouchers as any[]) {
+  for (const v of vouchers) {
     const t = String(v.voucher_type ?? "");
     const amt = Number(v.total_paise ?? 0);
     if (t === "sales") { salesTotal += amt; salesCount++; }
