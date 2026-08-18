@@ -492,19 +492,34 @@ async function retrieveProfitLoss(companyId: string, routed: RouteResult): Promi
 
 /** Cash / bank book — entries touching cash or bank ledgers. */
 async function retrieveCashBank(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
-  const [ledgers, entries, vouchers] = await Promise.all([
-    readLedgers(companyId),
-    readVoucherEntriesForCompany(companyId),
-    readVouchers(companyId, { from: routed.from, to: routed.to }),
-  ]);
-  const cashBank = (ledgers as any[]).filter((l) => {
+  const { offlineDb } = await import("@/lib/offline/db");
+  const ledgers = (await readLedgers(companyId)) as any[];
+  const cashBank = ledgers.filter((l) => {
     const k = classifyLedger(l);
     return k === "cash" || k === "bank";
   });
   const cbIds = new Set(cashBank.map((l) => String(l.id)));
-  const inWindow = new Set((vouchers as any[]).map((v) => String(v.id)));
-  const relevant = (entries as any[]).filter((e) => cbIds.has(String(e.ledger_id)) && inWindow.has(String(e.voucher_id)));
-  const vById = new Map((vouchers as any[]).map((v) => [String(v.id), v]));
+
+  // 1) Find vouchers in the window
+  const vouchers = await offlineDb.cache_vouchers
+    .where("[company_id+voucher_date]")
+    .between([companyId, routed.from || "0000-00-00"], [companyId, routed.to || "9999-99-99"], true, true)
+    .toArray();
+  
+  const inWindow = new Set(vouchers.map(v => String(v.id)));
+  const vById = new Map(vouchers.map(v => [String(v.id), v]));
+
+  // 2) Collect entries incrementally
+  const relevant: any[] = [];
+  await offlineDb.cache_voucher_entries
+    .where("company_id")
+    .equals(companyId)
+    .each((e: any) => {
+      if (cbIds.has(String(e.ledger_id)) && inWindow.has(String(e.voucher_id))) {
+        relevant.push(e);
+      }
+    });
+
   const rows = relevant.slice(-100).map((e) => {
     const v = vById.get(String(e.voucher_id));
     return {
