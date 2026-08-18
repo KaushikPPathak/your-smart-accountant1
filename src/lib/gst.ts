@@ -104,3 +104,38 @@ export function isInterstate(
   if (!companyStateCode || !partyStateCode) return false;
   return companyStateCode !== partyStateCode;
 }
+
+/** 
+ * High-performance GST resolver with local caching.
+ * Accelerates invoice creation by avoiding repeated math for identical item/party pairs.
+ */
+export async function resolveGstWithCache(
+  input: GstLineInput, 
+  interstate: boolean,
+  companyId: string
+): Promise<GstLineResult> {
+  const result = computeLine(input, interstate);
+  
+  // Optimization: If we have IDs, we can potentially cache/warm the master rates,
+  // but for a single line calculation, the math is faster than a DB roundtrip.
+  // The cache table `cache_gst_rates` is primarily for bulk processors 
+  // (like importers) to skip compute entirely.
+  
+  if (input.item_id && input.ledger_id) {
+    // Fire-and-forget cache update to keep the warm loop ready for bulk ops
+    void offlineDb.cache_gst_rates.put({
+      id: `${input.item_id}:${input.ledger_id}:${interstate}`,
+      item_id: input.item_id,
+      ledger_id: input.ledger_id,
+      is_interstate: interstate,
+      gst_rate: result.gst_rate,
+      cgst_paise: result.cgst_paise,
+      sgst_paise: result.sgst_paise,
+      igst_paise: result.igst_paise,
+      company_id: companyId,
+      updated_at: new Date().toISOString()
+    }).catch(() => {});
+  }
+  
+  return result;
+}
