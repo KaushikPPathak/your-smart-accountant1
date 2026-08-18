@@ -162,7 +162,7 @@ function SettingsPage() {
     (async () => {
       const { data } = await supabase
         .from("company_settings")
-        .select("invoice_prefix, invoice_starting_number, invoice_footer_note, invoice_terms, show_bank_details, show_signatory, gst_filing_frequency, reminders_enabled, audit_case_reminders")
+        .select("invoice_prefix, invoice_starting_number, invoice_footer_note, invoice_terms, show_bank_details, show_signatory, gst_filing_frequency, reminders_enabled, audit_case_reminders, gst_check_interval")
         .eq("company_id", activeCompanyId)
         .maybeSingle();
       if (data) setSettings(data as Settings);
