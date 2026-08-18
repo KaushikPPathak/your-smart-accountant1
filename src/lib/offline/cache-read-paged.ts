@@ -1,5 +1,5 @@
 import { offlineDb } from "./db";
-import { normalizeAll, normalizeVoucher } from "./cache-normalizers";
+import { normalizeAll, normalizeVoucher, normalizeLedger, normalizeItem } from "./cache-normalizers";
 
 export interface PagedReportOptions {
   companyId: string;
@@ -20,12 +20,6 @@ export async function readVouchersPaged(opts: PagedReportOptions) {
   const { companyId, voucherType, partyId, from, to, page = 1, pageSize = 50 } = opts;
   const offset = (page - 1) * pageSize;
 
-  // 1. Determine which index to use based on the filters
-  // Indexes from db.ts:
-  // [company_id+voucher_date]
-  // [company_id+voucher_type+voucher_date]
-  // [company_id+party_id+voucher_date]
-  
   let indexName = "[company_id+voucher_date]";
   let lowerBound: any[] = [companyId, from || "0000-00-00"];
   let upperBound: any[] = [companyId, to || "9999-99-99"];
@@ -40,24 +34,17 @@ export async function readVouchersPaged(opts: PagedReportOptions) {
     upperBound = [companyId, partyId, to || "9999-99-99"];
   }
 
-  // 2. Query with pagination using native Dexie/IndexedDB offset/limit
-  // We use reverse() because reports usually show newest first (Day Book / Ledger)
   const query = offlineDb.cache_vouchers
     .where(indexName)
     .between(lowerBound, upperBound, true, true)
     .reverse();
 
-  // 3. Count total matching rows for pagination metadata
-  // Dexie .count() on a filtered index is much faster than loading all rows
   const totalCount = await query.count();
-
-  // 4. Load only the specific page
   const rows = await query
     .offset(offset)
     .limit(pageSize)
     .toArray();
 
-  // 5. Normalize and return
   return {
     data: normalizeAll(rows, normalizeVoucher),
     totalCount,
@@ -65,4 +52,31 @@ export async function readVouchersPaged(opts: PagedReportOptions) {
     pageSize,
     totalPages: Math.ceil(totalCount / pageSize),
   };
+}
+
+/**
+ * Memory-safe iterator for all voucher entries of a company.
+ * Useful for Trial Balance, P&L, etc.
+ */
+export async function forEachEntry(
+  companyId: string, 
+  callback: (entry: any) => void
+): Promise<void> {
+  await offlineDb.cache_voucher_entries
+    .where("company_id")
+    .equals(companyId)
+    .each(callback);
+}
+
+/**
+ * Memory-safe iterator for all vouchers of a company.
+ */
+export async function forEachVoucher(
+  companyId: string,
+  callback: (voucher: any) => void
+): Promise<void> {
+  await offlineDb.cache_vouchers
+    .where("company_id")
+    .equals(companyId)
+    .each(callback);
 }
