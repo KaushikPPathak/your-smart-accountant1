@@ -112,23 +112,76 @@ async function retrieveParty(companyId: string, routed: RouteResult, opts: { wit
       data: { candidates: ledgers.slice(0, 20).map((l) => ({ id: l.id, name: l.name })) },
     };
   }
-  const [entries, allVouchers] = await Promise.all([
-    readVoucherEntriesForCompany(companyId),
-    readVouchers(companyId),
-  ]);
-  // Point-in-time: freeze balance at asOn (or `to`) if the user asked "as on <date>".
   const asOnIso = routed.asOn ?? routed.to ?? null;
-  const vDate = new Map((allVouchers as any[]).map((v) => [String(v.id), String(v.voucher_date ?? "")]));
-  const withinAsOn = (e: any) => {
-    if (!asOnIso) return true;
-    const d = vDate.get(String(e.voucher_id));
-    return d ? d <= asOnIso : false;
-  };
-  const scopedEntries = (entries as any[]).filter(withinAsOn);
-  const bal = sumEntriesFor(scopedEntries, target.id);
-  const partyEntries = scopedEntries.filter((e) => String(e.ledger_id) === String(target.id));
-  const voucherIds = new Set(partyEntries.map((e) => String(e.voucher_id)));
-  const vouchers = (allVouchers as any[]).filter((v) => voucherIds.has(String(v.id)));
+  const targetId = String(target.id);
+  
+  // Aggregate balance incrementally using the compound index [company_id+ledger_id]
+  let debit = 0, credit = 0, count = 0;
+  const recentVouchers: any[] = [];
+  const partyEntries: any[] = [];
+
+  const { offlineDb } = await import("@/lib/offline/db");
+  
+  // 1) Pull ONLY relevant entries for this party
+  const entryQuery = offlineDb.cache_voucher_entries
+    .where("[company_id+ledger_id]")
+    .equals([companyId, targetId]);
+
+  // We need voucher dates to respect asOnIso. 
+  // Optimization: If asOnIso exists, we join with vouchers. 
+  // If not, we just sum everything.
+  
+  if (asOnIso) {
+    // We need to check dates. We'll pull vouchers for this party within range first.
+    const vouchers = await offlineDb.cache_vouchers
+      .where("[company_id+party_id+voucher_date]")
+      .between([companyId, targetId, "0000-00-00"], [companyId, targetId, asOnIso], true, true)
+      .reverse()
+      .toArray();
+    
+    const vIds = new Set(vouchers.map(v => String(v.id)));
+    
+    await entryQuery.each((e: any) => {
+      if (!vIds.has(String(e.voucher_id))) return;
+      debit += Number(e.debit_paise ?? 0);
+      credit += Number(e.credit_paise ?? 0);
+      count++;
+      if (partyEntries.length < 200) partyEntries.push(e);
+    });
+
+    recentVouchers.push(...vouchers.slice(0, 8).map(v => ({
+      id: String(v.id),
+      number: String(v.voucher_number ?? ""),
+      date: String(v.voucher_date ?? ""),
+      kind: String(v.voucher_type ?? ""),
+      total_paise: Number(v.total_paise ?? 0),
+    })));
+  } else {
+    // No asOn constraint: sum all entries for this party
+    await entryQuery.each((e: any) => {
+      debit += Number(e.debit_paise ?? 0);
+      credit += Number(e.credit_paise ?? 0);
+      count++;
+      if (partyEntries.length < 200) partyEntries.push(e);
+    });
+
+    const vouchers = await offlineDb.cache_vouchers
+      .where("[company_id+party_id+voucher_date]")
+      .between([companyId, targetId, "0000-00-00"], [companyId, targetId, "9999-99-99"], true, true)
+      .reverse()
+      .limit(8)
+      .toArray();
+
+    recentVouchers.push(...vouchers.map(v => ({
+      id: String(v.id),
+      number: String(v.voucher_number ?? ""),
+      date: String(v.voucher_date ?? ""),
+      kind: String(v.voucher_type ?? ""),
+      total_paise: Number(v.total_paise ?? 0),
+    })));
+  }
+
+  const bal = { debit_paise: debit, credit_paise: credit, balance_paise: debit - credit };
 
   // Optional cash-vs-bank split for the FY window ending at asOn.
   let modeSplit: { cash_paise: number; bank_paise: number; other_paise: number } | undefined;
@@ -145,25 +198,13 @@ async function retrieveParty(companyId: string, routed: RouteResult, opts: { wit
   }
 
   const opening = Number(target.opening_balance_paise ?? 0) * (target.opening_balance_is_debit ? 1 : -1);
-  // Recent vouchers (most-recent first) — surfaced on the balance card so
-  // the user can click through to the source voucher for drill-down.
-  const recentVouchers = [...vouchers]
-    .sort((a: any, b: any) => String(b.voucher_date ?? "").localeCompare(String(a.voucher_date ?? "")))
-    .slice(0, 8)
-    .map((v: any) => ({
-      id: String(v.id),
-      number: String(v.voucher_number ?? ""),
-      date: String(v.voucher_date ?? ""),
-      kind: String(v.voucher_type ?? ""),
-      total_paise: Number(v.total_paise ?? 0),
-    }));
   return {
     scope: asOnIso
-      ? `party="${target.name}" as on ${asOnIso} (${vouchers.length} vouchers)`
-      : `party="${target.name}" (${vouchers.length} vouchers)`,
+      ? `party="${target.name}" as on ${asOnIso} (${count} vouchers)`
+      : `party="${target.name}" (${count} vouchers)`,
     data: {
       party: [{ id: target.id, name: target.name, group_name: target.group_name, gstin: target.gstin, state: target.state }],
-      vouchers: opts.withEntries ? vouchers.slice(0, 50) : vouchers.slice(0, 10),
+      vouchers: [], // Vouchers are now summarized in recent_vouchers for LLM efficiency
       entries: opts.withEntries ? partyEntries.slice(0, 200) : [],
     },
     facts: {
@@ -176,7 +217,7 @@ async function retrieveParty(companyId: string, routed: RouteResult, opts: { wit
       current_balance_paise: opening + bal.balance_paise,
       total_debit_paise: bal.debit_paise,
       total_credit_paise: bal.credit_paise,
-      voucher_count: vouchers.length,
+      voucher_count: count,
       recent_vouchers: recentVouchers,
       ...(modeSplit ? { mode_split: modeSplit } : {}),
     },
@@ -203,19 +244,33 @@ async function retrieveDateRange(companyId: string, routed: RouteResult): Promis
 
 /** Voucher lookup — one voucher + its entries + items. */
 async function retrieveVoucher(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
-  const vouchers = (await readVouchers(companyId)) as any[];
-  const needle = routed.entity?.voucherType?.toLowerCase() ?? ""; // entity extractor maps #123 to voucherType sometimes
-  const match = vouchers.find((v) => String(v.voucher_number ?? "").toLowerCase() === needle)
-             ?? vouchers.find((v) => String(v.voucher_number ?? "").toLowerCase().includes(needle));
+  const { offlineDb } = await import("@/lib/offline/db");
+  const needle = (routed.entity?.voucherType?.toLowerCase() ?? "").trim();
+  
+  if (!needle) return { scope: "no voucher number specified", data: {} };
+
+  // Try exact match on voucher_number
+  let match = await offlineDb.cache_vouchers
+    .where("company_id").equals(companyId)
+    .filter(v => String(v.voucher_number ?? "").toLowerCase() === needle)
+    .first();
+
+  // Partial match fallback
+  if (!match) {
+    match = await offlineDb.cache_vouchers
+      .where("company_id").equals(companyId)
+      .filter(v => String(v.voucher_number ?? "").toLowerCase().includes(needle))
+      .first();
+  }
+
   if (!match) {
     return { scope: `voucher not found: ${needle}`, data: {} };
   }
 
-  const [allEntries, items] = await Promise.all([
-    readVoucherEntriesForCompany(companyId),
+  const [entries, items] = await Promise.all([
+    offlineDb.cache_voucher_entries.where("voucher_id").equals(String(match.id)).toArray(),
     readVoucherItems(String(match.id)),
   ]);
-  const entries = (allEntries as any[]).filter((e) => String(e.voucher_id) === String(match.id));
   return {
     scope: `voucher ${match.voucher_number} (${match.voucher_type})`,
     data: { voucher: [match], entries, items },
@@ -347,38 +402,62 @@ async function retrieveTrialBalance(companyId: string): Promise<RetrievedSlice> 
 
 /** Profit & Loss — direct vs indirect income/expense grouping. */
 async function retrieveProfitLoss(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
-  const [ledgers, entries, vouchers] = await Promise.all([
-    readLedgers(companyId),
-    readVoucherEntriesForCompany(companyId),
-    readVouchers(companyId, { from: routed.from, to: routed.to }),
-  ]);
-  const inWindow = new Set((vouchers as any[]).map((v) => String(v.id)));
+  const { offlineDb } = await import("@/lib/offline/db");
+  const ledgers = (await readLedgers(companyId)) as any[];
+  
+  // 1) Identify vouchers in the window
+  const vouchers = await offlineDb.cache_vouchers
+    .where("[company_id+voucher_date]")
+    .between([companyId, routed.from || "0000-00-00"], [companyId, routed.to || "9999-99-99"], true, true)
+    .toArray();
+
+  const inWindow = new Set(vouchers.map((v) => String(v.id)));
+
   const buckets: Record<string, { name: string; group: string; amount_paise: number }[]> = {
     direct_income: [], direct_expense: [], indirect_income: [], indirect_expense: [],
   };
-  for (const l of ledgers as any[]) {
+
+  // 2) Classify ledgers into P&L buckets
+  const ledgerMap = new Map<string, { kind: string; name: string; group: string }>();
+  for (const l of ledgers) {
     const kind = classifyLedger(l);
-    if (!(kind in buckets)) continue;
-    let dr = 0, cr = 0;
-    for (const e of entries as any[]) {
-      if (String(e.ledger_id) !== String(l.id)) continue;
-      if (!inWindow.has(String(e.voucher_id))) continue;
-      dr += Number(e.debit_paise ?? 0);
-      cr += Number(e.credit_paise ?? 0);
+    if (kind in buckets) {
+      ledgerMap.set(String(l.id), { kind, name: l.name, group: l.group_name });
     }
-    const amt = kind.endsWith("income") ? cr - dr : dr - cr;
-    if (amt !== 0) buckets[kind].push({ name: l.name, group: l.group_name, amount_paise: amt });
   }
+
+  // 3) Aggregate entries for ONLY these ledgers in ONE pass
+  const balances = new Map<string, { dr: number; cr: number }>();
+  await offlineDb.cache_voucher_entries
+    .where("company_id")
+    .equals(companyId)
+    .each((e: any) => {
+      const lid = String(e.ledger_id);
+      if (!ledgerMap.has(lid)) return;
+      if (!inWindow.has(String(e.voucher_id))) return;
+
+      const b = balances.get(lid) ?? { dr: 0, cr: 0 };
+      b.dr += Number(e.debit_paise ?? 0);
+      b.cr += Number(e.credit_paise ?? 0);
+      balances.set(lid, b);
+    });
+
+  // 4) Fill buckets
+  for (const [lid, bal] of balances.entries()) {
+    const l = ledgerMap.get(lid)!;
+    const amt = l.kind.endsWith("income") ? bal.cr - bal.dr : bal.dr - bal.cr;
+    if (amt !== 0) {
+      buckets[l.kind].push({ name: l.name, group: l.group, amount_paise: amt });
+    }
+  }
+
   const sum = (arr: any[]) => arr.reduce((s, r) => s + r.amount_paise, 0);
   const gross = sum(buckets.direct_income) - sum(buckets.direct_expense);
   const net = gross + sum(buckets.indirect_income) - sum(buckets.indirect_expense);
 
-  // Also compute explicit sales/purchase totals from voucher headers in the
-  // window so the AI can answer "total sales" / "total purchases" verbatim
-  // without needing to sum arrays itself (which the strict prompt forbids).
   let salesTotal = 0, purchaseTotal = 0, salesCount = 0, purchaseCount = 0;
   let creditNoteTotal = 0, debitNoteTotal = 0;
-  for (const v of vouchers as any[]) {
+  for (const v of vouchers) {
     const t = String(v.voucher_type ?? "");
     const amt = Number(v.total_paise ?? 0);
     if (t === "sales") { salesTotal += amt; salesCount++; }
@@ -413,19 +492,34 @@ async function retrieveProfitLoss(companyId: string, routed: RouteResult): Promi
 
 /** Cash / bank book — entries touching cash or bank ledgers. */
 async function retrieveCashBank(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
-  const [ledgers, entries, vouchers] = await Promise.all([
-    readLedgers(companyId),
-    readVoucherEntriesForCompany(companyId),
-    readVouchers(companyId, { from: routed.from, to: routed.to }),
-  ]);
-  const cashBank = (ledgers as any[]).filter((l) => {
+  const { offlineDb } = await import("@/lib/offline/db");
+  const ledgers = (await readLedgers(companyId)) as any[];
+  const cashBank = ledgers.filter((l) => {
     const k = classifyLedger(l);
     return k === "cash" || k === "bank";
   });
   const cbIds = new Set(cashBank.map((l) => String(l.id)));
-  const inWindow = new Set((vouchers as any[]).map((v) => String(v.id)));
-  const relevant = (entries as any[]).filter((e) => cbIds.has(String(e.ledger_id)) && inWindow.has(String(e.voucher_id)));
-  const vById = new Map((vouchers as any[]).map((v) => [String(v.id), v]));
+
+  // 1) Find vouchers in the window
+  const vouchers = await offlineDb.cache_vouchers
+    .where("[company_id+voucher_date]")
+    .between([companyId, routed.from || "0000-00-00"], [companyId, routed.to || "9999-99-99"], true, true)
+    .toArray();
+  
+  const inWindow = new Set(vouchers.map(v => String(v.id)));
+  const vById = new Map(vouchers.map(v => [String(v.id), v]));
+
+  // 2) Collect entries incrementally
+  const relevant: any[] = [];
+  await offlineDb.cache_voucher_entries
+    .where("company_id")
+    .equals(companyId)
+    .each((e: any) => {
+      if (cbIds.has(String(e.ledger_id)) && inWindow.has(String(e.voucher_id))) {
+        relevant.push(e);
+      }
+    });
+
   const rows = relevant.slice(-100).map((e) => {
     const v = vById.get(String(e.voucher_id));
     return {
@@ -445,7 +539,12 @@ async function retrieveCashBank(companyId: string, routed: RouteResult): Promise
 
 /** GST — sales/purchase vouchers in window with taxable & total totals. */
 async function retrieveGst(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
-  const vouchers = (await readVouchers(companyId, { from: routed.from, to: routed.to })) as any[];
+  const { offlineDb } = await import("@/lib/offline/db");
+  const vouchers = await offlineDb.cache_vouchers
+    .where("[company_id+voucher_date]")
+    .between([companyId, routed.from || "0000-00-00"], [companyId, routed.to || "9999-99-99"], true, true)
+    .toArray();
+
   const gstTypes = new Set(["sales", "purchase", "credit_note", "debit_note"]);
   const rel = vouchers.filter((v) => gstTypes.has(String(v.voucher_type)));
   let taxable = 0, total = 0;
