@@ -79,22 +79,25 @@ const blankSimple = (): SimpleLine => ({ id: crypto.randomUUID(), ledger_id: "",
 
 const CFG: Record<
   EntryVoucherType,
-  { title: string; subtitle: string; defaultLines: number }
+  { title: string; subtitle: string; defaultLines: number; color: string }
 > = {
   receipt: {
     title: "Receipt Voucher",
     subtitle: "Money received — debit Cash/Bank, credit Party",
-    defaultLines: 2,
+    defaultLines: 10,
+    color: "var(--cat-receipt)",
   },
   payment: {
     title: "Payment Voucher",
     subtitle: "Money paid — credit Cash/Bank, debit Party/Expense",
-    defaultLines: 2,
+    defaultLines: 10,
+    color: "var(--cat-payment)",
   },
   journal: {
     title: "Journal / Contra",
     subtitle: "Free double-entry — supports book-to-book (cash↔bank) too",
-    defaultLines: 2,
+    defaultLines: 10,
+    color: "var(--cat-master)",
   },
 };
 
@@ -633,41 +636,51 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         onKeyDown={enterTab.onKeyDown}
         className="space-y-4"
       >
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{cfg.title}</h1>
-          <p className="text-xs text-muted-foreground">
-            {cfg.subtitle} · <kbd className="rounded border px-1">Enter</kbd> next field · <kbd className="rounded border px-1">Ctrl+S</kbd> save & next · <kbd className="rounded border px-1">F3</kbd> new ledger · <kbd className="rounded border px-1">Shift+F3</kbd> edit ledger
-          </p>
-          {voucherType === "journal" && taxResolution.status !== "hidden" && (
-            <div className="mt-1.5">
-              <AutoTaxChip
-                resolution={taxResolution}
-                manualId={manualTaxTemplateId}
-                onManualChange={setManualTaxTemplateId}
-              />
+        <div className="flex items-center justify-between border-b border-border/60 bg-white/50 px-4 py-2" style={{ borderTop: `3px solid ${cfg.color}` }}>
+          <div className="flex flex-col">
+            <h2 className="text-xl font-bold tracking-tight text-foreground">{cfg.title}</h2>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80">
+              <kbd className="rounded border bg-white px-1 shadow-sm">Enter</kbd> next field
+              <kbd className="ml-1 rounded border bg-white px-1 shadow-sm">Ctrl+S</kbd> save
+              {voucherType === "journal" && taxResolution.status !== "hidden" && (
+                <div className="ml-2 inline-flex items-center">
+                  <AutoTaxChip
+                    resolution={taxResolution}
+                    manualId={manualTaxTemplateId}
+                    onManualChange={setManualTaxTemplateId}
+                  />
+                </div>
+              )}
             </div>
-          )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => {
+                if (!isDraftEmpty(draftSnap)) {
+                  const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
+                  if (!ok) return;
+                  clearVoucherDraft(draftKey);
+                }
+                navigate({ to: "/app/vouchers" });
+              }}
+            >
+              <X className="mr-1 h-3 w-3" /> Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 px-4 text-xs font-bold"
+              data-assistant-save
+              data-primary-action="true"
+              onClick={save}
+              disabled={saving || !canWrite || !balanced || locked || taxTemplateBlocksSave}
+            >
+              <Save className="mr-1.5 h-3.5 w-3.5" /> {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              if (!isDraftEmpty(draftSnap)) {
-                const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
-                if (!ok) return;
-                clearVoucherDraft(draftKey);
-              }
-              navigate({ to: "/app/vouchers" });
-            }}
-          >
-            <X className="mr-1 h-4 w-4" /> Cancel
-          </Button>
-          <Button data-assistant-save data-primary-action="true" onClick={save} disabled={saving || !canWrite || !balanced || locked || taxTemplateBlocksSave}>
-            <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      </div>
 
 
       {draft.restored && !draftBannerDismissed && (
@@ -687,70 +700,96 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
 
       <PeriodLockBanner lock={lock} />
 
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <div className="flex justify-end">
-            <NextVoucherNumberCard companyId={activeCompanyId} voucherType={voucherType} refreshKey={savedTick} voucherDate={date} />
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-          <div className="space-y-1">
-            <Label>Date</Label>
-            <FyDatePicker value={date} onChange={setDate} autoFocus />
-          </div>
-          {isSimple && (
-            <div className="space-y-1">
-              <Label>{voucherType === "receipt" ? "Received In (Cash/Bank)" : "Paid From (Cash/Bank)"}</Label>
-              <Combo
-                value={cashBankId}
-                onChange={setCashBankId}
-                options={cashBankOptions.map((lg) => ({ value: lg.id, label: lg.name, hint: lg.type }))}
-                placeholder="Select Cash / Bank account"
-                emptyText="No Cash/Bank ledgers found"
-                onCreate={() => setLedgerDlg({ open: true, editId: null, lineIdx: null })}
-                createLabel="New Cash/Bank ledger"
-              />
-              {cashBankId && (
-                <LedgerBalanceChip ledgerId={cashBankId} prefix="Bal" compact />
+        <Card className="border-x-0 border-y shadow-none rounded-none bg-theme-pale">
+          <CardContent className="p-4">
+            <div className="grid gap-6 md:grid-cols-[1fr_2fr_1fr_auto] md:items-start">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">Date</Label>
+                <FyDatePicker value={date} onChange={setDate} autoFocus />
+              </div>
+              {isSimple && (
+                <div className="space-y-1.5">
+                  <Label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                    <span>{voucherType === "receipt" ? "Account (Dr)" : "Account (Cr)"}</span>
+                  </Label>
+                  <Combo
+                    value={cashBankId}
+                    onChange={setCashBankId}
+                    options={cashBankOptions.map((lg) => ({ value: lg.id, label: lg.name, hint: lg.type }))}
+                    placeholder="Select Cash / Bank account"
+                    emptyText="No Cash/Bank ledgers found"
+                    onCreate={() => setLedgerDlg({ open: true, editId: null, lineIdx: null })}
+                    createLabel="New Cash/Bank ledger"
+                  />
+                  {cashBankId && (
+                    <div className="pt-0.5">
+                      <LedgerBalanceChip ledgerId={cashBankId} prefix="Bal" compact />
+                    </div>
+                  )}
+                </div>
               )}
-            </div>
-          )}
-          <div className={`space-y-1 ${isSimple ? "" : "md:col-span-2"}`}>
-            <Label>Reference No.</Label>
-            <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="Cheque/UTR/Reference" />
-          </div>
-          </div>
-        </CardContent>
-      </Card>
+              <div className={`space-y-1.5 ${isSimple ? "" : "md:col-span-2"}`}>
+                <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">Reference No.</Label>
+                <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="Cheque/UTR/Reference" className="bg-white" />
+              </div>
 
-      {isSimple ? (
-        <Card>
+              <div className="md:pt-5">
+                <NextVoucherNumberCard companyId={activeCompanyId} voucherType={voucherType} refreshKey={savedTick} voucherDate={date} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-x-0 border-y shadow-none rounded-none bg-white">
           <CardContent className="p-0">
+            <div className="flex items-center justify-between border-b bg-muted/20 px-3 py-1">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">Particulars</span>
+            </div>
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[45%]">Particulars ({voucherType === "receipt" ? "Received From" : "Paid To"})</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Narration</TableHead>
-                  <TableHead className="w-10"></TableHead>
+              <TableHeader className="bg-muted/10">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">Ledger Account</TableHead>
+                  {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Debit</TableHead>}
+                  {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Credit</TableHead>}
+                  {isSimple && <TableHead className="w-40 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Amount</TableHead>}
+                  <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">Narration</TableHead>
+                  <TableHead className="w-10 py-2"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {simpleLines.map((l, i) => (
-                  <EntryRow
-                    key={l.id}
-                    mode="simple"
-                    idx={i}
-                    row={{ id: l.id, ledger_id: l.ledger_id, amount: l.amount, narration: l.narration }}
-                    ledgerOptions={ledgers.filter((lg) => lg.id !== cashBankId)}
-                    balance={ledgerBalances[l.ledger_id]}
-                    canDelete={simpleLines.length > 1}
-                    onCommit={(idx, patch) => updateSimple(idx, patch as Partial<SimpleLine>)}
-                    onFocusRow={setFocusedLine}
-                    onDelete={removeSimple}
-                    onAddLedger={(idx) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: null, lineIdx: idx }); }}
-                    onEditLedger={(idx, lid) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: lid, lineIdx: idx }); }}
-                  />
-                ))}
+                {isSimple
+                  ? simpleLines.map((l, i) => (
+                      <EntryRow
+                        key={l.id}
+                        mode="simple"
+                        idx={i}
+                        row={{ id: l.id, ledger_id: l.ledger_id, amount: l.amount, narration: l.narration }}
+                        ledgerOptions={ledgers.filter((lg) => lg.id !== cashBankId)}
+                        balance={ledgerBalances[l.ledger_id]}
+                        canDelete={simpleLines.length > 1}
+                        onCommit={(idx, patch) => updateSimple(idx, patch as Partial<SimpleLine>)}
+                        onDelete={(idx) => removeSimple(idx)}
+                        onFocusRow={setFocusedLine}
+                        onAddLedger={(idx) => setLedgerDlg({ open: true, editId: null, lineIdx: idx })}
+                        onEditLedger={(idx, lid) => setLedgerDlg({ open: true, editId: lid, lineIdx: idx })}
+                      />
+                    ))
+                  : lines.map((l, i) => (
+                      <EntryRow
+                        key={l.id}
+                        mode="double"
+                        idx={i}
+                        row={l}
+                        ledgerOptions={ledgers}
+                        balance={ledgerBalances[l.ledger_id]}
+                        canDelete={lines.length > 2}
+                        onCommit={(idx, patch) => update(idx, patch)}
+                        onDelete={(idx) => remove(idx)}
+                        onFocusRow={setFocusedLine}
+                        onAddLedger={(idx) => setLedgerDlg({ open: true, editId: null, lineIdx: idx })}
+                        onEditLedger={(idx, lid) => setLedgerDlg({ open: true, editId: lid, lineIdx: idx })}
+                      />
+                    ))}
               </TableBody>
             </Table>
             <div className="border-t p-3">
@@ -802,46 +841,6 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           </CardContent>
         </Card>
 
-      ) : (
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[40%]">Ledger</TableHead>
-                <TableHead className="text-right">Debit</TableHead>
-                <TableHead className="text-right">Credit</TableHead>
-                <TableHead>Narration</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lines.map((l, i) => (
-                <EntryRow
-                  key={l.id}
-                  mode="double"
-                  idx={i}
-                  row={{ id: l.id, ledger_id: l.ledger_id, debit: l.debit, credit: l.credit, narration: l.narration }}
-                  ledgerOptions={ledgers}
-                  balance={ledgerBalances[l.ledger_id]}
-                  canDelete={lines.length > 2}
-                  onCommit={(idx, patch) => update(idx, patch as Partial<Line>)}
-                  onFocusRow={setFocusedLine}
-                  onDelete={remove}
-                  onAddLedger={(idx) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: null, lineIdx: idx }); }}
-                  onEditLedger={(idx, lid) => { setFocusedLine(idx); setLedgerDlg({ open: true, editId: lid, lineIdx: idx }); }}
-                />
-              ))}
-            </TableBody>
-          </Table>
-          <div className="border-t p-3">
-            <Button variant="ghost" size="sm" onClick={add}>
-              <Plus className="mr-1 h-4 w-4" /> Add line
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
