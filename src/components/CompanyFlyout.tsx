@@ -28,7 +28,7 @@ function CompanyRow({
 }) {
   const { t } = useI18n();
   const [offset, setOffset] = useState(0);
-  const { memberships } = useCompany();
+  const { memberships, setActiveCompanyId } = useCompany();
   const navigate = useNavigate();
 
   const fy = useMemo(() => fyLabel(m.companies.financial_year_start, offset), [m.companies.financial_year_start, offset]);
@@ -58,16 +58,22 @@ function CompanyRow({
     );
 
     if (existing) {
-      // If it exists, switch to it via the parent onPick which handles all logic
+      console.log("Switching to existing FY company:", existing.company_id);
       setOffset(newOffset);
       onPick(existing.company_id);
     } else if (dir > 0) {
+      console.log("Next year not found, opening transfer wizard for:", targetYear);
       // If next year doesn't exist, trigger the transfer wizard
-      onPick(m.company_id);
-      navigate({ 
-        to: "/app/housekeeping", 
-        search: { wizard: "fy_transfer", target_year: targetYear, from_flyout: 1 } as any 
-      });
+      // Ensure we are working on the company the user is clicking the arrow on
+      setActiveCompanyId(m.company_id);
+      
+      // Wait a tick for context to update before navigating
+      setTimeout(() => {
+        navigate({ 
+          to: "/app/housekeeping", 
+          search: { wizard: "fy_transfer", target_year: targetYear, from_flyout: 1 } as any 
+        });
+      }, 50);
     } else {
       // For previous year, just update the visual offset
       setOffset(newOffset);
