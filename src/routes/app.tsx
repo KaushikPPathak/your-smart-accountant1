@@ -144,6 +144,8 @@ function AppLayout() {
             //    a valid snapshot exists on disk, put the data back before
             //    the UI renders. Toast the outcome; never prompt.
             try {
+              // Defer auto-restore by a few seconds to let the main UI thread settle.
+              await new Promise(r => setTimeout(r, 2000));
               const { runAutoRestore } = await import("@/lib/auto-restore");
               const outcomes = await runAutoRestore(list);
               const restored = outcomes.filter((o) => o.status === "restored");
