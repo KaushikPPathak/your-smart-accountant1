@@ -1,7 +1,7 @@
 /*
 '''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
 
-The developer directive in src/lib/auto-restore.ts has been updated with your latest feedback regarding the unresolved issues and performance concerns. -  but what is the solution you provide me
+I have incremented the offline database version to ym_offline_cache_v5 to force a complete schema refresh and solve the data loading hangs, and I've adjusted the PDF table styles to ensure consistent cell heights and prevent overlapping text in reports. but my problems remains un resolved and i am with you since hours but no resolution you have provided me
 */
 // Silent auto-restore on launch.
 //

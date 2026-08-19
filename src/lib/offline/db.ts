@@ -121,7 +121,7 @@ class OfflineDatabase extends Dexie {
   cache_gst_rates!: Table<any, any>;
 
   constructor() {
-    super("ym_offline_cache_v5");
+    super("ym_offline_cache_v100");
     this.version(1).stores({
       companies: "id, name",
       cache_companies: "id, name, updated_at",
