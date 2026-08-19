@@ -53,6 +53,7 @@ import { Route as AppReportsPresumptiveRouteImport } from './routes/app.reports.
 import { Route as AppReportsPayablesRouteImport } from './routes/app.reports.payables'
 import { Route as AppReportsOutstandingRouteImport } from './routes/app.reports.outstanding'
 import { Route as AppReportsLedgerRouteImport } from './routes/app.reports.ledger'
+import { Route as AppReportsJournalBookRouteImport } from './routes/app.reports.journal-book'
 import { Route as AppReportsItcPartyWiseRouteImport } from './routes/app.reports.itc-party-wise'
 import { Route as AppReportsItcItemWiseRouteImport } from './routes/app.reports.itc-item-wise'
 import { Route as AppReportsHsnSummaryRouteImport } from './routes/app.reports.hsn-summary'
@@ -303,6 +304,11 @@ const AppReportsLedgerRoute = AppReportsLedgerRouteImport.update({
   path: '/ledger',
   getParentRoute: () => AppReportsRoute,
 } as any)
+const AppReportsJournalBookRoute = AppReportsJournalBookRouteImport.update({
+  id: '/journal-book',
+  path: '/journal-book',
+  getParentRoute: () => AppReportsRoute,
+} as any)
 const AppReportsItcPartyWiseRoute = AppReportsItcPartyWiseRouteImport.update({
   id: '/itc-party-wise',
   path: '/itc-party-wise',
@@ -486,6 +492,7 @@ export interface FileRoutesByFullPath {
   '/app/reports/hsn-summary': typeof AppReportsHsnSummaryRoute
   '/app/reports/itc-item-wise': typeof AppReportsItcItemWiseRoute
   '/app/reports/itc-party-wise': typeof AppReportsItcPartyWiseRoute
+  '/app/reports/journal-book': typeof AppReportsJournalBookRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
   '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
@@ -558,6 +565,7 @@ export interface FileRoutesByTo {
   '/app/reports/hsn-summary': typeof AppReportsHsnSummaryRoute
   '/app/reports/itc-item-wise': typeof AppReportsItcItemWiseRoute
   '/app/reports/itc-party-wise': typeof AppReportsItcPartyWiseRoute
+  '/app/reports/journal-book': typeof AppReportsJournalBookRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
   '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
@@ -632,6 +640,7 @@ export interface FileRoutesById {
   '/app/reports/hsn-summary': typeof AppReportsHsnSummaryRoute
   '/app/reports/itc-item-wise': typeof AppReportsItcItemWiseRoute
   '/app/reports/itc-party-wise': typeof AppReportsItcPartyWiseRoute
+  '/app/reports/journal-book': typeof AppReportsJournalBookRoute
   '/app/reports/ledger': typeof AppReportsLedgerRoute
   '/app/reports/outstanding': typeof AppReportsOutstandingRoute
   '/app/reports/payables': typeof AppReportsPayablesRoute
@@ -707,6 +716,7 @@ export interface FileRouteTypes {
     | '/app/reports/hsn-summary'
     | '/app/reports/itc-item-wise'
     | '/app/reports/itc-party-wise'
+    | '/app/reports/journal-book'
     | '/app/reports/ledger'
     | '/app/reports/outstanding'
     | '/app/reports/payables'
@@ -779,6 +789,7 @@ export interface FileRouteTypes {
     | '/app/reports/hsn-summary'
     | '/app/reports/itc-item-wise'
     | '/app/reports/itc-party-wise'
+    | '/app/reports/journal-book'
     | '/app/reports/ledger'
     | '/app/reports/outstanding'
     | '/app/reports/payables'
@@ -852,6 +863,7 @@ export interface FileRouteTypes {
     | '/app/reports/hsn-summary'
     | '/app/reports/itc-item-wise'
     | '/app/reports/itc-party-wise'
+    | '/app/reports/journal-book'
     | '/app/reports/ledger'
     | '/app/reports/outstanding'
     | '/app/reports/payables'
@@ -1205,6 +1217,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsLedgerRouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/journal-book': {
+      id: '/app/reports/journal-book'
+      path: '/journal-book'
+      fullPath: '/app/reports/journal-book'
+      preLoaderRoute: typeof AppReportsJournalBookRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/reports/itc-party-wise': {
       id: '/app/reports/itc-party-wise'
       path: '/itc-party-wise'
@@ -1414,6 +1433,7 @@ interface AppReportsRouteChildren {
   AppReportsHsnSummaryRoute: typeof AppReportsHsnSummaryRoute
   AppReportsItcItemWiseRoute: typeof AppReportsItcItemWiseRoute
   AppReportsItcPartyWiseRoute: typeof AppReportsItcPartyWiseRoute
+  AppReportsJournalBookRoute: typeof AppReportsJournalBookRoute
   AppReportsLedgerRoute: typeof AppReportsLedgerRoute
   AppReportsOutstandingRoute: typeof AppReportsOutstandingRoute
   AppReportsPayablesRoute: typeof AppReportsPayablesRoute
@@ -1446,6 +1466,7 @@ const AppReportsRouteChildren: AppReportsRouteChildren = {
   AppReportsHsnSummaryRoute: AppReportsHsnSummaryRoute,
   AppReportsItcItemWiseRoute: AppReportsItcItemWiseRoute,
   AppReportsItcPartyWiseRoute: AppReportsItcPartyWiseRoute,
+  AppReportsJournalBookRoute: AppReportsJournalBookRoute,
   AppReportsLedgerRoute: AppReportsLedgerRoute,
   AppReportsOutstandingRoute: AppReportsOutstandingRoute,
   AppReportsPayablesRoute: AppReportsPayablesRoute,
