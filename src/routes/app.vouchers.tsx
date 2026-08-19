@@ -302,7 +302,7 @@ function VouchersHub() {
             <DataGrid<VoucherRow>
               reportId="vouchers-list"
               rows={filtered}
-              globalSearch={(r) => `${r.voucher_number} ${r.ledgers?.name ?? ""} ${r.reference_no ?? ""}`}
+              globalSearch={(r) => `${r.voucher_date} ${r.voucher_number} ${r.ledgers?.name ?? ""} ${r.reference_no ?? ""}`}
               onRowClick={(r) => { markVoucherOrigin(); navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } }); }}
               height={560}
               columns={[

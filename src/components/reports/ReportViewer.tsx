@@ -304,16 +304,19 @@ function openPrintPreview(
   fyShort: string,
   orientation: "portrait" | "landscape",
 ): void {
+  const startTs = Date.now();
   recordStage("preview", "start", {
     report: heading,
     node_found: !!el,
     orientation,
+    ts: startTs,
   });
 
   if (!el) {
     recordFailure("preview", new Error("Report root node not found — nothing to preview"), {
       stage: "start",
       report: heading,
+      ts: startTs,
     });
     return;
   }
@@ -467,6 +470,7 @@ function openPrintPreview(
   recordStage("preview", "iframe", {
     opened: true,
     html_len: html.length,
+    elapsed_ms: Date.now() - startTs,
   });
 }
 

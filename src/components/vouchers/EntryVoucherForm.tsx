@@ -113,9 +113,10 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   }, [defaultDate, date]);
   const [refNo, setRefNo] = useState("");
   const [narration, setNarration] = useState("");
-  const [lines, setLines] = useState<Line[]>(() =>
-    Array.from({ length: cfg.defaultLines }, blank),
-  );
+  const [lines, setLines] = useState<Line[]>(() => {
+    const lns = Array.from({ length: cfg.defaultLines }, blank);
+    return lns;
+  });
   const [cashBankId, setCashBankId] = useState<string>("");
   const [simpleLines, setSimpleLines] = useState<SimpleLine[]>(() =>
     Array.from({ length: 2 }, blankSimple),
