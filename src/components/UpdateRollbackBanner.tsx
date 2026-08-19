@@ -106,7 +106,7 @@ export function UpdateRollbackBanner() {
           </DialogHeader>
 
           <div className="rounded-md border bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-            <strong>Going back is not one click.</strong> Windows does not allow a
+            <strong>Going back is not one click.</strong> Windows (including Windows 7 and 10) does not allow a
             running program to uninstall itself and install an older version
             automatically, so you need to run the previous installer yourself.
           </div>
