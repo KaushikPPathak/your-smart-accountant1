@@ -172,7 +172,8 @@ export const BS_LIAB = new Set([
   "current_liability",
   "loan_liability",
   "capital",
-  "bank", // Banks can be liabilities if OD
+  "bank", // Banks can be liabilities if Overdrawn
+  "duties_taxes", // Duties can be assets if credit (receivable)
 ]);
 
 /**

@@ -1,3 +1,4 @@
+import { BS_ASSET, BS_LIAB, fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { amountHeader } from "@/lib/export-format";
 import { openLedgerReport } from "@/lib/voucher-return";
@@ -11,7 +12,7 @@ import { ReportViewer } from "@/components/reports/ReportViewer";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
-import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
+
 import {
   groupBalances,
   groupedTRows,
@@ -69,24 +70,31 @@ function BalanceSheet() {
     return inc - exp;
   }, [balances]);
 
+  // Reform: Balanced-Sign Partitions. 
+  // Ledgers with "wrong" signs (e.g. overdrawn Bank Asset showing as Cr) are 
+  // swapped to the opposite side to maintain professional accounting integrity.
+  const partitionedBalances = useMemo(() => {
+    const liabRaw = balances.filter(b => BS_LIAB.has(b.type));
+    const assetRaw = balances.filter(b => BS_ASSET.has(b.type));
+
+    const finalLiab = [...liabRaw.filter(b => -b.closing_paise >= 0)];
+    const finalAsset = [...assetRaw.filter(b => b.closing_paise >= 0)];
+
+    // Swap negative Assets to Liabilities
+    assetRaw.filter(b => b.closing_paise < 0).forEach(b => finalLiab.push(b));
+    // Swap negative Liabilities to Assets
+    liabRaw.filter(b => -b.closing_paise < 0).forEach(b => finalAsset.push(b));
+
+    return { liab: finalLiab, asset: finalAsset };
+  }, [balances]);
+
   const liabBuckets = useMemo(
-    () => groupBalances(
-      balances.map(b => {
-        const sign = -b.closing_paise;
-        // If it's a liability-nature group but has a Dr balance, we still group it here
-        // but it will show as a negative if we don't swap.
-        // India Accounting Standard: Dr-balance liabilities (like TDS receivable in Duties)
-        // should ideally stay in their group but showing negative is "nonsense" to users.
-        return b;
-      }),
-      "BS_LIAB",
-      (b) => -b.closing_paise
-    ),
-    [balances],
+    () => groupBalances(partitionedBalances.liab, "BS_LIAB", (b) => -b.closing_paise),
+    [partitionedBalances.liab],
   );
   const assetBuckets = useMemo(
-    () => groupBalances(balances, "BS_ASSET", (b) => b.closing_paise),
-    [balances],
+    () => groupBalances(partitionedBalances.asset, "BS_ASSET", (b) => b.closing_paise),
+    [partitionedBalances.asset],
   );
 
   const goLedger = (id: string) =>
