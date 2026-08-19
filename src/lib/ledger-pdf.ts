@@ -74,31 +74,7 @@ export async function downloadLedgerPdf(
 
   // ── 2. T-Format PDF Generation (Landscape A4) ──
   try {
-    const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-      import("jspdf"),
-      import("jspdf-autotable"),
-    ]);
-    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
-
-    // Centered header block
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.text(info.companyName.toUpperCase(), 148.5, 12, { align: "center" });
-
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Ledger Account: ${info.partyName}`, 148.5, 19, { align: "center" });
-
-    doc.setFontSize(10);
-    doc.text(`Financial Year 2025-26`, 148.5, 25, { align: "center" });
-    doc.text(`For the period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, 30, { align: "center" });
-
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text(`${info.partyName} Account`, 148.5, 38, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(`for the period ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, 43, { align: "center" });
+    const [{ jsPDF }, { default: autoTable }, { prepareReportFont }, { getStoredLang }] = await Promise.all([\n      import(\"jspdf\"),\n      import(\"jspdf-autotable\"),\n      import(\"./pdf-fonts\"),\n      import(\"./i18n\"),\n    ]);\n    const doc = new jsPDF({ unit: \"mm\", format: \"a4\", orientation: \"landscape\" });\n    const lang = getStoredLang();\n    const reportFont = await prepareReportFont(doc, lang);\n\n    // Centered header block\n    doc.setFont(reportFont, \"bold\");\n    doc.setFontSize(14);\n    doc.setTextColor(0, 32, 96);\n    doc.text(info.companyName.toUpperCase(), 148.5, 12, { align: \"center\" });\n    doc.setTextColor(0, 0, 0);\n\n    doc.setFontSize(12);\n    doc.setFont(reportFont, \"normal\");\n    doc.text(`Ledger Account: ${info.partyName}`, 148.5, 19, { align: \"center\" });\n\n    doc.setFontSize(9);\n    doc.text(`Financial Year 2025-26`, 148.5, 25, { align: \"center\" });\n    doc.text(`For the period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, 30, { align: \"center\" });\n\n    doc.setFontSize(11);\n    doc.setFont(reportFont, \"bold\");\n    doc.text(`${info.partyName} Account`, 148.5, 38, { align: \"center\" });\n    doc.setFont(reportFont, \"normal\");\n    doc.setFontSize(8);\n    doc.text(`for the period ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, 43, { align: \"center\" });
 
     // Filter & sort entries inside the date range
     const sortedEntries = liveEntries
