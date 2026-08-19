@@ -21,6 +21,7 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 import {
   readVouchers,
   readVoucherItemsForCompany,
@@ -388,8 +389,13 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
   ];
 
   return (
-    <div className="space-y-3">
-      <Card>
+    <ReportViewer
+      title={title}
+      fromDate={from}
+      toDate={to}
+      onExportPdf={onExportPdf}
+    >
+      <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
             from={from}
@@ -601,6 +607,6 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
           </Table>
         </CardContent>
       </Card>
-    </div>
+    </ReportViewer>
   );
 }

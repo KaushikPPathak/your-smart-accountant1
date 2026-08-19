@@ -12,6 +12,7 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 import {
   readItems,
   readVouchers,
@@ -189,8 +190,12 @@ function StockSummary() {
   ], []);
 
   return (
-    <div className="space-y-3">
-      <Card>
+    <ReportViewer
+      title="Stock Summary"
+      asOf={to}
+      onExportPdf={onExportPdf}
+    >
+      <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
             from={from}
@@ -272,6 +277,6 @@ function StockSummary() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </ReportViewer>
   );
 }

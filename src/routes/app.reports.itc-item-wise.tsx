@@ -10,6 +10,7 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { amountHeader } from "@/lib/export-format";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 
 export const Route = createFileRoute("/app/reports/itc-item-wise")({
   head: () => ({ meta: [{ title: "Item-wise ITC — Reports" }] }),
@@ -170,8 +171,13 @@ function ItcItemWise() {
   ];
 
   return (
-    <div className="space-y-3">
-      <Card>
+    <ReportViewer
+      title="Item-wise ITC Availed vs Utilised"
+      fromDate={from}
+      toDate={to}
+      onExportPdf={onExportPdf}
+    >
+      <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
             from={from} to={to} onFrom={setFrom} onTo={setTo}
@@ -210,6 +216,6 @@ function ItcItemWise() {
           />
         </CardContent>
       </Card>
-    </div>
+    </ReportViewer>
   );
 }

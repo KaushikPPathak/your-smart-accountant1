@@ -9,6 +9,7 @@ import { amountHeader } from "@/lib/export-format";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 
 export const Route = createFileRoute("/app/reports/receipts-payments")({
   head: () => ({ meta: [{ title: "Receipts & Payments — Reports" }] }),
@@ -214,17 +215,23 @@ function ReceiptsPayments() {
     });
 
   return (
-    <div className="space-y-4">
-      <ReportToolbar
-        from={from}
-        to={to}
-        onFrom={setFrom}
-        onTo={setTo}
-        onExportCsv={onExportCsv}
-        onExportXlsx={onExportXlsx}
-        onExportPdf={onExportPdf}
-        onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
-      />
+    <ReportViewer
+      title="Receipts & Payments Account"
+      fromDate={from}
+      toDate={to}
+      onExportPdf={onExportPdf}
+    >
+      <div className="space-y-4">
+        <ReportToolbar
+          from={from}
+          to={to}
+          onFrom={setFrom}
+          onTo={setTo}
+          onExportCsv={onExportCsv}
+          onExportXlsx={onExportXlsx}
+          onExportPdf={onExportPdf}
+          onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
+        />
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-lg">Receipts &amp; Payments Account — {from} to {to}</CardTitle>
@@ -277,6 +284,7 @@ function ReceiptsPayments() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </ReportViewer>
   );
 }
