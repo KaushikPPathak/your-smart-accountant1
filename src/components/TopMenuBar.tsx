@@ -523,10 +523,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
 
-  // Alt+letter → focus & open the matching top-level menu. Registered through
-  // the centralized keyboard engine so it appears in the cheat sheet and
-  // respects the global typing-target guard (allowInField defaults to false).
-  const kb = useOptionalKeyboard();
+  // Alt+letter → focus & open the matching top-level menu.
   useEffect(() => {
     if (!kb) return;
     const accessKeys: Array<{ key: string; menuKey: string; label: string }> = [
