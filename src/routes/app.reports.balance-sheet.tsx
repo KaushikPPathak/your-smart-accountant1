@@ -16,6 +16,7 @@ import {
   groupBalances,
   groupedTRows,
   groupedExportRows,
+  ledgerGroupCode,
 } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
 import { computeNceReportShape } from "@/lib/nce-report-shape";
@@ -69,7 +70,18 @@ function BalanceSheet() {
   }, [balances]);
 
   const liabBuckets = useMemo(
-    () => groupBalances(balances, "BS_LIAB", (b) => -b.closing_paise),
+    () => groupBalances(
+      balances.map(b => {
+        const sign = -b.closing_paise;
+        // If it's a liability-nature group but has a Dr balance, we still group it here
+        // but it will show as a negative if we don't swap.
+        // India Accounting Standard: Dr-balance liabilities (like TDS receivable in Duties)
+        // should ideally stay in their group but showing negative is "nonsense" to users.
+        return b;
+      }),
+      "BS_LIAB",
+      (b) => -b.closing_paise
+    ),
     [balances],
   );
   const assetBuckets = useMemo(
@@ -92,6 +104,16 @@ function BalanceSheet() {
   } else if (profitPaise < 0) {
     assetRows.push({ label: profitLabelNeg, amount: "", outerAmount: formatINR(-profitPaise), emphasis: "bold" });
   }
+
+  // Cross-side partition: move Dr-balance liabilities to Assets and Cr-balance assets to Liabilities
+  // to prevent "nonsense" negative balances (e.g. overdrawn Bank, debit Sundry Creditors).
+  const sectionBalances = balances.filter(b => {
+    const code = ledgerGroupCode(b);
+    return code !== "SALES_ACCOUNTS" && code !== "PURCHASE_ACCOUNTS" && 
+           code !== "DIRECT_EXPENSES" && code !== "DIRECT_INCOMES" &&
+           code !== "INDIRECT_INCOMES" && code !== "INDIRECT_EXPENSES";
+  });
+
   const grandL = liab.totalPaise + Math.max(0, profitPaise);
   const grandA = asset.totalPaise + Math.max(0, -profitPaise);
   const diffPaise = grandA - grandL;
