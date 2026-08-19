@@ -510,7 +510,7 @@ export function DataGrid<T>({
                     isFocused && "bg-primary/10 ring-1 ring-inset ring-primary/40",
                   )}
                   style={{ top, height: rowH, gridTemplateColumns: gridTemplate }}
-                  onClick={onRowClick ? () => { setFocusedIndex(vi.index); onRowClick(rows[item.__index]); } : () => setFocusedIndex(vi.index)}
+                  onClick={onRowClick ? () => { setFocusedIndex(vi.index); onRowClick(rows[(item as any).row.__index]); } : () => setFocusedIndex(vi.index)}
                 >
                   {visibleColumns.map((c, idx) => {
                     const isPinned = idx < pinnedCount;
@@ -526,7 +526,7 @@ export function DataGrid<T>({
                         style={isPinned ? { left: pinnedOffsets[c.id] } : undefined}
                       >
                         <span className="truncate">
-                          {c.cell ? c.cell(rows[item.__index]) : asReact(c.accessor(rows[item.__index]))}
+                          {c.cell ? c.cell(rows[(item as any).row.__index]) : asReact(c.accessor(rows[(item as any).row.__index]))}
                         </span>
                       </div>
                     );
