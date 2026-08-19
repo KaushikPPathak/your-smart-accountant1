@@ -398,17 +398,17 @@ function openPrintPreview(
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    .report-print-header { text-align: center; margin-bottom: 10pt; }
+    .report-print-header { text-align: center; margin-bottom: 8pt; }
     .report-print-header > div { margin: 1pt 0; }
     .report-print-company-name {
-      font-size: 13pt; font-weight: 700; text-transform: uppercase;
+      font-size: 12pt; font-weight: 700; text-transform: uppercase;
       letter-spacing: .5pt; color: #002060 !important;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
-    .report-print-title { font-size: 11pt; font-weight: 600; margin-top: 2pt; }
-    .report-print-fy-line { font-size: 10pt; font-weight: 500; margin-top: 1pt; }
-    .report-header-rule { height: 3px; border-top: 1px solid #000;
-      border-bottom: 1px solid #000; margin: 4pt 0 8pt; }
+    .report-print-title { font-size: 10pt; font-weight: 600; margin-top: 2pt; }
+    .report-print-fy-line { font-size: 9pt; font-weight: 500; margin-top: 1pt; }
+    .report-header-rule { height: 2px; border-top: 1px solid #000;
+      border-bottom: 1px solid #000; margin: 3pt 0 6pt; }
     table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
     th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
       text-align: left; }
