@@ -92,7 +92,8 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
 
   useEffect(() => {
     // Auto-trigger step 3 if coming from the flyout "Create Next Year" command
-    if (search.get("wizard") === "fy_transfer") {
+    // We check for from_flyout or wizard=fy_transfer
+    if (search.get("wizard") === "fy_transfer" || search.get("from_flyout")) {
       setStep(3);
       setMode("split");
     }

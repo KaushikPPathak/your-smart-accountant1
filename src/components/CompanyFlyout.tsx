@@ -41,8 +41,7 @@ function CompanyRow({
   const shiftYear = async (e: React.MouseEvent, dir: number) => {
     e.stopPropagation();
     const newOffset = offset + dir;
-    setOffset(newOffset);
-
+    
     // Calculate the label for the target FY
     const targetLabel = fyLabel(m.companies.financial_year_start, newOffset);
     const targetYear = parseInt(targetLabel.split("-")[0]);
@@ -52,21 +51,28 @@ function CompanyRow({
     const targetName = `${baseName} — FY ${targetLabel}`;
     
     const existing = memberships.find(member => 
-      (member.companies.name === targetName || (newOffset === 0 && member.company_id === m.company_id)) ||
-      (newOffset !== 0 && member.companies.name.split(" — FY ")[0] === baseName && fyLabel(member.companies.financial_year_start, 0) === targetLabel)
+      (member.companies.name === targetName) ||
+      (newOffset === 0 && member.company_id === m.company_id) ||
+      (member.companies.name.split(" — FY ")[0] === baseName && fyLabel(member.companies.financial_year_start, 0) === targetLabel)
     );
 
     if (existing) {
-      // If it exists, switch to it
+      // If it exists, switch to it and update visual offset
+      setOffset(newOffset);
       setActiveCompanyId(existing.company_id);
       navigate({ to: "/app" });
     } else if (dir > 0) {
       // If next year doesn't exist, trigger the transfer wizard
+      // We don't update offset here because we are leaving the current company view
       setActiveCompanyId(m.company_id);
       navigate({ 
         to: "/app/housekeeping", 
-        search: { wizard: "fy_transfer", target_year: targetYear } as any 
+        search: { wizard: "fy_transfer", target_year: targetYear, from_flyout: 1 } as any 
       });
+    } else {
+      // For previous year, just update the visual offset even if not found, 
+      // or we could show a message. For now, just update the label.
+      setOffset(newOffset);
     }
   };
 
