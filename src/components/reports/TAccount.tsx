@@ -57,22 +57,22 @@ function RowCell({ row }: { row: TRow }) {
   return (
     <div
       className={cn(
-        "flex items-start gap-2 px-2 py-1.5 text-[12px] leading-tight",
+        "flex items-start gap-2 px-2 py-1.5 text-[12px] leading-tight print:py-1 print:text-[9pt]",
         row.onClick && "cursor-pointer hover:bg-muted/40",
         weight,
       )}
       onClick={row.onClick}
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate">{row.label}</div>
+        <div className="truncate print:whitespace-normal print:break-words">{row.label}</div>
         {row.hint && (
-          <div className="truncate text-[10px] text-muted-foreground">{row.hint}</div>
+          <div className="truncate text-[10px] text-muted-foreground print:text-[8pt]">{row.hint}</div>
         )}
       </div>
-      <div className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums text-[12px]">
+      <div className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums text-[12px] print:w-[5rem] print:text-[9pt]">
         {row.amount}
       </div>
-      <div className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums text-[12px]">
+      <div className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums text-[12px] print:w-[5rem] print:text-[9pt]">
         {row.outerAmount}
       </div>
     </div>
@@ -116,14 +116,14 @@ export function TAccount({
         </div>
       )}
       {/* Column headers */}
-      <div className="grid grid-cols-2 border-b-2 border-foreground bg-muted/40 text-[11px] font-semibold uppercase tracking-wide print:border-black">
+      <div className="grid grid-cols-2 border-b-2 border-foreground bg-muted/40 text-[11px] font-semibold uppercase tracking-wide print:border-black print:text-[10px]">
         <div className="flex min-w-0 items-center gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black">
           <span className="min-w-0 flex-1 truncate">{loc(leftHeader, lang)}</span>
-          <span className="w-[13rem] shrink-0 whitespace-nowrap text-right">{loc(amountHeader, lang)}</span>
+          <span className="w-[13rem] shrink-0 whitespace-nowrap text-right print:w-[10rem]">{loc(amountHeader, lang)}</span>
         </div>
         <div className="flex min-w-0 items-center gap-2 px-2 py-1.5">
           <span className="min-w-0 flex-1 truncate">{loc(rightHeader, lang)}</span>
-          <span className="w-[13rem] shrink-0 whitespace-nowrap text-right">{loc(amountHeader, lang)}</span>
+          <span className="w-[13rem] shrink-0 whitespace-nowrap text-right print:w-[10rem]">{loc(amountHeader, lang)}</span>
         </div>
       </div>
       {/* Body */}

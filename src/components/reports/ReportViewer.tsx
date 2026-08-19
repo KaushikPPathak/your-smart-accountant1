@@ -342,11 +342,11 @@ function openPrintPreview(
   });
 
   const css = `
-    @page { size: A4 ${orient}; margin: 14mm; }
+    @page { size: A4 ${orient}; margin: 10mm; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #fff; color: #000;
-      font: 10pt/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    body { padding: 14mm; }
+      font: 9pt/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    body { padding: 10mm; }
     .preview-bar { position: fixed; top: 0; left: 0; right: 0; display: flex;
       gap: 8px; padding: 8px 12px; background: #f5f5f5;
       border-bottom: 1px solid #ddd; font: 13px system-ui; z-index: 10; }
