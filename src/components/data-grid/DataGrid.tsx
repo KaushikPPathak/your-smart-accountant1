@@ -104,7 +104,13 @@ export function DataGrid<T>({
       type: c.type,
       aggregator: c.aggregator,
       groupable: c.groupable,
-      header: typeof c.header === 'string' ? c.header : c.id, // Only send serializable header info if needed
+      // Ensure header is serializable (strip functions/components)
+      header: typeof c.header === 'string' ? c.header : (typeof c.header === 'object' && c.header !== null ? 'Column' : String(c.header || c.id)),
+      // Remove React-only props before sending to worker
+      cell: undefined,
+      renderGroupValue: undefined,
+      formatAggregate: undefined,
+      formatGroupValue: undefined,
     }));
 
     const workerMsg: WorkerRequest = {
@@ -155,7 +161,12 @@ export function DataGrid<T>({
 
   // Filtered rows (without grouping) feed both the parent callback and the pivot engine
   const filteredRows = useMemo(
-    () => flat.filter((r): r is { kind: "row"; row: any; index: number } => r.kind === "row").map((r) => rows[r.row.__index]),
+    () => {
+      // Ensure we only map valid row objects
+      return flat
+        .filter((r): r is { kind: "row"; row: any; index: number } => r.kind === "row" && r.row && typeof r.row.__index === 'number')
+        .map((r) => rows[r.row.__index]);
+    },
     [flat, rows],
   );
 
