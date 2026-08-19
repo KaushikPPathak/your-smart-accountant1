@@ -28,7 +28,7 @@ function CompanyRow({
 }) {
   const { t } = useI18n();
   const [offset, setOffset] = useState(0);
-  const { memberships } = useCompany();
+  const { memberships, setActiveCompanyId } = useCompany();
   const navigate = useNavigate();
 
   const fy = useMemo(() => fyLabel(m.companies.financial_year_start, offset), [m.companies.financial_year_start, offset]);
