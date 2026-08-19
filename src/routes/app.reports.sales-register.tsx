@@ -388,6 +388,44 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
     ]),
   ];
 
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title,
+      subtitle: pdfHeader.dateRangeSubtitle(from, to),
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
+      head: [head],
+      body: rows.map((x) => [
+        fmtIndianDate(x.voucher_date),
+        x.voucher_number,
+        x.ledgers?.name ?? "",
+        x.ledgers?.gstin ?? "",
+        ...(showQtyUnit ? [qtyUnitText(x)] : []),
+        r(x.subtotal_paise).toFixed(2),
+        r(x.cgst_paise).toFixed(2),
+        r(x.sgst_paise).toFixed(2),
+        r(x.igst_paise).toFixed(2),
+        r(x.total_paise).toFixed(2),
+      ]),
+      foot: [
+        [
+          "TOTAL",
+          "",
+          "",
+          "",
+          ...(showQtyUnit ? [""] : []),
+          r(totals.sub).toFixed(2),
+          r(totals.cgst).toFixed(2),
+          r(totals.sgst).toFixed(2),
+          r(totals.igst).toFixed(2),
+          r(totals.total).toFixed(2),
+        ],
+      ],
+      fileName: `${slug}-${from}_to_${to}.pdf`,
+      orientation: "l",
+      rightAlignCols: [4, 5, 6, 7, 8],
+    });
+
   return (
     <ReportViewer
       title={title}
@@ -414,53 +452,16 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                       h.hsn,
                       h.rate,
                       h.qty,
-                      r(h.taxable),
-                      r(h.cgst),
-                      r(h.sgst),
-                      r(h.igst),
+                      r(h.taxable).toFixed(2),
+                      r(h.cgst).toFixed(2),
+                      r(h.sgst).toFixed(2),
+                      r(h.igst).toFixed(2),
                     ]),
                   ],
                 },
               ])
             }
-            onExportPdf={() =>
-              downloadPdfTable({
-                title,
-                subtitle: pdfHeader.dateRangeSubtitle(from, to),
-                companyName: pdfHeader.companyName,
-                companySubLine: pdfHeader.companySubLine,
-                head: [head],
-                body: rows.map((x) => [
-                  fmtIndianDate(x.voucher_date),
-                  x.voucher_number,
-                  x.ledgers?.name ?? "",
-                  x.ledgers?.gstin ?? "",
-                  ...(showQtyUnit ? [qtyUnitText(x)] : []),
-                  r(x.subtotal_paise).toFixed(2),
-                  r(x.cgst_paise).toFixed(2),
-                  r(x.sgst_paise).toFixed(2),
-                  r(x.igst_paise).toFixed(2),
-                  r(x.total_paise).toFixed(2),
-                ]),
-                foot: [
-                  [
-                    "TOTAL",
-                    "",
-                    "",
-                    "",
-                    ...(showQtyUnit ? [""] : []),
-                    r(totals.sub).toFixed(2),
-                    r(totals.cgst).toFixed(2),
-                    r(totals.sgst).toFixed(2),
-                    r(totals.igst).toFixed(2),
-                    r(totals.total).toFixed(2),
-                  ],
-                ],
-                fileName: `${slug}-${from}_to_${to}.pdf`,
-                orientation: "l",
-                rightAlignCols: [4, 5, 6, 7, 8],
-              })
-            }
+            onExportPdf={onExportPdf}
             onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           />
           <div className="mt-2">

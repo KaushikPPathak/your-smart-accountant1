@@ -146,6 +146,20 @@ function ItcPartyWise() {
     ["TOTAL", "", "", "", (totals.purTaxable / 100).toFixed(2), (totals.availCgst / 100).toFixed(2), (totals.availSgst / 100).toFixed(2), (totals.availIgst / 100).toFixed(2), (totals.availed / 100).toFixed(2), (totals.salTaxable / 100).toFixed(2), (totals.outCgst / 100).toFixed(2), (totals.outSgst / 100).toFixed(2), (totals.outIgst / 100).toFixed(2), (totals.spent / 100).toFixed(2), (totals.net / 100).toFixed(2)],
   ];
 
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title: "Party-wise ITC Availed vs Output Tax",
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
+      subtitle: `${from} to ${to}`,
+      head: [["Party", "GSTIN", "State", "Type", amountHeader("Pur Tax."), amountHeader("ITC CGST"), amountHeader("ITC SGST"), amountHeader("ITC IGST"), amountHeader("ITC Availed"), amountHeader("Sale Tax."), amountHeader("Out CGST"), amountHeader("Out SGST"), amountHeader("Out IGST"), amountHeader("Output Tax"), amountHeader("Net")]],
+      body: rows.map((x) => [x.name, x.gstin, x.state, x.party_type, r(x.purTaxable).toFixed(2), r(x.availCgst).toFixed(2), r(x.availSgst).toFixed(2), r(x.availIgst).toFixed(2), r(x.availed).toFixed(2), r(x.salTaxable).toFixed(2), r(x.outCgst).toFixed(2), r(x.outSgst).toFixed(2), r(x.outIgst).toFixed(2), r(x.spent).toFixed(2), r(x.net).toFixed(2)]),
+      foot: [["TOTAL", "", "", "", r(totals.purTaxable).toFixed(2), r(totals.availCgst).toFixed(2), r(totals.availSgst).toFixed(2), r(totals.availIgst).toFixed(2), r(totals.availed).toFixed(2), r(totals.salTaxable).toFixed(2), r(totals.outCgst).toFixed(2), r(totals.outSgst).toFixed(2), r(totals.outIgst).toFixed(2), r(totals.spent).toFixed(2), r(totals.net).toFixed(2)]],
+      fileName: `itc-party-wise-${from}-to-${to}.pdf`,
+      orientation: "l",
+      rightAlignCols: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+    });
+
   return (
     <ReportViewer
       title="Party-wise ITC Availed vs Output Tax"
@@ -159,20 +173,7 @@ function ItcPartyWise() {
             from={from} to={to} onFrom={setFrom} onTo={setTo}
             onExportCsv={() => downloadCsv(`itc-party-wise-${from}-to-${to}.csv`, csvRows())}
             onExportXlsx={() => downloadXlsx(`itc-party-wise-${from}-to-${to}.xlsx`, [{ name: "ITC Party-wise", rows: csvRows() }])}
-            onExportPdf={() =>
-              downloadPdfTable({
-                title: "Party-wise ITC Availed vs Output Tax",
-                companyName: pdfHeader.companyName,
-                companySubLine: pdfHeader.companySubLine,
-                subtitle: `${from} to ${to}`,
-                head: [["Party", "GSTIN", "State", "Type", amountHeader("Pur Tax."), amountHeader("ITC CGST"), amountHeader("ITC SGST"), amountHeader("ITC IGST"), amountHeader("ITC Availed"), amountHeader("Sale Tax."), amountHeader("Out CGST"), amountHeader("Out SGST"), amountHeader("Out IGST"), amountHeader("Output Tax"), amountHeader("Net")]],
-                body: rows.map((x) => [x.name, x.gstin, x.state, x.party_type, r(x.purTaxable).toFixed(2), r(x.availCgst).toFixed(2), r(x.availSgst).toFixed(2), r(x.availIgst).toFixed(2), r(x.availed).toFixed(2), r(x.salTaxable).toFixed(2), r(x.outCgst).toFixed(2), r(x.outSgst).toFixed(2), r(x.outIgst).toFixed(2), r(x.spent).toFixed(2), r(x.net).toFixed(2)]),
-                foot: [["TOTAL", "", "", "", r(totals.purTaxable).toFixed(2), r(totals.availCgst).toFixed(2), r(totals.availSgst).toFixed(2), r(totals.availIgst).toFixed(2), r(totals.availed).toFixed(2), r(totals.salTaxable).toFixed(2), r(totals.outCgst).toFixed(2), r(totals.outSgst).toFixed(2), r(totals.outIgst).toFixed(2), r(totals.spent).toFixed(2), r(totals.net).toFixed(2)]],
-                fileName: `itc-party-wise-${from}-to-${to}.pdf`,
-                orientation: "l",
-                rightAlignCols: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-              })
-            }
+            onExportPdf={onExportPdf}
             onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           />
           <p className="mt-2 text-xs text-muted-foreground">

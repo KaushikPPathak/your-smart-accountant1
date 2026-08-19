@@ -189,6 +189,20 @@ function StockSummary() {
     { id: "value", header: "Value", type: "number", width: 140, align: "right", accessor: (x) => x.stockValue / 100, cell: (x) => formatINR(x.stockValue), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
   ], []);
 
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title: "Stock Summary",
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
+      subtitle: `As on ${to} (movement window: ${from} to ${to})`,
+      head: [["Item", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", amountHeader("Value")]],
+      body: rows.map((x) => [x.name, x.hsn_code ?? "", x.unit, String(x.opening), String(x.inWindow), x.outWindow ? `-${x.outWindow}` : "0", String(x.closing), r(x.stockValue).toFixed(2)]),
+      foot: [["TOTAL", "", "", "", "", "", "", r(totalValue).toFixed(2)]],
+      fileName: `stock-summary-${to}.pdf`,
+      orientation: "l",
+      rightAlignCols: [3, 4, 5, 6, 7],
+    });
+
   return (
     <ReportViewer
       title="Stock Summary"
@@ -204,20 +218,7 @@ function StockSummary() {
             onTo={setTo}
             onExportCsv={() => downloadCsv(`stock-summary-${to}.csv`, csv())}
             onExportXlsx={() => downloadXlsx(`stock-summary-${to}.xlsx`, [{ name: "Stock", rows: csv() }])}
-            onExportPdf={() =>
-              downloadPdfTable({
-                title: "Stock Summary",
-                companyName: pdfHeader.companyName,
-                companySubLine: pdfHeader.companySubLine,
-                subtitle: `As on ${to} (movement window: ${from} to ${to})`,
-                head: [["Item", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", amountHeader("Value")]],
-                body: rows.map((x) => [x.name, x.hsn_code ?? "", x.unit, String(x.opening), String(x.inWindow), x.outWindow ? `-${x.outWindow}` : "0", String(x.closing), r(x.stockValue).toFixed(2)]),
-                foot: [["TOTAL", "", "", "", "", "", "", r(totalValue).toFixed(2)]],
-                fileName: `stock-summary-${to}.pdf`,
-                orientation: "l",
-                rightAlignCols: [3, 4, 5, 6, 7],
-              })
-            }
+            onExportPdf={onExportPdf}
             onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           />
           <p className="mt-2 text-xs text-muted-foreground">Stock value is calculated using each item's opening rate.</p>
