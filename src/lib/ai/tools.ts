@@ -479,7 +479,10 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetVoucher(args);
     case "get_trial_balance":
       return execGetTrialBalance();
+    case "get_journal_book":
+      return execGetJournalBook(args);
     case "get_profit_loss":
+
       return execGetProfitLoss(args);
     case "get_stock_summary":
       return execGetStockSummary();
