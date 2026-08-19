@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isLocalOnlyMode } from "./local-only-mode";
 
 /**
  * Helpers for the "Provisional Balance Sync & Year-End Lock" utility.
@@ -51,6 +52,9 @@ export async function syncOpeningBalances(
   companyId: string,
   fyStart: string,
 ): Promise<SyncResult> {
+  if (isLocalOnlyMode()) {
+    return syncOpeningBalancesLocally(companyId, fyStart);
+  }
   const { data, error } = await (supabase as unknown as {
     rpc: (
       name: string,
@@ -70,6 +74,129 @@ export async function syncOpeningBalances(
       fy_start: fyStart,
     }
   );
+}
+
+async function syncOpeningBalancesLocally(
+  companyId: string,
+  fyStart: string
+): Promise<SyncResult> {
+  const { offlineDb: db } = await import("./offline/db");
+  const { readLedgers, readItems, readVoucherEntriesForCompany, readVoucherItemsForCompany } = await import("./offline/cache-read");
+  const { upsertCachedLedger, upsertCachedItem } = await import("./masters-cache");
+
+  const fy = fyRangeFromStart(fyStart);
+  const prevFyEnd = new Date(new Date(fy.start).getTime() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  const [ledgers, items, entries, moves] = await Promise.all([
+    readLedgers(companyId),
+    readItems(companyId),
+    readVoucherEntriesForCompany(companyId),
+    readVoucherItemsForCompany(companyId)
+  ]);
+
+  const result: SyncResult = {
+    ledgers_updated: 0,
+    items_updated: 0,
+    ledger_details: [],
+    item_details: [],
+    fy_start: fyStart
+  };
+
+  const PL_TYPES = new Set(["expense_direct", "expense_indirect", "income_direct", "income_indirect"]);
+
+  // 1. Sync Ledgers
+  const ledgerMovement = new Map<string, number>();
+  for (const e of entries as any[]) {
+    if (e.vouchers?.voucher_date && e.vouchers.voucher_date <= prevFyEnd) {
+      ledgerMovement.set(e.ledger_id, (ledgerMovement.get(e.ledger_id) ?? 0) + (e.debit_paise || 0) - (e.credit_paise || 0));
+    }
+  }
+
+  for (const l of ledgers as any[]) {
+    if (PL_TYPES.has(l.type)) continue;
+
+    const op = (l.opening_balance_is_debit ? 1 : -1) * (l.opening_balance_paise || 0);
+    const closing = op + (ledgerMovement.get(l.id) ?? 0);
+    const newOpAbs = Math.abs(closing);
+    const newOpIsDr = closing >= 0;
+
+    if (l.opening_balance_paise !== newOpAbs || l.opening_balance_is_debit !== newOpIsDr) {
+      result.ledger_details.push({
+        ledger_id: l.id,
+        name: l.name,
+        old_paise: l.opening_balance_paise,
+        old_is_debit: l.opening_balance_is_debit,
+        new_paise: newOpAbs,
+        new_is_debit: newOpIsDr
+      });
+      
+      const now = new Date().toISOString();
+      await db.cache_ledgers.update(l.id, {
+        opening_balance_paise: newOpAbs,
+        opening_balance_is_debit: newOpIsDr,
+        updated_at: now,
+        is_synced: false
+      });
+      upsertCachedLedger({ ...l, opening_balance_paise: newOpAbs, opening_balance_is_debit: newOpIsDr });
+      result.ledgers_updated++;
+    }
+  }
+
+  // 2. Sync Items
+  const itemMovement = new Map<string, { qty: number; rate: number }>();
+  const isIn = (t: string) => t === "purchase" || t === "credit_note";
+  const isOut = (t: string) => t === "sales" || t === "debit_note";
+  const isMfg = (t: string) => t === "manufacturing";
+
+  for (const m of moves as any[]) {
+    if (m.vouchers?.voucher_date && m.vouchers.voucher_date <= prevFyEnd) {
+      const cur = itemMovement.get(m.item_id) ?? { qty: 0, rate: 0 };
+      const t = m.vouchers.voucher_type;
+      const v = Number(m.qty || 0);
+      let nextQty = cur.qty;
+      let nextRate = cur.rate;
+
+      if (isMfg(t)) {
+        nextQty += v;
+        if (v > 0 && m.rate_paise) nextRate = m.rate_paise;
+      } else if (isIn(t)) {
+        nextQty += Math.abs(v);
+        if (m.rate_paise) nextRate = m.rate_paise;
+      } else if (isOut(t)) {
+        nextQty -= Math.abs(v);
+      }
+      itemMovement.set(m.item_id, { qty: nextQty, rate: nextRate });
+    }
+  }
+
+  for (const it of items as any[]) {
+    const mov = itemMovement.get(it.id) ?? { qty: 0, rate: 0 };
+    const closingQty = (Number(it.opening_stock_qty) || 0) + mov.qty;
+    const closingRate = mov.rate || it.opening_stock_rate_paise || it.purchase_price_paise || 0;
+
+    if (it.opening_stock_qty !== closingQty || it.opening_stock_rate_paise !== closingRate) {
+      result.item_details.push({
+        item_id: it.id,
+        name: it.name,
+        old_qty: it.opening_stock_qty,
+        old_rate_paise: it.opening_stock_rate_paise,
+        new_qty: closingQty,
+        new_rate_paise: closingRate
+      });
+      
+      const now = new Date().toISOString();
+      await db.cache_items.update(it.id, {
+        opening_stock_qty: closingQty,
+        opening_stock_rate_paise: closingRate,
+        updated_at: now,
+        is_synced: false
+      });
+      upsertCachedItem({ ...it, opening_stock_qty: closingQty, opening_stock_rate_paise: closingRate });
+      result.items_updated++;
+    }
+  }
+
+  return result;
 }
 
 export interface FyLockStatus {
