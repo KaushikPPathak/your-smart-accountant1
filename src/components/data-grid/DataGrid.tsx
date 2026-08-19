@@ -106,6 +106,11 @@ export function DataGrid<T>({
       groupable: c.groupable,
       // Ensure header is serializable (strip functions/components)
       header: typeof c.header === 'string' ? c.header : (typeof c.header === 'object' && c.header !== null ? 'Column' : String(c.header || c.id)),
+      // Remove React-only props before sending to worker
+      cell: undefined,
+      renderGroupValue: undefined,
+      formatAggregate: undefined,
+      formatGroupValue: undefined,
     }));
 
     const workerMsg: WorkerRequest = {
