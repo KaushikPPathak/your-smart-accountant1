@@ -136,7 +136,14 @@ function TrialBalance() {
         .filter((e) => e.ledger_id === l.id && e.vouchers && e.vouchers.voucher_date <= to)
         .reduce((s, e) => s + e.debit_paise - e.credit_paise, 0);
       const closing = obSigned + movement;
-      return { ...l, debit: closing > 0 ? closing : 0, credit: closing < 0 ? -closing : 0 };
+      
+      // In professional Trial Balance, a negative Dr is a Cr, and vice versa.
+      // We ensure the amount is absolute and placed in the correct column.
+      return { 
+        ...l, 
+        debit: closing > 0 ? closing : 0, 
+        credit: closing < 0 ? -closing : 0 
+      };
     });
   }, [ledgers, entries, to]);
 
