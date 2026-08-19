@@ -1,7 +1,7 @@
 /*
 '''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
 
-No, you have completely broken working in my win 10 colour pattern changed without my permission why ?
+no it was not steel blue
 */
 // Silent auto-restore on launch.
 //
