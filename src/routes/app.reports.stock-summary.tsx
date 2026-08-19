@@ -8,14 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
-import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { downloadCsv } from "@/lib/csv";
+import { amountHeader } from "@/lib/export-format";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
-import { useReportPdfHeader } from "@/lib/report-pdf-header";
-import { downloadCsv, downloadXlsx, downloadPdfTable } from "@/lib/exporters";
-import { formatINR } from "@/lib/money";
-import { amountHeader } from "@/lib/export-format";
 import { ReportViewer } from "@/components/reports/ReportViewer";
 import {
   readItems,
