@@ -72,13 +72,13 @@
   --card-foreground: oklch(0.25 0.03 70);
   --popover: oklch(0.98 0.01 80);
   --popover-foreground: oklch(0.25 0.03 70);
-  --primary: oklch(0.65 0.08 180); /* Soft Sage Green */
+  --primary: oklch(0.6 0.12 220); /* Steel Blue */
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.95 0.02 80);
   --secondary-foreground: oklch(0.35 0.04 70);
   --muted: oklch(0.96 0.02 80);
   --muted-foreground: oklch(0.5 0.03 70);
-  --accent: oklch(0.85 0.05 180);
+  --accent: oklch(0.85 0.05 220);
   --accent-foreground: oklch(0.25 0.03 70);
   --destructive: oklch(0.6 0.15 25);
   --destructive-foreground: oklch(0.99 0 0);
@@ -88,7 +88,7 @@
   --warning-foreground: oklch(0.3 0.05 70);
   --border: oklch(0.9 0.02 80);
   --input: oklch(0.93 0.02 80);
-  --ring: oklch(0.65 0.08 180);
+  --ring: oklch(0.6 0.12 220);
   --chart-1: oklch(0.65 0.08 180);
   --chart-2: oklch(0.75 0.1 160);
   --chart-3: oklch(0.85 0.1 85);
@@ -110,18 +110,18 @@
   --shadow-card: 0 1px 2px oklch(0.25 0.03 70 / 0.05), 0 4px 12px -6px oklch(0.25 0.03 70 / 0.1);
   --shadow-elevated: 0 10px 30px -14px oklch(0.25 0.03 70 / 0.2);
 
-  /* New Soft Palette (replacing Amber)
-     --theme-base   : Primary soft green/sage
+  /* New Soft Palette (Steel Blue Theme)
+     --theme-base   : Primary steel blue
      --theme-light  : Header/Ribbon background
      --theme-pale   : Dropdown backgrounds
      --theme-dark   : Hovers/Active states
      --theme-ink    : Professional deep charcoal text
      --theme-onDark : White text for dark surfaces */
-  /* Professional Accounting Theme (Tally/Marg inspired soft palette) */
-  --theme-base:  oklch(0.72 0.05 180);
-  --theme-light: oklch(0.96 0.01 180);
-  --theme-pale:  oklch(0.98 0.005 180);
-  --theme-dark:  oklch(0.55 0.08 180);
+  /* Professional Accounting Theme (Steel Blue Palette) */
+  --theme-base:  oklch(0.65 0.08 220);
+  --theme-light: oklch(0.96 0.01 220);
+  --theme-pale:  oklch(0.98 0.005 220);
+  --theme-dark:  oklch(0.45 0.1 220);
   --theme-ink:   oklch(0.22 0.02 70);
   --theme-onDark: oklch(0.99 0 0);
 
@@ -129,10 +129,10 @@
      Maintains the professional accounting look but ensures standard 
      color spacing for clear contrast on Windows 10 displays. */
   @media screen and (min-width: 0px) {
-    --theme-base:  oklch(0.72 0.05 180);
-    --theme-light: oklch(0.96 0.01 180);
-    --theme-pale:  oklch(0.98 0.005 180);
-    --theme-dark:  oklch(0.55 0.08 180);
+    --theme-base:  oklch(0.65 0.08 220);
+    --theme-light: oklch(0.96 0.01 220);
+    --theme-pale:  oklch(0.98 0.005 220);
+    --theme-dark:  oklch(0.45 0.1 220);
   }
 
   /* Backward compatibility for CSS classes using --amber-* */

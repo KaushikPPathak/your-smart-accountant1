@@ -1,7 +1,7 @@
 /*
 '''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
 
-I have incremented the offline database version to ym_offline_cache_v5 to force a complete schema refresh and solve the data loading hangs, and I've adjusted the PDF table styles to ensure consistent cell heights and prevent overlapping text in reports. but my problems remains un resolved and i am with you since hours but no resolution you have provided me
+No, you have completely broken working in my win 10 colour pattern changed without my permission why ?
 */
 // Silent auto-restore on launch.
 //
