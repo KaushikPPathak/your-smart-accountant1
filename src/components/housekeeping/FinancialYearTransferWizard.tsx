@@ -395,7 +395,8 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
       }
       if (mode === "extend") await refresh();
       setStep(4);
-      toast.success(`Books carried forward to FY ${fy.nextLabel}`);
+      const targetYear = search.get("target_year");
+      toast.success(`Books carried forward to FY ${targetYear ? `${targetYear}-${String(parseInt(targetYear) + 1).slice(-2)}` : fy.nextLabel}`);
     } catch (e) {
       toast.error(describeError(e) || "Transfer failed");
     } finally {
