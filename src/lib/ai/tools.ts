@@ -429,7 +429,39 @@ async function execGetTrialBalance(): Promise<ToolResult> {
   return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
 }
 
+async function execGetJournalBook(args: Record<string, unknown>): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+
+  const from = args.from ? String(args.from) : undefined;
+  const to = args.to ? String(args.to) : undefined;
+
+  const cached = await getCached("get_journal_book", args);
+  if (cached) return { success: true, data: cached, cached: true, latencyMs: 0 };
+
+  const all = (await readVouchers(cid, { from, to })) as any[];
+  const journals = all.filter((v) => String(v.voucher_type) === "journal");
+  const ledgers = (await readLedgers(cid)) as any[];
+  const lById = new Map(ledgers.map((l) => [String(l.id), l.name]));
+
+  const result = {
+    count: journals.length,
+    vouchers: journals.slice(0, 100).map((v) => ({
+      id: v.id,
+      number: v.voucher_number,
+      date: v.voucher_date,
+      party: v.party_ledger_id ? (lById.get(String(v.party_ledger_id)) ?? null) : null,
+      total_paise: v.total_paise,
+    })),
+  };
+
+  await setCached("get_journal_book", args, result);
+  return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
+
 //  MAIN EXECUTE GATE
 // ═════════════════════════════════════════════════════════════════════════════
 
