@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Building2, Plus, ChevronLeft, ChevronRight, Check, Settings, Pencil } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import { useCompany, type CompanyMembership } from "@/lib/company-context";
 import { useI18n } from "@/lib/i18n";
@@ -27,7 +28,7 @@ function CompanyRow({
 }) {
   const { t } = useI18n();
   const [offset, setOffset] = useState(0);
-  const { setActiveCompanyId, memberships } = useCompany();
+  const { setActiveCompanyId, memberships, activeCompanyId } = useCompany();
   const navigate = useNavigate();
 
   const fy = useMemo(() => fyLabel(m.companies.financial_year_start, offset), [m.companies.financial_year_start, offset]);
@@ -51,8 +52,8 @@ function CompanyRow({
     const targetName = `${baseName} — FY ${targetLabel}`;
     
     const existing = memberships.find(member => 
-      member.companies.name === targetName || 
-      (newOffset === 0 && member.company_id === m.company_id)
+      (member.companies.name === targetName || (newOffset === 0 && member.company_id === m.company_id)) ||
+      (newOffset !== 0 && member.companies.name.split(" — FY ")[0] === baseName && fyLabel(member.companies.financial_year_start, 0) === targetLabel)
     );
 
     if (existing) {
@@ -103,7 +104,10 @@ function CompanyRow({
         <span className="font-mono tabular-nums">{fy}</span>
         <button
           type="button"
-          className="rounded p-0.5 hover:bg-accent hover:text-foreground"
+          className={cn(
+            "rounded p-0.5 hover:bg-accent hover:text-foreground",
+            offset >= 0 && "text-primary font-bold"
+          )}
           onClick={(e) => shiftYear(e, 1)}
           aria-label={t("company.nextYear")}
         >
