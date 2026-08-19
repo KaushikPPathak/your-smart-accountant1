@@ -113,14 +113,6 @@ function BalanceSheet() {
     assetRows.push({ label: profitLabelNeg, amount: "", outerAmount: formatINR(-profitPaise), emphasis: "bold" });
   }
 
-  // Cross-side partition: move Dr-balance liabilities to Assets and Cr-balance assets to Liabilities
-  // to prevent "nonsense" negative balances (e.g. overdrawn Bank, debit Sundry Creditors).
-  const sectionBalances = balances.filter(b => {
-    const code = ledgerGroupCode(b);
-    return code !== "SALES_ACCOUNTS" && code !== "PURCHASE_ACCOUNTS" && 
-           code !== "DIRECT_EXPENSES" && code !== "DIRECT_INCOMES" &&
-           code !== "INDIRECT_INCOMES" && code !== "INDIRECT_EXPENSES";
-  });
 
   const grandL = liab.totalPaise + Math.max(0, profitPaise);
   const grandA = asset.totalPaise + Math.max(0, -profitPaise);
