@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { amountHeader } from "@/lib/export-format";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 import { openLedgerReport } from "@/lib/voucher-return";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -177,7 +178,12 @@ function TradingAccount() {
     });
 
   return (
-    <div className="space-y-3">
+    <ReportViewer
+      title="Trading Account"
+      fromDate={from}
+      toDate={to}
+      onExportPdf={onExportPdf}
+    >
       <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
@@ -233,6 +239,6 @@ function TradingAccount() {
         rightTotal={formatINR(grandRight)}
       />
       )}
-    </div>
+    </ReportViewer>
   );
 }

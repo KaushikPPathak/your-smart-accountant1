@@ -203,7 +203,12 @@ function TrialBalance() {
   };
 
   return (
-    <div className="space-y-3">
+    <ReportViewer
+      title="Trial Balance"
+      fromDate={from}
+      toDate={to}
+      onExportPdf={onExportPdf}
+    >
       <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
@@ -257,6 +262,6 @@ function TrialBalance() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </ReportViewer>
   );
 }

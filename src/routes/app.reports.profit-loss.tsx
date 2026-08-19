@@ -245,7 +245,12 @@ function ProfitLoss() {
     });
 
   return (
-    <div className="space-y-3">
+    <ReportViewer
+      title={reportTitle}
+      fromDate={from}
+      toDate={to}
+      onExportPdf={onExportPdf}
+    >
       <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
@@ -346,6 +351,6 @@ function ProfitLoss() {
       />
       )}
       {taxView && <TaxAuditPanel mode="pl" fyStart={from} fyEnd={to} />}
-    </div>
+    </ReportViewer>
   );
 }

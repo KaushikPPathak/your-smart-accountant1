@@ -143,7 +143,11 @@ function BalanceSheet() {
     });
 
   return (
-    <div className="space-y-3">
+    <ReportViewer
+      title="Balance Sheet"
+      toDate={to}
+      onExportPdf={onExportPdf}
+    >
       <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
@@ -249,6 +253,6 @@ function BalanceSheet() {
       />
       )}
       {taxView && <TaxAuditPanel mode="bs" fyStart={from} fyEnd={to} />}
-    </div>
+    </ReportViewer>
   );
 }
