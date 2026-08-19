@@ -21,6 +21,14 @@ const noopHandler: ProxyHandler<any> = {
         invoke: async () => ({ data: null, error: { message: 'Cloud functions not available in local-only mode' } }),
       };
     }
+    if (prop === 'channel') {
+      return () => ({
+        on: function() { return this; },
+        subscribe: function() { return this; },
+        unsubscribe: async () => {},
+        send: async () => {},
+      });
+    }
     if (prop === 'from') {
       const createQuery = () => {
         const query: any = {
@@ -74,6 +82,10 @@ const noopHandler: ProxyHandler<any> = {
         delete: () => Promise.resolve({ data: null, error: null }),
       }),
       rpc: () => Promise.resolve({ data: null, error: null }),
+      channel: () => ({
+        on: function() { return this; },
+        subscribe: function() { return this; },
+      }),
     });
   }
 };
