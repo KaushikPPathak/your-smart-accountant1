@@ -351,10 +351,11 @@ function CashBankBook() {
     const fyLabel = fyStart ? `Financial Year ${fyStart.split("-")[0]}-${(parseInt(fyStart.split("-")[0]) + 1).toString().slice(-2)}` : "";
 
     downloadPdfTable({
-      title: activeMembership?.companies?.name || "Company",
-      subtitle: `${accountHeading}\n${fyLabel}${fyLabel ? "\n" : ""}${pdfHeader.dateRangeSubtitle(from, to)}`,
-      companyName: undefined, // Already in title
-      companySubLine: undefined,
+      title: accountHeading,
+      subtitle: pdfHeader.dateRangeSubtitle(from, to),
+      companyName: activeMembership?.companies?.name,
+      companySubLine: pdfHeader.companySubLine,
+
       head: [head],
       body: [opening_row, ...bodyRows],
       foot,
