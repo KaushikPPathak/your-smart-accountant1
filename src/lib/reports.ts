@@ -166,14 +166,15 @@ export async function fetchLedgerBalancesWithMeta(
 // Type buckets for P&L and Balance Sheet (sign: +Dr / -Cr balance natural)
 export const PL_INCOME = new Set(["income_direct", "income_indirect"]);
 export const PL_EXPENSE = new Set(["expense_direct", "expense_indirect"]);
-export const BS_ASSET = new Set(["sundry_debtor", "cash", "bank", "fixed_asset", "current_asset", "stock_in_hand", "duties_taxes"]);
+export const BS_ASSET = new Set(["cash", "bank", "fixed_asset", "investment", "stock_in_hand", "loan_advance", "current_asset", "duties_taxes"]);
 export const BS_LIAB = new Set([
-  "sundry_creditor",
-  "current_liability",
-  "loan_liability",
   "capital",
-  "bank", // Banks can be liabilities if Overdrawn
-  "duties_taxes", // Duties can be assets if credit (receivable)
+  "reserve_surplus",
+  "loan_liability",
+  "sundry_creditor",
+  "duties_taxes",
+  "current_liability",
+  "bank", // Overdrafts
 ]);
 
 /**
