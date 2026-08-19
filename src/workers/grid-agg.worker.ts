@@ -11,8 +11,8 @@ export interface GridRequest {
   rows: any[];
   columns: DGColumn<any>[];
   state: GridState;
-  expandedGroups: Set<string>;
-  globalSearchAccessor?: string; // Serialized function placeholder
+  expandedGroups: string[]; // Serialized as array
+  globalSearchAccessor?: string;
 }
 
 export interface PivotRequest {
