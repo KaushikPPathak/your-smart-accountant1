@@ -372,15 +372,13 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
     if (Date.now() - lastMenuCloseRef.current < 200) return;
     
-    // If not in menu, check if we need to exit screen or app
     if (location.pathname !== "/app") {
       navigate({ to: "/app" });
     } else {
-      setConfirmOpen(true);
+      setExitConfirmOpen(true);
     }
   }, { enabled: true, allowInField: false, description: "Staged Exit" });
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
 
 
 
