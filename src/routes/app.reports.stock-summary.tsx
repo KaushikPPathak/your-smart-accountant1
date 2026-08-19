@@ -47,6 +47,7 @@ interface ItemMove {
 function StockSummary() {
   const { activeCompanyId } = useCompany();
   const pdfHeader = useReportPdfHeader();
+  const r = (p: number) => p / 100;
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [items, setItems] = useState<Item[]>([]);
   const [moves, setMoves] = useState<ItemMove[]>([]);

@@ -30,6 +30,7 @@ interface VRow {
 function ItcPartyWise() {
   const { activeCompanyId } = useCompany();
   const pdfHeader = useReportPdfHeader();
+  const r = (p: number) => p / 100;
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [vouchers, setVouchers] = useState<VRow[]>([]);
 

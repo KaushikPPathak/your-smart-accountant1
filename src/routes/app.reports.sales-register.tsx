@@ -88,6 +88,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
   const navigate = useNavigate();
   const { activeCompanyId } = useCompany();
   const pdfHeader = useReportPdfHeader();
+  const r = (p: number) => p / 100;
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [rows, setRows] = useState<VRow[]>([]);
   const { view, setView } = useReportView(`${kind}-register`);
