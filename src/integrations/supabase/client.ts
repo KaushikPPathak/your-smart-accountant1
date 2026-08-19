@@ -16,6 +16,11 @@ const noopHandler: ProxyHandler<any> = {
         signOut: async () => {},
       };
     }
+    if (prop === 'functions') {
+      return {
+        invoke: async () => ({ data: null, error: { message: 'Cloud functions not available in local-only mode' } }),
+      };
+    }
     if (prop === 'from') {
       const createQuery = () => {
         const query: any = {
