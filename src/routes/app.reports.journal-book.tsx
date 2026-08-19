@@ -35,7 +35,7 @@ async function readJournalVouchersByDate(
     try { return normalizeVoucher(v); } catch { return v; }
   });
   return normalized.sort((a: any, b: any) =>
-    (a.voucher_date < b.voucher_date ? 1 : -1),
+    (a.voucher_date > b.voucher_date ? 1 : -1),
   );
 }
 
@@ -67,45 +67,56 @@ function JournalBook() {
     if (!activeCompanyId) return;
     let cancelled = false;
     setLoading(true);
-    void withCacheFallback<Row[]>(
-      async () => {
-        const { data, error } = await supabase
-          .from("vouchers")
-          .select("id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, party_ledger_id, ledgers:party_ledger_id(name)")
-          .eq("company_id", activeCompanyId)
-          .eq("voucher_type", "journal")
-          .gte("voucher_date", from)
-          .lte("voucher_date", to)
-          .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true });
-        if (error) throw error;
-        return (data || []) as unknown as Row[];
-      },
-      async () => {
-        let vouchers: any[];
-        try {
-          vouchers = await readJournalVouchersByDate(activeCompanyId, from, to);
-        } catch {
-          vouchers = (await readVouchers(activeCompanyId, { from, to })).filter(v => v.voucher_type === 'journal');
+    const loadData = async () => {
+      try {
+        const data = await withCacheFallback<Row[]>(
+          async () => {
+            const { data: res, error } = await supabase
+              .from("vouchers")
+              .select("id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, party_ledger_id, ledgers:party_ledger_id(name)")
+              .eq("company_id", activeCompanyId)
+              .eq("voucher_type", "journal")
+              .gte("voucher_date", from)
+              .lte("voucher_date", to)
+              .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true });
+            if (error) throw error;
+            return (res || []) as unknown as Row[];
+          },
+          async () => {
+            let vouchers: any[];
+            try {
+              vouchers = await readJournalVouchersByDate(activeCompanyId, from, to);
+            } catch (err) {
+              console.warn("Journal book cache read error:", err);
+              vouchers = (await readVouchers(activeCompanyId, { from, to })).filter(v => v.voucher_type === 'journal');
+            }
+            const ledgers = await readLedgers(activeCompanyId);
+            const ledgerNames = new Map((ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]));
+            return (vouchers as any[]).map((v) => ({
+              id: String(v.id),
+              voucher_date: String(v.voucher_date ?? ""),
+              voucher_number: String(v.voucher_number ?? ""),
+              voucher_type: String(v.voucher_type ?? ""),
+              total_paise: Number(v.total_paise ?? 0),
+              narration: v.narration ?? null,
+              reference_no: v.reference_no ?? null,
+              ledgers: v.party_ledger_id ? { name: ledgerNames.get(String(v.party_ledger_id)) ?? "" } : null,
+            })) as Row[];
+          },
+        );
+        if (!cancelled) {
+          setRows(sortVouchersAsc(data));
         }
-        const ledgers = await readLedgers(activeCompanyId);
-        const ledgerNames = new Map((ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]));
-        return (vouchers as any[]).map((v) => ({
-          id: String(v.id),
-          voucher_date: String(v.voucher_date ?? ""),
-          voucher_number: String(v.voucher_number ?? ""),
-          voucher_type: String(v.voucher_type ?? ""),
-          total_paise: Number(v.total_paise ?? 0),
-          narration: v.narration ?? null,
-          reference_no: v.reference_no ?? null,
-          ledgers: v.party_ledger_id ? { name: ledgerNames.get(String(v.party_ledger_id)) ?? "" } : null,
-        })) as Row[];
-      },
-    ).then((data) => {
-      if (cancelled) return;
-      setRows(sortVouchersAsc(data));
-    }).finally(() => {
-      if (!cancelled) setLoading(false);
-    });
+      } catch (err) {
+        console.error("Journal Book failure:", err);
+        if (!cancelled) {
+          toast.error("Failed to load Journal Book. Check console for details.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void loadData();
     return () => { cancelled = true; };
   }, [activeCompanyId, from, to]);
 

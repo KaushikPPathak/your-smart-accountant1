@@ -1,7 +1,7 @@
 /*
 '''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
 
-it was golden colur pattern
+i seel can not print journal book, it goes on loading why ? why you are not going for error report that is visible when certain commands failes why print of balance sheet, profit loss is still faulty , some thing wrong happend with you
 */
 // Silent auto-restore on launch.
 //

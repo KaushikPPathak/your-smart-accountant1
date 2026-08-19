@@ -189,7 +189,7 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
         foot: isLast ? foot : undefined,
       showFoot: "lastPage",
       theme: "grid",
-      styles: { font: FONT, fontSize: 8, cellPadding: 4, lineColor: [80, 80, 80], lineWidth: 0.1, textColor: 20, minCellHeight: 18, overflow: 'linebreak' },
+      styles: { font: FONT, fontSize: 8, cellPadding: 4, lineColor: [80, 80, 80], lineWidth: 0.1, textColor: 20, minCellHeight: 20, overflow: 'linebreak' },
       headStyles: { font: FONT, fillColor: [255, 248, 220], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.2, fontSize: 8 },
       footStyles: { font: FONT, fillColor: [255, 248, 220], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.2, fontSize: 8 },
         columnStyles,
