@@ -1,7 +1,7 @@
 /*
 '''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
 
-no yesterday and day before we have updated our app so out of those updates some configuration has made my app slow find it anyway and tell me
+yes but in online all data gone , it says create new company but in off line mode edata loads correctly but data still loads very slowly do something robust work and still balance sheet print loads this way only i have attacheed Blance sheet everything has done wrong please correct it
 */
 // Silent auto-restore on launch.
 //

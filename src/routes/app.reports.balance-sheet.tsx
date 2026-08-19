@@ -70,20 +70,33 @@ function BalanceSheet() {
     return inc - exp;
   }, [balances]);
 
-  // Reform: Balanced-Sign Partitions. 
-  // Ledgers with "wrong" signs (e.g. overdrawn Bank Asset showing as Cr) are 
+  // Reform: Balanced-Sign Partitions.
+  // Ledgers with "wrong" signs (e.g. overdrawn Bank Asset showing as Cr) are
   // swapped to the opposite side to maintain professional accounting integrity.
   const partitionedBalances = useMemo(() => {
+    // 1. Separate by natural side
     const liabRaw = balances.filter(b => BS_LIAB.has(b.type));
     const assetRaw = balances.filter(b => BS_ASSET.has(b.type));
 
-    const finalLiab = [...liabRaw.filter(b => -b.closing_paise >= 0)];
-    const finalAsset = [...assetRaw.filter(b => b.closing_paise >= 0)];
+    // 2. Filter out Sundry Debtors from Liabilities and Sundry Creditors from Assets if they ended up there
+    // (Ensure strict grouping: Debtors are ALWAYS Assets, Creditors ALWAYS Liabilities unless swapped by sign)
+    const finalLiab = liabRaw.filter(b => b.type !== 'sundry_debtor' && -b.closing_paise >= 0);
+    const finalAsset = assetRaw.filter(b => b.type !== 'sundry_creditor' && b.closing_paise >= 0);
 
-    // Swap negative Assets to Liabilities
+    // 3. Swap negative Assets to Liabilities (e.g. Bank OD, Debit Taxes)
     assetRaw.filter(b => b.closing_paise < 0).forEach(b => finalLiab.push(b));
-    // Swap negative Liabilities to Assets
+    // 4. Swap negative Liabilities to Assets (e.g. Advance to Suppliers, GST Credit)
     liabRaw.filter(b => -b.closing_paise < 0).forEach(b => finalAsset.push(b));
+
+    // 5. Explicitly handle Debtors/Creditors if they were missing from BS_ASSET/BS_LIAB sets
+    balances.filter(b => b.type === 'sundry_debtor').forEach(b => {
+      if (b.closing_paise >= 0) finalAsset.push(b);
+      else finalLiab.push(b);
+    });
+    balances.filter(b => b.type === 'sundry_creditor').forEach(b => {
+      if (-b.closing_paise >= 0) finalLiab.push(b);
+      else finalAsset.push(b);
+    });
 
     return { liab: finalLiab, asset: finalAsset };
   }, [balances]);
@@ -114,9 +127,9 @@ function BalanceSheet() {
   }
 
 
-  const grandL = liab.totalPaise + Math.max(0, profitPaise);
-  const grandA = asset.totalPaise + Math.max(0, -profitPaise);
-  const diffPaise = grandA - grandL;
+  const grandL = liab.totalPaise + (profitPaise > 0 ? profitPaise : 0);
+  const grandA = asset.totalPaise + (profitPaise < 0 ? -profitPaise : 0);
+  const diffPaise = Math.round(grandA - grandL); // Handle floating point drift if any
 
   // Exports
   const liabExp = groupedExportRows(liabBuckets);
