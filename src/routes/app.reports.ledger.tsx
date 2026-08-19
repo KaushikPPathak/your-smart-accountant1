@@ -662,6 +662,7 @@ function LedgerStatement() {
         subtitle: `Period: ${fmtIndianDate(from)} to ${fmtIndianDate(to)}   ·   Opening: ${fmtBal(openingBeforeFrom)}`,
         companyName: pdfHeader.companyName,
         companySubLine: pdfHeader.companySubLine,
+
         head: [head],
         body: [openingRow, ...bodyRows],
         foot: footRows,
