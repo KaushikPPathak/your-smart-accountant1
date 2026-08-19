@@ -67,7 +67,7 @@ function CompanyRow({
       setActiveCompanyId(m.company_id);
       navigate({ 
         to: "/app/housekeeping", 
-        search: { wizard: "fy_transfer", target_year: targetYear } as any 
+        search: { wizard: "fy_transfer", target_year: targetYear, from_flyout: 1 } as any 
       });
     } else {
       // For previous year, just update the visual offset even if not found, 
