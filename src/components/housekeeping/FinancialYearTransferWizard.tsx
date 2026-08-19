@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -86,6 +87,17 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
   const { refresh, setActiveCompanyId, activeMembership } = useCompany();
   const fy = useMemo(() => fyFromHint(fyStartHint), [fyStartHint]);
   const [step, setStep] = useState<Step>(1);
+  const location = useLocation();
+  const search = useMemo(() => new URLSearchParams(location.searchStr), [location.searchStr]);
+
+  useEffect(() => {
+    // Auto-trigger step 3 if coming from the flyout "Create Next Year" command
+    if (search.get("wizard") === "fy_transfer") {
+      setStep(3);
+      setMode("split");
+    }
+  }, [search]);
+
   const [mode, setMode] = useState<Mode>("extend");
   const [unreconciled, setUnreconciled] = useState<number>(0);
   const [negativeCash, setNegativeCash] = useState<{ name: string; paise: number }[]>([]);
@@ -383,7 +395,8 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
       }
       if (mode === "extend") await refresh();
       setStep(4);
-      toast.success(`Books carried forward to FY ${fy.nextLabel}`);
+      const targetYear = search.get("target_year");
+      toast.success(`Books carried forward to FY ${targetYear ? `${targetYear}-${String(parseInt(targetYear) + 1).slice(-2)}` : fy.nextLabel}`);
     } catch (e) {
       toast.error(describeError(e) || "Transfer failed");
     } finally {

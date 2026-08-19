@@ -358,6 +358,29 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     });
   }, []);
 
+  const kb = useOptionalKeyboard();
+  useShortcut("Escape", (e) => {
+    const isDialogOpen = document.querySelector('[role="dialog"], [data-state="open"][role="alertdialog"]');
+    if (isDialogOpen) return;
+
+    const menuOpen = openMenuKey !== "";
+    if (menuOpen) {
+      setOpenMenuKey("");
+      lastMenuCloseRef.current = Date.now();
+      return;
+    }
+
+    if (Date.now() - lastMenuCloseRef.current < 200) return;
+    
+    if (location.pathname !== "/app") {
+      navigate({ to: "/app" });
+    } else {
+      setExitConfirmOpen(true);
+    }
+  }, { enabled: true, allowInField: false, description: "Staged Exit" });
+
+
+
 
   const orderedMenuKeys = useMemo(
     () => ["file", ...visible.map((menu) => menu.key)],
@@ -498,10 +521,7 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
 
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
 
-  // Alt+letter → focus & open the matching top-level menu. Registered through
-  // the centralized keyboard engine so it appears in the cheat sheet and
-  // respects the global typing-target guard (allowInField defaults to false).
-  const kb = useOptionalKeyboard();
+  // Alt+letter → focus & open the matching top-level menu.
   useEffect(() => {
     if (!kb) return;
     const accessKeys: Array<{ key: string; menuKey: string; label: string }> = [
@@ -836,21 +856,25 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           }}
         >
           <AlertDialogHeader>
-            <AlertDialogTitle>Exit application?</AlertDialogTitle>
+            <AlertDialogTitle>Exit Application?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will lock the session and return you to the start screen. Any unsaved work in open forms may be lost.
+              Are you sure you want to close Mehtaji? Any unsaved changes in open forms will be lost.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-exit-confirm="stay" autoFocus>Stay</AlertDialogCancel>
+            <AlertDialogCancel autoFocus>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              data-exit-confirm="exit"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 setExitConfirmOpen(false);
-                onLock?.();
+                if (typeof window !== "undefined" && (window as any).yourMehtaji?.closeApp) {
+                  (window as any).yourMehtaji.closeApp();
+                } else {
+                  window.close();
+                }
               }}
             >
-              Exit
+              Exit Software
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
