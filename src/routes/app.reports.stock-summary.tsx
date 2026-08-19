@@ -12,6 +12,10 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { downloadCsv, downloadXlsx, downloadPdfTable } from "@/lib/exporters";
+import { formatINR } from "@/lib/money";
+import { amountHeader } from "@/lib/export-format";
 import { ReportViewer } from "@/components/reports/ReportViewer";
 import {
   readItems,
