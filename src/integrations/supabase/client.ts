@@ -17,16 +17,46 @@ const noopHandler: ProxyHandler<any> = {
       };
     }
     if (prop === 'from') {
+      const createQuery = () => {
+        const query: any = {
+          select: () => query,
+          match: () => query,
+          order: () => query,
+          limit: () => query,
+          range: () => query,
+          eq: () => query,
+          neq: () => query,
+          gt: () => query,
+          gte: () => query,
+          lt: () => query,
+          lte: () => query,
+          like: () => query,
+          ilike: () => query,
+          is: () => query,
+          in: () => query,
+          contains: () => query,
+          containedBy: () => query,
+          rangeGt: () => query,
+          rangeGte: () => query,
+          rangeLt: () => query,
+          rangeLte: () => query,
+          rangeAdjacent: () => query,
+          overlaps: () => query,
+          textSearch: () => query,
+          filter: () => query,
+          or: () => query,
+          single: () => Promise.resolve({ data: null, error: null }),
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          csv: () => query,
+          then: (resolve: any) => Promise.resolve({ data: [], error: null }).then(resolve),
+        };
+        return query;
+      };
       return () => ({
-        select: () => ({
-          match: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }), range: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }), range: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }),
-          range: () => ({ order: () => Promise.resolve({ data: [], error: null }) }),
-          order: () => ({ range: () => Promise.resolve({ data: [], error: null }) }),
-          in: () => Promise.resolve({ data: [], error: null }),
-          eq: () => ({ gte: () => ({ is: () => Promise.resolve({ data: [], error: null }) }), is: () => Promise.resolve({ data: [], error: null }) }),
-        }),
+        select: createQuery,
         insert: () => Promise.resolve({ data: null, error: null }),
         update: () => Promise.resolve({ data: null, error: null }),
+        upsert: () => Promise.resolve({ data: null, error: null }),
         delete: () => Promise.resolve({ data: null, error: null }),
       });
     }
