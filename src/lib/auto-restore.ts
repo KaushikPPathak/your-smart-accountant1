@@ -1,7 +1,7 @@
 /*
 '''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
 
-yes but why loading of my app become slow which configuration has made this remove it
+no yesterday and day before we have updated our app so out of those updates some configuration has made my app slow find it anyway and tell me
 */
 // Silent auto-restore on launch.
 //

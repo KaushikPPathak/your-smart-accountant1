@@ -111,12 +111,18 @@ function AppLayout() {
     let stopIntraday: (() => void) | null = null;
     setBootstrapping(false);
     (async () => {
-      if (activeCompanyId) {
-        const { scheduleWarmup } = await import("@/lib/ai/cache-warmup");
-        scheduleWarmup(activeCompanyId);
-        const { scheduleWeeklyConsistencyCheck } = await import("@/lib/offline/consistency");
-        scheduleWeeklyConsistencyCheck(activeCompanyId);
-      }
+      // Background maintenance moved to a longer delay to ensure the UI
+      // is fully interactive before any background disk/AI work begins.
+      setTimeout(async () => {
+        if (!activeCompanyId) return;
+        try {
+          const { scheduleWarmup } = await import("@/lib/ai/cache-warmup");
+          scheduleWarmup(activeCompanyId);
+          const { scheduleWeeklyConsistencyCheck } = await import("@/lib/offline/consistency");
+          scheduleWeeklyConsistencyCheck(activeCompanyId);
+        } catch { /* ignore */ }
+      }, 10000); // 10s delay
+
 
 
       try {
