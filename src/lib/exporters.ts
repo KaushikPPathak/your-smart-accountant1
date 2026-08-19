@@ -111,10 +111,12 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
       doc.setFont(FONT, "bold");
       doc.setFontSize(14);
       doc.setTextColor(0, 32, 96);
-      doc.text(opts.companyName.toUpperCase(), pageW / 2, y, { align: "center" });
+      const companyLines = doc.splitTextToSize(opts.companyName.toUpperCase(), pageW - 80);
+      doc.text(companyLines, pageW / 2, y, { align: "center" });
       doc.setTextColor(0, 0, 0);
-      y += 15;
+      y += (companyLines.length * 15);
     }
+
     doc.setFont(FONT, "bold");
     doc.setFontSize(12);
     doc.text(title, pageW / 2, y, { align: "center" });
@@ -148,10 +150,12 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
         doc.setFont(FONT, "bold");
         doc.setFontSize(14);
         doc.setTextColor(0, 32, 96);
-        doc.text(opts.companyName.toUpperCase(), pageW / 2, hy, { align: "center" });
+        const companyLines = doc.splitTextToSize(opts.companyName.toUpperCase(), pageW - 80);
+        doc.text(companyLines, pageW / 2, hy, { align: "center" });
         doc.setTextColor(0, 0, 0);
-        hy += 15;
+        hy += (companyLines.length * 15);
       }
+
       doc.setFont(FONT, "bold");
       doc.setFontSize(12);
       doc.text(title, pageW / 2, hy, { align: "center" });
@@ -422,10 +426,12 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
         doc.setFont(FONT, "bold");
         doc.setFontSize(14);
         doc.setTextColor(0, 32, 96);
-        doc.text(opts.companyName.toUpperCase(), pageW / 2, y, { align: "center" });
+        const companyLines = doc.splitTextToSize(opts.companyName.toUpperCase(), pageW - 80);
+        doc.text(companyLines, pageW / 2, y, { align: "center" });
         doc.setTextColor(0, 0, 0);
-        y += 15;
+        y += (companyLines.length * 15);
       }
+
       doc.setFont(FONT, "bold");
       doc.setFontSize(12);
       doc.text(title, pageW / 2, y, { align: "center" });

@@ -87,23 +87,29 @@ export async function downloadLedgerPdf(
     doc.setFont(reportFont, "bold");
     doc.setFontSize(14);
     doc.setTextColor(0, 32, 96);
-    doc.text(info.companyName.toUpperCase(), 148.5, 12, { align: "center" });
+    const companyLines = doc.splitTextToSize(info.companyName.toUpperCase(), 200); // 200mm width for landscape
+    doc.text(companyLines, 148.5, 12, { align: "center" });
     doc.setTextColor(0, 0, 0);
+
+    const companyHeight = companyLines.length * 6; // ~6mm per line at 14pt
+    const subTitleY = 12 + companyHeight;
+
 
     doc.setFontSize(12);
     doc.setFont(reportFont, "normal");
-    doc.text(`Ledger Account: ${info.partyName}`, 148.5, 19, { align: "center" });
+    doc.text(`Ledger Account: ${info.partyName}`, 148.5, subTitleY, { align: "center" });
 
     doc.setFontSize(9);
-    doc.text(`Financial Year 2025-26`, 148.5, 25, { align: "center" });
-    doc.text(`For the period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, 30, { align: "center" });
+    doc.text(`Financial Year 2025-26`, 148.5, subTitleY + 6, { align: "center" });
+    doc.text(`For the period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, subTitleY + 11, { align: "center" });
 
     doc.setFontSize(11);
     doc.setFont(reportFont, "bold");
-    doc.text(`${info.partyName} Account`, 148.5, 38, { align: "center" });
+    doc.text(`${info.partyName} Account`, 148.5, subTitleY + 19, { align: "center" });
     doc.setFont(reportFont, "normal");
     doc.setFontSize(8);
-    doc.text(`for the period ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, 43, { align: "center" });
+    doc.text(`for the period ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, subTitleY + 24, { align: "center" });
+
 
     // Filter & sort entries inside the date range
     const sortedEntries = liveEntries
