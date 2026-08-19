@@ -451,7 +451,7 @@ export function DataGrid<T>({
             else if (e.key === "Enter" || e.key === " ") {
               const cur = renderRows[focusedIndex];
               if (cur?.kind === "group") { toggleGroup(cur.key); e.preventDefault(); return; }
-              if (cur?.kind === "row" && onRowClick) { onRowClick(rows[cur.row.__index]); e.preventDefault(); return; }
+              if (cur?.kind === "row" && onRowClick) { onRowClick(rows[(cur as any).row.__index]); e.preventDefault(); return; }
               return;
             } else {
               return;
