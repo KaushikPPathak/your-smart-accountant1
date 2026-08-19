@@ -1,14 +1,7 @@
 /*
 '''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
 
-d.from(...).select(...).eq(...).order is not a function
-
-TypeError: d.from(...).select(...).eq(...).order is not a function
-    at http://tauri.localhost/assets/account-groups-runtime-BWnQ-Q-U.js:1:461
-    ...
-    at rr (http://tauri.localhost/assets/index-CxLHq46n.js:9:108391)
-
-after main page i can not log in to any company-FAILURE
+and when i compaint to ai  it says :TypeError: pe.functions.invoke is not a function
 */
 // Silent auto-restore on launch.
 //
