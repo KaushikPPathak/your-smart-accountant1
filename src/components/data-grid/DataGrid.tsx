@@ -64,7 +64,7 @@ export function DataGrid<T>({
   // Worker-based processing
   const workerRef = useRef<Worker | null>(null);
   const [processed, setProcessed] = useState<{
-    flat: FlatRow<T>[];
+    flat: FlatRow<any>[];
     aggregates: Record<string, number>;
     visibleCount: number;
     enums: Record<string, string[]>;
@@ -86,11 +86,22 @@ export function DataGrid<T>({
     // Prepare columns for serialization (remove function accessors for worker, 
     // but the engine uses them. In production, we'd serialize them or use string accessors).
     // For now, we rely on the fact that most reports use string accessors anyway.
+    // Data must be serializable to be cloned for the Worker.
+    // We map rows to flat objects using the column accessors on the main thread
+    // if they are functions, ensuring the worker only deals with raw data.
+    const serializedRows = rows.map((r, i) => {
+      const flat: any = { __index: i };
+      for (const col of columns) {
+        flat[col.id] = col.accessor(r);
+      }
+      return flat;
+    });
+
     const workerMsg: WorkerRequest = {
       id,
       kind: "process",
-      rows,
-      columns: columns as any,
+      rows: serializedRows,
+      columns: columns.map(c => ({ ...c, accessor: (row: any) => row[c.id] })) as any,
       state,
       expandedGroups: expanded
     };
@@ -134,8 +145,8 @@ export function DataGrid<T>({
 
   // Filtered rows (without grouping) feed both the parent callback and the pivot engine
   const filteredRows = useMemo(
-    () => flat.filter((r): r is { kind: "row"; row: T; index: number } => r.kind === "row").map((r) => r.row),
-    [flat],
+    () => flat.filter((r): r is { kind: "row"; row: any; index: number } => r.kind === "row").map((r) => rows[r.row.__index]),
+    [flat, rows],
   );
 
   // Notify parent (debounced via ref to avoid loops)
@@ -161,7 +172,7 @@ export function DataGrid<T>({
   const rowH = rowHeight ?? (state.density === "compact" ? 28 : 36);
 
   // Filter out hidden group rows
-  const renderRows: FlatRow<T>[] = useMemo(
+  const renderRows: FlatRow<any>[] = useMemo(
     () => flat.filter((r) => r.kind === "row" || r.visible),
     [flat],
   );
@@ -440,7 +451,7 @@ export function DataGrid<T>({
             else if (e.key === "Enter" || e.key === " ") {
               const cur = renderRows[focusedIndex];
               if (cur?.kind === "group") { toggleGroup(cur.key); e.preventDefault(); return; }
-              if (cur?.kind === "row" && onRowClick) { onRowClick(cur.row); e.preventDefault(); return; }
+              if (cur?.kind === "row" && onRowClick) { onRowClick(rows[(cur as any).row.__index]); e.preventDefault(); return; }
               return;
             } else {
               return;
@@ -499,7 +510,7 @@ export function DataGrid<T>({
                     isFocused && "bg-primary/10 ring-1 ring-inset ring-primary/40",
                   )}
                   style={{ top, height: rowH, gridTemplateColumns: gridTemplate }}
-                  onClick={onRowClick ? () => { setFocusedIndex(vi.index); onRowClick(item.row); } : () => setFocusedIndex(vi.index)}
+                  onClick={onRowClick ? () => { setFocusedIndex(vi.index); onRowClick(rows[(item as any).row.__index]); } : () => setFocusedIndex(vi.index)}
                 >
                   {visibleColumns.map((c, idx) => {
                     const isPinned = idx < pinnedCount;
@@ -515,7 +526,7 @@ export function DataGrid<T>({
                         style={isPinned ? { left: pinnedOffsets[c.id] } : undefined}
                       >
                         <span className="truncate">
-                          {c.cell ? c.cell(item.row) : asReact(c.accessor(item.row))}
+                          {c.cell ? c.cell(rows[(item as any).row.__index]) : asReact(c.accessor(rows[(item as any).row.__index]))}
                         </span>
                       </div>
                     );
