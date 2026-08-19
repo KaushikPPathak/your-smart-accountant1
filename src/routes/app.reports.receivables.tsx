@@ -188,7 +188,7 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
                 rightAlignCols: [2, 3, 4, 5, 6, 7, 8, 9],
               })
             }
-            onPrint={() => window.print()}
+            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             As on <strong>{to}</strong>. {isRecv && "Use the WhatsApp / Email buttons to send a reminder; the message uses the template from Settings."}
