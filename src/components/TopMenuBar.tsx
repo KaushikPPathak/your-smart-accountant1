@@ -117,7 +117,7 @@ const MENUS: TopMenu[] = [
   {
     key: "masters",
     accessKey: "m",
-    label: "Masters",
+    label: "Mehtaji",
     icon: Layers,
     groups: [
       {

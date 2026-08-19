@@ -46,7 +46,7 @@ export async function ensureGujaratiFont(doc: jsPDF): Promise<void> {
 
 /** Returns the font family that should be used for the active language. */
 export function reportFontFamily(lang: LangCode = getStoredLang()): string {
-  return lang === "gu" ? GU_FONT_FAMILY : "helvetica";
+  return GU_FONT_FAMILY;
 }
 
 /** Convenience: ensure font loaded (only if needed) and return the family. */

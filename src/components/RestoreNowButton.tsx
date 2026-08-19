@@ -158,7 +158,7 @@ export function RestoreNowButton() {
                 src={restoreMedallion}
                 alt=""
                 aria-hidden
-                className="h-[25.6px] w-[25.6px] object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]"
+                className="h-[20px] w-[20px] object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]"
                 draggable={false}
               />
 
