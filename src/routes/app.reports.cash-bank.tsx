@@ -376,7 +376,7 @@ function CashBankBook() {
           onExportCsv={onExportCsv}
           onExportXlsx={onExportXlsx}
           onExportPdf={onExportPdf}
-          onPrint={() => window.print()}
+          onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           extra={
             <div className="flex flex-wrap items-end gap-3">
               <div className="space-y-1">
