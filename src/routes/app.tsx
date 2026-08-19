@@ -448,6 +448,10 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
           return;
         }
       }
+      // Company switch trigger → exit-confirm dialog
+      if (target?.closest?.('[data-company-switcher-trigger="true"]')) {
+        return;
+      }
       // Voucher entry → back to list
       if (location.pathname.startsWith("/app/vouchers/new/")) {
         e.preventDefault();
