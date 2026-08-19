@@ -46,6 +46,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD", "kind"?: "sales"|"purchase"|"receipt"|"payment"|"journal", "limit"?: number }`,
   },
   {
+    name: "get_journal_book",
+    description: "Detailed list of all Journal vouchers, optionally within a date range.",
+    argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
+  },
+
+  {
     name: "get_voucher",
     description:
       "Full detail of a single voucher: header, entries with ledger names, items with HSN/qty/rate.",
