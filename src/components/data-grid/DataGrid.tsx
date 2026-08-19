@@ -64,7 +64,7 @@ export function DataGrid<T>({
   // Worker-based processing
   const workerRef = useRef<Worker | null>(null);
   const [processed, setProcessed] = useState<{
-    flat: FlatRow<T>[];
+    flat: FlatRow<any>[];
     aggregates: Record<string, number>;
     visibleCount: number;
     enums: Record<string, string[]>;
@@ -172,7 +172,7 @@ export function DataGrid<T>({
   const rowH = rowHeight ?? (state.density === "compact" ? 28 : 36);
 
   // Filter out hidden group rows
-  const renderRows: FlatRow<T>[] = useMemo(
+  const renderRows: FlatRow<any>[] = useMemo(
     () => flat.filter((r) => r.kind === "row" || r.visible),
     [flat],
   );
@@ -510,7 +510,7 @@ export function DataGrid<T>({
                     isFocused && "bg-primary/10 ring-1 ring-inset ring-primary/40",
                   )}
                   style={{ top, height: rowH, gridTemplateColumns: gridTemplate }}
-                  onClick={onRowClick ? () => { setFocusedIndex(vi.index); onRowClick(item.row); } : () => setFocusedIndex(vi.index)}
+                  onClick={onRowClick ? () => { setFocusedIndex(vi.index); onRowClick(rows[item.__index]); } : () => setFocusedIndex(vi.index)}
                 >
                   {visibleColumns.map((c, idx) => {
                     const isPinned = idx < pinnedCount;
@@ -526,7 +526,7 @@ export function DataGrid<T>({
                         style={isPinned ? { left: pinnedOffsets[c.id] } : undefined}
                       >
                         <span className="truncate">
-                          {c.cell ? c.cell(item.row) : asReact(c.accessor(item.row))}
+                          {c.cell ? c.cell(rows[item.__index]) : asReact(c.accessor(rows[item.__index]))}
                         </span>
                       </div>
                     );
