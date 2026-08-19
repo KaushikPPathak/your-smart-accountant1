@@ -83,27 +83,37 @@ export function DataGrid<T>({
     
     setProcessed(p => ({ ...p, loading: true }));
 
-    // Prepare columns for serialization (remove function accessors for worker, 
-    // but the engine uses them. In production, we'd serialize them or use string accessors).
-    // For now, we rely on the fact that most reports use string accessors anyway.
     // Data must be serializable to be cloned for the Worker.
     // We map rows to flat objects using the column accessors on the main thread
     // if they are functions, ensuring the worker only deals with raw data.
     const serializedRows = rows.map((r, i) => {
       const flat: any = { __index: i };
       for (const col of columns) {
-        flat[col.id] = col.accessor(r);
+        try {
+          flat[col.id] = col.accessor(r);
+        } catch (e) {
+          console.error(`Error accessing column ${col.id} for row ${i}:`, e);
+          flat[col.id] = null;
+        }
       }
       return flat;
     });
+
+    const serializedColumns = columns.map(c => ({
+      id: c.id,
+      type: c.type,
+      aggregator: c.aggregator,
+      groupable: c.groupable,
+      header: typeof c.header === 'string' ? c.header : c.id, // Only send serializable header info if needed
+    }));
 
     const workerMsg: WorkerRequest = {
       id,
       kind: "process",
       rows: serializedRows,
-      columns: columns.map(c => ({ ...c, accessor: (row: any) => row[c.id] })) as any,
+      columns: serializedColumns as any,
       state,
-      expandedGroups: expanded
+      expandedGroups: Array.from(expanded) as any // Convert Set to Array for serialization
     };
 
     const handler = (e: MessageEvent) => {

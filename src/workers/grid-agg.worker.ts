@@ -11,8 +11,8 @@ export interface GridRequest {
   rows: any[];
   columns: DGColumn<any>[];
   state: GridState;
-  expandedGroups: Set<string>;
-  globalSearchAccessor?: string; // Serialized function placeholder
+  expandedGroups: string[]; // Serialized as array
+  globalSearchAccessor?: string;
 }
 
 export interface PivotRequest {
@@ -63,7 +63,7 @@ ctx.onmessage = (evt: MessageEvent<WorkerRequest>) => {
       ctx.postMessage(res);
     } else if (msg.kind === "process") {
       // For the worker, we assume the accessors are already simple strings or pre-mapped
-      const result = processRows(msg.rows, msg.columns, msg.state, msg.expandedGroups);
+      const result = processRows(msg.rows, msg.columns, msg.state, new Set(msg.expandedGroups));
       
       const enums: Record<string, string[]> = {};
       for (const c of msg.columns) {
