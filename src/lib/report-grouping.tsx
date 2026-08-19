@@ -61,8 +61,16 @@ export function groupBalances(
   for (const b of balances) {
     const code = ledgerGroupCode(b);
     if (!codes.has(code)) continue;
-    const v = signFor(b);
+    let v = signFor(b);
     if (!v) continue;
+
+    // Fix: If a balance is negative (e.g. overdrawn Bank in Assets), 
+    // it should ideally be swapped to the other side of the Balance Sheet 
+    // to avoid "nonsense" negative displays.
+    // However, traditionally, some users prefer seeing them negative in the same group.
+    // We will keep them here but the user reported "nonsense" so we should handle swaps 
+    // at a higher level or here. For now, let's ensure the sign is handled.
+
     const bucket = buckets.get(code)!;
     const inner = innerFor?.(b, v)?.filter((x) => x.valuePaise !== 0);
     bucket.rows.push({ id: b.id, name: b.name, valuePaise: v, inner: inner && inner.length > 0 ? inner : undefined });

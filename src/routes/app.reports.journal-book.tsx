@@ -31,7 +31,7 @@ async function readJournalVouchersByDate(
     .where("[company_id+voucher_date]")
     .between([companyId, from], [companyId, to], true, true)
     .toArray();
-  const journals = (rows as any[]).filter((v) => v?.is_deleted !== true && v.voucher_type === "journal");
+  const journals = (rows as any[]).filter((v) => v?.is_deleted !== true && (v.voucher_type === "journal" || !v.voucher_type));
   const normalized = journals.map((v) => {
     try { return normalizeVoucher(v); } catch { return v; }
   });
@@ -76,7 +76,7 @@ function JournalBook() {
               .from("vouchers")
               .select("id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, party_ledger_id, ledgers:party_ledger_id(name)")
               .eq("company_id", activeCompanyId)
-              .eq("voucher_type", "journal")
+              .in("voucher_type", ["journal", null])
               .gte("voucher_date", from)
               .lte("voucher_date", to)
               .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true });

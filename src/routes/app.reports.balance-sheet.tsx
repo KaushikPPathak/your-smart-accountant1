@@ -1,3 +1,4 @@
+import { BS_ASSET, BS_LIAB, fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { amountHeader } from "@/lib/export-format";
 import { openLedgerReport } from "@/lib/voucher-return";
@@ -11,11 +12,12 @@ import { ReportViewer } from "@/components/reports/ReportViewer";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
-import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
+
 import {
   groupBalances,
   groupedTRows,
   groupedExportRows,
+  ledgerGroupCode,
 } from "@/lib/report-grouping";
 import { getEntityFeatures } from "@/lib/entity-status";
 import { computeNceReportShape } from "@/lib/nce-report-shape";
@@ -68,13 +70,31 @@ function BalanceSheet() {
     return inc - exp;
   }, [balances]);
 
+  // Reform: Balanced-Sign Partitions. 
+  // Ledgers with "wrong" signs (e.g. overdrawn Bank Asset showing as Cr) are 
+  // swapped to the opposite side to maintain professional accounting integrity.
+  const partitionedBalances = useMemo(() => {
+    const liabRaw = balances.filter(b => BS_LIAB.has(b.type));
+    const assetRaw = balances.filter(b => BS_ASSET.has(b.type));
+
+    const finalLiab = [...liabRaw.filter(b => -b.closing_paise >= 0)];
+    const finalAsset = [...assetRaw.filter(b => b.closing_paise >= 0)];
+
+    // Swap negative Assets to Liabilities
+    assetRaw.filter(b => b.closing_paise < 0).forEach(b => finalLiab.push(b));
+    // Swap negative Liabilities to Assets
+    liabRaw.filter(b => -b.closing_paise < 0).forEach(b => finalAsset.push(b));
+
+    return { liab: finalLiab, asset: finalAsset };
+  }, [balances]);
+
   const liabBuckets = useMemo(
-    () => groupBalances(balances, "BS_LIAB", (b) => -b.closing_paise),
-    [balances],
+    () => groupBalances(partitionedBalances.liab, "BS_LIAB", (b) => -b.closing_paise),
+    [partitionedBalances.liab],
   );
   const assetBuckets = useMemo(
-    () => groupBalances(balances, "BS_ASSET", (b) => b.closing_paise),
-    [balances],
+    () => groupBalances(partitionedBalances.asset, "BS_ASSET", (b) => b.closing_paise),
+    [partitionedBalances.asset],
   );
 
   const goLedger = (id: string) =>
@@ -92,6 +112,8 @@ function BalanceSheet() {
   } else if (profitPaise < 0) {
     assetRows.push({ label: profitLabelNeg, amount: "", outerAmount: formatINR(-profitPaise), emphasis: "bold" });
   }
+
+
   const grandL = liab.totalPaise + Math.max(0, profitPaise);
   const grandA = asset.totalPaise + Math.max(0, -profitPaise);
   const diffPaise = grandA - grandL;
