@@ -127,7 +127,17 @@ const INTENT_PATTERNS: { intent: IntentType; patterns: RegExp[]; deterministic: 
     ],
   },
   {
+    intent: "date_range_report",
+    deterministic: true,
+    patterns: [
+      /journal book/i,
+      /journal register/i,
+      /show journals/i,
+    ],
+  },
+  {
     intent: "voucher_lookup",
+
     deterministic: true,
     patterns: [
       /(?:show|find|get|list).{0,20}(?:voucher|entry|transaction|bill|invoice)/i,

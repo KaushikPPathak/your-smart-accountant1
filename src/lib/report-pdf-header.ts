@@ -6,7 +6,7 @@ import { tReportText } from "./report-i18n-rules";
 /**
  * Returns the company / proprietor name and a financial-year sub-line
  * to inject into every PDF report header. Keeps the proprietor's name on
- * every printed page (Day Book, Cash/Bank Book, Ledger, etc.).
+ * every printed page (Day Book, Cash/Bank Book, Journal Book, Ledger, etc.).
  */
 export function useReportPdfHeader(): {
   companyName: string;
