@@ -108,11 +108,7 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
 
     let y = 28;
     if (opts.companyName) {
-      doc.setFont(FONT, "bold");
-      doc.setFontSize(14);
-      doc.setTextColor(0, 32, 96); // dark blue
-      doc.text(opts.companyName.toUpperCase(), pageW / 2, y, { align: "center" });
-      doc.setTextColor(0, 0, 0);
+      doc.setFont(FONT, \"bold\");\n      doc.setFontSize(14);\n      doc.setTextColor(0, 32, 96);\n      doc.text(opts.companyName.toUpperCase(), pageW / 2, y, { align: \"center\" });\n      doc.setTextColor(0, 0, 0);
       y += 15;
     }
     doc.setFont(FONT, "bold");
@@ -184,10 +180,7 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
         body: slice,
         foot: isLast ? foot : undefined,
       showFoot: "lastPage",
-      theme: "grid",
-      styles: { font: FONT, fontSize: 9, cellPadding: 3, lineColor: [80, 80, 80], lineWidth: 0.2, textColor: 20 },
-      headStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
-      footStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
+      theme: \"grid\",\n      styles: { font: FONT, fontSize: 8, cellPadding: 2, lineColor: [80, 80, 80], lineWidth: 0.1, textColor: 20 },\n      headStyles: { font: FONT, fillColor: [255, 248, 220], textColor: 0, fontStyle: \"bold\", lineColor: [0, 0, 0], lineWidth: 0.2, fontSize: 8 },\n      footStyles: { font: FONT, fillColor: [255, 248, 220], textColor: 0, fontStyle: \"bold\", lineColor: [0, 0, 0], lineWidth: 0.2, fontSize: 8 },
         columnStyles,
         margin: { top: tableStartY },
         didParseCell: (data) => {
