@@ -197,7 +197,7 @@ function JournalBook() {
               reportId="journal-book"
               rows={rows}
               columns={gridColumns}
-              globalSearch={(r2) => `${r2.voucher_number} ${r2.ledgers?.name ?? ""} ${r2.reference_no ?? ""} ${narrationOf(null, r2)}`}
+              globalSearch={(r2) => `${r2.voucher_date} ${r2.voucher_number} ${r2.ledgers?.name ?? ""} ${r2.reference_no ?? ""} ${narrationOf(null, r2)}`}
               onRowClick={(r2) => openVoucherDetail(navigate, r2.id)}
               height={560}
             />
