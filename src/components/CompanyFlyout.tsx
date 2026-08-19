@@ -27,13 +27,54 @@ function CompanyRow({
 }) {
   const { t } = useI18n();
   const [offset, setOffset] = useState(0);
+  const { setActiveCompanyId, memberships } = useCompany();
+  const navigate = useNavigate();
+
   const fy = useMemo(() => fyLabel(m.companies.financial_year_start, offset), [m.companies.financial_year_start, offset]);
+
+  const handlePick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onPick(m.company_id);
+  };
+
+  const shiftYear = async (e: React.MouseEvent, dir: number) => {
+    e.stopPropagation();
+    const newOffset = offset + dir;
+    setOffset(newOffset);
+
+    // Calculate the label for the target FY
+    const targetLabel = fyLabel(m.companies.financial_year_start, newOffset);
+    const targetYear = parseInt(targetLabel.split("-")[0]);
+
+    // Check if a company with this name + FY already exists
+    const baseName = m.companies.name.split(" — FY ")[0];
+    const targetName = `${baseName} — FY ${targetLabel}`;
+    
+    const existing = memberships.find(member => 
+      member.companies.name === targetName || 
+      (newOffset === 0 && member.company_id === m.company_id)
+    );
+
+    if (existing) {
+      // If it exists, switch to it
+      setActiveCompanyId(existing.company_id);
+      navigate({ to: "/app" });
+    } else if (dir > 0) {
+      // If next year doesn't exist, trigger the transfer wizard
+      setActiveCompanyId(m.company_id);
+      navigate({ 
+        to: "/app/housekeeping", 
+        search: { wizard: "fy_transfer", target_year: targetYear } as any 
+      });
+    }
+  };
+
   return (
     <div
       className={`group cursor-pointer rounded-md px-2 py-1.5 transition-colors ${
         isActive ? "bg-primary/10 text-primary" : "hover:bg-accent hover:text-accent-foreground"
       }`}
-      onClick={() => onPick(m.company_id)}
+      onClick={handlePick}
     >
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1 truncate text-sm font-medium">{m.companies.name}</div>
@@ -54,7 +95,7 @@ function CompanyRow({
         <button
           type="button"
           className="rounded p-0.5 hover:bg-accent hover:text-foreground"
-          onClick={(e) => { e.stopPropagation(); setOffset((o) => o - 1); }}
+          onClick={(e) => shiftYear(e, -1)}
           aria-label={t("company.prevYear")}
         >
           <ChevronLeft className="h-3 w-3" />
@@ -63,7 +104,7 @@ function CompanyRow({
         <button
           type="button"
           className="rounded p-0.5 hover:bg-accent hover:text-foreground"
-          onClick={(e) => { e.stopPropagation(); setOffset((o) => o + 1); }}
+          onClick={(e) => shiftYear(e, 1)}
           aria-label={t("company.nextYear")}
         >
           <ChevronRight className="h-3 w-3" />

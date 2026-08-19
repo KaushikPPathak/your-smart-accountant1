@@ -86,6 +86,17 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
   const { refresh, setActiveCompanyId, activeMembership } = useCompany();
   const fy = useMemo(() => fyFromHint(fyStartHint), [fyStartHint]);
   const [step, setStep] = useState<Step>(1);
+  const location = useLocation();
+  const search = useMemo(() => new URLSearchParams(location.searchStr), [location.searchStr]);
+
+  useEffect(() => {
+    // Auto-trigger step 3 if coming from the flyout "Create Next Year" command
+    if (search.get("wizard") === "fy_transfer") {
+      setStep(3);
+      setMode("split");
+    }
+  }, [search]);
+
   const [mode, setMode] = useState<Mode>("extend");
   const [unreconciled, setUnreconciled] = useState<number>(0);
   const [negativeCash, setNegativeCash] = useState<{ name: string; paise: number }[]>([]);

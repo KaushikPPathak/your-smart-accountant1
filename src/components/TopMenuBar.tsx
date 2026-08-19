@@ -358,6 +358,31 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
     });
   }, []);
 
+  const kb = useOptionalKeyboard();
+  useShortcut("Escape", (e) => {
+    const isDialogOpen = document.querySelector('[role="dialog"], [data-state="open"][role="alertdialog"]');
+    if (isDialogOpen) return;
+
+    const menuOpen = openMenuKey !== "";
+    if (menuOpen) {
+      setOpenMenuKey("");
+      lastMenuCloseRef.current = Date.now();
+      return;
+    }
+
+    if (Date.now() - lastMenuCloseRef.current < 200) return;
+    
+    // If not in menu, check if we need to exit screen or app
+    if (location.pathname !== "/app") {
+      navigate({ to: "/app" });
+    } else {
+      setConfirmOpen(true);
+    }
+  }, { enabled: true, allowInField: false, description: "Staged Exit" });
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+
 
   const orderedMenuKeys = useMemo(
     () => ["file", ...visible.map((menu) => menu.key)],
