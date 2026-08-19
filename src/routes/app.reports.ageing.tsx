@@ -12,6 +12,7 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 import {
   readVouchers,
   readLedgers,
@@ -167,8 +168,11 @@ function AgeingPage() {
   }, [mode]);
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <ReportViewer
+      title="Ageing Analysis"
+      asOf={asOf}
+    >
+      <Card className="print:hidden">
         <CardContent className="grid gap-3 p-4 md:grid-cols-3">
           <div className="space-y-1">
             <Label>Mode</Label>
@@ -252,6 +256,6 @@ function AgeingPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </ReportViewer>
   );
 }

@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { amountHeader } from "@/lib/export-format";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -8,10 +7,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
-import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
+import { downloadCsv } from "@/lib/csv";
+import { amountHeader } from "@/lib/export-format";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 import {
   readItems,
   readVouchers,
@@ -46,6 +47,7 @@ interface ItemMove {
 function StockSummary() {
   const { activeCompanyId } = useCompany();
   const pdfHeader = useReportPdfHeader();
+  const r = (p: number) => p / 100;
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [items, setItems] = useState<Item[]>([]);
   const [moves, setMoves] = useState<ItemMove[]>([]);
@@ -188,9 +190,27 @@ function StockSummary() {
     { id: "value", header: "Value", type: "number", width: 140, align: "right", accessor: (x) => x.stockValue / 100, cell: (x) => formatINR(x.stockValue), aggregator: "sum", formatAggregate: (v) => formatINR(Math.round(v * 100)) },
   ], []);
 
+  const onExportPdf = () =>
+    downloadPdfTable({
+      title: "Stock Summary",
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
+      subtitle: `As on ${to} (movement window: ${from} to ${to})`,
+      head: [["Item", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", amountHeader("Value")]],
+      body: rows.map((x) => [x.name, x.hsn_code ?? "", x.unit, String(x.opening), String(x.inWindow), x.outWindow ? `-${x.outWindow}` : "0", String(x.closing), r(x.stockValue).toFixed(2)]),
+      foot: [["TOTAL", "", "", "", "", "", "", r(totalValue).toFixed(2)]],
+      fileName: `stock-summary-${to}.pdf`,
+      orientation: "l",
+      rightAlignCols: [3, 4, 5, 6, 7],
+    });
+
   return (
-    <div className="space-y-3">
-      <Card>
+    <ReportViewer
+      title="Stock Summary"
+      asOf={to}
+      onExportPdf={onExportPdf}
+    >
+      <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
             from={from}
@@ -199,20 +219,7 @@ function StockSummary() {
             onTo={setTo}
             onExportCsv={() => downloadCsv(`stock-summary-${to}.csv`, csv())}
             onExportXlsx={() => downloadXlsx(`stock-summary-${to}.xlsx`, [{ name: "Stock", rows: csv() }])}
-            onExportPdf={() =>
-              downloadPdfTable({
-                title: "Stock Summary",
-                companyName: pdfHeader.companyName,
-                companySubLine: pdfHeader.companySubLine,
-                subtitle: `As on ${to} (movement window: ${from} to ${to})`,
-                head: [["Item", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", amountHeader("Value")]],
-                body: rows.map((x) => [x.name, x.hsn_code ?? "", x.unit, String(x.opening), String(x.inWindow), x.outWindow ? `-${x.outWindow}` : "0", String(x.closing), r(x.stockValue).toFixed(2)]),
-                foot: [["TOTAL", "", "", "", "", "", "", r(totalValue).toFixed(2)]],
-                fileName: `stock-summary-${to}.pdf`,
-                orientation: "l",
-                rightAlignCols: [3, 4, 5, 6, 7],
-              })
-            }
+            onExportPdf={onExportPdf}
             onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           />
           <p className="mt-2 text-xs text-muted-foreground">Stock value is calculated using each item's opening rate.</p>
@@ -272,6 +279,6 @@ function StockSummary() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </ReportViewer>
   );
 }

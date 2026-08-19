@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { useFyAsOfState } from "@/components/reports/ReportToolbar";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -134,8 +135,11 @@ function BrsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <ReportViewer
+      title="Bank Reconciliation (BRS)"
+      asOf={asOf}
+    >
+      <Card className="print:hidden">
         <CardContent className="grid gap-3 p-4 md:grid-cols-4">
           <div className="space-y-1">
             <Label>Bank / Cash Ledger</Label>
@@ -233,6 +237,6 @@ function BrsPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </ReportViewer>
   );
 }

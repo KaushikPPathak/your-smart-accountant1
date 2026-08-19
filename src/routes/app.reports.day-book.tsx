@@ -12,6 +12,7 @@ import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 import { fmtIndianDate } from "@/lib/format-date";
 import { EmptyState } from "@/components/EmptyState";
 import { BookOpen, LayoutGrid, Columns2 } from "lucide-react";
@@ -230,7 +231,12 @@ function DayBook() {
   ], []);
 
   return (
-    <div className="space-y-3">
+    <ReportViewer
+      title="Day Book"
+      fromDate={from}
+      toDate={to}
+      onExportPdf={onExportPdf}
+    >
       <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
@@ -289,6 +295,6 @@ function DayBook() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </ReportViewer>
   );
 }

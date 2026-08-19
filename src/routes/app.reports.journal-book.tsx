@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { BookOpen } from "lucide-react";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { QuickRangeChips } from "@/components/reports/QuickRangeChips";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 import { readLedgers, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 import { offlineDb } from "@/lib/offline/db";
 import { normalizeVoucher } from "@/lib/offline/cache-normalizers";
@@ -162,7 +163,12 @@ function JournalBook() {
   ], []);
 
   return (
-    <div className="space-y-3">
+    <ReportViewer
+      title="Journal Book"
+      fromDate={from}
+      toDate={to}
+      onExportPdf={onExportPdf}
+    >
       <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
@@ -198,6 +204,6 @@ function JournalBook() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </ReportViewer>
   );
 }

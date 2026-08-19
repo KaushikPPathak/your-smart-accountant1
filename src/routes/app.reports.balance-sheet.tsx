@@ -7,6 +7,7 @@ import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolb
 import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { useCompany } from "@/lib/company-context";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
@@ -143,7 +144,11 @@ function BalanceSheet() {
     });
 
   return (
-    <div className="space-y-3">
+    <ReportViewer
+      title="Balance Sheet"
+      toDate={to}
+      onExportPdf={onExportPdf}
+    >
       <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
@@ -249,6 +254,6 @@ function BalanceSheet() {
       />
       )}
       {taxView && <TaxAuditPanel mode="bs" fyStart={from} fyEnd={to} />}
-    </div>
+    </ReportViewer>
   );
 }

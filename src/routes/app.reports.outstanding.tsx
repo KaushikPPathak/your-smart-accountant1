@@ -24,6 +24,7 @@ import {
   msmedInterestBreakdown,
   DEFAULT_RBI_BANK_RATE_PCT,
 } from "@/lib/msme-interest";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 
 export const Route = createFileRoute("/app/reports/outstanding")({
   head: () => ({ meta: [{ title: "Bill-by-Bill Outstanding — Reports" }] }),
@@ -157,8 +158,11 @@ function OutstandingPage() {
 
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <ReportViewer
+      title="Bill-by-Bill Outstanding"
+      asOf={asOf}
+    >
+      <Card className="print:hidden">
         <CardContent className="grid gap-3 p-4 md:grid-cols-3">
           <div className="space-y-1">
             <Label>Mode</Label>
@@ -289,7 +293,7 @@ function OutstandingPage() {
           </Table>
         </CardContent>
       </Card>
-    </div>
+    </ReportViewer>
   );
 }
 
