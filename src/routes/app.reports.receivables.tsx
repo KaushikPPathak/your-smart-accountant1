@@ -16,6 +16,7 @@ import { renderReminder, whatsappLink, mailtoLink, logReminder } from "@/lib/rem
 import { toast } from "sonner";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { ReportViewer } from "@/components/reports/ReportViewer";
 
 export const Route = createFileRoute("/app/reports/receivables")({
   head: () => ({ meta: [{ title: "Outstanding Receivables — Reports" }] }),
@@ -168,8 +169,11 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
   }
 
   return (
-    <div className="space-y-3">
-      <Card>
+    <ReportViewer
+      title={title}
+      toDate={to}
+    >
+      <Card className="print:hidden">
         <CardContent className="p-3">
           <ReportToolbar
             from={from} to={to} onFrom={setFrom} onTo={setTo}
@@ -266,7 +270,7 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
           </CardContent>
         </Card>
       )}
-    </div>
+    </ReportViewer>
   );
 }
 
