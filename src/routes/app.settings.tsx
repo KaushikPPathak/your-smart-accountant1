@@ -346,8 +346,8 @@ function SettingsPage() {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={() => {
-              const { getVersionHistory } = require("@/lib/update-safety");
+            onClick={async () => {
+              const { getVersionHistory } = await import("@/lib/update-safety");
               const hist = getVersionHistory();
               if (hist.length > 1) {
                 const prev = hist[hist.length - 2].version;
