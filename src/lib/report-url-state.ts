@@ -1,6 +1,6 @@
 /**
  * Single shared return-state mechanism for every report screen that
- * supports drill-down into a voucher (Cash & Bank Book, Ledger Statement,
+ * supports drill-down into a voucher (Cash & Bank Book, Journal Book, Ledger Statement,
  * Day Book, Sales Register, etc.).
  *
  * Why this exists
