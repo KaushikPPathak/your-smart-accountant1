@@ -856,21 +856,25 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           }}
         >
           <AlertDialogHeader>
-            <AlertDialogTitle>Exit application?</AlertDialogTitle>
+            <AlertDialogTitle>Exit Application?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will lock the session and return you to the start screen. Any unsaved work in open forms may be lost.
+              Are you sure you want to close Mehtaji? Any unsaved changes in open forms will be lost.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-exit-confirm="stay" autoFocus>Stay</AlertDialogCancel>
+            <AlertDialogCancel autoFocus>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              data-exit-confirm="exit"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 setExitConfirmOpen(false);
-                onLock?.();
+                if (typeof window !== "undefined" && (window as any).yourMehtaji?.closeApp) {
+                  (window as any).yourMehtaji.closeApp();
+                } else {
+                  window.close();
+                }
               }}
             >
-              Exit
+              Exit Software
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
