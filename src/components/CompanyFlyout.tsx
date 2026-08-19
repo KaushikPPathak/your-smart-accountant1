@@ -50,6 +50,7 @@ function CompanyRow({
     const baseName = m.companies.name.split(" — FY ")[0];
     const targetName = `${baseName} — FY ${targetLabel}`;
     
+    // Exact name match or same base name with same FY start
     const existing = memberships.find(member => 
       (member.companies.name === targetName) ||
       (newOffset === 0 && member.company_id === m.company_id) ||
@@ -59,19 +60,16 @@ function CompanyRow({
     if (existing) {
       // If it exists, switch to it and update visual offset
       setOffset(newOffset);
-      setActiveCompanyId(existing.company_id);
-      navigate({ to: "/app" });
+      onPick(existing.company_id);
     } else if (dir > 0) {
       // If next year doesn't exist, trigger the transfer wizard
-      // We don't update offset here because we are leaving the current company view
-      setActiveCompanyId(m.company_id);
+      onPick(m.company_id);
       navigate({ 
         to: "/app/housekeeping", 
         search: { wizard: "fy_transfer", target_year: targetYear, from_flyout: 1 } as any 
       });
     } else {
-      // For previous year, just update the visual offset even if not found, 
-      // or we could show a message. For now, just update the label.
+      // For previous year, just update the visual offset
       setOffset(newOffset);
     }
   };
