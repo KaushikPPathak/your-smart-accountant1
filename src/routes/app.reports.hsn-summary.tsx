@@ -188,7 +188,7 @@ function HsnSummary() {
                 rightAlignCols: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
               })
             }
-            onPrint={() => window.print()}
+            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             Grouped by HSN by default. Purchase/Sales columns show Taxable, Tax (CGST+SGST+IGST) and Invoice value (taxable + tax) — so totals reconcile with GSTR-1 HSN summary. Opening &amp; Closing value use each item's standard rate (opening rate). Inward = Purchase + Sales Return + Manufacturing output; Outward = Sales + Purchase Return + Manufacturing consumption.

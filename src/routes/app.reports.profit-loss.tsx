@@ -256,7 +256,7 @@ function ProfitLoss() {
             onExportCsv={onExportCsv}
             onExportXlsx={onExportXlsx}
             onExportPdf={onExportPdf}
-            onPrint={() => window.print()}
+            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
             extra={<div className="flex gap-3 items-end">
               <div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>
               <div className="space-y-1"><Label className="text-xs">Tax Audit</Label>

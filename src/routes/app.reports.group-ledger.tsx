@@ -282,7 +282,7 @@ function GroupLedgerReport() {
         onExportCsv={exportCsv}
         onExportXlsx={() => downloadXlsx(`${fileBase}.xlsx`, [{ name: group.label.slice(0, 31), rows: [headers, ...tableRows] }])}
         onExportPdf={() => downloadPdfTable({ title: group.label, companyName: pdfHeader.companyName, companySubLine: pdfHeader.companySubLine, subtitle: `${group.section} · ${from} → ${to}`, head: [headers], body: tableRows, fileName: `${fileBase}.pdf`, rightAlignCols: [2] })}
-        onPrint={() => window.print()}
+        onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
         extra={<div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>}
       />
 

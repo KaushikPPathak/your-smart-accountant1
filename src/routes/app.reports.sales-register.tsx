@@ -455,7 +455,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
                 rightAlignCols: [4, 5, 6, 7, 8],
               })
             }
-            onPrint={() => window.print()}
+            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           />
           <div className="mt-2">
             <ViewSwitcher view={view} onChange={setView} />

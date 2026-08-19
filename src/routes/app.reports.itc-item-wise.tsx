@@ -191,7 +191,7 @@ function ItcItemWise() {
                 rightAlignCols: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
               })
             }
-            onPrint={() => window.print()}
+            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             ITC Availed = input GST on Purchases (net of Debit Notes). ITC Utilised = output GST on Sales of the same item

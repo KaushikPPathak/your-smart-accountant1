@@ -223,7 +223,7 @@ function ReceiptsPayments() {
         onExportCsv={onExportCsv}
         onExportXlsx={onExportXlsx}
         onExportPdf={onExportPdf}
-        onPrint={() => window.print()}
+        onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
       />
       <Card>
         <CardHeader className="pb-2">

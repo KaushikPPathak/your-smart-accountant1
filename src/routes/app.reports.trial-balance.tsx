@@ -214,7 +214,7 @@ function TrialBalance() {
             onExportCsv={onExportCsv}
             onExportXlsx={onExportXlsx}
             onExportPdf={onExportPdf}
-            onPrint={() => window.print()}
+            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
             extra={<div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>}
           />
           <p className="mt-2 text-xs text-muted-foreground">

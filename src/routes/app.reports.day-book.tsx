@@ -241,7 +241,7 @@ function DayBook() {
             onExportCsv={onExportCsv}
             onExportXlsx={onExportXlsx}
             onExportPdf={onExportPdf}
-            onPrint={() => window.print()}
+            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           />
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <QuickRangeChips from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
