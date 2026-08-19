@@ -28,7 +28,7 @@ function CompanyRow({
 }) {
   const { t } = useI18n();
   const [offset, setOffset] = useState(0);
-  const { setActiveCompanyId, memberships, activeCompanyId } = useCompany();
+  const { memberships } = useCompany();
   const navigate = useNavigate();
 
   const fy = useMemo(() => fyLabel(m.companies.financial_year_start, offset), [m.companies.financial_year_start, offset]);
@@ -58,7 +58,7 @@ function CompanyRow({
     );
 
     if (existing) {
-      // If it exists, switch to it and update visual offset
+      // If it exists, switch to it via the parent onPick which handles all logic
       setOffset(newOffset);
       onPick(existing.company_id);
     } else if (dir > 0) {
