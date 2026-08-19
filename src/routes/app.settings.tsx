@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, useLocation } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound, Lock as LockIcon, Trash2 } from "lucide-react";
+import { AlertTriangle, Database, Download, Moon, Save, Sun, Upload, UserPlus, KeyRound, Lock as LockIcon, Trash2, History } from "lucide-react";
 import {
   exportAllCompaniesBackup,
   exportCompanyBackup,
@@ -333,6 +333,38 @@ function SettingsPage() {
             <strong>Beta</strong> — get new features first. May contain bugs. Please report anything odd.
           </p>
           <ReleaseChannelPicker />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Rollback to previous version</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            If a recent update is causing issues in your environment (e.g. Windows 7 compatibility), 
+            you can view instructions on how to revert to the version you were using before.
+          </p>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => {
+              const { getVersionHistory } = require("@/lib/update-safety");
+              const hist = getVersionHistory();
+              if (hist.length > 1) {
+                const prev = hist[hist.length - 2].version;
+                const now = hist[hist.length - 1].version;
+                localStorage.setItem("ym_rollback_offer", JSON.stringify({
+                  fromVersion: prev,
+                  toVersion: now,
+                  offeredAt: new Date().toISOString()
+                }));
+                window.location.reload();
+              } else {
+                toast.info("No previous version history found on this device.");
+              }
+            }}
+          >
+            <History className="mr-2 h-4 w-4" /> View rollback instructions
+          </Button>
         </CardContent>
       </Card>
 
