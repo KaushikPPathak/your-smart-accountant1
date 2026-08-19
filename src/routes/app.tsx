@@ -111,12 +111,18 @@ function AppLayout() {
     let stopIntraday: (() => void) | null = null;
     setBootstrapping(false);
     (async () => {
-      if (activeCompanyId) {
-        const { scheduleWarmup } = await import("@/lib/ai/cache-warmup");
-        scheduleWarmup(activeCompanyId);
-        const { scheduleWeeklyConsistencyCheck } = await import("@/lib/offline/consistency");
-        scheduleWeeklyConsistencyCheck(activeCompanyId);
-      }
+      // Background maintenance moved to a longer delay to ensure the UI
+      // is fully interactive before any background disk/AI work begins.
+      setTimeout(async () => {
+        if (!activeCompanyId) return;
+        try {
+          const { scheduleWarmup } = await import("@/lib/ai/cache-warmup");
+          scheduleWarmup(activeCompanyId);
+          const { scheduleWeeklyConsistencyCheck } = await import("@/lib/offline/consistency");
+          scheduleWeeklyConsistencyCheck(activeCompanyId);
+        } catch { /* ignore */ }
+      }, 10000); // 10s delay
+
 
 
       try {
@@ -138,6 +144,8 @@ function AppLayout() {
             //    a valid snapshot exists on disk, put the data back before
             //    the UI renders. Toast the outcome; never prompt.
             try {
+              // Defer auto-restore by a few seconds to let the main UI thread settle.
+              await new Promise(r => setTimeout(r, 2000));
               const { runAutoRestore } = await import("@/lib/auto-restore");
               const outcomes = await runAutoRestore(list);
               const restored = outcomes.filter((o) => o.status === "restored");
