@@ -194,6 +194,7 @@ function DayBook() {
       subtitle: pdfHeader.dateRangeSubtitle(from, to),
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
+
       head: [["Date", "Type", "Number", "Party", "Narration", "Side", "Amount"]],
       body: rows.map((r2) => [
         fmtIndianDate(r2.voucher_date),
