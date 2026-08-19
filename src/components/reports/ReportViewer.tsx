@@ -342,11 +342,11 @@ function openPrintPreview(
   });
 
   const css = `
-    @page { size: A4 ${orient}; margin: 14mm; }
+    @page { size: A4 ${orient}; margin: 10mm; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #fff; color: #000;
-      font: 10pt/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    body { padding: 14mm; }
+      font: 9pt/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    body { padding: 10mm; }
     .preview-bar { position: fixed; top: 0; left: 0; right: 0; display: flex;
       gap: 8px; padding: 8px 12px; background: #f5f5f5;
       border-bottom: 1px solid #ddd; font: 13px system-ui; z-index: 10; }
@@ -398,17 +398,17 @@ function openPrintPreview(
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    .report-print-header { text-align: center; margin-bottom: 10pt; }
+    .report-print-header { text-align: center; margin-bottom: 8pt; }
     .report-print-header > div { margin: 1pt 0; }
     .report-print-company-name {
-      font-size: 13pt; font-weight: 700; text-transform: uppercase;
+      font-size: 12pt; font-weight: 700; text-transform: uppercase;
       letter-spacing: .5pt; color: #002060 !important;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
-    .report-print-title { font-size: 11pt; font-weight: 600; margin-top: 2pt; }
-    .report-print-fy-line { font-size: 10pt; font-weight: 500; margin-top: 1pt; }
-    .report-header-rule { height: 3px; border-top: 1px solid #000;
-      border-bottom: 1px solid #000; margin: 4pt 0 8pt; }
+    .report-print-title { font-size: 10pt; font-weight: 600; margin-top: 2pt; }
+    .report-print-fy-line { font-size: 9pt; font-weight: 500; margin-top: 1pt; }
+    .report-header-rule { height: 2px; border-top: 1px solid #000;
+      border-bottom: 1px solid #000; margin: 3pt 0 6pt; }
     table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
     th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
       text-align: left; }
