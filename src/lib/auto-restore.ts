@@ -1,7 +1,7 @@
 /*
 '''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
 
-L.channel(...).on is not a function
+but i can log in offline mode
 */
 // Silent auto-restore on launch.
 //
