@@ -49,11 +49,9 @@ export function reportFontFamily(lang: LangCode = getStoredLang()): string {
   return GU_FONT_FAMILY;
 }
 
-/** Convenience: ensure font loaded (only if needed) and return the family. */
-export async function prepareReportFont(doc: jsPDF, lang: LangCode = getStoredLang()): Promise<string> {
-  if (lang === "gu") {
-    await ensureGujaratiFont(doc);
-    return GU_FONT_FAMILY;
-  }
-  return "helvetica";
+/** Convenience: ensure font loaded and return the family. Always uses Noto Sans Gujarati
+ * to ensure consistent rendering across all languages. */
+export async function prepareReportFont(doc: jsPDF, _lang: LangCode = getStoredLang()): Promise<string> {
+  await ensureGujaratiFont(doc);
+  return GU_FONT_FAMILY;
 }

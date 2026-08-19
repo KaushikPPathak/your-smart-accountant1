@@ -1,7 +1,7 @@
 /*
 '''Do not make any visual modifications. The phrases I write are commands to understand what I want, not to be written down. Understand their content well, then execute what is required.'''
 
-but i can log in offline mode
+but in offline mode data not loading and in online to data is not loading it takes 10 seconds to log into app and still printing problem not resolved what is wrong today no issues are solved all issues are still remain unresolved my app working is significantly deteriorated not a single issue solved today, all issues are still remains unresolved, deeply frustrated
 */
 // Silent auto-restore on launch.
 //
