@@ -22,7 +22,6 @@ export const LABELS: Record<string, Partial<Record<LangCode, string>>> = {
   "Cash & Bank Book": { gu: "રોકડ અને બેંક ચોપડી" },
   "Journal Book": { gu: "જર્નલ ચોપડી" },
 
-  "Journal Book": { gu: "જર્નલ ચોપડી" },
   "Trial Balance": { gu: "કાચું સરવૈયું" },
 
   "Profit & Loss": { gu: "નફા-નુકસાન ખાતું" },
