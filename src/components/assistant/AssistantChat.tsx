@@ -3,9 +3,10 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2,
   Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff,
-  FileText, Paperclip, ScanLine, BrainCircuit, Volume2, VolumeX,
+  FileText, Paperclip, ScanLine, Volume2, VolumeX,
   Headphones, Cpu, Cloud, RotateCcw, Zap, History, MessageSquare, Trash2
 } from "lucide-react";
+import { ChatHeader, ChatFooterMetadata } from "./ChatUI";
 import { extractInvoiceOcr, type OcrDraft, type OcrExtracted } from "@/lib/ai/ocr-invoice";
 import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
 import { Link } from "@tanstack/react-router";
