@@ -17,6 +17,9 @@ import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-gro
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { BucketedGrid } from "@/components/reports/BucketedGrid";
 import { Label } from "@/components/ui/label";
+import { readItems, readVouchers, readVoucherItemsForCompany, withCacheFallback } from "@/lib/offline/cache-read";
+import { calculateWac, type ItemMove } from "@/lib/inventory/valuation-engine";
+
 
 export const Route = createFileRoute("/app/reports/trading")({
   head: () => ({ meta: [{ title: "Trading Account — Reports" }] }),
