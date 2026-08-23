@@ -23,7 +23,9 @@ import { Button } from "@/components/ui/button";
 import { Scale } from "lucide-react";
 import { TaxAuditPanel } from "@/components/reports/TaxAuditPanel";
 import { supabase } from "@/integrations/supabase/client";
-import { readLedgers, readItems, withCacheFallback } from "@/lib/offline/cache-read";
+import { readLedgers, readItems, readVoucherItemsForCompany, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
+import { calculateWac, type ItemMove } from "@/lib/inventory/valuation-engine";
+
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
   head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
