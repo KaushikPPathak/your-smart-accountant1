@@ -133,7 +133,7 @@ export function ManualValuationDialog({
           <Alert variant="default" className="bg-muted/50 border-muted">
             <InfoIcon className="h-4 w-4" />
             <AlertDescription className="text-xs">
-              This is a report-level total override. It does not create accounting vouchers or modify physical stock records or item rates.
+              Do not make any further changes to the Manual Valuation database schema or valuation-isolation logic. The current (company_id, as_of_date) design is approved. Treat as_of_date as the authoritative reporting-period key. Do not reintroduce financial_year into the table or lookup logic unless a future requirement specifically requires multiple valuations for the same company and exact date. Keep: Manual Valuation → WAC fallback and maintain strict company_id + as_of_date isolation. Do not modify the WAC engine, Trading Account, P&L, Balance Sheet, Stock Summary, or existing accounting calculations as part of this task.
             </AlertDescription>
           </Alert>
 
