@@ -187,7 +187,7 @@ const VOLATILE_BLACKLIST = new Set([
  * Generates a deterministic Business-State Fingerprint for a record.
  * Identity fields (id, company_id) are preserved exactly.
  */
-function canonicalFingerprint(row: Record<string, unknown>): string {
+export function canonicalFingerprint(row: Record<string, unknown>): string {
   const result: Record<string, unknown> = {};
   
   // 1. Selection & Sorting: Include everything not blacklisted, sort keys.
