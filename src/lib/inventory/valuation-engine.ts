@@ -1,5 +1,7 @@
+/**
+ * Shared inventory processing and validation for vouchers.
+ */
 
-import { VoucherItem, Voucher } from "@/lib/offline/db";
 
 export interface ItemMove {
   date: string;
