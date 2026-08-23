@@ -1,6 +1,8 @@
 /**
  * Shared inventory processing and validation for vouchers.
  */
+import { supabase } from "@/integrations/supabase/client";
+
 
 export interface ItemMove {
   date: string;
