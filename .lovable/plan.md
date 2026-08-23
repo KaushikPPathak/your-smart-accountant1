@@ -1,76 +1,85 @@
-# Revised Implementation Plan: Data Integrity Hardening (Auto-Restore & Fingerprinting)
+# Final Implementation Plan: Data Integrity Hardening (Auto-Restore & Fingerprinting)
 
-This plan addresses the identified "Risk-B" gaps where stale mutable state could be restored for missing records. The objective is to move from "Accounting Integrity" to "Complete User-Data Restoration Integrity."
+This plan addresses the identified "Risk-B" gaps to ensure that background auto-restoration never silently restores stale user state for missing records.
 
 ## 1. Authoritative Field Classification
 
-We define four categories of fields to determine participation in fingerprinting.
+We define four categories to determine participation in the Business-State Fingerprint.
 
-| Table | A: Authoritative Business/Accounting | B: User-Visible Config/State | C: Derived/Cache | D: Volatile/Runtime/Internal |
-|---|---|---|---|---|
-| **Company** | `name`, `gstin`, `financial_year_start`, `currency_code`, `inventory_enabled` | `address`, `phone`, `email`, `logo_url`, `mode` | - | `updated_at`, `created_at`, `access_password_hash` |
-| **Ledger** | `name`, `group_code`, `opening_balance_paise`, `opening_balance_is_debit` | `gstin`, `gst_treatment`, `is_active`, `address`, `phone` | - | `updated_at`, `created_at`, `is_synced` |
-| **Item** | `name`, `unit`, `hsn_code`, `gst_rate`, `opening_stock_qty` | `sale_price_paise`, `purchase_price_paise`, `is_active` | - | `updated_at`, `created_at`, `is_synced` |
-| **Voucher** | `date`, `voucher_type`, `voucher_number`, `total_paise`, `party_ledger_id` | `reference_no`, `due_date`, `narration`, `linked_voucher_ids`, `status` | `subtotal_paise`, `round_off_paise`, `cgst_paise`, `sgst_paise`, `igst_paise` | `updated_at`, `created_at`, `is_synced`, `created_by` |
-| **Entry** | `ledger_id`, `entry_type`, `amount_paise` | - | - | `id`, `voucher_id`, `created_at` |
-| **V. Item** | `item_id`, `qty`, `rate_paise`, `amount_paise` | `description`, `specs` | `cgst_paise`, `sgst_paise`, `igst_paise`, `taxable_paise` | `id`, `voucher_id`, `created_at` |
+| Category | Description | Entities |
+|---|---|---|
+| **A: Accounting Core** | Fields that define financial value. | `total_paise`, `amount_paise`, `qty`, `rate_paise`, `opening_balance_paise`. |
+| **B: Business State** | User-visible configuration and descriptive state. | `name`, `gstin`, `reference_no`, `due_date`, `linked_voucher_ids`, `is_active`. |
+| **C: Derived State** | Computed fields that must remain consistent with Core. | `cgst_paise`, `sgst_paise`, `taxable_paise`. |
+| **D: Volatile/Internal**| Technical fields irrelevant to user-visible state. | `updated_at`, `created_at`, `is_synced`, `last_error`. |
 
-**Fingerprinting Rule**: Only fields in Categories **A**, **B**, and **C** participate in the fingerprint. Category **D** (Volatile) and **E** (Internal/Migration) are strictly excluded to prevent false snapshot rejections.
+### 2. Record Identity vs. Business-State Fingerprint
 
-## 2. Canonicalization & Fingerprinting Design
+*   **Record Identity**: The set of fields required to uniquely identify the record across companies and time. This includes `id` and `company_id`.
+*   **Business-State Fingerprint**: The canonical deterministic representation of all fields in Categories **A, B, and C**.
+*   **Identity Mapping**: The multiset comparison will use a compound key: `[company_id + id + Business-State Fingerprint]`. This ensures that "Same ID + Different Content" or "Same ID + Different Company" results in a mismatch.
+*   **Entry/Item IDs**: Entry `id` is included in the Business-State Fingerprint because while entries are children of vouchers, their specific internal ID is part of the persisted state that should not change silently.
 
-*   **Deterministic Equality**: Canonicalization provides deterministic equality. We will use direct canonical representation comparison for the multiset check. If hashing is required for memory efficiency, SHA-256 will be used.
+## 3. Canonicalization & Future-Schema Policy
+
 *   **Canonicalization Rules**:
-    1.  **Selection**: Filter record to include only Categories A, B, C.
-    2.  **Normalization**: Trim strings, lowercase names/groups, `null` for `undefined`.
-    3.  **Ordering**: Deterministic alphabetical sorting of keys.
-    4.  **Representation**: `JSON.stringify` of the sorted object.
-*   **Company Isolation**: The `company_id` is always prepended to the canonical string to ensure cross-company same-ID records generate different fingerprints.
+    1.  **Selection**: Filter record to include all fields EXCEPT a hard-coded blacklist of Category D (Volatile) fields.
+    2.  **Future-Schema Policy (Fail Closed)**: By using a **Blacklist** of Volatile fields rather than a Whitelist of Protected fields, any newly added persisted field is **automatically protected** by the fingerprint unless an intentional code change explicitly classifies it as Volatile.
+    3.  **Normalization**: Trim strings, lowercase ID-like strings, `null` for `undefined`.
+    4.  **Deterministic Ordering**: Keys sorted alphabetically before `JSON.stringify`.
 
-## 3. Legacy Snapshot Safety Policy
+## 4. Legacy Snapshot Policy
 
-A legacy fingerprint cannot prove the safety of fields that were not included in the old fingerprint.
+A legacy snapshot may be used for **SILENT AUTO-RESTORE** only if the application can prove the complete required restoration state.
 
-*   **Policy**: Legacy snapshots (created before this implementation) are identified by the absence of a `fingerprint_version: 2` header.
-*   **Verification**: For every record in a legacy snapshot, the app will generate the **New Fingerprint** by assuming the missing/unverified fields match the Live state.
-*   **Rejection**: If a legacy snapshot contains a value for a newly-protected field (e.g., `opening_balance_paise`) and that value differs from the Live state, the snapshot is **Rejected**.
-*   **Safety**: If the field is missing from the snapshot entirely, the snapshot is rejected for that entity type. We do not infer equality for unverified fields.
-*   **Usability**: Existing backups remain usable for **manual** restores (where the user takes responsibility) but are disqualified from **silent** auto-restore if they cannot provide a complete integrity proof.
+*   **Rule**: Legacy snapshots (lacking `fingerprint_version: 2`) are checked against the **Legacy Fingerprint** (the old restricted field list).
+*   **Strict Constraint**: If a legacy snapshot passes the legacy check, it is **NOT** automatically accepted for silent restore. It is only accepted if the application verifies that the legacy snapshot contains **all** current Category A/B/C fields. 
+*   **Failure Mode**: If a legacy snapshot is missing a newly-protected field (e.g., `due_date` was not captured in an older backup version), the snapshot is **Disqualified** from silent auto-restore.
+*   **Manual Recovery**: These backups remain fully usable for user-initiated manual recovery via the "Restore from File" interface.
 
-## 4. Restore Decision Matrix
+## 5. Restore Decision Matrix
 
-| Live State | Snapshot State | Identity | Content | Action |
-|---|---|---|---|---|
-| Active | Missing | Match | N/A | **Accepted** (Snapshot is a superset) |
-| Active | Present | Match | Identical | **Accepted** |
-| Active | Present | Match | Different | **REJECTED** (Superset proof fails) |
-| Tombstoned | Present | Match | Any | **SKIPPED** (Tombstone takes precedence) |
-| Missing | Present | Match | N/A | **Accepted** (Restore missing record) |
+| Live DB | Snapshot | Content | Action |
+|---|---|---|---|
+| Exists | Exists | Identical | **Safe** |
+| Exists | Exists | Different | **REJECTED** (Superset proof fails) |
+| Exists | Missing | N/A | **Safe** (Live data is newer) |
+| Missing | Exists | Proven Safe | **RESTORE** (Insert missing record) |
+| Missing | Exists | Unverified | **REJECTED** (Ambiguous state) |
+| Tombstoned| Exists | Any | **SKIPPED** (Tombstone wins) |
 
-## 5. Rollback & Fail-Safe Behavior
+## 6. Performance & Scale
 
-*   **Destruction Prevention**: Backups are never deleted. Live data is never overwritten by `recoverMissingFromSnapshot`.
-*   **Hard Fail-Safe**: If the new implementation is disabled or rolls back, the `integrity.json` manifest version mismatch will cause the auto-restore task to abort with an "Unsupported Integrity Version" error.
-*   **No Silent Fallback**: We will not fall back to the old weaker validation. A failed integrity check requires user intervention via the "Data Sync" or "Restore from File" UI.
+We will establish a synchronous baseline for the canonicalization of 25,000 records.
+*   **Threshold**: If startup blocking exceeds **100ms** on standard hardware, we will move the comparison logic to a background worker.
+*   **Serialization**: If a worker is used, we will use `Transferable` objects or partitioned processing to minimize the main-thread overhead of sending the Live/Snapshot data.
 
-## 6. Regression Test Matrix
+## 7. Implementation Scope
 
-1.  **Balance Drift**: Live Ledger ₹5L / Snapshot ₹3L. **Result: Reject.**
-2.  **GST Drift**: Item GST 18% / Snapshot 5%. **Result: Reject.**
-3.  **Breakdown Drift**: Voucher total ₹1000 identical, but CGST/SGST differs. **Result: Reject.**
-4.  **Reference Drift**: `reference_no` or `due_date` differs. **Result: Reject.**
-5.  **Legacy Incomplete**: Old snapshot missing `linked_voucher_ids`. **Result: Reject.**
-6.  **Legacy Stale**: Old snapshot has old `opening_balance`. **Result: Reject.**
-7.  **Noise Immunity**: `updated_at` or `is_synced` changes. **Result: Accept.**
-8.  **Tombstone**: Deleted record in live DB vs active in snapshot. **Result: Skip resurrection.**
-9.  **Scale**: 10,000+ record multiset comparison performance profiling.
+*   **`src/lib/auto-restore.ts`**:
+    *   Implement `canonicalFingerprint` with Volatile Blacklist.
+    *   Update `isBackupSafeSuperset` to use the compound Identity + Fingerprint multiset.
+    *   Implement strict Legacy rejection for unverified state.
+*   **`src/lib/integrity.ts`**:
+    *   Update manifest to track `fingerprint_version`.
+*   **`src/lib/backup.ts`**:
+    *   **NO CHANGES**. The audit confirms that `recoverMissingFromSnapshot` is safely gated by the `isBackupSafeSuperset` check in `auto-restore.ts`. We will keep changes local to the restoration engine.
 
-## 7. Implementation Details
+## 8. Regression Test Matrix
 
-*   **Files to Change**:
-    *   `src/lib/auto-restore.ts`: Implement `canonicalFingerprint`, `isBackupSafeSuperset` v2 logic, and legacy compatibility layer.
-    *   `src/lib/integrity.ts`: Update `recordIntegrityFromSnapshot` to include fingerprint versioning.
-    *   `src/lib/backup.ts`: Update `recoverMissingFromSnapshot` to enforce company isolation and tombstone checks.
-*   **Performance Strategy**: Fingerprinting will be performed synchronously first. If profiling shows blocking > 100ms, the multiset check will be moved to a `postMessage` worker pattern.
+1.  **Opening Balance Drift**: Ledger ₹5L Live / ₹3L Snapshot. **Result: Reject.**
+2.  **GST Rate Drift**: Item 18% Live / 5% Snapshot. **Result: Reject.**
+3.  **Voucher Tax Breakdown**: Total identical, CGST/SGST swapped. **Result: Reject.**
+4.  **Metadata Drift**: `due_date` or `reference_no` differs. **Result: Reject.**
+5.  **Legacy Incomplete**: Old snapshot missing a newly protected field. **Result: Reject.**
+6.  **Legacy Stale**: Old snapshot has old value for newly protected field. **Result: Reject.**
+7.  **Volatile Noise**: `is_synced` or `updated_at` changes. **Result: Accept.**
+8.  **Tombstone Protection**: Record deleted in Live, present in Snapshot. **Result: Skip resurrection.**
+9.  **Company Isolation**: Identical ID in Snapshot but for a different company. **Result: Reject.**
 
-REVISED IMPLEMENTATION PLAN — AWAITING APPROVAL
+## 9. Rollback & Fail-Safe
+
+*   **Integrity Manifest**: Version mismatch in `integrity.json` will trigger a safe abort of the auto-restore task.
+*   **Fail-Closed**: A rejected or ambiguous snapshot will never fall back to weaker validation. The system will log the failure and wait for user intervention.
+
+FINAL IMPLEMENTATION PLAN — AWAITING APPROVAL
