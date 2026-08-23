@@ -17,8 +17,7 @@ describe('Manual Stock Valuation Edge Case Audit', () => {
     await supabase.from('inventory_manual_valuations').insert({
       company_id: companyId,
       as_of_date: dateA,
-      valuation_paise: valA,
-      financial_year: 'FY 2025-26'
+      valuation_paise: valA
     });
 
     // Resolve for date A
