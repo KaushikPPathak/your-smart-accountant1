@@ -335,7 +335,7 @@ export function isBackupSafeSuperset(candidate: CompanyBackup, live: CompanyBack
     legacyContains(candidate.ledgers ?? [], live.ledgers ?? [], 'ledger') &&
     legacyContains(candidate.items ?? [], live.items ?? [], 'item') &&
     legacyContains(candidate.voucher_entries ?? [], live.voucher_entries ?? [], 'entry') &&
-    legacyContains(legacyContains(candidate.voucher_items ?? [], live.voucher_items ?? [], 'voucher_item') as any) as any
+    legacyContains(candidate.voucher_items ?? [], live.voucher_items ?? [], 'voucher_item')
   );
 }
 
