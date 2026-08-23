@@ -13,7 +13,7 @@
 // field is added later, add one line here and every existing cached
 // row self-repairs.
 
-import { GST_STATE_CODES } from "@/utils/stateCodes";
+import { GST_STATE_CODES } from "../../utils/stateCodes";
 import { LEDGER_TYPES, type LedgerTypeValue } from "@/lib/constants";
 import {
   ACCOUNT_GROUPS,
