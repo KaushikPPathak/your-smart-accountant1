@@ -139,31 +139,30 @@ function StockSummary() {
   const rows = useMemo(() => {
     return items.map((it) => {
       const itemMoves = moves.filter((m) => m.item_id === it.id);
-      const mfgIn = (m: typeof itemMoves[number]) =>
-        m.vouchers && isMfg(m.vouchers.voucher_type) && Number(m.qty) > 0;
-      const mfgOut = (m: typeof itemMoves[number]) =>
-        m.vouchers && isMfg(m.vouchers.voucher_type) && Number(m.qty) < 0;
+      
+      const wacMoves: WacMove[] = itemMoves.map(m => ({
+        date: m.vouchers?.voucher_date ?? "",
+        qty: Number(m.qty),
+        taxablePaise: Number(m.taxable_paise),
+        type: m.vouchers?.voucher_type ?? "",
+        voucherId: m.voucher_id
+      }));
 
-      const inBefore = itemMoves
-        .filter((m) => m.vouchers && m.vouchers.voucher_date < from && (isInward(m.vouchers.voucher_type) || mfgIn(m)))
-        .reduce((s, m) => s + Math.abs(Number(m.qty)), 0);
-      const outBefore = itemMoves
-        .filter((m) => m.vouchers && m.vouchers.voucher_date < from && (isOutward(m.vouchers.voucher_type) || mfgOut(m)))
-        .reduce((s, m) => s + Math.abs(Number(m.qty)), 0);
-      const opening = Number(it.opening_stock_qty) + inBefore - outBefore;
+      const val = calculateWac(
+        Number(it.opening_stock_qty),
+        Number(it.opening_stock_rate_paise),
+        wacMoves.filter(m => m.date <= to)
+      );
 
-      const inWindow = itemMoves
-        .filter((m) => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isInward(m.vouchers.voucher_type) || mfgIn(m)))
-        .reduce((s, m) => s + Math.abs(Number(m.qty)), 0);
-      const outWindow = itemMoves
-        .filter((m) => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isOutward(m.vouchers.voucher_type) || mfgOut(m)))
-        .reduce((s, m) => s + Math.abs(Number(m.qty)), 0);
-
-      const closing = opening + inWindow - outWindow;
-      const valuationRate = it.opening_stock_rate_paise; // simplification: use opening rate as standard cost
-      const stockValue = Math.round(closing * valuationRate);
-      const lowStock = it.reorder_level > 0 && closing <= it.reorder_level;
-      return { ...it, opening, inWindow, outWindow, closing, stockValue, lowStock };
+      return {
+        ...it,
+        opening: Number(it.opening_stock_qty),
+        inWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && isInward(m.vouchers.voucher_type)).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
+        outWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && isOutward(m.vouchers.voucher_type)).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
+        closing: val.closingQty,
+        stockValue: val.closingValuePaise,
+        lowStock: it.reorder_level > 0 && val.closingQty <= it.reorder_level
+      };
     });
   }, [items, moves, from, to]);
 
