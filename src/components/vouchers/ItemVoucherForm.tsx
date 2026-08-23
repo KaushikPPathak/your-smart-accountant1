@@ -28,7 +28,7 @@ import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
-import { formatINR, rupeesToPaise, amountInWords } from "@/lib/money";
+import { formatINR, rupeesToPaise, amountInWords } from "@/lib/utils/currency-utils";
 import { computeLine, sumLines, isInterstate, resolveGstWithCache, type GstLineResult } from "@/lib/gst";
 
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";

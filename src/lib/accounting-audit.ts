@@ -65,7 +65,9 @@ function pushIssue(
   out.push(f);
 }
 
-const RUPEE = (paise: number) => `₹${(paise / 100).toFixed(2)}`;
+import { formatINR } from "@/lib/utils/currency-utils";
+const RUPEE = (paise: number) => formatINR(paise);
+
 const TOL = 100; // ₹1 rounding tolerance for cross-check sums
 
 // ---------------------------------------------------------------------------
