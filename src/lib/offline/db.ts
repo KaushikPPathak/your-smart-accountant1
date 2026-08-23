@@ -177,6 +177,7 @@ class OfflineDatabase extends Dexie {
       cache_cost_categories: "id, company_id, name, is_active, updated_at",
     });
     // v8 — Compound indexes for hot read paths.
+    this.version(8).stores({
       cache_vouchers:
         "id, company_id, updated_at, voucher_date, party_id, voucher_type, original_voucher_id, " +
         "[company_id+voucher_date], " +
