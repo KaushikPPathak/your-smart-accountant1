@@ -208,9 +208,11 @@ function canonicalizeValue(val: unknown, keyContext?: string): unknown {
   // Handle Primitives
   if (typeof val === "string") {
     // Rule: Do NOT lowercase or trim database identifiers.
-    const isId = keyContext && /(_id|^id$)/i.test(keyContext);
+    // ISSUE 2: Change regex to an explicit whitelist of database identity fields.
+    const isId = keyContext && /^(id|company_id|voucher_id|ledger_id|item_id|group_id|unit_id|bank_id|tax_id|party_id|linked_voucher_id|parent_voucher_id)$/i.test(keyContext);
     if (!isId) {
-      return val.trim().toLocaleLowerCase();
+      // ISSUE 1: cross-locale determinism fix (toLowerCase vs toLocaleLowerCase)
+      return val.trim().toLowerCase();
     }
     return val;
   }

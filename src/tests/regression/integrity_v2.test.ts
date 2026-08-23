@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { offlineDb } from '@/lib/offline/db';
-import { isBackupSafeSuperset, canonicalFingerprint } from '@/lib/auto-restore';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { offlineDb, setMeta } from '@/lib/offline/db';
+import { isBackupSafeSuperset, canonicalFingerprint, runAutoRestore } from '@/lib/auto-restore';
 import type { CompanyBackup } from '@/lib/backup';
 import type { IntegrityEntry } from '@/lib/integrity';
+import * as integrityModule from '@/lib/integrity';
+import * as backupModule from '@/lib/backup';
+import * as tauriFs from '@tauri-apps/plugin-fs';
 
 
 describe('Hardened Data Integrity Regression Matrix', () => {
@@ -183,5 +186,101 @@ describe('Hardened Data Integrity Regression Matrix', () => {
 
     console.log(`RECURSIVE_BENCHMARK_25K: Min: ${min.toFixed(2)}ms, Max: ${max.toFixed(2)}ms, Avg: ${avg.toFixed(2)}ms`);
     expect(avg).toBeLessThan(1000); 
+  });
+  
+  it('12. ISSUE 3A: Tombstone Protection', async () => {
+    // 1. Setup a company
+    const comp = { id: 'dead-comp', name: 'Dead Company' };
+    
+    // 2. Add a tombstone
+    await setMeta('purged_companies', [{ 
+      companyId: comp.id, 
+      normalizedName: 'deadcompany', 
+      purgedAtIso: new Date().toISOString() 
+    }]);
+
+    // 3. Mock environment to trigger auto-restore attempt
+    // isBackupSafeSuperset check comes after runAutoRestore filters by tombstone.
+    // So we verify runAutoRestore skips it.
+    
+    // Mock integrity manifest to show the company was healthy
+    vi.spyOn(integrityModule, 'getAllIntegrity').mockResolvedValue({
+      'dead-comp': { 
+        companyId: comp.id, 
+        companyName: comp.name, 
+        vouchers: 10, ledgers: 5, items: 5,
+        lastGoodAt: Date.now(),
+        fingerprintVersion: 2
+      } as any
+    });
+    
+    // Mock countLive to show it is now empty (triggering restoration)
+    vi.spyOn(integrityModule, 'countLive').mockResolvedValue({ ledgers: 0, items: 0, vouchers: 0 });
+
+    const outcomes = await runAutoRestore([comp]);
+    
+    // Outcome should be empty because it was filtered by tombstone
+    expect(outcomes).toHaveLength(0);
+    
+    vi.restoreAllMocks();
+  });
+
+  it('13. ISSUE 3B: Legacy Stale Protected Field Rejection', () => {
+    // 1. Create a live record with a new protected field (due_date)
+    const live = { id: 'v1', company_id: 'c1', total_paise: 1000, due_date: '2026-12-31' };
+    
+    // 2. Create a legacy snapshot with SAME fingerprint base but MISSING or DIFFERENT stale protected field
+    // In legacyFingerprint for vouchers, linked_voucher_ids/due_date etc are NOT included.
+    // So legacy fingerprint will be identical.
+    const snap = { id: 'v1', company_id: 'c1', total_paise: 1000 }; // Missing due_date
+    
+    const liveBackup: CompanyBackup = { vouchers: [live], ledgers: [], items: [], voucher_entries: [], voucher_items: [] } as any;
+    const snapBackup: CompanyBackup = { vouchers: [snap, { id: 'extra' }], ledgers: [], items: [], voucher_entries: [], voucher_items: [] } as any;
+    
+    // manifest missing fingerprintVersion or version < 2
+    const manifest: IntegrityEntry = { fingerprintVersion: 1 } as any;
+
+    // The legacy branch in isBackupSafeSuperset MUST reject this because canonical fingerprints differ 
+    // despite legacy fingerprints matching.
+    expect(isBackupSafeSuperset(snapBackup, liveBackup, manifest)).toBe(false);
+  });
+
+  it('14. ISSUE 4: Production Path Benchmark (25,000 Records)', () => {
+    const RECORD_COUNT = 25000;
+    const template = {
+      id: "v-uuid", company_id: "c-uuid", voucher_date: "2026-08-23",
+      voucher_type: "sales", total_paise: 1250000, narration: "Testing production path performance",
+      metadata: { source: "pos", details: { zone: "north" } },
+      items: [{ id: "i1", qty: 5 }]
+    };
+
+    const liveRecords = Array.from({ length: RECORD_COUNT }, (_, i) => ({
+      ...template, id: `v-${i}`, total_paise: 1000 + i
+    }));
+    
+    // Snapshot is identical (superset needs to be larger for isBackupSafeSuperset to return true/proceed,
+    // but here we just want to measure the comparison logic cost).
+    const snapRecords = [...liveRecords, { ...template, id: 'extra' }];
+
+    const liveBackup: CompanyBackup = { vouchers: liveRecords, ledgers: [], items: [], voucher_entries: [], voucher_items: [] } as any;
+    const snapBackup: CompanyBackup = { vouchers: snapRecords, ledgers: [], items: [], voucher_entries: [], voucher_items: [] } as any;
+    const manifest: IntegrityEntry = { fingerprintVersion: 2 } as any;
+
+    const iterations = 3;
+    const timings = [];
+
+    for (let iter = 0; iter < iterations; iter++) {
+      const start = performance.now();
+      isBackupSafeSuperset(snapBackup, liveBackup, manifest);
+      const end = performance.now();
+      timings.push(end - start);
+    }
+    
+    const min = Math.min(...timings);
+    const max = Math.max(...timings);
+    const avg = timings.reduce((a, b) => a + b, 0) / iterations;
+
+    console.log(`PRODUCTION_PATH_BENCHMARK_25K: Min: ${min.toFixed(2)}ms, Max: ${max.toFixed(2)}ms, Avg: ${avg.toFixed(2)}ms`);
+    expect(avg).toBeLessThan(2000); 
   });
 });
