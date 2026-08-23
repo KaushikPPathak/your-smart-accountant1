@@ -184,32 +184,56 @@ const VOLATILE_BLACKLIST = new Set([
 ]);
 
 /**
+ * Recursively canonicalizes a value for deterministic fingerprinting.
+ */
+function canonicalizeValue(val: unknown, keyContext?: string): unknown {
+  if (val === null || val === undefined) return null;
+
+  // Handle Arrays: preserve order, recursively canonicalize elements.
+  if (Array.isArray(val)) {
+    return val.map((v) => canonicalizeValue(v, keyContext));
+  }
+
+  // Handle Objects: sort keys recursively.
+  if (typeof val === "object") {
+    const obj = val as Record<string, unknown>;
+    const sortedKeys = Object.keys(obj).sort();
+    const result: Record<string, unknown> = {};
+    for (const k of sortedKeys) {
+      result[k] = canonicalizeValue(obj[k], k);
+    }
+    return result;
+  }
+
+  // Handle Primitives
+  if (typeof val === "string") {
+    // Rule: Do NOT lowercase or trim database identifiers.
+    const isId = keyContext && /(_id|^id$)/i.test(keyContext);
+    if (!isId) {
+      return val.trim().toLocaleLowerCase();
+    }
+    return val;
+  }
+
+  return val;
+}
+
+/**
  * Generates a deterministic Business-State Fingerprint for a record.
  * Identity fields (id, company_id) are preserved exactly.
+ * Recursive canonicalization ensures nested objects are key-order invariant.
  */
 export function canonicalFingerprint(row: Record<string, unknown>): string {
   const result: Record<string, unknown> = {};
   
-  // 1. Selection & Sorting: Include everything not blacklisted, sort keys.
+  // 1. Top-level Selection & Sorting: Include everything not blacklisted, sort keys.
   const keys = Object.keys(row).sort();
   
   for (const key of keys) {
     if (VOLATILE_BLACKLIST.has(key)) continue;
     
-    let val = row[key];
-    
-    // 2. Normalization
-    if (typeof val === "string") {
-      // Rule: Do NOT lowercase or trim database identifiers.
-      const isId = /(_id|^id$)/i.test(key);
-      if (!isId) {
-        val = val.trim().toLocaleLowerCase();
-      }
-    } else if (val === undefined) {
-      val = null;
-    }
-    
-    result[key] = val;
+    // 2. Recursive Canonicalization
+    result[key] = canonicalizeValue(row[key], key);
   }
   
   // 3. Deterministic Representation
