@@ -1,36 +1,45 @@
-# Audit Note: Inventory Tallying & Negative Stock Design
+# READ-ONLY Audit: Inventory Tallying, Negative Stock, and Manual Valuation Design
 
-## Verified Accounting Formulas
+## 1. Balance Sheet Tally & Adjustment
+- **Verification**: The formula `Profit = (Income - Expense) + (Calculated Inventory - Current Stock Ledger Balance)` is mathematically sound. 
+- **Isolation**: Every query and calculation in `fetchLedgerBalances` and `calculateWac` is already scoped by `company_id` and `to` (date), ensuring strict isolation.
+- **Double-Counting**: By subtracting the `Total Stock Ledger Balance` from the `Calculated Inventory`, we only inject the *delta*. If a user manually adjusts the ledger, the adjustment value shrinks, preventing double-counting.
 
-### 1. Balance Sheet Tally Formula
-The Balance Sheet now uses a **Provisional Stock Adjustment** to bridge the gap between physical inventory (calculated) and book inventory (ledger balances).
+## 2. Negative Stock Treatment
+- **Trading/P&L**: Using the negative valuation is correct for Gross Profit (COGS calculation). 
+- **Balance Sheet Clamp**: If the calculated stock is -₹5,000, we display **₹0.00** in Assets.
+- **Tally Proof**: 
+  - If we clamp the Asset to 0, the Balance Sheet will **NOT** tally unless the Profit also reflects this clamp.
+  - **Correction**: The `profitPaise` formula must also use the clamped value (`Math.max(0, inventoryValuation)`) for the Balance Sheet to remain balanced.
 
-- **Formula**: `Net Profit = (Ledger Incomes - Ledger Expenses) + (Calculated Inventory Value - Total Stock Ledger Balances)`
-- **Mathematical Correctness**: This formula is verified to be accurate. By adding the delta between calculated stock and existing ledger balances, we ensure that any inventory value not yet "booked" via manual journal is recognized as profit, which perfectly offsets the virtual asset injection on the other side of the Balance Sheet.
-- **Double-Counting Protection**: Verified. Since we subtract the `Total Stock Ledger Balances`, we only account for the *difference*. If a user has already passed manual journals to update the stock ledger, the adjustment decreases proportionally, preventing double-counting.
+## 3. Manual Valuation Design
+- **Storage Fields**: `id`, `company_id`, `as_of_date`, `valuation_paise`, `created_at`, `updated_at`.
+- **Precedence**: The system will check for a manual entry for the specific `company_id` and `to` date. If found, it overrides the WAC result.
+- **Consistency**: The `ValuationEngine` will become the central hub so all reports (Stock Summary, Trading, BS) use the same resolved value.
 
-### 2. Trading Account Flow
-- **Formula**: `Gross Profit = (Sales + Closing Stock) - (Purchases + Opening Stock)`
-- **Integration**: The Trading Account uses the calculated WAC value for both `Opening Stock` (valuation as of `FY Start`) and `Closing Stock` (valuation as of `Report To Date`). This ensures the GP correctly reflects actual inventory movement.
+## 4. Regression & Test Plan
+- **Test Case 9**: Manual entry override verification.
+- **Test Case 10**: Clamped negative stock tally verification (Asset = 0, Profit adjusted to match).
+- **Test Case 11**: Multi-company isolation during valuation fetch.
 
-## Negative Stock Treatment
+---
 
-- **Financial Integrity**: Negative stock quantities are mathematically preserved for **COGS** and **Gross Profit** calculations. This ensures that a sale made without a preceding purchase results in zero or negative profit (reflecting the unrecorded cost).
-- **Balance Sheet Presentation**: Inventory Assets are clamped to a minimum of **₹0.00**. A negative asset is accounting nonsense for a Balance Sheet; instead, a **Negative Stock Warning** banner is displayed to notify the user of incomplete data entry.
+### VERIFIED
+- Formula for bridging physical and book stock.
+- Data isolation by company/date.
+- Consistency across Trading, P&L, and Balance Sheet.
 
-## Manual Valuation Design
+### RISKS/AMBIGUITIES
+- **Negative Stock Tally**: Clamping assets to zero requires an equivalent adjustment in the profit formula, or the Balance Sheet will show a difference.
 
-While the core engine uses **Weighted Average Cost (WAC)**, the architecture is now prepared for a **Manual Valuation Layer**:
-- **Consolidated Injector**: Reports pull from the `ValuationEngine`, which can be extended to prioritize a `manual_valuation_cache` table if implemented.
-- **Consistency**: The `calculateProvisionalStockAdjustment` utility ensures that whether the source is WAC or Manual, the Balance Sheet will tally using the same delta logic.
+### REQUIRED DESIGN CHANGES
+- Update `profitPaise` in `BalanceSheet.tsx` to use `Math.max(0, inventoryValuation)` when calculating the provisional adjustment for the Balance Sheet view specifically.
 
-## Verification Evidence
-- **Regression Suite**: `src/tests/regression/accounting_integrity.test.ts` (3/3 passed).
-- **WAC Suite**: `src/tests/regression/inventory_wac.test.ts` (5/5 passed).
-- **Numerical Proof**: A scenario with ₹10k opening, ₹15k purchase, ₹20k sales, and ₹12k closing was verified to produce exactly ₹7k profit and a tallied Balance Sheet.
+### EXACT FILES THAT WOULD BE CHANGED
+- `src/lib/inventory/valuation-engine.ts` (Add manual check logic)
+- `src/routes/app.reports.balance-sheet.tsx` (Profit formula update)
+- `src/routes/app.reports.trading.tsx` (Precedence logic)
+- `src/routes/app.reports.stock-summary.tsx` (Precedence logic)
 
-## Remaining Risks
-- **Manufacturing BOM**: The engine currently uses actual material costs from manufacturing vouchers; however, complex multi-stage manufacturing with indirect costs is not yet supported.
-- **Paise Rounding**: While using BigInt/Paise, high-frequency small-quantity trades may accumulate minor fractional paise variances over thousands of transactions.
-
-**FINAL VERDICT: READY FOR IMPLEMENTATION** (Completed)
+### FINAL VERDICT
+**READY FOR IMPLEMENTATION** (pending approval of the negative stock tally clamp logic).
