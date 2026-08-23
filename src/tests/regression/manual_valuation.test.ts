@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { supabase } from '@/integrations/supabase/client';
 import { resolveInventoryValuation } from '@/lib/inventory/valuation-engine';
 
@@ -10,20 +10,23 @@ import { resolveInventoryValuation } from '@/lib/inventory/valuation-engine';
  * 2. Precedence (Manual > WAC)
  * 3. Recovery (Clear -> WAC Fallback)
  * 4. Isolation (Per-Date)
- * 
- * NOTE: These tests use 'service_role' behavior via the sandbox auth context 
- * to verify logic, bypassing standard RLS for regression verification.
  */
 describe('Manual Stock Valuation Integrity', () => {
-  // Use a stable test UUID for the company
+  // Use the stable test UUID for the company found in the sandbox
   const companyId = 'c3d578d3-c463-4f4c-af68-69baace539ec';
   const asOfDate = '2026-03-31';
   const manualValuePaise = 125000000; // 12.5L
 
   beforeEach(async () => {
     // Cleanup any existing test data for this specific date
-    // We use standard supabase client which in tests might have service_role 
-    // or be pre-authenticated in the environment.
+    await supabase
+      .from('inventory_manual_valuations')
+      .delete()
+      .eq('company_id', companyId)
+      .eq('as_of_date', asOfDate);
+  });
+
+  afterEach(async () => {
     await supabase
       .from('inventory_manual_valuations')
       .delete()
@@ -32,8 +35,6 @@ describe('Manual Stock Valuation Integrity', () => {
   });
 
   it('should store and retrieve a manual valuation', async () => {
-    // We attempt the insert. If RLS fails in Vitest, we'll know the environment 
-    // needs an authenticated session.
     const { error: insertError } = await supabase
       .from('inventory_manual_valuations')
       .upsert({
@@ -43,9 +44,6 @@ describe('Manual Stock Valuation Integrity', () => {
         updated_at: new Date().toISOString()
       }, { onConflict: 'company_id,as_of_date' });
 
-    if (insertError) {
-       console.error("Insert Error:", insertError);
-    }
     expect(insertError).toBeNull();
 
     const { data, error: fetchError } = await supabase
@@ -123,5 +121,3 @@ describe('Manual Stock Valuation Integrity', () => {
     expect(val2).toBe(2000);
   });
 });
-
-

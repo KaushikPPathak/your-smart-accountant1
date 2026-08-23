@@ -255,8 +255,9 @@ function StockSummary() {
                 className={manualTotalValue !== null ? "border-primary text-primary hover:text-primary" : ""}
               >
                 <Scale className="mr-2 h-4 w-4" />
-                {manualTotalValue !== null ? "Manual Override Active" : "Set Manual Valuation"}
+                {manualTotalValue !== null ? "Manual Override" : "Manual Valuation"}
               </Button>
+
             }
           />
 

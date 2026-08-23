@@ -85,7 +85,7 @@ function BalanceSheet() {
         ]);
 
         const voucherMap = new Map((vouchers as any[]).map(v => [String(v.id), v]));
-        let totalValuationPaise = 0;
+        let wacValuationPaise = 0;
         let negativeFound = false;
 
         // 1. Calculate WAC for each item to detect negative stock
@@ -111,7 +111,7 @@ function BalanceSheet() {
             Number(it.opening_stock_rate_paise || 0),
             itemMoves
           );
-          totalValuationPaise += val.closingValuePaise;
+          wacValuationPaise += val.closingValuePaise;
           if (val.closingQty < 0) negativeFound = true;
         }
 
@@ -126,9 +126,11 @@ function BalanceSheet() {
         if (manual) {
           setInventoryValuation(Number(manual.valuation_paise));
         } else {
-          setInventoryValuation(totalValuationPaise);
+          setInventoryValuation(wacValuationPaise);
         }
         setHasNegativeStock(negativeFound);
+        (window as any).__BS_CALCULATED_WAC = wacValuationPaise;
+
       })();
     }
   }, [activeCompanyId, to, activeMembership?.companies?.inventory_enabled]);
@@ -175,17 +177,20 @@ function BalanceSheet() {
       // Remove existing stock ledgers from assets
       const nonStockAssets = finalAsset.filter(b => b.type !== 'stock_in_hand');
       
+      const calculatedWac = (window as any).__BS_CALCULATED_WAC ?? 0;
+      
       // Add a single virtual ledger for the calculated valuation
       nonStockAssets.push({
         id: 'virtual-inventory-stock',
-        name: 'Inventory (Calculated)',
+        name: inventoryValuation === calculatedWac ? 'Inventory (Calculated WAC)' : 'Inventory (Manual Override)',
         type: 'stock_in_hand',
         group_code: 'STOCK_IN_HAND',
         closing_paise: inventoryValuation
-
       });
       partitionedBalances.asset = nonStockAssets;
     }
+
+
 
 
 
