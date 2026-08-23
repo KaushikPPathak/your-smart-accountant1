@@ -3,9 +3,10 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   Bot, Send, Sparkles, ArrowRight, Sun, Moon, Languages, Building2,
   Check, X, Pencil, Loader2, Wrench, FileSpreadsheet, Mic, MicOff,
-  FileText, Paperclip, ScanLine, BrainCircuit, Volume2, VolumeX,
+  FileText, Paperclip, ScanLine, Volume2, VolumeX,
   Headphones, Cpu, Cloud, RotateCcw, Zap, History, MessageSquare, Trash2
 } from "lucide-react";
+import { ChatHeader, ChatFooterMetadata } from "./ChatUI";
 import { extractInvoiceOcr, type OcrDraft, type OcrExtracted } from "@/lib/ai/ocr-invoice";
 import { recallPartyPattern, rememberPartyPattern, type PartyPattern } from "@/lib/ai/persistent-memory";
 import { Link } from "@tanstack/react-router";
@@ -273,46 +274,12 @@ export function AssistantChat() {
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <BrainCircuit className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold leading-none">Mehtaji</h2>
-            <p className="text-[10px] text-muted-foreground">Local-first Accounting Intelligence</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn("h-8 w-8", ttsOn && "text-primary bg-primary/10")}
-            onClick={() => setTtsOn(!ttsOn)}
-            title={ttsOn ? "Mute Voice" : "Enable Voice"}
-          >
-            {ttsOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </Button>
-          
-          <div className="flex items-center gap-1 rounded-md border bg-muted/50 px-2 py-1">
-            <Cpu className="h-3 w-3 text-muted-foreground" />
-            <span className="text-[10px] font-medium text-muted-foreground">
-              {modelPref === "local" ? "Device" : modelPref === "cloud" ? "Cloud" : "Auto"}
-            </span>
-          </div>
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            onClick={() => setMessages([WELCOME])}
-            title="Clear Chat"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <ChatHeader 
+        ttsOn={ttsOn}
+        onToggleTts={() => setTtsOn(!ttsOn)}
+        modelPref={modelPref}
+        onClearChat={() => setMessages([WELCOME])}
+      />
 
       {/* Messages */}
       <ScrollArea ref={scrollerRef} className="flex-1 px-4 py-4">
@@ -531,25 +498,10 @@ export function AssistantChat() {
             </div>
           </div>
           
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1">
-                <Zap className="h-3 w-3 text-amber-500" />
-                Local Compute Only
-              </span>
-              <span className="flex items-center gap-1">
-                <Check className="h-3 w-3 text-emerald-500" />
-                Zero Data Tracking
-              </span>
-            </div>
-            
-            <button 
-              className="hover:text-primary underline-offset-2 hover:underline"
-              onClick={() => setActiveCat(activeCat === "All" ? "Vouchers" : "All")}
-            >
-              {activeCat === "All" ? "Browse Knowledge Base" : "Back to Chat"}
-            </button>
-          </div>
+          <ChatFooterMetadata 
+            activeCat={activeCat}
+            onToggleKb={() => setActiveCat(activeCat === "All" ? "Vouchers" : "All")}
+          />
         </div>
       </div>
       
