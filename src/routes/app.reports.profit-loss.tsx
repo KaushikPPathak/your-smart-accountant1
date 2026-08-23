@@ -75,46 +75,67 @@ function ProfitLoss() {
     if (!activeCompanyId || !inventoryEnabled) return;
     (async () => {
       try {
-        const { ledgers, items } = await withCacheFallback(
-          async () => {
-            const [sLed, itms] = await Promise.all([
-              supabase
-                .from("ledgers")
-                .select("opening_balance_paise, opening_balance_is_debit")
-                .eq("company_id", activeCompanyId)
-                .eq("type", "stock_in_hand"),
-              supabase
-                .from("items")
-                .select("opening_stock_qty, opening_stock_rate_paise")
-                .eq("company_id", activeCompanyId),
-            ]);
-            return { ledgers: (sLed.data || []) as any[], items: (itms.data || []) as any[] };
-          },
-          async () => {
-            const [ledgers, items] = await Promise.all([readLedgers(activeCompanyId), readItems(activeCompanyId)]);
-            return {
-              ledgers: (ledgers as any[]).filter((l) => l.type === "stock_in_hand"),
-              items: items as any[],
-            };
-          },
-        );
-        const ledOp = (ledgers as any[]).reduce(
-          (s, l) => s + (l.opening_balance_is_debit ? 1 : -1) * Number(l.opening_balance_paise || 0),
-          0,
-        );
-        const itemOp = (items as any[]).reduce(
-          (s, it) => s + Math.round(Number(it.opening_stock_qty || 0) * Number(it.opening_stock_rate_paise || 0)),
-          0,
-        );
-        const stk = ledOp || itemOp;
-        setOpeningStock(stk);
-        setClosingStock(stk);
+        const [items, vouchers, voucherItems] = await Promise.all([
+          withCacheFallback(
+            async () => (await supabase.from("items").select("*").eq("company_id", activeCompanyId)).data || [],
+            async () => readItems(activeCompanyId)
+          ),
+          withCacheFallback(
+            async () => (await supabase.from("vouchers").select("*").eq("company_id", activeCompanyId).lte("voucher_date", to)).data || [],
+            async () => readVouchers(activeCompanyId, { to })
+          ),
+          withCacheFallback(
+            async () => (await supabase.from("voucher_items").select("*, vouchers!inner(voucher_date, company_id)").eq("vouchers.company_id", activeCompanyId).lte("vouchers.voucher_date", to)).data || [],
+            async () => readVoucherItemsForCompany(activeCompanyId)
+          )
+        ]);
+
+        const voucherMap = new Map((vouchers as any[]).map(v => [String(v.id), v]));
+        let totalOpeningPaise = 0;
+        let totalClosingPaise = 0;
+
+        for (const it of items as any[]) {
+          const itemMoves: ItemMove[] = (voucherItems as any[])
+            .filter(vi => String(vi.item_id) === String(it.id))
+            .map(vi => {
+              const v = voucherMap.get(String(vi.voucher_id));
+              if (!v || v.is_deleted) return null;
+              if (v.voucher_date > to) return null;
+              return {
+                date: v.voucher_date,
+                qty: Number(vi.qty || 0),
+                taxablePaise: Number(vi.taxable_paise || 0),
+                type: v.voucher_type,
+                voucherId: v.id
+              };
+            })
+            .filter((m): m is ItemMove => m !== null);
+
+          // Opening Stock for P&L carry (start of period)
+          const valOpening = calculateWac(
+            Number(it.opening_stock_qty || 0),
+            Number(it.opening_stock_rate_paise || 0),
+            itemMoves.filter(m => m.date < from)
+          );
+          totalOpeningPaise += valOpening.closingValuePaise;
+
+          // Closing Stock for P&L carry (end of period)
+          const valClosing = calculateWac(
+            Number(it.opening_stock_qty || 0),
+            Number(it.opening_stock_rate_paise || 0),
+            itemMoves
+          );
+          totalClosingPaise += valClosing.closingValuePaise;
+        }
+
+        setOpeningStock(totalOpeningPaise);
+        setClosingStock(totalClosingPaise);
       } catch {
         setOpeningStock(0);
         setClosingStock(0);
       }
     })();
-  }, [activeCompanyId, inventoryEnabled]);
+  }, [activeCompanyId, from, to, inventoryEnabled]);
 
   // Accounting rule: Sales / Purchase / Direct Income / Direct Expense
   // ALWAYS flow through the Trading A/c — this includes job-work / labour-only
