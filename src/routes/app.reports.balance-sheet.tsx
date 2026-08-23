@@ -122,23 +122,20 @@ function BalanceSheet() {
     const exp = balances.filter((b) => b.type === "expense_direct" || b.type === "expense_indirect")
       .reduce((s, b) => s + b.closing_paise, 0);
     
-    // Period P/L calculation: (Income + Calculated Closing Stock) - (Expense + Opening Stock)
-    // However, the Balance Sheet logic is derived from ALL ledger balances.
-    // If we use Calculated Closing Stock, we must replace the 'Stock-in-Hand' ledger 
-    // contribution to the P/L surplus with our calculated figure.
-    
     const inventoryEnabled = !!activeMembership?.companies?.inventory_enabled;
     if (!inventoryEnabled) return inc - exp;
 
-    // We already have inc and exp from ledger movements.
-    // We need to inject the provisional stock adjustment into the profit calculation.
-    // Trading A/c profit = (Sales + ClosingStock) - (Purchases + OpeningStock)
-    // Profit = (Total Income + Closing Stock) - (Total Expense + Opening Stock)
+    // To tally when using virtual inventory valuation, we must calculate the delta
+    // between the calculated valuation and the actual ledger balances for STOCK_IN_HAND.
+    const stockLedgers = balances.filter(b => b.type === 'stock_in_hand');
+    const totalStockLedgerPaise = stockLedgers.reduce((s, b) => s + b.closing_paise, 0);
     
-    // We need to calculate opening stock for the profit formula
-    // (This is a simplified carry from Trading A/c logic)
-    return inc - exp; // Placeholder: Profit is naturally balanced by ledger movements + manual stock journals
+    // The provisional adjustment is the "unrealized" stock value not yet booked in ledgers.
+    const provisionalAdjustment = inventoryValuation - totalStockLedgerPaise;
+
+    return inc - exp + provisionalAdjustment;
   }, [balances, inventoryValuation, activeMembership?.companies?.inventory_enabled]);
+
 
   // Reform: Balanced-Sign Partitions.
   // Ledgers with "wrong" signs (e.g. overdrawn Bank Asset showing as Cr) are
@@ -156,18 +153,21 @@ function BalanceSheet() {
     // Replace Stock-in-Hand ledger balances with calculated inventory valuation if enabled
     const inventoryEnabled = !!activeMembership?.companies?.inventory_enabled;
     if (inventoryEnabled) {
-      // Remove existing stock ledgers
+      // Remove existing stock ledgers from assets
       const nonStockAssets = finalAsset.filter(b => b.type !== 'stock_in_hand');
+      
       // Add a single virtual ledger for the calculated valuation
+      // IMPORTANT: Negative inventory is reported as ₹0 in Balance Sheet to avoid negative asset distortion
       nonStockAssets.push({
         id: 'virtual-inventory-stock',
         name: 'Inventory (Calculated)',
         type: 'stock_in_hand',
         group_code: 'STOCK_IN_HAND',
-        closing_paise: inventoryValuation
+        closing_paise: Math.max(0, inventoryValuation)
       });
       partitionedBalances.asset = nonStockAssets;
     }
+
 
 
     // 3. Swap negative Assets to Liabilities (e.g. Bank OD, Debit Taxes)
@@ -342,7 +342,14 @@ function BalanceSheet() {
                 : `${formatINR(Math.abs(diffPaise))} ${diffPaise > 0 ? "(Assets > Liabilities)" : "(Liabilities > Assets)"}`}
             </span>
           </div>
+          {activeMembership?.companies?.inventory_enabled && inventoryValuation < 0 && (
+            <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              <p className="font-semibold">Negative Stock Warning</p>
+              <p>One or more items have negative quantities. Calculated inventory value is negative ({formatINR(inventoryValuation)}), but reported as <strong>₹0.00</strong> here to maintain Balance Sheet integrity. Please review Stock Summary.</p>
+            </div>
+          )}
         </CardContent>
+
       </Card>
       {view === "grid" ? (
         <Card><CardContent className="p-3">
