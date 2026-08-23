@@ -13,6 +13,8 @@ import { amountHeader } from "@/lib/export-format";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { ReportViewer } from "@/components/reports/ReportViewer";
+import { ManualValuationDialog } from "@/components/inventory/ManualValuationDialog";
+import { Scale } from "lucide-react";
 import {
   readItems,
   readVouchers,
@@ -20,6 +22,8 @@ import {
   withCacheFallback,
 } from "@/lib/offline/cache-read";
 import { calculateWac, type ItemMove as WacMove } from "@/lib/inventory/valuation-engine";
+import { Button } from "@/components/ui/button";
+
 
 
 export const Route = createFileRoute("/app/reports/stock-summary")({
@@ -166,15 +170,23 @@ function StockSummary() {
       };
     });
   }, [items, moves, from, to]);
-
+  
+  const [manualValOpen, setManualValOpen] = useState(false);
   const [manualTotalValue, setManualTotalValue] = useState<number | null>(null);
 
-  useEffect(() => {
+  const fetchManualValuation = useEffect(() => {
     if (!activeCompanyId) return;
     supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", to).maybeSingle().then(({ data }: { data: any }) => {
       setManualTotalValue(data ? Number(data.valuation_paise) : null);
     });
   }, [activeCompanyId, to]);
+
+  const financialYear = useMemo(() => {
+    const y = new Date(from).getFullYear();
+    const shortEnd = String(y + 1).slice(-2);
+    return `FY ${y}-${shortEnd}`;
+  }, [from]);
+
 
 
   const calculatedTotalValue = rows.reduce((s, r2) => s + r2.stockValue, 0);
@@ -235,7 +247,19 @@ function StockSummary() {
             onExportXlsx={() => downloadXlsx(`stock-summary-${to}.xlsx`, [{ name: "Stock", rows: csv() }])}
             onExportPdf={onExportPdf}
             onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
+            extraButtons={
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setManualValOpen(true)}
+                className={manualTotalValue !== null ? "border-primary text-primary hover:text-primary" : ""}
+              >
+                <Scale className="mr-2 h-4 w-4" />
+                {manualTotalValue !== null ? "Manual Override Active" : "Set Manual Valuation"}
+              </Button>
+            }
           />
+
           <p className="mt-2 text-xs text-muted-foreground">Stock value is calculated using Weighted Average Cost (WAC).</p>
           {rows.some(r => r.closing < 0) && (
             <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
@@ -302,6 +326,23 @@ function StockSummary() {
           </CardContent>
         </Card>
       )}
+      <ManualValuationDialog
+        open={manualValOpen}
+        onOpenChange={setManualValOpen}
+        companyId={activeCompanyId || ""}
+        asOfDate={to}
+        financialYear={financialYear}
+        calculatedWacPaise={calculatedTotalValue}
+        onSuccess={() => {
+          // Force refresh manual value state
+          if (activeCompanyId) {
+            supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", to).maybeSingle().then(({ data }: { data: any }) => {
+              setManualTotalValue(data ? Number(data.valuation_paise) : null);
+            });
+          }
+        }}
+      />
     </ReportViewer>
+
   );
 }
