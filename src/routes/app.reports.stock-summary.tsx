@@ -223,8 +223,14 @@ function StockSummary() {
             onExportPdf={onExportPdf}
             onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           />
-          <p className="mt-2 text-xs text-muted-foreground">Stock value is calculated using each item's opening rate.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Stock value is calculated using Weighted Average Cost (WAC).</p>
+          {rows.some(r => r.closing < 0) && (
+            <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              <strong>Negative Stock Detected:</strong> Some items have sales/outwards recorded before matching purchases. Valuation for these items is mathematically calculated at the last known WAC.
+            </div>
+          )}
           <div className="mt-2"><ViewSwitcher view={view} onChange={setView} /></div>
+
         </CardContent>
       </Card>
       {view === "grid" ? (

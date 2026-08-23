@@ -153,18 +153,21 @@ function BalanceSheet() {
     // Replace Stock-in-Hand ledger balances with calculated inventory valuation if enabled
     const inventoryEnabled = !!activeMembership?.companies?.inventory_enabled;
     if (inventoryEnabled) {
-      // Remove existing stock ledgers
+      // Remove existing stock ledgers from assets
       const nonStockAssets = finalAsset.filter(b => b.type !== 'stock_in_hand');
+      
       // Add a single virtual ledger for the calculated valuation
+      // IMPORTANT: Negative inventory is reported as ₹0 in Balance Sheet to avoid negative asset distortion
       nonStockAssets.push({
         id: 'virtual-inventory-stock',
         name: 'Inventory (Calculated)',
         type: 'stock_in_hand',
         group_code: 'STOCK_IN_HAND',
-        closing_paise: inventoryValuation
+        closing_paise: Math.max(0, inventoryValuation)
       });
       partitionedBalances.asset = nonStockAssets;
     }
+
 
 
     // 3. Swap negative Assets to Liabilities (e.g. Bank OD, Debit Taxes)
@@ -339,7 +342,14 @@ function BalanceSheet() {
                 : `${formatINR(Math.abs(diffPaise))} ${diffPaise > 0 ? "(Assets > Liabilities)" : "(Liabilities > Assets)"}`}
             </span>
           </div>
+          {activeMembership?.companies?.inventory_enabled && inventoryValuation < 0 && (
+            <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              <p className="font-semibold">Negative Stock Warning</p>
+              <p>One or more items have negative quantities. Calculated inventory value is negative ({formatINR(inventoryValuation)}), but reported as <strong>₹0.00</strong> here to maintain Balance Sheet integrity. Please review Stock Summary.</p>
+            </div>
+          )}
         </CardContent>
+
       </Card>
       {view === "grid" ? (
         <Card><CardContent className="p-3">
