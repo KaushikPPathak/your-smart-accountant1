@@ -122,23 +122,20 @@ function BalanceSheet() {
     const exp = balances.filter((b) => b.type === "expense_direct" || b.type === "expense_indirect")
       .reduce((s, b) => s + b.closing_paise, 0);
     
-    // Period P/L calculation: (Income + Calculated Closing Stock) - (Expense + Opening Stock)
-    // However, the Balance Sheet logic is derived from ALL ledger balances.
-    // If we use Calculated Closing Stock, we must replace the 'Stock-in-Hand' ledger 
-    // contribution to the P/L surplus with our calculated figure.
-    
     const inventoryEnabled = !!activeMembership?.companies?.inventory_enabled;
     if (!inventoryEnabled) return inc - exp;
 
-    // We already have inc and exp from ledger movements.
-    // We need to inject the provisional stock adjustment into the profit calculation.
-    // Trading A/c profit = (Sales + ClosingStock) - (Purchases + OpeningStock)
-    // Profit = (Total Income + Closing Stock) - (Total Expense + Opening Stock)
+    // To tally when using virtual inventory valuation, we must calculate the delta
+    // between the calculated valuation and the actual ledger balances for STOCK_IN_HAND.
+    const stockLedgers = balances.filter(b => b.type === 'stock_in_hand');
+    const totalStockLedgerPaise = stockLedgers.reduce((s, b) => s + b.closing_paise, 0);
     
-    // We need to calculate opening stock for the profit formula
-    // (This is a simplified carry from Trading A/c logic)
-    return inc - exp; // Placeholder: Profit is naturally balanced by ledger movements + manual stock journals
+    // The provisional adjustment is the "unrealized" stock value not yet booked in ledgers.
+    const provisionalAdjustment = inventoryValuation - totalStockLedgerPaise;
+
+    return inc - exp + provisionalAdjustment;
   }, [balances, inventoryValuation, activeMembership?.companies?.inventory_enabled]);
+
 
   // Reform: Balanced-Sign Partitions.
   // Ledgers with "wrong" signs (e.g. overdrawn Bank Asset showing as Cr) are
