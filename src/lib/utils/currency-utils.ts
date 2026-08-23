@@ -33,7 +33,6 @@ export function formatPaise(paise: number): string {
   return `${isNegative ? "-" : ""}${rupees}.${cents.toString().padStart(2, "0")}`;
 }
 
-
 /**
  * Convert a rupee string (e.g., "1,234.56" or "1234.5") into integer paise.
  * Hardened against floating point errors by using string split and integer math.
@@ -58,6 +57,9 @@ export function parseToPaise(rupeeString: string | number): number {
   return cleanStr.startsWith("-") ? -total : total;
 }
 
+/** Alias for parseToPaise to maintain backward compatibility */
+export const rupeesToPaise = parseToPaise;
+
 /**
  * Calculate GST component from a taxable amount and rate.
  * Returns integer paise.
@@ -67,6 +69,13 @@ export function calculateGST(taxablePaise: number, rate: number): number {
   // Calculation: (taxable * rate) / 100
   // To keep it in integer paise: round((taxablePaise * rate) / 100)
   return Math.round((taxablePaise * rate) / 100);
+}
+
+/**
+ * Round a value to the nearest rupee (100 paise).
+ */
+export function roundToNearestRupee(paise: number): number {
+  return Math.round(paise / 100) * 100;
 }
 
 /**
@@ -109,4 +118,3 @@ export function amountInWords(paise: number): string {
   result += " Only";
   return result;
 }
-
