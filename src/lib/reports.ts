@@ -116,7 +116,7 @@ export async function fetchLedgerBalancesWithMeta(
     movements.set(e.ledger_id, (movements.get(e.ledger_id) || 0) + e.debit_paise - e.credit_paise);
   }
 
-  const balances = (ledgers || []).map((l) => {
+  const balances = ((ledgers as LedgerForBalance[]) || []).map((l) => {
     const ob = fromOpt ? 0 : (l.opening_balance_is_debit ? 1 : -1) * l.opening_balance_paise;
     const closing = ob + (movements.get(l.id) || 0);
     return { id: l.id, name: l.name, type: l.type, group_code: l.group_code ?? null, closing_paise: closing };
