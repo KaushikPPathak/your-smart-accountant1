@@ -176,13 +176,13 @@ function BalanceSheet() {
       const nonStockAssets = finalAsset.filter(b => b.type !== 'stock_in_hand');
       
       // Add a single virtual ledger for the calculated valuation
-      // IMPORTANT: Negative inventory is reported as ₹0 in Balance Sheet to avoid negative asset distortion
       nonStockAssets.push({
         id: 'virtual-inventory-stock',
         name: 'Inventory (Calculated)',
         type: 'stock_in_hand',
         group_code: 'STOCK_IN_HAND',
-        closing_paise: Math.max(0, inventoryValuation)
+        closing_paise: inventoryValuation
+
       });
       partitionedBalances.asset = nonStockAssets;
     }
