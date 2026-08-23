@@ -498,7 +498,10 @@ export function AssistantChat() {
             </div>
           </div>
           
-          <ChatFooterMetadata />
+          <ChatFooterMetadata 
+            activeCat={activeCat}
+            onToggleKb={() => setActiveCat(activeCat === "All" ? "Vouchers" : "All")}
+          />
         </div>
       </div>
       
