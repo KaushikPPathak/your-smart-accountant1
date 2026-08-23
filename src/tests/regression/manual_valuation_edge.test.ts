@@ -37,10 +37,14 @@ describe('Manual Stock Valuation Edge Case Audit', () => {
     
     await supabase.from('inventory_manual_valuations').delete().eq('company_id', companyId);
 
-    await supabase.from('inventory_manual_valuations').insert([
+    const { error: insertError } = await supabase.from('inventory_manual_valuations').insert([
       { company_id: companyId, as_of_date: date1, valuation_paise: 1000 },
       { company_id: companyId, as_of_date: date2, valuation_paise: 2000 }
     ]);
+    
+    if (insertError) {
+      console.error("DEBUG: Insert Error", insertError);
+    }
 
     const res1 = await resolveInventoryValuation(companyId, date1, [], [], []);
     const res2 = await resolveInventoryValuation(companyId, date2, [], [], []);
