@@ -14,6 +14,8 @@ import { supabase } from "../../integrations/supabase/client";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { emitDataChange } from "@/lib/ai/cache-events";
 import { logActivity } from "@/lib/activity-log";
+import { nowIso, getDbInstance as getOfflineDb } from "@/lib/utils/sys-utils";
+
 
 export type VoucherExecutor = (snap: unknown) => Promise<void>;
 
@@ -69,14 +71,9 @@ const ITEM_COLUMNS = [
   "updated_at",
 ] as const;
 
-async function getOfflineDb() {
-  const module = await import("./db");
-  return module.default || module.offlineDb || module.db || (module as any);
-}
+// Functions moved to sys-utils.ts
 
-function nowIso(): string {
-  return new Date().toISOString();
-}
+
 
 async function nextLocalVoucherNumber(
   companyId: string,

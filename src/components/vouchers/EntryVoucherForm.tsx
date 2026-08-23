@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
-import { formatINR, rupeesToPaise } from "@/lib/money";
+import { formatINR, rupeesToPaise } from "@/lib/utils/currency-utils";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
