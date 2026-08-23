@@ -2,7 +2,6 @@
  * Shared inventory processing and validation for vouchers.
  */
 
-
 export interface ItemMove {
   date: string;
   qty: number;
@@ -41,7 +40,7 @@ export function calculateWac(
 
   for (const move of sortedMoves) {
     const qty = Math.abs(move.qty);
-    const moveRate = move.taxablePaise / qty;
+    const moveRate = qty > 0 ? move.taxablePaise / qty : 0;
 
     const isInward = 
       move.type === "purchase" || 
@@ -118,3 +117,18 @@ export async function getCompanyInventoryValuation(
 
   return valuationMap;
 }
+
+/**
+ * Calculates the delta between the physical stock (WAC valuation) 
+ * and the accounting book stock (ledger balances).
+ * 
+ * This adjustment is injected into the P&L and Balance Sheet to ensure they tally.
+ */
+export function calculateProvisionalStockAdjustment(
+  calculatedValuationPaise: number,
+  stockLedgerBalances: { closing_paise: number }[]
+): number {
+  const totalLedgerBalance = stockLedgerBalances.reduce((s, b) => s + b.closing_paise, 0);
+  return calculatedValuationPaise - totalLedgerBalance;
+}
+
