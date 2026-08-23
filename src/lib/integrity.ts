@@ -31,6 +31,8 @@ export interface IntegrityEntry {
   lastSnapshotFile?: string | null;
   /** Sub-path relative to <root>, e.g. "snapshots/2026-07-06". */
   lastSnapshotDir?: string | null;
+  /** The fingerprint version used by this manifest entry. */
+  fingerprintVersion?: number;
 }
 
 export type IntegrityMap = Record<string, IntegrityEntry>;
@@ -51,6 +53,7 @@ function countFromPayload(name: string, companyId: string, payload: CompanyBacku
     voucherItems: payload.voucher_items?.length ?? 0,
     lastSnapshotFile: opts?.file ?? null,
     lastSnapshotDir: opts?.dir ?? null,
+    fingerprintVersion: 2, // Current hardened version
   };
 }
 
