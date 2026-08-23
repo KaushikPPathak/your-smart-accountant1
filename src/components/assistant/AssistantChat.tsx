@@ -498,25 +498,7 @@ export function AssistantChat() {
             </div>
           </div>
           
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1">
-                <Zap className="h-3 w-3 text-amber-500" />
-                Local Compute Only
-              </span>
-              <span className="flex items-center gap-1">
-                <Check className="h-3 w-3 text-emerald-500" />
-                Zero Data Tracking
-              </span>
-            </div>
-            
-            <button 
-              className="hover:text-primary underline-offset-2 hover:underline"
-              onClick={() => setActiveCat(activeCat === "All" ? "Vouchers" : "All")}
-            >
-              {activeCat === "All" ? "Browse Knowledge Base" : "Back to Chat"}
-            </button>
-          </div>
+          <ChatFooterMetadata />
         </div>
       </div>
       
