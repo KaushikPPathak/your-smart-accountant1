@@ -35,28 +35,25 @@ describe('Accounting Tally & Negative Stock Logic', () => {
       { date: '2024-04-01', qty: -50, taxablePaise: 0, type: 'sales', voucherId: 's1' }
     ]);
     
-    // Mathematical value is negative
+    // Mathematical value is negative and MUST be preserved
     expect(result.closingQty).toBe(-50);
     expect(result.closingValuePaise).toBe(-500000);
     
-    // Reporting Logic (simulated from BalanceSheet.tsx):
-    const reportedAsset = Math.max(0, result.closingValuePaise);
-    expect(reportedAsset).toBe(0);
+    // Reporting Logic: Check that we use the negative value for tallying
+    const stockLedgers = [{ closing_paise: 0 }];
+    const adjustment = calculateProvisionalStockAdjustment(result.closingValuePaise, stockLedgers);
+    expect(adjustment).toBe(-500000);
   });
 
   it('8. Negative stock effect on Gross Profit (COGS)', () => {
-    // Even if stock is negative, it must reduce profit (mathematically correct)
-    // Opening: 0, Purchase: 0, Sale: 50, Closing: -50 (Value: -5000)
-    // GP = (Sales + Closing) - (Purchases + Opening)
-    // GP = (5000 + (-5000)) - (0 + 0) = 0
-    // This is correct: we sold 50 units we didn't buy yet, so we have no profit until purchase is recorded.
-    
-    const salesPaise = 500000;
-    const closingStockPaise = -500000;
+    const salesPaise = 1000000; // 10k
+    const closingStockPaise = -500000; // -5k
     const purchasesPaise = 0;
     const openingStockPaise = 0;
     
+    // GP = (10,000 + (-5,000)) - (0 + 0) = 5,000
     const gp = (salesPaise + closingStockPaise) - (purchasesPaise + openingStockPaise);
-    expect(gp).toBe(0);
+    expect(gp).toBe(500000);
   });
+
 });

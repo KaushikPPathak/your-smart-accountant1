@@ -161,12 +161,25 @@ function StockSummary() {
         outWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && isOutward(m.vouchers.voucher_type)).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
         closing: val.closingQty,
         stockValue: val.closingValuePaise,
-        lowStock: it.reorder_level > 0 && val.closingQty <= it.reorder_level
+        lowStock: it.reorder_level > 0 && val.closingQty <= it.reorder_level,
+        isNegative: val.closingQty < 0
       };
     });
   }, [items, moves, from, to]);
 
-  const totalValue = rows.reduce((s, r2) => s + r2.stockValue, 0);
+  const [manualTotalValue, setManualTotalValue] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", to).maybeSingle().then(({ data }: { data: any }) => {
+      setManualTotalValue(data ? Number(data.valuation_paise) : null);
+    });
+  }, [activeCompanyId, to]);
+
+
+  const calculatedTotalValue = rows.reduce((s, r2) => s + r2.stockValue, 0);
+  const totalValue = manualTotalValue !== null ? manualTotalValue : calculatedTotalValue;
+
 
   // Sold / consumed quantities are shown as negative numbers so the sign
   // convention matches inventory ledgers ("goods leaving stock").
@@ -278,8 +291,11 @@ function StockSummary() {
                   </TableRow>
                 ))}
                 <TableRow>
-                  <TableCell colSpan={7} className="text-right font-semibold">Total Stock Value</TableCell>
+                  <TableCell colSpan={7} className="text-right font-semibold">
+                    {manualTotalValue !== null ? "Total Stock Value (Manual Override)" : "Total Stock Value"}
+                  </TableCell>
                   <TableCell className="text-right font-mono font-semibold">{formatINR(totalValue)}</TableCell>
+
                 </TableRow>
               </TableBody>
             </Table>

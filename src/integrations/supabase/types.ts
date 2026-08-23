@@ -1251,6 +1251,48 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_manual_valuations: {
+        Row: {
+          as_of_date: string
+          company_id: string
+          created_at: string
+          id: string
+          updated_at: string
+          valuation_paise: number
+        }
+        Insert: {
+          as_of_date: string
+          company_id: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          valuation_paise: number
+        }
+        Update: {
+          as_of_date?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          valuation_paise?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_manual_valuations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_manual_valuations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies_picker"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       it_43b_clearances: {
         Row: {
           cleared_on: string | null

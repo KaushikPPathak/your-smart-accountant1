@@ -60,6 +60,7 @@ function BalanceSheet() {
   const [taxView, setTaxView] = useState(false);
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
   const [inventoryValuation, setInventoryValuation] = useState(0);
+  const [hasNegativeStock, setHasNegativeStock] = useState(false);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -85,7 +86,9 @@ function BalanceSheet() {
 
         const voucherMap = new Map((vouchers as any[]).map(v => [String(v.id), v]));
         let totalValuationPaise = 0;
+        let negativeFound = false;
 
+        // 1. Calculate WAC for each item to detect negative stock
         for (const it of items as any[]) {
           const itemMoves: ItemMove[] = (voucherItems as any[])
             .filter(vi => String(vi.item_id) === String(it.id))
@@ -109,11 +112,27 @@ function BalanceSheet() {
             itemMoves
           );
           totalValuationPaise += val.closingValuePaise;
+          if (val.closingQty < 0) negativeFound = true;
         }
-        setInventoryValuation(totalValuationPaise);
+
+        // 2. Check for manual override which applies to the WHOLE company valuation
+        const { data: manual } = await supabase
+          .from("inventory_manual_valuations")
+          .select("valuation_paise")
+          .eq("company_id", activeCompanyId)
+          .eq("as_of_date", to)
+          .maybeSingle();
+
+        if (manual) {
+          setInventoryValuation(Number(manual.valuation_paise));
+        } else {
+          setInventoryValuation(totalValuationPaise);
+        }
+        setHasNegativeStock(negativeFound);
       })();
     }
   }, [activeCompanyId, to, activeMembership?.companies?.inventory_enabled]);
+
 
   // Period P/L flows into the BS to balance it (Net Profit on Liabilities, Loss on Assets).
   const profitPaise = useMemo(() => {
@@ -157,13 +176,13 @@ function BalanceSheet() {
       const nonStockAssets = finalAsset.filter(b => b.type !== 'stock_in_hand');
       
       // Add a single virtual ledger for the calculated valuation
-      // IMPORTANT: Negative inventory is reported as ₹0 in Balance Sheet to avoid negative asset distortion
       nonStockAssets.push({
         id: 'virtual-inventory-stock',
         name: 'Inventory (Calculated)',
         type: 'stock_in_hand',
         group_code: 'STOCK_IN_HAND',
-        closing_paise: Math.max(0, inventoryValuation)
+        closing_paise: inventoryValuation
+
       });
       partitionedBalances.asset = nonStockAssets;
     }
@@ -342,13 +361,14 @@ function BalanceSheet() {
                 : `${formatINR(Math.abs(diffPaise))} ${diffPaise > 0 ? "(Assets > Liabilities)" : "(Liabilities > Assets)"}`}
             </span>
           </div>
-          {activeMembership?.companies?.inventory_enabled && inventoryValuation < 0 && (
+          {activeMembership?.companies?.inventory_enabled && (inventoryValuation < 0 || hasNegativeStock) && (
             <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-              <p className="font-semibold">Negative Stock Warning</p>
-              <p>One or more items have negative quantities. Calculated inventory value is negative ({formatINR(inventoryValuation)}), but reported as <strong>₹0.00</strong> here to maintain Balance Sheet integrity. Please review Stock Summary.</p>
+              <p className="font-semibold text-amber-800 dark:text-amber-300">Negative Stock Warning</p>
+              <p>One or more items have negative quantities or the total inventory value is negative ({formatINR(inventoryValuation)}). This indicates sales/outwards were recorded before matching purchases.</p>
             </div>
           )}
         </CardContent>
+
 
       </Card>
       {view === "grid" ? (

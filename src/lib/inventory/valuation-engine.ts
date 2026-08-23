@@ -1,6 +1,8 @@
 /**
  * Shared inventory processing and validation for vouchers.
  */
+import { supabase } from "@/integrations/supabase/client";
+
 
 export interface ItemMove {
   date: string;
@@ -119,6 +121,44 @@ export async function getCompanyInventoryValuation(
 }
 
 /**
+ * Resolves the inventory valuation for a company, applying manual overrides if present.
+ */
+export async function resolveInventoryValuation(
+  companyId: string,
+  asOfDate: string,
+  items: any[],
+  vouchers: any[],
+  voucherItems: any[]
+): Promise<number> {
+  // 1. Check for manual valuation override
+  const { data: manual, error } = await supabase
+    .from("inventory_manual_valuations")
+    .select("valuation_paise")
+    .eq("company_id", companyId)
+    .eq("as_of_date", asOfDate)
+    .maybeSingle();
+
+  if (!error && manual) {
+    return Number(manual.valuation_paise);
+  }
+
+  // 2. Fallback to WAC engine
+  const valuationMap = await getCompanyInventoryValuation(
+    companyId,
+    asOfDate,
+    items,
+    vouchers,
+    voucherItems
+  );
+
+  let totalPaise = 0;
+  for (const res of valuationMap.values()) {
+    totalPaise += res.closingValuePaise;
+  }
+  return totalPaise;
+}
+
+/**
  * Calculates the delta between the physical stock (WAC valuation) 
  * and the accounting book stock (ledger balances).
  * 
@@ -131,4 +171,5 @@ export function calculateProvisionalStockAdjustment(
   const totalLedgerBalance = stockLedgerBalances.reduce((s, b) => s + b.closing_paise, 0);
   return calculatedValuationPaise - totalLedgerBalance;
 }
+
 
