@@ -203,3 +203,38 @@ export async function withCacheFallback<T>(
     return await cache();
   }
 }
+
+/** 
+ * Unified fetcher for accounting reports. Returns a complete dataset 
+ * (ledgers, vouchers, entries) for a company and date range.
+ */
+export async function readAccountingDataset(companyId: string, opts?: { from?: string; to?: string }) {
+  const [ledgers, vouchers, rawEntries] = await Promise.all([
+    readLedgers(companyId),
+    readVouchers(companyId, opts),
+    readVoucherEntriesForCompany(companyId),
+  ]);
+
+  const voucherById = new Map(vouchers.map((v: any) => [String(v.id), v]));
+  const entries = (rawEntries as any[])
+    .map((e) => {
+      const v = voucherById.get(String(e.voucher_id));
+      if (!v) return null;
+      const date = String(v.voucher_date ?? v.date ?? "");
+      if (opts?.from && date < opts.from) return null;
+      if (opts?.to && date > opts.to) return null;
+      return {
+        ledger_id: String(e.ledger_id ?? ""),
+        debit_paise: Number(e.debit_paise ?? 0),
+        credit_paise: Number(e.credit_paise ?? 0),
+        vouchers: {
+          voucher_type: (v.voucher_type as string | null) ?? null,
+          narration: (v.narration as string | null) ?? null,
+          voucher_id: String(v.id),
+        },
+      };
+    })
+    .filter((e): e is NonNullable<typeof e> => e !== null);
+
+  return { ledgers: ledgers as any[], entries };
+}

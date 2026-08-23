@@ -1,15 +1,7 @@
 // Dexie-backed offline cache database.
 //
-// This module is the single source of truth for IndexedDB tables used by
-// the offline subsystem: outbox, credential cache, snapshot cache and
-// sync cursors. All consumers import `offlineDb` (named, default, and
-// legacy `db` exports kept for backwards-compatibility with dynamic
-// importers).
-//
-// IMPORTANT: When the browser does not support IndexedDB (e.g. private
-// mode on some browsers, or a server-rendered context), every operation
-// falls back to a safe no-op so the app degrades gracefully instead of
-// throwing "Cannot read properties of undefined" runtime errors.
+// tables used by the offline subsystem: outbox, credential cache, snapshots.
+// Safe no-op stubs are used in environments without IndexedDB.
 
 import Dexie, { type Table } from "dexie";
 
@@ -159,12 +151,7 @@ class OfflineDatabase extends Dexie {
       cache_recurring_invoices: "id, company_id, updated_at, is_active",
     });
     this.version(5).stores({
-      // Deferred IRN / E-Way Bill generation requests. IRP / EWB portal calls
-      // require the device to be online AND the Setu (or other GSP) API to be
-      // reachable. When either is unavailable we queue the request here and
-      // the sync worker drains it on the next successful connectivity window,
-      // so users can carry on issuing invoices offline without losing the
-      // pending IRN/EWB work.
+      // einvoice_queue: kind, voucher_id, status, created_at.
       einvoice_queue: "++id, kind, voucher_id, company_id, status, created_at",
     });
     this.version(6).stores({
@@ -189,16 +176,7 @@ class OfflineDatabase extends Dexie {
       cache_cost_centres: "id, company_id, name, is_active, updated_at",
       cache_cost_categories: "id, company_id, name, is_active, updated_at",
     });
-    // v8 — Performance: compound indexes for the hot read paths.
-    // No data migration needed; Dexie only adds indexes to the existing
-    // object stores. Existing queries keep working unchanged; new code
-    // can opt into these compound keys for range scans.
-    //   cache_vouchers:
-    //     [company_id+voucher_date]              — Day Book, date-range reports
-    //     [company_id+voucher_type+voucher_date] — Sales/Purchase Register
-    //     [company_id+party_id+voucher_date]     — Party ledger / statement
-    //   cache_voucher_entries:
-    //     [company_id+ledger_id]                 — Ledger balance, Trial Balance
+    // v8 — Compound indexes for hot read paths.
     this.version(8).stores({
       cache_vouchers:
         "id, company_id, updated_at, voucher_date, party_id, voucher_type, original_voucher_id, " +

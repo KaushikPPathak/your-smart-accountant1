@@ -1,6 +1,7 @@
 // Shared computation: closing balances per ledger as of a date
 import { supabase } from "@/integrations/supabase/client";
 import {
+  readAccountingDataset,
   readLedgers,
   readVoucherEntriesForCompany,
   readVouchers,
@@ -83,13 +84,10 @@ export async function fetchLedgerBalancesWithMeta(
         .eq("company_id", companyId);
       if (lErr) throw lErr;
 
-      // Fix: Bundle the date configurations safely into a consolidated modifier object
       let queryBuilder = supabase
         .from("voucher_entries")
         .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id, voucher_type, narration)")
         .eq("vouchers.company_id", companyId);
-
-      // Apply sequential evaluation constraints without breaking structural execution paths
       if (fromOpt) {
         queryBuilder = queryBuilder.filter("vouchers.voucher_date", "gte", fromOpt);
       }
@@ -102,43 +100,7 @@ export async function fetchLedgerBalancesWithMeta(
         entries: (entries ?? []) as unknown as VoucherEntryForBalance[],
       };
     },
-    async () => {
-      const [ledgers, vouchers, rawEntries] = await Promise.all([
-        readLedgers(companyId),
-        readVouchers(companyId),
-        readVoucherEntriesForCompany(companyId),
-      ]);
-      const voucherById = new Map(vouchers.map((v: any) => [String(v.id), v]));
-      const entries = (rawEntries as any[])
-        .map((e) => {
-          const v = voucherById.get(String(e.voucher_id));
-          if (!v) return null;
-          const date = String(v.voucher_date ?? v.date ?? "");
-          if (fromOpt && date < fromOpt) return null;
-          if (asOf && date > asOf) return null;
-          return {
-            ledger_id: String(e.ledger_id ?? ""),
-            debit_paise: Number(e.debit_paise ?? 0),
-            credit_paise: Number(e.credit_paise ?? 0),
-            vouchers: {
-              voucher_type: v.voucher_type ?? null,
-              narration: v.narration ?? null,
-            },
-          } as VoucherEntryForBalance;
-        })
-        .filter(Boolean) as VoucherEntryForBalance[];
-      return {
-        ledgers: (ledgers as any[]).map((l) => ({
-          id: String(l.id),
-          name: String(l.name ?? ""),
-          type: String(l.type ?? ""),
-          group_code: l.group_code ?? null,
-          opening_balance_paise: Number(l.opening_balance_paise ?? 0),
-          opening_balance_is_debit: Boolean(l.opening_balance_is_debit),
-        })) as LedgerForBalance[],
-        entries,
-      };
-    },
+    async () => readAccountingDataset(companyId, { from: fromOpt, to: asOf }) as Promise<any>,
   );
 
   const movements = new Map<string, number>();
@@ -154,7 +116,7 @@ export async function fetchLedgerBalancesWithMeta(
     movements.set(e.ledger_id, (movements.get(e.ledger_id) || 0) + e.debit_paise - e.credit_paise);
   }
 
-  const balances = (ledgers || []).map((l) => {
+  const balances = ((ledgers as LedgerForBalance[]) || []).map((l) => {
     const ob = fromOpt ? 0 : (l.opening_balance_is_debit ? 1 : -1) * l.opening_balance_paise;
     const closing = ob + (movements.get(l.id) || 0);
     return { id: l.id, name: l.name, type: l.type, group_code: l.group_code ?? null, closing_paise: closing };
@@ -216,30 +178,10 @@ export async function fetchLedgerModeSplits(
       };
     },
     async () => {
-      const [leds, vouchers, rawEntries] = await Promise.all([
-        readLedgers(companyId),
-        readVouchers(companyId),
-        readVoucherEntriesForCompany(companyId),
-      ]);
-      const vById = new Map(vouchers.map((v: any) => [String(v.id), v]));
-      const ents = (rawEntries as any[])
-        .map((e) => {
-          const v = vById.get(String(e.voucher_id));
-          if (!v) return null;
-          const d = String(v.voucher_date ?? v.date ?? "");
-          if (d < from || d > to) return null;
-          return {
-            voucher_id: String(e.voucher_id),
-            ledger_id: String(e.ledger_id ?? ""),
-            debit_paise: Number(e.debit_paise ?? 0),
-            credit_paise: Number(e.credit_paise ?? 0),
-            vouchers: { voucher_type: v.voucher_type ?? null, narration: v.narration ?? null },
-          };
-        })
-        .filter(Boolean) as any[];
+      const { ledgers, entries } = await readAccountingDataset(companyId, { from, to });
       return {
-        ledgers: (leds as any[]).map((l) => ({ id: String(l.id), type: String(l.type ?? "") })),
-        entries: ents,
+        ledgers: ledgers.map((l: any) => ({ id: String(l.id), type: String(l.type ?? "") })),
+        entries: entries as any[],
       };
     },
   );
