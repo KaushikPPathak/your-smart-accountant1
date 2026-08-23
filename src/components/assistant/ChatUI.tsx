@@ -55,7 +55,12 @@ export function ChatHeader({ ttsOn, onToggleTts, modelPref, onClearChat }: ChatH
   );
 }
 
-export function ChatFooterMetadata() {
+interface ChatFooterMetadataProps {
+  activeCat: string;
+  onToggleKb: () => void;
+}
+
+export function ChatFooterMetadata({ activeCat, onToggleKb }: ChatFooterMetadataProps) {
   return (
     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
       <div className="flex items-center gap-3">
@@ -68,6 +73,14 @@ export function ChatFooterMetadata() {
           Zero Data Tracking
         </span>
       </div>
+      
+      <button 
+        className="hover:text-primary underline-offset-2 hover:underline"
+        onClick={onToggleKb}
+      >
+        {activeCat === "All" ? "Browse Knowledge Base" : "Back to Chat"}
+      </button>
     </div>
   );
 }
+
