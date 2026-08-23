@@ -171,10 +171,11 @@ function StockSummary() {
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", to).maybeSingle().then(({ data }) => {
+    supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", to).maybeSingle().then(({ data }: { data: any }) => {
       setManualTotalValue(data ? Number(data.valuation_paise) : null);
     });
   }, [activeCompanyId, to]);
+
 
   const calculatedTotalValue = rows.reduce((s, r2) => s + r2.stockValue, 0);
   const totalValue = manualTotalValue !== null ? manualTotalValue : calculatedTotalValue;
