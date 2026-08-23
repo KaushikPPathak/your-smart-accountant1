@@ -164,84 +164,80 @@ function companyNameFromBackup(backup: CompanyBackup): string {
   return String((backup.company as { name?: unknown } | null)?.name ?? "");
 }
 
-function voucherFingerprint(row: Record<string, unknown>): string {
-  // Hardened fingerprint (Round 2). The previous key was
-  //   [date, type, number, total]
-  // which collided any time two vouchers shared a series+total (common in
-  // repeat monthly bills, split cash payments, or a re-entered receipt for
-  // the same amount). Collisions let a smaller backup *appear* to contain
-  // every live voucher — so `isBackupSafeSuperset` would green-light an
-  // overwrite that silently lost work.
-  //
-  // We now include: party, narration hash, entry count, and either the
-  // stable id (same-installation) or amount+lines (cross-installation).
-  // Every field is normalised so trivial whitespace/case drift does not
-  // break the match.
-  const norm = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase();
-  const narration = norm(row.narration ?? row.remarks ?? row.description ?? "").slice(0, 120);
-  const party = norm(row.party_name ?? row.party_ledger_id ?? "");
-  const entriesLen = Array.isArray(row.entries) ? row.entries.length
-    : Number(row.entry_count ?? row.entries_count ?? 0);
-  const itemsLen = Array.isArray(row.items) ? row.items.length
-    : Number(row.item_count ?? row.items_count ?? 0);
-  return JSON.stringify([
-    norm(row.voucher_date ?? row.date),
-    norm(row.voucher_type ?? row.type),
-    norm(row.voucher_number ?? row.number),
-    Number(row.total_amount_paise ?? row.total_paise ?? row.total_amount ?? row.amount ?? row.grand_total ?? 0),
-    party,
-    narration,
-    entriesLen,
-    itemsLen,
-    norm(row.id ?? ""),
-  ]);
+/**
+ * VOLATILE_BLACKLIST: Fields that are technical/runtime and do not constitute
+ * authoritative business state. Any newly persisted field NOT in this list
+ * is automatically included in the Business-State Fingerprint (Fail-Closed).
+ */
+const VOLATILE_BLACKLIST = new Set([
+  "updated_at",
+  "created_at",
+  "is_synced",
+  "last_error",
+  "attempts",
+  "is_deleted",
+  "created_by",
+  "sync_cursor",
+  "last_unlock_at",
+  "locked_until",
+  "failed_attempts"
+]);
+
+/**
+ * Generates a deterministic Business-State Fingerprint for a record.
+ * Identity fields (id, company_id) are preserved exactly.
+ */
+export function canonicalFingerprint(row: Record<string, unknown>): string {
+  const result: Record<string, unknown> = {};
+  
+  // 1. Selection & Sorting: Include everything not blacklisted, sort keys.
+  const keys = Object.keys(row).sort();
+  
+  for (const key of keys) {
+    if (VOLATILE_BLACKLIST.has(key)) continue;
+    
+    let val = row[key];
+    
+    // 2. Normalization
+    if (typeof val === "string") {
+      // Rule: Do NOT lowercase or trim database identifiers.
+      const isId = /(_id|^id$)/i.test(key);
+      if (!isId) {
+        val = val.trim().toLocaleLowerCase();
+      }
+    } else if (val === undefined) {
+      val = null;
+    }
+    
+    result[key] = val;
+  }
+  
+  // 3. Deterministic Representation
+  return JSON.stringify(result);
 }
 
-function ledgerFingerprint(row: Record<string, unknown>): string {
-  // Ledger identity = normalised name + group. Two "Cash" ledgers under
-  // different groups (Cash-in-Hand vs Bank) must not collapse into one.
-  const norm = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
-  return JSON.stringify([norm(row.name), norm(row.group_name ?? row.group ?? "")]);
-}
-
-function itemFingerprint(row: Record<string, unknown>): string {
-  const norm = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
-  return JSON.stringify([norm(row.name), norm(row.unit ?? ""), norm(row.hsn ?? row.hsn_code ?? "")]);
-}
-
-function entryFingerprint(row: Record<string, unknown>): string {
-  const norm = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase();
-  return JSON.stringify([
-    norm(row.voucher_id),
-    norm(row.ledger_id),
-    norm(row.entry_type ?? row.dc ?? row.dr_cr ?? ""),
-    Number(row.amount_paise ?? row.amount ?? 0),
-  ]);
-}
-
-function voucherItemFingerprint(row: Record<string, unknown>): string {
-  const norm = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase();
-  return JSON.stringify([
-    norm(row.voucher_id),
-    norm(row.item_id),
-    Number(row.quantity ?? row.qty ?? 0),
-    Number(row.rate_paise ?? row.rate ?? 0),
-    Number(row.amount_paise ?? row.amount ?? 0),
-  ]);
+/**
+ * Compound identity key for multiset comparison.
+ * Ensures "Same ID + Different Content" or "Same ID + Different Company" mismatch.
+ */
+function recordIdentity(row: Record<string, unknown>): string {
+  // Preserve exact stored value of IDs.
+  const id = String(row.id ?? "");
+  const cid = String(row.company_id ?? "");
+  return `${cid}|${id}|${canonicalFingerprint(row)}`;
 }
 
 function multisetContains(
   candidate: Record<string, unknown>[],
   live: Record<string, unknown>[],
-  keyOf: (row: Record<string, unknown>) => string,
 ): boolean {
   const counts = new Map<string, number>();
   for (const row of candidate) {
-    const key = keyOf(row);
+    const key = recordIdentity(row);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   for (const row of live) {
-    const key = keyOf(row);
+    const key = recordIdentity(row);
     const remaining = counts.get(key) ?? 0;
     if (remaining < 1) return false;
     counts.set(key, remaining - 1);
@@ -250,13 +246,32 @@ function multisetContains(
 }
 
 /**
- * A snapshot may silently replace live books only when it demonstrably
- * contains every live voucher, ledger, item, entry and voucher-item plus
- * additional data. This prevents an older but larger backup from deleting
- * newer work — even when the newer work happens inside child tables
- * (voucher_entries, voucher_items) that the previous check ignored.
+ * Legacy support: the previous restricted field list.
  */
-export function isBackupSafeSuperset(candidate: CompanyBackup, live: CompanyBackup): boolean {
+function legacyFingerprint(row: Record<string, unknown>, type: 'voucher' | 'ledger' | 'item' | 'entry' | 'voucher_item'): string {
+  const norm = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase();
+  if (type === 'voucher') {
+    const narration = norm(row.narration ?? row.remarks ?? row.description ?? "").slice(0, 120);
+    const party = norm(row.party_name ?? row.party_ledger_id ?? "");
+    const entriesLen = Array.isArray(row.entries) ? row.entries.length : Number(row.entry_count ?? row.entries_count ?? 0);
+    const itemsLen = Array.isArray(row.items) ? row.items.length : Number(row.item_count ?? row.items_count ?? 0);
+    return JSON.stringify([norm(row.voucher_date ?? row.date), norm(row.voucher_type ?? row.type), norm(row.voucher_number ?? row.number), Number(row.total_amount_paise ?? row.total_paise ?? 0), party, narration, entriesLen, itemsLen, norm(row.id ?? "")]);
+  }
+  if (type === 'ledger') return JSON.stringify([norm(row.name), norm(row.group_name ?? row.group ?? "")]);
+  if (type === 'item') return JSON.stringify([norm(row.name), norm(row.unit ?? ""), norm(row.hsn ?? row.hsn_code ?? "")]);
+  if (type === 'entry') return JSON.stringify([norm(row.voucher_id), norm(row.ledger_id), norm(row.entry_type ?? row.dc ?? ""), Number(row.amount_paise ?? 0)]);
+  if (type === 'voucher_item') return JSON.stringify([norm(row.voucher_id), norm(row.item_id), Number(row.quantity ?? 0), Number(row.rate_paise ?? 0), Number(row.amount_paise ?? 0)]);
+  return "";
+}
+
+/**
+ * A snapshot may silently replace live books only when it demonstrably
+ * contains every live record with identical business state.
+ */
+export function isBackupSafeSuperset(candidate: CompanyBackup, live: CompanyBackup, manifest?: IntegrityEntry | null): boolean {
+  // 1. Version Check
+  const isV2 = manifest?.fingerprintVersion === 2;
+
   const candidateCounts = [
     candidate.vouchers?.length ?? 0,
     candidate.ledgers?.length ?? 0,
@@ -271,16 +286,56 @@ export function isBackupSafeSuperset(candidate: CompanyBackup, live: CompanyBack
     live.voucher_entries?.length ?? 0,
     live.voucher_items?.length ?? 0,
   ];
-  // Every collection must be at least as large as live.
+
   if (candidateCounts.some((count, index) => count < liveCounts[index])) return false;
-  // At least one collection must be strictly larger (otherwise nothing to gain).
   if (!candidateCounts.some((count, index) => count > liveCounts[index])) return false;
+
+  if (isV2) {
+    return (
+      multisetContains(candidate.vouchers ?? [], live.vouchers ?? []) &&
+      multisetContains(candidate.ledgers ?? [], live.ledgers ?? []) &&
+      multisetContains(candidate.items ?? [], live.items ?? []) &&
+      multisetContains(candidate.voucher_entries ?? [], live.voucher_entries ?? []) &&
+      multisetContains(candidate.voucher_items ?? [], live.voucher_items ?? [])
+    );
+  }
+
+  // Legacy Snapshot Policy: Silent restore ONLY if complete required state is provable.
+  // We compare legacy fingerprints, but if ANY new protected field is missing or ambiguous,
+  // we must reject for silent auto-restore.
+  const legacyContains = (cand: Record<string, unknown>[], l: Record<string, unknown>[], type: any) => {
+    const counts = new Map<string, number>();
+    for (const row of cand) {
+      const key = legacyFingerprint(row, type);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    for (const row of l) {
+      const key = legacyFingerprint(row, type);
+      const remaining = counts.get(key) ?? 0;
+      if (remaining < 1) return false;
+      
+      // Strict Check: Even if legacy fingerprint matches, if a newly protected field 
+      // exists in Live but is absent/different in the Legacy snapshot, we must REJECT.
+      const candMatch = cand.find(c => legacyFingerprint(c, type) === key);
+      if (candMatch) {
+        const liveCanon = canonicalFingerprint(row);
+        const candCanon = canonicalFingerprint(candMatch);
+        if (liveCanon !== candCanon) return false; // Different stale state detected.
+      } else {
+        return false;
+      }
+      
+      counts.set(key, remaining - 1);
+    }
+    return true;
+  };
+
   return (
-    multisetContains(candidate.vouchers ?? [], live.vouchers ?? [], voucherFingerprint) &&
-    multisetContains(candidate.ledgers ?? [], live.ledgers ?? [], ledgerFingerprint) &&
-    multisetContains(candidate.items ?? [], live.items ?? [], itemFingerprint) &&
-    multisetContains(candidate.voucher_entries ?? [], live.voucher_entries ?? [], entryFingerprint) &&
-    multisetContains(candidate.voucher_items ?? [], live.voucher_items ?? [], voucherItemFingerprint)
+    legacyContains(candidate.vouchers ?? [], live.vouchers ?? [], 'voucher') &&
+    legacyContains(candidate.ledgers ?? [], live.ledgers ?? [], 'ledger') &&
+    legacyContains(candidate.items ?? [], live.items ?? [], 'item') &&
+    legacyContains(candidate.voucher_entries ?? [], live.voucher_entries ?? [], 'entry') &&
+    legacyContains(candidate.voucher_items ?? [], live.voucher_items ?? [], 'voucher_item')
   );
 }
 
@@ -352,7 +407,7 @@ export async function runAutoRestore(
       if (sourceName && sourceName !== normalizedIdentity(c.name)) continue;
       const total = (payload.ledgers?.length ?? 0) + (payload.items?.length ?? 0) + (payload.vouchers?.length ?? 0);
       if (total === 0) continue;
-      if (!isBackupSafeSuperset(payload, livePayload)) continue;
+      if (!isBackupSafeSuperset(payload, livePayload, m)) continue;
       valid.push({ path: cand.absPath, payload, dateFolder: cand.dateFolder });
     }
     // Prefer the richest verified lineage, not merely the newest filename.
