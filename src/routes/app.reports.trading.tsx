@@ -49,25 +49,64 @@ function TradingAccount() {
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    Promise.all([
-      supabase
-        .from("ledgers")
-        .select("opening_balance_paise, opening_balance_is_debit")
-        .eq("company_id", activeCompanyId)
-        .eq("type", "stock_in_hand"),
-      supabase
-        .from("items")
-        .select("opening_stock_qty, opening_stock_rate_paise")
-        .eq("company_id", activeCompanyId),
-    ]).then(([sLed, items]) => {
-      const ledOp = ((sLed.data || []) as { opening_balance_paise: number; opening_balance_is_debit: boolean }[])
-        .reduce((s, l) => s + (l.opening_balance_is_debit ? 1 : -1) * l.opening_balance_paise, 0);
-      const itemOp = ((items.data || []) as { opening_stock_qty: number; opening_stock_rate_paise: number }[])
-        .reduce((s, it) => s + Math.round(it.opening_stock_qty * it.opening_stock_rate_paise), 0);
-      setOpeningStock(ledOp || itemOp);
-      setClosingStock(ledOp || itemOp);
-    });
-  }, [activeCompanyId]);
+    (async () => {
+      const [items, vouchers, voucherItems] = await Promise.all([
+        withCacheFallback(
+          async () => (await supabase.from("items").select("*").eq("company_id", activeCompanyId)).data || [],
+          async () => readItems(activeCompanyId)
+        ),
+        withCacheFallback(
+          async () => (await supabase.from("vouchers").select("*").eq("company_id", activeCompanyId).lte("voucher_date", to)).data || [],
+          async () => readVouchers(activeCompanyId, { to })
+        ),
+        withCacheFallback(
+          async () => (await supabase.from("voucher_items").select("*, vouchers!inner(voucher_date, company_id)").eq("vouchers.company_id", activeCompanyId).lte("vouchers.voucher_date", to)).data || [],
+          async () => readVoucherItemsForCompany(activeCompanyId)
+        )
+      ]);
+
+      const voucherMap = new Map((vouchers as any[]).map(v => [String(v.id), v]));
+      let totalOpeningPaise = 0;
+      let totalClosingPaise = 0;
+
+      for (const it of items as any[]) {
+        const itemMoves: ItemMove[] = (voucherItems as any[])
+          .filter(vi => String(vi.item_id) === String(it.id))
+          .map(vi => {
+            const v = voucherMap.get(String(vi.voucher_id));
+            if (!v || v.is_deleted) return null;
+            if (v.voucher_date > to) return null;
+            return {
+              date: v.voucher_date,
+              qty: Number(vi.qty || 0),
+              taxablePaise: Number(vi.taxable_paise || 0),
+              type: v.voucher_type,
+              voucherId: v.id
+            };
+          })
+          .filter((m): m is ItemMove => m !== null);
+
+        // Opening Stock for Trading A/c (at start of period)
+        const valOpening = calculateWac(
+          Number(it.opening_stock_qty || 0),
+          Number(it.opening_stock_rate_paise || 0),
+          itemMoves.filter(m => m.date < from)
+        );
+        totalOpeningPaise += valOpening.closingValuePaise;
+
+        // Closing Stock for Trading A/c (at end of period)
+        const valClosing = calculateWac(
+          Number(it.opening_stock_qty || 0),
+          Number(it.opening_stock_rate_paise || 0),
+          itemMoves
+        );
+        totalClosingPaise += valClosing.closingValuePaise;
+      }
+
+      setOpeningStock(totalOpeningPaise);
+      setClosingStock(totalClosingPaise);
+    })();
+  }, [activeCompanyId, from, to]);
 
   // Inner mode-split (Cash vs Bank/Cheque) per direct ledger.
   const innerDr = (b: LedgerBalance) => {
