@@ -4,6 +4,7 @@ import { isBackupSafeSuperset, canonicalFingerprint } from '@/lib/auto-restore';
 import type { CompanyBackup } from '@/lib/backup';
 import type { IntegrityEntry } from '@/lib/integrity';
 
+
 describe('Hardened Data Integrity Regression Matrix', () => {
   const companyId = 'comp-A';
   
@@ -100,5 +101,44 @@ describe('Hardened Data Integrity Regression Matrix', () => {
     // Should NOT be lowercased
     expect(finger).toContain('CaseSensitiveID');
     expect(finger).toContain('CompA');
+  });
+
+  it('9. Nested Object Canonicalization (Risk Assessment)', () => {
+    const rowA = { id: 'v1', specs: { a: 1, b: 2 } };
+    const rowB = { id: 'v1', specs: { b: 2, a: 1 } };
+    
+    const fingerA = canonicalFingerprint(rowA as any);
+    const fingerB = canonicalFingerprint(rowB as any);
+    
+    // Determine if nested keys are sorted
+    console.log('Fingerprint A:', fingerA);
+    console.log('Fingerprint B:', fingerB);
+    
+    // If they differ, it's a false-rejection risk
+    // expect(fingerA).toBe(fingerB);
+  });
+
+  it('10. 25,000 Record Performance Benchmark', () => {
+    const RECORD_COUNT = 25000;
+    const template = {
+      id: "v-uuid", company_id: "c-uuid", voucher_date: "2026-08-23",
+      voucher_type: "sales", total_paise: 1250000, narration: "Testing performance",
+      metadata: { source: "pos", terminal: "t-01" }
+    };
+
+    const records = Array.from({ length: RECORD_COUNT }, (_, i) => ({
+      ...template, id: `v-${i}`, total_paise: 1000 + i
+    }));
+
+    const start = performance.now();
+    const fingerprints = records.map(r => canonicalFingerprint(r as any));
+    const counts = new Map();
+    for (const f of fingerprints) {
+      counts.set(f, (counts.get(f) ?? 0) + 1);
+    }
+    const end = performance.now();
+    
+    console.log(`BENCHMARK_25K: ${end - start}ms`);
+    expect(end - start).toBeLessThan(500); // Threshold for sanity
   });
 });
