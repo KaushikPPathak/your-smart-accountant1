@@ -77,7 +77,7 @@ export function ManualValuationDialog({
           company_id: companyId,
           as_of_date: asOfDate,
           valuation_paise,
-          financial_year: financialYear, // Assuming this is needed based on instructions
+          // Removed non-existent financial_year column
         }, {
           onConflict: "company_id,as_of_date"
         });
