@@ -14,7 +14,7 @@ This plan outlines the systematic cleanup and refactoring of the Smart Accountan
 ### 1. Discovery & Inventory (Pre-Refactor Audit)
 - **Action**: Comprehensive scan of the repository to identify:
   - Files > 300 lines.
-  - Potential dead code/unused exports using `ts-prune` or similar analysis.
+  - Potential dead code/unused exports.
   - Duplicate type definitions and utility functions.
   - Unused assets and stale Tauri commands.
 
@@ -58,4 +58,3 @@ This plan outlines the systematic cleanup and refactoring of the Smart Accountan
 - **No Deletion on Assumption**: Every candidate for deletion must pass a repository-wide reference check.
 - **Public API Preservation**: Function signatures, component props, and Tauri interfaces remain unchanged.
 - **Incremental Commits**: Changes will be applied in logical batches to ensure stability.
-
