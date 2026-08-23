@@ -37,8 +37,11 @@ export function formatPaise(paise: number): string {
  * Convert a rupee string (e.g., "1,234.56" or "1234.5") into integer paise.
  * Hardened against floating point errors by using string split and integer math.
  */
-export function parseToPaise(rupeeString: string | number): number {
-  if (typeof rupeeString === "number") return Math.round(rupeeString * 100);
+export function parseToPaise(rupeeString: any): number {
+  if (typeof rupeeString === "number") {
+    if (isNaN(rupeeString) || !isFinite(rupeeString)) return 0;
+    return Math.round(rupeeString * 100);
+  }
   if (!rupeeString) return 0;
   
   const cleanStr = rupeeString.toString().replace(/[^0-9.-]/g, "");
