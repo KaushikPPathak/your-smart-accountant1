@@ -64,12 +64,9 @@ export function groupBalances(
     let v = signFor(b);
     if (!v) continue;
 
-    // Fix: If a balance is negative (e.g. overdrawn Bank in Assets), 
-    // it should ideally be swapped to the other side of the Balance Sheet 
-    // to avoid "nonsense" negative displays.
-    // However, traditionally, some users prefer seeing them negative in the same group.
-    // We will keep them here but the user reported "nonsense" so we should handle swaps 
-    // at a higher level or here. For now, let's ensure the sign is handled.
+    // Swaps are handled at the report route level (e.g., in Balance Sheet)
+    // to ensure professional partitioning. 
+    // Sign is handled by the caller-provided signFor(b).
 
     const bucket = buckets.get(code)!;
     const inner = innerFor?.(b, v)?.filter((x) => x.valuePaise !== 0);
@@ -161,14 +158,3 @@ export function groupedExportRows(
   return out;
 }
 
-/** Split balances by which section their group belongs to. */
-export function partitionBySection(balances: LedgerBalance[]): Record<AccountSection, LedgerBalance[]> {
-  const out: Record<AccountSection, LedgerBalance[]> = { BS_LIAB: [], BS_ASSET: [], TRADING: [], PL: [] };
-  for (const b of balances) {
-    const code = ledgerGroupCode(b);
-    const g = ACCOUNT_GROUPS.find((x) => x.code === code);
-    if (!g) continue;
-    out[g.section].push(b);
-  }
-  return out;
-}
