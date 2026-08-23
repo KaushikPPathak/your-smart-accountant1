@@ -178,14 +178,14 @@ function BalanceSheet() {
       // Add a single virtual ledger for the calculated valuation
       nonStockAssets.push({
         id: 'virtual-inventory-stock',
-        name: 'Inventory (Calculated)',
+        name: inventoryValuation === totalValuationPaise ? 'Inventory (Calculated WAC)' : 'Inventory (Manual Override)',
         type: 'stock_in_hand',
         group_code: 'STOCK_IN_HAND',
         closing_paise: inventoryValuation
-
       });
       partitionedBalances.asset = nonStockAssets;
     }
+
 
 
 
