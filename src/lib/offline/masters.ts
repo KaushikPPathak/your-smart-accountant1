@@ -5,6 +5,8 @@
 // pulls down cloud updates incrementally using cursor high-water marks.
 
 import { supabase } from "../../integrations/supabase/client";
+import { newId, getDbInstance } from "@/lib/utils/sys-utils";
+
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { isOnlineNow } from "./online-status";
 import { enqueueWrite } from "./outbox";
@@ -37,15 +39,8 @@ export interface ItemCacheRow extends ItemInsertPayload {
   is_active?: boolean;
 }
 
-function newId(): string {
-  return crypto.randomUUID();
-}
+// Functions moved to sys-utils.ts
 
-// Runtime dynamic import resolver to prevent Rollup compilation deadlocks
-async function getDbInstance() {
-  const module = await import("./db");
-  return module.default || module.offlineDb || (module as any).db;
-}
 
 /**
  * Robust Bi-Directional Master Synchronizer
@@ -155,6 +150,7 @@ export interface LedgerRow {
 export async function createLedger(payload: LedgerInsertPayload): Promise<LedgerRow> {
   const id = newId();
   const now = new Date().toISOString();
+
   const offlineDb = await getDbInstance();
   
   const localRecord: LedgerCacheRow = {
