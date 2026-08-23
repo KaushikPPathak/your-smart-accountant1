@@ -19,6 +19,8 @@ import {
   readVoucherItemsForCompany,
   withCacheFallback,
 } from "@/lib/offline/cache-read";
+import { calculateWac, type ItemMove as WacMove } from "@/lib/inventory/valuation-engine";
+
 
 export const Route = createFileRoute("/app/reports/stock-summary")({
   head: () => ({ meta: [{ title: "Stock Summary — Reports" }] }),
