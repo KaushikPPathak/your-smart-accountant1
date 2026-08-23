@@ -228,13 +228,13 @@ export async function readAccountingDataset(companyId: string, opts?: { from?: s
         debit_paise: Number(e.debit_paise ?? 0),
         credit_paise: Number(e.credit_paise ?? 0),
         vouchers: {
-          voucher_type: v.voucher_type ?? null,
-          narration: v.narration ?? null,
+          voucher_type: (v.voucher_type as string | null) ?? null,
+          narration: (v.narration as string | null) ?? null,
           voucher_id: String(v.id),
         },
       };
     })
-    .filter(Boolean);
+    .filter((e): e is NonNullable<typeof e> => e !== null);
 
-  return { ledgers, entries };
+  return { ledgers: ledgers as any[], entries };
 }

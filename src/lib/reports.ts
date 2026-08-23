@@ -100,7 +100,7 @@ export async function fetchLedgerBalancesWithMeta(
         entries: (entries ?? []) as unknown as VoucherEntryForBalance[],
       };
     },
-    async () => readAccountingDataset(companyId, { from: fromOpt, to: asOf }),
+    async () => readAccountingDataset(companyId, { from: fromOpt, to: asOf }) as Promise<any>,
   );
 
   const movements = new Map<string, number>();
