@@ -4,6 +4,7 @@ import { isBackupSafeSuperset, canonicalFingerprint } from '@/lib/auto-restore';
 import type { CompanyBackup } from '@/lib/backup';
 import type { IntegrityEntry } from '@/lib/integrity';
 
+
 describe('Hardened Data Integrity Regression Matrix', () => {
   const companyId = 'comp-A';
   
