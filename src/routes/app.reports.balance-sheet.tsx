@@ -60,6 +60,7 @@ function BalanceSheet() {
   const [taxView, setTaxView] = useState(false);
   const [balances, setBalances] = useState<LedgerBalance[]>([]);
   const [inventoryValuation, setInventoryValuation] = useState(0);
+  const [hasNegativeStock, setHasNegativeStock] = useState(false);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -85,7 +86,9 @@ function BalanceSheet() {
 
         const voucherMap = new Map((vouchers as any[]).map(v => [String(v.id), v]));
         let totalValuationPaise = 0;
+        let negativeFound = false;
 
+        // 1. Calculate WAC for each item to detect negative stock
         for (const it of items as any[]) {
           const itemMoves: ItemMove[] = (voucherItems as any[])
             .filter(vi => String(vi.item_id) === String(it.id))
@@ -109,11 +112,27 @@ function BalanceSheet() {
             itemMoves
           );
           totalValuationPaise += val.closingValuePaise;
+          if (val.closingQty < 0) negativeFound = true;
         }
-        setInventoryValuation(totalValuationPaise);
+
+        // 2. Check for manual override which applies to the WHOLE company valuation
+        const { data: manual } = await supabase
+          .from("inventory_manual_valuations")
+          .select("valuation_paise")
+          .eq("company_id", activeCompanyId)
+          .eq("as_of_date", to)
+          .maybeSingle();
+
+        if (manual) {
+          setInventoryValuation(Number(manual.valuation_paise));
+        } else {
+          setInventoryValuation(totalValuationPaise);
+        }
+        setHasNegativeStock(negativeFound);
       })();
     }
   }, [activeCompanyId, to, activeMembership?.companies?.inventory_enabled]);
+
 
   // Period P/L flows into the BS to balance it (Net Profit on Liabilities, Loss on Assets).
   const profitPaise = useMemo(() => {
