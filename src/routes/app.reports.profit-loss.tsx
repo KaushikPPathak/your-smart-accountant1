@@ -111,7 +111,6 @@ function ProfitLoss() {
             })
             .filter((m): m is ItemMove => m !== null);
 
-          // Opening Stock for P&L carry (start of period)
           const valOpening = calculateWac(
             Number(it.opening_stock_qty || 0),
             Number(it.opening_stock_rate_paise || 0),
@@ -119,7 +118,6 @@ function ProfitLoss() {
           );
           totalOpeningPaise += valOpening.closingValuePaise;
 
-          // Closing Stock for P&L carry (end of period)
           const valClosing = calculateWac(
             Number(it.opening_stock_qty || 0),
             Number(it.opening_stock_rate_paise || 0),
@@ -128,13 +126,19 @@ function ProfitLoss() {
           totalClosingPaise += valClosing.closingValuePaise;
         }
 
-        setOpeningStock(totalOpeningPaise);
-        setClosingStock(totalClosingPaise);
+        const [{ data: manualOpening }, { data: manualClosing }] = await Promise.all([
+          supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", from).maybeSingle(),
+          supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", to).maybeSingle()
+        ]);
+
+        setOpeningStock(manualOpening ? Number(manualOpening.valuation_paise) : totalOpeningPaise);
+        setClosingStock(manualClosing ? Number(manualClosing.valuation_paise) : totalClosingPaise);
       } catch {
         setOpeningStock(0);
         setClosingStock(0);
       }
     })();
+
   }, [activeCompanyId, from, to, inventoryEnabled]);
 
   // Accounting rule: Sales / Purchase / Direct Income / Direct Expense

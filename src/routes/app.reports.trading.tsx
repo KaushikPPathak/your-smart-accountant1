@@ -86,7 +86,6 @@ function TradingAccount() {
           })
           .filter((m): m is ItemMove => m !== null);
 
-        // Opening Stock for Trading A/c (at start of period)
         const valOpening = calculateWac(
           Number(it.opening_stock_qty || 0),
           Number(it.opening_stock_rate_paise || 0),
@@ -94,7 +93,6 @@ function TradingAccount() {
         );
         totalOpeningPaise += valOpening.closingValuePaise;
 
-        // Closing Stock for Trading A/c (at end of period)
         const valClosing = calculateWac(
           Number(it.opening_stock_qty || 0),
           Number(it.opening_stock_rate_paise || 0),
@@ -103,9 +101,16 @@ function TradingAccount() {
         totalClosingPaise += valClosing.closingValuePaise;
       }
 
-      setOpeningStock(totalOpeningPaise);
-      setClosingStock(totalClosingPaise);
+      // Check for manual overrides for both opening and closing dates if they fall in the same company
+      const [{ data: manualOpening }, { data: manualClosing }] = await Promise.all([
+        supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", from).maybeSingle(),
+        supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", to).maybeSingle()
+      ]);
+
+      setOpeningStock(manualOpening ? Number(manualOpening.valuation_paise) : totalOpeningPaise);
+      setClosingStock(manualClosing ? Number(manualClosing.valuation_paise) : totalClosingPaise);
     })();
+
   }, [activeCompanyId, from, to]);
 
   // Inner mode-split (Cash vs Bank/Cheque) per direct ledger.
@@ -241,9 +246,14 @@ function TradingAccount() {
           />
           <p className="mt-2 text-xs text-muted-foreground">
             Sales, Purchases &amp; Direct Expenses grouped per IT-norms. Gross Profit / Loss flows to the P&amp;L account.
-            Stock values are taken from <strong>Stock-in-Hand</strong> ledgers (or items opening) — adjust closing stock manually
-            via a journal entry if needed.
+            Inventory values are calculated using Weighted Average Cost (WAC) or manual overrides.
           </p>
+          {(openingStock < 0 || closingStock < 0) && (
+            <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              <strong>Negative Stock Warning:</strong> Inventory valuation is negative. This affects Gross Profit and indicates missing purchase records.
+            </div>
+          )}
+
         </CardContent>
       </Card>
       {view === "grid" ? (

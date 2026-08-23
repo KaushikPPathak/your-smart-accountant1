@@ -361,13 +361,14 @@ function BalanceSheet() {
                 : `${formatINR(Math.abs(diffPaise))} ${diffPaise > 0 ? "(Assets > Liabilities)" : "(Liabilities > Assets)"}`}
             </span>
           </div>
-          {activeMembership?.companies?.inventory_enabled && inventoryValuation < 0 && (
+          {activeMembership?.companies?.inventory_enabled && (inventoryValuation < 0 || hasNegativeStock) && (
             <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-              <p className="font-semibold">Negative Stock Warning</p>
-              <p>One or more items have negative quantities. Calculated inventory value is negative ({formatINR(inventoryValuation)}), but reported as <strong>₹0.00</strong> here to maintain Balance Sheet integrity. Please review Stock Summary.</p>
+              <p className="font-semibold text-amber-800 dark:text-amber-300">Negative Stock Warning</p>
+              <p>One or more items have negative quantities or the total inventory value is negative ({formatINR(inventoryValuation)}). This indicates sales/outwards were recorded before matching purchases.</p>
             </div>
           )}
         </CardContent>
+
 
       </Card>
       {view === "grid" ? (
