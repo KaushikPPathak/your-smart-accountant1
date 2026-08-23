@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { offlineDb } from '@/lib/offline/db';
-import { isBackupSafeSuperset, canonicalFingerprint } from '@/lib/auto-restore';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { offlineDb, setMeta } from '@/lib/offline/db';
+import { isBackupSafeSuperset, canonicalFingerprint, runAutoRestore } from '@/lib/auto-restore';
 import type { CompanyBackup } from '@/lib/backup';
 import type { IntegrityEntry } from '@/lib/integrity';
+import * as integrityModule from '@/lib/integrity';
+import * as backupModule from '@/lib/backup';
+import * as tauriFs from '@tauri-apps/plugin-fs';
 
 
 describe('Hardened Data Integrity Regression Matrix', () => {
