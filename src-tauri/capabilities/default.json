@@ -44,7 +44,11 @@
         { "path": "$DOWNLOAD" },
         { "path": "$DOWNLOAD/**" },
         { "path": "$DESKTOP" },
-        { "path": "$DESKTOP/**" }
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOCUMENT/SmartAccountant" },
+        { "path": "$DOCUMENT/SmartAccountant/**" },
+        { "path": "C:/smartaccountant" },
+        { "path": "C:/smartaccountant/**" }
       ]
     },
     "sql:default",

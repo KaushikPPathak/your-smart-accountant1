@@ -35,7 +35,9 @@ interface ElectronBridge {
     contents: string | ArrayBuffer | Uint8Array,
   ) => Promise<SaveNativeResult>;
   readDir?: (absPath: string) => Promise<{ ok: boolean; entries?: string[]; error?: string }>;
+  getLegacyScanRoots?: () => Promise<{ ok: boolean; roots?: string[]; error?: string }>;
 }
+
 
 function electronBridge(): ElectronBridge | null {
   if (typeof window === "undefined") return null;
@@ -452,3 +454,38 @@ export async function listDirectoriesNative(absPath: string): Promise<{ ok: bool
   return { ok: false, error: "No native runtime" };
 }
 
+
+/**
+ * The ONLY filesystem roots the fresh-install legacy backup scanner is allowed
+ * to touch. Never returns a drive root — a full C:\ scan is forbidden.
+ */
+export async function getLegacyScanRootsNative(): Promise<{
+  ok: boolean;
+  roots?: string[];
+  error?: string;
+}> {
+  const eb = electronBridge();
+  if (eb?.getLegacyScanRoots) return eb.getLegacyScanRoots();
+  if (!hasTauri()) return { ok: false, error: "No native runtime" };
+  try {
+    const { documentDir, join } = await import("@tauri-apps/api/path");
+    const roots: string[] = [];
+    try {
+      const docs = await documentDir();
+      roots.push(await join(docs, "SmartAccountant", "Exports"));
+    } catch { /* documents dir unavailable */ }
+    const isWindows =
+      typeof navigator !== "undefined" && /win/i.test(navigator.userAgent || "");
+    if (isWindows) roots.push("C:\\smartaccountant");
+    return { ok: true, roots };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Read-only text read used by legacy backup discovery. */
+export async function readLegacyTextFileNative(
+  absPath: string,
+): Promise<{ ok: boolean; text?: string; error?: string }> {
+  return readAbsoluteTextFileNative(absPath);
+}

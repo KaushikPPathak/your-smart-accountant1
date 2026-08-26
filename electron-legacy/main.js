@@ -274,6 +274,39 @@ ipcMain.handle('sa:getDataRoot', async () => {
   catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
 });
 
+// --- Fresh-install legacy backup discovery (READ-ONLY, scoped) ---------------
+// Only these two roots may ever be listed/read by the renderer. No arbitrary
+// filesystem access is exposed and a full C:\ scan is impossible.
+function legacyScanRoots() {
+  const roots = [];
+  try {
+    roots.push(path.join(app.getPath('documents'), 'SmartAccountant', 'Exports'));
+  } catch (_) { /* ignore */ }
+  if (process.platform === 'win32') roots.push('C:\\smartaccountant');
+  return roots;
+}
+
+function isInsideLegacyRoot(target) {
+  const resolved = path.resolve(String(target || ''));
+  return legacyScanRoots().some((root) => {
+    const r = path.resolve(root);
+    return resolved === r || resolved.startsWith(r + path.sep);
+  });
+}
+
+ipcMain.handle('sa:getLegacyScanRoots', async () => {
+  try { return { ok: true, roots: legacyScanRoots() }; }
+  catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
+});
+
+ipcMain.handle('sa:readDir', async (_e, absPath) => {
+  try {
+    if (!isInsideLegacyRoot(absPath)) return { ok: false, error: 'Path outside allowed backup roots' };
+    const entries = fs.readdirSync(String(absPath));
+    return { ok: true, entries };
+  } catch (err) { return { ok: false, error: (err && err.message) || String(err) }; }
+});
+
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {

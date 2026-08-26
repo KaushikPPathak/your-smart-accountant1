@@ -139,7 +139,30 @@ function LockGate({ children }: { children: React.ReactNode }) {
           await discoverCompaniesFromSnapshots();
           
           // 2. Load the current (potentially reconstructed) company list
-          const companies = await offlineDb.companies.toArray();
+          let companies = await offlineDb.companies.toArray();
+
+          // 2b. Fresh install (zero companies): scan the approved legacy
+          // backup roots and restore the newest valid backup per company.
+          if (companies.length === 0) {
+            try {
+              const { discoverAndRestoreLegacyBackups } = await import(
+                "@/lib/legacy-backup-discovery"
+              );
+              const res = await discoverAndRestoreLegacyBackups();
+              if (res.restored > 0) {
+                companies = await offlineDb.companies.toArray();
+              } else if (res.invalid > 0) {
+                console.warn(
+                  "Legacy backups were found but could not be restored:",
+                  res.invalidPaths,
+                );
+              }
+            } catch (err) {
+              console.warn("Legacy backup discovery failed:", err);
+            }
+          }
+
+
           
           // 3. Trigger silent auto-restore for any company with missing data
           // NOTE: auto-restore now uses recoverMissingFromSnapshot which is non-destructive
