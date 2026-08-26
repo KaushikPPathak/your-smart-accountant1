@@ -468,20 +468,15 @@ export async function getLegacyScanRootsNative(): Promise<{
   if (eb?.getLegacyScanRoots) return eb.getLegacyScanRoots();
   if (!hasTauri()) return { ok: false, error: "No native runtime" };
   try {
-    const [{ documentDir, join }, { platform }] = await Promise.all([
-      import("@tauri-apps/api/path"),
-      import("@tauri-apps/plugin-os"),
-    ]);
+    const { documentDir, join } = await import("@tauri-apps/api/path");
     const roots: string[] = [];
     try {
       const docs = await documentDir();
       roots.push(await join(docs, "SmartAccountant", "Exports"));
     } catch { /* documents dir unavailable */ }
-    try {
-      if ((await platform()) === "windows") roots.push("C:\\smartaccountant");
-    } catch {
-      roots.push("C:\\smartaccountant");
-    }
+    const isWindows =
+      typeof navigator !== "undefined" && /win/i.test(navigator.userAgent || "");
+    if (isWindows) roots.push("C:\\smartaccountant");
     return { ok: true, roots };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
