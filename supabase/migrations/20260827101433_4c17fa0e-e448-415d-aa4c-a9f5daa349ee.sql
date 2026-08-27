@@ -1,0 +1,1 @@
+ALTER TABLE public.inventory_manual_valuations ENABLE ROW LEVEL SECURITY;
