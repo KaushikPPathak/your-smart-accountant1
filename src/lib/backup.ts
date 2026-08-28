@@ -695,6 +695,25 @@ async function restoreCompanyBackupImpl(
     console.error("[restore] local cache mirror failed:", err);
   }
 
+  // Manual stock valuations (cloud-only table). Best-effort, non-fatal;
+  // re-keyed to the target company, keeping the approved
+  // (company_id, as_of_date) uniqueness.
+  try {
+    const rows = (backup.inventory_manual_valuations ?? []) as Record<string, unknown>[];
+    if (rows.length) {
+      const payload = rows.map((r) => {
+        const { id: _id, created_at: _c, updated_at: _u, company_id: _cid, ...rest } = r;
+        return { ...rest, company_id: targetCompanyId };
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await supabase.from("inventory_manual_valuations").upsert(payload as any, {
+        onConflict: "company_id,as_of_date",
+      });
+    }
+  } catch (err) {
+    console.warn("[restore] manual valuations restore skipped:", err);
+  }
+
   // Lock out the one-time cloud→local migration permanently. After a
   // restore, local IndexedDB is authoritative; if the flag were still
   // unset (e.g. user restored on a fresh install), the next sign-in
