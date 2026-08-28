@@ -482,9 +482,42 @@ function openPrintPreview(
   doc.write(html);
   doc.close();
 
+  // Wait for fonts and images inside the iframe before allowing (or firing)
+  // a print, otherwise the output can miss logos or reflow mid-table.
+  const ready = (async () => {
+    try {
+      const idoc = iframe.contentDocument;
+      if (!idoc) return;
+      await (idoc as Document & { fonts?: FontFaceSet }).fonts?.ready?.catch?.(() => undefined);
+      await Promise.all(
+        Array.from(idoc.images).map((img) =>
+          img.complete ? Promise.resolve() : img.decode().catch(() => undefined),
+        ),
+      );
+    } catch {
+      /* best effort */
+    }
+  })();
+
+  void ready.then(() => {
+    const btn = iframe.contentDocument?.getElementById("preview-print-btn") as
+      | HTMLButtonElement
+      | null;
+    if (btn) btn.disabled = false;
+    if (autoPrint) {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    }
+  });
+
   recordStage("preview", "iframe", {
     opened: true,
     html_len: html.length,
+    auto_print: autoPrint,
     elapsed_ms: Date.now() - startTs,
   });
 }
