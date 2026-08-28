@@ -116,6 +116,20 @@ async function buildCompanyBackupFromLocal(companyId: string): Promise<CompanyBa
     byCompany<Record<string, unknown>>(db.cache_cost_centres),
     byCompany<Record<string, unknown>>(db.cache_cost_categories),
   ]);
+
+  // Manual stock valuations live in the cloud table only (approved
+  // company_id + as_of_date design). Best-effort: never fail a backup.
+  let inventory_manual_valuations: Record<string, unknown>[] = [];
+  try {
+    const { data } = await supabase
+      .from("inventory_manual_valuations")
+      .select("*")
+      .eq("company_id", companyId);
+    inventory_manual_valuations = (data ?? []) as Record<string, unknown>[];
+  } catch {
+    inventory_manual_valuations = [];
+  }
+
   return {
     schema_version: 2,
     exported_at: new Date().toISOString(),
@@ -127,6 +141,7 @@ async function buildCompanyBackupFromLocal(companyId: string): Promise<CompanyBa
     bom_templates, bom_template_lines,
     voucher_series, tax_templates, bill_sundries, transport_details,
     cost_centres, cost_categories,
+    inventory_manual_valuations,
   };
 }
 
