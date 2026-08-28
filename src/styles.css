@@ -692,11 +692,18 @@
     page-break-inside: avoid;
     break-inside: avoid;
   }
+  .report-print-root,
+  .report-print-root * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   .report-print-root th,
   .report-print-root td {
     border: 0.5pt solid #000 !important;
     padding: 3pt 4pt !important;
     vertical-align: top;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .report-print-root th {
     background: #f0f0f0 !important;
@@ -866,55 +873,8 @@ html[lang="gu"] body {
 }
 
 @media print {
-  /* Hide UI elements */
-  nav, 
-  aside, 
-  header,
-  footer,
-  .print\:hidden,
-  [role="toolbar"],
-  [role="menubar"],
-  .ReportToolbar_root,
-  button,
-  .fixed,
-  .absolute:not(#ledger-print-area *) {
-    display: none !important;
-  }
-
-  /* Reset layout */
-  body, html {
-    background: white !important;
-    height: auto !important;
-    overflow: visible !important;
-  }
-
-  /* Printable area */
-  #ledger-print-area {
-    visibility: visible !important;
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  /* Ensure colors and table borders appear */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-  }
-
-  th, td {
-    border: 1px solid #ddd !important;
-    padding: 8px !important;
-  }
-
+  /* Legacy #ledger-print-area rules removed — the `.report-print-root`
+     block above is the single authoritative print stylesheet. */
   .page-break {
     page-break-before: always;
   }

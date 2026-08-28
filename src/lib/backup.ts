@@ -39,6 +39,7 @@ export interface CompanyBackup {
   transport_details?: Record<string, unknown>[];
   cost_centres?: Record<string, unknown>[];
   cost_categories?: Record<string, unknown>[];
+  inventory_manual_valuations?: Record<string, unknown>[];
 }
 
 export interface MultiCompanyBackup {
@@ -115,6 +116,20 @@ async function buildCompanyBackupFromLocal(companyId: string): Promise<CompanyBa
     byCompany<Record<string, unknown>>(db.cache_cost_centres),
     byCompany<Record<string, unknown>>(db.cache_cost_categories),
   ]);
+
+  // Manual stock valuations live in the cloud table only (approved
+  // company_id + as_of_date design). Best-effort: never fail a backup.
+  let inventory_manual_valuations: Record<string, unknown>[] = [];
+  try {
+    const { data } = await supabase
+      .from("inventory_manual_valuations")
+      .select("*")
+      .eq("company_id", companyId);
+    inventory_manual_valuations = (data ?? []) as Record<string, unknown>[];
+  } catch {
+    inventory_manual_valuations = [];
+  }
+
   return {
     schema_version: 2,
     exported_at: new Date().toISOString(),
@@ -126,6 +141,7 @@ async function buildCompanyBackupFromLocal(companyId: string): Promise<CompanyBa
     bom_templates, bom_template_lines,
     voucher_series, tax_templates, bill_sundries, transport_details,
     cost_centres, cost_categories,
+    inventory_manual_valuations,
   };
 }
 
@@ -677,6 +693,25 @@ async function restoreCompanyBackupImpl(
     await mirrorRestoreToLocalCache(targetCompanyId, backup, summary);
   } catch (err) {
     console.error("[restore] local cache mirror failed:", err);
+  }
+
+  // Manual stock valuations (cloud-only table). Best-effort, non-fatal;
+  // re-keyed to the target company, keeping the approved
+  // (company_id, as_of_date) uniqueness.
+  try {
+    const rows = (backup.inventory_manual_valuations ?? []) as Record<string, unknown>[];
+    if (rows.length) {
+      const payload = rows.map((r) => {
+        const { id: _id, created_at: _c, updated_at: _u, company_id: _cid, ...rest } = r;
+        return { ...rest, company_id: targetCompanyId };
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await supabase.from("inventory_manual_valuations").upsert(payload as any, {
+        onConflict: "company_id,as_of_date",
+      });
+    }
+  } catch (err) {
+    console.warn("[restore] manual valuations restore skipped:", err);
   }
 
   // Lock out the one-time cloud→local migration permanently. After a

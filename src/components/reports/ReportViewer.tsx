@@ -157,7 +157,17 @@ export function ReportViewer({
       // Allow the dialog to close before invoking blocking print/save APIs.
       window.setTimeout(() => {
         if (mode === "system") {
-          window.print();
+          // Route through the same cloned/normalised preview document as the
+          // other modes so headers, colours and de-scaled layout are identical
+          // (and so desktop WebViews print the same output as the browser).
+          openPrintPreview(
+            rootRef.current,
+            company,
+            localizedHeading || localizedTitle,
+            fyShort,
+            orientation,
+            true,
+          );
         } else if (mode === "pdf") {
           onExportPdf?.();
           openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
@@ -303,6 +313,7 @@ function openPrintPreview(
   heading: string,
   fyShort: string,
   orientation: "portrait" | "landscape",
+  autoPrint = false,
 ): void {
   const startTs = Date.now();
   recordStage("preview", "start", {
@@ -412,9 +423,13 @@ function openPrintPreview(
     .report-print-fy-line { font-size: 9pt; font-weight: 500; margin-top: 1pt; }
     .report-header-rule { height: 2px; border-top: 1px solid #000;
       border-bottom: 1px solid #000; margin: 3pt 0 6pt; }
+    .preview-content, .preview-content * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
     table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
     th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
-      text-align: left; }
+      text-align: left; overflow-wrap: anywhere; word-break: break-word; }
     th { background: #f0f0f0; font-weight: 600;
       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     td.num, th.num, .num { text-align: right; font-variant-numeric: tabular-nums;
@@ -440,7 +455,7 @@ function openPrintPreview(
 </head>
 <body>
 <div class="preview-bar">
-  <button onclick="window.print()">Print</button>
+  <button id="preview-print-btn" disabled onclick="window.print()">Print</button>
   <button onclick="window.parent.document.getElementById('report-preview-iframe').remove()">Close</button>
   <span style="margin-left:auto;color:#666">Print Preview</span>
 </div>
@@ -467,9 +482,42 @@ function openPrintPreview(
   doc.write(html);
   doc.close();
 
+  // Wait for fonts and images inside the iframe before allowing (or firing)
+  // a print, otherwise the output can miss logos or reflow mid-table.
+  const ready = (async () => {
+    try {
+      const idoc = iframe.contentDocument;
+      if (!idoc) return;
+      await (idoc as Document & { fonts?: FontFaceSet }).fonts?.ready?.catch?.(() => undefined);
+      await Promise.all(
+        Array.from(idoc.images).map((img) =>
+          img.complete ? Promise.resolve() : img.decode().catch(() => undefined),
+        ),
+      );
+    } catch {
+      /* best effort */
+    }
+  })();
+
+  void ready.then(() => {
+    const btn = iframe.contentDocument?.getElementById("preview-print-btn") as
+      | HTMLButtonElement
+      | null;
+    if (btn) btn.disabled = false;
+    if (autoPrint) {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    }
+  });
+
   recordStage("preview", "iframe", {
     opened: true,
     html_len: html.length,
+    auto_print: autoPrint,
     elapsed_ms: Date.now() - startTs,
   });
 }
