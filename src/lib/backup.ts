@@ -39,6 +39,7 @@ export interface CompanyBackup {
   transport_details?: Record<string, unknown>[];
   cost_centres?: Record<string, unknown>[];
   cost_categories?: Record<string, unknown>[];
+  inventory_manual_valuations?: Record<string, unknown>[];
 }
 
 export interface MultiCompanyBackup {
