@@ -313,6 +313,7 @@ function openPrintPreview(
   heading: string,
   fyShort: string,
   orientation: "portrait" | "landscape",
+  autoPrint = false,
 ): void {
   const startTs = Date.now();
   recordStage("preview", "start", {
@@ -454,7 +455,7 @@ function openPrintPreview(
 </head>
 <body>
 <div class="preview-bar">
-  <button onclick="window.print()">Print</button>
+  <button id="preview-print-btn" disabled onclick="window.print()">Print</button>
   <button onclick="window.parent.document.getElementById('report-preview-iframe').remove()">Close</button>
   <span style="margin-left:auto;color:#666">Print Preview</span>
 </div>
