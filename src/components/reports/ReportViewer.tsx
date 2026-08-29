@@ -439,11 +439,23 @@ function openPrintPreview(
     .narration-cell { white-space: normal; word-break: break-word; }
     [class*="print:hidden"] { display: none !important; }
     .overflow-hidden { overflow: visible !important; }
+    .run-head, .run-foot { display: none; }
     @media print {
       .preview-bar { display: none !important; }
       body { padding: 0; }
       .preview-content { margin-top: 0; }
+      /* Chromium/WebView2 ignore @page margin boxes, but repeat
+         position:fixed elements on every printed page. */
+      .run-head, .run-foot {
+        display: flex; position: fixed; left: 0; right: 0;
+        gap: 8pt; justify-content: space-between; align-items: baseline;
+        font-size: 8pt; color: #000;
+      }
+      .run-head { top: 0; font-weight: 700; border-bottom: 0.5pt solid #000; padding-bottom: 2pt; }
+      .run-foot { bottom: 0; color: #444; border-top: 0.5pt solid #999; padding-top: 2pt; }
+      .preview-content { padding: 8mm 0 6mm; }
     }
+
   `;
 
   const html = `<!doctype html>
