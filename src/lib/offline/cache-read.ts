@@ -233,11 +233,15 @@ export async function withCacheFallback<T>(
  * (ledgers, vouchers, entries) for a company and date range.
  */
 export async function readAccountingDataset(companyId: string, opts?: { from?: string; to?: string }) {
+  // The vouchers read is shared with the (legacy-only) child-row recovery path
+  // so 10k-row datasets never scan and normalise the voucher table twice.
+  const vouchersPromise = readVouchers(companyId, opts);
   const [ledgers, vouchers, rawEntries] = await Promise.all([
     readLedgers(companyId),
-    readVouchers(companyId, opts),
-    readVoucherEntriesForCompany(companyId),
+    vouchersPromise,
+    readVoucherEntriesForCompany(companyId, vouchersPromise),
   ]);
+
 
   const voucherById = new Map(vouchers.map((v: any) => [String(v.id), v]));
   const entries = (rawEntries as any[])
