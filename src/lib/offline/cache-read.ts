@@ -86,21 +86,49 @@ export async function readVouchers(companyId: string, opts?: {
   return normalized.sort((a: any, b: any) => (a.voucher_date < b.voucher_date ? 1 : -1));
 }
 
-export async function readVoucherEntriesForCompany(companyId: string) {
-  const direct = await offlineDb.cache_voucher_entries.where("company_id").equals(companyId).toArray();
+/**
+ * True when the table contains rows whose `company_id` key is missing, i.e.
+ * legacy rows written before child rows were stamped with the company. Rows
+ * without the indexed key are excluded from `orderBy("company_id")`, so the
+ * two counts diverge only when legacy rows exist. Both counts are index-only
+ * and stay cheap at 10k+ rows, unlike the id-chunked recovery scan below.
+ */
+async function hasUntaggedRows(table: any): Promise<boolean> {
+  try {
+    const [total, tagged] = await Promise.all([
+      table.count(),
+      table.orderBy("company_id").count(),
+    ]);
+    return total > tagged;
+  } catch {
+    return true; // On any doubt, keep the safe (slow) recovery path.
+  }
+}
 
-  // Backward-compatible recovery for caches created before company_id was
-  // stored on child rows. We intentionally MERGE this with direct rows rather
-  // than returning early, because a failed/interrupted sync may leave only some
-  // children stamped with company_id. Returning only `direct` was the source of
-  // "offline reports show partial/no transactions" even after sync said done.
-  const vouchers = await readVouchers(companyId);
-  const ids = vouchers.map((v) => v.id).filter(Boolean);
+/**
+ * Backward-compatible recovery for caches created before company_id was stored
+ * on child rows. Results are MERGED with the directly indexed rows because a
+ * failed/interrupted sync may leave only some children stamped — returning only
+ * the direct rows was the source of "offline reports show partial transactions".
+ */
+async function readChildRowsForCompany(
+  table: any,
+  companyId: string,
+  vouchersPromise?: Promise<any[]>,
+) {
+  const [direct, untagged] = await Promise.all([
+    table.where("company_id").equals(companyId).toArray(),
+    hasUntaggedRows(table),
+  ]);
+  if (!untagged) return direct;
+
+  const vouchers = await (vouchersPromise ?? readVouchers(companyId));
+  const ids = vouchers.map((v: any) => v.id).filter(Boolean);
   if (ids.length === 0) return direct;
   const seen = new Set(direct.map((r: any) => String(r.id)));
   const out: unknown[] = [];
   for (let i = 0; i < ids.length; i += 500) {
-    const rows = await offlineDb.cache_voucher_entries.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray();
+    const rows = await table.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray();
     for (const r of rows as any[]) {
       const id = String(r.id);
       if (!seen.has(id)) {
@@ -112,26 +140,20 @@ export async function readVoucherEntriesForCompany(companyId: string) {
   return [...direct, ...out];
 }
 
-export async function readVoucherItemsForCompany(companyId: string) {
-  const direct = await offlineDb.cache_voucher_items.where("company_id").equals(companyId).toArray();
-
-  const vouchers = await readVouchers(companyId);
-  const ids = vouchers.map((v) => v.id).filter(Boolean);
-  if (ids.length === 0) return direct;
-  const seen = new Set(direct.map((r: any) => String(r.id)));
-  const out: unknown[] = [];
-  for (let i = 0; i < ids.length; i += 500) {
-    const rows = await offlineDb.cache_voucher_items.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray();
-    for (const r of rows as any[]) {
-      const id = String(r.id);
-      if (!seen.has(id)) {
-        seen.add(id);
-        out.push({ ...r, company_id: r.company_id ?? companyId });
-      }
-    }
-  }
-  return [...direct, ...out];
+export async function readVoucherEntriesForCompany(
+  companyId: string,
+  vouchersPromise?: Promise<any[]>,
+) {
+  return readChildRowsForCompany(offlineDb.cache_voucher_entries, companyId, vouchersPromise);
 }
+
+export async function readVoucherItemsForCompany(
+  companyId: string,
+  vouchersPromise?: Promise<any[]>,
+) {
+  return readChildRowsForCompany(offlineDb.cache_voucher_items, companyId, vouchersPromise);
+}
+
 
 export async function readVoucherEntriesWithVouchers(companyId: string, opts?: {
   ledgerId?: string;
