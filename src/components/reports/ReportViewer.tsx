@@ -471,6 +471,9 @@ function openPrintPreview(
   <button onclick="window.parent.document.getElementById('report-preview-iframe').remove()">Close</button>
   <span style="margin-left:auto;color:#666">Print Preview</span>
 </div>
+<div class="run-head"><span>${escape(company)}</span><span>${escape(fyShort)}</span></div>
+<div class="run-foot"><span>${escape(heading)}</span><span>${escape(new Date().toLocaleDateString("en-IN"))}</span></div>
+
 <div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">
   ${clone.outerHTML}
 </div>
