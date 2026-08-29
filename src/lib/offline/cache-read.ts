@@ -161,10 +161,12 @@ export async function readVoucherEntriesWithVouchers(companyId: string, opts?: {
   to?: string;
   before?: string;
 }) {
+  const vouchersPromise = readVouchers(companyId);
   const [vouchers, entries] = await Promise.all([
-    readVouchers(companyId),
-    readVoucherEntriesForCompany(companyId),
+    vouchersPromise,
+    readVoucherEntriesForCompany(companyId, vouchersPromise),
   ]);
+
   const voucherById = new Map(vouchers.map((v: any) => [String(v.id), v]));
   return (entries as any[])
     .map((e) => {
