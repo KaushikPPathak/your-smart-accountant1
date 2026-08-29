@@ -633,27 +633,13 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  /* Capture the report title into a CSS string so the @page footer
-     can echo it on the left of every page. */
-  .report-print-root .report-print-title {
-    string-set: report-title content();
-  }
-  .report-print-root .report-print-company-capture {
-    string-set: report-company content();
-    position: absolute;
-    width: 0;
-    height: 0;
-    overflow: hidden;
-    visibility: hidden;
-  }
+  /* Capture spans are inert in print (their content is echoed by the
+     DOM running header in the print preview document). */
+  .report-print-root .report-print-company-capture,
   .report-print-root .report-print-fy-capture {
-    string-set: report-fy content();
-    position: absolute;
-    width: 0;
-    height: 0;
-    overflow: hidden;
-    visibility: hidden;
+    display: none !important;
   }
+
   .report-print-landscape {
     page: landscape;
   }
