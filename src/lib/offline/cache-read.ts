@@ -73,17 +73,24 @@ export async function readVouchers(companyId: string, opts?: {
   from?: string; // ISO date
   to?: string;
 }) {
-  let coll = offlineDb.cache_vouchers.where("company_id").equals(companyId);
-  coll = coll.filter((v: any) => {
+  // Bulk-read the indexed rows and filter in plain JS. Dexie's Collection
+  // .filter() runs a cursor callback per row, which dominates the cost at
+  // 10k+ vouchers; a single toArray() plus an array filter is far cheaper
+  // and returns identical rows.
+  const rows = (await offlineDb.cache_vouchers
+    .where("company_id")
+    .equals(companyId)
+    .toArray()) as any[];
+  const filtered = rows.filter((v: any) => {
     if (v?.is_deleted === true) return false;
     if (opts?.voucher_type && v.voucher_type !== opts.voucher_type) return false;
     if (opts?.from && v.voucher_date < opts.from) return false;
     if (opts?.to && v.voucher_date > opts.to) return false;
     return true;
   });
-  const rows = await coll.toArray();
-  const normalized = normalizeAll(rows as any[], normalizeVoucher);
+  const normalized = normalizeAll(filtered, normalizeVoucher);
   return normalized.sort((a: any, b: any) => (a.voucher_date < b.voucher_date ? 1 : -1));
+
 }
 
 /**
