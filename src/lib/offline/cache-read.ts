@@ -130,21 +130,23 @@ async function readChildRowsForCompany(
   if (!untagged) return direct;
 
   const vouchers = await (vouchersPromise ?? readVouchers(companyId));
-  const ids = vouchers.map((v: any) => v.id).filter(Boolean);
-  if (ids.length === 0) return direct;
+  const ids = new Set(vouchers.map((v: any) => String(v.id)).filter(Boolean));
+  if (ids.size === 0) return direct;
   const seen = new Set(direct.map((r: any) => String(r.id)));
   const out: unknown[] = [];
-  for (let i = 0; i < ids.length; i += 500) {
-    const rows = await table.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray();
-    for (const r of rows as any[]) {
-      const id = String(r.id);
-      if (!seen.has(id)) {
-        seen.add(id);
-        out.push({ ...r, company_id: r.company_id ?? companyId });
-      }
-    }
+  // One bulk read + in-memory matching. The previous id-chunked `anyOf`
+  // queries issued dozens of index lookups and were pathologically slow once
+  // a company held ~10k vouchers.
+  const all = (await table.toArray()) as any[];
+  for (const r of all) {
+    const id = String(r.id);
+    if (seen.has(id)) continue;
+    if (!ids.has(String(r.voucher_id))) continue;
+    seen.add(id);
+    out.push({ ...r, company_id: r.company_id ?? companyId });
   }
   return [...direct, ...out];
+
 }
 
 export async function readVoucherEntriesForCompany(
