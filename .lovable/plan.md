@@ -1,72 +1,61 @@
-# SECURITY DEFINER Review (read-only findings + recommendation)
+# Plan: SECURITY DEFINER Grant Hardening (grants only)
 
-## Correction to the premise
+## Scope
 
-There are **not two SECURITY DEFINER functions**. There are **two linter warning *types*, each covering 41 functions** — the same 41 functions appear under both. Verified by query:
+One migration touching **privileges only** on the 26 authorization-checked SECURITY DEFINER RPCs (Group B + the two internal admin helpers). Verified exact signatures; no overload ambiguity.
 
-- SECURITY DEFINER functions in `public`: **41**
-- Executable by `anon`: **41**
-- Executable by `authenticated`: **41**
-- Missing a fixed `search_path`: **0**
-- Of the 41, **5 are trigger functions** (not directly callable through the API), **36 are callable RPCs**.
+- REVOKE EXECUTE from `PUBLIC` and `anon`
+- GRANT EXECUTE to `authenticated` (service_role EXECUTE preserved via explicit GRANT)
+- No changes to function definitions, bodies, DEFINER status, search_path, RLS, accounting logic, or app code
 
-## Exact linter warning text
+Explicitly untouched: the 5 pre-login functions (`accounts_exist`, `app_users_count`, `list_login_users`, `verify_account_login`, `verify_app_user_pin`), `signup_account` (both overloads), `setup_first_admin`, `setup_first_account` (both overloads), and all 5 trigger functions.
 
-1. **Public Can Execute SECURITY DEFINER Function** (WARN, 41 issues)
-   "Detects `SECURITY DEFINER` functions that are callable without signing in. Revoke `EXECUTE`, switch the function to `SECURITY INVOKER`, or move it out of your exposed API schema if it is not meant to be public."
-   https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable
+Note: the earlier "31" estimate came from counting overloaded `signup_account`/`setup_first_account` variants in the group; after excluding them per your instruction, the exact set is **26 functions**.
 
-2. **Signed-In Users Can Execute SECURITY DEFINER Function** (WARN, 41 issues)
-   "Detects `SECURITY DEFINER` functions that are callable by signed-in users. Revoke `EXECUTE`, switch the function to `SECURITY INVOKER`, or move it out of your exposed API schema if signed-in users should not call it."
-   https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
+## Functions affected (26, exact signatures)
 
-## Common properties (all 41)
+```text
+_require_admin(uuid, text)
+_require_admin_password(uuid, text)
+can_write_company(uuid, uuid)
+change_account_password(uuid, text, text)
+create_app_user(uuid, text, text, app_user_role, text)
+delete_account_admin(uuid, text, uuid)
+delete_app_user(uuid, text, uuid)
+delete_import_batch(uuid)
+delete_vouchers_bulk(uuid, voucher_type, date, date)
+has_company_role(uuid, uuid, company_role)
+is_company_member(uuid, uuid)
+is_period_locked(uuid, date)
+list_accounts_admin(uuid, text)
+lock_period(uuid, text, text, date, date, text, text)
+next_voucher_number(uuid, voucher_type)
+reclassify_misposted_vouchers(uuid)
+recompute_monthly_balances(uuid)
+repair_orphan_vouchers_with_suspense(uuid)
+reset_app_user_pin(uuid, text, uuid, text)
+save_voucher_atomic(jsonb, jsonb, jsonb)
+set_company_password(uuid, text)
+sync_opening_balances_from_previous_fy(uuid, date)
+unlock_period(uuid, text, text, text)
+update_account_admin(uuid, text, uuid, text, app_user_role, boolean, boolean, text)
+verify_company_password(uuid, text)
+voucher_company_id(uuid)
+```
 
-- Owner: `postgres`
-- `SECURITY DEFINER`: yes
-- `search_path`: pinned on every one — `public`, or `public, extensions` for the bcrypt (`crypt`/`gen_salt`) functions
-- Privileges: default pattern `postgres=X`, `anon=X`, `authenticated=X`, `service_role=X` (i.e. `PUBLIC`/`anon` execute was never revoked)
+## SQL shape (per function)
 
-So the "fixed search_path" hardening the linter usually pushes is **already done everywhere**. The remaining exposure is purely the **`anon` EXECUTE grant**.
+```sql
+REVOKE EXECUTE ON FUNCTION public.<name>(<args>) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.<name>(<args>) TO authenticated, service_role;
+```
 
-## Risk classification of the 36 callable functions
+## Verification after the migration
 
-**A. Genuinely must stay anon-callable (pre-login surface)** — 5
-`accounts_exist()`, `app_users_count()`, `list_login_users()`, `verify_account_login(text,text)`, `verify_app_user_pin(uuid,text)`.
-These run on the lock/login screen before any session exists. They need DEFINER because `app_users` has all client SELECT revoked (password/PIN hashes must never be readable). Callers: `src/routes/lock.tsx`.
-Residual concern: `list_login_users()` enumerates usernames + roles to anonymous callers; `verify_*` are unauthenticated credential oracles (mitigated by the existing 5-attempt / 60-second lockout).
+1. Query `has_function_privilege` for all 26: anon = false, authenticated = true, service_role = true.
+2. Re-run the Supabase linter and report remaining warning counts (expected drop from 41 to ~10 anon-flagged and ~10 authenticated-flagged: 5 pre-login + signup/setup + 5 triggers).
+3. Run the regression suite (Vitest) and confirm the build is clean.
 
-**B. Anon-callable but should be authenticated-only** — 31
-Everything else with an argument-based or `auth.uid()`-based authorization check inside: `save_voucher_atomic`, `next_voucher_number`, `lock_period`, `unlock_period`, `delete_import_batch`, `delete_vouchers_bulk`, `recompute_monthly_balances`, `sync_opening_balances_from_previous_fy`, `reclassify_misposted_vouchers`, `repair_orphan_vouchers_with_suspense`, `set_company_password`, `verify_company_password`, `has_company_role`, `is_company_member`, `can_write_company`, `is_period_locked`, `voucher_company_id`, `list_accounts_admin`, `update_account_admin`, `delete_account_admin`, `change_account_password`, `create_app_user`, `delete_app_user`, `reset_app_user_pin`, `_require_admin`, `_require_admin_password`, `setup_first_admin`, `setup_first_account` (x2 overloads), `signup_account` (x2 overloads).
-These already fail closed for anonymous callers (`auth.uid()` is null → `Not authorized`, or an admin PIN/password is required). The anon grant is unnecessary attack surface, not an open door — **with two exceptions below**.
+## Out of scope (unchanged by this work)
 
-**C. Actual exposure worth acting on** — 3
-- `signup_account(...)` — anonymous callers can create an `app_users` row with `role = 'admin'`. There is no invite/allow-list gate. Caller: `src/routes/lock.tsx` (signup screen). This is a design decision (first-run self-provisioning) but it is currently unlimited, not first-run-only.
-- `setup_first_admin` / `setup_first_account` — self-guarded (`count(*) = 0`), so only exploitable on a truly empty instance; low severity but still anon-reachable.
-- `_require_admin`, `_require_admin_password` — internal helpers, never called from app code; should not be in the API surface at all.
-
-## Can anything move to SECURITY INVOKER?
-
-No, not without breaking behaviour. Every one of the 41 either reads `app_users` (client SELECT revoked), bypasses RLS deliberately (`has_role`-style helpers used *inside* RLS policies — making them INVOKER causes infinite policy recursion), or is a trigger that must write past RLS. Verified by reading each definition.
-
-## Recommendation
-
-| Group | Verdict |
-|---|---|
-| A — 5 pre-login functions | **KEEP + HARDEN** — keep anon EXECUTE, keep DEFINER; harden by trimming `list_login_users()` output and rate-limiting the verify functions |
-| B — 31 authorization-checked RPCs | **KEEP + HARDEN** — keep DEFINER; `REVOKE EXECUTE ... FROM anon, PUBLIC`, `GRANT ... TO authenticated` |
-| C — `signup_account`, `_require_admin*` | **NEEDS FURTHER REVIEW** — decide whether open admin self-signup is intended; revoke all client EXECUTE on the two `_require_admin*` helpers |
-| Trigger functions (5) | **KEEP** — no change; linter flags them but they are not API-reachable |
-
-Nothing here is a confirmed data-leak vulnerability today; the linter is flagging exposure surface, and the one item that deserves a real decision is anonymous admin self-signup.
-
-## If you approve, the change would be
-
-A single migration that only touches grants — no function bodies, no `search_path` edits, no accounting logic:
-
-1. `REVOKE EXECUTE ON FUNCTION ... FROM PUBLIC, anon;` for the 31 group-B functions plus the 2 `_require_admin*` helpers.
-2. `GRANT EXECUTE ON FUNCTION ... TO authenticated;` (and `service_role`) for the same set.
-3. Leave the 5 group-A pre-login functions and the 5 trigger functions untouched.
-4. Re-run the linter to confirm the issue count drops from 41 to ~10 per warning type.
-
-The two group-C policy questions (open admin signup, username enumeration) would be handled separately after your decision.
+signup_account open-signup, username enumeration, dependency vulnerabilities, and all other findings.
