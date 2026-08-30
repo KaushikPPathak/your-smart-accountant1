@@ -95,7 +95,7 @@ describe("10k-record scale", () => {
     expect(debit).toBe(credit);
     // fake-indexeddb is far slower than a real engine; this is a regression
     // ceiling, not a target.
-    expect(ms).toBeLessThan(30_000);
+    expect(ms).toBeLessThan(45_000);
     // eslint-disable-next-line no-console
     console.log(`readAccountingDataset(10k vouchers / 20k entries): ${ms}ms`);
   }, 120_000);

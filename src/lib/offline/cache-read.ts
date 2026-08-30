@@ -73,17 +73,24 @@ export async function readVouchers(companyId: string, opts?: {
   from?: string; // ISO date
   to?: string;
 }) {
-  let coll = offlineDb.cache_vouchers.where("company_id").equals(companyId);
-  coll = coll.filter((v: any) => {
+  // Bulk-read the indexed rows and filter in plain JS. Dexie's Collection
+  // .filter() runs a cursor callback per row, which dominates the cost at
+  // 10k+ vouchers; a single toArray() plus an array filter is far cheaper
+  // and returns identical rows.
+  const rows = (await offlineDb.cache_vouchers
+    .where("company_id")
+    .equals(companyId)
+    .toArray()) as any[];
+  const filtered = rows.filter((v: any) => {
     if (v?.is_deleted === true) return false;
     if (opts?.voucher_type && v.voucher_type !== opts.voucher_type) return false;
     if (opts?.from && v.voucher_date < opts.from) return false;
     if (opts?.to && v.voucher_date > opts.to) return false;
     return true;
   });
-  const rows = await coll.toArray();
-  const normalized = normalizeAll(rows as any[], normalizeVoucher);
+  const normalized = normalizeAll(filtered, normalizeVoucher);
   return normalized.sort((a: any, b: any) => (a.voucher_date < b.voucher_date ? 1 : -1));
+
 }
 
 /**
@@ -123,21 +130,23 @@ async function readChildRowsForCompany(
   if (!untagged) return direct;
 
   const vouchers = await (vouchersPromise ?? readVouchers(companyId));
-  const ids = vouchers.map((v: any) => v.id).filter(Boolean);
-  if (ids.length === 0) return direct;
+  const ids = new Set(vouchers.map((v: any) => String(v.id)).filter(Boolean));
+  if (ids.size === 0) return direct;
   const seen = new Set(direct.map((r: any) => String(r.id)));
   const out: unknown[] = [];
-  for (let i = 0; i < ids.length; i += 500) {
-    const rows = await table.where("voucher_id").anyOf(ids.slice(i, i + 500)).toArray();
-    for (const r of rows as any[]) {
-      const id = String(r.id);
-      if (!seen.has(id)) {
-        seen.add(id);
-        out.push({ ...r, company_id: r.company_id ?? companyId });
-      }
-    }
+  // One bulk read + in-memory matching. The previous id-chunked `anyOf`
+  // queries issued dozens of index lookups and were pathologically slow once
+  // a company held ~10k vouchers.
+  const all = (await table.toArray()) as any[];
+  for (const r of all) {
+    const id = String(r.id);
+    if (seen.has(id)) continue;
+    if (!ids.has(String(r.voucher_id))) continue;
+    seen.add(id);
+    out.push({ ...r, company_id: r.company_id ?? companyId });
   }
   return [...direct, ...out];
+
 }
 
 export async function readVoucherEntriesForCompany(
