@@ -1,46 +1,64 @@
-# Competitive Gap List — What the App Must Add
+# Core Accounting Deficiencies — Audit Findings & Remediation Plan
 
-Based on a read of the current codebase (vouchers, reports, GST, inventory, backup, security), here is what is genuinely missing versus what mainstream Indian accounting products ship. Ordered by how much each one blocks a real buyer.
+Read-only audit of core bookkeeping functions (not market extras). Each gap below was verified against the codebase.
 
-## Tier 1 — Deal-breakers (a firm cannot switch without these)
+## Verified missing core functions
 
-1. **TDS / TCS engine.** Today TDS exists only as a ledger group name and a tax-audit mention. Missing: section master (194C/194J/194H/194Q, 206C), automatic deduction on purchase/payment vouchers with threshold and rate logic, PAN-based higher-rate handling, TDS payable ledger auto-posting, challan (281) tracking, and Form 26Q/27Q/24Q export. Every business with vendors needs this monthly.
-2. **Payroll.** Zero code exists. Missing: employee master, salary structure, attendance/LOP, PF/ESI/PT/TDS on salary, payslip PDF, salary journal posting, and PF/ESI return files. This is a standard module in every competing product.
-3. **Live e-invoice + e-way bill.** The IRP integration is a stub that always returns "unavailable"; the DB tables and payload builder exist but nothing transmits. Mandatory for turnover above the notified threshold — without it, invoices are legally incomplete for many users.
-4. **GSTR-9 / 9C annual return.** GSTR-1, 2B, 3B exist; the annual return and reconciliation statement do not.
-5. **Role-based permissions inside the app.** There are admin/staff app users, but no per-module/per-voucher-type rights, no approval workflow, and no "restrict backdated entry" control. Buyers with more than two users ask for this first.
+### 1. Contra voucher (cash ↔ bank transfers) — CRITICAL
+No contra voucher type exists. `src/lib/voucher-postings.ts` and `src/lib/voucher-resolver.ts` do not handle `contra`; there is no `app.vouchers.new.contra.tsx` route. Only label/i18n strings mention it.
+- Impact: everyday entries like "cash deposited into bank" or "bank withdrawal" cannot be recorded correctly — users must misuse payment/receipt vouchers, which corrupts cash-book and bank-book reporting.
 
-## Tier 2 — Expected as standard (absence looks like a toy)
+### 2. TDS / TCS — HIGH
+No TDS/TCS anywhere in voucher posting or GST logic. No TDS ledger groups, no deduction on payment vouchers, no TDS payable tracking or returns.
+- Impact: any business deducting tax at source cannot keep compliant books.
 
-6. **Multi-godown / location inventory.** Stock is single-pool. No godown master, no stock transfer voucher, no godown-wise stock summary.
-7. **Batch, expiry and serial tracking.** Only a free-form `specs` JSON exists. Pharma, food, electronics cannot use the app at all without batch/expiry and FEFO issue.
-8. **Price lists and discount slabs.** No party-wise or quantity-wise rate master; every invoice rate is typed manually.
-9. **Cheque printing and post-dated cheque register.** Referenced in text but no print layout or PDC tracking.
-10. **Budgets and variance reporting.** No budget master, no budget-vs-actual column in P&L or group summary.
-11. **Cost centre depth.** Cost centres exist, but there is no cost-centre allocation on each voucher line and no cost-centre P&L.
-12. **Multi-currency for regular ledgers.** FX exists only on export invoices; no forex ledger revaluation, no gain/loss posting.
+### 3. Payroll — HIGH
+No payroll/salary voucher generation, employee masters, or attendance. Salary can only be posted as a generic journal.
+- Impact: a basic expectation for a business accounting product.
 
-## Tier 3 — Competitive polish (wins deals, not required to enter)
+### 4. Physical stock reconciliation — MEDIUM
+No physical-stock/stock-take voucher. Stock Summary is book-quantity only; shortages, breakage, and count corrections cannot be recorded.
 
-13. **Barcode / POS billing screen** with scanner input and quick tender.
-14. **Interest calculation on overdue receivables** (the MSME interest helper exists but is not a full interest-on-outstanding engine).
-15. **Bill-of-materials costing depth** — job work challans (Form ITC-04), subcontracting stock with vendors.
-16. **Fixed asset register with book depreciation** (only income-tax block WDV exists today; no Companies Act SLM/WDV schedule).
-17. **Document management** — attach scanned bills/receipts to vouchers.
-18. **Scheduled/automated backup to the user's own cloud with a restore drill reminder** (manual and opt-in cloud exist; scheduling and verification do not).
+### 5. Memorandum / reversing journals — MEDIUM
+No memorandum vouchers (non-posting) and no auto-reversing journals for provisional/year-end adjustments. Accountants rely on these for accruals.
 
-## What is already competitive (no work needed)
+### 6. Multi-currency — LOW (defer)
+No foreign-currency vouchers or forex gain/loss. Acceptable to defer for a domestic-focused product.
 
-Double-entry with balance invariants, full voucher set including manufacturing, GST returns (1/2B/3B) with reconciliation, bank import and reconciliation, ageing/outstanding, NCE-aware Balance Sheet, P&L, Trading, Receipts & Payments, WAC inventory valuation with manual override, period locks, audit/activity log, offline-first local data ownership, backup/restore with tombstone safety, and report printing.
+### 7. Budgets vs actuals — LOW (defer)
+No budget definition or variance reporting.
 
-## Suggested build order
+## Robustness gaps (verified earlier, still open)
 
-Phase 1: TDS/TCS engine → role-based permissions → live e-invoice/e-way bill.
-Phase 2: Multi-godown + batch/expiry → price lists → cheque printing.
-Phase 3: Payroll → GSTR-9/9C → budgets → cost-centre allocation.
+- 25k-record benchmark passes in isolation (~274ms avg) but flakes under full-suite load — needs a load-tolerant threshold or isolated perf job.
+- Critical dependency vulnerabilities remain unaddressed (out of scope of recent security work).
+- 57 Supabase linter warnings remain — all reviewed and by-design (pre-login/signup/trigger functions + intended `authenticated` execute).
 
-Each phase is independently shippable and none of them require changing the existing accounting core, local-only data model, or report engine.
+## AI — status
+The assistant layer is extensive (query router, planner, anomaly detection, OCR invoice capture, voice I/O, vector index, conversation memory). No verified core deficiency; a deeper read-only audit of end-to-end AI voucher creation accuracy would be the next audit candidate.
 
-## Next step
+## Proposed remediation (priority order)
 
-Tell me which single item to plan in detail and I will write an implementation plan for it (schema, postings, UI, reports, tests) before touching any code.
+**Phase 1 — Contra voucher (do first, smallest and most critical)**
+1. Add `contra` to voucher type registry, `voucher-postings.ts` (Dr bank/cash, Cr cash/bank only — restrict ledger selection to cash/bank groups), and `voucher-resolver.ts`.
+2. New route `app.vouchers.new.contra.tsx` reusing the payment/receipt form pattern.
+3. Day Book, Cash/Bank book, and voucher numbering integration.
+4. Regression tests: posting balance, cash-book effect, edit/delete, backup round-trip.
+
+**Phase 2 — Physical stock voucher**
+Stock-take entry screen posting quantity-only adjustments through the existing stock journal pattern, feeding the WAC engine.
+
+**Phase 3 — Memorandum & reversing journals**
+Non-posting flag on journal vouchers (excluded from trial balance/reports) + auto-reverse-on-date journals.
+
+**Phase 4 — TDS (basic)**
+TDS section master + rate, deduction line on payment vouchers, TDS payable ledger auto-posting, simple TDS payable report. Returns filing deferred.
+
+**Phase 5 — Payroll (basic)**
+Employee master + monthly salary journal generator posting to payroll ledgers. No attendance/statutory filing initially.
+
+Each phase is independently shippable, uses the existing voucher/posting/test architecture, and does not change the data model's local-only guarantees.
+
+## Technical notes
+- All new voucher types must flow through `readAccountingDataset`, voucher numbering, fingerprinting (`voucherFingerprint`), backup payload, and tombstone handling — the integration checklist used for manual valuations applies.
+- No change to public API, accounting conventions already in place, or the WAC engine.
