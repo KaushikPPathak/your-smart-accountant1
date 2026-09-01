@@ -46,7 +46,7 @@ import { setVoucherContext, clearVoucherContext } from "@/lib/voucher-context-st
 import { BillAllocationDialog, type BillAllocation } from "./BillAllocationDialog";
 
 
-type EntryVoucherType = "receipt" | "payment" | "journal";
+type EntryVoucherType = "receipt" | "payment" | "journal" | "contra";
 
 interface LedgerOpt {
   id: string;
@@ -105,7 +105,8 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   const navigate = useNavigate();
   const { activeCompanyId, activeMembership } = useCompany();
   const cfg = CFG[voucherType];
-  const isSimple = voucherType === "receipt" || voucherType === "payment";
+  const isSimple = voucherType === "payment" || voucherType === "receipt" || voucherType === "contra";
+  const isContra = voucherType === "contra";
   const defaultDate = useDefaultFyDate();
   const [date, setDate] = useState(defaultDate);
   useEffect(() => {
