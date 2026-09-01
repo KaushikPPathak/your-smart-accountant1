@@ -81,6 +81,7 @@ import { Route as AppVouchersNewJournalRouteImport } from './routes/app.vouchers
 import { Route as AppVouchersNewDelivery_noteRouteImport } from './routes/app.vouchers.new.delivery_note'
 import { Route as AppVouchersNewDebit_noteRouteImport } from './routes/app.vouchers.new.debit_note'
 import { Route as AppVouchersNewCredit_noteRouteImport } from './routes/app.vouchers.new.credit_note'
+import { Route as AppVouchersNewContraRouteImport } from './routes/app.vouchers.new.contra'
 
 const WelcomeRoute = WelcomeRouteImport.update({
   id: '/welcome',
@@ -450,6 +451,11 @@ const AppVouchersNewCredit_noteRoute =
     path: '/new/credit_note',
     getParentRoute: () => AppVouchersRoute,
   } as any)
+const AppVouchersNewContraRoute = AppVouchersNewContraRouteImport.update({
+  id: '/new/contra',
+  path: '/new/contra',
+  getParentRoute: () => AppVouchersRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -513,6 +519,7 @@ export interface FileRoutesByFullPath {
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
   '/app/tools/gstr1-json': typeof AppToolsGstr1JsonRoute
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
+  '/app/vouchers/new/contra': typeof AppVouchersNewContraRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/delivery_note': typeof AppVouchersNewDelivery_noteRoute
@@ -586,6 +593,7 @@ export interface FileRoutesByTo {
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
   '/app/tools/gstr1-json': typeof AppToolsGstr1JsonRoute
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
+  '/app/vouchers/new/contra': typeof AppVouchersNewContraRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/delivery_note': typeof AppVouchersNewDelivery_noteRoute
@@ -661,6 +669,7 @@ export interface FileRoutesById {
   '/app/settings/tax-templates': typeof AppSettingsTaxTemplatesRoute
   '/app/tools/gstr1-json': typeof AppToolsGstr1JsonRoute
   '/app/vouchers/$voucherId': typeof AppVouchersVoucherIdRoute
+  '/app/vouchers/new/contra': typeof AppVouchersNewContraRoute
   '/app/vouchers/new/credit_note': typeof AppVouchersNewCredit_noteRoute
   '/app/vouchers/new/debit_note': typeof AppVouchersNewDebit_noteRoute
   '/app/vouchers/new/delivery_note': typeof AppVouchersNewDelivery_noteRoute
@@ -737,6 +746,7 @@ export interface FileRouteTypes {
     | '/app/settings/tax-templates'
     | '/app/tools/gstr1-json'
     | '/app/vouchers/$voucherId'
+    | '/app/vouchers/new/contra'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/delivery_note'
@@ -810,6 +820,7 @@ export interface FileRouteTypes {
     | '/app/settings/tax-templates'
     | '/app/tools/gstr1-json'
     | '/app/vouchers/$voucherId'
+    | '/app/vouchers/new/contra'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/delivery_note'
@@ -884,6 +895,7 @@ export interface FileRouteTypes {
     | '/app/settings/tax-templates'
     | '/app/tools/gstr1-json'
     | '/app/vouchers/$voucherId'
+    | '/app/vouchers/new/contra'
     | '/app/vouchers/new/credit_note'
     | '/app/vouchers/new/debit_note'
     | '/app/vouchers/new/delivery_note'
@@ -1413,6 +1425,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppVouchersNewCredit_noteRouteImport
       parentRoute: typeof AppVouchersRoute
     }
+    '/app/vouchers/new/contra': {
+      id: '/app/vouchers/new/contra'
+      path: '/new/contra'
+      fullPath: '/app/vouchers/new/contra'
+      preLoaderRoute: typeof AppVouchersNewContraRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
   }
 }
 
@@ -1508,6 +1527,7 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 
 interface AppVouchersRouteChildren {
   AppVouchersVoucherIdRoute: typeof AppVouchersVoucherIdRoute
+  AppVouchersNewContraRoute: typeof AppVouchersNewContraRoute
   AppVouchersNewCredit_noteRoute: typeof AppVouchersNewCredit_noteRoute
   AppVouchersNewDebit_noteRoute: typeof AppVouchersNewDebit_noteRoute
   AppVouchersNewDelivery_noteRoute: typeof AppVouchersNewDelivery_noteRoute
@@ -1523,6 +1543,7 @@ interface AppVouchersRouteChildren {
 
 const AppVouchersRouteChildren: AppVouchersRouteChildren = {
   AppVouchersVoucherIdRoute: AppVouchersVoucherIdRoute,
+  AppVouchersNewContraRoute: AppVouchersNewContraRoute,
   AppVouchersNewCredit_noteRoute: AppVouchersNewCredit_noteRoute,
   AppVouchersNewDebit_noteRoute: AppVouchersNewDebit_noteRoute,
   AppVouchersNewDelivery_noteRoute: AppVouchersNewDelivery_noteRoute,

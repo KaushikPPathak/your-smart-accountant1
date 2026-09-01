@@ -574,7 +574,7 @@ export interface ItemVoucherSnap {
 
 export interface EntryVoucherSnap {
   companyId: string;
-  voucherType: "receipt" | "payment" | "journal";
+  voucherType: "receipt" | "payment" | "journal" | "contra";
   voucherDate: string;
   partyLedgerId: string | null;
   refNo: string;
