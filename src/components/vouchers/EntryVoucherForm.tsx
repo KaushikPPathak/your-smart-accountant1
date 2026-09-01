@@ -99,6 +99,12 @@ const CFG: Record<
     defaultLines: 10,
     color: "var(--cat-master)",
   },
+  contra: {
+    title: "Contra Voucher",
+    subtitle: "Cash ↔ bank transfer — cash deposit, cash withdrawal, or bank-to-bank",
+    defaultLines: 4,
+    color: "var(--cat-master)",
+  },
 };
 
 export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherType }) {
