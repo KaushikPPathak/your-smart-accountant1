@@ -771,10 +771,9 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             <Table>
               <TableHeader className="bg-muted/10">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">Ledger Account</TableHead>
-                  {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Debit</TableHead>}
                   <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">{isContra ? "Deposit To (Dr)" : "Ledger Account"}</TableHead>
                   {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Debit</TableHead>}
+
                   {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Credit</TableHead>}
                   {isSimple && <TableHead className="w-40 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">{isContra ? "Amount Transferred" : "Amount"}</TableHead>}
                   <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">Narration</TableHead>
