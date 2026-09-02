@@ -773,8 +773,10 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">Ledger Account</TableHead>
                   {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Debit</TableHead>}
+                  <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">{isContra ? "Deposit To (Dr)" : "Ledger Account"}</TableHead>
+                  {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Debit</TableHead>}
                   {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Credit</TableHead>}
-                  {isSimple && <TableHead className="w-40 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Amount</TableHead>}
+                  {isSimple && <TableHead className="w-40 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">{isContra ? "Amount Transferred" : "Amount"}</TableHead>}
                   <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">Narration</TableHead>
                   <TableHead className="w-10 py-2"></TableHead>
                 </TableRow>
@@ -787,8 +789,9 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                         mode="simple"
                         idx={i}
                         row={{ id: l.id, ledger_id: l.ledger_id, amount: l.amount, narration: l.narration }}
-                        ledgerOptions={ledgers.filter((lg) => lg.id !== cashBankId)}
+                        ledgerOptions={(isContra ? cashBankOptions : ledgers).filter((lg) => lg.id !== cashBankId)}
                         balance={ledgerBalances[l.ledger_id]}
+
                         canDelete={simpleLines.length > 1}
                         onCommit={(idx, patch) => updateSimple(idx, patch as Partial<SimpleLine>)}
                         onDelete={(idx) => removeSimple(idx)}
