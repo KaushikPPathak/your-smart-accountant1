@@ -414,8 +414,19 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         toast.error("Particulars cannot be the same as the Cash/Bank account");
         return;
       }
+      if (isContra) {
+        const isCashBank = (id: string) => {
+          const lg = ledgers.find((x) => x.id === id);
+          return lg?.type === "cash" || lg?.type === "bank";
+        };
+        if (!isCashBank(cashBankId) || filled.some((l) => !isCashBank(l.ledger_id))) {
+          toast.error("Contra allows only Cash and Bank accounts on both sides");
+          return;
+        }
+      }
       totalForVoucher = filled.reduce((s, l) => s + rupeesToPaise(parseFloat(l.amount) || 0), 0);
       // Receipt: Dr Cash/Bank, Cr Party. Payment: Cr Cash/Bank, Dr Party.
+      // Contra: Cr "Withdraw From" account, Dr "Deposit To" account(s).
       const isReceipt = voucherType === "receipt";
       entriesToInsert = [
         {
@@ -433,11 +444,14 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           line_no: i + 2,
         })),
       ];
-      const partyLine = filled.find((l) => {
-        const lg = ledgers.find((x) => x.id === l.ledger_id);
-        return lg && (lg.type === "sundry_debtor" || lg.type === "sundry_creditor");
-      });
+      const partyLine = isContra
+        ? undefined
+        : filled.find((l) => {
+            const lg = ledgers.find((x) => x.id === l.ledger_id);
+            return lg && (lg.type === "sundry_debtor" || lg.type === "sundry_creditor");
+          });
       partyLedgerId = partyLine?.ledger_id ?? null;
+
     } else {
       const filled = lines.filter(
         (l) => l.ledger_id && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0),
