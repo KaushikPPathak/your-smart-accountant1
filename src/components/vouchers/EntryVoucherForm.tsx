@@ -94,9 +94,10 @@ const CFG: Record<
     color: "var(--cat-payment)",
   },
   journal: {
-    title: "Journal / Contra",
-    subtitle: "Free double-entry — supports book-to-book (cash↔bank) too",
+    title: "Journal Voucher",
+    subtitle: "Free double-entry adjustment entries",
     defaultLines: 10,
+
     color: "var(--cat-master)",
   },
   contra: {
