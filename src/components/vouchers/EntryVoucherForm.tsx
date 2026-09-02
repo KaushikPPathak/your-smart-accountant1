@@ -732,7 +732,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
               {isSimple && (
                 <div className="space-y-1.5">
                   <Label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
-                    <span>{voucherType === "receipt" ? "Account (Dr)" : "Account (Cr)"}</span>
+                    <span>{isContra ? "Withdraw From (Cr)" : voucherType === "receipt" ? "Account (Dr)" : "Account (Cr)"}</span>
                   </Label>
                   <Combo
                     value={cashBankId}
@@ -743,6 +743,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                     onCreate={() => setLedgerDlg({ open: true, editId: null, lineIdx: null })}
                     createLabel="New Cash/Bank ledger"
                   />
+
                   {cashBankId && (
                     <div className="pt-0.5">
                       <LedgerBalanceChip ledgerId={cashBankId} prefix="Bal" compact />
