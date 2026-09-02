@@ -50,7 +50,8 @@ const QUICK = [
   { type: "payment", label: "Payment", hotkey: "Alt+Y", icon: ArrowUpFromLine, to: "/app/vouchers/new/payment" },
   { type: "credit_note", label: "Credit Note", hotkey: "Alt+C", icon: FileMinus, to: "/app/vouchers/new/credit_note" },
   { type: "debit_note", label: "Debit Note", hotkey: "Alt+D", icon: FilePlus, to: "/app/vouchers/new/debit_note" },
-  { type: "journal", label: "Journal / Contra", hotkey: "Alt+J", icon: BookOpen, to: "/app/vouchers/new/journal" },
+  { type: "journal", label: "Journal", hotkey: "Alt+J", icon: BookOpen, to: "/app/vouchers/new/journal" },
+  { type: "contra", label: "Contra", hotkey: "Alt+N", icon: ArrowDownToLine, to: "/app/vouchers/new/contra" },
   { type: "sales_order", label: "Sales Order", hotkey: "Alt+O", icon: ShoppingCart, to: "/app/vouchers/new/sales_order" },
   { type: "delivery_note", label: "Delivery Challan", hotkey: "Alt+L", icon: ShoppingBag, to: "/app/vouchers/new/delivery_note" },
   { type: "quotation", label: "Quotation", hotkey: "Alt+Q", icon: FilePlus, to: "/app/vouchers/new/quotation" },
@@ -68,7 +69,8 @@ interface VoucherRow {
   ledgers?: { name: string } | null;
 }
 
-const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "credit_note", "debit_note", "sales_order", "delivery_note", "quotation", "manufacturing"] as const;
+const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "contra", "credit_note", "debit_note", "sales_order", "delivery_note", "quotation", "manufacturing"] as const;
+
 
 function VouchersHub() {
   const location = useLocation();

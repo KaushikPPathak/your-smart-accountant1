@@ -94,9 +94,10 @@ const CFG: Record<
     color: "var(--cat-payment)",
   },
   journal: {
-    title: "Journal / Contra",
-    subtitle: "Free double-entry — supports book-to-book (cash↔bank) too",
+    title: "Journal Voucher",
+    subtitle: "Free double-entry adjustment entries",
     defaultLines: 10,
+
     color: "var(--cat-master)",
   },
   contra: {
@@ -414,8 +415,19 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         toast.error("Particulars cannot be the same as the Cash/Bank account");
         return;
       }
+      if (isContra) {
+        const isCashBank = (id: string) => {
+          const lg = ledgers.find((x) => x.id === id);
+          return lg?.type === "cash" || lg?.type === "bank";
+        };
+        if (!isCashBank(cashBankId) || filled.some((l) => !isCashBank(l.ledger_id))) {
+          toast.error("Contra allows only Cash and Bank accounts on both sides");
+          return;
+        }
+      }
       totalForVoucher = filled.reduce((s, l) => s + rupeesToPaise(parseFloat(l.amount) || 0), 0);
       // Receipt: Dr Cash/Bank, Cr Party. Payment: Cr Cash/Bank, Dr Party.
+      // Contra: Cr "Withdraw From" account, Dr "Deposit To" account(s).
       const isReceipt = voucherType === "receipt";
       entriesToInsert = [
         {
@@ -433,11 +445,14 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           line_no: i + 2,
         })),
       ];
-      const partyLine = filled.find((l) => {
-        const lg = ledgers.find((x) => x.id === l.ledger_id);
-        return lg && (lg.type === "sundry_debtor" || lg.type === "sundry_creditor");
-      });
+      const partyLine = isContra
+        ? undefined
+        : filled.find((l) => {
+            const lg = ledgers.find((x) => x.id === l.ledger_id);
+            return lg && (lg.type === "sundry_debtor" || lg.type === "sundry_creditor");
+          });
       partyLedgerId = partyLine?.ledger_id ?? null;
+
     } else {
       const filled = lines.filter(
         (l) => l.ledger_id && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0),
@@ -718,7 +733,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
               {isSimple && (
                 <div className="space-y-1.5">
                   <Label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
-                    <span>{voucherType === "receipt" ? "Account (Dr)" : "Account (Cr)"}</span>
+                    <span>{isContra ? "Withdraw From (Cr)" : voucherType === "receipt" ? "Account (Dr)" : "Account (Cr)"}</span>
                   </Label>
                   <Combo
                     value={cashBankId}
@@ -729,6 +744,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                     onCreate={() => setLedgerDlg({ open: true, editId: null, lineIdx: null })}
                     createLabel="New Cash/Bank ledger"
                   />
+
                   {cashBankId && (
                     <div className="pt-0.5">
                       <LedgerBalanceChip ledgerId={cashBankId} prefix="Bal" compact />
@@ -756,10 +772,11 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             <Table>
               <TableHeader className="bg-muted/10">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">Ledger Account</TableHead>
+                  <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">{isContra ? "Deposit To (Dr)" : "Ledger Account"}</TableHead>
                   {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Debit</TableHead>}
+
                   {!isSimple && <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Credit</TableHead>}
-                  {isSimple && <TableHead className="w-40 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Amount</TableHead>}
+                  {isSimple && <TableHead className="w-40 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">{isContra ? "Amount Transferred" : "Amount"}</TableHead>}
                   <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">Narration</TableHead>
                   <TableHead className="w-10 py-2"></TableHead>
                 </TableRow>
@@ -772,8 +789,9 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                         mode="simple"
                         idx={i}
                         row={{ id: l.id, ledger_id: l.ledger_id, amount: l.amount, narration: l.narration }}
-                        ledgerOptions={ledgers.filter((lg) => lg.id !== cashBankId)}
+                        ledgerOptions={(isContra ? cashBankOptions : ledgers).filter((lg) => lg.id !== cashBankId)}
                         balance={ledgerBalances[l.ledger_id]}
+
                         canDelete={simpleLines.length > 1}
                         onCommit={(idx, patch) => updateSimple(idx, patch as Partial<SimpleLine>)}
                         onDelete={(idx) => removeSimple(idx)}
