@@ -1,0 +1,1 @@
+ALTER TYPE public.voucher_type ADD VALUE IF NOT EXISTS 'physical_stock';

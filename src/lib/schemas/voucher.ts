@@ -11,7 +11,9 @@ export const ITEM_VOUCHER_TYPES = [
   "delivery_note",
   "quotation",
 ] as const;
-export const ALL_VOUCHER_TYPES = [...ENTRY_VOUCHER_TYPES, ...ITEM_VOUCHER_TYPES] as const;
+/** Quantity-only inventory documents (no party, no GL postings). */
+export const STOCK_VOUCHER_TYPES = ["physical_stock"] as const;
+export const ALL_VOUCHER_TYPES = [...ENTRY_VOUCHER_TYPES, ...ITEM_VOUCHER_TYPES, ...STOCK_VOUCHER_TYPES] as const;
 
 export const voucherDateSchema = z
   .string()

@@ -14,6 +14,7 @@ import {
   Printer,
   Trash2,
   Boxes,
+  ClipboardCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -56,6 +57,7 @@ const QUICK = [
   { type: "delivery_note", label: "Delivery Challan", hotkey: "Alt+L", icon: ShoppingBag, to: "/app/vouchers/new/delivery_note" },
   { type: "quotation", label: "Quotation", hotkey: "Alt+Q", icon: FilePlus, to: "/app/vouchers/new/quotation" },
   { type: "manufacturing", label: "Mfg & Process JV", hotkey: "Alt+M", icon: Boxes, to: "/app/vouchers/new/manufacturing", requires: "inventory" as const },
+  { type: "physical_stock", label: "Physical Stock", hotkey: "Alt+K", icon: ClipboardCheck, to: "/app/vouchers/new/physical_stock", requires: "inventory" as const },
 ] as const;
 
 interface VoucherRow {
@@ -69,7 +71,7 @@ interface VoucherRow {
   ledgers?: { name: string } | null;
 }
 
-const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "contra", "credit_note", "debit_note", "sales_order", "delivery_note", "quotation", "manufacturing"] as const;
+const TYPES = ["all", "sales", "purchase", "receipt", "payment", "journal", "contra", "credit_note", "debit_note", "sales_order", "delivery_note", "quotation", "manufacturing", "physical_stock"] as const;
 
 
 function VouchersHub() {

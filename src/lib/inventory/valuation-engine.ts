@@ -44,6 +44,16 @@ export function calculateWac(
     const qty = Math.abs(move.qty);
     const moveRate = qty > 0 ? move.taxablePaise / qty : 0;
 
+    // Physical stock (stock-take) lines carry a SIGNED difference quantity and
+    // no value of their own — they are always valued at the running WAC so the
+    // count correction never distorts the average cost.
+    if (move.type === "physical_stock") {
+      currentQty += move.qty;
+      currentValuePaise += Math.round(move.qty * currentWacPaise);
+      if (currentQty > 0) currentWacPaise = currentValuePaise / currentQty;
+      continue;
+    }
+
     const isInward = 
       move.type === "purchase" || 
       move.type === "credit_note" || 
@@ -53,6 +63,7 @@ export function calculateWac(
       move.type === "sales" || 
       move.type === "debit_note" || 
       (move.type === "manufacturing" && move.qty < 0);
+
 
     if (isInward) {
       const addedValue = Math.round(qty * moveRate);

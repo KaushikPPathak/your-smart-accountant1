@@ -135,9 +135,13 @@ function StockSummary() {
 
 
   // Inward = purchase + credit_note (sales return) + manufacturing output (qty > 0)
+  //          + physical stock excess (qty > 0)
   // Outward = sales + debit_note (purchase return) + manufacturing consumption (qty < 0)
+  //          + physical stock shortage (qty < 0)
   const isInward = (t: string) => t === "purchase" || t === "credit_note";
   const isOutward = (t: string) => t === "sales" || t === "debit_note";
+  const isMfg = (t: string) => t === "manufacturing";
+
   const isMfg = (t: string) => t === "manufacturing";
 
   const rows = useMemo(() => {
@@ -161,8 +165,9 @@ function StockSummary() {
       return {
         ...it,
         opening: Number(it.opening_stock_qty),
-        inWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && isInward(m.vouchers.voucher_type)).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
-        outWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && isOutward(m.vouchers.voucher_type)).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
+        inWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isInward(m.vouchers.voucher_type) || (m.vouchers.voucher_type === "physical_stock" && Number(m.qty) > 0))).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
+        outWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isOutward(m.vouchers.voucher_type) || (m.vouchers.voucher_type === "physical_stock" && Number(m.qty) < 0))).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
+
         closing: val.closingQty,
         stockValue: val.closingValuePaise,
         lowStock: it.reorder_level > 0 && val.closingQty <= it.reorder_level,
