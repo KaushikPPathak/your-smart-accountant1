@@ -165,8 +165,9 @@ function StockSummary() {
       return {
         ...it,
         opening: Number(it.opening_stock_qty),
-        inWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && isInward(m.vouchers.voucher_type)).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
-        outWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && isOutward(m.vouchers.voucher_type)).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
+        inWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isInward(m.vouchers.voucher_type) || (m.vouchers.voucher_type === "physical_stock" && Number(m.qty) > 0))).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
+        outWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isOutward(m.vouchers.voucher_type) || (m.vouchers.voucher_type === "physical_stock" && Number(m.qty) < 0))).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
+
         closing: val.closingQty,
         stockValue: val.closingValuePaise,
         lowStock: it.reorder_level > 0 && val.closingQty <= it.reorder_level,
