@@ -135,9 +135,13 @@ function StockSummary() {
 
 
   // Inward = purchase + credit_note (sales return) + manufacturing output (qty > 0)
+  //          + physical stock excess (qty > 0)
   // Outward = sales + debit_note (purchase return) + manufacturing consumption (qty < 0)
+  //          + physical stock shortage (qty < 0)
   const isInward = (t: string) => t === "purchase" || t === "credit_note";
   const isOutward = (t: string) => t === "sales" || t === "debit_note";
+  const isMfg = (t: string) => t === "manufacturing";
+
   const isMfg = (t: string) => t === "manufacturing";
 
   const rows = useMemo(() => {
