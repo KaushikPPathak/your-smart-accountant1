@@ -516,7 +516,8 @@ export interface ItemVoucherSnap {
     | "debit_note"
     | "sales_order"
     | "delivery_note"
-    | "quotation";
+    | "quotation"
+    | "physical_stock";
   voucherDate: string;
   partyId: string;
   refNo: string;
@@ -602,6 +603,9 @@ export interface EntryVoucherSnap {
 // ---------- Item voucher executor -------------------------------------------
 
 export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
+  if (snap.voucherType === "physical_stock") {
+    return runPhysicalStockCreate(snap);
+  }
   const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
   if (isLocalOnlyMode()) {
     const r = await runLocalItemVoucherCreate(snap);
@@ -834,6 +838,8 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
 
 export const ITEM_VOUCHER_KEY = "item_voucher_create";
 export const ENTRY_VOUCHER_KEY = "entry_voucher_create";
+export const PHYSICAL_STOCK_KEY = "physical_stock_create";
 
 registerVoucherExecutor(ITEM_VOUCHER_KEY, (snap) => runItemVoucherCreate(snap as ItemVoucherSnap).then(() => undefined));
+registerVoucherExecutor(PHYSICAL_STOCK_KEY, (snap) => runPhysicalStockCreate(snap as ItemVoucherSnap).then(() => undefined));
 registerVoucherExecutor(ENTRY_VOUCHER_KEY, (snap) => runEntryVoucherCreate(snap as EntryVoucherSnap));
