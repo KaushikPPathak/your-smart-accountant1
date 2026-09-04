@@ -18,27 +18,7 @@ import { BookOpen } from "lucide-react";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { QuickRangeChips } from "@/components/reports/QuickRangeChips";
 import { ReportViewer } from "@/components/reports/ReportViewer";
-import { readLedgers, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
-import { offlineDb } from "@/lib/offline/db";
-import { normalizeVoucher } from "@/lib/offline/cache-normalizers";
-
-async function readJournalVouchersByDate(
-  companyId: string,
-  from: string,
-  to: string,
-): Promise<any[]> {
-  const rows = await offlineDb.cache_vouchers
-    .where("[company_id+voucher_date]")
-    .between([companyId, from], [companyId, to], true, true)
-    .toArray();
-  const journals = (rows as any[]).filter((v) => v?.is_deleted !== true && (v.voucher_type === "journal" || !v.voucher_type));
-  const normalized = journals.map((v) => {
-    try { return normalizeVoucher(v); } catch { return v; }
-  });
-  return normalized.sort((a: any, b: any) =>
-    (a.voucher_date > b.voucher_date ? 1 : -1),
-  );
-}
+import { readLedgers, readVouchers } from "@/lib/offline/cache-read";
 
 export const Route = createFileRoute("/app/reports/journal-book")({
   head: () => ({ meta: [{ title: "Journal Book — Reports" }] }),
@@ -65,58 +45,98 @@ function JournalBook() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!activeCompanyId) return;
+    if (!activeCompanyId) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
+
     const loadData = async () => {
+      // Journal Book must never remain stuck behind a network request.
+      // Read the local accounting cache first, then refresh from Supabase
+      // when available. This also makes the report work reliably in the
+      // desktop/offline build.
       try {
-        const data = await withCacheFallback<Row[]>(
-          async () => {
-            const { data: res, error } = await supabase
-              .from("vouchers")
-              .select("id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, party_ledger_id, ledgers:party_ledger_id(name)")
-              .eq("company_id", activeCompanyId)
-              .in("voucher_type", ["journal", null])
-              .gte("voucher_date", from)
-              .lte("voucher_date", to)
-              .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true });
-            if (error) throw error;
-            return (res || []) as unknown as Row[];
-          },
-          async () => {
-            let vouchers: any[];
-            try {
-              vouchers = await readJournalVouchersByDate(activeCompanyId, from, to);
-            } catch (err) {
-              console.warn("Journal book cache read error:", err);
-              vouchers = (await readVouchers(activeCompanyId, { from, to })).filter(v => v.voucher_type === 'journal');
-            }
-            const ledgers = await readLedgers(activeCompanyId);
-            const ledgerNames = new Map((ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]));
-            return (vouchers as any[]).map((v) => ({
-              id: String(v.id),
-              voucher_date: String(v.voucher_date ?? ""),
-              voucher_number: String(v.voucher_number ?? ""),
-              voucher_type: String(v.voucher_type ?? ""),
-              total_paise: Number(v.total_paise ?? 0),
-              narration: v.narration ?? null,
-              reference_no: v.reference_no ?? null,
-              ledgers: v.party_ledger_id ? { name: ledgerNames.get(String(v.party_ledger_id)) ?? "" } : null,
-            })) as Row[];
-          },
-        );
+        let cacheRows: Row[] = [];
+        try {
+          const [vouchers, ledgers] = await Promise.all([
+            readVouchers(activeCompanyId, { from, to, voucher_type: "journal" }),
+            readLedgers(activeCompanyId),
+          ]);
+          const ledgerNames = new Map(
+            (ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]),
+          );
+          cacheRows = (vouchers as any[]).map((v) => ({
+            id: String(v.id),
+            voucher_date: String(v.voucher_date ?? ""),
+            voucher_number: String(v.voucher_number ?? ""),
+            voucher_type: String(v.voucher_type ?? "journal"),
+            total_paise: Number(v.total_paise ?? 0),
+            narration: v.narration ?? null,
+            reference_no: v.reference_no ?? null,
+            ledgers: v.party_ledger_id
+              ? { name: ledgerNames.get(String(v.party_ledger_id)) ?? "" }
+              : null,
+          })) as Row[];
+        } catch (cacheErr) {
+          console.warn("Journal book cache read error:", cacheErr);
+        }
+
+        // Render cached data immediately if we have it; do not make the UI
+        // wait for Supabase. The cloud refresh is bounded so a dead/hanging
+        // network cannot leave the report showing Loading forever.
+        if (!cancelled && cacheRows.length > 0) {
+          setRows(sortVouchersAsc(cacheRows));
+          setLoading(false);
+        }
+
+        let cloudRows: Row[] | null = null;
+        try {
+          const cloudPromise = supabase
+            .from("vouchers")
+            .select(
+              "id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, party_ledger_id, ledgers:party_ledger_id(name)",
+            )
+            .eq("company_id", activeCompanyId)
+            .eq("voucher_type", "journal")
+            .gte("voucher_date", from)
+            .lte("voucher_date", to)
+            .order("voucher_date", { ascending: true })
+            .order("voucher_number", { ascending: true });
+
+          const timeout = new Promise<never>((_, reject) =>
+            window.setTimeout(() => reject(new Error("Journal Book cloud query timed out")), 8000),
+          );
+          const { data: res, error } = await Promise.race([cloudPromise, timeout]);
+          if (error) throw error;
+          cloudRows = ((res || []) as unknown as Row[]).filter(
+            (r) => r?.voucher_type === "journal",
+          );
+        } catch (cloudErr) {
+          console.warn("Journal book cloud refresh unavailable; using cache:", cloudErr);
+        }
+
         if (!cancelled) {
-          setRows(sortVouchersAsc(data));
+          if (cloudRows) {
+            setRows(sortVouchersAsc(cloudRows));
+          } else if (cacheRows.length === 0) {
+            setRows([]);
+          }
+          setLoading(false);
         }
       } catch (err) {
         console.error("Journal Book failure:", err);
         if (!cancelled) {
+          setRows([]);
+          setLoading(false);
           toast.error("Failed to load Journal Book. Check console for details.");
         }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     };
+
     void loadData();
     return () => { cancelled = true; };
   }, [activeCompanyId, from, to]);
@@ -203,18 +223,58 @@ function JournalBook() {
       ) : rows.length === 0 ? (
         <Card><CardContent className="p-6"><EmptyState icon={BookOpen} title="No journals in range" description="Adjust the date filter or post some journal vouchers." /></CardContent></Card>
       ) : (
-        <Card>
-          <CardContent className="p-3">
-            <DataGrid
-              reportId="journal-book"
-              rows={rows}
-              columns={gridColumns}
-              globalSearch={(r2) => `${r2.voucher_date} ${r2.voucher_number} ${r2.ledgers?.name ?? ""} ${r2.reference_no ?? ""} ${narrationOf(null, r2)}`}
-              onRowClick={(r2) => openVoucherDetail(navigate, r2.id)}
-              height={560}
-            />
-          </CardContent>
-        </Card>
+        <>
+          {/* Interactive grid is screen-only. DataGrid virtualization can keep
+              rows outside the DOM, so it must never be the print source. */}
+          <Card className="print:hidden">
+            <CardContent className="p-3">
+              <DataGrid
+                reportId="journal-book"
+                rows={rows}
+                columns={gridColumns}
+                globalSearch={(r2) => `${r2.voucher_date} ${r2.voucher_number} ${r2.ledgers?.name ?? ""} ${r2.reference_no ?? ""} ${narrationOf(null, r2)}`}
+                onRowClick={(r2) => openVoucherDetail(navigate, r2.id)}
+                height={560}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Dedicated static print representation: all rows are present in the
+              DOM and the accounting report is independent of DataGrid sizing,
+              virtualization, scrolling, or screen auto-fit. */}
+          <div className="hidden print:block journal-book-print-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>No.</th>
+                  <th>Particulars</th>
+                  <th>Narration</th>
+                  <th>Ref</th>
+                  <th className="num">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r2) => (
+                  <tr key={r2.id}>
+                    <td>{fmtIndianDate(r2.voucher_date)}</td>
+                    <td>{r2.voucher_number}</td>
+                    <td>{r2.ledgers?.name ?? ""}</td>
+                    <td className="narration-cell">{narrationOf(null, r2)}</td>
+                    <td>{r2.reference_no ?? ""}</td>
+                    <td className="num">{formatINR(r2.total_paise)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="row-bold">
+                  <td colSpan={5}>Total</td>
+                  <td className="num">{formatINR(total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
       )}
     </ReportViewer>
   );
