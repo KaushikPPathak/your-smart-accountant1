@@ -124,6 +124,7 @@ const SECTIONS: NavSection[] = [
         label: "Core Financial Reports",
         items: [
           { title: "Day Book", url: "/app/reports/day-book", icon: CalendarClock, i18nKey: "nav.dayBook" },
+          { title: "Journal Book", url: "/app/reports/journal-book", icon: BookOpen },
           { title: "Ledger Statement", url: "/app/reports/ledger", icon: ScrollText, i18nKey: "nav.ledgerStatement" },
           { title: "Group Ledger (B/S & P&L)", url: "/app/reports/group-ledger", icon: Layers, i18nKey: "nav.groupLedger" },
           { title: "Trial Balance", url: "/app/reports/trial-balance", icon: Calculator, i18nKey: "nav.trialBalance" },
