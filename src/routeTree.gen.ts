@@ -75,6 +75,7 @@ import { Route as AppVouchersNewSalesRouteImport } from './routes/app.vouchers.n
 import { Route as AppVouchersNewReceiptRouteImport } from './routes/app.vouchers.new.receipt'
 import { Route as AppVouchersNewQuotationRouteImport } from './routes/app.vouchers.new.quotation'
 import { Route as AppVouchersNewPurchaseRouteImport } from './routes/app.vouchers.new.purchase'
+import { Route as AppVouchersNewPhysical_stockRouteImport } from './routes/app.vouchers.new.physical_stock'
 import { Route as AppVouchersNewPaymentRouteImport } from './routes/app.vouchers.new.payment'
 import { Route as AppVouchersNewManufacturingRouteImport } from './routes/app.vouchers.new.manufacturing'
 import { Route as AppVouchersNewJournalRouteImport } from './routes/app.vouchers.new.journal'
@@ -417,6 +418,12 @@ const AppVouchersNewPurchaseRoute = AppVouchersNewPurchaseRouteImport.update({
   path: '/new/purchase',
   getParentRoute: () => AppVouchersRoute,
 } as any)
+const AppVouchersNewPhysical_stockRoute =
+  AppVouchersNewPhysical_stockRouteImport.update({
+    id: '/new/physical_stock',
+    path: '/new/physical_stock',
+    getParentRoute: () => AppVouchersRoute,
+  } as any)
 const AppVouchersNewPaymentRoute = AppVouchersNewPaymentRouteImport.update({
   id: '/new/payment',
   path: '/new/payment',
@@ -526,6 +533,7 @@ export interface FileRoutesByFullPath {
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
   '/app/vouchers/new/manufacturing': typeof AppVouchersNewManufacturingRoute
   '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
+  '/app/vouchers/new/physical_stock': typeof AppVouchersNewPhysical_stockRoute
   '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
   '/app/vouchers/new/quotation': typeof AppVouchersNewQuotationRoute
   '/app/vouchers/new/receipt': typeof AppVouchersNewReceiptRoute
@@ -600,6 +608,7 @@ export interface FileRoutesByTo {
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
   '/app/vouchers/new/manufacturing': typeof AppVouchersNewManufacturingRoute
   '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
+  '/app/vouchers/new/physical_stock': typeof AppVouchersNewPhysical_stockRoute
   '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
   '/app/vouchers/new/quotation': typeof AppVouchersNewQuotationRoute
   '/app/vouchers/new/receipt': typeof AppVouchersNewReceiptRoute
@@ -676,6 +685,7 @@ export interface FileRoutesById {
   '/app/vouchers/new/journal': typeof AppVouchersNewJournalRoute
   '/app/vouchers/new/manufacturing': typeof AppVouchersNewManufacturingRoute
   '/app/vouchers/new/payment': typeof AppVouchersNewPaymentRoute
+  '/app/vouchers/new/physical_stock': typeof AppVouchersNewPhysical_stockRoute
   '/app/vouchers/new/purchase': typeof AppVouchersNewPurchaseRoute
   '/app/vouchers/new/quotation': typeof AppVouchersNewQuotationRoute
   '/app/vouchers/new/receipt': typeof AppVouchersNewReceiptRoute
@@ -753,6 +763,7 @@ export interface FileRouteTypes {
     | '/app/vouchers/new/journal'
     | '/app/vouchers/new/manufacturing'
     | '/app/vouchers/new/payment'
+    | '/app/vouchers/new/physical_stock'
     | '/app/vouchers/new/purchase'
     | '/app/vouchers/new/quotation'
     | '/app/vouchers/new/receipt'
@@ -827,6 +838,7 @@ export interface FileRouteTypes {
     | '/app/vouchers/new/journal'
     | '/app/vouchers/new/manufacturing'
     | '/app/vouchers/new/payment'
+    | '/app/vouchers/new/physical_stock'
     | '/app/vouchers/new/purchase'
     | '/app/vouchers/new/quotation'
     | '/app/vouchers/new/receipt'
@@ -902,6 +914,7 @@ export interface FileRouteTypes {
     | '/app/vouchers/new/journal'
     | '/app/vouchers/new/manufacturing'
     | '/app/vouchers/new/payment'
+    | '/app/vouchers/new/physical_stock'
     | '/app/vouchers/new/purchase'
     | '/app/vouchers/new/quotation'
     | '/app/vouchers/new/receipt'
@@ -1383,6 +1396,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppVouchersNewPurchaseRouteImport
       parentRoute: typeof AppVouchersRoute
     }
+    '/app/vouchers/new/physical_stock': {
+      id: '/app/vouchers/new/physical_stock'
+      path: '/new/physical_stock'
+      fullPath: '/app/vouchers/new/physical_stock'
+      preLoaderRoute: typeof AppVouchersNewPhysical_stockRouteImport
+      parentRoute: typeof AppVouchersRoute
+    }
     '/app/vouchers/new/payment': {
       id: '/app/vouchers/new/payment'
       path: '/new/payment'
@@ -1534,6 +1554,7 @@ interface AppVouchersRouteChildren {
   AppVouchersNewJournalRoute: typeof AppVouchersNewJournalRoute
   AppVouchersNewManufacturingRoute: typeof AppVouchersNewManufacturingRoute
   AppVouchersNewPaymentRoute: typeof AppVouchersNewPaymentRoute
+  AppVouchersNewPhysical_stockRoute: typeof AppVouchersNewPhysical_stockRoute
   AppVouchersNewPurchaseRoute: typeof AppVouchersNewPurchaseRoute
   AppVouchersNewQuotationRoute: typeof AppVouchersNewQuotationRoute
   AppVouchersNewReceiptRoute: typeof AppVouchersNewReceiptRoute
@@ -1550,6 +1571,7 @@ const AppVouchersRouteChildren: AppVouchersRouteChildren = {
   AppVouchersNewJournalRoute: AppVouchersNewJournalRoute,
   AppVouchersNewManufacturingRoute: AppVouchersNewManufacturingRoute,
   AppVouchersNewPaymentRoute: AppVouchersNewPaymentRoute,
+  AppVouchersNewPhysical_stockRoute: AppVouchersNewPhysical_stockRoute,
   AppVouchersNewPurchaseRoute: AppVouchersNewPurchaseRoute,
   AppVouchersNewQuotationRoute: AppVouchersNewQuotationRoute,
   AppVouchersNewReceiptRoute: AppVouchersNewReceiptRoute,

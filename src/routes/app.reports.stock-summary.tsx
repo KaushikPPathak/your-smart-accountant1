@@ -142,8 +142,6 @@ function StockSummary() {
   const isOutward = (t: string) => t === "sales" || t === "debit_note";
   const isMfg = (t: string) => t === "manufacturing";
 
-  const isMfg = (t: string) => t === "manufacturing";
-
   const rows = useMemo(() => {
     return items.map((it) => {
       const itemMoves = moves.filter((m) => m.item_id === it.id);
