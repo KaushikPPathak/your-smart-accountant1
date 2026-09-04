@@ -132,20 +132,23 @@ function CompaniesPage() {
   const [restoreFileOpen, setRestoreFileOpen] = useState(false);
   const [nceWizard, setNceWizard] = useState<{ id: string; entity: EntityStatus } | null>(null);
 
-  // Per-company selected FY state (year integer e.g., 2025, 2026)
+  // Per-company selected FY state (integer year)
   const [selectedYears, setSelectedYears] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const init: Record<string, number> = {};
     for (const m of memberships) {
-      const start = m.companies.financial_year_start;
-      const y = start ? new Date(start).getFullYear() : new Date().getFullYear();
-      init[m.company_id] = y;
+      const savedStart = typeof window !== "undefined" ? localStorage.getItem(`ym_active_fy_start_${m.company_id}`) : null;
+      if (savedStart) {
+        init[m.company_id] = new Date(savedStart).getFullYear();
+      } else {
+        const start = m.companies.financial_year_start;
+        init[m.company_id] = start ? new Date(start).getFullYear() : new Date().getFullYear();
+      }
     }
     setSelectedYears((prev) => ({ ...init, ...prev }));
   }, [memberships]);
 
-  // Handle FY Stepping with Automatic New Year Provisioning
   const handleStepYear = async (companyId: string, companyName: string, direction: -1 | 1, e: React.MouseEvent) => {
     e.stopPropagation();
     const current = selectedYears[companyId] ?? new Date().getFullYear();
@@ -156,42 +159,18 @@ function CompaniesPage() {
     const nextStart = `${nextYear}-04-01`;
     const nextEnd = `${nextYear + 1}-03-31`;
 
-    // Persist active FY range for reports/vouchers
     try {
       localStorage.setItem(`ym_active_fy_start_${companyId}`, nextStart);
       localStorage.setItem(`ym_active_fy_end_${companyId}`, nextEnd);
-    } catch { /* non-fatal */ }
+      localStorage.setItem("ym_active_fy_start", nextStart);
+      localStorage.setItem("ym_active_fy_end", nextEnd);
+    } catch { /* ignore */ }
 
-    // When advancing beyond the current date, automatically provision the new FY
+    // If advancing forward past previous years, provision the new FY
     if (direction === 1) {
-      const targetCompany = memberships.find((m) => m.company_id === companyId);
-      const companyFyStart = targetCompany?.companies?.financial_year_start
-        ? new Date(targetCompany.companies.financial_year_start).getFullYear()
-        : new Date().getFullYear();
-
-      if (nextYear > companyFyStart) {
-        toast.info(`Created FY ${nextYear}-${String(nextYear + 1).slice(-2)}`, {
-          description: `Initialized new financial year for ${companyName}.`,
-        });
-
-        // Mirror the new year to local database & cloud
-        try {
-          const { offlineDb } = await import("@/lib/offline/db");
-          const existing = await offlineDb.cache_companies.get(companyId);
-          if (existing) {
-            await offlineDb.cache_companies.put({
-              ...existing,
-              financial_year_start: nextStart,
-              updated_at: new Date().toISOString(),
-            });
-          }
-          if (isOnlineNow() && !isLocalOnlyMode()) {
-            await supabase.from("companies").update({ financial_year_start: nextStart }).eq("id", companyId);
-          }
-        } catch (err) {
-          console.warn("FY auto-provision background error:", err);
-        }
-      }
+      toast.success(`FY ${nextYear}-${String(nextYear + 1).slice(-2)} Selected`, {
+        description: `New financial year ready for ${companyName}.`,
+      });
     }
   };
 
@@ -466,14 +445,36 @@ function CompaniesPage() {
     if (chosenYear) {
       const customStart = `${chosenYear}-04-01`;
       const customEnd = `${chosenYear + 1}-03-31`;
+
       try {
         localStorage.setItem(`ym_active_fy_start_${companyId}`, customStart);
         localStorage.setItem(`ym_active_fy_end_${companyId}`, customEnd);
-      } catch { /* ignore */ }
+        localStorage.setItem("ym_active_fy_start", customStart);
+        localStorage.setItem("ym_active_fy_end", customEnd);
+
+        // Update local Dexie company row so company context and report toolbar immediately pick up the selected year
+        const { offlineDb } = await import("@/lib/offline/db");
+        const existing = await offlineDb.cache_companies.get(companyId);
+        if (existing) {
+          await offlineDb.cache_companies.put({
+            ...existing,
+            financial_year_start: customStart,
+            updated_at: new Date().toISOString(),
+          });
+        }
+
+        // Update company record if online
+        if (isOnlineNow() && !isLocalOnlyMode()) {
+          await supabase.from("companies").update({ financial_year_start: customStart }).eq("id", companyId);
+        }
+      } catch (e) {
+        console.warn("Failed to synchronize active financial year:", e);
+      }
     }
 
     if (isCompanyUnlocked(companyId)) {
       setActiveCompanyId(companyId);
+      await refresh();
       navigate({ to: "/app" });
       return;
     }
@@ -497,11 +498,13 @@ function CompaniesPage() {
     if (!hasPassword) {
       markCompanyUnlocked(companyId);
       setActiveCompanyId(companyId);
+      await refresh();
       navigate({ to: "/app" });
       return;
     }
 
     setActiveCompanyId(companyId);
+    await refresh();
     navigate({ to: "/" });
   };
 
@@ -672,7 +675,7 @@ function CompaniesPage() {
                 return (
                   <div
                     key={m.company_id}
-                    onClick={() => !isActive && openMembershipCompany(m.company_id)}
+                    onClick={() => openMembershipCompany(m.company_id)}
                     className={`group relative flex flex-col rounded-xl border bg-card p-5 transition-all duration-200 cursor-pointer ${
                       isActive
                         ? "border-primary/60 bg-primary/[0.03] shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]"
@@ -744,12 +747,12 @@ function CompaniesPage() {
 
                         <span className="font-semibold select-none">{fyLabel}</span>
 
-                        {/* NEXT YEAR BUTTON WITH AUTO-CREATION */}
+                        {/* NEXT YEAR BUTTON (AUTO-CREATE) */}
                         <button
                           type="button"
                           onClick={(e) => handleStepYear(m.company_id, m.companies.name, 1, e)}
                           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground active:scale-95 transition-all"
-                          title="Next Financial Year (Auto-creates new FY)"
+                          title="Next Financial Year (Auto-create)"
                         >
                           <ChevronRight className="h-3.5 w-3.5" />
                         </button>
@@ -765,19 +768,17 @@ function CompaniesPage() {
                         )}
                       </div>
 
-                      {isActive ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
-                          <Check className="h-3.5 w-3.5" /> Active
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); openMembershipCompany(m.company_id); }}
-                          className="inline-flex items-center rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
-                        >
-                          Open
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openMembershipCompany(m.company_id); }}
+                        className={
+                          isActive
+                            ? "inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary"
+                            : "inline-flex items-center rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
+                        }
+                      >
+                        {isActive ? <><Check className="h-3.5 w-3.5" /> Active</> : "Open"}
+                      </button>
                     </div>
                   </div>
                 );
@@ -797,7 +798,7 @@ function CompaniesPage() {
                 return (
                   <div
                     key={m.company_id}
-                    onClick={() => !isActive && openMembershipCompany(m.company_id)}
+                    onClick={() => openMembershipCompany(m.company_id)}
                     className={`group flex flex-col gap-3 rounded-xl border bg-card p-4 transition-all duration-200 cursor-pointer sm:flex-row sm:items-center sm:gap-4 ${
                       isActive
                         ? "border-primary/60 bg-primary/[0.03] shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]"
@@ -851,15 +852,17 @@ function CompaniesPage() {
                     </div>
 
                     <div className="flex items-center gap-2 sm:shrink-0">
-                      {!isActive && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); openMembershipCompany(m.company_id); }}
-                          className="inline-flex items-center rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
-                        >
-                          Open
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openMembershipCompany(m.company_id); }}
+                        className={
+                          isActive
+                            ? "inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary"
+                            : "inline-flex items-center rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
+                        }
+                      >
+                        {isActive ? <><Check className="h-3 w-3" /> Active</> : "Open"}
+                      </button>
                       {m.role === "admin" && (
                         <button
                           onClick={(e) => { e.stopPropagation(); openEdit(m.company_id); }}
