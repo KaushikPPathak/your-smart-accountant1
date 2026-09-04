@@ -1,5 +1,4 @@
 import React from "react";
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
 export interface TRow {
@@ -44,140 +43,166 @@ export function TAccount({
   const paddedRight: (TRow | null)[] = [...rightRows];
   while (paddedRight.length < maxRows) paddedRight.push(null);
 
-  const renderRow = (row: TRow | null, index: number, side: "left" | "right") => {
-    if (!row) {
-      return (
-        <TableRow key={`${side}-empty-${index}`} className="border-b border-transparent h-7">
-          <TableCell className="py-1 px-2 text-xs">&nbsp;</TableCell>
-          <TableCell className="py-1 px-2 text-right text-xs">&nbsp;</TableCell>
-        </TableRow>
-      );
-    }
-
-    const isClickable = Boolean(row.onClick);
-    const isBold = row.emphasis === "bold" || row.emphasis === "total" || row.isHeader || row.isFooter;
-    const isTotal = row.emphasis === "total";
-    const indentLevel = row.indent ?? (row.isSubLedger ? 2 : row.isCashBankSplit ? 3 : row.isHeader ? 0 : 1);
-
-    return (
-      <TableRow
-        key={`${side}-${index}-${row.label}`}
-        onClick={row.onClick}
-        className={cn(
-          "border-b border-border/40 transition-colors",
-          isClickable && "cursor-pointer hover:bg-muted/60",
-          row.isHeader && "bg-muted/20 font-semibold",
-          row.isFooter && "bg-muted/10 font-medium",
-          isTotal && "font-bold text-primary",
-          row.isCashBankSplit && "text-muted-foreground text-[11px]"
-        )}
-        title={isClickable ? "Click to view ledger details" : undefined}
-      >
-        <TableCell
-          className={cn(
-            "py-1 px-2 text-xs select-text",
-            isBold && "font-semibold",
-            row.isCashBankSplit && "text-[11px] text-muted-foreground"
-          )}
-          style={{ paddingLeft: `${Math.max(8, indentLevel * 12)}px` }}
-        >
-          {row.label}
-        </TableCell>
-        <TableCell
-          className={cn(
-            "py-1 px-2 text-right font-mono text-xs whitespace-nowrap select-text",
-            isBold && "font-semibold",
-            row.isCashBankSplit && "text-[11px] text-muted-foreground"
-          )}
-        >
-          {row.amount}
-        </TableCell>
-      </TableRow>
-    );
-  };
-
   return (
-    <div className={cn("w-full space-y-4 print:space-y-2", className)}>
-      {/* Print stylesheet to enforce A4 landscape and dual-column T-shape */}
+    <div className={cn("w-full space-y-2", className)}>
+      {/* Traditional Indian Accounting T-Frame Stylesheet */}
       <style>{`
-        @media print {
-          @page {
-            size: A4 landscape;
-            margin: 8mm 10mm;
-          }
-          .t-account-print-wrapper {
-            display: grid !important;
-            grid-template-columns: 1fr 1fr !important;
-            width: 100% !important;
-            gap: 12px !important;
-          }
-          .t-account-print-col {
-            width: 100% !important;
-            min-width: 0 !important;
-          }
-          table {
-            width: 100% !important;
-            border-collapse: collapse !important;
-          }
-          .print-avoid-break {
-            break-inside: avoid !important;
-            page-break-inside: avoid !important;
-          }
+        .t-account-table {
+          width: 100% !important;
+          border-collapse: collapse !important;
+          border: 1.5px solid #000 !important;
+          font-size: 8.5pt !important;
+          background: #fff !important;
+          color: #000 !important;
+        }
+        .t-account-table th {
+          border-bottom: 1.5px solid #000 !important;
+          background-color: #f2f2f2 !important;
+          font-weight: 700 !important;
+          padding: 4px 6px !important;
+          color: #000 !important;
+        }
+        .t-account-table td {
+          border-bottom: 0.5px solid #d0d0d0 !important;
+          padding: 2.5px 6px !important;
+          vertical-align: top !important;
+          color: #000 !important;
+        }
+        /* Vertical Column Dividers */
+        .col-divider {
+          border-right: 0.5px solid #b0b0b0 !important;
+        }
+        .center-t-divider {
+          border-right: 2px solid #000 !important;
+        }
+        /* Accounting Double-Line Total Row */
+        .total-row td {
+          border-top: 1.5px solid #000 !important;
+          border-bottom: 2.5px double #000 !important;
+          font-weight: 700 !important;
+          background-color: #fafafa !important;
+          padding: 4px 6px !important;
         }
       `}</style>
 
-      {/* Report Header */}
-      <div className="text-center">
-        <h2 className="text-xl font-bold tracking-tight print:text-lg">{title}</h2>
-        {subtitle && <p className="text-sm text-muted-foreground print:text-xs">{subtitle}</p>}
+      {/* Title & Subtitle */}
+      <div className="text-center mb-1">
+        <h2 className="text-lg font-bold uppercase tracking-tight text-foreground">{title}</h2>
+        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
       </div>
 
-      {/* Main Dual-Column T-Account Container */}
-      <div className="t-account-print-wrapper print-avoid-break grid grid-cols-2 gap-4 rounded-lg border border-border bg-card p-2 text-card-foreground shadow-sm print:grid-cols-2 print:gap-2 print:border print:p-1 print:shadow-none">
-        
-        {/* Debit Side (Left) */}
-        <div className="t-account-print-col min-w-0 border-r border-border pr-2 print:pr-1">
-          <Table className="w-full">
-            <TableHeader>
-              <TableRow className="border-b-2 border-border bg-muted/40">
-                <TableHead className="py-2 px-2 font-bold text-foreground print:text-xs">{leftHeaderLabel}</TableHead>
-                <TableHead className="py-2 px-2 text-right font-bold text-foreground print:text-xs">Amount (₹)</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paddedLeft.map((row, idx) => renderRow(row, idx, "left"))}
-            </TableBody>
-            <TableFooter>
-              <TableRow className="border-t-2 border-double border-foreground font-bold bg-muted/30">
-                <TableCell className="py-2 px-2 text-xs uppercase tracking-wider print:py-1">Total</TableCell>
-                <TableCell className="py-2 px-2 text-right font-mono text-xs print:py-1">{leftTotal}</TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </div>
+      {/* Unified Single-Table T-Account Structure (guarantees row-to-row alignment) */}
+      <table className="t-account-table">
+        <thead>
+          <tr>
+            <th style={{ width: "35%", textAlign: "left" }} className="col-divider">
+              {leftHeaderLabel}
+            </th>
+            <th style={{ width: "15%", textAlign: "right" }} className="center-t-divider">
+              Amount (₹)
+            </th>
+            <th style={{ width: "35%", textAlign: "left" }} className="col-divider">
+              {rightHeaderLabel}
+            </th>
+            <th style={{ width: "15%", textAlign: "right" }}>
+              Amount (₹)
+            </th>
+          </tr>
+        </thead>
 
-        {/* Credit Side (Right) */}
-        <div className="t-account-print-col min-w-0 pl-2 print:pl-1">
-          <Table className="w-full">
-            <TableHeader>
-              <TableRow className="border-b-2 border-border bg-muted/40">
-                <TableHead className="py-2 px-2 font-bold text-foreground print:text-xs">{rightHeaderLabel}</TableHead>
-                <TableHead className="py-2 px-2 text-right font-bold text-foreground print:text-xs">Amount (₹)</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paddedRight.map((row, idx) => renderRow(row, idx, "right"))}
-            </TableBody>
-            <TableFooter>
-              <TableRow className="border-t-2 border-double border-foreground font-bold bg-muted/30">
-                <TableCell className="py-2 px-2 text-xs uppercase tracking-wider print:py-1">Total</TableCell>
-                <TableCell className="py-2 px-2 text-right font-mono text-xs print:py-1">{rightTotal}</TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </div>
+        <tbody>
+          {Array.from({ length: maxRows }).map((_, idx) => {
+            const left = paddedLeft[idx];
+            const right = paddedRight[idx];
 
-      </div>
+            const leftBold = left && (left.emphasis === "bold" || left.emphasis === "total" || left.isHeader || left.isFooter);
+            const rightBold = right && (right.emphasis === "bold" || right.emphasis === "total" || right.isHeader || right.isFooter);
+
+            const leftIndent = left?.indent ?? (left?.isSubLedger ? 2 : left?.isCashBankSplit ? 3 : left?.isHeader ? 0 : 1);
+            const rightIndent = right?.indent ?? (right?.isSubLedger ? 2 : right?.isCashBankSplit ? 3 : right?.isHeader ? 0 : 1);
+
+            return (
+              <tr key={idx}>
+                {/* Left: Particulars */}
+                <td
+                  className="col-divider"
+                  style={{
+                    paddingLeft: left ? `${Math.max(6, leftIndent * 12)}px` : "6px",
+                    fontWeight: leftBold ? 600 : 400,
+                    color: left?.isCashBankSplit ? "#555" : "#000",
+                    fontSize: left?.isCashBankSplit ? "8pt" : "8.5pt",
+                    cursor: left?.onClick ? "pointer" : "default",
+                  }}
+                  onClick={left?.onClick}
+                >
+                  {left?.label ?? ""}
+                </td>
+
+                {/* Left: Amount */}
+                <td
+                  className="center-t-divider"
+                  style={{
+                    textAlign: "right",
+                    fontFamily: "monospace",
+                    fontWeight: leftBold ? 600 : 400,
+                    color: left?.isCashBankSplit ? "#555" : "#000",
+                    fontSize: left?.isCashBankSplit ? "8pt" : "8.5pt",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {left?.amount ?? ""}
+                </td>
+
+                {/* Right: Particulars */}
+                <td
+                  className="col-divider"
+                  style={{
+                    paddingLeft: right ? `${Math.max(6, rightIndent * 12)}px` : "6px",
+                    fontWeight: rightBold ? 600 : 400,
+                    color: right?.isCashBankSplit ? "#555" : "#000",
+                    fontSize: right?.isCashBankSplit ? "8pt" : "8.5pt",
+                    cursor: right?.onClick ? "pointer" : "default",
+                  }}
+                  onClick={right?.onClick}
+                >
+                  {right?.label ?? ""}
+                </td>
+
+                {/* Right: Amount */}
+                <td
+                  style={{
+                    textAlign: "right",
+                    fontFamily: "monospace",
+                    fontWeight: rightBold ? 600 : 400,
+                    color: right?.isCashBankSplit ? "#555" : "#000",
+                    fontSize: right?.isCashBankSplit ? "8pt" : "8.5pt",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {right?.amount ?? ""}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+
+        <tfoot>
+          <tr className="total-row">
+            <td className="col-divider" style={{ textAlign: "left", paddingLeft: "8px" }}>
+              TOTAL
+            </td>
+            <td className="center-t-divider" style={{ textAlign: "right", fontFamily: "monospace" }}>
+              {leftTotal}
+            </td>
+            <td className="col-divider" style={{ textAlign: "left", paddingLeft: "8px" }}>
+              TOTAL
+            </td>
+            <td style={{ textAlign: "right", fontFamily: "monospace" }}>
+              {rightTotal}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   );
 }
