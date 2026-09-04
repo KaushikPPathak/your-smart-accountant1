@@ -320,14 +320,25 @@ function openPrintPreview(
   const css = `
     @page { size: A4 ${orient}; margin: 8mm 10mm; }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #fff; color: #000;
-      font: 9pt/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #000;
+      font: 9pt/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
     body { padding: 8mm 10mm; }
-    .preview-bar { position: fixed; top: 0; left: 0; right: 0; display: flex;
-      gap: 8px; padding: 8px 12px; background: #f5f5f5;
-      border-bottom: 1px solid #ddd; font: 13px system-ui; z-index: 10; }
-    .preview-bar button { padding: 6px 12px; border: 1px solid #888;
-      background: #fff; border-radius: 4px; cursor: pointer; font: inherit; font-weight: 600; }
+    .preview-bar {
+      position: fixed; top: 0; left: 0; right: 0;
+      display: flex; gap: 8px; padding: 8px 12px;
+      background: #f5f5f5; border-bottom: 1px solid #ddd;
+      font: 13px system-ui; z-index: 10;
+    }
+    .preview-bar button {
+      padding: 6px 12px; border: 1px solid #888;
+      background: #fff; border-radius: 4px; cursor: pointer;
+      font: inherit; font-weight: 600;
+    }
     .preview-content { margin-top: 48px; position: relative; z-index: 1; }
     .preview-content, .preview-content * {
       color: #000 !important;
@@ -337,64 +348,50 @@ function openPrintPreview(
       print-color-adjust: exact !important;
     }
 
-    /* CRITICAL T-ACCOUNT SIDE-BY-SIDE DUAL COLUMN RULES */
-    .grid-cols-2,
-    .t-account-grid,
-    .t-account-print-wrapper,
-    [class*="grid-cols-2"] {
-      display: flex !important;
-      flex-direction: row !important;
-      width: 100% !important;
-      gap: 12px !important;
-      align-items: flex-start !important;
-    }
-
-    .grid-cols-2 > div,
-    .t-account-grid > div,
-    .t-account-print-wrapper > div,
-    .t-account-side,
-    .t-account-print-col {
-      flex: 1 1 50% !important;
-      width: 50% !important;
-      max-width: 50% !important;
-      min-width: 0 !important;
-      box-sizing: border-box !important;
-    }
-
-    .grid-cols-2 > div:first-child,
-    .t-account-grid > div:first-child,
-    .t-account-print-wrapper > div:first-child {
-      border-right: 1.5pt solid #000 !important;
-      padding-right: 8px !important;
-    }
-
-    .grid-cols-2 > div:last-child,
-    .t-account-grid > div:last-child,
-    .t-account-print-wrapper > div:last-child {
-      padding-left: 8px !important;
-    }
-
-    /* TABLE FORMATTING */
-    table {
+    /* ACCOUNTING T-FRAME TABLE: CRISP BORDERS, VERTICAL DIVIDERS, DOUBLE TOTALS */
+    .preview-content table {
       width: 100% !important;
       border-collapse: collapse !important;
+      border: 1.5pt solid #000 !important;
       font-size: 8.5pt !important;
+      background: #fff !important;
+      margin-bottom: 6pt !important;
     }
-    th, td {
-      border: 0.5pt solid #bbb;
-      padding: 2.5pt 4pt;
-      vertical-align: top;
-      text-align: left;
+
+    .preview-content th,
+    .preview-content td {
+      border: 0.5pt solid #bbb !important;
+      padding: 3pt 5pt !important;
+      vertical-align: top !important;
     }
-    th {
-      background: #f0f0f0 !important;
-      font-weight: 700;
-    }
-    tfoot td, tfoot th {
+
+    .preview-content th {
       border-top: 1.5pt solid #000 !important;
-      border-bottom: 2pt double #000 !important;
-      font-weight: 700;
-      background: #fafafa !important;
+      border-bottom: 1.5pt solid #000 !important;
+      background-color: #f2f2f2 !important;
+      font-weight: 700 !important;
+    }
+
+    /* Center black partition for T-account tables (Column 2 separator) */
+    .preview-content table th:nth-child(2),
+    .preview-content table td:nth-child(2) {
+      border-right: 2pt solid #000 !important;
+    }
+
+    /* Outer right-edge border cleanup */
+    .preview-content table th:last-child,
+    .preview-content table td:last-child {
+      border-right: none !important;
+    }
+
+    /* Traditional double-underline on Total footer row */
+    .preview-content tfoot tr td,
+    .preview-content tfoot tr th,
+    .preview-content .total-row td {
+      border-top: 1.5pt solid #000 !important;
+      border-bottom: 2.5pt double #000 !important;
+      font-weight: 700 !important;
+      background-color: #fafafa !important;
     }
 
     .report-print-header { text-align: center; margin-bottom: 8pt; }
@@ -404,8 +401,12 @@ function openPrintPreview(
     }
     .report-print-title { font-size: 11pt; font-weight: 600; margin-top: 2pt; }
     .report-print-fy-line { font-size: 9pt; font-weight: 500; margin-top: 1pt; }
-    .report-header-rule { height: 2px; border-top: 1px solid #000;
-      border-bottom: 1px solid #000; margin: 3pt 0 6pt; }
+    .report-header-rule {
+      height: 2px;
+      border-top: 1px solid #000;
+      border-bottom: 1px solid #000;
+      margin: 3pt 0 6pt;
+    }
 
     .print\\:hidden, [class*="print:hidden"] { display: none !important; }
     .hidden { display: none !important; }
