@@ -1,290 +1,582 @@
-import { openVoucherDetail } from "@/lib/voucher-return";
-import { sortVouchersAsc } from "@/lib/voucher-sort";
-import { narrationOf } from "@/lib/voucher-text";
-import { toast } from "sonner";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
-import { supabase } from "@/integrations/supabase/client";
+import * as React from "react";
+import { cn } from "@/lib/utils";
 import { useCompany } from "@/lib/company-context";
-import { formatINR } from "@/lib/money";
-import { downloadCsv } from "@/lib/csv";
-import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
-import { useReportPdfHeader } from "@/lib/report-pdf-header";
+import { PrintModeDialog, type PrintMode } from "./PrintModeDialog";
+import { exportElementAsWord } from "@/lib/word-export";
 import { fmtIndianDate } from "@/lib/format-date";
-import { EmptyState } from "@/components/EmptyState";
-import { BookOpen } from "lucide-react";
-import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
-import { QuickRangeChips } from "@/components/reports/QuickRangeChips";
-import { ReportViewer } from "@/components/reports/ReportViewer";
-import { readLedgers, readVouchers } from "@/lib/offline/cache-read";
+import { useI18n } from "@/lib/i18n";
+import { tReportText } from "@/lib/report-i18n-rules";
+import { FitToWidth } from "./FitToWidth";
+import { Button } from "@/components/ui/button";
+import { Maximize2, Minimize2 } from "lucide-react";
+import { useShortcut } from "@/lib/keyboard";
+import { toast } from "sonner";
+import { recordFailure, recordStage } from "@/lib/crash-log";
 
-export const Route = createFileRoute("/app/reports/journal-book")({
-  head: () => ({ meta: [{ title: "Journal Book — Reports" }] }),
-  component: JournalBook,
-});
+/**
+ * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
+ * GSTR-3B, GSTR-2B recon, GST sales/purchase books) follow the official
+ * GSTN print/export flow and must not be intercepted.
+ */
+const PRINT_PICKER_EXCLUDED = [
+  "/app/reports/gst",       // covers gst-sales-book, gst-purchase-book
+  "/app/reports/gstr1",
+  "/app/reports/gstr3b",
+  "/app/reports/gstr2b",
+];
 
-interface Row {
-  id: string;
-  voucher_date: string;
-  voucher_number: string;
-  voucher_type: string;
-  total_paise: number;
-  narration: string | null;
-  reference_no: string | null;
-  ledgers: { name: string } | null;
+function isPrintPickerExcludedPath(pathname: string): boolean {
+  return PRINT_PICKER_EXCLUDED.some((p) => pathname.startsWith(p));
 }
 
-function JournalBook() {
-  const navigate = useNavigate();
-  const { activeCompanyId } = useCompany();
-  const pdfHeader = useReportPdfHeader();
-  const { from, to, setFrom, setTo } = useFyRangeState();
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(false);
+/**
+ * ReportViewer — print-ready wrapper for any report.
+ *
+ * Behavior
+ * - On screen: renders children with an optional toolbar slot above.
+ * - On print: hides app chrome via CSS in `src/styles.css`, prints a header
+ *   with Company / Title / Subtitle / Period on every page.
+ * - Ctrl+P (or Cmd+P) anywhere on the page opens a "Print mode" picker:
+ *     1) System Printer  → window.print()
+ *     2) PDF             → calls onExportPdf
+ *     3) Word (.doc)     → exports the rendered report HTML as .doc
+ *   Inside the picker, P / D / W select directly.
+ */
+export interface ReportViewerProps {
+  title: string;
+  subtitle?: React.ReactNode;
+  fromDate?: string;
+  toDate?: string;
+  asOf?: string;
+  toolbar?: React.ReactNode;
+  companyName?: string;
+  /** Optional report-specific FY override, useful when viewing an older FY. */
+  financialYearStartOverride?: string;
+  orientation?: "portrait" | "landscape";
+  className?: string;
+  /** PDF export hook — usually wired to downloadPdfTable(). */
+  onExportPdf?: () => void;
+  /**
+   * Optional Word override. If omitted, the picker exports the rendered
+   * report HTML as a .doc file (editable in Word).
+   */
+  onExportWord?: () => void;
+  /** File-name stem used by the default Word export. Defaults to title. */
+  exportFileBase?: string;
+  /**
+   * Opt out of the universal Ctrl+P picker (e.g. GST returns where the
+   * statutory print/export flow must be used instead). When true, Ctrl+P
+   * falls back to the browser's native print dialog.
+   */
+  disablePrintShortcut?: boolean;
+  /**
+   * Pre-formatted account / ledger heading line, e.g.
+   *   "Ledger Account: ACME Traders"
+   *   "Cash Book"
+   *   "Bank Book: HDFC Current 0123"
+   * Renders directly under the title on every printed page.
+   */
+  accountHeading?: string;
+  /** Company city (printed on the small address/GST line). */
+  companyCity?: string | null;
+  /** Company GSTIN (printed on the small address/GST line). */
+  companyGstin?: string | null;
+  children: React.ReactNode;
+}
 
-  useEffect(() => {
-    if (!activeCompanyId) {
-      setRows([]);
-      setLoading(false);
+export function ReportViewer({
+  title,
+  subtitle,
+  fromDate,
+  toDate,
+  asOf,
+  toolbar,
+  companyName,
+  financialYearStartOverride,
+  orientation = "portrait",
+  className,
+  onExportPdf,
+  onExportWord,
+  exportFileBase,
+  disablePrintShortcut,
+  accountHeading,
+  companyCity,
+  companyGstin,
+  children,
+}: ReportViewerProps) {
+  const { activeMembership } = useCompany();
+  const { lang } = useI18n();
+  const tt = React.useCallback((s: string) => tReportText(s, lang), [lang]);
+  const company = companyName ?? activeMembership?.companies?.name ?? "";
+  const city = companyCity ?? null;
+  const gstin = companyGstin ?? activeMembership?.companies?.gstin ?? null;
+  const fyStart = financialYearStartOverride ?? activeMembership?.companies?.financial_year_start ?? null;
+  const fyText = React.useMemo(() => tt(formatFyRange(fyStart)), [fyStart, tt]);
+  const fyShort = React.useMemo(() => formatFyShort(fyStart), [fyStart]);
+  const periodText = asOf
+    ? tt(`As on ${fmtIndianDate(asOf)}`)
+    : fromDate && toDate
+      ? tt(`For the period: ${fmtIndianDate(fromDate)} to ${fmtIndianDate(toDate)}`)
+      : "";
+  const addressLine = [city, gstin ? `GSTIN: ${gstin}` : null].filter(Boolean).join(" · ");
+
+  const localizedTitle = tt(title);
+  const localizedHeading = accountHeading ? tt(accountHeading) : "";
+
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+
+  const subtitleText = typeof subtitle === "string" ? tt(subtitle) : "";
+
+  const doWord = React.useCallback(() => {
+    if (onExportWord) {
+      onExportWord();
       return;
     }
-
-    let cancelled = false;
-    setLoading(true);
-
-    const loadData = async () => {
-      // Journal Book must never remain stuck behind a network request.
-      // Read the local accounting cache first, then refresh from Supabase
-      // when available. This also makes the report work reliably in the
-      // desktop/offline build.
-      try {
-        let cacheRows: Row[] = [];
-        try {
-          const [vouchers, ledgers] = await Promise.all([
-            readVouchers(activeCompanyId, { from, to }),
-            readLedgers(activeCompanyId),
-          ]);
-          const ledgerNames = new Map(
-            (ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]),
-          );
-          const journalVouchers = (vouchers as any[]).filter((v) => {
-            const type = String(v?.voucher_type ?? "").trim().toLowerCase();
-            // Legacy restored backups can contain Journal vouchers with a
-            // missing/null voucher_type. Existing reports historically treat
-            // those untyped entry vouchers as Journal, so preserve that
-            // compatibility instead of silently hiding them.
-            return type === "journal" || type === "";
-          });
-          cacheRows = journalVouchers.map((v) => ({
-            id: String(v.id),
-            voucher_date: String(v.voucher_date ?? ""),
-            voucher_number: String(v.voucher_number ?? ""),
-            voucher_type: String(v.voucher_type ?? "journal"),
-            total_paise: Number(v.total_paise ?? 0),
-            narration: v.narration ?? null,
-            reference_no: v.reference_no ?? null,
-            ledgers: v.party_ledger_id
-              ? { name: ledgerNames.get(String(v.party_ledger_id)) ?? "" }
-              : null,
-          })) as Row[];
-        } catch (cacheErr) {
-          console.warn("Journal book cache read error:", cacheErr);
-        }
-
-        // Render cached data immediately if we have it; do not make the UI
-        // wait for Supabase. The cloud refresh is bounded so a dead/hanging
-        // network cannot leave the report showing Loading forever.
-        if (!cancelled && cacheRows.length > 0) {
-          setRows(sortVouchersAsc(cacheRows));
-          setLoading(false);
-        }
-
-        let cloudRows: Row[] | null = null;
-        try {
-          const cloudPromise = supabase
-            .from("vouchers")
-            .select(
-              "id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, party_ledger_id, ledgers:party_ledger_id(name)",
-            )
-            .eq("company_id", activeCompanyId)
-            .gte("voucher_date", from)
-            .lte("voucher_date", to)
-            .order("voucher_date", { ascending: true })
-            .order("voucher_number", { ascending: true });
-
-          const timeout = new Promise<never>((_, reject) =>
-            window.setTimeout(() => reject(new Error("Journal Book cloud query timed out")), 8000),
-          );
-          const { data: res, error } = await Promise.race([cloudPromise, timeout]);
-          if (error) throw error;
-          cloudRows = ((res || []) as unknown as Row[]).filter((r) => {
-            const type = String(r?.voucher_type ?? "").trim().toLowerCase();
-            return type === "journal" || type === "";
-          });
-        } catch (cloudErr) {
-          console.warn("Journal book cloud refresh unavailable; using cache:", cloudErr);
-        }
-
-        if (!cancelled) {
-          if (cloudRows && cloudRows.length > 0) {
-            setRows(sortVouchersAsc(cloudRows));
-          } else if (cacheRows.length === 0) {
-            setRows([]);
-          }
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error("Journal Book failure:", err);
-        if (!cancelled) {
-          setRows([]);
-          setLoading(false);
-          toast.error("Failed to load Journal Book. Check console for details.");
-        }
-      }
-    };
-
-    void loadData();
-    return () => { cancelled = true; };
-  }, [activeCompanyId, from, to]);
-
-  const total = useMemo(() => rows.reduce((s, r) => s + r.total_paise, 0), [rows]);
-
-  const csvRows = (): (string | number)[][] => [
-    ["Date", "Number", "Particulars", "Narration", "Amount"],
-    ...rows.map((r2) => [
-      fmtIndianDate(r2.voucher_date),
-      r2.voucher_number,
-      r2.ledgers?.name ?? "",
-      narrationOf(null, r2),
-      (r2.total_paise / 100).toFixed(2),
-    ]),
-    ["", "", "", "Total", (total / 100).toFixed(2)],
-  ];
-
-  const onExportCsv = () => downloadCsv(`journal-book-${from}_to_${to}.csv`, csvRows());
-  const onExportXlsx = () =>
-    downloadXlsx(`journal-book-${from}_to_${to}.xlsx`, [{ name: "Journal Book", rows: csvRows() }]);
-  const onExportPdf = () =>
-    downloadPdfTable({
-      title: "Journal Book",
-      subtitle: pdfHeader.dateRangeSubtitle(from, to),
-      companyName: pdfHeader.companyName,
-      companySubLine: pdfHeader.companySubLine,
-      head: [["Date", "Number", "Particulars", "Narration", "Amount"]],
-      body: rows.map((r2) => [
-        fmtIndianDate(r2.voucher_date),
-        r2.voucher_number,
-        r2.ledgers?.name ?? "",
-        narrationOf(null, r2),
-        r(r2.total_paise).toFixed(2),
-      ]),
-      foot: [["", "", "", "Total", r(total).toFixed(2)]],
-      fileName: `journal-book-${from}_to_${to}.pdf`,
-      orientation: "l",
-      rightAlignCols: [4],
+    if (!rootRef.current) return;
+    const headerHtml = `
+      <div class="report-print-header" style="text-align:center;margin-bottom:10pt">
+        <div class="report-print-company-name" style="font-size:13pt;font-weight:700;text-transform:uppercase;letter-spacing:.5pt;color:#002060;margin-bottom:2pt">${escape(company)}</div>
+        <div class="report-print-title" style="font-size:11pt;font-weight:600;margin-top:2pt;color:#000">${escape(localizedHeading || localizedTitle)}</div>
+        ${fyShort ? `<div class="report-print-fy-line" style="font-size:10pt;font-weight:500;margin-top:1pt;color:#000">${escape(fyShort)}</div>` : ""}
+        ${subtitleText ? `<div style="font-size:9pt;margin-top:1pt;color:#000">${escape(subtitleText)}</div>` : ""}
+        ${periodText ? `<div style="font-size:9pt;margin-top:1pt;color:#000">${escape(periodText)}</div>` : ""}
+        ${addressLine ? `<div style="font-size:8.5pt;color:#444;margin-top:1pt">${escape(addressLine)}</div>` : ""}
+        <div class="report-header-rule" style="border-top:1pt solid #000;border-bottom:1pt solid #000;height:3pt;margin-top:4pt"></div>
+      </div>`;
+    const stem = (exportFileBase || title).replace(/[^A-Za-z0-9._-]+/g, "-");
+    exportElementAsWord({
+      element: rootRef.current,
+      title: localizedTitle,
+      fileName: `${stem}.doc`,
+      headerHtml,
+      orientation,
     });
+  }, [onExportWord, company, localizedTitle, localizedHeading, fyShort, subtitleText, periodText, addressLine, exportFileBase, orientation, title]);
 
-  const gridColumns: DGColumn<Row>[] = useMemo(() => [
-    { id: "date", header: "Date", type: "date", width: 110, accessor: (r2) => r2.voucher_date, cell: (r2) => fmtIndianDate(r2.voucher_date) },
-    { id: "number", header: "No.", type: "text", width: 110, accessor: (r2) => r2.voucher_number },
-    { id: "party", header: "Particulars", type: "text", width: 220, accessor: (r2) => r2.ledgers?.name ?? "", groupable: true, cell: (r2) => r2.ledgers?.name ?? "—" },
-    { id: "narration", header: "Narration", type: "text", width: 260, accessor: (r2) => narrationOf(null, r2) },
-    { id: "ref", header: "Ref", type: "text", width: 110, accessor: (r2) => r2.reference_no ?? "" },
-    {
-      id: "amount", header: "Amount", type: "number", width: 140, align: "right",
-      accessor: (r2) => r2.total_paise / 100,
-      cell: (r2) => formatINR(r2.total_paise),
-      aggregator: "sum",
-      formatAggregate: (v) => formatINR(Math.round(v * 100)),
-      formatGroupValue: (v) => formatINR(Math.round(v * 100)),
+  const handlePick = React.useCallback(
+    (mode: PrintMode) => {
+      setPickerOpen(false);
+      // Allow the dialog to close before invoking blocking print/save APIs.
+      window.setTimeout(() => {
+        if (mode === "system") {
+          // Route through the same cloned/normalised preview document as the
+          // other modes so headers, colours and de-scaled layout are identical
+          // (and so desktop WebViews print the same output as the browser).
+          openPrintPreview(
+            rootRef.current,
+            company,
+            localizedHeading || localizedTitle,
+            fyShort,
+            orientation,
+            true,
+          );
+        } else if (mode === "pdf") {
+          onExportPdf?.();
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+        } else if (mode === "word") {
+          doWord();
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+        } else if (mode === "preview") {
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+        }
+      }, 50);
     },
-  ], []);
+    [onExportPdf, doWord, company, localizedHeading, localizedTitle, fyShort, orientation],
+  );
+
+  const [pathname, setPathname] = React.useState(() =>
+    typeof window === "undefined" ? "" : window.location.pathname,
+  );
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const update = () => setPathname(window.location.pathname);
+    window.addEventListener("popstate", update);
+    return () => window.removeEventListener("popstate", update);
+  }, []);
+  const shortcutsEnabled = !disablePrintShortcut && !isPrintPickerExcludedPath(pathname);
+
+  useShortcut("Ctrl+p", (e) => { e.preventDefault(); setPickerOpen(true); },
+    { scope: "global", allowInField: true, enabled: shortcutsEnabled, description: "Print / export report" });
+  useShortcut("Meta+p", (e) => { e.preventDefault(); setPickerOpen(true); },
+    { scope: "global", allowInField: true, enabled: shortcutsEnabled, description: "Print / export report" });
+
+  useShortcut("p", (e) => { e.preventDefault(); handlePick("system"); },
+    { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "System print" });
+  useShortcut("d", (e) => { e.preventDefault(); handlePick("pdf"); },
+    { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "PDF export" });
+  useShortcut("w", (e) => { e.preventDefault(); handlePick("word"); },
+    { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "Word export" });
+  useShortcut("v", (e) => { e.preventDefault(); handlePick("preview"); },
+    { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "Print preview" });
+
+  React.useEffect(() => {
+    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+    window.addEventListener("report:preview", handler as EventListener);
+    return () => window.removeEventListener("report:preview", handler as EventListener);
+  }, [company, localizedHeading, localizedTitle, fyShort, orientation]);
+
+  const [autoFit, setAutoFit] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem("report.autoFit") !== "0";
+  });
+  React.useEffect(() => {
+    try {
+      window.localStorage.setItem("report.autoFit", autoFit ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [autoFit]);
 
   return (
-    <ReportViewer
-      title="Journal Book"
-      fromDate={from}
-      toDate={to}
-      onExportPdf={onExportPdf}
-      orientation="landscape"
-    >
-      <Card className="print:hidden">
-        <CardContent className="p-3">
-          <ReportToolbar
-            from={from}
-            to={to}
-            onFrom={setFrom}
-            onTo={setTo}
-            onExportCsv={onExportCsv}
-            onExportXlsx={onExportXlsx}
-            onExportPdf={onExportPdf}
-            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
-          />
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <QuickRangeChips from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
-          </div>
-        </CardContent>
-      </Card>
-      {loading ? (
-        <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
-      ) : rows.length === 0 ? (
-        <Card><CardContent className="p-6"><EmptyState icon={BookOpen} title="No journals in range" description="Adjust the date filter or post some journal vouchers." /></CardContent></Card>
-      ) : (
-        <>
-          {/* Interactive grid is screen-only. DataGrid virtualization can keep
-              rows outside the DOM, so it must never be the print source. */}
-          <Card className="print:hidden">
-            <CardContent className="p-3">
-              <DataGrid
-                reportId="journal-book"
-                rows={rows}
-                columns={gridColumns}
-                globalSearch={(r2) => `${r2.voucher_date} ${r2.voucher_number} ${r2.ledgers?.name ?? ""} ${r2.reference_no ?? ""} ${narrationOf(null, r2)}`}
-                onRowClick={(r2) => openVoucherDetail(navigate, r2.id)}
-                height={560}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Dedicated static print representation: all rows are present in the
-              DOM and the accounting report is independent of DataGrid sizing,
-              virtualization, scrolling, or screen auto-fit. */}
-          <div className="hidden print:block journal-book-print-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>No.</th>
-                  <th>Particulars</th>
-                  <th>Narration</th>
-                  <th>Ref</th>
-                  <th className="num">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r2) => (
-                  <tr key={r2.id}>
-                    <td>{fmtIndianDate(r2.voucher_date)}</td>
-                    <td>{r2.voucher_number}</td>
-                    <td>{r2.ledgers?.name ?? ""}</td>
-                    <td className="narration-cell">{narrationOf(null, r2)}</td>
-                    <td>{r2.reference_no ?? ""}</td>
-                    <td className="num">{formatINR(r2.total_paise)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="row-bold">
-                  <td colSpan={5}>Total</td>
-                  <td className="num">{formatINR(total)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </>
+    <div className={cn("report-print-root-wrap space-y-3", className)}>
+      {(toolbar || true) && (
+        <div className="flex items-start justify-between gap-2 print:hidden">
+          <div className="min-w-0 flex-1">{toolbar}</div>
+          <Button
+            type="button"
+            size="sm"
+            variant={autoFit ? "default" : "outline"}
+            className="shrink-0 gap-1.5"
+            onClick={() => setAutoFit((v) => !v)}
+            title={autoFit ? "Auto-fit: ON — report scales to fit screen" : "Auto-fit: OFF — report uses natural width"}
+          >
+            {autoFit ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            <span className="text-xs">Fit {autoFit ? "On" : "Off"}</span>
+          </Button>
+        </div>
       )}
-    </ReportViewer>
+      <div
+        ref={rootRef}
+        className={cn(
+          "report-print-root",
+          orientation === "landscape" && "report-print-landscape",
+        )}
+      >
+        <div className="report-print-header mb-3 text-center">
+          <div className="report-print-company-name text-lg font-bold uppercase tracking-wide leading-tight text-[#002060]">
+            {company || "\u00A0"}
+          </div>
+          <div className="report-print-title text-sm font-semibold mt-0.5">
+            {localizedHeading || localizedTitle}
+          </div>
+          {fyShort && (
+            <div className="report-print-fy-line text-[12px] font-medium text-foreground mt-0.5">
+              {fyShort}
+            </div>
+          )}
+          {subtitle && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {typeof subtitle === "string" ? subtitleText : subtitle}
+            </div>
+          )}
+          {periodText && <div className="text-[11px] mt-0.5">{periodText}</div>}
+          {addressLine && (
+            <div className="text-[10px] text-muted-foreground mt-0.5">{addressLine}</div>
+          )}
+          <span className="report-print-company-capture hidden" aria-hidden>{company || "\u00A0"}</span>
+          {fyShort && (
+            <span className="report-print-fy-capture hidden" aria-hidden>{fyShort}</span>
+          )}
+          <div className="report-header-rule mt-2 w-full border-t border-b border-black h-[3px]" aria-hidden />
+        </div>
+        {autoFit ? (
+          <FitToWidth className="print:!h-auto print:!overflow-visible">
+            <div className="print:[transform:none!important] print:[width:100%!important]">
+              {children}
+            </div>
+          </FitToWidth>
+        ) : (
+          children
+        )}
+      </div>
+      <PrintModeDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onPick={handlePick}
+        hasPdf={!!onExportPdf}
+        hasWord
+      />
+    </div>
   );
+}
+
+function escape(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Open a full-screen iframe containing the rendered report HTML.
+ * Tauri's WebView blocks window.open() popups, so we inject an iframe
+ * directly into the current document instead.
+ */
+function openPrintPreview(
+  el: HTMLElement | null,
+  company: string,
+  heading: string,
+  fyShort: string,
+  orientation: "portrait" | "landscape",
+  autoPrint = false,
+): void {
+  const startTs = Date.now();
+  recordStage("preview", "start", {
+    report: heading,
+    node_found: !!el,
+    orientation,
+    ts: startTs,
+  });
+
+  if (!el) {
+    recordFailure("preview", new Error("Report root node not found — nothing to preview"), {
+      stage: "start",
+      report: heading,
+      ts: startTs,
+    });
+    return;
+  }
+
+  // Remove any existing preview iframe
+  const existing = document.getElementById("report-preview-iframe");
+  if (existing) existing.remove();
+
+  const orient = orientation === "landscape" ? "landscape" : "portrait";
+
+  // Clone the live DOM so late-rendered rows are captured.
+  const clone = el.cloneNode(true) as HTMLElement;
+
+  // Convert inputs to static text so their current values are preserved.
+  clone.querySelectorAll("input, textarea, select").forEach((input: any) => {
+    const val = input.value || "";
+    const span = document.createElement("span");
+    span.textContent = val;
+    input.parentNode?.replaceChild(span, input);
+  });
+
+  recordStage("preview", "clone", {
+    clone_html_len: clone.outerHTML.length,
+    tables: clone.querySelectorAll("table").length,
+    rows: clone.querySelectorAll("tr").length,
+  });
+
+  const css = `
+    @page { size: A4 ${orient}; margin: 10mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #000;
+      font: 9pt/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    body { padding: 10mm; }
+    .preview-bar { position: fixed; top: 0; left: 0; right: 0; display: flex;
+      gap: 8px; padding: 8px 12px; background: #f5f5f5;
+      border-bottom: 1px solid #ddd; font: 13px system-ui; z-index: 10; }
+    .preview-bar button { padding: 6px 12px; border: 1px solid #888;
+      background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
+    .preview-content { margin-top: 48px; position: relative; z-index: 1; }
+    .preview-content {
+      color: #000 !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      background: #fff !important;
+    }
+    .preview-content * {
+      color: inherit !important;
+      visibility: inherit !important;
+      opacity: inherit !important;
+    }
+    .preview-content table,
+    .preview-content tbody,
+    .preview-content thead,
+    .preview-content tfoot,
+    .preview-content tr,
+    .preview-content td,
+    .preview-content th {
+      display: revert !important;
+      color: #000 !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+    .preview-content table {
+      border-collapse: collapse !important;
+      width: 100% !important;
+    }
+    .preview-content [style*="transform"] { transform: none !important; }
+    .preview-content,
+    .preview-content > div,
+    .preview-content > div > div,
+    .preview-content > div > div > div {
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      width: auto !important;
+      min-width: 0 !important;
+    }
+    .preview-content thead th,
+    .preview-content .row-bold,
+    .preview-content tfoot {
+      background-color: #f0f0f0 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .report-print-header { text-align: center; margin-bottom: 8pt; }
+    .report-print-header > div { margin: 1pt 0; }
+    .report-print-company-name {
+      font-size: 12pt; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .5pt; color: #002060 !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .report-print-title { font-size: 10pt; font-weight: 600; margin-top: 2pt; }
+    .report-print-fy-line { font-size: 9pt; font-weight: 500; margin-top: 1pt; }
+    .report-header-rule { height: 2px; border-top: 1px solid #000;
+      border-bottom: 1px solid #000; margin: 3pt 0 6pt; }
+    .preview-content, .preview-content * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+    th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
+      text-align: left; overflow-wrap: anywhere; word-break: break-word; }
+    th { background: #f0f0f0; font-weight: 600;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    td.num, th.num, .num { text-align: right; font-variant-numeric: tabular-nums;
+      white-space: nowrap; }
+    .row-bold td, .row-bold th, tfoot td, tfoot th { font-weight: 700;
+      background: #f7f7f7; }
+    .narration-cell { white-space: normal; word-break: break-word; }
+    [class*="print:hidden"] { display: none !important; }
+    .overflow-hidden { overflow: visible !important; }
+    .run-head, .run-foot { display: none; }
+    @media print {
+      .preview-bar { display: none !important; }
+      body { padding: 0; }
+      .preview-content { margin-top: 0; }
+      /* Chromium/WebView2 ignore @page margin boxes, but repeat
+         position:fixed elements on every printed page. */
+      .run-head, .run-foot {
+        display: flex; position: fixed; left: 0; right: 0;
+        gap: 8pt; justify-content: space-between; align-items: baseline;
+        font-size: 8pt; color: #000;
+      }
+      .run-head { top: 0; font-weight: 700; border-bottom: 0.5pt solid #000; padding-bottom: 2pt; }
+      .run-foot { bottom: 0; color: #444; border-top: 0.5pt solid #999; padding-top: 2pt; }
+      .preview-content { padding: 8mm 0 6mm; }
+    }
+
+  `;
+
+  const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${escape(company)} — ${escape(heading)} — Preview</title>
+<style>${css}</style>
+</head>
+<body>
+<div class="preview-bar">
+  <button id="preview-print-btn" disabled onclick="window.print()">Print</button>
+  <button onclick="window.parent.document.getElementById('report-preview-iframe').remove()">Close</button>
+  <span style="margin-left:auto;color:#666">Print Preview</span>
+</div>
+<div class="run-head"><span>${escape(company)}</span><span>${escape(fyShort)}</span></div>
+<div class="run-foot"><span>${escape(heading)}</span><span>${escape(new Date().toLocaleDateString("en-IN"))}</span></div>
+
+<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">
+  ${clone.outerHTML}
+</div>
+</body>
+</html>`;
+
+  const iframe = document.createElement("iframe");
+  iframe.id = "report-preview-iframe";
+  iframe.style.cssText =
+    "position:fixed;top:0;left:0;width:100vw;height:100vh;border:none;z-index:9999;background:#fff;";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument;
+  if (!doc) {
+    iframe.remove();
+    recordFailure("preview", new Error("iframe contentDocument is null"), { stage: "iframe" });
+    return;
+  }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  // Wait for fonts and images inside the iframe before allowing (or firing)
+  // a print, otherwise the output can miss logos or reflow mid-table.
+  const ready = (async () => {
+    try {
+      const idoc = iframe.contentDocument;
+      if (!idoc) return;
+      await (idoc as Document & { fonts?: FontFaceSet }).fonts?.ready?.catch?.(() => undefined);
+      await Promise.all(
+        Array.from(idoc.images).map((img) =>
+          img.complete ? Promise.resolve() : img.decode().catch(() => undefined),
+        ),
+      );
+    } catch {
+      /* best effort */
+    }
+  })();
+
+  void ready.then(() => {
+    const btn = iframe.contentDocument?.getElementById("preview-print-btn") as
+      | HTMLButtonElement
+      | null;
+    if (btn) btn.disabled = false;
+    if (autoPrint) {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        /* ignore */
+      }
+    }
+  });
+
+  recordStage("preview", "iframe", {
+    opened: true,
+    html_len: html.length,
+    auto_print: autoPrint,
+    elapsed_ms: Date.now() - startTs,
+  });
+}
+
+/** Navigate to the Diagnostics page from a toast action. */
+function openDiagnostics(): void {
+  try {
+    window.location.assign("/app/diagnostics");
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Format the company's financial year start (YYYY-MM-DD, typically
+ * 04-01) into a human label that covers a printable page header.
+ * Example: "2025-04-01" -> "FY 2025-26 (01/04/2025 to 31/03/2026)".
+ */
+function formatFyRange(start: string | null | undefined): string {
+  if (!start) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const mo = m[2];
+  const d = m[3];
+  const endY = y + 1;
+  const startStr = `${d}-${mo}-${y}`;
+  const endStr = `31-03-${endY}`;
+  const shortEnd = String(endY).slice(-2);
+  return `FY ${y}-${shortEnd} (${startStr} to ${endStr})`;
+}
+
+/**
+ * Extract just the "FY 2025-26" part for the primary report header.
+ */
+function formatFyShort(start: string | null | undefined): string {
+  if (!start) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const endY = y + 1;
+  const shortEnd = String(endY).slice(-2);
+  return `Financial Year ${y}-${shortEnd}`;
 }
