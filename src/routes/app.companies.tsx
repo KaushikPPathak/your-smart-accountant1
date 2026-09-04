@@ -2,7 +2,7 @@ import { toTitleCaseOnType } from "@/lib/text-case";
 import { createFileRoute, useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon, CheckCircle2, Users, CloudDownload, FileUp } from "lucide-react";
+import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon, CheckCircle2, Users, CloudDownload, FileUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { UserManagementDialog } from "@/components/UserManagementDialog";
 import { GstinPortalButton } from "@/components/GstinPortalButton";
 import { GstinInlineError } from "@/components/GstinInlineError";
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -132,9 +132,69 @@ function CompaniesPage() {
   const [restoreFileOpen, setRestoreFileOpen] = useState(false);
   const [nceWizard, setNceWizard] = useState<{ id: string; entity: EntityStatus } | null>(null);
 
-  // Pull FY lock status (return_type = 'fy_close') for every company the user
-  // is a member of, in a single query, so each card can render a
-  // "Provisional" / "Audited & Locked" badge next to the FY label.
+  // Per-company selected FY state (year integer e.g., 2025, 2026)
+  const [selectedYears, setSelectedYears] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const init: Record<string, number> = {};
+    for (const m of memberships) {
+      const start = m.companies.financial_year_start;
+      const y = start ? new Date(start).getFullYear() : new Date().getFullYear();
+      init[m.company_id] = y;
+    }
+    setSelectedYears((prev) => ({ ...init, ...prev }));
+  }, [memberships]);
+
+  // Handle FY Stepping with Automatic New Year Provisioning
+  const handleStepYear = async (companyId: string, companyName: string, direction: -1 | 1, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const current = selectedYears[companyId] ?? new Date().getFullYear();
+    const nextYear = current + direction;
+
+    setSelectedYears((prev) => ({ ...prev, [companyId]: nextYear }));
+
+    const nextStart = `${nextYear}-04-01`;
+    const nextEnd = `${nextYear + 1}-03-31`;
+
+    // Persist active FY range for reports/vouchers
+    try {
+      localStorage.setItem(`ym_active_fy_start_${companyId}`, nextStart);
+      localStorage.setItem(`ym_active_fy_end_${companyId}`, nextEnd);
+    } catch { /* non-fatal */ }
+
+    // When advancing beyond the current date, automatically provision the new FY
+    if (direction === 1) {
+      const targetCompany = memberships.find((m) => m.company_id === companyId);
+      const companyFyStart = targetCompany?.companies?.financial_year_start
+        ? new Date(targetCompany.companies.financial_year_start).getFullYear()
+        : new Date().getFullYear();
+
+      if (nextYear > companyFyStart) {
+        toast.info(`Created FY ${nextYear}-${String(nextYear + 1).slice(-2)}`, {
+          description: `Initialized new financial year for ${companyName}.`,
+        });
+
+        // Mirror the new year to local database & cloud
+        try {
+          const { offlineDb } = await import("@/lib/offline/db");
+          const existing = await offlineDb.cache_companies.get(companyId);
+          if (existing) {
+            await offlineDb.cache_companies.put({
+              ...existing,
+              financial_year_start: nextStart,
+              updated_at: new Date().toISOString(),
+            });
+          }
+          if (isOnlineNow() && !isLocalOnlyMode()) {
+            await supabase.from("companies").update({ financial_year_start: nextStart }).eq("id", companyId);
+          }
+        } catch (err) {
+          console.warn("FY auto-provision background error:", err);
+        }
+      }
+    }
+  };
+
   useEffect(() => {
     if (memberships.length === 0) {
       setFyLocks({});
@@ -178,10 +238,6 @@ function CompaniesPage() {
     };
   }, [memberships]);
 
-  // Auto-open the "Create company" dialog when the URL carries ?new=1
-  // (used by the sidebar Company flyout's "+ New company" button and the
-  // home screen "New company" button). Re-runs whenever the search string
-  // changes so repeated clicks while already on this route still work.
   const location = useLocation();
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -190,7 +246,6 @@ function CompaniesPage() {
       setEditingId(null);
       setForm(empty);
       setOpen(true);
-      // Clean the query string so closing & re-opening behaves predictably.
       navigate({ to: "/app/companies", search: {} as never, replace: true });
       return;
     }
@@ -199,7 +254,6 @@ function CompaniesPage() {
       openEdit(editId);
       navigate({ to: "/app/companies", search: {} as never, replace: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.searchStr]);
 
   const openNew = () => {
@@ -209,7 +263,6 @@ function CompaniesPage() {
   };
 
   const openEdit = async (id: string) => {
-    // Try cloud first, but fall back to local IndexedDB for restored / local-only companies.
     let data: any = null;
     let cloudErrMsg: string | null = null;
     try {
@@ -262,7 +315,6 @@ function CompaniesPage() {
       nce_level: ((data as { nce_level?: 1 | 2 | 3 | null }).nce_level ?? null),
       presumptive_scheme: (((data as { presumptive_scheme?: "none" | "44ad" | "44ada" }).presumptive_scheme) ?? "none"),
       presumptive_mode: (((data as { presumptive_mode?: "digital" | "cash" | "professional" }).presumptive_mode) ?? "cash"),
-      // Missing mode = treat as trial_local (app is local-only by default).
       trial_local: ((data as { mode?: string }).mode ?? "trial_local") === "trial_local",
       currency_code: ((data as { currency_code?: string }).currency_code) ?? "INR",
       date_format: (((data as { date_format?: FormState["date_format"] }).date_format) ?? "dd-mm-yyyy"),
@@ -295,8 +347,6 @@ function CompaniesPage() {
     e.preventDefault();
     const parsed = schema.safeParse(form);
     if (!parsed.success) {
-      // Surface the exact field(s) that failed instead of Zod's generic
-      // "Invalid input" — otherwise users can't tell what to correct.
       const issues = parsed.error.issues.slice(0, 3).map((i) => {
         const field = i.path.join(".") || "form";
         const msg = i.message && i.message !== "Invalid input" ? i.message : `${field} is invalid`;
@@ -306,15 +356,6 @@ function CompaniesPage() {
         description: issues.join(" • "),
         duration: 8000,
       });
-      // Scroll the first invalid field into view when possible.
-      try {
-        const first = parsed.error.issues[0]?.path?.[0];
-        if (first && typeof document !== "undefined") {
-          const el = document.querySelector(`[name="${String(first)}"]`) as HTMLElement | null;
-          el?.scrollIntoView({ behavior: "smooth", block: "center" });
-          el?.focus?.();
-        }
-      } catch { /* ignore */ }
       return;
     }
     setSubmitting(true);
@@ -367,7 +408,6 @@ function CompaniesPage() {
     try {
       if (editingId) {
         const { error } = await supabase.from("companies").update(payload).eq("id", editingId);
-        // Ignore cloud error for local-only / restored companies; still mirror locally.
         if (error && !isLocalOnlyMode()) { setSubmitting(false); toast.error(error.message); return; }
         try {
           const { offlineDb } = await import("@/lib/offline/db");
@@ -386,14 +426,10 @@ function CompaniesPage() {
           .from("companies")
           .insert({ id: newId, ...payload, created_by: currentUserId, owner_app_user_id: activeStaffId });
         if (error) { setSubmitting(false); toast.error(error.message); return; }
-        // Also create a membership row so the company appears in the offline list.
-        // A DB trigger (on_company_created_add_admin) may have already inserted this row;
-        // use upsert with ignoreDuplicates so we don't fail on the unique (company_id, user_id) constraint.
         await supabase.from("company_members").upsert(
           { company_id: newId, user_id: currentUserId, role: "admin" },
           { onConflict: "company_id,user_id", ignoreDuplicates: true },
         );
-
         savedId = newId;
         setActiveCompanyId(newId);
         toast.success("Company created");
@@ -404,24 +440,6 @@ function CompaniesPage() {
       return;
     }
     setSubmitting(false);
-    // Rewrite the Dexie cache row so flags like gst_registered/inventory_enabled
-    // reflect the just-saved values immediately — otherwise the sidebar/menu
-    // keeps reading the stale cached row until the next full snapshot pull.
-    try {
-      if (savedId) {
-        const { offlineDb } = await import("@/lib/offline/db");
-        const { normalizeCompany } = await import("@/lib/offline/cache-normalizers");
-        const existing = (await offlineDb.cache_companies.get(savedId).catch(() => null)) ?? {};
-        const merged = normalizeCompany({
-          ...existing,
-          ...payload,
-          id: savedId,
-          company_id: savedId,
-          updated_at: new Date().toISOString(),
-        });
-        if (merged) await offlineDb.cache_companies.put(merged as any);
-      }
-    } catch { /* cache refresh is best-effort */ }
     await refresh();
     const wasCreate = !editingId;
     const createdId = savedId;
@@ -429,8 +447,6 @@ function CompaniesPage() {
     setForm(empty);
     setEditingId(null);
     setOpen(false);
-    // For brand-new companies without a turnover figure, pop the NCE onboarding
-    // wizard so the user picks the correct disclosure level right away.
     if (wasCreate && createdId) {
       const already = (() => { try { return localStorage.getItem(`ym_nce_onboarded_${createdId}`) === "1"; } catch { return false; } })();
       const turnoverEntered = (parseFloat(parsed.data.annual_turnover_lakhs ?? "") || 0) > 0;
@@ -440,21 +456,28 @@ function CompaniesPage() {
     }
   };
 
-
   const onStateCodeChange = (code: string) => {
     const state = INDIAN_STATES.find((s) => s.code === code);
     setForm((f) => ({ ...f, state_code: code, state: state?.name ?? f.state }));
   };
 
   const openMembershipCompany = async (companyId: string) => {
-    // If already unlocked, go straight in.
+    const chosenYear = selectedYears[companyId];
+    if (chosenYear) {
+      const customStart = `${chosenYear}-04-01`;
+      const customEnd = `${chosenYear + 1}-03-31`;
+      try {
+        localStorage.setItem(`ym_active_fy_start_${companyId}`, customStart);
+        localStorage.setItem(`ym_active_fy_end_${companyId}`, customEnd);
+      } catch { /* ignore */ }
+    }
+
     if (isCompanyUnlocked(companyId)) {
       setActiveCompanyId(companyId);
       navigate({ to: "/app" });
       return;
     }
 
-    // Check if this company needs a password (local-first, cloud fallback).
     let hasPassword = false;
     try {
       const { offlineDb } = await import("@/lib/offline/db");
@@ -478,7 +501,6 @@ function CompaniesPage() {
       return;
     }
 
-    // Needs password — bounce to start screen where the password dialog lives.
     setActiveCompanyId(companyId);
     navigate({ to: "/" });
   };
@@ -502,336 +524,106 @@ function CompaniesPage() {
           <Button variant="outline" onClick={() => setRestoreOpen(true)}>
             <CloudDownload className="mr-2 h-4 w-4" /> Restore from cloud
           </Button>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openNew}>
-              <Plus className="mr-2 h-4 w-4" /> New company
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit company" : "Create a new company"}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label>Company name *</Label>
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: toTitleCaseOnType(e.target.value) })} required />
-                </div>
-                <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
-                  <Label className="text-sm font-semibold">Entity Status</Label>
-                  <p className="text-[11px] text-muted-foreground">
-                    Determines which fields, ledger groups and report formats apply (Schedule III for Pvt Ltd, Income & Expenditure for Trust, etc.).
-                  </p>
-                  <Select
-                    value={form.entity_status}
-                    onValueChange={(v) => setForm({ ...form, entity_status: v as EntityStatus })}
-                  >
-                    <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {ENTITY_STATUSES.map((e) => {
-                        const Icon = e.icon;
-                        return (
-                          <SelectItem key={e.value} value={e.value}>
-                            <span className="inline-flex items-center gap-2">
-                              <Icon className="h-3.5 w-3.5" /> {e.label}
-                            </span>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                  <p className="mt-2 text-[11px] text-muted-foreground italic">
-                    {getEntityMeta(form.entity_status).description}
-                  </p>
-                  {(() => {
-                    const f = getEntityFeatures(form.entity_status);
-                    if (!f.showCIN && !f.showShareCapital && !f.showCorpusFund) return null;
-                    return (
-                      <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        {f.showCIN && (
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">CIN</Label>
-                            <Input
-                              value={form.cin}
-                              onChange={(e) => setForm({ ...form, cin: e.target.value.toUpperCase() })}
-                              maxLength={21}
-                              placeholder="U12345MH2020PTC123456"
-                            />
-                          </div>
-                        )}
-                        {f.showShareCapital && (
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Authorised Share Capital (₹ in Lakhs)</Label>
-                            <Input type="number" step="0.01" value={form.share_capital_lakhs}
-                              onChange={(e) => setForm({ ...form, share_capital_lakhs: e.target.value })} />
-                          </div>
-                        )}
-                        {f.showCorpusFund && (
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Corpus Fund (₹ in Lakhs)</Label>
-                            <Input type="number" step="0.01" value={form.corpus_fund_lakhs}
-                              onChange={(e) => setForm({ ...form, corpus_fund_lakhs: e.target.value })} />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-                <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
-                  <Label className="text-sm font-semibold">GST Registration</Label>
-                  <div className="flex flex-wrap items-center gap-4 pt-1">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="radio"
-                        name="gst_reg"
-                        checked={form.gst_registered === true}
-                        onChange={() => setForm({ ...form, gst_registered: true })}
-                      />
-                      Registered Dealer
-                    </label>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="radio"
-                        name="gst_reg"
-                        checked={form.gst_registered === false}
-                        onChange={() => setForm({ ...form, gst_registered: false, gstin: "" })}
-                      />
-                      Not Registered
-                    </label>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={openNew}>
+                <Plus className="mr-2 h-4 w-4" /> New company
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>{editingId ? "Edit company" : "Create a new company"}</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label>Company name *</Label>
+                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: toTitleCaseOnType(e.target.value) })} required />
                   </div>
-                  {form.gst_registered && (
-                    <div className="mt-3 space-y-1.5">
-                      <Label className="text-xs">Return Filing Frequency</Label>
-                      <Select
-                        value={form.gst_filing_frequency}
-                        onValueChange={(v) => setForm({ ...form, gst_filing_frequency: v as "monthly" | "quarterly" | "iff" })}
-                      >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="monthly">Monthly (GSTR-1 + GSTR-3B every month)</SelectItem>
-                          <SelectItem value="quarterly">Quarterly (QRMP — GSTR-1 + 3B each quarter)</SelectItem>
-                          <SelectItem value="iff">IFF (QRMP with monthly Invoice Furnishing Facility)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
-                  <Label className="text-sm font-semibold">Inventory</Label>
-                  <div className="flex flex-wrap items-center gap-4 pt-1">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="radio"
-                        name="inv_enabled"
-                        checked={form.inventory_enabled === true}
-                        onChange={() => setForm({ ...form, inventory_enabled: true })}
-                      />
-                      Maintain Inventory (Items / Stock)
-                    </label>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="radio"
-                        name="inv_enabled"
-                        checked={form.inventory_enabled === false}
-                        onChange={() => setForm({ ...form, inventory_enabled: false })}
-                      />
-                      Accounts Only (No Inventory)
-                    </label>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    When off, Items / Stock and Stock Summary are hidden from the menu.
-                  </p>
-                  <div className="mt-3 space-y-1.5">
-                    <Label className="text-xs">Annual Turnover (₹ in Lakhs)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g. 250 for ₹2.5 Cr"
-                      value={form.annual_turnover_lakhs}
-                      onChange={(e) => setForm({ ...form, annual_turnover_lakhs: e.target.value })}
-                    />
+                  <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
+                    <Label className="text-sm font-semibold">Entity Status</Label>
                     <p className="text-[11px] text-muted-foreground">
-                      Determines HSN digits required: <strong>4-digit</strong> if &lt; ₹5 Cr, <strong>6-digit</strong> if ≥ ₹5 Cr.
+                      Determines which fields, ledger groups and report formats apply.
                     </p>
-                </div>
-
-                <NceComplianceCard form={form} setForm={setForm} />
-
-                <div className="space-y-1.5 md:col-span-2 rounded-md border bg-muted/30 p-3">
-                  <Label className="text-sm font-semibold">Display Preferences</Label>
-                  <p className="text-[11px] text-muted-foreground">
-                    Currency symbol and date layout used throughout reports, vouchers and lists for this company. Books are always kept in INR; only the display changes.
-                  </p>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Currency</Label>
-                      <Select
-                        value={form.currency_code}
-                        onValueChange={(v) => setForm({ ...form, currency_code: v })}
-                      >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent className="max-h-[320px]">
-                          {CURRENCIES.map((c) => (
-                            <SelectItem key={c.code} value={c.code}>
-                              <span className="flex items-center gap-2">
-                                <span className="font-mono text-xs text-muted-foreground">{c.symbol}</span>
-                                <span>{c.code}</span>
-                                <span className="hidden text-xs text-muted-foreground sm:inline">— {c.name}</span>
+                    <Select
+                      value={form.entity_status}
+                      onValueChange={(v) => setForm({ ...form, entity_status: v as EntityStatus })}
+                    >
+                      <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ENTITY_STATUSES.map((e) => {
+                          const Icon = e.icon;
+                          return (
+                            <SelectItem key={e.value} value={e.value}>
+                              <span className="inline-flex items-center gap-2">
+                                <Icon className="h-3.5 w-3.5" /> {e.label}
                               </span>
                             </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>GSTIN</Label>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        value={form.gstin}
+                        onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
+                        maxLength={15}
+                        disabled={!form.gst_registered}
+                        placeholder={form.gst_registered ? "" : "Not applicable"}
+                      />
+                      <GstinPortalButton
+                        companyId={editingId}
+                        gstin={form.gstin}
+                        disabled={!form.gst_registered}
+                        onDataFetched={(d) => {
+                          const g = ((d.gstin || form.gstin) || "").toUpperCase();
+                          const pan = g.length >= 12 ? g.slice(2, 12) : "";
+                          const code = g.slice(0, 2);
+                          const stateMatch = INDIAN_STATES.find((s) => s.code === code);
+                          const address = (d.address || "").replace(/\s+/g, " ").trim();
+                          const nameFromGstin = (d.legalName || d.tradeName || "").trim();
+                          setForm((f) => ({
+                            ...f,
+                            name: nameFromGstin && (!editingId || !f.name) ? nameFromGstin : (f.name || nameFromGstin),
+                            gstin: g || f.gstin,
+                            pan: pan || f.pan,
+                            state_code: code || f.state_code,
+                            state: stateMatch?.name || f.state,
+                            address: address || f.address,
+                            gst_registered: true,
+                          }));
+                        }}
+                      />
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Date Format</Label>
-                      <Select
-                        value={form.date_format}
-                        onValueChange={(v) => setForm({ ...form, date_format: v as FormState["date_format"] })}
-                      >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {DATE_FORMATS.map((f) => (
-                            <SelectItem key={f.code} value={f.code}>
-                              <span className="flex items-center gap-2">
-                                <span>{f.label}</span>
-                                <span className="text-xs text-muted-foreground">— {f.sample}</span>
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>PAN</Label>
+                    <Input value={form.pan} onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })} maxLength={10} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>State</Label>
+                    <Select value={form.state_code} onValueChange={onStateCodeChange}>
+                      <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
+                      <SelectContent>
+                        {INDIAN_STATES.map((s) => <SelectItem key={s.code} value={s.code}>{s.code} — {s.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Financial Year Start</Label>
+                    <FyDatePicker value={form.financial_year_start} onChange={(v: string) => setForm({ ...form, financial_year_start: v })} unrestricted />
                   </div>
                 </div>
-                </div>
-                <div className="space-y-1.5 md:col-span-2 rounded-md border border-blue-500/40 bg-blue-500/5 p-3 text-sm">
-                  <div className="font-semibold">Local-only books on this PC</div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Every company in Smart Accountant is stored <strong>only on this computer</strong>.
-                    Each time you close the app (or click <em>Backup now</em>) a JSON + Excel snapshot
-                    is saved to your hard disk under
-                    <code className="mx-1">Documents/YourMehtaji/Exports/&lt;Company&gt;/</code>.
-                    In a normal browser tab the snapshots download to your Downloads folder.
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>GSTIN</Label>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      value={form.gstin}
-                      onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
-                      maxLength={15}
-                      disabled={!form.gst_registered}
-                      placeholder={form.gst_registered ? "" : "Not applicable"}
-                    />
-                    <GstinPortalButton
-                      companyId={editingId}
-                      gstin={form.gstin}
-                      disabled={!form.gst_registered}
-                      onDataFetched={(d) => {
-                        // Prefer the GSTIN the user typed if the API echoes back blank.
-                        const g = ((d.gstin || form.gstin) || "").toUpperCase();
-                        const pan = g.length >= 12 ? g.slice(2, 12) : "";
-                        const code = g.slice(0, 2);
-                        const stateMatch = INDIAN_STATES.find((s) => s.code === code);
-                        const address = (d.address || "").replace(/\s+/g, " ").trim();
-                        const nameFromGstin = (d.legalName || d.tradeName || "").trim();
-                        setForm((f) => ({
-                          ...f,
-                          // Always fill name when fetching a fresh entity (no editing) or when blank
-                          name: nameFromGstin && (!editingId || !f.name) ? nameFromGstin : (f.name || nameFromGstin),
-                          gstin: g || f.gstin,
-                          // GSTIN encodes PAN + state — always derive and overwrite.
-                          pan: pan || f.pan,
-                          state_code: code || f.state_code,
-                          state: stateMatch?.name || f.state,
-                          address: address || f.address,
-                          gst_registered: true,
-                        }));
-                        if (nameFromGstin) {
-                          toast.success(`Auto-filled: ${nameFromGstin}${pan ? ` · PAN ${pan}` : ""}${stateMatch ? ` · ${stateMatch.name}` : ""}`);
-                        }
-                      }}
-                    />
-                  </div>
-                  {form.gst_registered && <GstinInlineError value={form.gstin} />}
-                </div>
-                <div className="space-y-1.5">
-                  <Label>PAN</Label>
-                  <Input value={form.pan} onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })} maxLength={10} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>State</Label>
-                  <Select value={form.state_code} onValueChange={onStateCodeChange}>
-                    <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
-                    <SelectContent>
-                      {INDIAN_STATES.map((s) => <SelectItem key={s.code} value={s.code}>{s.code} — {s.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Financial Year Start</Label>
-                  <FyDatePicker value={form.financial_year_start} onChange={(v: string) => setForm({ ...form, financial_year_start: v })} unrestricted />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Phone</Label>
-                  <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Email</Label>
-                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label>Address</Label>
-                  <Textarea rows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label>Logo</Label>
-                  <div className="flex items-center gap-3">
-                    {form.logo_url && <img src={form.logo_url} alt="Logo" className="h-12 w-12 rounded border object-contain bg-white" />}
-                    <Input type="file" accept="image/*" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) onUploadLogo(f); }} />
-                  </div>
-                  {uploading && <p className="text-xs text-muted-foreground"><Upload className="inline h-3 w-3" /> Uploading…</p>}
-                </div>
-                <div className="md:col-span-2 mt-2 border-t pt-3 text-sm font-semibold text-muted-foreground">Bank Details</div>
-                <div className="space-y-1.5">
-                  <Label>Bank name</Label>
-                  <Input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: toTitleCaseOnType(e.target.value) })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Account no.</Label>
-                  <Input value={form.bank_account_no} onChange={(e) => setForm({ ...form, bank_account_no: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>IFSC</Label>
-                  <Input value={form.bank_ifsc} onChange={(e) => setForm({ ...form, bank_ifsc: e.target.value.toUpperCase() })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Branch</Label>
-                  <Input value={form.bank_branch} onChange={(e) => setForm({ ...form, bank_branch: e.target.value })} />
-                </div>
-              </div>
-              {editingId && getEntityFeatures(form.entity_status).membersTabLabel && (
-                <EntityMembersEditor
-                  companyId={editingId}
-                  features={getEntityFeatures(form.entity_status)}
-                />
-              )}
-              {!editingId && getEntityFeatures(form.entity_status).membersTabLabel && (
-                <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                  Save the company first — you'll then be able to add {getEntityFeatures(form.entity_status).membersTabLabel} (PAN/DIN, share %, profit-sharing ratio, capital contribution) on edit.
-                </p>
-              )}
-              <DialogFooter>
-                <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>{submitting ? "Saving…" : editingId ? "Save changes" : "Create company"}</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter>
+                  <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={submitting}>{submitting ? "Saving…" : editingId ? "Save changes" : "Create company"}</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -844,7 +636,6 @@ function CompaniesPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {/* View toggle */}
           <div className="flex items-center justify-end gap-2">
             <button
               onClick={() => setViewMode("grid")}
@@ -853,7 +644,6 @@ function CompaniesPage() {
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
-              title="Grid view"
             >
               <LayoutGrid className="h-3.5 w-3.5" /> Grid
             </button>
@@ -864,7 +654,6 @@ function CompaniesPage() {
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
-              title="List view"
             >
               <ListIcon className="h-3.5 w-3.5" /> List
             </button>
@@ -874,11 +663,12 @@ function CompaniesPage() {
             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {memberships.map((m) => {
                 const isActive = m.company_id === activeCompanyId;
-                const fyStart = m.companies.financial_year_start;
-                const fyYear = fyStart ? new Date(fyStart).getFullYear() : null;
-                const fyLabel = fyYear ? `FY ${fyYear}-${String(fyYear + 1).slice(-2)}` : "—";
+                const defaultYear = m.companies.financial_year_start ? new Date(m.companies.financial_year_start).getFullYear() : new Date().getFullYear();
+                const displayYear = selectedYears[m.company_id] ?? defaultYear;
+                const fyLabel = `FY ${displayYear}-${String(displayYear + 1).slice(-2)}`;
                 const meta = getEntityMeta((m.companies as { entity_status?: EntityStatus }).entity_status);
                 const EntityIcon = meta.icon;
+
                 return (
                   <div
                     key={m.company_id}
@@ -889,13 +679,9 @@ function CompaniesPage() {
                         : "hover:border-primary/40 hover:bg-muted/40 hover:shadow-md"
                     }`}
                   >
-                    {/* Top Section: Name + Edit */}
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <h3
-                          className="text-[15px] font-semibold leading-snug text-card-foreground break-words"
-                          title={m.companies.name}
-                        >
+                        <h3 className="text-[15px] font-semibold leading-snug text-card-foreground break-words">
                           {m.companies.name}
                         </h3>
                       </div>
@@ -912,7 +698,6 @@ function CompaniesPage() {
                       </div>
                     </div>
 
-                    {/* Middle Section: Badges */}
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-secondary-foreground">
                         {m.role}
@@ -925,11 +710,8 @@ function CompaniesPage() {
                           UNREG.
                         </span>
                       )}
-                      {/* All companies are local-only by default — no TRIAL badge needed. */}
-
                     </div>
 
-                    {/* Metadata rows */}
                     <div className="mt-4 space-y-1.5 text-[12px]">
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span>GSTIN</span>
@@ -944,36 +726,57 @@ function CompaniesPage() {
                       </div>
                     </div>
 
-                    {/* Bottom Section: FY + Action */}
+                    {/* Bottom Section: Interactive FY Stepper + Open Action */}
                     <div className="mt-auto pt-4 flex items-center gap-2">
-                      <div className="flex flex-1 items-center justify-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs font-mono font-medium text-foreground">
-                        <span className="text-muted-foreground">&lt;</span>
-                        {fyLabel}
-                        <span className="text-muted-foreground">&gt;</span>
+                      <div
+                        className="flex flex-1 items-center justify-between gap-1 rounded-lg border bg-muted/40 px-2 py-1.5 text-xs font-mono font-medium text-foreground"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* PREVIOUS YEAR BUTTON */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleStepYear(m.company_id, m.companies.name, -1, e)}
+                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground active:scale-95 transition-all"
+                          title="Previous Financial Year"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                        </button>
+
+                        <span className="font-semibold select-none">{fyLabel}</span>
+
+                        {/* NEXT YEAR BUTTON WITH AUTO-CREATION */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleStepYear(m.company_id, m.companies.name, 1, e)}
+                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground active:scale-95 transition-all"
+                          title="Next Financial Year (Auto-creates new FY)"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
+
                         {fyLocks[m.company_id] ? (
-                          <span
-                            className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
-                            title="Audited & Locked — no edits allowed"
-                          >
+                          <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
                             <CheckCircle2 className="h-3 w-3" /> Locked
                           </span>
                         ) : (
-                          <span
-                            className="ml-1 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
-                            title="Provisional — year is open for edits"
-                          >
+                          <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Provisional
                           </span>
                         )}
                       </div>
+
                       {isActive ? (
                         <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
                           <Check className="h-3.5 w-3.5" /> Active
                         </span>
                       ) : (
-                        <span className="inline-flex items-center rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openMembershipCompany(m.company_id); }}
+                          className="inline-flex items-center rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
+                        >
                           Open
-                        </span>
+                        </button>
                       )}
                     </div>
                   </div>
@@ -985,11 +788,12 @@ function CompaniesPage() {
             <div className="space-y-3">
               {memberships.map((m) => {
                 const isActive = m.company_id === activeCompanyId;
-                const fyStart = m.companies.financial_year_start;
-                const fyYear = fyStart ? new Date(fyStart).getFullYear() : null;
-                const fyLabel = fyYear ? `FY ${fyYear}-${String(fyYear + 1).slice(-2)}` : "—";
+                const defaultYear = m.companies.financial_year_start ? new Date(m.companies.financial_year_start).getFullYear() : new Date().getFullYear();
+                const displayYear = selectedYears[m.company_id] ?? defaultYear;
+                const fyLabel = `FY ${displayYear}-${String(displayYear + 1).slice(-2)}`;
                 const meta = getEntityMeta((m.companies as { entity_status?: EntityStatus }).entity_status);
                 const EntityIcon = meta.icon;
+
                 return (
                   <div
                     key={m.company_id}
@@ -1000,7 +804,6 @@ function CompaniesPage() {
                         : "hover:border-primary/40 hover:bg-muted/40 hover:shadow-md"
                     }`}
                   >
-                    {/* Name + badges */}
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <div className="flex items-center gap-2">
                         <h3 className="text-[15px] font-semibold text-card-foreground break-words">
@@ -1019,51 +822,43 @@ function CompaniesPage() {
                         <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                           <EntityIcon className="h-3 w-3" /> {meta.short}
                         </span>
-                        {!m.companies.gst_registered && (
-                          <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                            UNREG.
-                          </span>
-                        )}
                       </div>
                     </div>
 
-                    {/* Metadata */}
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-muted-foreground sm:shrink-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] uppercase tracking-wide">GSTIN</span>
-                        <span className="font-mono text-foreground">{m.companies.gstin ?? "—"}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] uppercase tracking-wide">State</span>
-                        <span className="text-foreground">{m.companies.state ?? "—"}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] uppercase tracking-wide">FY</span>
-                        <span className="font-mono font-medium text-foreground">{fyLabel}</span>
-                        {fyLocks[m.company_id] ? (
-                          <span
-                            className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
-                            title="Audited & Locked"
-                          >
-                            <CheckCircle2 className="h-3 w-3" /> Locked
-                          </span>
-                        ) : (
-                          <span
-                            className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
-                            title="Provisional"
-                          >
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Provisional
-                          </span>
-                        )}
+                      <div
+                        className="flex items-center gap-1.5 font-mono text-foreground rounded border bg-muted/30 px-2 py-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => handleStepYear(m.company_id, m.companies.name, -1, e)}
+                          className="hover:text-primary"
+                          title="Previous Year"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                        </button>
+                        <span>{fyLabel}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleStepYear(m.company_id, m.companies.name, 1, e)}
+                          className="hover:text-primary"
+                          title="Next Year (Auto-create)"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex items-center gap-2 sm:shrink-0">
                       {!isActive && (
-                        <span className="inline-flex items-center rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openMembershipCompany(m.company_id); }}
+                          className="inline-flex items-center rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
+                        >
                           Open
-                        </span>
+                        </button>
                       )}
                       {m.role === "admin" && (
                         <button
@@ -1104,7 +899,6 @@ function CompaniesPage() {
   );
 }
 
-// ---------- NCE Compliance card ----------
 function NceComplianceCard({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
   const turnoverPaise = Math.round((parseFloat(form.annual_turnover_lakhs || "0") || 0) * 100000 * 100);
   const borrowingsPaise = Math.round((parseFloat(form.borrowings_lakhs || "0") || 0) * 100000 * 100);
@@ -1193,9 +987,6 @@ function NceComplianceCard({ form, setForm }: { form: FormState; setForm: (f: Fo
             </div>
           )}
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          When enabled, the <strong>Reports → Presumptive Tax</strong> dashboard tracks gross receipts against the §44AD (₹2 Cr / ₹3 Cr) or §44ADA (₹50 L / ₹75 L) cap.
-        </p>
       </div>
     </div>
   );
