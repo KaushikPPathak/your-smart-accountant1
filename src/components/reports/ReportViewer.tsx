@@ -68,7 +68,14 @@ export function ReportViewer({
   const company = companyName ?? activeMembership?.companies?.name ?? "";
   const city = companyCity ?? null;
   const gstin = companyGstin ?? activeMembership?.companies?.gstin ?? null;
-  const fyStart = activeMembership?.companies?.financial_year_start ?? null;
+
+  // Read year from local override if user selected a previous/next FY on the company card
+  const activeCompId = activeMembership?.companies?.id;
+  const savedFyStart = (typeof window !== "undefined" && activeCompId)
+    ? localStorage.getItem(`ym_active_fy_start_${activeCompId}`) || localStorage.getItem("ym_active_fy_start")
+    : null;
+
+  const fyStart = savedFyStart || activeMembership?.companies?.financial_year_start || null;
   const fyText = React.useMemo(() => tt(formatFyRange(fyStart)), [fyStart, tt]);
   const fyShort = React.useMemo(() => formatFyShort(fyStart), [fyStart]);
   const periodText = asOf
@@ -81,7 +88,7 @@ export function ReportViewer({
   const localizedTitle = tt(title);
   const localizedHeading = accountHeading ? tt(accountHeading) : "";
 
-  // Auto-detect landscape for dual-column T-Accounts (P&L, Trading, Balance Sheet)
+  // Auto-detect landscape for T-Accounts (P&L, Trading, Balance Sheet)
   const isTReport =
     title.toLowerCase().includes("profit") ||
     title.toLowerCase().includes("trading") ||
@@ -297,7 +304,14 @@ function openPrintPreview(
   const existing = document.getElementById("report-preview-iframe");
   if (existing) existing.remove();
 
-  const orient = orientation === "landscape" ? "landscape" : "portrait";
+  // Force Landscape for traditional dual-column accounting statements
+  const isDualColumnReport =
+    heading.toLowerCase().includes("profit") ||
+    heading.toLowerCase().includes("trading") ||
+    heading.toLowerCase().includes("income") ||
+    heading.toLowerCase().includes("balance");
+
+  const orient = isDualColumnReport ? "landscape" : (orientation === "landscape" ? "landscape" : "portrait");
 
   const clone = el.cloneNode(true) as HTMLElement;
 
@@ -308,7 +322,6 @@ function openPrintPreview(
     input.parentNode?.replaceChild(span, input);
   });
 
-  // Remove screen-only elements from preview clone
   clone.querySelectorAll(".print\\:hidden, [class*='print:hidden']").forEach((node) => node.remove());
 
   recordStage("preview", "clone", {
@@ -327,7 +340,7 @@ function openPrintPreview(
       color: #000;
       font: 9pt/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     }
-    body { padding: 8mm 10mm; }
+    body { padding: 6mm 10mm; }
     .preview-bar {
       position: fixed; top: 0; left: 0; right: 0;
       display: flex; gap: 8px; padding: 8px 12px;
@@ -335,11 +348,11 @@ function openPrintPreview(
       font: 13px system-ui; z-index: 10;
     }
     .preview-bar button {
-      padding: 6px 12px; border: 1px solid #888;
+      padding: 6px 14px; border: 1px solid #888;
       background: #fff; border-radius: 4px; cursor: pointer;
       font: inherit; font-weight: 600;
     }
-    .preview-content { margin-top: 48px; position: relative; z-index: 1; }
+    .preview-content { margin-top: 45px; position: relative; z-index: 1; }
     .preview-content, .preview-content * {
       color: #000 !important;
       visibility: visible !important;
@@ -348,9 +361,11 @@ function openPrintPreview(
       print-color-adjust: exact !important;
     }
 
-    /* ACCOUNTING T-FRAME TABLE: CRISP BORDERS, VERTICAL DIVIDERS, DOUBLE TOTALS */
+    /* SOLID 4-COLUMN ACCOUNTING T-FRAME TABLE: 35% | 15% || 35% | 15% */
     .preview-content table {
       width: 100% !important;
+      max-width: 100% !important;
+      table-layout: fixed !important;
       border-collapse: collapse !important;
       border: 1.5pt solid #000 !important;
       font-size: 8.5pt !important;
@@ -358,11 +373,43 @@ function openPrintPreview(
       margin-bottom: 6pt !important;
     }
 
+    .preview-content table colgroup col:nth-child(1),
+    .preview-content table th:nth-child(1),
+    .preview-content table td:nth-child(1) {
+      width: 35% !important;
+      border-right: 0.5pt solid #bbb !important;
+    }
+
+    .preview-content table colgroup col:nth-child(2),
+    .preview-content table th:nth-child(2),
+    .preview-content table td:nth-child(2) {
+      width: 15% !important;
+      text-align: right !important;
+      border-right: 2.5pt solid #000 !important; /* SOLID CENTER T-DIVIDER */
+    }
+
+    .preview-content table colgroup col:nth-child(3),
+    .preview-content table th:nth-child(3),
+    .preview-content table td:nth-child(3) {
+      width: 35% !important;
+      border-right: 0.5pt solid #bbb !important;
+    }
+
+    .preview-content table colgroup col:nth-child(4),
+    .preview-content table th:nth-child(4),
+    .preview-content table td:nth-child(4) {
+      width: 15% !important;
+      text-align: right !important;
+      border-right: none !important;
+    }
+
     .preview-content th,
     .preview-content td {
-      border: 0.5pt solid #bbb !important;
       padding: 3pt 5pt !important;
       vertical-align: top !important;
+      border-bottom: 0.5pt solid #d0d0d0 !important;
+      overflow-wrap: break-word !important;
+      word-break: break-word !important;
     }
 
     .preview-content th {
@@ -372,19 +419,7 @@ function openPrintPreview(
       font-weight: 700 !important;
     }
 
-    /* Center black partition for T-account tables (Column 2 separator) */
-    .preview-content table th:nth-child(2),
-    .preview-content table td:nth-child(2) {
-      border-right: 2pt solid #000 !important;
-    }
-
-    /* Outer right-edge border cleanup */
-    .preview-content table th:last-child,
-    .preview-content table td:last-child {
-      border-right: none !important;
-    }
-
-    /* Traditional double-underline on Total footer row */
+    /* DOUBLE UNDERLINE FOR TOTAL FOOTER */
     .preview-content tfoot tr td,
     .preview-content tfoot tr th,
     .preview-content .total-row td {
