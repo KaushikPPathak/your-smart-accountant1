@@ -834,6 +834,134 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
 
 }
 
+// ---------- Physical Stock (stock-take) -------------------------------------
+//
+// A physical stock voucher records the SIGNED difference between counted and
+// book quantity for each item. It carries NO monetary value of its own —
+// the valuation engine values every physical_stock line at the running WAC
+// so the count correction never distorts the average cost. There are no GL
+// postings and no party ledger.
+
+export async function runPhysicalStockCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) {
+    const r = await runLocalPhysicalStockCreate(snap);
+    emitDataChange(snap.companyId, "voucher", [`voucher_type:physical_stock`]);
+    void logActivity({ company_id: snap.companyId, entity_type: "voucher", entity_id: r.voucherId, entity_label: `physical_stock ${r.voucherNumber}`, action: "create" });
+    return r;
+  }
+
+  // Cloud path: ensure item master refs exist, then save via the atomic RPC.
+  const itemRemap = await ensureMasterRefsSynced("items", snap.companyId, snap.lines.map((x) => x.l.item_id));
+  const lines = snap.lines.map(({ l, c }) => ({ l: { ...l, item_id: remapId(l.item_id, itemRemap) }, c }));
+
+  const { data: numData, error: numErr } = await supabase.rpc("next_voucher_number", {
+    _company_id: snap.companyId,
+    _type: "physical_stock",
+  });
+  if (numErr) throw numErr;
+  const voucherNumber = numData as string;
+
+  const header = {
+    company_id: snap.companyId,
+    voucher_type: "physical_stock",
+    voucher_number: voucherNumber,
+    voucher_date: snap.voucherDate,
+    party_ledger_id: null,
+    reference_no: snap.refNo || null,
+    narration: snap.narration || null,
+    is_interstate: false,
+    subtotal_paise: 0,
+    total_paise: 0,
+    itc_class: "na" as const,
+    itc_eligible: false,
+    supply_nature: "non_gst" as const,
+  };
+
+  const items = lines.map(({ l }, i) => ({
+    item_id: l.item_id,
+    description: l.description || null,
+    qty: parseFloat(l.qty) || 0, // signed difference
+    rate_paise: 0,
+    discount_paise: 0,
+    taxable_paise: 0,
+    gst_rate: 0,
+    cgst_paise: 0,
+    sgst_paise: 0,
+    igst_paise: 0,
+    amount_paise: 0,
+    line_no: i + 1,
+  }));
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: saveErr } = await supabase.rpc("save_voucher_atomic", {
+    _header: header as any,
+    _entries: [] as any,
+    _items: items as any,
+  });
+  if (saveErr) throw saveErr;
+
+  emitDataChange(snap.companyId, "voucher", [`voucher_type:physical_stock`]);
+  void logActivity({ company_id: snap.companyId, entity_type: "voucher", entity_id: null, entity_label: `physical_stock ${voucherNumber}`, action: "create" });
+  return { voucherId: "", voucherNumber };
+}
+
+async function runLocalPhysicalStockCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
+  const db = await getOfflineDb();
+  const voucherId = crypto.randomUUID();
+  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, "physical_stock", snap.voucherDate);
+  const stamp = nowIso();
+
+  const itemRows = snap.lines.map(({ l }, i) => ({
+    id: crypto.randomUUID(),
+    voucher_id: voucherId,
+    company_id: snap.companyId,
+    item_id: l.item_id,
+    line_no: i + 1,
+    description: l.description || null,
+    qty: parseFloat(l.qty) || 0, // signed difference
+    rate_paise: 0,
+    discount_paise: 0,
+    amount_paise: 0,
+    taxable_paise: 0,
+    gst_rate: 0,
+    cgst_paise: 0,
+    sgst_paise: 0,
+    igst_paise: 0,
+    updated_at: stamp,
+  }));
+
+  await db.transaction("rw", db.cache_vouchers, db.cache_voucher_items, async () => {
+    await db.cache_vouchers.put({
+      id: voucherId,
+      company_id: snap.companyId,
+      voucher_type: "physical_stock",
+      voucher_number: voucherNumber,
+      voucher_date: snap.voucherDate,
+      party_ledger_id: null,
+      reference_no: snap.refNo || null,
+      narration: snap.narration || null,
+      is_interstate: false,
+      subtotal_paise: 0,
+      cgst_paise: 0,
+      sgst_paise: 0,
+      igst_paise: 0,
+      round_off_paise: 0,
+      total_paise: 0,
+      itc_class: "na",
+      itc_eligible: false,
+      supply_nature: "non_gst",
+      is_deleted: false,
+      is_synced: true,
+      created_at: stamp,
+      updated_at: stamp,
+    });
+    if (itemRows.length > 0) await db.cache_voucher_items.bulkPut(itemRows);
+  });
+
+  return { voucherId, voucherNumber };
+}
+
 // ---------- Registration -----------------------------------------------------
 
 export const ITEM_VOUCHER_KEY = "item_voucher_create";
