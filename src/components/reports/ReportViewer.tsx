@@ -378,32 +378,27 @@ function openPrintPreview(
       visibility: inherit !important;
       opacity: inherit !important;
     }
-    .preview-content table,
-    .preview-content tbody,
-    .preview-content thead,
-    .preview-content tfoot,
-    .preview-content tr,
-    .preview-content td,
-    .preview-content th {
-      display: revert !important;
-      color: #000 !important;
-      visibility: visible !important;
-      opacity: 1 !important;
-    }
-    .preview-content table {
-      border-collapse: collapse !important;
+    /* Preserve the report's own layout. Only neutralise the screen-only
+       FitToWidth wrapper; do not rewrite arbitrary div/flex/grid geometry. */
+    .preview-content .fit-to-width-outer {
       width: 100% !important;
-    }
-    .preview-content [style*="transform"] { transform: none !important; }
-    .preview-content,
-    .preview-content > div,
-    .preview-content > div > div,
-    .preview-content > div > div > div {
       height: auto !important;
       max-height: none !important;
       overflow: visible !important;
-      width: auto !important;
+    }
+    .preview-content .fit-to-width-inner {
+      width: 100% !important;
       min-width: 0 !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      transform: none !important;
+      transform-origin: top left !important;
+    }
+    .preview-content [style*="transform"] { transform: none !important; }
+    .preview-content table {
+      border-collapse: collapse !important;
+      width: 100% !important;
     }
     .preview-content thead th,
     .preview-content .row-bold,
