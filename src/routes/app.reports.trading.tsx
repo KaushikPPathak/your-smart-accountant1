@@ -1,296 +1,183 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { amountHeader } from "@/lib/export-format";
-import { ReportViewer } from "@/components/reports/ReportViewer";
-import { openLedgerReport } from "@/lib/voucher-return";
-import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
-import { TAccount, type TRow } from "@/components/reports/TAccount";
-import { useCompany } from "@/lib/company-context";
-import { useReportPdfHeader } from "@/lib/report-pdf-header";
-import { formatINR } from "@/lib/money";
-import { downloadCsv } from "@/lib/csv";
-import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
-import { fetchLedgerBalances, fetchLedgerModeSplits, type LedgerBalance, type ModeSplit } from "@/lib/reports";
-import { supabase } from "@/integrations/supabase/client";
-import { groupBalances, groupedTRows, groupedExportRows } from "@/lib/report-grouping";
-import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
-import { BucketedGrid } from "@/components/reports/BucketedGrid";
-import { Label } from "@/components/ui/label";
-import { readItems, readVouchers, readVoucherItemsForCompany, withCacheFallback } from "@/lib/offline/cache-read";
-import { calculateWac, type ItemMove } from "@/lib/inventory/valuation-engine";
+import React from "react";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
+export interface TRow {
+  label: string;
+  amount: string;
+  emphasis?: "normal" | "bold" | "total";
+  isHeader?: boolean;
+  isFooter?: boolean;
+  isSubLedger?: boolean;
+  isCashBankSplit?: boolean;
+  indent?: number;
+  onClick?: () => void;
+}
 
-export const Route = createFileRoute("/app/reports/trading")({
-  head: () => ({ meta: [{ title: "Trading Account — Reports" }] }),
-  component: TradingAccount,
-});
+export interface TAccountProps {
+  title: string;
+  subtitle?: string;
+  leftRows: TRow[];
+  rightRows: TRow[];
+  leftTotal: string;
+  rightTotal: string;
+  leftHeaderLabel?: string;
+  rightHeaderLabel?: string;
+  className?: string;
+}
 
-function TradingAccount() {
-  const { activeCompanyId } = useCompany();
-  const pdfHeader = useReportPdfHeader();
-  const navigate = useNavigate();
-  const { from, to, setFrom, setTo } = useFyRangeState();
-  const [balances, setBalances] = useState<LedgerBalance[]>([]);
-  const [openingStock, setOpeningStock] = useState(0);
-  const [closingStock, setClosingStock] = useState(0);
-  const [modeSplits, setModeSplits] = useState<Map<string, ModeSplit>>(new Map());
-  const { view, setView } = useReportView("trading");
+export function TAccount({
+  title,
+  subtitle,
+  leftRows,
+  rightRows,
+  leftTotal,
+  rightTotal,
+  leftHeaderLabel = "Dr. Particulars",
+  rightHeaderLabel = "Cr. Particulars",
+  className,
+}: TAccountProps) {
+  const maxRows = Math.max(leftRows.length, rightRows.length);
+  const paddedLeft: (TRow | null)[] = [...leftRows];
+  while (paddedLeft.length < maxRows) paddedLeft.push(null);
 
-  useEffect(() => {
-    if (!activeCompanyId) return;
-    fetchLedgerBalances(activeCompanyId, to, from, {
-      excludeProfitLossClosingTransfers: true,
-    }).then(setBalances);
-    fetchLedgerModeSplits(activeCompanyId, from, to, {
-      excludeProfitLossClosingTransfers: true,
-    }).then(setModeSplits).catch(() => setModeSplits(new Map()));
-  }, [activeCompanyId, from, to]);
+  const paddedRight: (TRow | null)[] = [...rightRows];
+  while (paddedRight.length < maxRows) paddedRight.push(null);
 
-  useEffect(() => {
-    if (!activeCompanyId) return;
-    (async () => {
-      const [items, vouchers, voucherItems] = await Promise.all([
-        withCacheFallback(
-          async () => (await supabase.from("items").select("*").eq("company_id", activeCompanyId)).data || [],
-          async () => readItems(activeCompanyId)
-        ),
-        withCacheFallback(
-          async () => (await supabase.from("vouchers").select("*").eq("company_id", activeCompanyId).lte("voucher_date", to)).data || [],
-          async () => readVouchers(activeCompanyId, { to })
-        ),
-        withCacheFallback(
-          async () => (await supabase.from("voucher_items").select("*, vouchers!inner(voucher_date, company_id)").eq("vouchers.company_id", activeCompanyId).lte("vouchers.voucher_date", to)).data || [],
-          async () => readVoucherItemsForCompany(activeCompanyId)
-        )
-      ]);
+  const renderRow = (row: TRow | null, index: number, side: "left" | "right") => {
+    if (!row) {
+      return (
+        <TableRow key={`${side}-empty-${index}`} className="border-b border-transparent h-7">
+          <TableCell className="py-1 px-2 text-xs">&nbsp;</TableCell>
+          <TableCell className="py-1 px-2 text-right text-xs">&nbsp;</TableCell>
+        </TableRow>
+      );
+    }
 
-      const voucherMap = new Map((vouchers as any[]).map(v => [String(v.id), v]));
-      let totalOpeningPaise = 0;
-      let totalClosingPaise = 0;
+    const isClickable = Boolean(row.onClick);
+    const isBold = row.emphasis === "bold" || row.emphasis === "total" || row.isHeader || row.isFooter;
+    const isTotal = row.emphasis === "total";
+    const indentLevel = row.indent ?? (row.isSubLedger ? 2 : row.isCashBankSplit ? 3 : row.isHeader ? 0 : 1);
 
-      for (const it of items as any[]) {
-        const itemMoves: ItemMove[] = (voucherItems as any[])
-          .filter(vi => String(vi.item_id) === String(it.id))
-          .map(vi => {
-            const v = voucherMap.get(String(vi.voucher_id));
-            if (!v || v.is_deleted) return null;
-            if (v.voucher_date > to) return null;
-            return {
-              date: v.voucher_date,
-              qty: Number(vi.qty || 0),
-              taxablePaise: Number(vi.taxable_paise || 0),
-              type: v.voucher_type,
-              voucherId: v.id
-            };
-          })
-          .filter((m): m is ItemMove => m !== null);
-
-        const valOpening = calculateWac(
-          Number(it.opening_stock_qty || 0),
-          Number(it.opening_stock_rate_paise || 0),
-          itemMoves.filter(m => m.date < from)
-        );
-        totalOpeningPaise += valOpening.closingValuePaise;
-
-        const valClosing = calculateWac(
-          Number(it.opening_stock_qty || 0),
-          Number(it.opening_stock_rate_paise || 0),
-          itemMoves
-        );
-        totalClosingPaise += valClosing.closingValuePaise;
-      }
-
-      // Check for manual overrides for both opening and closing dates if they fall in the same company
-      const [{ data: manualOpening }, { data: manualClosing }] = await Promise.all([
-        supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", from).maybeSingle(),
-        supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", to).maybeSingle()
-      ]);
-
-      setOpeningStock(manualOpening ? Number(manualOpening.valuation_paise) : totalOpeningPaise);
-      setClosingStock(manualClosing ? Number(manualClosing.valuation_paise) : totalClosingPaise);
-    })();
-
-  }, [activeCompanyId, from, to]);
-
-  // Inner mode-split (Cash vs Bank/Cheque) per direct ledger.
-  const innerDr = (b: LedgerBalance) => {
-    const m = modeSplits.get(b.id); if (!m) return undefined;
-    return [
-      { label: "Paid in Cash", valuePaise: m.cashPaise },
-      { label: "Paid via Bank / Cheque", valuePaise: m.bankPaise },
-      { label: "Other (journal / adjustment)", valuePaise: m.otherPaise },
-    ];
+    return (
+      <TableRow
+        key={`${side}-${index}-${row.label}`}
+        onClick={row.onClick}
+        className={cn(
+          "border-b border-border/40 transition-colors",
+          isClickable && "cursor-pointer hover:bg-muted/60",
+          row.isHeader && "bg-muted/20 font-semibold",
+          row.isFooter && "bg-muted/10 font-medium",
+          isTotal && "font-bold text-primary",
+          row.isCashBankSplit && "text-muted-foreground text-[11px]"
+        )}
+        title={isClickable ? "Click to view ledger details" : undefined}
+      >
+        <TableCell
+          className={cn(
+            "py-1 px-2 text-xs select-text",
+            isBold && "font-semibold",
+            row.isCashBankSplit && "text-[11px] text-muted-foreground"
+          )}
+          style={{ paddingLeft: `${Math.max(8, indentLevel * 12)}px` }}
+        >
+          {row.label}
+        </TableCell>
+        <TableCell
+          className={cn(
+            "py-1 px-2 text-right font-mono text-xs whitespace-nowrap select-text",
+            isBold && "font-semibold",
+            row.isCashBankSplit && "text-[11px] text-muted-foreground"
+          )}
+        >
+          {row.amount}
+        </TableCell>
+      </TableRow>
+    );
   };
-  const innerCr = (b: LedgerBalance) => {
-    const m = modeSplits.get(b.id); if (!m) return undefined;
-    return [
-      { label: "Received in Cash", valuePaise: -m.cashPaise },
-      { label: "Received via Bank / Cheque", valuePaise: -m.bankPaise },
-      { label: "Other (journal / adjustment)", valuePaise: -m.otherPaise },
-    ];
-  };
-
-  // Direct income (Sales / Direct Income) and direct expenses (Purchase / Direct Exp), grouped.
-  const drBuckets = useMemo(
-    () => groupBalances(
-      balances.filter((b) => b.type === "expense_direct"),
-      "TRADING",
-      (b) => b.closing_paise,
-      innerDr,
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balances, modeSplits],
-  );
-  const crBuckets = useMemo(
-    () => groupBalances(
-      balances.filter((b) => b.type === "income_direct"),
-      "TRADING",
-      (b) => -b.closing_paise,
-      innerCr,
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balances, modeSplits],
-  );
-
-  const goLedger = (id: string) =>
-    openLedgerReport(navigate, { ledgerId: id, from, to });
-
-  const drGroup = groupedTRows(drBuckets, goLedger);
-  const crGroup = groupedTRows(crBuckets, goLedger);
-
-  const totalSales = crGroup.totalPaise;
-  const totalDirect = drGroup.totalPaise;
-  const gp = totalSales + closingStock - (totalDirect + openingStock);
-
-  // Build display rows with Opening Stock / Closing Stock additions.
-  const drRows: TRow[] = [];
-  if (openingStock) drRows.push({ label: "To Opening Stock", amount: formatINR(openingStock), emphasis: "bold" });
-  drRows.push(...drGroup.rows);
-  if (gp > 0) drRows.push({ label: "To Gross Profit c/d", amount: formatINR(gp), emphasis: "total" });
-
-  const crRows: TRow[] = [...crGroup.rows];
-  if (closingStock) crRows.push({ label: "By Closing Stock", amount: formatINR(closingStock), emphasis: "bold" });
-  if (gp < 0) crRows.push({ label: "By Gross Loss c/d", amount: formatINR(-gp), emphasis: "total" });
-
-  const grandLeft = openingStock + totalDirect + Math.max(0, gp);
-  const grandRight = totalSales + closingStock + Math.max(0, -gp);
-
-  // Exports
-  const drExp = groupedExportRows(drBuckets, "To ");
-  const crExp = groupedExportRows(crBuckets, "By ");
-  if (openingStock) drExp.unshift({ label: "To Opening Stock", paise: openingStock, isSubtotal: true });
-  if (closingStock) crExp.push({ label: "By Closing Stock", paise: closingStock, isSubtotal: true });
-  if (gp > 0) drExp.push({ label: "  To Gross Profit c/d", paise: gp, isSubtotal: true });
-  if (gp < 0) crExp.push({ label: "  By Gross Loss c/d", paise: -gp, isSubtotal: true });
-
-  const fmtInner = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
-    row && !row.isHeader && row.outerPaise === undefined && row.paise !== 0 ? r(row.paise).toFixed(2) : "";
-  const fmtOuter = (row?: { paise: number; outerPaise?: number; isHeader?: boolean }) =>
-    row && !row.isHeader && row.outerPaise !== undefined ? r(row.outerPaise).toFixed(2) : "";
-
-  const exportBody = (): (string | number)[][] => {
-    const max = Math.max(drExp.length, crExp.length);
-    return Array.from({ length: max }).map((_, i) => [
-      drExp[i]?.label ?? "",
-      fmtInner(drExp[i]),
-      fmtOuter(drExp[i]),
-      crExp[i]?.label ?? "",
-      fmtInner(crExp[i]),
-      fmtOuter(crExp[i]),
-    ]);
-  };
-
-  const csvRows = (): (string | number)[][] => [
-    [`Trading A/c: ${from} to ${to}`, "", "", "", "", ""],
-    ["Dr. Particulars", "", amountHeader(), "Cr. Particulars", "", amountHeader()],
-    ...exportBody(),
-    ["Total", "", r(grandLeft).toFixed(2), "Total", "", r(grandRight).toFixed(2)],
-  ];
-
-  const onExportCsv = () => downloadCsv(`trading-${from}_to_${to}.csv`, csvRows());
-  const onExportXlsx = () => downloadXlsx(`trading-${from}_to_${to}.xlsx`, [{ name: "Trading", rows: csvRows() }]);
-  const onExportPdf = () =>
-    downloadPdfTable({
-      title: "Trading Account",
-      companyName: pdfHeader.companyName,
-      companySubLine: pdfHeader.companySubLine,
-      subtitle: `${from} to ${to}`,
-      head: [["Dr. Particulars", "", amountHeader(), "Cr. Particulars", "", amountHeader()]],
-      body: exportBody(),
-      foot: [["Total", "", r(grandLeft).toFixed(2), "Total", "", r(grandRight).toFixed(2)]],
-      fileName: `trading-${from}_to_${to}.pdf`,
-      orientation: "l",
-      rightAlignCols: [1, 2, 4, 5],
-    });
 
   return (
-    <ReportViewer
-      title="Trading Account"
-      fromDate={from}
-      toDate={to}
-      onExportPdf={onExportPdf}
-    >
-      <Card className="print:hidden">
-        <CardContent className="p-3">
-          <ReportToolbar
-            from={from}
-            to={to}
-            onFrom={setFrom}
-            onTo={setTo}
-            onExportCsv={onExportCsv}
-            onExportXlsx={onExportXlsx}
-            onExportPdf={onExportPdf}
-            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
-            extra={<div className="space-y-1"><Label className="text-xs">View</Label><ViewSwitcher view={view} onChange={setView} classicLabel="T-Format" /></div>}
-          />
-          <p className="mt-2 text-xs text-muted-foreground">
-            Sales, Purchases &amp; Direct Expenses grouped per IT-norms. Gross Profit / Loss flows to the P&amp;L account.
-            Inventory values are calculated using Weighted Average Cost (WAC) or manual overrides.
-          </p>
-          {(openingStock < 0 || closingStock < 0) && (
-            <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-              <strong>Negative Stock Warning:</strong> Inventory valuation is negative. This affects Gross Profit and indicates missing purchase records.
-            </div>
-          )}
+    <div className={cn("w-full space-y-4 print:space-y-2", className)}>
+      {/* Print stylesheet to enforce A4 landscape and dual-column T-shape */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 8mm 10mm;
+          }
+          .t-account-print-wrapper {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            width: 100% !important;
+            gap: 12px !important;
+          }
+          .t-account-print-col {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+          }
+          .print-avoid-break {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+        }
+      `}</style>
 
-        </CardContent>
-      </Card>
-      {view === "grid" ? (
-        <Card><CardContent className="p-3">
-          <BucketedGrid
-            reportId="trading"
-            onLedgerClick={goLedger}
-            sides={[
-              {
-                side: "Dr. Particulars",
-                buckets: drBuckets,
-                extras: [
-                  ...(openingStock ? [{ group: "Stock", name: "Opening Stock", valuePaise: openingStock }] : []),
-                  ...(gp > 0 ? [{ group: "Result", name: "Gross Profit c/d", valuePaise: gp }] : []),
-                ],
-              },
-              {
-                side: "Cr. Particulars",
-                buckets: crBuckets,
-                extras: [
-                  ...(closingStock ? [{ group: "Stock", name: "Closing Stock", valuePaise: closingStock }] : []),
-                  ...(gp < 0 ? [{ group: "Result", name: "Gross Loss c/d", valuePaise: -gp }] : []),
-                ],
-              },
-            ]}
-          />
-        </CardContent></Card>
-      ) : (
-      <TAccount
-        title="Trading Account"
-        subtitle={`for the period ${from} to ${to}`}
-        leftRows={drRows}
-        rightRows={crRows}
-        leftTotal={formatINR(grandLeft)}
-        rightTotal={formatINR(grandRight)}
-      />
-      )}
-    </ReportViewer>
+      {/* Report Header */}
+      <div className="text-center">
+        <h2 className="text-xl font-bold tracking-tight print:text-lg">{title}</h2>
+        {subtitle && <p className="text-sm text-muted-foreground print:text-xs">{subtitle}</p>}
+      </div>
+
+      {/* Main Dual-Column T-Account Container */}
+      <div className="t-account-print-wrapper print-avoid-break grid grid-cols-2 gap-4 rounded-lg border border-border bg-card p-2 text-card-foreground shadow-sm print:grid-cols-2 print:gap-2 print:border print:p-1 print:shadow-none">
+        
+        {/* Debit Side (Left) */}
+        <div className="t-account-print-col min-w-0 border-r border-border pr-2 print:pr-1">
+          <Table className="w-full">
+            <TableHeader>
+              <TableRow className="border-b-2 border-border bg-muted/40">
+                <TableHead className="py-2 px-2 font-bold text-foreground print:text-xs">{leftHeaderLabel}</TableHead>
+                <TableHead className="py-2 px-2 text-right font-bold text-foreground print:text-xs">Amount (₹)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paddedLeft.map((row, idx) => renderRow(row, idx, "left"))}
+            </TableBody>
+            <TableFooter>
+              <TableRow className="border-t-2 border-double border-foreground font-bold bg-muted/30">
+                <TableCell className="py-2 px-2 text-xs uppercase tracking-wider print:py-1">Total</TableCell>
+                <TableCell className="py-2 px-2 text-right font-mono text-xs print:py-1">{leftTotal}</TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </div>
+
+        {/* Credit Side (Right) */}
+        <div className="t-account-print-col min-w-0 pl-2 print:pl-1">
+          <Table className="w-full">
+            <TableHeader>
+              <TableRow className="border-b-2 border-border bg-muted/40">
+                <TableHead className="py-2 px-2 font-bold text-foreground print:text-xs">{rightHeaderLabel}</TableHead>
+                <TableHead className="py-2 px-2 text-right font-bold text-foreground print:text-xs">Amount (₹)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paddedRight.map((row, idx) => renderRow(row, idx, "right"))}
+            </TableBody>
+            <TableFooter>
+              <TableRow className="border-t-2 border-double border-foreground font-bold bg-muted/30">
+                <TableCell className="py-2 px-2 text-xs uppercase tracking-wider print:py-1">Total</TableCell>
+                <TableCell className="py-2 px-2 text-right font-mono text-xs print:py-1">{rightTotal}</TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </div>
+
+      </div>
+    </div>
   );
 }
