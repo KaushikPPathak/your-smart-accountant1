@@ -63,13 +63,21 @@ function JournalBook() {
         let cacheRows: Row[] = [];
         try {
           const [vouchers, ledgers] = await Promise.all([
-            readVouchers(activeCompanyId, { from, to, voucher_type: "journal" }),
+            readVouchers(activeCompanyId, { from, to }),
             readLedgers(activeCompanyId),
           ]);
           const ledgerNames = new Map(
             (ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]),
           );
-          cacheRows = (vouchers as any[]).map((v) => ({
+          const journalVouchers = (vouchers as any[]).filter((v) => {
+            const type = String(v?.voucher_type ?? "").trim().toLowerCase();
+            // Legacy restored backups can contain Journal vouchers with a
+            // missing/null voucher_type. Existing reports historically treat
+            // those untyped entry vouchers as Journal, so preserve that
+            // compatibility instead of silently hiding them.
+            return type === "journal" || type === "";
+          });
+          cacheRows = journalVouchers.map((v) => ({
             id: String(v.id),
             voucher_date: String(v.voucher_date ?? ""),
             voucher_number: String(v.voucher_number ?? ""),
@@ -101,7 +109,6 @@ function JournalBook() {
               "id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, party_ledger_id, ledgers:party_ledger_id(name)",
             )
             .eq("company_id", activeCompanyId)
-            .eq("voucher_type", "journal")
             .gte("voucher_date", from)
             .lte("voucher_date", to)
             .order("voucher_date", { ascending: true })
@@ -112,15 +119,16 @@ function JournalBook() {
           );
           const { data: res, error } = await Promise.race([cloudPromise, timeout]);
           if (error) throw error;
-          cloudRows = ((res || []) as unknown as Row[]).filter(
-            (r) => r?.voucher_type === "journal",
-          );
+          cloudRows = ((res || []) as unknown as Row[]).filter((r) => {
+            const type = String(r?.voucher_type ?? "").trim().toLowerCase();
+            return type === "journal" || type === "";
+          });
         } catch (cloudErr) {
           console.warn("Journal book cloud refresh unavailable; using cache:", cloudErr);
         }
 
         if (!cancelled) {
-          if (cloudRows) {
+          if (cloudRows && cloudRows.length > 0) {
             setRows(sortVouchersAsc(cloudRows));
           } else if (cacheRows.length === 0) {
             setRows([]);
@@ -200,6 +208,7 @@ function JournalBook() {
       fromDate={from}
       toDate={to}
       onExportPdf={onExportPdf}
+      orientation="landscape"
     >
       <Card className="print:hidden">
         <CardContent className="p-3">
