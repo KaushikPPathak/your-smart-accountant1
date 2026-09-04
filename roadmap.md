@@ -1,11 +1,11 @@
 # Roadmap
 
-## In Progress
+## Completed
 - Phase 2 — Physical Stock (stock-take) voucher: executor, form, route, list UI, tests, build OK.
   - [x] Enum migration, valuation-engine branch, stock-summary window filters, schema type group, label
   - [x] Fix duplicate `isMfg` build error in stock-summary.tsx
-  - [ ] Executor `runPhysicalStockCreate` (local + cloud)
-  - [ ] `PhysicalStockForm.tsx` + route
-  - [ ] Vouchers list quick action + TYPES
-  - [ ] Regression test
-  - [ ] vitest + build OK
+  - [x] Executor `runPhysicalStockCreate` (local + cloud)
+  - [x] `PhysicalStockForm.tsx` + route
+  - [x] Vouchers list quick action + TYPES
+  - [x] Regression test (5/5 pass)
+  - [x] Build OK
