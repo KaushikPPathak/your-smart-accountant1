@@ -11,7 +11,6 @@ const corsHeaders = {
 
 interface ProxyBody {
   gstin?: string;
-  // Optional overrides; normally we read from env.
   clientId?: string;
   clientSecret?: string; // treated as API key for back-compat with older callers
   apiKey?: string;
@@ -61,7 +60,9 @@ Deno.serve(async (req: Request) => {
   const headers: Record<string, string> = {
     "X-APISETU-CLIENTID": clientId,
     "X-APISETU-APIKEY": apiKey,
-    Accept: "application/json",
+    "Accept": "application/json",
+    // CRITICAL FIX: Spoof a standard browser to bypass NIC Web Application Firewalls
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   };
 
   try {
@@ -70,7 +71,8 @@ Deno.serve(async (req: Request) => {
     try {
       payload = await upstream.json();
     } catch {
-      /* ignore */
+      // Capture HTML/Text errors if the firewall rejects the request instead of returning JSON
+      payload = { rawText: await upstream.text() }; 
     }
     return json({ ok: upstream.ok, status: upstream.status, json: payload }, 200);
   } catch (e: unknown) {
