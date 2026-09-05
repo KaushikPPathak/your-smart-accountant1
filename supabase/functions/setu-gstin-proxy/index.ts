@@ -1,6 +1,4 @@
 // GSTIN verification proxy — API Setu (apisetu.gov.in) GSTN Tax Payer API V2.
-// Browser cannot call apisetu.gov.in directly (CORS), so the SPA proxies
-// through this edge function. Auth uses X-APISETU-CLIENTID / X-APISETU-APIKEY.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,7 +10,7 @@ const corsHeaders = {
 interface ProxyBody {
   gstin?: string;
   clientId?: string;
-  clientSecret?: string; // treated as API key for back-compat with older callers
+  clientSecret?: string;
   apiKey?: string;
 }
 
@@ -40,28 +38,20 @@ Deno.serve(async (req: Request) => {
     body.clientId ||
     Deno.env.get("APISETU_CLIENT_ID") ||
     "com.shcglobaltrade";
+  
   const apiKey =
     body.apiKey ||
     body.clientSecret ||
     Deno.env.get("APISETU_API_KEY") ||
     Deno.env.get("SETU_API_KEY") ||
-    "";
+    "df93df0e036268e83bcffd824287952374c0b4aa624c25bc52df419f084a4743";
 
-  if (!clientId || !apiKey) {
-    return json(
-      { ok: false, status: 400, error: "API Setu credentials not configured" },
-      200,
-    );
-  }
-
-  // API Setu GSTN Tax Payer API V2 — GET with GSTIN in path.
   const url = `https://apisetu.gov.in/gstn/v2/taxpayers/${encodeURIComponent(gstin)}`;
 
   const headers: Record<string, string> = {
     "X-APISETU-CLIENTID": clientId,
     "X-APISETU-APIKEY": apiKey,
     "Accept": "application/json",
-    // CRITICAL FIX: Spoof a standard browser to bypass NIC Web Application Firewalls
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   };
 
@@ -71,8 +61,7 @@ Deno.serve(async (req: Request) => {
     try {
       payload = await upstream.json();
     } catch {
-      // Capture HTML/Text errors if the firewall rejects the request instead of returning JSON
-      payload = { rawText: await upstream.text() }; 
+      payload = { rawText: await upstream.text() };
     }
     return json({ ok: upstream.ok, status: upstream.status, json: payload }, 200);
   } catch (e: unknown) {
