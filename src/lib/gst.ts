@@ -100,16 +100,25 @@ export function sumLines(lines: GstLineResult[]): VoucherTotals {
 export function isInterstate(
   companyStateCode: string | null | undefined,
   partyStateCode: string | null | undefined,
-  partyGstin?: string | null
+  partyGstin?: string | null,
+  placeOfSupply?: string | null // Added PoS override for unregistered parties
 ): boolean {
-  const getCode = (val?: string | null) => val ? val.trim().substring(0, 2) : null;
+  const getCode = (val?: string | null) => {
+    if (!val) return null;
+    // Safely matches any standalone 2-digit number (e.g., "PoS 29", "29 - Karnataka")
+    const match = String(val).match(/\b(\d{2})\b/);
+    return match ? match[1] : null;
+  };
   
   const compCode = getCode(companyStateCode);
-  const partyCode = getCode(partyGstin) || getCode(partyStateCode);
-
-  if (!compCode || !partyCode) return false;
   
-  return compCode !== partyCode;
+  // Priority: 1) Invoice PoS, 2) Party GSTIN, 3) Ledger State
+  const destCode = getCode(placeOfSupply) || getCode(partyGstin) || getCode(partyStateCode);
+
+  // Fallback to local only if both the company code AND the destination code are missing
+  if (!compCode || !destCode) return false;
+  
+  return compCode !== destCode;
 }
 
 /** 
