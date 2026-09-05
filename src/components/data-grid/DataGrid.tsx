@@ -10,6 +10,7 @@ import { type FlatRow } from "./grid-engine";
 import { PivotPanel } from "./PivotPanel";
 import { usePivot } from "./usePivot";
 import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
+import { usePrintPreparing } from "@/lib/print-prepare";
 import type { DGColumn, GridState, PivotStatePersisted } from "./types";
 import type { GridResponse, WorkerRequest } from "@/workers/grid-agg.worker";
 
