@@ -594,6 +594,69 @@ export function DataGrid<T>({
           </div>
         )}
       </div>
+      </div>
+      {/* Print representation: a real <table> with every visible row, so the
+          print/PDF engine never has to clone the virtualised screen grid. */}
+      {printing && (
+        <div data-print-only className="hidden">
+          <table className="report-data-table">
+            <thead>
+              <tr>
+                {visibleColumns.map((c) => (
+                  <th key={c.id} className={cellAlign(c) === "right" ? "num" : undefined}>
+                    {typeof c.header === "string" ? c.header : c.id}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {renderRows.map((item, i) => {
+                if (item.kind === "group") {
+                  const col = columns.find((c) => c.id === item.groupCol);
+                  const groupValue = item.key.split("=").slice(1).join("=");
+                  return (
+                    <tr key={`g-${item.key}-${i}`} className="row-bold">
+                      <td colSpan={Math.max(1, visibleColumns.length - aggColumns.length)}>
+                        {`${String(col?.header ?? item.groupCol)}: ${groupValue} (${item.count})`}
+                      </td>
+                      {aggColumns.map((c) => (
+                        <td key={c.id} className="num">
+                          {(c.formatGroupValue ?? c.formatAggregate ?? defaultFormat)(item.aggregates[c.id] ?? 0)}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                }
+                const src = rows[(item as any).row.__index];
+                return (
+                  <tr key={`r-${i}`}>
+                    {visibleColumns.map((c) => (
+                      <td key={c.id} className={cellAlign(c) === "right" ? "num" : undefined}>
+                        {c.cell ? c.cell(src) : asReact(c.accessor(src))}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+            {aggColumns.length > 0 && (
+              <tfoot>
+                <tr className="row-bold">
+                  {visibleColumns.map((c, i) => (
+                    <td key={c.id} className={cellAlign(c) === "right" ? "num" : undefined}>
+                      {i === 0 ? (footerLabel ?? "Total") : null}
+                      {c.aggregator
+                        ? (c.formatAggregate ?? defaultFormat)(aggregates[c.id] ?? 0)
+                        : null}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      )}
+      </>
       )}
     </div>
   );
