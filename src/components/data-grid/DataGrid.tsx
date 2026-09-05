@@ -594,7 +594,6 @@ export function DataGrid<T>({
           </div>
         )}
       </div>
-      </div>
       {/* Print representation: a real <table> with every visible row, so the
           print/PDF engine never has to clone the virtualised screen grid. */}
       {printing && (
