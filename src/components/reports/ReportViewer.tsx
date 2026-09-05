@@ -315,6 +315,36 @@ function openPrintPreview(
   orientation: "portrait" | "landscape",
   autoPrint = false,
 ): void {
+  void openPrintPreviewAsync(el, company, heading, fyShort, orientation, autoPrint);
+}
+
+/**
+ * Collect the application's own stylesheets so the preview document renders
+ * with the SAME layout engine as the on-screen report. Without this the clone
+ * loses every utility class and two-column (Dr / Cr) layouts collapse into a
+ * single vertical stack.
+ */
+function collectAppStyles(): string {
+  const parts: string[] = [];
+  document.querySelectorAll('style, link[rel="stylesheet"]').forEach((node) => {
+    if (node.tagName === "STYLE") {
+      parts.push(`<style>${(node as HTMLStyleElement).innerHTML}</style>`);
+    } else {
+      const href = (node as HTMLLinkElement).href;
+      if (href) parts.push(`<link rel="stylesheet" href="${href}">`);
+    }
+  });
+  return parts.join("\n");
+}
+
+async function openPrintPreviewAsync(
+  el: HTMLElement | null,
+  company: string,
+  heading: string,
+  fyShort: string,
+  orientation: "portrait" | "landscape",
+  autoPrint: boolean,
+): Promise<void> {
   const startTs = Date.now();
   recordStage("preview", "start", {
     report: heading,
@@ -338,6 +368,10 @@ function openPrintPreview(
 
   const orient = orientation === "landscape" ? "landscape" : "portrait";
 
+  // Ask virtualised grids (and any other screen-only widget) to render their
+  // full print tables before we take the snapshot.
+  await preparePrintDom();
+
   // Clone the live DOM so late-rendered rows are captured.
   const clone = el.cloneNode(true) as HTMLElement;
 
@@ -349,11 +383,15 @@ function openPrintPreview(
     input.parentNode?.replaceChild(span, input);
   });
 
+  const appStyles = collectAppStyles();
+  endPrintDom();
+
   recordStage("preview", "clone", {
     clone_html_len: clone.outerHTML.length,
     tables: clone.querySelectorAll("table").length,
     rows: clone.querySelectorAll("tr").length,
   });
+
 
   const css = `
     @page { size: A4 ${orient}; margin: 10mm; }
