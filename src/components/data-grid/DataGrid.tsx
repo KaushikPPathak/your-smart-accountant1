@@ -199,6 +199,11 @@ export function DataGrid<T>({
     [flat],
   );
 
+  // True while the print engine is capturing the DOM — see src/lib/print-prepare.ts
+  const printing = usePrintPreparing();
+
+
+
   const virtualizer = useVirtualizer({
     count: renderRows.length,
     getScrollElement: () => parentRef.current,
