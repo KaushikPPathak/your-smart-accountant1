@@ -5,20 +5,50 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+// Define a permanent offline session to bypass login locks
+const offlineSession = {
+  access_token: 'offline-token',
+  token_type: 'bearer',
+  expires_in: 3600,
+  refresh_token: 'offline-refresh',
+  user: { 
+    id: 'offline-local-user-id', 
+    email: 'local@offline.com', 
+    role: 'authenticated',
+    aud: 'authenticated'
+  }
+};
+
 // No-op proxy handler for when Supabase is not configured
 const noopHandler: ProxyHandler<any> = {
   get: (target, prop) => {
     if (prop === 'auth') {
       return {
-        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-        getSession: async () => ({ data: { session: null }, error: null }),
-        getUser: async () => ({ data: { user: null }, error: null }),
-        signOut: async () => {},
+        // 1. Force the app to always see an active session on load
+        getSession: async () => ({ data: { session: offlineSession }, error: null }),
+        getUser: async () => ({ data: { user: offlineSession.user }, error: null }),
+        
+        // 2. Immediately tell the router the user is signed in
+        onAuthStateChange: (callback: any) => {
+          setTimeout(() => callback('SIGNED_IN', offlineSession), 10);
+          return { data: { subscription: { unsubscribe: () => {} } } };
+        },
+        
+        // 3. Prevent crashes if login/signup buttons are accidentally clicked
+        signInWithPassword: async () => ({ data: { session: offlineSession, user: offlineSession.user }, error: null }),
+        signUp: async () => ({ data: { session: offlineSession, user: offlineSession.user }, error: null }),
+        signOut: async () => ({ error: null }),
       };
     }
     if (prop === 'functions') {
       return {
-        invoke: async () => ({ data: null, error: { message: 'Cloud functions not available in local-only mode' } }),
+        invoke: async (functionName: string) => {
+          // Return a safe dummy response for the AI chat to prevent it from crashing the UI
+          if (functionName === "ai-chat" || functionName.includes("ai")) {
+            return { data: { reply: "I am offline. Please connect to the cloud to use AI features." }, error: null };
+          }
+          return { data: null, error: { message: 'Cloud functions not available in local-only mode' } };
+        }
       };
     }
     if (prop === 'channel') {
