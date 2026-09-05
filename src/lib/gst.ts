@@ -101,22 +101,33 @@ export function isInterstate(
   companyStateCode: string | null | undefined,
   partyStateCode: string | null | undefined,
   partyGstin?: string | null,
-  placeOfSupply?: string | null // Added PoS override for unregistered parties
+  placeOfSupply?: string | null 
 ): boolean {
   const getCode = (val?: string | null) => {
     if (!val) return null;
-    // Safely matches any standalone 2-digit number (e.g., "PoS 29", "29 - Karnataka")
-    const match = String(val).match(/\b(\d{2})\b/);
-    return match ? match[1] : null;
+    const str = String(val).trim().toUpperCase();
+    
+    // Safely grab the first two consecutive digits anywhere in the string
+    const match = str.match(/\d{2}/);
+    if (match) return match[0];
+
+    // Text fallbacks
+    if (str.includes("KARNATAKA")) return "29";
+    if (str.includes("GUJARAT")) return "24";
+    if (str.includes("TELANGANA")) return "36";
+    if (str.includes("MAHARASHTRA")) return "27";
+    if (str.includes("UTTAR PRADESH")) return "09";
+    
+    return null;
   };
   
-  const compCode = getCode(companyStateCode);
+  // Hard fallback to "24" (Gujarat) in case your company profile state is unconfigured
+  const compCode = getCode(companyStateCode) || "24"; 
   
   // Priority: 1) Invoice PoS, 2) Party GSTIN, 3) Ledger State
   const destCode = getCode(placeOfSupply) || getCode(partyGstin) || getCode(partyStateCode);
 
-  // Fallback to local only if both the company code AND the destination code are missing
-  if (!compCode || !destCode) return false;
+  if (!destCode) return false;
   
   return compCode !== destCode;
 }
@@ -131,11 +142,6 @@ export async function resolveGstWithCache(
   companyId: string
 ): Promise<GstLineResult> {
   const result = computeLine(input, interstate);
-  
-  // Optimization: If we have IDs, we can potentially cache/warm the master rates,
-  // but for a single line calculation, the math is faster than a DB roundtrip.
-  // The cache table `cache_gst_rates` is primarily for bulk processors 
-  // (like importers) to skip compute entirely.
   
   if (input.item_id && input.ledger_id) {
     // Fire-and-forget cache update to keep the warm loop ready for bulk ops
