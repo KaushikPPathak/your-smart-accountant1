@@ -14,7 +14,7 @@ export interface SetuCreds {
 
 const DEFAULT_CREDS: SetuCreds = {
   clientId: "com.shcglobaltrade",
-  clientSecret: "c4d8e35c63b2336959e90200ff55571394449dbdf40310fa577ed8e25ca93b4d",
+  clientSecret: "df93df0e036268e83bcffd824287952374c0b4aa624c25bc52df419f084a4743",
   productInstanceId: "",
   environment: "production",
 };
