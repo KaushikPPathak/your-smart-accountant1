@@ -533,10 +533,11 @@ async function openPrintPreviewAsync(
 
 
   const html = `<!doctype html>
-<html>
+<html lang="${document.documentElement.getAttribute("lang") ?? "en"}" style="color-scheme: light">
 <head>
 <meta charset="utf-8">
 <title>${escape(company)} — ${escape(heading)} — Preview</title>
+${appStyles}
 <style>${css}</style>
 </head>
 <body>
