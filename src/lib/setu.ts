@@ -107,6 +107,15 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
   };
   if (!cleanGstin) return { ...empty, error: "GSTIN is required" };
 
+  // Prevent cloud/network call in offline/local mode and offer portal fallback
+  if (typeof window !== "undefined" && (!window.navigator.onLine || import.meta.env.VITE_APP_MODE === "local")) {
+    window.open("https://services.gst.gov.in/services/searchtp", "_blank");
+    return { 
+      ...empty, 
+      error: "Cloud functions disabled in local mode. Opening GST portal manually." 
+    };
+  }
+
   const creds = loadSetuCreds();
   const isTauri =
     typeof window !== "undefined" &&
