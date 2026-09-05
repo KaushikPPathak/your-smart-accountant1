@@ -706,26 +706,18 @@
      transform:scale() or fixed-pixel height/width from the on-screen
      fit helper must be stripped so the content flows naturally.
      ------------------------------------------------------------------ */
-  /* FitToWidth is a screen-only convenience. Neutralise only its own
-     wrappers during print; never force arbitrary report divs to width:100%.
-     This preserves horizontal Debit/Credit, T-account and P&L layouts. */
-  .report-print-root .fit-to-width-outer {
-    height: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
-    width: 100% !important;
+  .report-print-root [style*="transform"] {
+    transform: none !important;
   }
+  .report-print-root > div,
+  .report-print-root > div > div,
+  .report-print-root .fit-to-width-outer,
   .report-print-root .fit-to-width-inner {
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
     width: 100% !important;
     min-width: 0 !important;
-    transform: none !important;
-    transform-origin: top left !important;
-  }
-  .report-print-root [style*="transform"] {
-    transform: none !important;
   }
 }
 

@@ -10,6 +10,7 @@ import { type FlatRow } from "./grid-engine";
 import { PivotPanel } from "./PivotPanel";
 import { usePivot } from "./usePivot";
 import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
+import { usePrintPreparing } from "@/lib/print-prepare";
 import type { DGColumn, GridState, PivotStatePersisted } from "./types";
 import type { GridResponse, WorkerRequest } from "@/workers/grid-agg.worker";
 
@@ -157,6 +158,8 @@ export function DataGrid<T>({
 
   const enumOptionsByCol = processed.enums;
 
+  const aggColumns = useMemo(() => visibleColumns.filter((c) => c.aggregator), [visibleColumns]);
+
   const { flat, aggregates, visibleCount } = processed;
 
   // Filtered rows (without grouping) feed both the parent callback and the pivot engine
@@ -197,6 +200,11 @@ export function DataGrid<T>({
     () => flat.filter((r) => r.kind === "row" || r.visible),
     [flat],
   );
+
+  // True while the print engine is capturing the DOM — see src/lib/print-prepare.ts
+  const printing = usePrintPreparing();
+
+
 
   const virtualizer = useVirtualizer({
     count: renderRows.length,
@@ -390,7 +398,8 @@ export function DataGrid<T>({
           onExit={() => setPivot({ ...pivotState, enabled: false })}
         />
       ) : (
-      <div className="rounded-md border bg-card">
+      <>
+      <div className="rounded-md border bg-card" data-print-hide>
         {/* Header */}
         <div
           className="grid border-b bg-muted/40 text-xs font-medium uppercase tracking-wide overflow-x-auto"
@@ -592,6 +601,68 @@ export function DataGrid<T>({
           </div>
         )}
       </div>
+      {/* Print representation: a real <table> with every visible row, so the
+          print/PDF engine never has to clone the virtualised screen grid. */}
+      {printing && (
+        <div data-print-only className="hidden">
+          <table className="report-data-table">
+            <thead>
+              <tr>
+                {visibleColumns.map((c) => (
+                  <th key={c.id} className={cellAlign(c) === "right" ? "num" : undefined}>
+                    {typeof c.header === "string" ? c.header : c.id}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {renderRows.map((item, i) => {
+                if (item.kind === "group") {
+                  const col = columns.find((c) => c.id === item.groupCol);
+                  const groupValue = item.key.split("=").slice(1).join("=");
+                  return (
+                    <tr key={`g-${item.key}-${i}`} className="row-bold">
+                      <td colSpan={Math.max(1, visibleColumns.length - aggColumns.length)}>
+                        {`${String(col?.header ?? item.groupCol)}: ${groupValue} (${item.count})`}
+                      </td>
+                      {aggColumns.map((c) => (
+                        <td key={c.id} className="num">
+                          {(c.formatGroupValue ?? c.formatAggregate ?? defaultFormat)(item.aggregates[c.id] ?? 0)}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                }
+                const src = rows[(item as any).row.__index];
+                return (
+                  <tr key={`r-${i}`}>
+                    {visibleColumns.map((c) => (
+                      <td key={c.id} className={cellAlign(c) === "right" ? "num" : undefined}>
+                        {c.cell ? c.cell(src) : asReact(c.accessor(src))}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+            {aggColumns.length > 0 && (
+              <tfoot>
+                <tr className="row-bold">
+                  {visibleColumns.map((c, i) => (
+                    <td key={c.id} className={cellAlign(c) === "right" ? "num" : undefined}>
+                      {i === 0 ? (footerLabel ?? "Total") : null}
+                      {c.aggregator
+                        ? (c.formatAggregate ?? defaultFormat)(aggregates[c.id] ?? 0)
+                        : null}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      )}
+      </>
       )}
     </div>
   );

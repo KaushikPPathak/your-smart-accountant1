@@ -7,7 +7,7 @@ import * as React from "react";
 import { useI18n } from "@/lib/i18n";
 import { tReportText } from "@/lib/report-i18n-rules";
 import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
-import { useCompany } from "@/lib/company-context";
+
 
 interface Props {
   from: string;
@@ -54,14 +54,12 @@ export function ReportToolbar({
     e.preventDefault();
     onPrint();
   }, { scope: "report", description: "Print report" });
-
   useShortcut("Ctrl+E", (e) => {
     const fn = onExportXlsx ?? onExportCsv ?? onExportPdf;
     if (!fn) return;
     e.preventDefault();
     fn();
   }, { scope: "report", description: "Export report" });
-
   useShortcut("Ctrl+Shift+E", (e) => {
     if (!onExportCsv) return;
     e.preventDefault();
@@ -69,6 +67,7 @@ export function ReportToolbar({
   }, { scope: "report", description: "Export CSV" });
 
   // F6 bridge — toggle focus between this toolbar and the report's data grid.
+  // Standard WAI pattern for moving between "regions" on complex screens.
   const toolbarRef = React.useRef<HTMLDivElement | null>(null);
   useShortcut(
     "F6",
@@ -77,6 +76,7 @@ export function ReportToolbar({
       const inGrid = active?.closest('[role="grid"]') != null;
       const inToolbar = toolbarRef.current?.contains(active) ?? false;
       if (inToolbar || (!inGrid && !inToolbar)) {
+        // Toolbar → Grid (or nowhere → Grid).
         const grid = document.querySelector<HTMLElement>('[role="grid"]');
         const firstCell =
           grid?.querySelector<HTMLElement>('[role="row"] [role="gridcell"], [role="row"] button, [role="row"] a') ??
@@ -87,6 +87,7 @@ export function ReportToolbar({
         }
         return;
       }
+      // Grid → Toolbar.
       const firstBtn = toolbarRef.current?.querySelector<HTMLElement>('button, [href], input');
       if (firstBtn) {
         e.preventDefault();
@@ -97,16 +98,18 @@ export function ReportToolbar({
   );
 
   return (
+
     <div ref={toolbarRef} className="flex flex-wrap items-end gap-3 print:hidden">
+
       {!hideDates && (
         <>
           <div className="space-y-1">
             <Label className="text-xs">{tt("From Date")}</Label>
-            <FyDatePicker value={from} onChange={onFrom} className="w-[170px]" unrestricted />
+            <FyDatePicker value={from} onChange={onFrom} className="w-[170px]" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">{tt("To Date")}</Label>
-            <FyDatePicker value={to} onChange={onTo} className="w-[170px]" unrestricted />
+            <FyDatePicker value={to} onChange={onTo} className="w-[170px]" />
           </div>
         </>
       )}
@@ -144,53 +147,19 @@ export function defaultFyRange(): { from: string; to: string } {
   return { from: `${y}-04-01`, to: `${y + 1}-03-31` };
 }
 
-/** 
- * Returns from/to ISO strings for the active company's financial year.
- * Priority:
- * 1. Selected year override saved by Companies card stepper (< or >)
- * 2. Active company's database financial_year_start
- * 3. Default calendar FY
- */
+/** Returns from/to ISO strings for the active company's financial year.
+ *  Falls back to the calendar-derived FY when no company is loaded. */
 export function useFyRangeStrings(): { from: string; to: string } {
-  const { activeMembership, activeCompanyId } = useCompany();
-  const fallback = useFyRange();
-
-  return React.useMemo(() => {
-    if (typeof window !== "undefined" && activeCompanyId) {
-      const savedStart =
-        localStorage.getItem(`ym_active_fy_start_${activeCompanyId}`) ||
-        localStorage.getItem("ym_active_fy_start");
-      const savedEnd =
-        localStorage.getItem(`ym_active_fy_end_${activeCompanyId}`) ||
-        localStorage.getItem("ym_active_fy_end");
-
-      if (savedStart && savedEnd) {
-        return { from: savedStart, to: savedEnd };
-      }
-    }
-
-    const companyStart = activeMembership?.companies?.financial_year_start;
-    if (companyStart) {
-      const y = parseInt(companyStart.split("-")[0], 10);
-      if (!isNaN(y)) {
-        return {
-          from: `${y}-04-01`,
-          to: `${y + 1}-03-31`,
-        };
-      }
-    }
-
-    return {
-      from: format(fallback.start, "yyyy-MM-dd"),
-      to: format(fallback.end, "yyyy-MM-dd"),
-    };
-  }, [activeMembership, activeCompanyId, fallback.start, fallback.end]);
+  const { start, end } = useFyRange();
+  return React.useMemo(
+    () => ({ from: format(start, "yyyy-MM-dd"), to: format(end, "yyyy-MM-dd") }),
+    [start, end],
+  );
 }
 
-/** 
- * Reactive [from, to] state seeded from the company's active FY.
- * Automatically synchronizes whenever a new company or year is selected.
- */
+/** Reactive [from, to] state seeded from the active company's FY.
+ *  Auto-resyncs to the FY when the company changes, unless the user has
+ *  manually edited the values. */
 export function useFyRangeState(initialFrom?: string, initialTo?: string): {
   from: string;
   to: string;
@@ -198,44 +167,25 @@ export function useFyRangeState(initialFrom?: string, initialTo?: string): {
   setTo: (v: string) => void;
 } {
   const fy = useFyRangeStrings();
-  const [from, setFromState] = React.useState(initialFrom || fy.from);
-  const [to, setToState] = React.useState(initialTo || fy.to);
+  const [from, setFromState] = React.useState(initialFrom ?? fy.from);
+  const [to, setToState] = React.useState(initialTo ?? fy.to);
   const lastFy = React.useRef(fy);
-  const userEdited = React.useRef(false);
-
+  const userEdited = React.useRef(!!(initialFrom || initialTo));
   React.useEffect(() => {
-    if (initialFrom || initialTo) {
-      userEdited.current = true;
-      if (initialFrom) setFromState(initialFrom);
-      if (initialTo) setToState(initialTo);
-      return;
-    }
-
-    if (lastFy.current.from !== fy.from || lastFy.current.to !== fy.to) {
-      lastFy.current = fy;
+    if (lastFy.current.from === fy.from && lastFy.current.to === fy.to) return;
+    lastFy.current = fy;
+    if (!userEdited.current) {
       setFromState(fy.from);
       setToState(fy.to);
-      userEdited.current = false;
     }
-  }, [fy, initialFrom, initialTo]);
-
-  const setFrom = React.useCallback((v: string) => {
-    userEdited.current = true;
-    setFromState(v);
-  }, []);
-
-  const setTo = React.useCallback((v: string) => {
-    userEdited.current = true;
-    setToState(v);
-  }, []);
-
+  }, [fy]);
+  const setFrom = React.useCallback((v: string) => { userEdited.current = true; setFromState(v); }, []);
+  const setTo = React.useCallback((v: string) => { userEdited.current = true; setToState(v); }, []);
   return { from, to, setFrom, setTo };
 }
 
-/** 
- * Reactive single-date state, defaulting to today if inside the FY,
- * otherwise falling back to the FY end date.
- */
+/** Reactive single-date state, defaulting to today if it's inside the FY,
+ *  otherwise to the FY end date. */
 export function useFyAsOfState(): { asOf: string; setAsOf: (v: string) => void } {
   const fy = useFyRangeStrings();
   const compute = React.useCallback(() => {
@@ -243,20 +193,14 @@ export function useFyAsOfState(): { asOf: string; setAsOf: (v: string) => void }
     if (today >= fy.from && today <= fy.to) return today;
     return fy.to;
   }, [fy]);
-
   const [asOf, setAsOfState] = React.useState(compute);
   const lastFy = React.useRef(fy);
-
+  const userEdited = React.useRef(false);
   React.useEffect(() => {
-    if (lastFy.current.from !== fy.from || lastFy.current.to !== fy.to) {
-      lastFy.current = fy;
-      setAsOfState(compute());
-    }
+    if (lastFy.current.from === fy.from && lastFy.current.to === fy.to) return;
+    lastFy.current = fy;
+    if (!userEdited.current) setAsOfState(compute());
   }, [fy, compute]);
-
-  const setAsOf = React.useCallback((v: string) => {
-    setAsOfState(v);
-  }, []);
-
+  const setAsOf = React.useCallback((v: string) => { userEdited.current = true; setAsOfState(v); }, []);
   return { asOf, setAsOf };
 }

@@ -48,6 +48,7 @@ interface EntryRow {
     narration: string | null;
     reference_no: string | null;
   } | null;
+  // sibling entries to determine "particulars" (the contra ledger)
 }
 
 interface SiblingRow {
@@ -77,28 +78,22 @@ function CashBankBook() {
   const { from, to, setFrom, setTo } = useFyRangeState(search.from, search.to);
   const mastersVersion = useMastersVersion();
   const [offlineLedgers, setOfflineLedgers] = useState<Array<{ id: string; name: string; type: string }>>([]);
-
   const masterCashBankLedgers = useMemo(
     () => getAllLedgers().filter((l) => l.type === "cash" || l.type === "bank"),
     [mastersVersion],
   );
-
   const offlineCashBankLedgers = useMemo(
     () => offlineLedgers.filter((l) => l.type === "cash" || l.type === "bank"),
     [offlineLedgers],
   );
-
   const cashBankLedgers = masterCashBankLedgers.length > 0 ? masterCashBankLedgers : offlineCashBankLedgers;
-
   const ledgerNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const l of offlineLedgers) map.set(l.id, l.name);
     for (const l of getAllLedgers()) map.set(l.id, l.name);
     return map;
   }, [mastersVersion, offlineLedgers]);
-
-  const [ledgerId, setLedgerId] = useState<string>(() => search.ledgerId || "");
-
+  const [ledgerId, setLedgerId] = useState<string>(search.ledgerId || "");
   useEffect(() => {
     if (masterCashBankLedgers.length > 0 || !activeCompanyId) return;
     let cancelled = false;
@@ -110,18 +105,18 @@ function CashBankBook() {
     }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [activeCompanyId, masterCashBankLedgers.length]);
-
   useEffect(() => {
-    if (!ledgerId && cashBankLedgers.length > 0) {
-      setLedgerId(cashBankLedgers[0].id);
-    }
+    if (!ledgerId && cashBankLedgers[0]) setLedgerId(cashBankLedgers[0].id);
   }, [ledgerId, cashBankLedgers]);
 
+  // Shared return-state mechanism: mirror the current selection into the
+  // URL so that when the user drills into a voucher and comes back, the
+  // report re-mounts and re-hydrates from search params.
   useReportUrlSync({
     to: "/app/reports/cash-bank",
     current: { ledgerId: search.ledgerId, from: search.from, to: search.to },
     next: { ledgerId, from, to },
-    enabled: Boolean(ledgerId),
+    enabled: !!ledgerId,
   });
 
   const [entries, setEntries] = useState<EntryRow[]>([]);
@@ -134,133 +129,111 @@ function CashBankBook() {
   const selectedLedgerName = ledger?.name ?? selectedCashBankLedger?.name ?? "";
   const selectedLedgerType = ledger?.type ?? selectedCashBankLedger?.type ?? "";
 
+  // Load opening (paise) for the chosen ledger from base ledger row
   useEffect(() => {
-    if (!ledgerId || !activeCompanyId) {
-      setLoading(false);
-      return;
-    }
-
+    if (!ledgerId || !activeCompanyId) return;
     let cancelled = false;
-
     void (async () => {
-      try {
-        setLoading(true);
+      setLoading(true);
+      const base = await withCacheFallback<{ opening_balance_paise: number; opening_balance_is_debit: boolean } | null>(
+        async () => {
+          const { data, error } = await supabase
+            .from("ledgers")
+            .select("opening_balance_paise, opening_balance_is_debit")
+            .eq("id", ledgerId)
+            .maybeSingle();
+          if (error) throw error;
+          return data as { opening_balance_paise: number; opening_balance_is_debit: boolean } | null;
+        },
+        async () => {
+          const row = (await readLedgers(activeCompanyId)).find((l: any) => String(l.id) === ledgerId) as any;
+          return row ? {
+            opening_balance_paise: Number(row.opening_balance_paise ?? 0),
+            opening_balance_is_debit: Boolean(row.opening_balance_is_debit),
+          } : null;
+        },
+      );
+      const ob = base
+        ? (base.opening_balance_is_debit ? 1 : -1) * base.opening_balance_paise
+        : 0;
+      const prior = await withCacheFallback<{ debit_paise: number; credit_paise: number }[]>(
+        async () => {
+          const { data, error } = await supabase
+            .from("voucher_entries")
+            .select("debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
+            .eq("ledger_id", ledgerId)
+            .eq("vouchers.company_id", activeCompanyId)
+            .lt("vouchers.voucher_date", from);
+          if (error) throw error;
+          return (data || []) as { debit_paise: number; credit_paise: number }[];
+        },
+        async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, before: from })) as { debit_paise: number; credit_paise: number }[],
+      );
+      const movement = prior.reduce(
+        (s, e) => s + (e.debit_paise as number) - (e.credit_paise as number),
+        0,
+      );
+      if (cancelled) return;
+      setOpening(ob + movement);
 
-        const base = await withCacheFallback<{ opening_balance_paise: number; opening_balance_is_debit: boolean } | null>(
-          async () => {
-            const { data, error } = await supabase
-              .from("ledgers")
-              .select("opening_balance_paise, opening_balance_is_debit")
-              .eq("id", ledgerId)
-              .maybeSingle();
-            if (error) throw error;
-            return data as { opening_balance_paise: number; opening_balance_is_debit: boolean } | null;
-          },
-          async () => {
-            const row = (await readLedgers(activeCompanyId)).find((l: any) => String(l.id) === ledgerId) as any;
-            return row ? {
-              opening_balance_paise: Number(row.opening_balance_paise ?? 0),
-              opening_balance_is_debit: Boolean(row.opening_balance_is_debit),
-            } : null;
-          },
-        );
+      const list = await withCacheFallback<EntryRow[]>(
+        async () => {
+          const { data, error } = await supabase
+            .from("voucher_entries")
+            .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
+            .eq("ledger_id", ledgerId)
+            .eq("vouchers.company_id", activeCompanyId)
+            .gte("vouchers.voucher_date", from)
+            .lte("vouchers.voucher_date", to)
+            .order("voucher_date", { referencedTable: "vouchers", ascending: true }).order("voucher_number", { referencedTable: "vouchers", ascending: true });
+          if (error) throw error;
+          return (data || []) as unknown as EntryRow[];
+        },
+        async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, from, to })) as EntryRow[],
+      );
+      if (cancelled) return;
+      setEntries(list);
 
-        if (cancelled) return;
-
-        const ob = base
-          ? (base.opening_balance_is_debit ? 1 : -1) * Number(base.opening_balance_paise || 0)
-          : 0;
-
-        const prior = await withCacheFallback<{ debit_paise: number; credit_paise: number }[]>(
+      const ids = list.map((e) => e.vouchers?.id).filter(Boolean) as string[];
+      if (ids.length === 0) {
+        setSiblings(new Map());
+      } else {
+        const sibs = await withCacheFallback<SiblingRow[]>(
           async () => {
             const { data, error } = await supabase
               .from("voucher_entries")
-              .select("debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-              .eq("ledger_id", ledgerId)
-              .eq("vouchers.company_id", activeCompanyId)
-              .lt("vouchers.voucher_date", from);
+              .select("voucher_id, ledger_id, debit_paise, credit_paise")
+              .in("voucher_id", ids)
+              .neq("ledger_id", ledgerId);
             if (error) throw error;
-            return (data || []) as { debit_paise: number; credit_paise: number }[];
+            return (data || []) as SiblingRow[];
           },
-          async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, before: from })) as { debit_paise: number; credit_paise: number }[],
+          async () => ((await readVoucherEntriesWithVouchers(activeCompanyId)) as any[])
+            .filter((e) => ids.includes(String(e.voucher_id)) && String(e.ledger_id) !== ledgerId)
+            .map((e) => ({
+              voucher_id: String(e.voucher_id),
+              ledger_id: String(e.ledger_id),
+              debit_paise: Number(e.debit_paise ?? 0),
+              credit_paise: Number(e.credit_paise ?? 0),
+            })),
         );
-
-        if (cancelled) return;
-
-        const movement = (prior || []).reduce(
-          (s, e) => s + Number(e.debit_paise || 0) - Number(e.credit_paise || 0),
-          0,
-        );
-        setOpening(ob + movement);
-
-        const list = await withCacheFallback<EntryRow[]>(
-          async () => {
-            const { data, error } = await supabase
-              .from("voucher_entries")
-              .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
-              .eq("ledger_id", ledgerId)
-              .eq("vouchers.company_id", activeCompanyId)
-              .gte("vouchers.voucher_date", from)
-              .lte("vouchers.voucher_date", to)
-              .order("voucher_date", { referencedTable: "vouchers", ascending: true })
-              .order("voucher_number", { referencedTable: "vouchers", ascending: true });
-            if (error) throw error;
-            return (data || []) as unknown as EntryRow[];
-          },
-          async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, from, to })) as EntryRow[],
-        );
-
-        if (cancelled) return;
-        setEntries(list || []);
-
-        const ids = (list || []).map((e) => e.vouchers?.id).filter(Boolean) as string[];
-        if (ids.length === 0) {
-          setSiblings(new Map());
-        } else {
-          const sibs = await withCacheFallback<SiblingRow[]>(
-            async () => {
-              const { data, error } = await supabase
-                .from("voucher_entries")
-                .select("voucher_id, ledger_id, debit_paise, credit_paise")
-                .in("voucher_id", ids)
-                .neq("ledger_id", ledgerId);
-              if (error) throw error;
-              return (data || []) as SiblingRow[];
-            },
-            async () => ((await readVoucherEntriesWithVouchers(activeCompanyId)) as any[])
-              .filter((e) => ids.includes(String(e.voucher_id)) && String(e.ledger_id) !== ledgerId)
-              .map((e) => ({
-                voucher_id: String(e.voucher_id),
-                ledger_id: String(e.ledger_id),
-                debit_paise: Number(e.debit_paise ?? 0),
-                credit_paise: Number(e.credit_paise ?? 0),
-              })),
-          );
-
-          if (cancelled) return;
-
-          const map = new Map<string, SiblingRow[]>();
-          for (const s of (sibs || [])) {
-            const arr = map.get(s.voucher_id) ?? [];
-            arr.push(s);
-            map.set(s.voucher_id, arr);
-          }
-          setSiblings(map);
+        const map = new Map<string, SiblingRow[]>();
+        for (const s of sibs) {
+          const arr = map.get(s.voucher_id) ?? [];
+          arr.push(s);
+          map.set(s.voucher_id, arr);
         }
-      } catch (err) {
-        console.error("Cash/Bank book loading error:", err);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (cancelled) return;
+        setSiblings(map);
       }
+      setLoading(false);
     })();
-
     return () => {
       cancelled = true;
     };
   }, [ledgerId, activeCompanyId, from, to]);
 
+  // Build rows in a single pass with running balance — integer (paise) math.
   const rows = useMemo(() => {
     type R = {
       key: string;
@@ -281,11 +254,12 @@ function CashBankBook() {
       const v = e.vouchers;
       if (!v) continue;
       const sibs = siblings.get(v.id) ?? [];
+      // Particulars = the contra ledger(s)
       const partyNames = sibs
         .map((s) => getLedger(s.ledger_id)?.name ?? ledgerNameById.get(s.ledger_id))
         .filter(Boolean) as string[];
       const particulars = partyNames.length ? partyNames.join(", ") : "—";
-      bal = bal + Number(e.debit_paise || 0) - Number(e.credit_paise || 0);
+      bal = bal + e.debit_paise - e.credit_paise;
       out.push({
         key: e.id,
         voucherId: v.id,
@@ -294,8 +268,8 @@ function CashBankBook() {
         vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
         vchNo: v.voucher_number,
         narration: narrationOf(e, v),
-        debit: Number(e.debit_paise || 0),
-        credit: Number(e.credit_paise || 0),
+        debit: e.debit_paise,
+        credit: e.credit_paise,
         balance: bal,
       });
     }
@@ -317,6 +291,7 @@ function CashBankBook() {
   const fmtBal = (paise: number) =>
     `${formatINR(Math.abs(paise), { symbol: false })} ${paise >= 0 ? "Dr" : "Cr"}`;
 
+  // ---------- Exports ----------
   const csvRows = (): (string | number)[][] => {
     const head = ["Date", "Particulars", "Vch Type", "Vch No", "Narration", "Debit", "Credit", "Balance"];
     const body: (string | number)[][] = [
@@ -372,11 +347,15 @@ function CashBankBook() {
           ["Closing Balance", "", "", "", "", "", fmtBal(closing)],
         ];
 
+    const fyStart = activeMembership?.companies?.financial_year_start;
+    const fyLabel = fyStart ? `Financial Year ${fyStart.split("-")[0]}-${(parseInt(fyStart.split("-")[0]) + 1).toString().slice(-2)}` : "";
+
     downloadPdfTable({
       title: accountHeading,
       subtitle: pdfHeader.dateRangeSubtitle(from, to),
       companyName: activeMembership?.companies?.name,
       companySubLine: pdfHeader.companySubLine,
+
       head: [head],
       body: [opening_row, ...bodyRows],
       foot,
@@ -444,7 +423,7 @@ function CashBankBook() {
 
   const accountHeading = selectedLedgerName
     ? selectedLedgerType === "cash"
-      ? `Cash Book: ${selectedLedgerName}`
+      ? `Cash Book${selectedLedgerName ? `: ${selectedLedgerName}` : ""}`
       : `Bank Book: ${selectedLedgerName}`
     : "Cash & Bank Book";
 
@@ -458,10 +437,13 @@ function CashBankBook() {
       orientation="landscape"
       onExportPdf={onExportPdf}
       exportFileBase={fileBase}
+      onExportWord={() => {
+        // Fallback to standard Word export in ReportViewer
+      }}
     >
       {loading ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
-      ) : !ledgerId ? (
+      ) : !ledger ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a Cash or Bank ledger.</CardContent></Card>
       ) : view === "grid" ? (
         <Card className="overflow-hidden">

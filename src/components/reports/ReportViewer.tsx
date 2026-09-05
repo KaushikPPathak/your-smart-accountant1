@@ -10,10 +10,17 @@ import { FitToWidth } from "./FitToWidth";
 import { Button } from "@/components/ui/button";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { useShortcut } from "@/lib/keyboard";
+import { toast } from "sonner";
 import { recordFailure, recordStage } from "@/lib/crash-log";
+import { preparePrintDom, endPrintDom } from "@/lib/print-prepare";
 
+/**
+ * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
+ * GSTR-3B, GSTR-2B recon, GST sales/purchase books) follow the official
+ * GSTN print/export flow and must not be intercepted.
+ */
 const PRINT_PICKER_EXCLUDED = [
-  "/app/reports/gst",
+  "/app/reports/gst",       // covers gst-sales-book, gst-purchase-book
   "/app/reports/gstr1",
   "/app/reports/gstr3b",
   "/app/reports/gstr2b",
@@ -23,6 +30,19 @@ function isPrintPickerExcludedPath(pathname: string): boolean {
   return PRINT_PICKER_EXCLUDED.some((p) => pathname.startsWith(p));
 }
 
+/**
+ * ReportViewer — print-ready wrapper for any report.
+ *
+ * Behavior
+ * - On screen: renders children with an optional toolbar slot above.
+ * - On print: hides app chrome via CSS in `src/styles.css`, prints a header
+ *   with Company / Title / Subtitle / Period on every page.
+ * - Ctrl+P (or Cmd+P) anywhere on the page opens a "Print mode" picker:
+ *     1) System Printer  → window.print()
+ *     2) PDF             → calls onExportPdf
+ *     3) Word (.doc)     → exports the rendered report HTML as .doc
+ *   Inside the picker, P / D / W select directly.
+ */
 export interface ReportViewerProps {
   title: string;
   subtitle?: React.ReactNode;
@@ -33,12 +53,32 @@ export interface ReportViewerProps {
   companyName?: string;
   orientation?: "portrait" | "landscape";
   className?: string;
+  /** PDF export hook — usually wired to downloadPdfTable(). */
   onExportPdf?: () => void;
+  /**
+   * Optional Word override. If omitted, the picker exports the rendered
+   * report HTML as a .doc file (editable in Word).
+   */
   onExportWord?: () => void;
+  /** File-name stem used by the default Word export. Defaults to title. */
   exportFileBase?: string;
+  /**
+   * Opt out of the universal Ctrl+P picker (e.g. GST returns where the
+   * statutory print/export flow must be used instead). When true, Ctrl+P
+   * falls back to the browser's native print dialog.
+   */
   disablePrintShortcut?: boolean;
+  /**
+   * Pre-formatted account / ledger heading line, e.g.
+   *   "Ledger Account: ACME Traders"
+   *   "Cash Book"
+   *   "Bank Book: HDFC Current 0123"
+   * Renders directly under the title on every printed page.
+   */
   accountHeading?: string;
+  /** Company city (printed on the small address/GST line). */
   companyCity?: string | null;
+  /** Company GSTIN (printed on the small address/GST line). */
   companyGstin?: string | null;
   children: React.ReactNode;
 }
@@ -51,7 +91,7 @@ export function ReportViewer({
   asOf,
   toolbar,
   companyName,
-  orientation,
+  orientation = "portrait",
   className,
   onExportPdf,
   onExportWord,
@@ -68,14 +108,7 @@ export function ReportViewer({
   const company = companyName ?? activeMembership?.companies?.name ?? "";
   const city = companyCity ?? null;
   const gstin = companyGstin ?? activeMembership?.companies?.gstin ?? null;
-
-  // Read year from local override if user selected a previous/next FY on the company card
-  const activeCompId = activeMembership?.companies?.id;
-  const savedFyStart = (typeof window !== "undefined" && activeCompId)
-    ? localStorage.getItem(`ym_active_fy_start_${activeCompId}`) || localStorage.getItem("ym_active_fy_start")
-    : null;
-
-  const fyStart = savedFyStart || activeMembership?.companies?.financial_year_start || null;
+  const fyStart = activeMembership?.companies?.financial_year_start ?? null;
   const fyText = React.useMemo(() => tt(formatFyRange(fyStart)), [fyStart, tt]);
   const fyShort = React.useMemo(() => formatFyShort(fyStart), [fyStart]);
   const periodText = asOf
@@ -87,16 +120,6 @@ export function ReportViewer({
 
   const localizedTitle = tt(title);
   const localizedHeading = accountHeading ? tt(accountHeading) : "";
-
-  // Auto-detect landscape for T-Accounts (P&L, Trading, Balance Sheet)
-  const isTReport =
-    title.toLowerCase().includes("profit") ||
-    title.toLowerCase().includes("trading") ||
-    title.toLowerCase().includes("income & expenditure") ||
-    title.toLowerCase().includes("balance sheet");
-
-  const effectiveOrientation: "portrait" | "landscape" =
-    orientation ?? (isTReport ? "landscape" : "portrait");
 
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [pickerOpen, setPickerOpen] = React.useState(false);
@@ -125,35 +148,39 @@ export function ReportViewer({
       title: localizedTitle,
       fileName: `${stem}.doc`,
       headerHtml,
-      orientation: effectiveOrientation,
+      orientation,
     });
-  }, [onExportWord, company, localizedTitle, localizedHeading, subtitleText, periodText, addressLine, exportFileBase, effectiveOrientation, title]);
+  }, [onExportWord, company, localizedTitle, localizedHeading, subtitleText, periodText, addressLine, exportFileBase, orientation, title]);
 
   const handlePick = React.useCallback(
     (mode: PrintMode) => {
       setPickerOpen(false);
+      // Allow the dialog to close before invoking blocking print/save APIs.
       window.setTimeout(() => {
         if (mode === "system") {
+          // Route through the same cloned/normalised preview document as the
+          // other modes so headers, colours and de-scaled layout are identical
+          // (and so desktop WebViews print the same output as the browser).
           openPrintPreview(
             rootRef.current,
             company,
             localizedHeading || localizedTitle,
             fyShort,
-            effectiveOrientation,
+            orientation,
             true,
           );
         } else if (mode === "pdf") {
           onExportPdf?.();
-          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, effectiveOrientation);
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
         } else if (mode === "word") {
           doWord();
-          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, effectiveOrientation);
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
         } else if (mode === "preview") {
-          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, effectiveOrientation);
+          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
         }
       }, 50);
     },
-    [onExportPdf, doWord, company, localizedHeading, localizedTitle, fyShort, effectiveOrientation],
+    [onExportPdf, doWord, company, localizedHeading, localizedTitle, fyShort, orientation],
   );
 
   const [pathname, setPathname] = React.useState(() =>
@@ -182,10 +209,10 @@ export function ReportViewer({
     { scope: "dialog", enabled: pickerOpen && shortcutsEnabled, description: "Print preview" });
 
   React.useEffect(() => {
-    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, effectiveOrientation);
+    const handler = () => openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
     window.addEventListener("report:preview", handler as EventListener);
     return () => window.removeEventListener("report:preview", handler as EventListener);
-  }, [company, localizedHeading, localizedTitle, fyShort, effectiveOrientation]);
+  }, [company, localizedHeading, localizedTitle, fyShort, orientation]);
 
   const [autoFit, setAutoFit] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -221,7 +248,7 @@ export function ReportViewer({
         ref={rootRef}
         className={cn(
           "report-print-root",
-          effectiveOrientation === "landscape" && "report-print-landscape",
+          orientation === "landscape" && "report-print-landscape",
         )}
       >
         <div className="report-print-header mb-3 text-center">
@@ -276,6 +303,11 @@ function escape(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/**
+ * Open a full-screen iframe containing the rendered report HTML.
+ * Tauri's WebView blocks window.open() popups, so we inject an iframe
+ * directly into the current document instead.
+ */
 function openPrintPreview(
   el: HTMLElement | null,
   company: string,
@@ -284,6 +316,36 @@ function openPrintPreview(
   orientation: "portrait" | "landscape",
   autoPrint = false,
 ): void {
+  void openPrintPreviewAsync(el, company, heading, fyShort, orientation, autoPrint);
+}
+
+/**
+ * Collect the application's own stylesheets so the preview document renders
+ * with the SAME layout engine as the on-screen report. Without this the clone
+ * loses every utility class and two-column (Dr / Cr) layouts collapse into a
+ * single vertical stack.
+ */
+function collectAppStyles(): string {
+  const parts: string[] = [];
+  document.querySelectorAll('style, link[rel="stylesheet"]').forEach((node) => {
+    if (node.tagName === "STYLE") {
+      parts.push(`<style>${(node as HTMLStyleElement).innerHTML}</style>`);
+    } else {
+      const href = (node as HTMLLinkElement).href;
+      if (href) parts.push(`<link rel="stylesheet" href="${href}">`);
+    }
+  });
+  return parts.join("\n");
+}
+
+async function openPrintPreviewAsync(
+  el: HTMLElement | null,
+  company: string,
+  heading: string,
+  fyShort: string,
+  orientation: "portrait" | "landscape",
+  autoPrint: boolean,
+): Promise<void> {
   const startTs = Date.now();
   recordStage("preview", "start", {
     report: heading,
@@ -301,20 +363,20 @@ function openPrintPreview(
     return;
   }
 
+  // Remove any existing preview iframe
   const existing = document.getElementById("report-preview-iframe");
   if (existing) existing.remove();
 
-  // Force Landscape for traditional dual-column accounting statements
-  const isDualColumnReport =
-    heading.toLowerCase().includes("profit") ||
-    heading.toLowerCase().includes("trading") ||
-    heading.toLowerCase().includes("income") ||
-    heading.toLowerCase().includes("balance");
+  const orient = orientation === "landscape" ? "landscape" : "portrait";
 
-  const orient = isDualColumnReport ? "landscape" : (orientation === "landscape" ? "landscape" : "portrait");
+  // Ask virtualised grids (and any other screen-only widget) to render their
+  // full print tables before we take the snapshot.
+  await preparePrintDom();
 
+  // Clone the live DOM so late-rendered rows are captured.
   const clone = el.cloneNode(true) as HTMLElement;
 
+  // Convert inputs to static text so their current values are preserved.
   clone.querySelectorAll("input, textarea, select").forEach((input: any) => {
     const val = input.value || "";
     const span = document.createElement("span");
@@ -322,7 +384,8 @@ function openPrintPreview(
     input.parentNode?.replaceChild(span, input);
   });
 
-  clone.querySelectorAll(".print\\:hidden, [class*='print:hidden']").forEach((node) => node.remove());
+  const appStyles = collectAppStyles();
+  endPrintDom();
 
   recordStage("preview", "clone", {
     clone_html_len: clone.outerHTML.length,
@@ -330,127 +393,98 @@ function openPrintPreview(
     rows: clone.querySelectorAll("tr").length,
   });
 
+
   const css = `
-    @page { size: A4 ${orient}; margin: 8mm 10mm; }
+    @page { size: A4 ${orient}; margin: 10mm; }
     * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #fff;
-      color: #000;
-      font: 9pt/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    }
-    body { padding: 6mm 10mm; }
-    .preview-bar {
-      position: fixed; top: 0; left: 0; right: 0;
-      display: flex; gap: 8px; padding: 8px 12px;
-      background: #f5f5f5; border-bottom: 1px solid #ddd;
-      font: 13px system-ui; z-index: 10;
-    }
-    .preview-bar button {
-      padding: 6px 14px; border: 1px solid #888;
-      background: #fff; border-radius: 4px; cursor: pointer;
-      font: inherit; font-weight: 600;
-    }
-    .preview-content { margin-top: 45px; position: relative; z-index: 1; }
-    .preview-content, .preview-content * {
+    html, body { margin: 0; padding: 0; background: #fff; color: #000;
+      font: 9pt/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    body { padding: 10mm; }
+    .preview-bar { position: fixed; top: 0; left: 0; right: 0; display: flex;
+      gap: 8px; padding: 8px 12px; background: #f5f5f5;
+      border-bottom: 1px solid #ddd; font: 13px system-ui; z-index: 10; }
+    .preview-bar button { padding: 6px 12px; border: 1px solid #888;
+      background: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
+    .preview-content { margin-top: 48px; position: relative; z-index: 1; }
+    .preview-content {
       color: #000 !important;
       visibility: visible !important;
       opacity: 1 !important;
+      background: #fff !important;
+    }
+    .preview-content * {
+      color: inherit !important;
+      visibility: inherit !important;
+      opacity: inherit !important;
+    }
+    .preview-content table,
+    .preview-content tbody,
+    .preview-content thead,
+    .preview-content tfoot,
+    .preview-content tr,
+    .preview-content td,
+    .preview-content th {
+      display: revert !important;
+      color: #000 !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+    .preview-content table {
+      border-collapse: collapse !important;
+      width: 100% !important;
+    }
+    .preview-content [style*="transform"] { transform: none !important; }
+    .preview-content,
+    .preview-content > div,
+    .preview-content > div > div,
+    .preview-content > div > div > div {
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      width: auto !important;
+      min-width: 0 !important;
+    }
+    .preview-content thead th,
+    .preview-content .row-bold,
+    .preview-content tfoot {
+      background-color: #f0f0f0 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .report-print-header { text-align: center; margin-bottom: 8pt; }
+    .report-print-header > div { margin: 1pt 0; }
+    .report-print-company-name {
+      font-size: 12pt; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .5pt; color: #002060 !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .report-print-title { font-size: 10pt; font-weight: 600; margin-top: 2pt; }
+    .report-print-fy-line { font-size: 9pt; font-weight: 500; margin-top: 1pt; }
+    .report-header-rule { height: 2px; border-top: 1px solid #000;
+      border-bottom: 1px solid #000; margin: 3pt 0 6pt; }
+    .preview-content, .preview-content * {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-
-    /* SOLID 4-COLUMN ACCOUNTING T-FRAME TABLE: 35% | 15% || 35% | 15% */
-    .preview-content table {
-      width: 100% !important;
-      max-width: 100% !important;
-      table-layout: fixed !important;
-      border-collapse: collapse !important;
-      border: 1.5pt solid #000 !important;
-      font-size: 8.5pt !important;
-      background: #fff !important;
-      margin-bottom: 6pt !important;
-    }
-
-    .preview-content table colgroup col:nth-child(1),
-    .preview-content table th:nth-child(1),
-    .preview-content table td:nth-child(1) {
-      width: 35% !important;
-      border-right: 0.5pt solid #bbb !important;
-    }
-
-    .preview-content table colgroup col:nth-child(2),
-    .preview-content table th:nth-child(2),
-    .preview-content table td:nth-child(2) {
-      width: 15% !important;
-      text-align: right !important;
-      border-right: 2.5pt solid #000 !important; /* SOLID CENTER T-DIVIDER */
-    }
-
-    .preview-content table colgroup col:nth-child(3),
-    .preview-content table th:nth-child(3),
-    .preview-content table td:nth-child(3) {
-      width: 35% !important;
-      border-right: 0.5pt solid #bbb !important;
-    }
-
-    .preview-content table colgroup col:nth-child(4),
-    .preview-content table th:nth-child(4),
-    .preview-content table td:nth-child(4) {
-      width: 15% !important;
-      text-align: right !important;
-      border-right: none !important;
-    }
-
-    .preview-content th,
-    .preview-content td {
-      padding: 3pt 5pt !important;
-      vertical-align: top !important;
-      border-bottom: 0.5pt solid #d0d0d0 !important;
-      overflow-wrap: break-word !important;
-      word-break: break-word !important;
-    }
-
-    .preview-content th {
-      border-top: 1.5pt solid #000 !important;
-      border-bottom: 1.5pt solid #000 !important;
-      background-color: #f2f2f2 !important;
-      font-weight: 700 !important;
-    }
-
-    /* DOUBLE UNDERLINE FOR TOTAL FOOTER */
-    .preview-content tfoot tr td,
-    .preview-content tfoot tr th,
-    .preview-content .total-row td {
-      border-top: 1.5pt solid #000 !important;
-      border-bottom: 2.5pt double #000 !important;
-      font-weight: 700 !important;
-      background-color: #fafafa !important;
-    }
-
-    .report-print-header { text-align: center; margin-bottom: 8pt; }
-    .report-print-company-name {
-      font-size: 13pt; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .5pt; color: #002060 !important;
-    }
-    .report-print-title { font-size: 11pt; font-weight: 600; margin-top: 2pt; }
-    .report-print-fy-line { font-size: 9pt; font-weight: 500; margin-top: 1pt; }
-    .report-header-rule {
-      height: 2px;
-      border-top: 1px solid #000;
-      border-bottom: 1px solid #000;
-      margin: 3pt 0 6pt;
-    }
-
-    .print\\:hidden, [class*="print:hidden"] { display: none !important; }
-    .hidden { display: none !important; }
-    .print\\:block { display: block !important; }
-
+    table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+    th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
+      text-align: left; overflow-wrap: anywhere; word-break: break-word; }
+    th { background: #f0f0f0; font-weight: 600;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    td.num, th.num, .num { text-align: right; font-variant-numeric: tabular-nums;
+      white-space: nowrap; }
+    .row-bold td, .row-bold th, tfoot td, tfoot th { font-weight: 700;
+      background: #f7f7f7; }
+    .narration-cell { white-space: normal; word-break: break-word; }
+    [class*="print:hidden"] { display: none !important; }
+    .overflow-hidden { overflow: visible !important; }
+    .run-head, .run-foot { display: none; }
     @media print {
       .preview-bar { display: none !important; }
-      body { padding: 0 !important; margin: 0 !important; }
-      .preview-content { margin-top: 0 !important; }
+      body { padding: 0; }
+      .preview-content { margin-top: 0; }
+      /* Chromium/WebView2 ignore @page margin boxes, but repeat
+         position:fixed elements on every printed page. */
       .run-head, .run-foot {
         display: flex; position: fixed; left: 0; right: 0;
         gap: 8pt; justify-content: space-between; align-items: baseline;
@@ -458,15 +492,53 @@ function openPrintPreview(
       }
       .run-head { top: 0; font-weight: 700; border-bottom: 0.5pt solid #000; padding-bottom: 2pt; }
       .run-foot { bottom: 0; color: #444; border-top: 0.5pt solid #999; padding-top: 2pt; }
-      .preview-content { padding: 6mm 0 4mm; }
+      .preview-content { padding: 8mm 0 6mm; }
+    }
+
+    /* ----------------------------------------------------------------
+       Deterministic accounting print layout. The app's own stylesheet is
+       loaded above this block, so utility classes still position things;
+       these rules only pin down what MUST NOT change when printing.
+       ---------------------------------------------------------------- */
+    /* Screen-only widgets (virtualised grids) vs. their print tables. */
+    [data-print-hide] { display: none !important; }
+    [data-print-only] { display: block !important; }
+    /* Two-column (Dr / Cr) accounting blocks never collapse to one column. */
+    .preview-content [class*="grid-cols-2"] {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+    }
+    .preview-content .flex { display: flex !important; }
+    /* Truncation is a screen affordance; print must show the full value. */
+    .preview-content .truncate {
+      overflow: visible !important;
+      text-overflow: clip !important;
+      white-space: normal !important;
+    }
+    /* Sticky/zebra screen polish must not leak into paper. */
+    .preview-content thead th { position: static !important; backdrop-filter: none !important; }
+    .preview-content table { border-collapse: collapse !important; }
+    /* Repeat headers, keep rows whole, keep totals with the table. */
+    .preview-content thead { display: table-header-group !important; }
+    .preview-content tfoot { display: table-footer-group !important; }
+    .preview-content tr, .preview-content td, .preview-content th {
+      page-break-inside: avoid; break-inside: avoid;
+    }
+    .preview-content .report-data-table td,
+    .preview-content .report-data-table th { border: 0.5pt solid #000; padding: 3pt 4pt; }
+    @media print {
+      [data-print-hide] { display: none !important; }
+      [data-print-only] { display: block !important; }
     }
   `;
 
+
   const html = `<!doctype html>
-<html>
+<html lang="${document.documentElement.getAttribute("lang") ?? "en"}" style="color-scheme: light">
 <head>
 <meta charset="utf-8">
 <title>${escape(company)} — ${escape(heading)} — Preview</title>
+${appStyles}
 <style>${css}</style>
 </head>
 <body>
@@ -478,7 +550,7 @@ function openPrintPreview(
 <div class="run-head"><span>${escape(company)}</span><span>${escape(fyShort)}</span></div>
 <div class="run-foot"><span>${escape(heading)}</span><span>${escape(new Date().toLocaleDateString("en-IN"))}</span></div>
 
-<div class="preview-content report-print-root${orient === "landscape" ? " report-print-landscape" : ""}">
+<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">
   ${clone.outerHTML}
 </div>
 </body>
@@ -501,6 +573,8 @@ function openPrintPreview(
   doc.write(html);
   doc.close();
 
+  // Wait for fonts and images inside the iframe before allowing (or firing)
+  // a print, otherwise the output can miss logos or reflow mid-table.
   const ready = (async () => {
     try {
       const idoc = iframe.contentDocument;
@@ -517,7 +591,9 @@ function openPrintPreview(
   })();
 
   void ready.then(() => {
-    const btn = iframe.contentDocument?.getElementById("preview-print-btn") as HTMLButtonElement | null;
+    const btn = iframe.contentDocument?.getElementById("preview-print-btn") as
+      | HTMLButtonElement
+      | null;
     if (btn) btn.disabled = false;
     if (autoPrint) {
       try {
@@ -537,6 +613,20 @@ function openPrintPreview(
   });
 }
 
+/** Navigate to the Diagnostics page from a toast action. */
+function openDiagnostics(): void {
+  try {
+    window.location.assign("/app/diagnostics");
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Format the company's financial year start (YYYY-MM-DD, typically
+ * 04-01) into a human label that covers a printable page header.
+ * Example: "2025-04-01" -> "FY 2025-26 (01/04/2025 to 31/03/2026)".
+ */
 function formatFyRange(start: string | null | undefined): string {
   if (!start) return "";
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
@@ -551,6 +641,9 @@ function formatFyRange(start: string | null | undefined): string {
   return `FY ${y}-${shortEnd} (${startStr} to ${endStr})`;
 }
 
+/**
+ * Extract just the "FY 2025-26" part for the primary report header.
+ */
 function formatFyShort(start: string | null | undefined): string {
   if (!start) return "";
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);

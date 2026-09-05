@@ -26,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { readLedgers, readItems, readVoucherItemsForCompany, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 import { calculateWac, type ItemMove } from "@/lib/inventory/valuation-engine";
 
+
 export const Route = createFileRoute("/app/reports/profit-loss")({
   head: () => ({ meta: [{ title: "Profit & Loss — Reports" }] }),
   component: ProfitLoss,
@@ -41,7 +42,10 @@ function ProfitLoss() {
   const cr = isIE ? "Income" : "Cr. Particulars";
   const surplusLabel = isIE ? "To Excess of Income over Expenditure" : "To Net Profit c/d";
   const deficitLabel = isIE ? "By Excess of Expenditure over Income" : "By Net Loss c/d";
-  
+  // When inventory is disabled the Trading Account is not the primary flow, so
+  // direct income (Sales, Job Work) and direct expense (Purchases, Factory
+  // Wages) must appear in P&L — otherwise those ledgers silently disappear
+  // from every profitability report.
   const inventoryEnabled = !!activeMembership?.companies?.inventory_enabled;
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
@@ -66,6 +70,7 @@ function ProfitLoss() {
     }).then(setModeSplits).catch(() => setModeSplits(new Map()));
   }, [activeCompanyId, from, to]);
 
+  // Opening / Closing stock for gross-profit carry from Trading A/c.
   useEffect(() => {
     if (!activeCompanyId || !inventoryEnabled) return;
     (async () => {
@@ -76,7 +81,7 @@ function ProfitLoss() {
             async () => readItems(activeCompanyId)
           ),
           withCacheFallback(
-            async () => (await supabase.from("vouchers").select("*").eq("company_id", activeCompanyId)).data || [],
+            async () => (await supabase.from("vouchers").select("*").eq("company_id", activeCompanyId).lte("voucher_date", to)).data || [],
             async () => readVouchers(activeCompanyId, { to })
           ),
           withCacheFallback(
@@ -133,11 +138,21 @@ function ProfitLoss() {
         setClosingStock(0);
       }
     })();
+
   }, [activeCompanyId, from, to, inventoryEnabled]);
 
+  // Accounting rule: Sales / Purchase / Direct Income / Direct Expense
+  // ALWAYS flow through the Trading A/c — this includes job-work / labour-only
+  // manufacturing concerns that hold zero own-stock (e.g. jewellers turning
+  // customer-supplied gold into ornaments). Only Indirect Income / Indirect
+  // Expense appear in P&L; the Trading A/c's Gross Profit / Loss is carried
+  // here as b/d. The Inventory flag only controls whether Opening / Closing
+  // Stock is added to Trading — it does NOT change which heads belong where.
   const expenseTypes = new Set(["expense_indirect"]);
   const incomeTypes = new Set(["income_indirect"]);
 
+  // Inner breakdown: split each P&L ledger by receipt mode (Cash vs Bank/Cheque).
+  // Signed ModeSplit is dr−cr; expenses (Dr-natural) use +, incomes (Cr-natural) flip.
   const innerForExpense = (b: LedgerBalance) => {
     const m = modeSplits.get(b.id); if (!m) return undefined;
     return [
@@ -162,6 +177,7 @@ function ProfitLoss() {
       (b) => b.closing_paise,
       innerForExpense,
     ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [balances, modeSplits],
   );
   const incomeBuckets = useMemo(
@@ -171,6 +187,7 @@ function ProfitLoss() {
       (b) => -b.closing_paise,
       innerForIncome,
     ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [balances, modeSplits],
   );
 
@@ -180,6 +197,8 @@ function ProfitLoss() {
   const exp = groupedTRows(expenseBuckets, goLedger);
   const inc = groupedTRows(incomeBuckets, goLedger);
 
+  // Trading Gross Profit / Gross Loss carry — direct income/expense always
+  // route through Trading, so its net result always carries here as b/d.
   const tradingGp = useMemo(() => {
     const directIncome = balances
       .filter((b) => b.type === "income_direct")
@@ -194,15 +213,16 @@ function ProfitLoss() {
 
   const expenseRows: TRow[] = [...exp.rows];
   const incomeRows: TRow[] = [];
-  if (tradingGp > 0) incomeRows.push({ label: "By Gross Profit b/d", amount: formatINR(tradingGp), emphasis: "bold" });
-  if (tradingGp < 0) expenseRows.unshift({ label: "To Gross Loss b/d", amount: formatINR(-tradingGp), emphasis: "bold" });
+  if (tradingGp > 0) incomeRows.push({ label: "By Gross Profit b/d", amount: "", outerAmount: formatINR(tradingGp), emphasis: "bold" });
+  if (tradingGp < 0) expenseRows.unshift({ label: "To Gross Loss b/d", amount: "", outerAmount: formatINR(-tradingGp), emphasis: "bold" });
   incomeRows.push(...inc.rows);
-  if (profit > 0) expenseRows.push({ label: surplusLabel, amount: formatINR(profit), emphasis: "bold" });
-  if (profit < 0) incomeRows.push({ label: deficitLabel, amount: formatINR(-profit), emphasis: "bold" });
+  if (profit > 0) expenseRows.push({ label: surplusLabel, amount: "", outerAmount: formatINR(profit), emphasis: "bold" });
+  if (profit < 0) incomeRows.push({ label: deficitLabel, amount: "", outerAmount: formatINR(-profit), emphasis: "bold" });
 
   const grandLeft = exp.totalPaise + Math.max(0, -tradingGp) + Math.max(0, profit);
   const grandRight = inc.totalPaise + Math.max(0, tradingGp) + Math.max(0, -profit);
 
+  // Exports
   const drExp = groupedExportRows(expenseBuckets, isIE ? "" : "To ");
   const crExp = groupedExportRows(incomeBuckets, isIE ? "" : "By ");
   if (tradingGp > 0) crExp.unshift({ label: "  By Gross Profit b/d", paise: 0, outerPaise: tradingGp, isSubtotal: true });
@@ -252,19 +272,6 @@ function ProfitLoss() {
       rightAlignCols: [1, 2, 4, 5],
     });
 
-  const tAccountView = (
-    <TAccount
-      title={reportTitle}
-      subtitle={`for the period ${from} to ${to}`}
-      leftHeaderLabel={dr}
-      rightHeaderLabel={cr}
-      leftRows={expenseRows}
-      rightRows={incomeRows}
-      leftTotal={formatINR(grandLeft)}
-      rightTotal={formatINR(grandRight)}
-    />
-  );
-
   return (
     <ReportViewer
       title={reportTitle}
@@ -295,51 +302,83 @@ function ProfitLoss() {
           <p className="mt-2 text-xs text-muted-foreground">
             {isIE
               ? <>Income &amp; Expenditure for the period — surplus/deficit transfers to the <strong>Corpus / General Fund</strong>.</>
-              : <>Indirect Income &amp; Indirect Expenses only. Sales / Purchase / Direct Income / Direct Expenses flow through the <strong>Trading Account</strong> — its Gross Profit / Loss is carried here as b/d.</>}
+              : <>Indirect Income &amp; Indirect Expenses only. Sales / Purchase / Direct Income / Direct Expenses (e.g. Job Work Income, Factory Wages) flow through the <strong>Trading Account</strong> — its Gross Profit / Loss is carried here as b/d.</>}
           </p>
+          {excludedClosingEntries > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Year-end Profit &amp; Loss transfer entries are excluded here so the period income and expenses remain visible.
+            </p>
+          )}
+          {(() => {
+            const c = activeMembership?.companies as unknown as {
+              entity_status?: string | null;
+              annual_turnover_paise?: number | null;
+              borrowings_paise?: number | null;
+              nce_level?: number | null;
+            } | undefined;
+            if (!c) return null;
+            const shape = computeNceReportShape({
+              entity: (c.entity_status ?? "individual") as Parameters<typeof computeNceReportShape>[0]["entity"],
+              turnoverPaise: Number(c.annual_turnover_paise ?? 0),
+              borrowingsPaise: Number(c.borrowings_paise ?? 0),
+              levelOverride: (c.nce_level ?? null) as 1 | 2 | 3 | null,
+            });
+            if (shape.isCorporate) return null;
+            return (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 font-medium text-primary">
+                  ICAI NCE: {NCE_LEVEL_LABEL[shape.level]}
+                </span>
+                <span className="text-muted-foreground">
+                  {shape.level === 3
+                    ? "Simplified P&L — no cash-flow / related-party / segment / AS 15 disclosures required."
+                    : shape.level === 2
+                    ? "Level 2 disclosures — segment reporting & detailed employee benefits not required."
+                    : "Level 1 — full NCE disclosures apply."}
+                </span>
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
-
-      {/* Screen View (Shows Grid or T-Format depending on switcher, but hides on print) */}
-      <div className="print:hidden">
-        {view === "grid" ? (
-          <Card>
-            <CardContent className="p-3">
-              <BucketedGrid
-                reportId="profit-loss"
-                onLedgerClick={goLedger}
-                sides={[
-                  {
-                    side: dr,
-                    buckets: expenseBuckets,
-                    extras: [
-                      ...(tradingGp < 0 ? [{ group: "Trading", name: "Gross Loss b/d", valuePaise: -tradingGp }] : []),
-                      ...(profit > 0 ? [{ group: "Result", name: surplusLabel, valuePaise: profit }] : []),
-                    ],
-                  },
-                  {
-                    side: cr,
-                    buckets: incomeBuckets,
-                    extras: [
-                      ...(tradingGp > 0 ? [{ group: "Trading", name: "Gross Profit b/d", valuePaise: tradingGp }] : []),
-                      ...(profit < 0 ? [{ group: "Result", name: deficitLabel, valuePaise: -profit }] : []),
-                    ],
-                  },
-                ]}
-              />
-            </CardContent>
-          </Card>
-        ) : (
-          tAccountView
-        )}
-      </div>
-
-      {/* Print View: ALWAYS renders T-Account in side-by-side format on print */}
-      <div className="hidden print:block w-full">
-        {tAccountView}
-      </div>
-
-      {taxView && <div className="print:hidden"><TaxAuditPanel mode="pl" fyStart={from} fyEnd={to} /></div>}
+      {view === "grid" ? (
+        <Card><CardContent className="p-3">
+          <BucketedGrid
+            reportId="profit-loss"
+            onLedgerClick={goLedger}
+            sides={[
+              {
+                side: dr,
+                buckets: expenseBuckets,
+                extras: [
+                  ...(tradingGp < 0 ? [{ group: "Trading", name: "Gross Loss b/d", valuePaise: -tradingGp }] : []),
+                  ...(profit > 0 ? [{ group: "Result", name: surplusLabel, valuePaise: profit }] : []),
+                ],
+              },
+              {
+                side: cr,
+                buckets: incomeBuckets,
+                extras: [
+                  ...(tradingGp > 0 ? [{ group: "Trading", name: "Gross Profit b/d", valuePaise: tradingGp }] : []),
+                  ...(profit < 0 ? [{ group: "Result", name: deficitLabel, valuePaise: -profit }] : []),
+                ],
+              },
+            ]}
+          />
+        </CardContent></Card>
+      ) : (
+      <TAccount
+        title={reportTitle}
+        subtitle={`for the period ${from} to ${to}`}
+        leftHeader={dr}
+        rightHeader={cr}
+        leftRows={expenseRows}
+        rightRows={incomeRows}
+        leftTotal={formatINR(grandLeft)}
+        rightTotal={formatINR(grandRight)}
+      />
+      )}
+      {taxView && <TaxAuditPanel mode="pl" fyStart={from} fyEnd={to} />}
     </ReportViewer>
   );
 }
