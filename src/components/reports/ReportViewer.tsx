@@ -494,7 +494,43 @@ async function openPrintPreviewAsync(
       .preview-content { padding: 8mm 0 6mm; }
     }
 
+    /* ----------------------------------------------------------------
+       Deterministic accounting print layout. The app's own stylesheet is
+       loaded above this block, so utility classes still position things;
+       these rules only pin down what MUST NOT change when printing.
+       ---------------------------------------------------------------- */
+    /* Screen-only widgets (virtualised grids) vs. their print tables. */
+    [data-print-hide] { display: none !important; }
+    [data-print-only] { display: block !important; }
+    /* Two-column (Dr / Cr) accounting blocks never collapse to one column. */
+    .preview-content [class*="grid-cols-2"] {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+    }
+    .preview-content .flex { display: flex !important; }
+    /* Truncation is a screen affordance; print must show the full value. */
+    .preview-content .truncate {
+      overflow: visible !important;
+      text-overflow: clip !important;
+      white-space: normal !important;
+    }
+    /* Sticky/zebra screen polish must not leak into paper. */
+    .preview-content thead th { position: static !important; backdrop-filter: none !important; }
+    .preview-content table { border-collapse: collapse !important; }
+    /* Repeat headers, keep rows whole, keep totals with the table. */
+    .preview-content thead { display: table-header-group !important; }
+    .preview-content tfoot { display: table-footer-group !important; }
+    .preview-content tr, .preview-content td, .preview-content th {
+      page-break-inside: avoid; break-inside: avoid;
+    }
+    .preview-content .report-data-table td,
+    .preview-content .report-data-table th { border: 0.5pt solid #000; padding: 3pt 4pt; }
+    @media print {
+      [data-print-hide] { display: none !important; }
+      [data-print-only] { display: block !important; }
+    }
   `;
+
 
   const html = `<!doctype html>
 <html>
