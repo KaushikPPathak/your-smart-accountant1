@@ -107,25 +107,27 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
   };
   if (!cleanGstin) return { ...empty, error: "GSTIN is required" };
 
-  // Prevent cloud/network call in offline/local mode and offer portal fallback
-  if (typeof window !== "undefined" && (!window.navigator.onLine || import.meta.env.VITE_APP_MODE === "local")) {
-    window.open("https://services.gst.gov.in/services/searchtp", "_blank");
-    return { 
-      ...empty, 
-      error: "Cloud functions disabled in local mode. Opening GST portal manually." 
-    };
-  }
-
   const creds = loadSetuCreds();
   const isTauri =
     typeof window !== "undefined" &&
     Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+  
+  const hasLocalCreds = Boolean(creds.clientId && creds.clientSecret);
+  const isLocalMode = import.meta.env.VITE_APP_MODE === "local";
+
+  // CLEAN FALLBACK 1: Intercept offline status or local mode without saved API credentials.
+  // Returning `{ ...empty }` without an `error` string forces the UI to fail silently.
+  if ((typeof window !== "undefined" && !window.navigator.onLine) || (isLocalMode && !hasLocalCreds)) {
+    if (typeof window !== "undefined") {
+      window.open("https://services.gst.gov.in/services/searchtp", "_blank");
+    }
+    return { ...empty }; 
+  }
 
   let json: any = null;
   let httpOk = false;
   let httpStatus = 0;
 
-  const hasLocalCreds = Boolean(creds.clientId && creds.clientSecret);
   if (isTauri && hasLocalCreds) {
     // Desktop build with local creds — call API Setu directly.
     const url = `https://apisetu.gov.in/gstn/v2/taxpayers/${encodeURIComponent(cleanGstin)}`;
@@ -153,6 +155,15 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
           gstin: cleanGstin,
         },
       });
+      
+      // CLEAN FALLBACK 2: Safely trap the mock error thrown by Supabase in local mode
+      if (error && error.message && error.message.includes("local-only mode")) {
+        if (typeof window !== "undefined") {
+          window.open("https://services.gst.gov.in/services/searchtp", "_blank");
+        }
+        return { ...empty }; // Fails silently, preventing the red toast
+      }
+
       if (error) return { ...empty, error: `Proxy error: ${error.message}` };
       const resp = data as { ok: boolean; status: number; json: unknown; error?: string };
       if (resp?.error) return { ...empty, error: resp.error };
