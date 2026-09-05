@@ -1,5 +1,4 @@
 import { openVoucherDetail } from "@/lib/voucher-return";
-import { sortVouchersAsc } from "@/lib/voucher-sort";
 import { narrationOf } from "@/lib/voucher-text";
 import { toast } from "sonner";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -18,42 +17,35 @@ import { BookOpen } from "lucide-react";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { QuickRangeChips } from "@/components/reports/QuickRangeChips";
 import { ReportViewer } from "@/components/reports/ReportViewer";
-import { readLedgers, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
-import { offlineDb } from "@/lib/offline/db";
-import { normalizeVoucher } from "@/lib/offline/cache-normalizers";
-
-async function readJournalVouchersByDate(
-  companyId: string,
-  from: string,
-  to: string,
-): Promise<any[]> {
-  const rows = await offlineDb.cache_vouchers
-    .where("[company_id+voucher_date]")
-    .between([companyId, from], [companyId, to], true, true)
-    .toArray();
-  const journals = (rows as any[]).filter((v) => v?.is_deleted !== true && (v.voucher_type === "journal" || !v.voucher_type));
-  const normalized = journals.map((v) => {
-    try { return normalizeVoucher(v); } catch { return v; }
-  });
-  return normalized.sort((a: any, b: any) =>
-    (a.voucher_date > b.voucher_date ? 1 : -1),
-  );
-}
+import { readLedgers, readVoucherEntriesWithVouchers, withCacheFallback } from "@/lib/offline/cache-read";
+import { voucherTypeLabel } from "@/lib/voucher-type-label";
 
 export const Route = createFileRoute("/app/reports/journal-book")({
   head: () => ({ meta: [{ title: "Journal Book — Reports" }] }),
   component: JournalBook,
 });
 
+/**
+ * Journal Book row = ONE voucher entry (ledger posting), so the book shows
+ * the classic Date / Vch No / Vch Type / Particulars / Narration / Dr / Cr
+ * columns instead of a single net amount per voucher.
+ */
 interface Row {
   id: string;
+  voucher_id: string;
   voucher_date: string;
   voucher_number: string;
   voucher_type: string;
-  total_paise: number;
-  narration: string | null;
-  reference_no: string | null;
-  ledgers: { name: string } | null;
+  particulars: string;
+  narration: string;
+  reference_no: string;
+  debit_paise: number;
+  credit_paise: number;
+}
+
+/** Journal Book covers manual journals plus legacy/untyped vouchers. */
+function isJournalType(t: string | null | undefined): boolean {
+  return !t || t === "journal";
 }
 
 function JournalBook() {
@@ -73,66 +65,74 @@ function JournalBook() {
         const data = await withCacheFallback<Row[]>(
           async () => {
             const { data: res, error } = await supabase
-              .from("vouchers")
-              .select("id, voucher_date, voucher_number, voucher_type, total_paise, narration, reference_no, party_ledger_id, ledgers:party_ledger_id(name)")
-              .eq("company_id", activeCompanyId)
-              .in("voucher_type", ["journal", null])
-              .gte("voucher_date", from)
-              .lte("voucher_date", to)
-              .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true });
+              .from("voucher_entries")
+              .select(
+                "id, debit_paise, credit_paise, narration, ledgers:ledger_id(name), vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)",
+              )
+              .eq("vouchers.company_id", activeCompanyId)
+              .gte("vouchers.voucher_date", from)
+              .lte("vouchers.voucher_date", to);
             if (error) throw error;
-            return (res || []) as unknown as Row[];
+            return ((res || []) as any[])
+              .filter((e) => isJournalType(e.vouchers?.voucher_type))
+              .map((e) => toRow(e, String(e.ledgers?.name ?? "")));
           },
           async () => {
-            let vouchers: any[];
-            try {
-              vouchers = await readJournalVouchersByDate(activeCompanyId, from, to);
-            } catch (err) {
-              console.warn("Journal book cache read error:", err);
-              vouchers = (await readVouchers(activeCompanyId, { from, to })).filter(v => v.voucher_type === 'journal');
-            }
-            const ledgers = await readLedgers(activeCompanyId);
-            const ledgerNames = new Map((ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]));
-            return (vouchers as any[]).map((v) => ({
-              id: String(v.id),
-              voucher_date: String(v.voucher_date ?? ""),
-              voucher_number: String(v.voucher_number ?? ""),
-              voucher_type: String(v.voucher_type ?? ""),
-              total_paise: Number(v.total_paise ?? 0),
-              narration: v.narration ?? null,
-              reference_no: v.reference_no ?? null,
-              ledgers: v.party_ledger_id ? { name: ledgerNames.get(String(v.party_ledger_id)) ?? "" } : null,
-            })) as Row[];
+            const [entries, ledgers] = await Promise.all([
+              readVoucherEntriesWithVouchers(activeCompanyId, { from, to }),
+              readLedgers(activeCompanyId),
+            ]);
+            const names = new Map(
+              (ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]),
+            );
+            return (entries as any[])
+              .filter((e) => isJournalType(e.vouchers?.voucher_type))
+              .map((e) => toRow(e, names.get(String(e.ledger_id)) ?? ""));
           },
         );
-        if (!cancelled) {
-          setRows(sortVouchersAsc(data));
-        }
+        if (!cancelled) setRows(sortRows(data));
       } catch (err) {
         console.error("Journal Book failure:", err);
-        if (!cancelled) {
-          toast.error("Failed to load Journal Book. Check console for details.");
-        }
+        if (!cancelled) toast.error("Failed to load Journal Book. Check console for details.");
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     void loadData();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeCompanyId, from, to]);
 
-  const total = useMemo(() => rows.reduce((s, r) => s + r.total_paise, 0), [rows]);
+  const totals = useMemo(
+    () =>
+      rows.reduce(
+        (acc, row) => ({
+          debit: acc.debit + row.debit_paise,
+          credit: acc.credit + row.credit_paise,
+        }),
+        { debit: 0, credit: 0 },
+      ),
+    [rows],
+  );
+
+  const HEAD = ["Date", "Vch No", "Vch Type", "Particulars", "Narration", "Debit", "Credit"];
+
+  const bodyRows = (): (string | number)[][] =>
+    rows.map((row) => [
+      fmtIndianDate(row.voucher_date),
+      row.voucher_number,
+      voucherTypeLabel(row.voucher_type || "journal", "en"),
+      row.particulars,
+      row.narration,
+      (row.debit_paise / 100).toFixed(2),
+      (row.credit_paise / 100).toFixed(2),
+    ]);
 
   const csvRows = (): (string | number)[][] => [
-    ["Date", "Number", "Particulars", "Narration", "Amount"],
-    ...rows.map((r2) => [
-      fmtIndianDate(r2.voucher_date),
-      r2.voucher_number,
-      r2.ledgers?.name ?? "",
-      narrationOf(null, r2),
-      (r2.total_paise / 100).toFixed(2),
-    ]),
-    ["", "", "", "Total", (total / 100).toFixed(2)],
+    HEAD,
+    ...bodyRows(),
+    ["", "", "", "", "Total", (totals.debit / 100).toFixed(2), (totals.credit / 100).toFixed(2)],
   ];
 
   const onExportCsv = () => downloadCsv(`journal-book-${from}_to_${to}.csv`, csvRows());
@@ -144,41 +144,47 @@ function JournalBook() {
       subtitle: pdfHeader.dateRangeSubtitle(from, to),
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
-      head: [["Date", "Number", "Particulars", "Narration", "Amount"]],
-      body: rows.map((r2) => [
-        fmtIndianDate(r2.voucher_date),
-        r2.voucher_number,
-        r2.ledgers?.name ?? "",
-        narrationOf(null, r2),
-        r(r2.total_paise).toFixed(2),
-      ]),
-      foot: [["", "", "", "Total", r(total).toFixed(2)]],
+      head: [HEAD],
+      body: bodyRows(),
+      foot: [["", "", "", "", "Total", r(totals.debit).toFixed(2), r(totals.credit).toFixed(2)]],
       fileName: `journal-book-${from}_to_${to}.pdf`,
       orientation: "l",
-      rightAlignCols: [4],
+      rightAlignCols: [5, 6],
     });
 
-  const gridColumns: DGColumn<Row>[] = useMemo(() => [
-    { id: "date", header: "Date", type: "date", width: 110, accessor: (r2) => r2.voucher_date, cell: (r2) => fmtIndianDate(r2.voucher_date) },
-    { id: "number", header: "No.", type: "text", width: 110, accessor: (r2) => r2.voucher_number },
-    { id: "party", header: "Particulars", type: "text", width: 220, accessor: (r2) => r2.ledgers?.name ?? "", groupable: true, cell: (r2) => r2.ledgers?.name ?? "—" },
-    { id: "narration", header: "Narration", type: "text", width: 260, accessor: (r2) => narrationOf(null, r2) },
-    { id: "ref", header: "Ref", type: "text", width: 110, accessor: (r2) => r2.reference_no ?? "" },
-    {
-      id: "amount", header: "Amount", type: "number", width: 140, align: "right",
-      accessor: (r2) => r2.total_paise / 100,
-      cell: (r2) => formatINR(r2.total_paise),
-      aggregator: "sum",
-      formatAggregate: (v) => formatINR(Math.round(v * 100)),
-      formatGroupValue: (v) => formatINR(Math.round(v * 100)),
-    },
-  ], []);
+  const money = (id: string, header: string, pick: (row: Row) => number): DGColumn<Row> => ({
+    id,
+    header,
+    type: "number",
+    width: 130,
+    align: "right",
+    accessor: (row) => pick(row) / 100,
+    cell: (row) => (pick(row) === 0 ? "" : formatINR(pick(row))),
+    aggregator: "sum",
+    formatAggregate: (v) => formatINR(Math.round(v * 100)),
+    formatGroupValue: (v) => formatINR(Math.round(v * 100)),
+  });
+
+  const gridColumns: DGColumn<Row>[] = useMemo(
+    () => [
+      { id: "date", header: "Date", type: "date", width: 105, accessor: (row) => row.voucher_date, cell: (row) => fmtIndianDate(row.voucher_date) },
+      { id: "number", header: "Vch No", type: "text", width: 110, accessor: (row) => row.voucher_number, groupable: true },
+      { id: "vtype", header: "Vch Type", type: "enum", width: 110, accessor: (row) => voucherTypeLabel(row.voucher_type || "journal", "en"), groupable: true },
+      { id: "party", header: "Particulars", type: "text", width: 240, accessor: (row) => row.particulars, groupable: true, cell: (row) => row.particulars || "—" },
+      { id: "narration", header: "Narration", type: "text", width: 240, accessor: (row) => row.narration },
+      { id: "ref", header: "Ref", type: "text", width: 100, accessor: (row) => row.reference_no },
+      money("debit", "Debit (₹)", (row) => row.debit_paise),
+      money("credit", "Credit (₹)", (row) => row.credit_paise),
+    ],
+    [],
+  );
 
   return (
     <ReportViewer
       title="Journal Book"
       fromDate={from}
       toDate={to}
+      orientation="landscape"
       onExportPdf={onExportPdf}
     >
       <Card className="print:hidden">
@@ -209,8 +215,11 @@ function JournalBook() {
               reportId="journal-book"
               rows={rows}
               columns={gridColumns}
-              globalSearch={(r2) => `${r2.voucher_date} ${r2.voucher_number} ${r2.ledgers?.name ?? ""} ${r2.reference_no ?? ""} ${narrationOf(null, r2)}`}
-              onRowClick={(r2) => openVoucherDetail(navigate, r2.id)}
+              footerLabel="Total"
+              globalSearch={(row) =>
+                `${row.voucher_date} ${row.voucher_number} ${row.particulars} ${row.reference_no} ${row.narration}`
+              }
+              onRowClick={(row) => openVoucherDetail(navigate, row.voucher_id)}
               height={560}
             />
           </CardContent>
@@ -218,4 +227,30 @@ function JournalBook() {
       )}
     </ReportViewer>
   );
+}
+
+function toRow(entry: any, ledgerName: string): Row {
+  const v = entry.vouchers ?? {};
+  return {
+    id: String(entry.id),
+    voucher_id: String(v.id ?? entry.voucher_id ?? ""),
+    voucher_date: String(v.voucher_date ?? ""),
+    voucher_number: String(v.voucher_number ?? ""),
+    voucher_type: String(v.voucher_type ?? ""),
+    particulars: ledgerName,
+    narration: narrationOf(entry, v) ?? "",
+    reference_no: String(v.reference_no ?? ""),
+    debit_paise: Number(entry.debit_paise ?? 0),
+    credit_paise: Number(entry.credit_paise ?? 0),
+  };
+}
+
+/** Date, then voucher number, then debits before credits (book convention). */
+function sortRows(rows: Row[]): Row[] {
+  return [...rows].sort((a, b) => {
+    if (a.voucher_date !== b.voucher_date) return a.voucher_date < b.voucher_date ? -1 : 1;
+    if (a.voucher_number !== b.voucher_number)
+      return a.voucher_number.localeCompare(b.voucher_number, undefined, { numeric: true });
+    return b.debit_paise - a.debit_paise;
+  });
 }
