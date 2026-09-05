@@ -100,9 +100,16 @@ export function sumLines(lines: GstLineResult[]): VoucherTotals {
 export function isInterstate(
   companyStateCode: string | null | undefined,
   partyStateCode: string | null | undefined,
+  partyGstin?: string | null
 ): boolean {
-  if (!companyStateCode || !partyStateCode) return false;
-  return companyStateCode !== partyStateCode;
+  const getCode = (val?: string | null) => val ? val.trim().substring(0, 2) : null;
+  
+  const compCode = getCode(companyStateCode);
+  const partyCode = getCode(partyGstin) || getCode(partyStateCode);
+
+  if (!compCode || !partyCode) return false;
+  
+  return compCode !== partyCode;
 }
 
 /** 
