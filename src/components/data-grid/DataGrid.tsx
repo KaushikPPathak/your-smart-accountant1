@@ -391,7 +391,8 @@ export function DataGrid<T>({
           onExit={() => setPivot({ ...pivotState, enabled: false })}
         />
       ) : (
-      <div className="rounded-md border bg-card">
+      <>
+      <div className="rounded-md border bg-card" data-print-hide>
         {/* Header */}
         <div
           className="grid border-b bg-muted/40 text-xs font-medium uppercase tracking-wide overflow-x-auto"
