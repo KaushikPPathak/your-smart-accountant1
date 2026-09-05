@@ -147,12 +147,14 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
     httpStatus = res.status;
     try { json = await res.json(); } catch { /* ignore */ }
   } else {
-    // Web build — proxy through edge function (uses server-side env credentials).
+    // Web build — proxy through edge function (forwards local credentials so the proxy doesn't fail).
     try {
       const { supabase } = await import("@/integrations/supabase/client");
       const { data, error } = await supabase.functions.invoke("setu-gstin-proxy", {
         body: {
           gstin: cleanGstin,
+          clientId: creds.clientId,
+          clientSecret: creds.clientSecret,
         },
       });
       
