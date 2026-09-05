@@ -158,6 +158,8 @@ export function DataGrid<T>({
 
   const enumOptionsByCol = processed.enums;
 
+  const aggColumns = useMemo(() => visibleColumns.filter((c) => c.aggregator), [visibleColumns]);
+
   const { flat, aggregates, visibleCount } = processed;
 
   // Filtered rows (without grouping) feed both the parent callback and the pivot engine
