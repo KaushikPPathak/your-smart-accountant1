@@ -60,6 +60,7 @@ const noopHandler: ProxyHandler<any> = {
       });
     }
     if (prop === 'from') {
+      // Create a chainable query mock so .update().eq() works
       const createQuery = () => {
         const query: any = {
           select: () => query,
@@ -91,16 +92,16 @@ const noopHandler: ProxyHandler<any> = {
           single: () => Promise.resolve({ data: null, error: null }),
           maybeSingle: () => Promise.resolve({ data: null, error: null }),
           csv: () => query,
-          then: (resolve: any) => Promise.resolve({ data: [], error: null }).then(resolve),
+          then: (resolve: any) => Promise.resolve({ data: null, error: null }).then(resolve),
         };
         return query;
       };
       return () => ({
         select: createQuery,
-        insert: () => Promise.resolve({ data: null, error: null }),
-        update: () => Promise.resolve({ data: null, error: null }),
-        upsert: () => Promise.resolve({ data: null, error: null }),
-        delete: () => Promise.resolve({ data: null, error: null }),
+        insert: createQuery,
+        update: createQuery,
+        upsert: createQuery,
+        delete: createQuery,
       });
     }
     // Return a dummy function for everything else to avoid "not a function" crashes
