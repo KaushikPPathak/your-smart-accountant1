@@ -32,6 +32,18 @@ function deriveStateCodeFromGstin(gstin: unknown): string | null {
   return GST_STATE_CODES[prefix] ? prefix : null;
 }
 
+/** Written state / UT name -> GST state code. */
+function stateCodeFromName(name: unknown): string | null {
+  if (typeof name !== "string") return null;
+  const wanted = name.trim().toUpperCase();
+  if (!wanted) return null;
+  for (const [code, label] of Object.entries(GST_STATE_CODES)) {
+    const l = label.toUpperCase();
+    if (l === wanted || l.replace(/&/g, "AND") === wanted || wanted.includes(l)) return code;
+  }
+  return null;
+}
+
 /** Normalize a `cache_companies` row. Idempotent. */
 export function normalizeCompany<T extends AnyRow>(row: T | null | undefined): T | null {
   if (!row || typeof row !== "object") return null;
@@ -58,7 +70,7 @@ export function normalizeCompany<T extends AnyRow>(row: T | null | undefined): T
   if (out.audit_case_reminders == null) out.audit_case_reminders = false;
 
   if (!out.state_code) {
-    const derived = deriveStateCodeFromGstin(out.gstin);
+    const derived = deriveStateCodeFromGstin(out.gstin) ?? stateCodeFromName(out.state);
     if (derived) out.state_code = derived;
   }
   if (!out.financial_year_start) {
@@ -80,6 +92,13 @@ export function normalizeLedger<T extends AnyRow>(row: T | null | undefined): T 
   if (out.credit_limit_paise == null) out.credit_limit_paise = 0;
   if (out.credit_days == null) out.credit_days = 0;
   if (out.gst_treatment == null && out.gstin) out.gst_treatment = "regular";
+
+  // Place-of-supply routing (IGST vs CGST+SGST) depends on this code, so recover
+  // it from the GSTIN or the written state name when the row omits it.
+  if (!out.state_code) {
+    const derived = deriveStateCodeFromGstin(out.gstin) ?? stateCodeFromName(out.state);
+    if (derived) out.state_code = derived;
+  }
 
   // Backups/imports created before account classification was introduced can
   // omit `type`, `group_code`, or the opening Dr/Cr flag. Those rows rendered

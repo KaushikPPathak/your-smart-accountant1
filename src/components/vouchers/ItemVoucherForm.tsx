@@ -344,12 +344,35 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   // Load company state once; ledgers + items come from the in-memory masters cache.
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("companies")
-      .select("state_code")
-      .eq("id", activeCompanyId)
-      .single()
-      .then(({ data }: any) => setCompanyStateCode(data?.state_code ?? null));
+    let cancelled = false;
+    void (async () => {
+      // Local copy is the primary truth (the app runs local-only by default);
+      // the cloud row is only a fallback when nothing is cached yet.
+      try {
+        const { readCompanies } = await import("@/lib/offline/cache-read");
+        const local = (await readCompanies()).find((c: any) => c?.id === activeCompanyId) as any;
+        const code =
+          toStateCode(local?.state_code) || toStateCode(local?.gstin) || toStateCode(local?.state);
+        if (code) {
+          if (!cancelled) setCompanyStateCode(code);
+          return;
+        }
+      } catch { /* fall through to cloud */ }
+      try {
+        const { data } = await supabase
+          .from("companies")
+          .select("state_code, gstin, state")
+          .eq("id", activeCompanyId)
+          .single();
+        const d = data as any;
+        if (!cancelled) {
+          setCompanyStateCode(
+            toStateCode(d?.state_code) || toStateCode(d?.gstin) || toStateCode(d?.state) || null,
+          );
+        }
+      } catch { /* offline — leave unset */ }
+    })();
+    return () => { cancelled = true; };
   }, [activeCompanyId]);
   const mastersVersion = useMastersVersion();
   useEffect(() => {
