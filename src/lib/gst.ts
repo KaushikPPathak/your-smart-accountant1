@@ -96,6 +96,50 @@ export function sumLines(lines: GstLineResult[]): VoucherTotals {
   );
 }
 
+/** Reverse lookup: state / UT name (upper-case) -> GST state code. */
+const STATE_NAME_TO_CODE: Record<string, string> = Object.entries(GST_STATE_CODES).reduce(
+  (acc, [code, name]) => {
+    acc[name.toUpperCase()] = code;
+    // Common spelling variants without the ampersand / with "and"
+    acc[name.toUpperCase().replace(/&/g, "AND")] = code;
+    return acc;
+  },
+  {} as Record<string, string>,
+);
+// Frequently used aliases that don't match the canonical label exactly.
+STATE_NAME_TO_CODE["ORISSA"] = "21";
+STATE_NAME_TO_CODE["PONDICHERRY"] = "34";
+STATE_NAME_TO_CODE["NEW DELHI"] = "07";
+STATE_NAME_TO_CODE["DELHI NCR"] = "07";
+STATE_NAME_TO_CODE["JAMMU AND KASHMIR"] = "01";
+STATE_NAME_TO_CODE["ANDHRA PRADESH"] = "37";
+
+/** Resolve any state-ish value (code, GSTIN, or state name) to a 2-digit GST state code. */
+export function toStateCode(val?: string | null): string | null {
+  if (!val) return null;
+  const str = String(val).trim().toUpperCase();
+  if (!str) return null;
+
+  // A bare code or a GSTIN both start with the 2-digit state code.
+  const lead = str.match(/^(\d{2})/);
+  if (lead && GST_STATE_CODES[lead[1]]) return lead[1];
+
+  // Exact state / UT name.
+  const cleaned = str.replace(/[.\-_]/g, " ").replace(/\s+/g, " ").trim();
+  if (STATE_NAME_TO_CODE[cleaned]) return STATE_NAME_TO_CODE[cleaned];
+
+  // Name embedded in a longer string (e.g. "Hyderabad, Telangana 500001").
+  for (const [name, code] of Object.entries(STATE_NAME_TO_CODE)) {
+    if (name.length >= 4 && cleaned.includes(name)) return code;
+  }
+
+  // Last resort: any 2 consecutive digits that form a valid state code.
+  const any = str.match(/\d{2}/);
+  if (any && GST_STATE_CODES[any[0]]) return any[0];
+
+  return null;
+}
+
 /** Determine if interstate based on company state code vs party state code */
 export function isInterstate(
   companyStateCode: string | null | undefined,
@@ -103,34 +147,18 @@ export function isInterstate(
   partyGstin?: string | null,
   placeOfSupply?: string | null 
 ): boolean {
-  const getCode = (val?: string | null) => {
-    if (!val) return null;
-    const str = String(val).trim().toUpperCase();
-    
-    // Safely grab the first two consecutive digits anywhere in the string
-    const match = str.match(/\d{2}/);
-    if (match) return match[0];
+  const compCode = toStateCode(companyStateCode);
 
-    // Text fallbacks
-    if (str.includes("KARNATAKA")) return "29";
-    if (str.includes("GUJARAT")) return "24";
-    if (str.includes("TELANGANA")) return "36";
-    if (str.includes("MAHARASHTRA")) return "27";
-    if (str.includes("UTTAR PRADESH")) return "09";
-    
-    return null;
-  };
-  
-  // Hard fallback to "24" (Gujarat) in case your company profile state is unconfigured
-  const compCode = getCode(companyStateCode) || "24"; 
-  
   // Priority: 1) Invoice PoS, 2) Party GSTIN, 3) Ledger State
-  const destCode = getCode(placeOfSupply) || getCode(partyGstin) || getCode(partyStateCode);
+  const destCode =
+    toStateCode(placeOfSupply) || toStateCode(partyGstin) || toStateCode(partyStateCode);
 
-  if (!destCode) return false;
-  
+  // Without both sides we cannot prove an interstate supply — stay local.
+  if (!compCode || !destCode) return false;
+
   return compCode !== destCode;
 }
+
 
 /** 
  * High-performance GST resolver with local caching.
