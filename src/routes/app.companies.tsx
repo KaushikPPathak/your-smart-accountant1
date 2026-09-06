@@ -990,6 +990,7 @@ function CompaniesPage() {
                     {/* Bottom Section: FY + Action */}
                     <div className="mt-auto pt-4 flex items-center gap-2">
                       <div className="flex flex-1 items-center justify-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs font-mono font-medium text-foreground">
+  <button
   type="button"
   onClick={(e) => {
     e.stopPropagation();
