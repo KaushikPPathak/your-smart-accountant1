@@ -2,7 +2,7 @@ import { toTitleCaseOnType } from "@/lib/text-case";
 import { createFileRoute, useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon, CheckCircle2, Users, CloudDownload, FileUp } from "lucide-react";
+import { Building2, Check, Plus, Pencil, Upload, LayoutGrid, List as ListIcon, CheckCircle2, Users, CloudDownload, FileUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { UserManagementDialog } from "@/components/UserManagementDialog";
 import { GstinPortalButton } from "@/components/GstinPortalButton";
 import { GstinInlineError } from "@/components/GstinInlineError";
@@ -440,6 +440,49 @@ function CompaniesPage() {
     }
   };
 
+  const changeFinancialYear = async (companyId: string, direction: -1 | 1) => {
+    const membership = memberships.find((m) => m.company_id === companyId);
+    const currentStart = membership?.companies?.financial_year_start;
+    if (!currentStart) return;
+
+    const currentYear = new Date(currentStart).getFullYear();
+    const newYear = currentYear + direction;
+    const newStart = `${newYear}-04-01`;
+
+    try {
+      const { error } = await supabase
+        .from("companies")
+        .update({ financial_year_start: newStart })
+        .eq("id", companyId);
+
+      // In Local-only mode, the local cache is authoritative.
+      if (error && !isLocalOnlyMode()) {
+        throw error;
+      }
+
+      // Always update the local company cache so the FY changes immediately.
+      const { offlineDb } = await import("@/lib/offline/db");
+      const existing = await offlineDb.cache_companies.get(companyId);
+
+      if (existing) {
+        await offlineDb.cache_companies.put({
+          ...existing,
+          financial_year_start: newStart,
+          updated_at: new Date().toISOString(),
+        });
+      }
+
+      await refresh();
+
+      toast.success(
+        `Financial year changed to FY ${newYear}-${String(newYear + 1).slice(-2)}`
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to change financial year"
+      );
+    }
+  };
 
   const onStateCodeChange = (code: string) => {
     const state = INDIAN_STATES.find((s) => s.code === code);
@@ -946,10 +989,29 @@ function CompaniesPage() {
 
                     {/* Bottom Section: FY + Action */}
                     <div className="mt-auto pt-4 flex items-center gap-2">
-                      <div className="flex flex-1 items-center justify-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs font-mono font-medium text-foreground">
-                        <span className="text-muted-foreground">&lt;</span>
-                        {fyLabel}
-                        <span className="text-muted-foreground">&gt;</span>
+                      <div<button
+  type="button"
+  onClick={(e) => {
+    e.stopPropagation();
+    void changeFinancialYear(m.company_id, -1);
+  }}
+  className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+  title="Previous financial year"
+>
+  <ChevronLeft className="h-4 w-4" />
+</button>
+{fyLabel}
+<button
+  type="button"
+  onClick={(e) => {
+    e.stopPropagation();
+    void changeFinancialYear(m.company_id, 1);
+  }}
+  className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+  title="Next financial year"
+>
+  <ChevronRight className="h-4 w-4" />
+</button>
                         {fyLocks[m.company_id] ? (
                           <span
                             className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
@@ -1039,7 +1101,29 @@ function CompaniesPage() {
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] uppercase tracking-wide">FY</span>
-                        <span className="font-mono font-medium text-foreground">{fyLabel}</span>
+                        <span className="<button
+  type="button"
+  onClick={(e) => {
+    e.stopPropagation();
+    void changeFinancialYear(m.company_id, -1);
+  }}
+  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+  title="Previous financial year"
+>
+  <ChevronLeft className="h-3.5 w-3.5" />
+</button>
+<span className="font-mono font-medium text-foreground">{fyLabel}</span>
+<button
+  type="button"
+  onClick={(e) => {
+    e.stopPropagation();
+    void changeFinancialYear(m.company_id, 1);
+  }}
+  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+  title="Next financial year"
+>
+  <ChevronRight className="h-3.5 w-3.5" />
+</button>
                         {fyLocks[m.company_id] ? (
                           <span
                             className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
