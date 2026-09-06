@@ -1,6 +1,8 @@
 // GST calculation helpers — all amounts in paise (integer)
 import { rupeesToPaise } from "./money";
 import { offlineDb } from "./offline/db";
+import { GST_STATE_CODES } from "../utils/stateCodes";
+
 
 export interface GstLineInput {
   item_id?: string;
