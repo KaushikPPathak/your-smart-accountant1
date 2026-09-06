@@ -489,7 +489,7 @@ function LedgersPage() {
                             onDataFetched={(d) => {
                               setForm((prev) => ({
                                 ...prev,
-                                name: prev.name?.trim() ? prev.name : (d.legalName || d.tradeName || prev.name),
+                                name: prev.name?.trim() ? prev.name : (d.tradeName || d.legalName || prev.name),
                                 gstin: d.gstin || prev.gstin,
                                 address: d.address && !prev.address?.trim() ? d.address : prev.address,
                                 state_code:
