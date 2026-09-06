@@ -781,7 +781,7 @@ function CompaniesPage() {
                         const code = g.slice(0, 2);
                         const stateMatch = INDIAN_STATES.find((s) => s.code === code);
                         const address = (d.address || "").replace(/\s+/g, " ").trim();
-                        const nameFromGstin = (d.legalName || d.tradeName || "").trim();
+                        const nameFromGstin = (d.tradeName || d.legalName || "").trim();
                         setForm((f) => ({
                           ...f,
                           // Always fill name when fetching a fresh entity (no editing) or when blank
@@ -989,7 +989,7 @@ function CompaniesPage() {
 
                     {/* Bottom Section: FY + Action */}
                     <div className="mt-auto pt-4 flex items-center gap-2">
-                      <div<button
+                      <div className="flex flex-1 items-center justify-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs font-mono font-medium text-foreground">
   type="button"
   onClick={(e) => {
     e.stopPropagation();
@@ -1101,7 +1101,7 @@ function CompaniesPage() {
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] uppercase tracking-wide">FY</span>
-                        <span className="<button
+                        <button
   type="button"
   onClick={(e) => {
     e.stopPropagation();
