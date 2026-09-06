@@ -94,3 +94,23 @@ describe("isInterstate", () => {
     expect(isInterstate("", "27")).toBe(false);
   });
 });
+
+describe("interstate detection from state names and GSTINs", () => {
+  it("treats a Telangana party as interstate for a Gujarat company", () => {
+    expect(isInterstate("24", "36")).toBe(true);
+    expect(isInterstate("24", "Telangana")).toBe(true);
+    expect(isInterstate("Gujarat", "Telangana")).toBe(true);
+    expect(isInterstate("24", null, "36AAACT1234A1ZQ")).toBe(true);
+    expect(isInterstate("24", null, null, "Hyderabad, Telangana 500001")).toBe(true);
+  });
+
+  it("keeps a same-state party local", () => {
+    expect(isInterstate("24", "24")).toBe(false);
+    expect(isInterstate("Gujarat", "24AAACT1234A1ZQ")).toBe(false);
+  });
+
+  it("stays local when either side is unknown", () => {
+    expect(isInterstate(null, "36")).toBe(false);
+    expect(isInterstate("24", null)).toBe(false);
+  });
+});

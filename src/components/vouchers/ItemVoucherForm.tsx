@@ -29,7 +29,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/utils/currency-utils";
-import { computeLine, sumLines, isInterstate, resolveGstWithCache, type GstLineResult } from "@/lib/gst";
+import { computeLine, sumLines, isInterstate, toStateCode, resolveGstWithCache, type GstLineResult } from "@/lib/gst";
 
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
@@ -80,6 +80,7 @@ interface LedgerOpt {
   name: string;
   type: string;
   state_code: string | null;
+  state?: string | null;
   gstin: string | null;
   gst_treatment: string | null;
 }
@@ -343,12 +344,35 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   // Load company state once; ledgers + items come from the in-memory masters cache.
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("companies")
-      .select("state_code")
-      .eq("id", activeCompanyId)
-      .single()
-      .then(({ data }: any) => setCompanyStateCode(data?.state_code ?? null));
+    let cancelled = false;
+    void (async () => {
+      // Local copy is the primary truth (the app runs local-only by default);
+      // the cloud row is only a fallback when nothing is cached yet.
+      try {
+        const { readCompanies } = await import("@/lib/offline/cache-read");
+        const local = (await readCompanies()).find((c: any) => c?.id === activeCompanyId) as any;
+        const code =
+          toStateCode(local?.state_code) || toStateCode(local?.gstin) || toStateCode(local?.state);
+        if (code) {
+          if (!cancelled) setCompanyStateCode(code);
+          return;
+        }
+      } catch { /* fall through to cloud */ }
+      try {
+        const { data } = await supabase
+          .from("companies")
+          .select("state_code, gstin, state")
+          .eq("id", activeCompanyId)
+          .single();
+        const d = data as any;
+        if (!cancelled) {
+          setCompanyStateCode(
+            toStateCode(d?.state_code) || toStateCode(d?.gstin) || toStateCode(d?.state) || null,
+          );
+        }
+      } catch { /* offline — leave unset */ }
+    })();
+    return () => { cancelled = true; };
   }, [activeCompanyId]);
   const mastersVersion = useMastersVersion();
   useEffect(() => {
@@ -358,6 +382,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         name: l.name,
         type: l.type,
         state_code: l.state_code,
+        state: l.state ?? null,
         gstin: l.gstin,
         gst_treatment: l.gst_treatment,
       })),
@@ -474,9 +499,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   // or, if GSTIN is missing, from the party's state code. No manual override — the party
   // ledger is the single source of truth for IGST vs CGST+SGST routing.
   const placeOfSupply = useMemo(() => {
-    const fromGstin = partyLedger?.gstin?.slice(0, 2);
-    if (fromGstin && /^\d{2}$/.test(fromGstin)) return fromGstin;
-    return partyLedger?.state_code ?? "";
+    return (
+      toStateCode(partyLedger?.gstin) ||
+      toStateCode(partyLedger?.state_code) ||
+      toStateCode(partyLedger?.state) ||
+      ""
+    );
   }, [partyLedger]);
   const interstate = isInterstate(companyStateCode, placeOfSupply);
 

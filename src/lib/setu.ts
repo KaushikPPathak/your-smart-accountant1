@@ -77,6 +77,51 @@ function compactAddress(value: unknown): string | undefined {
   );
 }
 
+// The GSTIN lookup is one of the few features that legitimately needs the
+// internet (the government register lives online). In local-only / desktop
+// builds the Supabase client is a no-op stub, so we call the verification
+// endpoint directly over HTTPS with the publishable key. No business data
+// leaves the device — only the GSTIN being checked.
+const FALLBACK_PROJECT_REF = "yzymutqvqwjeqnbygpgp";
+const FALLBACK_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6eW11dHF2cXdqZXFuYnlncGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MTY2ODEsImV4cCI6MjA5NzA5MjY4MX0.-mtpRUvTSaxu_YPkqw8by6voYetpy5E2Y2mcWBnxd54";
+
+function endpointBase(): { url: string; key: string } {
+  const env = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
+  const url = env.VITE_SUPABASE_URL || `https://${FALLBACK_PROJECT_REF}.supabase.co`;
+  const key = env.VITE_SUPABASE_PUBLISHABLE_KEY || FALLBACK_ANON_KEY;
+  return { url: url.replace(/\/+$/, ""), key };
+}
+
+/** Direct HTTPS call to the GSTIN verification endpoint (no Supabase client needed). */
+async function invokeDirect(gstin: string): Promise<{ data: unknown; error?: string }> {
+  const { url, key } = endpointBase();
+  try {
+    const res = await fetch(`${url}/functions/v1/setu-gstin-proxy`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({ gstin }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok && !json) {
+      return { data: null, error: `GST verification failed (HTTP ${res.status}).` };
+    }
+    return { data: json };
+  } catch (err) {
+    return {
+      data: null,
+      error:
+        err instanceof Error && /fetch|network/i.test(err.message)
+          ? "No internet connection — GST verification needs to be online."
+          : "GST verification service unavailable.",
+    };
+  }
+}
+
 /**
  * Verify a GSTIN via the Lovable Cloud API Setu proxy.
  * The desktop/browser client never receives API Setu credentials.
@@ -97,13 +142,25 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
   try {
     const { supabase } = await import("@/integrations/supabase/client");
 
-    const { data, error } = await supabase.functions.invoke("setu-gstin-proxy", {
-      body: { gstin: cleanGstin },
-    });
+    let data: any = null;
+    let errMessage: string | null = null;
 
-    if (error) {
-      console.error("GST proxy error:", error);
-      return { ...empty, error: error.message || "GST verification service unavailable." };
+    try {
+      const res = await supabase.functions.invoke("setu-gstin-proxy", {
+        body: { gstin: cleanGstin },
+      });
+      data = res.data;
+      errMessage = res.error?.message ?? null;
+    } catch (e) {
+      errMessage = e instanceof Error ? e.message : "invoke failed";
+    }
+
+    // Local-only / desktop builds stub out the cloud client — go direct.
+    if (!data || errMessage) {
+      const direct = await invokeDirect(cleanGstin);
+      if (direct.error && !direct.data) return { ...empty, error: direct.error };
+      data = direct.data;
+      errMessage = null;
     }
 
     const payload = data?.json ?? data;
@@ -116,6 +173,7 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
         `GST verification failed (HTTP ${data?.status ?? "unknown"}).`;
       return { ...empty, error: String(message) };
     }
+
 
     const d = (payload && (payload.data || payload)) || {};
     const legalName = String(

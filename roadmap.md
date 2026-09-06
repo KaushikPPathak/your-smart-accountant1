@@ -3,8 +3,9 @@
 ## In progress
 - [ ] Print View collapses accounting tables vertically (root cause: preview iframe has no app CSS + virtualized grid clone)
 - [ ] Journal Book missing from main sidebar; needs Dr/Cr accounting columns
-- [ ] GST number verification fails in local-only mode ("Proxy error: Cloud functions not available")
-- [ ] Telangana (inter-state) party taxed as local Gujarat sale — interstate detection broken
+- [x] GST number verification works without the cloud client (direct HTTPS call to the verification endpoint)
+- [x] Telangana (inter-state) party now taxed as IGST — state resolved from GSTIN / code / written state name, company state read locally
+
 
 
 
