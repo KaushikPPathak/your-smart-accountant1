@@ -35,6 +35,8 @@ export interface CachedLedger {
   _folded_name?: string; // Precomputed for search performance
   type: string;
   state_code: string | null;
+  state?: string | null;
+
   gstin: string | null;
   gst_treatment: string | null;
   gst_registration_type?: string | null;
