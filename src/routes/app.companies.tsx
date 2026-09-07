@@ -443,35 +443,46 @@ function CompaniesPage() {
   const changeFinancialYear = async (companyId: string, direction: -1 | 1) => {
     const membership = memberships.find((m) => m.company_id === companyId);
     const currentStart = membership?.companies?.financial_year_start;
-    if (!currentStart) return;
+
+    if (!currentStart) {
+      toast.error("Financial year information is not available");
+      return;
+    }
 
     const currentYear = new Date(currentStart).getFullYear();
     const newYear = currentYear + direction;
     const newStart = `${newYear}-04-01`;
 
     try {
-      const { error } = await supabase
-        .from("companies")
-        .update({ financial_year_start: newStart })
-        .eq("id", companyId);
-
-      // In Local-only mode, the local cache is authoritative.
-      if (error && !isLocalOnlyMode()) {
-        throw error;
-      }
-
-      // Always update the local company cache so the FY changes immediately.
       const { offlineDb } = await import("@/lib/offline/db");
+
+      // Local-only mode: the local company cache is authoritative.
+      // Update it first so refresh() cannot restore the old FY.
       const existing = await offlineDb.cache_companies.get(companyId);
 
-      if (existing) {
-        await offlineDb.cache_companies.put({
-          ...existing,
-          financial_year_start: newStart,
-          updated_at: new Date().toISOString(),
-        });
+      if (!existing) {
+        throw new Error("Local company record not found");
       }
 
+      await offlineDb.cache_companies.put({
+        ...existing,
+        financial_year_start: newStart,
+        updated_at: new Date().toISOString(),
+      });
+
+      // In non-local mode, also mirror the change to Supabase.
+      if (!isLocalOnlyMode()) {
+        const { error } = await supabase
+          .from("companies")
+          .update({ financial_year_start: newStart })
+          .eq("id", companyId);
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      // Reload the company list from the updated local cache.
       await refresh();
 
       toast.success(
