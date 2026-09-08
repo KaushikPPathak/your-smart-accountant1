@@ -18,8 +18,8 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
 
   // === Chapter 04 — Dairy ===
   { code: "0401", desc: "Fresh milk and cream, not concentrated", cgst: 0, sgst: 0, igst: 0 },
-  { code: "0406", desc: "Cheese and curd", cgst: 6, sgst: 6, igst: 12 },
-  { code: "04059020", desc: "Pure cow ghee", cgst: 6, sgst: 6, igst: 12 },
+  { code: "0406", desc: "Cheese and curd", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "04059020", desc: "Pure cow ghee", cgst: 2.5, sgst: 2.5, igst: 5 },
 
   // === Chapter 07/08 — Vegetables & Fruits ===
   { code: "0701", desc: "Potatoes, fresh or chilled", cgst: 0, sgst: 0, igst: 0 },
@@ -55,15 +55,15 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
   // === Chapter 19/20 — Prepared foods ===
   { code: "1902", desc: "Pasta, noodles, couscous", cgst: 9, sgst: 9, igst: 18 },
   { code: "1905", desc: "Biscuits, bread, pastry, cakes", cgst: 9, sgst: 9, igst: 18 },
-  { code: "2005", desc: "Other prepared / preserved vegetables", cgst: 6, sgst: 6, igst: 12 },
+  { code: "2005", desc: "Other prepared / preserved vegetables", cgst: 2.5, sgst: 2.5, igst: 5 },
 
   // === Chapter 22 — Beverages ===
   { code: "2201", desc: "Mineral / aerated waters, unsweetened", cgst: 9, sgst: 9, igst: 18 },
   { code: "2202", desc: "Aerated / flavoured waters, soft drinks", cgst: 14, sgst: 14, igst: 28 },
 
   // === Chapter 30 — Pharmaceuticals ===
-  { code: "3003", desc: "Medicaments (mixed), not in dosage form", cgst: 6, sgst: 6, igst: 12 },
-  { code: "3004", desc: "Medicaments in measured doses / retail", cgst: 6, sgst: 6, igst: 12 },
+  { code: "3003", desc: "Medicaments (mixed), not in dosage form", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "3004", desc: "Medicaments in measured doses / retail", cgst: 2.5, sgst: 2.5, igst: 5 },
 
   // === Chapter 33 — Cosmetics ===
   { code: "3304", desc: "Beauty / make-up & skin-care preparations", cgst: 9, sgst: 9, igst: 18 },
@@ -79,24 +79,24 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
   { code: "4418", desc: "Builders' joinery & carpentry of wood", cgst: 9, sgst: 9, igst: 18 },
 
   // === Chapter 48 — Paper & paperboard (Surat / stationery trade) ===
-  { code: "4801", desc: "Newsprint, in rolls or sheets", cgst: 6, sgst: 6, igst: 12 },
-  { code: "4802", desc: "Uncoated paper & paperboard for writing/printing (incl. A4, copier, bond)", cgst: 6, sgst: 6, igst: 12 },
-  { code: "48025410", desc: "Uncoated paper 40-150 gsm (e.g. A4 70 GSM copier sheets)", cgst: 6, sgst: 6, igst: 12 },
-  { code: "48025610", desc: "Uncoated paper in sheets ≥150 gsm (printing & writing)", cgst: 6, sgst: 6, igst: 12 },
+  { code: "4801", desc: "Newsprint, in rolls or sheets", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "4802", desc: "Uncoated paper & paperboard for writing/printing (incl. A4, copier, bond)", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "48025410", desc: "Uncoated paper 40-150 gsm (e.g. A4 70 GSM copier sheets)", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "48025610", desc: "Uncoated paper in sheets ≥150 gsm (printing & writing)", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "4803", desc: "Toilet / facial tissue, towel paper", cgst: 9, sgst: 9, igst: 18 },
-  { code: "4804", desc: "Uncoated kraft paper & paperboard, in rolls", cgst: 6, sgst: 6, igst: 12 },
-  { code: "4805", desc: "Other uncoated paper / paperboard", cgst: 6, sgst: 6, igst: 12 },
-  { code: "4810", desc: "Paper / paperboard coated with kaolin", cgst: 6, sgst: 6, igst: 12 },
+  { code: "4804", desc: "Uncoated kraft paper & paperboard, in rolls", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "4805", desc: "Other uncoated paper / paperboard", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "4810", desc: "Paper / paperboard coated with kaolin", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "4811", desc: "Paper / paperboard coated, impregnated", cgst: 9, sgst: 9, igst: 18 },
   { code: "4817", desc: "Envelopes, letter cards, postcards", cgst: 9, sgst: 9, igst: 18 },
-  { code: "4819", desc: "Cartons, boxes, cases of paper / board", cgst: 6, sgst: 6, igst: 12 },
+  { code: "4819", desc: "Cartons, boxes, cases of paper / board", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "4820", desc: "Registers, ledgers, notebooks, diaries", cgst: 9, sgst: 9, igst: 18 },
   { code: "4821", desc: "Paper / paperboard labels, printed or not", cgst: 9, sgst: 9, igst: 18 },
   { code: "4823", desc: "Other paper / paperboard, cut to size", cgst: 9, sgst: 9, igst: 18 },
 
   // === Chapter 49 — Printed matter ===
   { code: "4901", desc: "Printed books, brochures, leaflets", cgst: 0, sgst: 0, igst: 0 },
-  { code: "4911", desc: "Other printed matter, pictures, photos", cgst: 6, sgst: 6, igst: 12 },
+  { code: "4911", desc: "Other printed matter, pictures, photos", cgst: 2.5, sgst: 2.5, igst: 5 },
 
   // === Chapter 52/54 — Textile fabrics ===
   { code: "5208", desc: "Woven cotton fabrics ≥85% cotton, ≤200 gsm", cgst: 2.5, sgst: 2.5, igst: 5 },
@@ -104,10 +104,10 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
 
   // === Chapter 61/62/63 — Apparel & made-ups ===
   { code: "6109", desc: "T-shirts, singlets, vests, knitted", cgst: 2.5, sgst: 2.5, igst: 5 },
-  { code: "6203", desc: "Men's suits, jackets, trousers, shorts", cgst: 6, sgst: 6, igst: 12 },
-  { code: "6204", desc: "Women's suits, dresses, skirts, trousers", cgst: 6, sgst: 6, igst: 12 },
-  { code: "6205", desc: "Men's shirts", cgst: 6, sgst: 6, igst: 12 },
-  { code: "6302", desc: "Bed linen, table linen, toilet & kitchen linen", cgst: 6, sgst: 6, igst: 12 },
+  { code: "6203", desc: "Men's suits, jackets, trousers, shorts", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "6204", desc: "Women's suits, dresses, skirts, trousers", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "6205", desc: "Men's shirts", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "6302", desc: "Bed linen, table linen, toilet & kitchen linen", cgst: 2.5, sgst: 2.5, igst: 5 },
 
   // === Chapter 64 — Footwear ===
   { code: "6403", desc: "Footwear, leather uppers", cgst: 9, sgst: 9, igst: 18 },
@@ -132,9 +132,9 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
 
   // === Chapter 87/90/94/95 ===
   { code: "8703", desc: "Motor cars & vehicles for transport of persons", cgst: 14, sgst: 14, igst: 28 },
-  { code: "9018", desc: "Medical, surgical, dental or veterinary instruments", cgst: 6, sgst: 6, igst: 12 },
+  { code: "9018", desc: "Medical, surgical, dental or veterinary instruments", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "9403", desc: "Other furniture and parts thereof", cgst: 9, sgst: 9, igst: 18 },
-  { code: "9503", desc: "Tricycles, scooters, dolls, toys, puzzles", cgst: 6, sgst: 6, igst: 12 },
+  { code: "9503", desc: "Tricycles, scooters, dolls, toys, puzzles", cgst: 2.5, sgst: 2.5, igst: 5 },
 
   // === SAC — Services ===
   { code: "9954", desc: "Construction services", cgst: 9, sgst: 9, igst: 18 },
@@ -153,7 +153,7 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
   { code: "9985", desc: "Support services", cgst: 9, sgst: 9, igst: 18 },
   { code: "9987", desc: "Maintenance, repair & installation services", cgst: 9, sgst: 9, igst: 18 },
   { code: "99871300", desc: "Maintenance & repair of computers and peripherals", cgst: 9, sgst: 9, igst: 18 },
-  { code: "9988", desc: "Manufacturing services on physical inputs (job work)", cgst: 6, sgst: 6, igst: 12 },
+  { code: "9988", desc: "Manufacturing services on physical inputs (job work)", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "9991", desc: "Public administration services", cgst: 9, sgst: 9, igst: 18 },
   { code: "9992", desc: "Education services", cgst: 0, sgst: 0, igst: 0 },
   { code: "9993", desc: "Human health and social care services", cgst: 0, sgst: 0, igst: 0 },
@@ -179,7 +179,7 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
   { code: "1806", desc: "Chocolate and food preparations containing cocoa", cgst: 9, sgst: 9, igst: 18 },
   { code: "1904", desc: "Prepared cereals (cornflakes, muesli, puffed rice)", cgst: 9, sgst: 9, igst: 18 },
   { code: "1901", desc: "Malt extract; food preparations of flour/starch", cgst: 9, sgst: 9, igst: 18 },
-  { code: "2103", desc: "Sauces, ketchup, mixed condiments", cgst: 6, sgst: 6, igst: 12 },
+  { code: "2103", desc: "Sauces, ketchup, mixed condiments", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "2104", desc: "Soups & broths, homogenised composite foods", cgst: 9, sgst: 9, igst: 18 },
   { code: "2106", desc: "Food preparations not elsewhere specified (namkeen, mixes)", cgst: 9, sgst: 9, igst: 18 },
   { code: "2203", desc: "Beer made from malt", cgst: 14, sgst: 14, igst: 28 },
@@ -200,14 +200,14 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
   { code: "3208", desc: "Paints & varnishes based on synthetic polymers", cgst: 9, sgst: 9, igst: 18 },
   { code: "3209", desc: "Paints & varnishes in aqueous medium", cgst: 9, sgst: 9, igst: 18 },
   { code: "3210", desc: "Other paints, varnishes; distempers", cgst: 9, sgst: 9, igst: 18 },
-  { code: "3213", desc: "Artists', students' or signboard painters' colours", cgst: 6, sgst: 6, igst: 12 },
+  { code: "3213", desc: "Artists', students' or signboard painters' colours", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "3306", desc: "Preparations for oral or dental hygiene (toothpaste)", cgst: 9, sgst: 9, igst: 18 },
   { code: "3307", desc: "Shaving preparations, deodorants, bath preparations", cgst: 9, sgst: 9, igst: 18 },
   { code: "3402", desc: "Organic surface-active agents, detergents", cgst: 9, sgst: 9, igst: 18 },
-  { code: "3406", desc: "Candles, tapers and the like", cgst: 6, sgst: 6, igst: 12 },
+  { code: "3406", desc: "Candles, tapers and the like", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "3506", desc: "Prepared glues & adhesives, retail packs ≤1 kg", cgst: 9, sgst: 9, igst: 18 },
   { code: "3808", desc: "Insecticides, fungicides, herbicides, disinfectants", cgst: 9, sgst: 9, igst: 18 },
-  { code: "3822", desc: "Diagnostic or laboratory reagents", cgst: 6, sgst: 6, igst: 12 },
+  { code: "3822", desc: "Diagnostic or laboratory reagents", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "3824", desc: "Prepared binders for foundry moulds; chemical products n.e.s.", cgst: 9, sgst: 9, igst: 18 },
 
   // Plastics
@@ -236,30 +236,30 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
   { code: "4410", desc: "Particle board, oriented strand board (OSB)", cgst: 9, sgst: 9, igst: 18 },
   { code: "4411", desc: "Fibreboard of wood (MDF, HDF)", cgst: 9, sgst: 9, igst: 18 },
   { code: "4412", desc: "Plywood, veneered panels, similar laminated wood", cgst: 9, sgst: 9, igst: 18 },
-  { code: "4802", desc: "Uncoated paper / paperboard, writing / printing", cgst: 6, sgst: 6, igst: 12 },
+  { code: "4802", desc: "Uncoated paper / paperboard, writing / printing", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "4818", desc: "Toilet paper, tissues, napkins, sanitary towels", cgst: 9, sgst: 9, igst: 18 },
-  { code: "4909", desc: "Printed / illustrated postcards, greeting cards", cgst: 6, sgst: 6, igst: 12 },
-  { code: "4910", desc: "Calendars of any kind, printed", cgst: 6, sgst: 6, igst: 12 },
+  { code: "4909", desc: "Printed / illustrated postcards, greeting cards", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "4910", desc: "Calendars of any kind, printed", cgst: 2.5, sgst: 2.5, igst: 5 },
 
   // Textiles / apparel
   { code: "5205", desc: "Cotton yarn (≥85% cotton), not put up for retail", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "5206", desc: "Cotton yarn (other than sewing thread)", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "5209", desc: "Woven cotton fabrics ≥85% cotton, >200 gsm", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "5210", desc: "Woven cotton fabrics <85% cotton, mixed synthetic", cgst: 2.5, sgst: 2.5, igst: 5 },
-  { code: "5402", desc: "Synthetic filament yarn (nylon, polyester)", cgst: 6, sgst: 6, igst: 12 },
+  { code: "5402", desc: "Synthetic filament yarn (nylon, polyester)", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "5408", desc: "Woven fabrics of artificial filament yarn", cgst: 2.5, sgst: 2.5, igst: 5 },
-  { code: "5509", desc: "Yarn of synthetic staple fibres, not retail", cgst: 6, sgst: 6, igst: 12 },
+  { code: "5509", desc: "Yarn of synthetic staple fibres, not retail", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "5513", desc: "Woven fabrics of synthetic staple fibres <170 gsm", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "5514", desc: "Woven fabrics of synthetic staple fibres >170 gsm", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "5804", desc: "Tulles & other net fabrics; lace in the piece", cgst: 2.5, sgst: 2.5, igst: 5 },
-  { code: "5903", desc: "Textile fabrics impregnated / coated with plastics", cgst: 6, sgst: 6, igst: 12 },
+  { code: "5903", desc: "Textile fabrics impregnated / coated with plastics", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "6006", desc: "Other knitted or crocheted fabrics", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "6110", desc: "Jerseys, pullovers, cardigans, waistcoats, knitted", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "6115", desc: "Panty hose, tights, stockings, socks, knitted", cgst: 2.5, sgst: 2.5, igst: 5 },
-  { code: "6206", desc: "Women's blouses, shirts and shirt-blouses", cgst: 6, sgst: 6, igst: 12 },
-  { code: "6210", desc: "Garments made up of fabrics of headings 5602/5903", cgst: 6, sgst: 6, igst: 12 },
-  { code: "6217", desc: "Other made-up clothing accessories", cgst: 6, sgst: 6, igst: 12 },
-  { code: "6304", desc: "Other furnishing articles (curtains, cushion covers)", cgst: 6, sgst: 6, igst: 12 },
+  { code: "6206", desc: "Women's blouses, shirts and shirt-blouses", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "6210", desc: "Garments made up of fabrics of headings 5602/5903", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "6217", desc: "Other made-up clothing accessories", cgst: 2.5, sgst: 2.5, igst: 5 },
+  { code: "6304", desc: "Other furnishing articles (curtains, cushion covers)", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "6305", desc: "Sacks & bags of textile materials for packing", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "6307", desc: "Other made-up textile articles (masks, floor cloths)", cgst: 2.5, sgst: 2.5, igst: 5 },
 
@@ -312,7 +312,7 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
   { code: "8428", desc: "Other lifting, handling, loading machinery", cgst: 9, sgst: 9, igst: 18 },
   { code: "8443", desc: "Printing machinery; ink-jet printers; parts", cgst: 9, sgst: 9, igst: 18 },
   { code: "8450", desc: "Household or laundry-type washing machines", cgst: 9, sgst: 9, igst: 18 },
-  { code: "8452", desc: "Sewing machines; furniture, bases & covers", cgst: 6, sgst: 6, igst: 12 },
+  { code: "8452", desc: "Sewing machines; furniture, bases & covers", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "8481", desc: "Taps, cocks, valves & similar appliances", cgst: 9, sgst: 9, igst: 18 },
   { code: "8482", desc: "Ball or roller bearings", cgst: 9, sgst: 9, igst: 18 },
   { code: "8483", desc: "Transmission shafts, gears, gearing, ball screws", cgst: 9, sgst: 9, igst: 18 },
@@ -340,7 +340,7 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
   { code: "8704", desc: "Motor vehicles for transport of goods (trucks)", cgst: 14, sgst: 14, igst: 28 },
   { code: "8708", desc: "Parts & accessories of motor vehicles", cgst: 14, sgst: 14, igst: 28 },
   { code: "8711", desc: "Motorcycles and cycles with auxiliary motor", cgst: 14, sgst: 14, igst: 28 },
-  { code: "8712", desc: "Bicycles and other cycles, not motorised", cgst: 6, sgst: 6, igst: 12 },
+  { code: "8712", desc: "Bicycles and other cycles, not motorised", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "8714", desc: "Parts & accessories of cycles and motorcycles", cgst: 9, sgst: 9, igst: 18 },
   { code: "9004", desc: "Spectacles, goggles and the like", cgst: 9, sgst: 9, igst: 18 },
   { code: "9021", desc: "Orthopaedic appliances, hearing aids, pacemakers", cgst: 2.5, sgst: 2.5, igst: 5 },
@@ -352,7 +352,7 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
   { code: "9506", desc: "Articles & equipment for general physical exercise", cgst: 9, sgst: 9, igst: 18 },
   { code: "9603", desc: "Brooms, brushes, mops, feather dusters", cgst: 9, sgst: 9, igst: 18 },
   { code: "9608", desc: "Ball point pens; felt tipped pens, markers", cgst: 9, sgst: 9, igst: 18 },
-  { code: "9609", desc: "Pencils, crayons, pastels, chalks", cgst: 6, sgst: 6, igst: 12 },
+  { code: "9609", desc: "Pencils, crayons, pastels, chalks", cgst: 2.5, sgst: 2.5, igst: 5 },
   { code: "9611", desc: "Date, sealing, or numbering stamps", cgst: 9, sgst: 9, igst: 18 },
 
   // Additional SAC — professional services
@@ -375,7 +375,7 @@ const HSN_PRIMARY_DATASET: HsnSeedItem[] = [
   { code: "997221", desc: "Rental services of residential property (exempt if for residence)", cgst: 0, sgst: 0, igst: 0 },
   { code: "997331", desc: "Licensing services for computer software (SaaS)", cgst: 9, sgst: 9, igst: 18 },
   { code: "998821", desc: "Textile manufacturing services (job work)", cgst: 2.5, sgst: 2.5, igst: 5 },
-  { code: "998873", desc: "Job work related to manufacturing of goods", cgst: 6, sgst: 6, igst: 12 },
+  { code: "998873", desc: "Job work related to manufacturing of goods", cgst: 2.5, sgst: 2.5, igst: 5 },
 ];
 
 // Merge primary + extended, deduplicating by code (primary takes precedence).
