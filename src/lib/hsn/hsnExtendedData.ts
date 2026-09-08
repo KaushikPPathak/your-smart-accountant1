@@ -7,7 +7,8 @@ import type { HsnSeedItem } from "./seedHsnData";
 
 const R0 = { cgst: 0, sgst: 0, igst: 0 };
 const R5 = { cgst: 2.5, sgst: 2.5, igst: 5 };
-const R12 = { cgst: 6, sgst: 6, igst: 12 };
+// 12% slab withdrawn (GST rate rationalisation) — those goods now fall in the 5% slab.
+const R12 = { cgst: 2.5, sgst: 2.5, igst: 5 };
 const R18 = { cgst: 9, sgst: 9, igst: 18 };
 const R28 = { cgst: 14, sgst: 14, igst: 28 };
 
