@@ -166,17 +166,15 @@ export async function lookupHsn(code: string): Promise<HsnLookup> {
   const trimmed = (code || "").trim();
   if (!trimmed) return { found: false, record: null };
 
-  // Memory index answers instantly; only fall back to SQLite for custom codes.
-  const mem = memoryFindByCode(trimmed);
-  if (mem) return { found: true, record: mem };
-
+  // Stored rows win (they may carry user edits); the memory index is the fallback.
   try {
     const rec = await findHsnByCode(trimmed);
     if (rec) return { found: true, record: rec };
   } catch {
-    /* ignore — memory already missed */
+    /* fall through to memory */
   }
-  return { found: false, record: null };
+  const mem = memoryFindByCode(trimmed);
+  return { found: !!mem, record: mem };
 }
 
 export async function suggestHsn(prefix: string, limit = 10): Promise<HsnRecord[]> {
