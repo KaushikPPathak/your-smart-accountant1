@@ -397,9 +397,16 @@ export async function ensureHsnSeed(): Promise<void> {
     );
     const rowCount = check[0]?.count ?? 0;
 
+    // Rows still carrying the withdrawn 12% slab must be refreshed even when the
+    // row count already matches, otherwise old installs keep the obsolete rate.
+    const stale = await safeBrainSelect<{ count: number }>(
+      "SELECT COUNT(*) as count FROM hsn_master WHERE igst_rate = 12"
+    );
+    const staleCount = stale[0]?.count ?? 0;
+
     // Re-seed when empty OR when our dataset has grown beyond what's stored
     // (so users on an older sparse seed automatically pick up the expanded list).
-    if (rowCount < HSN_MASTER_DATASET.length) {
+    if (rowCount < HSN_MASTER_DATASET.length || staleCount > 0) {
       await safeBrainExec("BEGIN TRANSACTION;");
       for (const item of HSN_MASTER_DATASET) {
         await safeBrainExec(
