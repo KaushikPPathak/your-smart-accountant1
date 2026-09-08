@@ -126,23 +126,30 @@ function LockGate({ children }: { children: React.ReactNode }) {
     if (!discoveryDone.current && isDesktopRuntime()) {
       discoveryDone.current = true;
       void (async () => {
+        // Hard safety net: never hold the splash for more than 1.5s.
+        const splashTimer = setTimeout(() => setBooting(false), 1500);
+        const release = () => {
+          clearTimeout(splashTimer);
+          setBooting(false);
+        };
         try {
-          const [{ discoverCompaniesFromSnapshots }, { offlineDb }, { runAutoRestore }, { checkUpdateSafety }, { dedupeLocalCompaniesOnce }] = await Promise.all([
-            import("@/lib/offline/snapshot-discovery"),
-            import("@/lib/offline/db"),
-            import("@/lib/auto-restore"),
-            import("@/lib/update-safety"),
-            import("@/lib/dedupe-local-companies"),
-          ]);
-
-          // 1. Scan for orphans/missing companies from disk snapshots first
-          await discoverCompaniesFromSnapshots();
-          
-          // 2. Load the current (potentially reconstructed) company list
+          const { offlineDb } = await import("@/lib/offline/db");
           let companies = await offlineDb.companies.toArray();
 
-          // 2b. Fresh install (zero companies): scan the approved legacy
-          // backup roots and restore the newest valid backup per company.
+          if (companies.length === 0) {
+            // Cold/fresh install: recovery genuinely has to run before we can
+            // decide between /welcome and the workspace.
+            try {
+              const { discoverCompaniesFromSnapshots } = await import(
+                "@/lib/offline/snapshot-discovery"
+              );
+              await discoverCompaniesFromSnapshots();
+              companies = await offlineDb.companies.toArray();
+            } catch (err) {
+              console.warn("Snapshot discovery failed:", err);
+            }
+          }
+
           if (companies.length === 0) {
             try {
               const { discoverAndRestoreLegacyBackups } = await import(
@@ -162,30 +169,41 @@ function LockGate({ children }: { children: React.ReactNode }) {
             }
           }
 
+          // Everything below is maintenance work — it must never block paint.
+          release();
 
-          
-          // 3. Trigger silent auto-restore for any company with missing data
-          // NOTE: auto-restore now uses recoverMissingFromSnapshot which is non-destructive
-          if (companies.length > 0) {
-            await runAutoRestore(companies);
-          }
-
-          // 4. Update safety counters so the app doesn't think it's still "missing"
-          await checkUpdateSafety();
-
-          // 5. Safely dedupe only AFTER discovery and restore are done
-          await dedupeLocalCompaniesOnce();
-
+          void (async () => {
+            try {
+              if (companies.length > 0) {
+                // Snapshot discovery for existing installs runs in background.
+                const { discoverCompaniesFromSnapshots } = await import(
+                  "@/lib/offline/snapshot-discovery"
+                );
+                await discoverCompaniesFromSnapshots();
+                const { runAutoRestore } = await import("@/lib/auto-restore");
+                await runAutoRestore(await offlineDb.companies.toArray());
+              }
+              const { checkUpdateSafety } = await import("@/lib/update-safety");
+              await checkUpdateSafety();
+              const { dedupeLocalCompaniesOnce } = await import(
+                "@/lib/dedupe-local-companies"
+              );
+              await dedupeLocalCompaniesOnce();
+            } catch (err) {
+              console.warn("Background maintenance cycle failed:", err);
+            }
+          })();
         } catch (err) {
           console.warn("Startup discovery/restore cycle failed:", err);
         } finally {
-          setBooting(false);
+          release();
         }
       })();
     } else if (!isDesktopRuntime()) {
       setBooting(false);
     }
   }, []);
+
 
   useEffect(() => {
     if (loading || booting) return;
