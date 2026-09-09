@@ -135,7 +135,9 @@ function CashBankBook() {
     let cancelled = false;
     void (async () => {
       setLoading(true);
+      try {
       const base = await withCacheFallback<{ opening_balance_paise: number; opening_balance_is_debit: boolean } | null>(
+
         async () => {
           const { data, error } = await supabase
             .from("ledgers")
@@ -226,8 +228,17 @@ function CashBankBook() {
         if (cancelled) return;
         setSiblings(map);
       }
-      setLoading(false);
+      } catch (err) {
+        console.error("Cash & Bank Book failure:", err);
+        if (!cancelled) {
+          setEntries([]);
+          setSiblings(new Map());
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -443,7 +454,7 @@ function CashBankBook() {
     >
       {loading ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
-      ) : !ledger ? (
+      ) : !selectedLedgerName ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a Cash or Bank ledger.</CardContent></Card>
       ) : view === "grid" ? (
         <Card className="overflow-hidden">
