@@ -135,7 +135,9 @@ function CashBankBook() {
     let cancelled = false;
     void (async () => {
       setLoading(true);
+      try {
       const base = await withCacheFallback<{ opening_balance_paise: number; opening_balance_is_debit: boolean } | null>(
+
         async () => {
           const { data, error } = await supabase
             .from("ledgers")
