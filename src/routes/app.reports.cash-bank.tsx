@@ -228,8 +228,17 @@ function CashBankBook() {
         if (cancelled) return;
         setSiblings(map);
       }
-      setLoading(false);
+      } catch (err) {
+        console.error("Cash & Bank Book failure:", err);
+        if (!cancelled) {
+          setEntries([]);
+          setSiblings(new Map());
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
+
     return () => {
       cancelled = true;
     };
