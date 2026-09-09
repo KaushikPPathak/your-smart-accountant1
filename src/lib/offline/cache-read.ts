@@ -214,28 +214,43 @@ export async function readVoucherItems(voucherId: string) {
   return offlineDb.cache_voucher_items.where("voucher_id").equals(voucherId).toArray();
 }
 
-/** Cache-aware fetch: try the cloud loader; on any error/empty, fall back. */
+/** Cloud reads must never hang a report forever — fall back after this long. */
+const CLOUD_READ_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(run: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("offline: cloud read timed out")),
+      CLOUD_READ_TIMEOUT_MS,
+    );
+    run().then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
+/** Cache-aware fetch: try the cloud loader; on any error/empty/stall, fall back. */
 export async function withCacheFallback<T>(
   cloud: () => Promise<T>,
   cache: () => Promise<T>,
 ): Promise<T> {
   if (shouldPreferOfflineCache()) {
-    try {
-      return await cache();
-    } catch {
-      // If the local cache is not available, still try cloud below.
-    }
+    // Local data is authoritative here: never fall through to a cloud call that
+    // can stall the whole report behind an unreachable network.
+    return await cache();
   }
   try {
-    return await cloud();
+    return await withTimeout(cloud);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err ?? "");
-    if (/failed to fetch|failed to send a request|networkerror|offline/i.test(msg)) {
+    if (/failed to fetch|failed to send a request|networkerror|offline|timed out/i.test(msg)) {
       rememberNetworkBlocked();
     }
     return await cache();
   }
 }
+
 
 /** 
  * Unified fetcher for accounting reports. Returns a complete dataset 
