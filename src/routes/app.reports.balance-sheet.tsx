@@ -162,55 +162,49 @@ function BalanceSheet() {
   // Ledgers with "wrong" signs (e.g. overdrawn Bank Asset showing as Cr) are
   // swapped to the opposite side to maintain professional accounting integrity.
   const partitionedBalances = useMemo(() => {
-    // 1. Separate by natural side
-    const liabRaw = balances.filter(b => BS_LIAB.has(b.type));
-    const assetRaw = balances.filter(b => BS_ASSET.has(b.type));
+    const finalLiab: LedgerBalance[] = [];
+    let finalAsset: LedgerBalance[] = [];
 
-    // 2. Filter out Sundry Debtors from Liabilities and Sundry Creditors from Assets if they ended up there
-    // (Ensure strict grouping: Debtors are ALWAYS Assets, Creditors ALWAYS Liabilities unless swapped by sign)
-    const finalLiab = liabRaw.filter(b => b.type !== 'sundry_debtor' && -b.closing_paise >= 0);
-    const finalAsset = assetRaw.filter(b => b.type !== 'sundry_creditor' && b.closing_paise >= 0);
-    
+    // Each ledger lands on EXACTLY ONE side. Types such as bank and
+    // duties_taxes belong to both natural sets, so the side is decided by the
+    // sign of the closing balance — never by pushing into both lists.
+    for (const b of balances) {
+      if (b.type === "sundry_debtor") {
+        (b.closing_paise >= 0 ? finalAsset : finalLiab).push(b);
+        continue;
+      }
+      if (b.type === "sundry_creditor") {
+        (-b.closing_paise >= 0 ? finalLiab : finalAsset).push(b);
+        continue;
+      }
+      if (BS_ASSET.has(b.type)) {
+        // Negative asset (e.g. bank overdraft) is shown on the liability side.
+        (b.closing_paise >= 0 ? finalAsset : finalLiab).push(b);
+        continue;
+      }
+      if (BS_LIAB.has(b.type)) {
+        // Negative liability (e.g. advance to supplier) is shown as an asset.
+        (-b.closing_paise >= 0 ? finalLiab : finalAsset).push(b);
+      }
+    }
+
     // Replace Stock-in-Hand ledger balances with calculated inventory valuation if enabled
     const inventoryEnabled = !!activeMembership?.companies?.inventory_enabled;
     if (inventoryEnabled) {
-      // Remove existing stock ledgers from assets
-      const nonStockAssets = finalAsset.filter(b => b.type !== 'stock_in_hand');
-      
       const calculatedWac = (window as any).__BS_CALCULATED_WAC ?? 0;
-      
-      // Add a single virtual ledger for the calculated valuation
-      nonStockAssets.push({
-        id: 'virtual-inventory-stock',
-        name: inventoryValuation === calculatedWac ? 'Inventory (Calculated WAC)' : 'Inventory (Manual Override)',
-        type: 'stock_in_hand',
-        group_code: 'STOCK_IN_HAND',
-        closing_paise: inventoryValuation
+      finalAsset = finalAsset.filter((b) => b.type !== "stock_in_hand");
+      finalAsset.push({
+        id: "virtual-inventory-stock",
+        name: inventoryValuation === calculatedWac ? "Inventory (Calculated WAC)" : "Inventory (Manual Override)",
+        type: "stock_in_hand",
+        group_code: "STOCK_IN_HAND",
+        closing_paise: inventoryValuation,
       });
-      partitionedBalances.asset = nonStockAssets;
     }
 
-
-
-
-
-    // 3. Swap negative Assets to Liabilities (e.g. Bank OD, Debit Taxes)
-    assetRaw.filter(b => b.closing_paise < 0).forEach(b => finalLiab.push(b));
-    // 4. Swap negative Liabilities to Assets (e.g. Advance to Suppliers, GST Credit)
-    liabRaw.filter(b => -b.closing_paise < 0).forEach(b => finalAsset.push(b));
-
-    // 5. Explicitly handle Debtors/Creditors if they were missing from BS_ASSET/BS_LIAB sets
-    balances.filter(b => b.type === 'sundry_debtor').forEach(b => {
-      if (b.closing_paise >= 0) finalAsset.push(b);
-      else finalLiab.push(b);
-    });
-    balances.filter(b => b.type === 'sundry_creditor').forEach(b => {
-      if (-b.closing_paise >= 0) finalLiab.push(b);
-      else finalAsset.push(b);
-    });
-
     return { liab: finalLiab, asset: finalAsset };
-  }, [balances]);
+  }, [balances, inventoryValuation, activeMembership?.companies?.inventory_enabled]);
+
 
   const liabBuckets = useMemo(
     () => groupBalances(partitionedBalances.liab, "BS_LIAB", (b) => -b.closing_paise),
