@@ -454,7 +454,7 @@ function CashBankBook() {
     >
       {loading ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
-      ) : !ledger ? (
+      ) : !selectedLedgerName ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a Cash or Bank ledger.</CardContent></Card>
       ) : view === "grid" ? (
         <Card className="overflow-hidden">
