@@ -214,14 +214,15 @@ export async function readVoucherItems(voucherId: string) {
   return offlineDb.cache_voucher_items.where("voucher_id").equals(voucherId).toArray();
 }
 
-/** Cloud reads must never hang a report forever — fall back after this long. */
+/** Neither network nor IndexedDB reads may leave a report loading forever. */
 const CLOUD_READ_TIMEOUT_MS = 8000;
+const CACHE_READ_TIMEOUT_MS = 8000;
 
-function withTimeout<T>(run: () => Promise<T>): Promise<T> {
+function withTimeout<T>(run: () => Promise<T>, timeoutMs: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error("offline: cloud read timed out")),
-      CLOUD_READ_TIMEOUT_MS,
+      () => reject(new Error(`${label} timed out`)),
+      timeoutMs,
     );
     run().then(
       (v) => { clearTimeout(timer); resolve(v); },
@@ -236,12 +237,12 @@ export async function withCacheFallback<T>(
   cache: () => Promise<T>,
 ): Promise<T> {
   if (shouldPreferOfflineCache()) {
-    // Local data is authoritative here: never fall through to a cloud call that
-    // can stall the whole report behind an unreachable network.
-    return await cache();
+    // Local data remains authoritative. The timeout only prevents a blocked
+    // IndexedDB upgrade/connection from leaving report screens spinning forever.
+    return await withTimeout(cache, CACHE_READ_TIMEOUT_MS, "local cache read");
   }
   try {
-    return await withTimeout(cloud);
+    return await withTimeout(cloud, CLOUD_READ_TIMEOUT_MS, "cloud read");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err ?? "");
     if (/failed to fetch|failed to send a request|networkerror|offline|timed out/i.test(msg)) {

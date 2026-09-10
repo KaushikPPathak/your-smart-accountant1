@@ -1,6 +1,8 @@
 # Roadmap
 
 ## In progress
+- [ ] Cash Book, Bank Book and Journal Book must never remain stuck on Loading
+- [ ] Balance Sheet must include every Trial Balance ledger exactly once and tally
 - [ ] Print View collapses accounting tables vertically (root cause: preview iframe has no app CSS + virtualized grid clone)
 - [ ] Journal Book missing from main sidebar; needs Dr/Cr accounting columns
 - [x] GST number verification works without the cloud client (direct HTTPS call to the verification endpoint)

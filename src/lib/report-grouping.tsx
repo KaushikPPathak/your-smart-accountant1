@@ -59,8 +59,23 @@ export function groupBalances(
     buckets.set(g.code, { group: g, rows: [], subtotalPaise: 0 });
   }
   for (const b of balances) {
-    const code = ledgerGroupCode(b);
-    if (!codes.has(code)) continue;
+    let code = ledgerGroupCode(b);
+    if (!codes.has(code)) {
+      // Sign-based Balance Sheet partitioning can legitimately move an account
+      // away from its saved/natural section. Never discard that balance merely
+      // because its original group belongs to the opposite side.
+      if (section === "BS_LIAB") {
+        code = b.type === "bank" ? "BANK_OVERDRAFT" : "CURRENT_LIABILITIES";
+      } else if (section === "BS_ASSET") {
+        code = b.type === "duties_taxes"
+          ? "DUTIES_TAXES_RECEIVABLE"
+          : b.type === "sundry_creditor"
+            ? "LOANS_AND_ADVANCES_ASSET"
+            : "CURRENT_ASSETS";
+      } else {
+        continue;
+      }
+    }
     let v = signFor(b);
     if (!v) continue;
 
@@ -68,7 +83,8 @@ export function groupBalances(
     // to ensure professional partitioning. 
     // Sign is handled by the caller-provided signFor(b).
 
-    const bucket = buckets.get(code)!;
+    const bucket = buckets.get(code);
+    if (!bucket) continue;
     const inner = innerFor?.(b, v)?.filter((x) => x.valuePaise !== 0);
     bucket.rows.push({ id: b.id, name: b.name, valuePaise: v, inner: inner && inner.length > 0 ? inner : undefined });
     bucket.subtotalPaise += v;

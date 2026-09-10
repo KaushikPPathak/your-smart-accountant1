@@ -277,6 +277,16 @@ const hasIndexedDb =
 let _db: OfflineDatabase;
 try {
   _db = hasIndexedDb ? new OfflineDatabase() : makeStubDb();
+  if (hasIndexedDb) {
+    _db.on("versionchange", () => {
+      // Release this connection so a newer app window can complete its schema
+      // upgrade instead of leaving every queued report read unresolved.
+      _db.close();
+    });
+    _db.on("blocked", () => {
+      console.warn("Offline database upgrade is blocked by another app window.");
+    });
+  }
 } catch (err) {
   console.warn("Offline DB unavailable, using in-memory stub:", err);
   _db = makeStubDb();
