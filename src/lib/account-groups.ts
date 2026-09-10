@@ -74,6 +74,11 @@ export const ACCOUNT_GROUPS: AccountGroup[] = [
     ledgerTypes: ["current_liability"],
     hints: [/\bcurrent\s+liabilit/i, /\boutstanding\s+expense/i, /\bexpense.*payable\b/i, /\bsalary\s+payable\b/i, /\brent\s+payable\b/i],
   },
+  {
+    code: "BANK_OVERDRAFT", label: "Bank Overdraft",
+    section: "BS_LIAB", side: "Cr", order: 90,
+    ledgerTypes: ["bank"],
+  },
 
   // ───────── APPLICATION OF FUNDS — Assets (Dr) ─────────
   {
@@ -117,6 +122,11 @@ export const ACCOUNT_GROUPS: AccountGroup[] = [
     section: "BS_ASSET", side: "Dr", order: 170,
     ledgerTypes: ["current_asset"],
     hints: [/\bloans?\s*&?\s*advances?\b/i, /\badvance\s+to\b/i, /\binterest\s+receivable\b/i, /\btds\s+receivable\b/i, /\btds\s+\d/i],
+  },
+  {
+    code: "DUTIES_TAXES_RECEIVABLE", label: "Duties & Taxes Receivable",
+    section: "BS_ASSET", side: "Dr", order: 175,
+    ledgerTypes: ["duties_taxes"],
   },
   {
     code: "CURRENT_ASSETS", label: "Current Assets",
