@@ -42,4 +42,26 @@ describe("Balance Sheet grouping preserves sign-switched balances", () => {
     ]);
     expect(groupedTRows(buckets).totalPaise).toBe(19_989_00);
   });
+
+  it("keeps the two debit balances shown in the reported Trial Balance", () => {
+    const rows: LedgerBalance[] = [
+      {
+        id: "shares-withdrawn",
+        name: "JAIMAN SHARES",
+        type: "capital",
+        group_code: "CAPITAL_ACCOUNT",
+        closing_paise: 102_469_25,
+      },
+      {
+        id: "withdrawal",
+        name: "Withdrawal",
+        type: "capital",
+        group_code: "CAPITAL_ACCOUNT",
+        closing_paise: 2_202_84,
+      },
+    ];
+
+    const buckets = groupBalances(rows, "BS_ASSET", (row) => row.closing_paise);
+    expect(groupedTRows(buckets).totalPaise).toBe(104_672_09);
+  });
 });
