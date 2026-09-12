@@ -5,7 +5,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
-import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
@@ -17,7 +16,7 @@ import { BookOpen } from "lucide-react";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { QuickRangeChips } from "@/components/reports/QuickRangeChips";
 import { ReportViewer } from "@/components/reports/ReportViewer";
-import { readLedgers, readVoucherEntriesWithVouchers, withCacheFallback } from "@/lib/offline/cache-read";
+import { readLocalBookDataset } from "@/lib/offline/cache-read";
 import { voucherTypeLabel } from "@/lib/voucher-type-label";
 
 export const Route = createFileRoute("/app/reports/journal-book")({
@@ -62,34 +61,16 @@ function JournalBook() {
     setLoading(true);
     const loadData = async () => {
       try {
-        const data = await withCacheFallback<Row[]>(
-          async () => {
-            const { data: res, error } = await supabase
-              .from("voucher_entries")
-              .select(
-                "id, debit_paise, credit_paise, narration, ledgers:ledger_id(name), vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)",
-              )
-              .eq("vouchers.company_id", activeCompanyId)
-              .gte("vouchers.voucher_date", from)
-              .lte("vouchers.voucher_date", to);
-            if (error) throw error;
-            return ((res || []) as any[])
-              .filter((e) => isJournalType(e.vouchers?.voucher_type))
-              .map((e) => toRow(e, String(e.ledgers?.name ?? "")));
-          },
-          async () => {
-            const [entries, ledgers] = await Promise.all([
-              readVoucherEntriesWithVouchers(activeCompanyId, { from, to }),
-              readLedgers(activeCompanyId),
-            ]);
-            const names = new Map(
-              (ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]),
-            );
-            return (entries as any[])
-              .filter((e) => isJournalType(e.vouchers?.voucher_type))
-              .map((e) => toRow(e, names.get(String(e.ledger_id)) ?? ""));
-          },
+        const dataset = await readLocalBookDataset(activeCompanyId);
+        const names = new Map(
+          dataset.ledgers.map((ledger: any) => [String(ledger.id), String(ledger.name ?? "")]),
         );
+        const data = dataset.entries
+          .filter((entry: any) => {
+            const date = String(entry.vouchers?.voucher_date ?? "");
+            return date >= from && date <= to && isJournalType(entry.vouchers?.voucher_type);
+          })
+          .map((entry: any) => toRow(entry, names.get(String(entry.ledger_id)) ?? ""));
         if (!cancelled) setRows(sortRows(data));
       } catch (err) {
         console.error("Journal Book failure:", err);

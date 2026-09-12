@@ -10,7 +10,7 @@
 
 
 ## Completed
-- Cash Book, Bank Book and Journal Book local reads now exit safely instead of remaining stuck on Loading; blocked local-store upgrades release stale connections.
+- Cash Book, Bank Book and Journal Book now use one bounded local-data read; focused and 10,000-voucher regression tests pass.
 - Balance Sheet sign-switched ledgers are retained in valid opposite-side groups; regression covers the exact ₹1,04,672.09 omitted debit balances.
 - Phase 2 — Physical Stock (stock-take) voucher: executor, form, route, list UI, tests, build OK.
   - [x] Enum migration, valuation-engine branch, stock-summary window filters, schema type group, label
