@@ -13,14 +13,13 @@ import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { EmptyState } from "@/components/EmptyState";
 import { Wallet } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { getLedger, useMastersVersion, getAllLedgers } from "@/lib/masters-cache";
 import { downloadCsv } from "@/lib/csv";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
-import { readLedgers, readVoucherEntriesWithVouchers, withCacheFallback } from "@/lib/offline/cache-read";
+import { readLedgers, readLocalBookDataset } from "@/lib/offline/cache-read";
 import { useReportUrlSync } from "@/lib/report-url-state";
 
 type Search = { ledgerId?: string; from?: string; to?: string };
@@ -136,41 +135,17 @@ function CashBankBook() {
     void (async () => {
       setLoading(true);
       try {
-      const base = await withCacheFallback<{ opening_balance_paise: number; opening_balance_is_debit: boolean } | null>(
-
-        async () => {
-          const { data, error } = await supabase
-            .from("ledgers")
-            .select("opening_balance_paise, opening_balance_is_debit")
-            .eq("id", ledgerId)
-            .maybeSingle();
-          if (error) throw error;
-          return data as { opening_balance_paise: number; opening_balance_is_debit: boolean } | null;
-        },
-        async () => {
-          const row = (await readLedgers(activeCompanyId)).find((l: any) => String(l.id) === ledgerId) as any;
-          return row ? {
-            opening_balance_paise: Number(row.opening_balance_paise ?? 0),
-            opening_balance_is_debit: Boolean(row.opening_balance_is_debit),
-          } : null;
-        },
-      );
+      const dataset = await readLocalBookDataset(activeCompanyId);
+      const baseRow = dataset.ledgers.find((l: any) => String(l.id) === ledgerId) as any;
+      const base = baseRow ? {
+        opening_balance_paise: Number(baseRow.opening_balance_paise ?? 0),
+        opening_balance_is_debit: Boolean(baseRow.opening_balance_is_debit),
+      } : null;
       const ob = base
         ? (base.opening_balance_is_debit ? 1 : -1) * base.opening_balance_paise
         : 0;
-      const prior = await withCacheFallback<{ debit_paise: number; credit_paise: number }[]>(
-        async () => {
-          const { data, error } = await supabase
-            .from("voucher_entries")
-            .select("debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-            .eq("ledger_id", ledgerId)
-            .eq("vouchers.company_id", activeCompanyId)
-            .lt("vouchers.voucher_date", from);
-          if (error) throw error;
-          return (data || []) as { debit_paise: number; credit_paise: number }[];
-        },
-        async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, before: from })) as { debit_paise: number; credit_paise: number }[],
-      );
+      const ledgerEntries = dataset.entries.filter((entry: any) => String(entry.ledger_id) === ledgerId);
+      const prior = ledgerEntries.filter((entry: any) => String(entry.vouchers?.voucher_date ?? "") < from);
       const movement = prior.reduce(
         (s, e) => s + (e.debit_paise as number) - (e.credit_paise as number),
         0,
@@ -178,21 +153,10 @@ function CashBankBook() {
       if (cancelled) return;
       setOpening(ob + movement);
 
-      const list = await withCacheFallback<EntryRow[]>(
-        async () => {
-          const { data, error } = await supabase
-            .from("voucher_entries")
-            .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
-            .eq("ledger_id", ledgerId)
-            .eq("vouchers.company_id", activeCompanyId)
-            .gte("vouchers.voucher_date", from)
-            .lte("vouchers.voucher_date", to)
-            .order("voucher_date", { referencedTable: "vouchers", ascending: true }).order("voucher_number", { referencedTable: "vouchers", ascending: true });
-          if (error) throw error;
-          return (data || []) as unknown as EntryRow[];
-        },
-        async () => (await readVoucherEntriesWithVouchers(activeCompanyId, { ledgerId, from, to })) as EntryRow[],
-      );
+      const list = ledgerEntries.filter((entry: any) => {
+        const date = String(entry.vouchers?.voucher_date ?? "");
+        return date >= from && date <= to;
+      }) as EntryRow[];
       if (cancelled) return;
       setEntries(list);
 
@@ -200,25 +164,15 @@ function CashBankBook() {
       if (ids.length === 0) {
         setSiblings(new Map());
       } else {
-        const sibs = await withCacheFallback<SiblingRow[]>(
-          async () => {
-            const { data, error } = await supabase
-              .from("voucher_entries")
-              .select("voucher_id, ledger_id, debit_paise, credit_paise")
-              .in("voucher_id", ids)
-              .neq("ledger_id", ledgerId);
-            if (error) throw error;
-            return (data || []) as SiblingRow[];
-          },
-          async () => ((await readVoucherEntriesWithVouchers(activeCompanyId)) as any[])
-            .filter((e) => ids.includes(String(e.voucher_id)) && String(e.ledger_id) !== ledgerId)
-            .map((e) => ({
-              voucher_id: String(e.voucher_id),
-              ledger_id: String(e.ledger_id),
-              debit_paise: Number(e.debit_paise ?? 0),
-              credit_paise: Number(e.credit_paise ?? 0),
-            })),
-        );
+        const idSet = new Set(ids);
+        const sibs = dataset.entries
+          .filter((e: any) => idSet.has(String(e.voucher_id)) && String(e.ledger_id) !== ledgerId)
+          .map((e: any) => ({
+            voucher_id: String(e.voucher_id),
+            ledger_id: String(e.ledger_id),
+            debit_paise: Number(e.debit_paise ?? 0),
+            credit_paise: Number(e.credit_paise ?? 0),
+          })) as SiblingRow[];
         const map = new Map<string, SiblingRow[]>();
         for (const s of sibs) {
           const arr = map.get(s.voucher_id) ?? [];

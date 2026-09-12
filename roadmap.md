@@ -1,6 +1,7 @@
 # Roadmap
 
 ## In progress
+- [ ] Verify Cash Book, Bank Book and Journal Book complete from one bounded local-data read
 - [ ] Print View collapses accounting tables vertically (root cause: preview iframe has no app CSS + virtualized grid clone)
 - [ ] Journal Book missing from main sidebar; needs Dr/Cr accounting columns
 - [x] GST number verification works without the cloud client (direct HTTPS call to the verification endpoint)
@@ -10,7 +11,6 @@
 
 
 ## Completed
-- Cash Book, Bank Book and Journal Book local reads now exit safely instead of remaining stuck on Loading; blocked local-store upgrades release stale connections.
 - Balance Sheet sign-switched ledgers are retained in valid opposite-side groups; regression covers the exact ₹1,04,672.09 omitted debit balances.
 - Phase 2 — Physical Stock (stock-take) voucher: executor, form, route, list UI, tests, build OK.
   - [x] Enum migration, valuation-engine branch, stock-summary window filters, schema type group, label

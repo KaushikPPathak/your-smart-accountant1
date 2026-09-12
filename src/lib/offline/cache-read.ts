@@ -202,6 +202,11 @@ export async function readVoucherEntriesWithVouchers(companyId: string, opts?: {
     .filter(Boolean);
 }
 
+export interface LocalBookDataset {
+  ledgers: any[];
+  entries: any[];
+}
+
 export async function readBillAllocations(companyId: string) {
   return offlineDb.cache_bill_allocations.where("company_id").equals(companyId).toArray();
 }
@@ -231,6 +236,43 @@ function withTimeout<T>(run: () => Promise<T>, timeoutMs: number, label: string)
   });
 }
 
+/**
+ * One bounded local read for Cash Book, Bank Book and Journal Book.
+ * Consumers derive date, ledger and sibling-entry views in memory so these
+ * reports never repeat the same full voucher/entry scan during one load.
+ */
+export async function readLocalBookDataset(companyId: string): Promise<LocalBookDataset> {
+  return withTimeout(async () => {
+    const vouchersPromise = readVouchers(companyId);
+    const [ledgers, vouchers, entries] = await Promise.all([
+      readLedgers(companyId),
+      vouchersPromise,
+      readVoucherEntriesForCompany(companyId, vouchersPromise),
+    ]);
+    const voucherById = new Map(vouchers.map((voucher: any) => [String(voucher.id), voucher]));
+    const liveEntries = (entries as any[])
+      .filter((entry) => entry?.is_deleted !== true)
+      .map((entry) => {
+        const voucher = voucherById.get(String(entry.voucher_id));
+        if (!voucher) return null;
+        return {
+          ...entry,
+          vouchers: {
+            id: String(voucher.id),
+            voucher_date: String(voucher.voucher_date ?? voucher.date ?? ""),
+            voucher_number: String(voucher.voucher_number ?? ""),
+            voucher_type: String(voucher.voucher_type ?? ""),
+            narration: voucher.narration ?? null,
+            reference_no: voucher.reference_no ?? null,
+            company_id: companyId,
+          },
+        };
+      })
+      .filter(Boolean);
+    return { ledgers: ledgers as any[], entries: liveEntries };
+  }, CACHE_READ_TIMEOUT_MS, "local book data read");
+}
+
 /** Cache-aware fetch: try the cloud loader; on any error/empty/stall, fall back. */
 export async function withCacheFallback<T>(
   cloud: () => Promise<T>,
@@ -248,7 +290,7 @@ export async function withCacheFallback<T>(
     if (/failed to fetch|failed to send a request|networkerror|offline|timed out/i.test(msg)) {
       rememberNetworkBlocked();
     }
-    return await cache();
+    return await withTimeout(cache, CACHE_READ_TIMEOUT_MS, "local cache fallback read");
   }
 }
 
