@@ -7,12 +7,13 @@ import { ColumnFilterButton } from "./ColumnFilter";
 import { GridToolbar } from "./GridToolbar";
 import { useGridState } from "./useGridState";
 import { type FlatRow } from "./grid-engine";
+import { processSerializedGrid, type SerializedGridColumn, type SerializedGridRow } from "./grid-worker-core";
 import { PivotPanel } from "./PivotPanel";
 import { usePivot } from "./usePivot";
 import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { usePrintPreparing } from "@/lib/print-prepare";
 import type { DGColumn, GridState, PivotStatePersisted } from "./types";
-import type { GridResponse, WorkerRequest } from "@/workers/grid-agg.worker";
+import type { GridResponse, WorkerRequest, WorkerResponse } from "@/workers/grid-agg.worker";
 
 // Import worker via Vite
 import GridWorker from "@/workers/grid-agg.worker?worker";
@@ -73,13 +74,17 @@ export function DataGrid<T>({
   }>({ flat: [], aggregates: {}, visibleCount: 0, enums: {}, loading: true });
 
   useEffect(() => {
-    workerRef.current = new GridWorker();
+    try {
+      workerRef.current = new GridWorker();
+    } catch (error) {
+      console.error("Grid worker could not start; using main-thread processing.", error);
+      workerRef.current = null;
+    }
     return () => workerRef.current?.terminate();
   }, []);
 
   const requestIdRef = useRef(0);
   useEffect(() => {
-    if (!workerRef.current) return;
     const id = ++requestIdRef.current;
     
     setProcessed(p => ({ ...p, loading: true }));
@@ -87,8 +92,11 @@ export function DataGrid<T>({
     // Data must be serializable to be cloned for the Worker.
     // We map rows to flat objects using the column accessors on the main thread
     // if they are functions, ensuring the worker only deals with raw data.
-    const serializedRows = rows.map((r, i) => {
-      const flat: any = { __index: i };
+    const serializedRows: SerializedGridRow[] = rows.map((r, i) => {
+      const flat: SerializedGridRow = {
+        __index: i,
+        __search: globalSearch ? globalSearch(r) : "",
+      };
       for (const col of columns) {
         try {
           flat[col.id] = col.accessor(r);
@@ -100,32 +108,43 @@ export function DataGrid<T>({
       return flat;
     });
 
-    const serializedColumns = columns.map(c => ({
+    const serializedColumns: SerializedGridColumn[] = columns.map(c => ({
       id: c.id,
       type: c.type,
       aggregator: c.aggregator,
       groupable: c.groupable,
+      enumValues: c.enumValues,
       // Ensure header is serializable (strip functions/components)
       header: typeof c.header === 'string' ? c.header : (typeof c.header === 'object' && c.header !== null ? 'Column' : String(c.header || c.id)),
-      // Remove React-only props before sending to worker
-      cell: undefined,
-      renderGroupValue: undefined,
-      formatAggregate: undefined,
-      formatGroupValue: undefined,
     }));
 
     const workerMsg: WorkerRequest = {
       id,
       kind: "process",
       rows: serializedRows,
-      columns: serializedColumns as any,
+      columns: serializedColumns,
       state,
       expandedGroups: Array.from(expanded) as any // Convert Set to Array for serialization
     };
 
-    const handler = (e: MessageEvent) => {
-      const resp = e.data as GridResponse;
-      if (resp.id === id && resp.ok) {
+    let settled = false;
+    const applyFallback = (reason: unknown) => {
+      if (settled || requestIdRef.current !== id) return;
+      settled = true;
+      console.error("Grid worker failed; using main-thread processing.", reason);
+      try {
+        const result = processSerializedGrid(serializedRows, serializedColumns, state, Array.from(expanded));
+        setProcessed({ ...result, loading: false });
+      } catch (error) {
+        console.error("Grid processing failed:", error);
+        setProcessed({ flat: [], aggregates: {}, visibleCount: 0, enums: {}, loading: false });
+      }
+    };
+    const handler = (e: MessageEvent<WorkerResponse>) => {
+      const resp = e.data;
+      if (resp.id !== id) return;
+      if (resp.ok && resp.kind === "process") {
+        settled = true;
         setProcessed({
           flat: resp.flat,
           aggregates: resp.aggregates,
@@ -133,13 +152,30 @@ export function DataGrid<T>({
           enums: resp.enums,
           loading: false
         });
+      } else if (!resp.ok) {
+        applyFallback(resp.error);
       }
     };
-
-    workerRef.current.addEventListener("message", handler);
-    workerRef.current.postMessage(workerMsg);
-    return () => workerRef.current?.removeEventListener("message", handler);
-  }, [rows, columns, state, expanded]);
+    const errorHandler = (event: ErrorEvent) => applyFallback(event.message || "Worker error");
+    const worker = workerRef.current;
+    if (!worker) {
+      applyFallback("Worker unavailable");
+      return;
+    }
+    const timer = window.setTimeout(() => applyFallback("Worker response timed out"), 3000);
+    worker.addEventListener("message", handler);
+    worker.addEventListener("error", errorHandler);
+    try {
+      worker.postMessage(workerMsg);
+    } catch (error) {
+      applyFallback(error);
+    }
+    return () => {
+      window.clearTimeout(timer);
+      worker.removeEventListener("message", handler);
+      worker.removeEventListener("error", errorHandler);
+    };
+  }, [rows, columns, state, expanded, globalSearch]);
 
   // Reorder columns: pinned-left first, then the rest. Hidden columns stripped.
   const visibleColumns = useMemo(() => {
