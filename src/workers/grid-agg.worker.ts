@@ -2,14 +2,15 @@
 /// <reference lib="webworker" />
 
 import { computePivot, type PivotConfig, type PivotRecord, type PivotResult } from "../components/data-grid/pivot-engine";
-import { processRows, deriveEnumValues, type FlatRow } from "../components/data-grid/grid-engine";
-import type { DGColumn, GridState } from "../components/data-grid/types";
+import type { FlatRow } from "../components/data-grid/grid-engine";
+import { processSerializedGrid, type SerializedGridColumn, type SerializedGridRow } from "../components/data-grid/grid-worker-core";
+import type { GridState } from "../components/data-grid/types";
 
 export interface GridRequest {
   id: number;
   kind: "process";
-  rows: any[];
-  columns: DGColumn<any>[];
+  rows: SerializedGridRow[];
+  columns: SerializedGridColumn[];
   state: GridState;
   expandedGroups: string[]; // Serialized as array
   globalSearchAccessor?: string;
@@ -62,20 +63,13 @@ ctx.onmessage = (evt: MessageEvent<WorkerRequest>) => {
       const res: PivotResponse = { id: msg.id, ok: true, kind: "pivot", result, ms: performance.now() - t0 };
       ctx.postMessage(res);
     } else if (msg.kind === "process") {
-      // For the worker, we assume the accessors are already simple strings or pre-mapped
-      const result = processRows(msg.rows, msg.columns, msg.state, new Set(msg.expandedGroups));
-      
-      const enums: Record<string, string[]> = {};
-      for (const c of msg.columns) {
-        if (c.type === "enum") enums[c.id] = deriveEnumValues(msg.rows, c);
-      }
+      const result = processSerializedGrid(msg.rows, msg.columns, msg.state, msg.expandedGroups);
 
       const res: GridResponse = { 
         id: msg.id, 
         ok: true, 
         kind: "process", 
         ...result, 
-        enums,
         ms: performance.now() - t0 
       };
       ctx.postMessage(res);
