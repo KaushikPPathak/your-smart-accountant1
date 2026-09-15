@@ -263,6 +263,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "cash_balance": toolName = "get_cash_balance"; toolArgs = { account: "cash" }; break;
     case "bank_balance": toolName = "get_cash_balance"; toolArgs = { account: route.entity?.accountName || "bank" }; break;
     case "trial_balance": toolName = "get_trial_balance"; break;
+    case "voucher_lookup":
+      toolName = "list_vouchers";
+      toolArgs = { from: route.entity?.dateRange?.from, to: route.entity?.dateRange?.to, kind: route.entity?.voucherType };
+      break;
   }
   if (!toolName) return null;
   try {
