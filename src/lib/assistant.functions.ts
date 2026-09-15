@@ -221,8 +221,30 @@ function detectCreateCompanyIntent(t: string): boolean {
   return /\b(create|add|new|make|setup|set up|register)\b/.test(s) && /\b(company|firm|business|organi[sz]ation)\b/.test(s);
 }
 
+/** Intents whose answer can be produced entirely from local books — no LLM, no
+ *  compressed-context build. Phase 1 local-first gate. */
+const DETERMINISTIC_INTENTS = new Set([
+  "party_balance",
+  "party_ledger",
+  "cash_balance",
+  "bank_balance",
+  "trial_balance",
+  "voucher_lookup",
+]);
+
+/** Cheap cache scope derived from the route alone (no retrieval needed). */
+function routeScope(route: any): string {
+  const bits: string[] = [];
+  if (route?.entity?.partyName) bits.push(`party:${String(route.entity.partyName).toLowerCase()}`);
+  if (route?.entity?.accountName) bits.push(`account:${String(route.entity.accountName).toLowerCase()}`);
+  if (route?.from) bits.push(`from:${route.from}`);
+  if (route?.to) bits.push(`to:${route.to}`);
+  return bits.join(",") || "all";
+}
+
 async function tryDirectToolAnswer(route: any, text: string, companyId: string): Promise<AssistantChatResult | null> {
-  if (!companyId || route.requiresLLM || route.confidence < 0.75) return null;
+  if (!companyId || route.requiresLLM) return null;
+  if (!DETERMINISTIC_INTENTS.has(route.intent) || route.confidence < 0.6) return null;
   let toolName: string | null = null;
   let toolArgs: Record<string, unknown> = {};
   switch (route.intent) {
@@ -241,6 +263,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "cash_balance": toolName = "get_cash_balance"; toolArgs = { account: "cash" }; break;
     case "bank_balance": toolName = "get_cash_balance"; toolArgs = { account: route.entity?.accountName || "bank" }; break;
     case "trial_balance": toolName = "get_trial_balance"; break;
+    case "voucher_lookup":
+      toolName = "list_vouchers";
+      toolArgs = { from: route.entity?.dateRange?.from, to: route.entity?.dateRange?.to, kind: route.entity?.voucherType };
+      break;
   }
   if (!toolName) return null;
   try {
@@ -283,6 +309,24 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
       isDebit: closing >= 0,
     };
   }
+  if (intent === "trial_balance") {
+    const raw = Array.isArray(data?.data?.trial_balance) ? data.data.trial_balance : [];
+    if (!raw.length) return undefined;
+    return {
+      kind: "trial_balance",
+      rows: raw.map((r: any) => ({
+        name: String(r.name ?? ""),
+        debitPaise: Number(r.closing_paise ?? 0) > 0 ? Number(r.closing_paise) : 0,
+        creditPaise: Number(r.closing_paise ?? 0) < 0 ? -Number(r.closing_paise) : 0,
+        closingPaise: Number(r.closing_paise ?? 0),
+      })),
+    };
+  }
+  if (intent === "voucher_lookup") {
+    const list = Array.isArray(data?.vouchers) ? data.vouchers : (Array.isArray(data?.data?.vouchers) ? data.data.vouchers : []);
+    if (!list.length) return undefined;
+    return { kind: "voucher_list", vouchers: list };
+  }
   return undefined;
 }
 
@@ -303,17 +347,32 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       return { ok: true, text: route.deterministicAnswer, latencyMs: Math.round(performance.now() - start) };
     }
 
-    // 2. Speed path / Direct Tool
-    if (companyId) {
-      const fastResult = await tryDirectToolAnswer(route, question, companyId);
-      if (fastResult) return { ...fastResult, latencyMs: Math.round(performance.now() - start) };
+    const isDeterministic = DETERMINISTIC_INTENTS.has(route.intent);
+    const earlyCompanyId =
+      companyId ?? (typeof window !== "undefined" ? window.localStorage?.getItem("ym_active_company_id") ?? "" : "");
+
+    // 2a. Cached deterministic answer — before any retrieval or context build.
+    if (isDeterministic && earlyCompanyId) {
+      const cachedFast = lookupAnswer(earlyCompanyId, route.intent, routeScope(route), question);
+      if (cachedFast) return { ok: true, text: cachedFast, latencyMs: Math.round(performance.now() - start) };
     }
 
-    // 3. Offline KB search
-  const matches = searchKb(question);
-  if (matches.length > 0 && matches[0].score > 0.85) {
-    return { ok: true, text: matches[0].entry.answer, matches: matches.map((m: { entry: KbEntry }) => m.entry), latencyMs: Math.round(performance.now() - start) };
-  }
+    // 2b. Speed path / Direct Tool — targeted local calculation, no LLM context.
+    if (companyId) {
+      const fastResult = await tryDirectToolAnswer(route, question, companyId);
+      if (fastResult) {
+        if (earlyCompanyId) storeAnswer(earlyCompanyId, route.intent, routeScope(route), question, fastResult.text);
+        return { ...fastResult, latencyMs: Math.round(performance.now() - start) };
+      }
+    }
+
+    // 3. Offline KB search (skipped for book-data questions)
+    if (!isDeterministic) {
+      const matches = searchKb(question);
+      if (matches.length > 0 && matches[0].score > 0.85) {
+        return { ok: true, text: matches[0].entry.answer, matches: matches.map((m: { entry: KbEntry }) => m.entry), latencyMs: Math.round(performance.now() - start) };
+      }
+    }
 
     // 4. Company creation intent
     const parsed = parseCompanyDetails(question);
@@ -324,8 +383,8 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       return { ok: true, text: "I can help you create a company. Tell me the name, GSTIN, and state.", latencyMs: Math.round(performance.now() - start) };
     }
 
-    // 5. Voucher drafting (Local First)
-    if (companyId) {
+    // 5. Voucher drafting (Local First) — skipped for read-only book questions
+    if (companyId && !isDeterministic) {
       const action = await detectVoucherAction(question, companyId);
       if (action) {
         if (action.confidence >= DIRECT_EXECUTE_CONFIDENCE && action.kind === "new") {
