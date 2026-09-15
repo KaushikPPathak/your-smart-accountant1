@@ -383,8 +383,8 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       return { ok: true, text: "I can help you create a company. Tell me the name, GSTIN, and state.", latencyMs: Math.round(performance.now() - start) };
     }
 
-    // 5. Voucher drafting (Local First)
-    if (companyId) {
+    // 5. Voucher drafting (Local First) — skipped for read-only book questions
+    if (companyId && !isDeterministic) {
       const action = await detectVoucherAction(question, companyId);
       if (action) {
         if (action.confidence >= DIRECT_EXECUTE_CONFIDENCE && action.kind === "new") {
