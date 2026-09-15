@@ -366,11 +366,13 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       }
     }
 
-    // 3. Offline KB search
-  const matches = searchKb(question);
-  if (matches.length > 0 && matches[0].score > 0.85) {
-    return { ok: true, text: matches[0].entry.answer, matches: matches.map((m: { entry: KbEntry }) => m.entry), latencyMs: Math.round(performance.now() - start) };
-  }
+    // 3. Offline KB search (skipped for book-data questions)
+    if (!isDeterministic) {
+      const matches = searchKb(question);
+      if (matches.length > 0 && matches[0].score > 0.85) {
+        return { ok: true, text: matches[0].entry.answer, matches: matches.map((m: { entry: KbEntry }) => m.entry), latencyMs: Math.round(performance.now() - start) };
+      }
+    }
 
     // 4. Company creation intent
     const parsed = parseCompanyDetails(question);
