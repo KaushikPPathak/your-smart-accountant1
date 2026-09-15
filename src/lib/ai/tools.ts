@@ -209,13 +209,18 @@ async function getCached<T>(name: string, args: Record<string, unknown>): Promis
 
 async function setCached(name: string, args: Record<string, unknown>, result: unknown): Promise<void> {
   const key = cacheKey(name, args);
+  // In-memory cache is updated synchronously so callers are never delayed.
   _memCache.set(key, result);
-  try {
-    const db = await getToolCacheDB();
-    await db.put("tool_results", { key, result, ts: Date.now() });
-  } catch {
-    /* ignore */
-  }
+  // IndexedDB persistence is fire-and-forget; failures are swallowed so no
+  // unhandled rejection can escape.
+  void (async () => {
+    try {
+      const db = await getToolCacheDB();
+      await db.put("tool_results", { key, result, ts: Date.now() });
+    } catch {
+      /* ignore */
+    }
+  })();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
