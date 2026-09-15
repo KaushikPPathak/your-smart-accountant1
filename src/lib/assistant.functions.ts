@@ -309,6 +309,24 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
       isDebit: closing >= 0,
     };
   }
+  if (intent === "trial_balance") {
+    const raw = Array.isArray(data?.data?.trial_balance) ? data.data.trial_balance : [];
+    if (!raw.length) return undefined;
+    return {
+      kind: "trial_balance",
+      rows: raw.map((r: any) => ({
+        name: String(r.name ?? ""),
+        debitPaise: Number(r.closing_paise ?? 0) > 0 ? Number(r.closing_paise) : 0,
+        creditPaise: Number(r.closing_paise ?? 0) < 0 ? -Number(r.closing_paise) : 0,
+        closingPaise: Number(r.closing_paise ?? 0),
+      })),
+    };
+  }
+  if (intent === "voucher_lookup") {
+    const list = Array.isArray(data?.vouchers) ? data.vouchers : (Array.isArray(data?.data?.vouchers) ? data.data.vouchers : []);
+    if (!list.length) return undefined;
+    return { kind: "voucher_list", vouchers: list };
+  }
   return undefined;
 }
 
