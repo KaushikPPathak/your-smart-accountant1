@@ -430,25 +430,43 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
 
     const errs = questionMentionsError(question) ? recentErrors(15) : [];
     const extra = { recentErrors: errs };
-    let answer = await smartChat(baseMessages, 0.2, extra);
+    let llmCalls = 0;
+    let toolRuns = 0;
+    const chat = async (msgs: ChatMsg[]) => { llmCalls++; return smartChat(msgs, 0.2, extra); };
+
+    let answer = await chat(baseMessages);
 
     const toolTrail: { name: string; input: string }[] = [];
     const toolConvo: ChatMsg[] = [...baseMessages];
-    for (let round = 0; round < 3; round++) {
+    const seenCalls = new Set<string>();
+    const MAX_TOOL_RUNS = 2;
+    while (toolRuns < MAX_TOOL_RUNS) {
       const call = parseToolCall(answer);
       if (!call) break;
+      const sig = `${call.name}:${JSON.stringify(call.args)}`;
+      // Never run the identical tool+arguments twice within one request.
+      if (seenCalls.has(sig)) break;
+      seenCalls.add(sig);
       let res: any;
       try { res = await executeTool(call.name, call.args); }
       catch (e) { res = { error: String(e) }; }
+      toolRuns++;
       toolTrail.push({ name: call.name, input: JSON.stringify(call.args) });
       toolConvo.push({ role: "assistant", content: answer });
       toolConvo.push({ role: "user", content: `[[TOOL_RESULT name="${call.name}"]]\n${JSON.stringify(res)}\nUse this to answer.` });
-      answer = await smartChat(toolConvo, 0.2, extra);
+      answer = await chat(toolConvo);
     }
 
     const cleanAnswer = stripToolCall(answer);
     const finalText = verifyAnswer(unredactAnswer(cleanAnswer, ctx), ctx.card);
     if (cacheCompanyId) storeAnswer(cacheCompanyId, ctx.intent, ctx.scope, question, finalText);
+
+    if (import.meta.env?.DEV) {
+      console.debug("[assistant] latencyMs=%d llmCalls=%d toolRuns=%d",
+        Math.round(performance.now() - start), llmCalls, toolRuns);
+    }
+
+
     
     return {
       ok: true,
