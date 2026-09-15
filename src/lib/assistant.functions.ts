@@ -347,10 +347,23 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       return { ok: true, text: route.deterministicAnswer, latencyMs: Math.round(performance.now() - start) };
     }
 
-    // 2. Speed path / Direct Tool
+    const isDeterministic = DETERMINISTIC_INTENTS.has(route.intent);
+    const earlyCompanyId =
+      companyId ?? (typeof window !== "undefined" ? window.localStorage?.getItem("ym_active_company_id") ?? "" : "");
+
+    // 2a. Cached deterministic answer — before any retrieval or context build.
+    if (isDeterministic && earlyCompanyId) {
+      const cachedFast = lookupAnswer(earlyCompanyId, route.intent, routeScope(route), question);
+      if (cachedFast) return { ok: true, text: cachedFast, latencyMs: Math.round(performance.now() - start) };
+    }
+
+    // 2b. Speed path / Direct Tool — targeted local calculation, no LLM context.
     if (companyId) {
       const fastResult = await tryDirectToolAnswer(route, question, companyId);
-      if (fastResult) return { ...fastResult, latencyMs: Math.round(performance.now() - start) };
+      if (fastResult) {
+        if (earlyCompanyId) storeAnswer(earlyCompanyId, route.intent, routeScope(route), question, fastResult.text);
+        return { ...fastResult, latencyMs: Math.round(performance.now() - start) };
+      }
     }
 
     // 3. Offline KB search
