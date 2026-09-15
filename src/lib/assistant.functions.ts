@@ -221,8 +221,30 @@ function detectCreateCompanyIntent(t: string): boolean {
   return /\b(create|add|new|make|setup|set up|register)\b/.test(s) && /\b(company|firm|business|organi[sz]ation)\b/.test(s);
 }
 
+/** Intents whose answer can be produced entirely from local books — no LLM, no
+ *  compressed-context build. Phase 1 local-first gate. */
+const DETERMINISTIC_INTENTS = new Set([
+  "party_balance",
+  "party_ledger",
+  "cash_balance",
+  "bank_balance",
+  "trial_balance",
+  "voucher_lookup",
+]);
+
+/** Cheap cache scope derived from the route alone (no retrieval needed). */
+function routeScope(route: any): string {
+  const bits: string[] = [];
+  if (route?.entity?.partyName) bits.push(`party:${String(route.entity.partyName).toLowerCase()}`);
+  if (route?.entity?.accountName) bits.push(`account:${String(route.entity.accountName).toLowerCase()}`);
+  if (route?.from) bits.push(`from:${route.from}`);
+  if (route?.to) bits.push(`to:${route.to}`);
+  return bits.join(",") || "all";
+}
+
 async function tryDirectToolAnswer(route: any, text: string, companyId: string): Promise<AssistantChatResult | null> {
-  if (!companyId || route.requiresLLM || route.confidence < 0.75) return null;
+  if (!companyId || route.requiresLLM) return null;
+  if (!DETERMINISTIC_INTENTS.has(route.intent) || route.confidence < 0.6) return null;
   let toolName: string | null = null;
   let toolArgs: Record<string, unknown> = {};
   switch (route.intent) {
