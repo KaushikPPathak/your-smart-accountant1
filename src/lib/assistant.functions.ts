@@ -460,6 +460,13 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
     const cleanAnswer = stripToolCall(answer);
     const finalText = verifyAnswer(unredactAnswer(cleanAnswer, ctx), ctx.card);
     if (cacheCompanyId) storeAnswer(cacheCompanyId, ctx.intent, ctx.scope, question, finalText);
+
+    if (import.meta.env?.DEV) {
+      console.debug("[assistant] latencyMs=%d llmCalls=%d toolRuns=%d",
+        Math.round(performance.now() - start), llmCalls, toolRuns);
+    }
+
+
     
     return {
       ok: true,
