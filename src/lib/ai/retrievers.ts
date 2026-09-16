@@ -147,15 +147,23 @@ async function retrieveParty(companyId: string, routed: RouteResult, opts: { wit
       .reverse()
       .toArray();
     
-    const vIds = new Set(vouchers.map(v => String(v.id)));
-    
-    await entryQuery.each((e: any) => {
-      if (!vIds.has(String(e.voucher_id))) return;
+    // Date filter must cover EVERY voucher touching this ledger (journals,
+    // contras, third-party vouchers), not only those where it is the header
+    // party — otherwise the balance is undercounted.
+    const rows: any[] = [];
+    await entryQuery.each((e: any) => rows.push(e));
+    const eVoucherIds = [...new Set(rows.map((r) => String(r.voucher_id)))];
+    const eVouchers = await offlineDb.cache_vouchers.bulkGet(eVoucherIds);
+    const dateById = new Map<string, string>();
+    eVouchers.forEach((v: any, i: number) => { if (v) dateById.set(eVoucherIds[i], String(v.voucher_date ?? "")); });
+    for (const e of rows) {
+      const d = dateById.get(String(e.voucher_id));
+      if (!d || d > asOnIso) continue;
       debit += Number(e.debit_paise ?? 0);
       credit += Number(e.credit_paise ?? 0);
       count++;
       if (partyEntries.length < 200) partyEntries.push(e);
-    });
+    }
 
     recentVouchers.push(...vouchers.slice(0, 8).map(v => ({
       id: String(v.id),
