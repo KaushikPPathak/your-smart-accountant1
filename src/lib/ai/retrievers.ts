@@ -103,10 +103,71 @@ async function resolveCompanyId(companyId?: string | null): Promise<string | nul
   return String((companies as any[])[0]?.id ?? "") || null;
 }
 
+/**
+ * Deterministic party/ledger resolution.
+ *
+ * Priority:
+ *  1. Normalized exact full-name match.
+ *  2. Honorific-stripped exact full-name match.
+ *  3. Strong token match where every meaningful query token is present.
+ *
+ * Only after these deterministic checks do we fall back to the existing
+ * fuzzy/semantic resolver. This prevents a weak fuzzy match from winning
+ * when the books contain the requested party under a slightly expanded
+ * name, e.g. "Hasmukhbhai Shah" -> "Hasmukhbhai A Shah".
+ */
+function resolvePartyLedger(ledgers: any[], hints: string[]): any | null {
+  if (!hints.length) return null;
+
+  const phrase = hints.join(" ").trim();
+  const nPhrase = normKey(phrase);
+  const strippedPhrase = normKey(stripHonorifics(phrase));
+
+  if (!nPhrase) return null;
+
+  // 1. Exact normalized full-name match.
+  const exact = ledgers.find((l) => normKey(String(l.name ?? "")) === nPhrase);
+  if (exact) return exact;
+
+  // 2. Exact match after removing honorifics.
+  if (strippedPhrase && strippedPhrase !== nPhrase) {
+    const strippedExact = ledgers.find(
+      (l) => normKey(stripHonorifics(String(l.name ?? ""))) === strippedPhrase
+    );
+    if (strippedExact) return strippedExact;
+  }
+
+  // 3. Strong token match. Require every meaningful query token to exist
+  // in the candidate, so "Hasmukhbhai Shah" can resolve to
+  // "Hasmukhbhai A Shah" without allowing a single-token weak match.
+  const queryTokens = nPhrase.split(/\s+/).filter((t) => t.length >= 3);
+  if (queryTokens.length >= 2) {
+    const candidates = ledgers
+      .map((l) => {
+        const nName = normKey(String(l.name ?? ""));
+        const nameTokens = nName.split(/\s+/).filter((t) => t.length >= 3);
+        const allQueryTokensPresent = queryTokens.every((t) => nameTokens.includes(t));
+        if (!allQueryTokensPresent) return null;
+        return { ledger: l, f1: tokenF1(nName, nPhrase) };
+      })
+      .filter(Boolean) as { ledger: any; f1: number }[];
+
+    if (candidates.length) {
+      candidates.sort((a, b) => b.f1 - a.f1);
+      if (candidates[0].f1 >= 0.78) return candidates[0].ledger;
+    }
+  }
+
+  return null;
+}
+
 /** Party balance / party ledger — fetch just that party's ledger + its entries. */
 async function retrieveParty(companyId: string, routed: RouteResult, opts: { withEntries: boolean }): Promise<RetrievedSlice> {
   const ledgers = (await readLedgers(companyId)) as any[];
-  let target = fuzzyPickLedger(ledgers, routed.entityHints);
+  let target = resolvePartyLedger(ledgers, routed.entityHints);
+
+  // Existing fuzzy resolver remains the next fallback.
+  if (!target) target = fuzzyPickLedger(ledgers, routed.entityHints);
   // Fallback: semantic index (typos, transliteration, word order).
   if (!target && routed.entityHints.length > 0) {
     const { semanticSearch } = await import("./semantic-index");
@@ -649,50 +710,22 @@ export async function retrieveAccountBalance(
   };
 }
 
+/**
+ * Backward-compatible cash/bank retriever.
+ *
+ * Account balances must use retrieveAccountBalance(), which resolves the
+ * requested ledger and calculates opening + debit - credit. Keep this
+ * wrapper so any older caller does not accidentally reintroduce the
+ * entry-only implementation.
+ */
 async function retrieveCashBank(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
-  const { offlineDb } = await import("@/lib/offline/db");
-  const ledgers = (await readLedgers(companyId)) as any[];
-  const cashBank = ledgers.filter((l) => {
-    const k = classifyLedger(l);
-    return k === "cash" || k === "bank";
-  });
-  const cbIds = new Set(cashBank.map((l) => String(l.id)));
+  const accountHint =
+    String((routed.entity as any)?.accountName ?? "").trim() ||
+    routed.entityHints.join(" ").trim() ||
+    (routed.intent === "cash_balance" ? "cash" : "bank");
 
-  // 1) Find vouchers in the window
-  const vouchers = await offlineDb.cache_vouchers
-    .where("[company_id+voucher_date]")
-    .between([companyId, routed.from || "0000-00-00"], [companyId, routed.to || "9999-99-99"], true, true)
-    .toArray();
-  
-  const inWindow = new Set(vouchers.map(v => String(v.id)));
-  const vById = new Map(vouchers.map(v => [String(v.id), v]));
-
-  // 2) Collect entries incrementally
-  const relevant: any[] = [];
-  await offlineDb.cache_voucher_entries
-    .where("company_id")
-    .equals(companyId)
-    .each((e: any) => {
-      if (cbIds.has(String(e.ledger_id)) && inWindow.has(String(e.voucher_id))) {
-        relevant.push(e);
-      }
-    });
-
-  const rows = relevant.slice(-100).map((e) => {
-    const v = vById.get(String(e.voucher_id));
-    return {
-      date: v?.voucher_date, voucher_number: v?.voucher_number, voucher_type: v?.voucher_type,
-      ledger_id: e.ledger_id, debit_paise: e.debit_paise, credit_paise: e.credit_paise,
-    };
-  });
-  return {
-    scope: `cash/bank book (${cashBank.length} accounts, ${rows.length} rows)`,
-    data: {
-      accounts: cashBank.map((l) => ({ id: l.id, name: l.name, kind: classifyLedger(l) })),
-      entries: rows,
-    },
-    facts: { entry_count: relevant.length },
-  };
+  const asOn = routed.asOn ?? routed.to ?? null;
+  return retrieveAccountBalance(companyId, accountHint, asOn);
 }
 
 /** GST — sales/purchase vouchers in window with taxable & total totals. */
@@ -820,8 +853,22 @@ export async function retrieveForQuery(routed: RouteResult, companyIdIn?: string
     case "voucher_lookup":    slice = await retrieveVoucher(companyId, routed); break;
     case "trial_balance":     slice = await retrieveTrialBalance(companyId); break;
     case "explanation":       slice = await retrieveTrialBalance(companyId); break;
-    case "cash_balance":      slice = await retrieveCashBank(companyId, routed); break;
-    case "bank_balance":      slice = await retrieveCashBank(companyId, routed); break;
+    case "cash_balance": {
+      const accountHint =
+        String((routed.entity as any)?.accountName ?? "").trim() ||
+        routed.entityHints.join(" ").trim() ||
+        "cash";
+      slice = await retrieveAccountBalance(companyId, accountHint, routed.asOn ?? routed.to ?? null);
+      break;
+    }
+    case "bank_balance": {
+      const accountHint =
+        String((routed.entity as any)?.accountName ?? "").trim() ||
+        routed.entityHints.join(" ").trim() ||
+        "bank";
+      slice = await retrieveAccountBalance(companyId, accountHint, routed.asOn ?? routed.to ?? null);
+      break;
+    }
     case "ageing":            slice = await retrieveAgeing(companyId, routed); break;
     case "gst_query":         slice = await retrieveGst(companyId, routed); break;
     case "profit_loss":       slice = await retrieveProfitLoss(companyId, routed); break;
