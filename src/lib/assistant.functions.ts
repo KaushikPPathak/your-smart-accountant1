@@ -351,8 +351,16 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
     const earlyCompanyId =
       companyId ?? (typeof window !== "undefined" ? window.localStorage?.getItem("ym_active_company_id") ?? "" : "");
 
+    // Live financial balances must always be recalculated from the current
+    // books. Never return an answer-cache entry for a balance question:
+    // an older answer can refer to the wrong ledger or an older book state.
+    const isLiveBalanceIntent =
+      route.intent === "party_balance" ||
+      route.intent === "cash_balance" ||
+      route.intent === "bank_balance";
+
     // 2a. Cached deterministic answer — before any retrieval or context build.
-    if (isDeterministic && earlyCompanyId) {
+    if (isDeterministic && earlyCompanyId && !isLiveBalanceIntent) {
       const cachedFast = lookupAnswer(earlyCompanyId, route.intent, routeScope(route), question);
       if (cachedFast) return { ok: true, text: cachedFast, latencyMs: Math.round(performance.now() - start) };
     }
@@ -361,7 +369,9 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
     if (companyId) {
       const fastResult = await tryDirectToolAnswer(route, question, companyId);
       if (fastResult) {
-        if (earlyCompanyId) storeAnswer(earlyCompanyId, route.intent, routeScope(route), question, fastResult.text);
+        if (earlyCompanyId && !isLiveBalanceIntent) {
+          storeAnswer(earlyCompanyId, route.intent, routeScope(route), question, fastResult.text);
+        }
         return { ...fastResult, latencyMs: Math.round(performance.now() - start) };
       }
     }
@@ -417,7 +427,7 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       return { ok: true, text: localAnswer, card: ctx.card, memory: ctx.memory, latencyMs: Math.round(performance.now() - start) };
     }
 
-    if (cacheCompanyId) {
+    if (cacheCompanyId && !isLiveBalanceIntent) {
       const cached = lookupAnswer(cacheCompanyId, ctx.intent, ctx.scope, question);
       if (cached) return { ok: true, text: cached, card: ctx.card, memory: ctx.memory, latencyMs: Math.round(performance.now() - start) };
     }
@@ -430,43 +440,27 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
 
     const errs = questionMentionsError(question) ? recentErrors(15) : [];
     const extra = { recentErrors: errs };
-    let llmCalls = 0;
-    let toolRuns = 0;
-    const chat = async (msgs: ChatMsg[]) => { llmCalls++; return smartChat(msgs, 0.2, extra); };
-
-    let answer = await chat(baseMessages);
+    let answer = await smartChat(baseMessages, 0.2, extra);
 
     const toolTrail: { name: string; input: string }[] = [];
     const toolConvo: ChatMsg[] = [...baseMessages];
-    const seenCalls = new Set<string>();
-    const MAX_TOOL_RUNS = 2;
-    while (toolRuns < MAX_TOOL_RUNS) {
+    for (let round = 0; round < 3; round++) {
       const call = parseToolCall(answer);
       if (!call) break;
-      const sig = `${call.name}:${JSON.stringify(call.args)}`;
-      // Never run the identical tool+arguments twice within one request.
-      if (seenCalls.has(sig)) break;
-      seenCalls.add(sig);
       let res: any;
       try { res = await executeTool(call.name, call.args); }
       catch (e) { res = { error: String(e) }; }
-      toolRuns++;
       toolTrail.push({ name: call.name, input: JSON.stringify(call.args) });
       toolConvo.push({ role: "assistant", content: answer });
       toolConvo.push({ role: "user", content: `[[TOOL_RESULT name="${call.name}"]]\n${JSON.stringify(res)}\nUse this to answer.` });
-      answer = await chat(toolConvo);
+      answer = await smartChat(toolConvo, 0.2, extra);
     }
 
     const cleanAnswer = stripToolCall(answer);
     const finalText = verifyAnswer(unredactAnswer(cleanAnswer, ctx), ctx.card);
-    if (cacheCompanyId) storeAnswer(cacheCompanyId, ctx.intent, ctx.scope, question, finalText);
-
-    if (import.meta.env?.DEV) {
-      console.debug("[assistant] latencyMs=%d llmCalls=%d toolRuns=%d",
-        Math.round(performance.now() - start), llmCalls, toolRuns);
+    if (cacheCompanyId && !isLiveBalanceIntent) {
+      storeAnswer(cacheCompanyId, ctx.intent, ctx.scope, question, finalText);
     }
-
-
     
     return {
       ok: true,
