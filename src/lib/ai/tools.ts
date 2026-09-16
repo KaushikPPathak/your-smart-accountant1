@@ -262,18 +262,36 @@ async function execGetPartyBalance(args: Record<string, unknown>): Promise<ToolR
   const asOn = args.asOn ? String(args.asOn) : undefined;
   if (!name) return { success: false, error: "missing 'name'", latencyMs: Math.round(performance.now() - start) };
 
-  const cached = await getCached("get_party_balance", args);
-  if (cached) return { success: true, data: cached, cached: true, latencyMs: 0 };
-
   const cid = await activeCompanyId();
   if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
 
-  const q = `balance of ${name}${asOn ? ` as on ${asOn}` : ""}`;
-  const routed = routeQuery(q);
-  const slice = await retrieveForQuery(routed, cid);
-  const result = { scope: slice.scope, facts: slice.facts, vouchers: (slice.data.vouchers as any[])?.slice(0, 10) };
+  // Balance questions are live accounting data. Do not reuse an older
+  // party-balance result because a fuzzy/ambiguous name may have resolved to
+  // another ledger. Construct the route directly so the requested name is
+  // passed unchanged to the deterministic ledger resolver.
+  const routed = {
+    intent: "party_balance" as const,
+    confidence: 1,
+    requiresLLM: false,
+    requiresTools: true,
+    entity: {
+      partyName: name,
+      ...(asOn ? { dateRange: { to: asOn } } : {}),
+    },
+    entityHints: [name],
+    ...(asOn ? { asOn, to: asOn } : {}),
+    deterministicAnswer: undefined,
+  };
 
-  await setCached("get_party_balance", args, result);
+  const slice = await retrieveForQuery(routed, cid);
+  const result = {
+    scope: slice.scope,
+    facts: slice.facts,
+    vouchers: (slice.data.vouchers as any[])?.slice(0, 10),
+  };
+
+  // Deliberately do not cache party balances. They must reflect the current
+  // local books and the exact resolved ledger.
   return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
 }
 
@@ -346,9 +364,6 @@ async function execGetCashBalance(args: Record<string, unknown>): Promise<ToolRe
   const account = String(args.account ?? "cash").trim();
   const asOn = args.asOn ? String(args.asOn) : undefined;
 
-  const cached = await getCached("get_cash_balance", args);
-  if (cached) return { success: true, data: cached, cached: true, latencyMs: 0 };
-
   const cid = await activeCompanyId();
   if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
 
@@ -365,7 +380,7 @@ async function execGetCashBalance(args: Record<string, unknown>): Promise<ToolRe
   }
   const result = { scope: slice.scope, facts: slice.facts, data: slice.data };
 
-  await setCached("get_cash_balance", args, result);
+  // Cash/bank balances are live book values; do not cache them.
   return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
 }
 
