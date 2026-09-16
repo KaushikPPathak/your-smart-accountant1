@@ -388,6 +388,11 @@ function extractBalanceSubject(text: string): string | undefined {
     .replace(/^\s*(?:the|my|our)\b/gi, " ")
     .replace(/\b(?:please|kindly)\b/gi, " ");
 
+  // Honorifics are not part of the ledger name. Keep the actual name tokens
+  // intact so a query such as "Shri Hasmukhbhai Shah balance" resolves to
+  // the ledger whose first/last name tokens are Hasmukhbhai/Shah.
+  value = value.replace(/\b(?:shri|smt|smti|mr|mrs|ms|miss|dr)\.?\b/gi, " ");
+
   // Remove the balance word and common trailing qualifiers.
   value = value
     .replace(/\b(?:balance|bal|amount|status)\b/gi, " ")
@@ -408,6 +413,7 @@ function extractBalanceSubject(text: string): string | undefined {
   }
 
   value = value.replace(/[?.,:;]+/g, " ");
+  value = value.replace(/\b(?:please|kindly|tell|show|give|get|me|my|our|the)\b/gi, " ");
   value = cleanSpaces(value);
 
   // Avoid returning pure filler.
