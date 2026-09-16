@@ -352,11 +352,18 @@ async function execGetCashBalance(args: Record<string, unknown>): Promise<ToolRe
   const cid = await activeCompanyId();
   if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
 
-  const q = `balance of ${account}${asOn ? ` as on ${asOn}` : ""}`;
-  const routed = routeQuery(q);
-  routed.intent = "party_balance";
-  const slice = await retrieveForQuery(routed, cid);
-  const result = { scope: slice.scope, facts: slice.facts };
+  // Direct ledger balance — cash/bank accounts are never the voucher party, so
+  // the party retrieval path would return a wrong (or zero) balance.
+  const { retrieveAccountBalance } = await import("./retrievers");
+  const slice = await retrieveAccountBalance(cid, account, asOn);
+  if (!slice.facts?.account_name) {
+    return {
+      success: false,
+      error: `no cash/bank account matched "${account}"`,
+      latencyMs: Math.round(performance.now() - start),
+    };
+  }
+  const result = { scope: slice.scope, facts: slice.facts, data: slice.data };
 
   await setCached("get_cash_balance", args, result);
   return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
