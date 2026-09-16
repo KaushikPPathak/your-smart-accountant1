@@ -125,44 +125,106 @@ function resolvePartyLedger(all: any[], hints: string[]): any | null {
   const normalizedPhrase = normalizeName(phrase);
   const strippedPhrase = normalizeName(stripHonorifics(phrase));
   const queryTokens = normalizedPhrase.split(/\s+/).filter((t) => t.length >= 3);
+  const strippedTokens = strippedPhrase.split(/\s+/).filter((t) => t.length >= 3);
 
-  // 1. Exact normalized full-name match.
-  const exact = all.find((l) => normalizeName(String(l.name ?? "")) === normalizedPhrase);
-  if (exact) return exact;
+  // Accounting identity rule:
+  // Never let a generic fuzzy score decide between people with overlapping
+  // names. First try a structured first-name/last-name match, allowing
+  // optional middle names/initials and honorifics.
+  const candidates = all.map((ledger) => {
+    const rawName = String(ledger.name ?? "");
+    const normalizedName = normalizeName(rawName);
+    const strippedName = normalizeName(stripHonorifics(rawName));
+    const nameTokens = normalizedName.split(/\s+/).filter((t) => t.length >= 3);
+    const strippedNameTokens = strippedName.split(/\s+/).filter((t) => t.length >= 3);
+    return { ledger, normalizedName, strippedName, nameTokens, strippedNameTokens };
+  });
 
-  // 2. Exact match after removing honorifics such as Miss/Smt/Shri.
-  if (strippedPhrase && strippedPhrase !== normalizedPhrase) {
-    const honorificExact = all.find(
-      (l) => normalizeName(stripHonorifics(String(l.name ?? ""))) === strippedPhrase,
-    );
-    if (honorificExact) return honorificExact;
+  // 1. Exact full name WITHOUT honorifics.
+  // Only accept it immediately when it is unique. If another ledger contains
+  // the same first/last identity with a middle name, the structured identity
+  // rule below gets priority; this is what prevents:
+  //   "Hasmukhbhai Shah" -> a short/old Hasmukhbhai Shah ledger
+  // instead of:
+  //   "Hasmukhbhai A Shah".
+  const exactStripped = candidates.filter(
+    (c) => c.strippedName === strippedPhrase,
+  );
+
+  // 2. Strong identity match for 2+ meaningful tokens:
+  // first and last query tokens must be the candidate's first and last tokens.
+  // Any tokens between them are allowed as middle names/initials.
+  //
+  // Examples:
+  //   Hasmukhbhai Shah -> Hasmukhbhai A Shah
+  //   Payal Shah -> Miss Payal Hasmukhbhai Shah
+  //   Hasmukhbhai A Shah -> Hasmukhbhai A Shah
+  //
+  // This deliberately rejects:
+  //   Hasmukhbhai Shah -> Payal Hasmukhbhai Shah
+  // because the candidate's first token is Payal.
+  if (strippedTokens.length >= 2) {
+    const first = strippedTokens[0];
+    const last = strippedTokens[strippedTokens.length - 1];
+
+    const identityMatches = candidates.filter((c) => {
+      const t = c.strippedNameTokens;
+      if (t.length < 2) return false;
+      if (t[0] !== first || t[t.length - 1] !== last) return false;
+
+      // Every explicitly supplied query token must be present in the
+      // candidate, preserving the first/last identity requirement.
+      return strippedTokens.every((q) => t.includes(q));
+    });
+
+    if (identityMatches.length === 1) return identityMatches[0].ledger;
+
+    if (identityMatches.length > 1) {
+      // Prefer the candidate with the highest token F1. If still tied, prefer
+      // the shortest candidate. Never fall through to fuzzy matching when
+      // strong identity matches exist.
+      const ranked = identityMatches
+        .map((c) => ({
+          ...c,
+          f1: tokenF1(c.strippedName, strippedPhrase),
+        }))
+        .sort((a, b) => {
+          if (b.f1 !== a.f1) return b.f1 - a.f1;
+          return a.strippedName.length - b.strippedName.length;
+        });
+
+      const top = ranked[0];
+      const second = ranked[1];
+      if (!second || top.f1 > second.f1 + 0.05) return top.ledger;
+
+      // If the user supplied a complete name, an exact stripped-name match is
+      // still safe only when it is unique among the identity candidates.
+      if (exactStripped.length === 1) return exactStripped[0].ledger;
+
+      // Ambiguous identity: do not invent a financial answer.
+      return null;
+    }
   }
 
-  // 3. Strong token/entity match. Every meaningful query token must occur in
-  // the candidate name. F1 then prefers the candidate whose own name is best
-  // covered by the query, e.g. "Hasmukhbhai Shah" -> "Hasmukhbhai A Shah".
-  if (queryTokens.length >= 2) {
-    const strong: { ledger: any; f1: number }[] = [];
-    for (const l of all) {
-      const nName = normalizeName(String(l.name ?? ""));
-      const nameTokens = nName.split(/\s+/).filter((t) => t.length >= 3);
-      if (queryTokens.every((t) => nameTokens.includes(t))) {
-        const f1 = tokenF1(nName, normalizedPhrase);
-        strong.push({ ledger: l, f1 });
-      }
-    }
-    if (strong.length) {
-      strong.sort((a, b) => {
-        if (b.f1 !== a.f1) return b.f1 - a.f1;
-        return normalizeName(String(a.ledger.name ?? "")).length -
-          normalizeName(String(b.ledger.name ?? "")).length;
-      });
-      if (strong[0].f1 >= 0.78) return strong[0].ledger;
-    }
+  // 3. Single-token names are intentionally conservative. If the token is
+  // unique in the ledger master, use it. If several ledgers contain it, do not
+  // fuzzy-pick one and risk returning another person's balance.
+  if (strippedTokens.length === 1) {
+    const token = strippedTokens[0];
+    const exactToken = candidates.filter((c) => c.strippedNameTokens.length === 1 && c.strippedNameTokens[0] === token);
+    if (exactToken.length === 1) return exactToken[0].ledger;
+
+    const firstTokenMatches = candidates.filter((c) => c.strippedNameTokens[0] === token);
+    if (firstTokenMatches.length === 1) return firstTokenMatches[0].ledger;
+
+    // Multiple possible people/ledgers: return no match rather than a wrong
+    // financial figure.
+    return null;
   }
 
-  // 4. Existing fuzzy/phonetic matching remains as the fallback for typos,
-  // transliteration and genuinely incomplete names.
+  // 4. For genuinely misspelled/incomplete multi-token names, use the existing
+  // fuzzy/phonetic resolver only as a last resort. It is never allowed to
+  // override a strong structured identity match above.
   return fuzzyPickLedger(all, hints);
 }
 
