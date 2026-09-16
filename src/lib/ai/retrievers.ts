@@ -33,6 +33,7 @@ function fuzzyPickLedger(all: any[], hints: string[]): any | null {
   const phraseTokens = nPhrase.split(/\s+/).filter((t) => t.length >= 3);
   let best: any = null;
   let bestScore = 0;
+  let bestF1 = 0;
   for (const l of all) {
     const name = String(l.name ?? "");
     const nName = normalizeName(name);
@@ -54,7 +55,14 @@ function fuzzyPickLedger(all: any[], hints: string[]): any | null {
       (strippedName.includes(strippedPhrase) || strippedPhrase.includes(strippedName))
         ? 0.9 : 0;
     const s = Math.max(sim, contains, phon, strippedContains, overlap >= 0.6 ? 0.6 + overlap * 0.3 : 0);
-    if (s > bestScore) { bestScore = s; best = l; }
+    if (s > bestScore) { bestScore = s; best = l; bestF1 = tokenF1(nName, nPhrase); }
+    else if (best && Math.abs(s - bestScore) <= 0.02) {
+      // Tie-break: prefer the candidate whose own name is best covered by the
+      // query too, so "Hasmukhbhai Shah" picks "Hasmukhbhai A Shah" and not a
+      // longer name that merely contains those tokens.
+      const f1 = tokenF1(nName, nPhrase);
+      if (f1 > bestF1) { bestScore = Math.max(bestScore, s); best = l; bestF1 = f1; }
+    }
   }
   // Raised from 0.55 → 0.72 to avoid confidently returning the wrong ledger.
   return bestScore >= 0.72 ? best : null;
@@ -139,15 +147,23 @@ async function retrieveParty(companyId: string, routed: RouteResult, opts: { wit
       .reverse()
       .toArray();
     
-    const vIds = new Set(vouchers.map(v => String(v.id)));
-    
-    await entryQuery.each((e: any) => {
-      if (!vIds.has(String(e.voucher_id))) return;
+    // Date filter must cover EVERY voucher touching this ledger (journals,
+    // contras, third-party vouchers), not only those where it is the header
+    // party — otherwise the balance is undercounted.
+    const rows: any[] = [];
+    await entryQuery.each((e: any) => rows.push(e));
+    const eVoucherIds = [...new Set(rows.map((r) => String(r.voucher_id)))];
+    const eVouchers = await offlineDb.cache_vouchers.bulkGet(eVoucherIds);
+    const dateById = new Map<string, string>();
+    eVouchers.forEach((v: any, i: number) => { if (v) dateById.set(eVoucherIds[i], String(v.voucher_date ?? "")); });
+    for (const e of rows) {
+      const d = dateById.get(String(e.voucher_id));
+      if (!d || d > asOnIso) continue;
       debit += Number(e.debit_paise ?? 0);
       credit += Number(e.credit_paise ?? 0);
       count++;
       if (partyEntries.length < 200) partyEntries.push(e);
-    });
+    }
 
     recentVouchers.push(...vouchers.slice(0, 8).map(v => ({
       id: String(v.id),
@@ -491,6 +507,148 @@ async function retrieveProfitLoss(companyId: string, routed: RouteResult): Promi
 }
 
 /** Cash / bank book — entries touching cash or bank ledgers. */
+// ── Direct ledger balance lookup (cash / bank) ──────────────────────────────
+// Deliberately does NOT go through retrieveParty()/fuzzyPickLedger(): cash and
+// bank accounts are never the voucher's "party", so the party path undercounts.
+
+const BANK_ALIASES: Record<string, string> = {
+  sbi: "state bank of india",
+  bob: "bank of baroda",
+  pnb: "punjab national bank",
+  boi: "bank of india",
+  hdfc: "hdfc bank",
+  icici: "icici bank",
+  axis: "axis bank",
+  kotak: "kotak mahindra bank",
+  idbi: "idbi bank",
+  bom: "bank of maharashtra",
+};
+
+function normKey(s: string): string {
+  return normalizeName(String(s ?? "")).replace(/[^a-z0-9 ]/gi, " ").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function tokenF1(a: string, b: string): number {
+  const at = a.split(" ").filter((t) => t.length >= 3);
+  const bt = b.split(" ").filter((t) => t.length >= 3);
+  if (!at.length || !bt.length) return 0;
+  const hit = at.filter((t) => bt.includes(t)).length;
+  const p = hit / at.length;
+  const r = hit / bt.length;
+  return p + r === 0 ? 0 : (2 * p * r) / (p + r);
+}
+
+/** Resolve a cash/bank account name to a real ledger — exact first, fuzzy last. */
+export function resolveAccountLedger(ledgers: any[], account: string): any | null {
+  const raw = String(account ?? "cash").trim();
+  const q0 = normKey(raw);
+  const q = BANK_ALIASES[q0] ?? q0;
+  const cash = ledgers.filter((l) => classifyLedger(l) === "cash");
+  const banks = ledgers.filter((l) => classifyLedger(l) === "bank");
+
+  if (!q || /^(cash|cash in hand|cash on hand|cash balance|hand)$/.test(q)) {
+    if (!cash.length) return null;
+    return cash.find((l) => normKey(l.name) === "cash in hand")
+      ?? cash.find((l) => normKey(l.name) === "cash")
+      ?? cash[0];
+  }
+  if (/^bank( account| balance)?$/.test(q)) {
+    return banks.length === 1 ? banks[0] : null;
+  }
+
+  const pool = [...banks, ...cash];
+  const exact = pool.find((l) => normKey(l.name) === q);
+  if (exact) return exact;
+  const contains = pool.filter((l) => {
+    const n = normKey(l.name);
+    return n.includes(q) || q.includes(n);
+  });
+  if (contains.length === 1) return contains[0];
+  if (contains.length > 1) {
+    return contains.reduce((a, b) => (tokenF1(normKey(b.name), q) > tokenF1(normKey(a.name), q) ? b : a));
+  }
+  let best: any = null;
+  let bestScore = 0;
+  for (const l of pool) {
+    const s = Math.max(tokenF1(normKey(l.name), q), scoreNameMatch(String(l.name ?? ""), raw).score);
+    if (s > bestScore) { bestScore = s; best = l; }
+  }
+  return bestScore >= 0.75 ? best : null;
+}
+
+/** Sum a single ledger's entries using the [company_id+ledger_id] index only. */
+async function sumLedgerEntries(companyId: string, ledgerId: string, asOnIso?: string | null) {
+  const { offlineDb } = await import("@/lib/offline/db");
+  const query = offlineDb.cache_voucher_entries.where("[company_id+ledger_id]").equals([companyId, ledgerId]);
+  let debit = 0, credit = 0, count = 0;
+  if (!asOnIso) {
+    await query.each((e: any) => {
+      debit += Number(e.debit_paise ?? 0);
+      credit += Number(e.credit_paise ?? 0);
+      count++;
+    });
+    return { debit_paise: debit, credit_paise: credit, count };
+  }
+  const rows: any[] = [];
+  await query.each((e: any) => rows.push(e));
+  const ids = [...new Set(rows.map((r) => String(r.voucher_id)))];
+  const vouchers = await offlineDb.cache_vouchers.bulkGet(ids);
+  const dateById = new Map<string, string>();
+  vouchers.forEach((v: any, i: number) => { if (v) dateById.set(ids[i], String(v.voucher_date ?? "")); });
+  for (const e of rows) {
+    const d = dateById.get(String(e.voucher_id));
+    if (!d || d > asOnIso) continue;
+    debit += Number(e.debit_paise ?? 0);
+    credit += Number(e.credit_paise ?? 0);
+    count++;
+  }
+  return { debit_paise: debit, credit_paise: credit, count };
+}
+
+/** Deterministic cash / bank account balance — opening + debit − credit. */
+export async function retrieveAccountBalance(
+  companyIdIn: string | null | undefined,
+  account: string,
+  asOn?: string | null,
+): Promise<RetrievedSlice> {
+  const companyId = await resolveCompanyId(companyIdIn);
+  if (!companyId) return { scope: "no active company", data: {} };
+  const ledgers = (await readLedgers(companyId)) as any[];
+  const target = resolveAccountLedger(ledgers, account);
+  if (!target) {
+    return {
+      scope: `no cash/bank account matched "${account}"`,
+      data: {
+        accounts: ledgers
+          .filter((l) => { const k = classifyLedger(l); return k === "cash" || k === "bank"; })
+          .map((l) => ({ id: l.id, name: l.name, kind: classifyLedger(l) })),
+      },
+    };
+  }
+  const asOnIso = asOn ? String(asOn) : null;
+  const sums = await sumLedgerEntries(companyId, String(target.id), asOnIso);
+  const opening = Number(target.opening_balance_paise ?? 0) * (target.opening_balance_is_debit ? 1 : -1);
+  const closing = opening + sums.debit_paise - sums.credit_paise;
+  return {
+    scope: asOnIso
+      ? `account="${target.name}" as on ${asOnIso} (${sums.count} entries)`
+      : `account="${target.name}" (${sums.count} entries)`,
+    data: { accounts: [{ id: target.id, name: target.name, kind: classifyLedger(target) }] },
+    facts: {
+      as_on_date: asOnIso,
+      account_id: String(target.id),
+      account_name: String(target.name ?? ""),
+      account_kind: classifyLedger(target),
+      opening_balance_paise: opening,
+      total_debit_paise: sums.debit_paise,
+      total_credit_paise: sums.credit_paise,
+      closing_balance_paise: closing,
+      current_balance_paise: closing,
+      entry_count: sums.count,
+    },
+  };
+}
+
 async function retrieveCashBank(companyId: string, routed: RouteResult): Promise<RetrievedSlice> {
   const { offlineDb } = await import("@/lib/offline/db");
   const ledgers = (await readLedgers(companyId)) as any[];
