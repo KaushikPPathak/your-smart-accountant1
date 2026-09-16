@@ -33,6 +33,7 @@ function fuzzyPickLedger(all: any[], hints: string[]): any | null {
   const phraseTokens = nPhrase.split(/\s+/).filter((t) => t.length >= 3);
   let best: any = null;
   let bestScore = 0;
+  let bestF1 = 0;
   for (const l of all) {
     const name = String(l.name ?? "");
     const nName = normalizeName(name);
