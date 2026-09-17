@@ -6,7 +6,8 @@ import { routeTree } from "./routeTree.gen";
 // SPA-fallback rewrite required. Used everywhere (web + Tauri desktop).
 const appHistory = createHashHistory();
 
-function DefaultErrorComponent({ error, reset }: ErrorComponentProps) {
+function DefaultErrorComponent({ error: rawError, reset }: ErrorComponentProps) {
+  const error = rawError as Error | undefined;
   const router = useRouter();
   const [copied, setCopied] = useState(false);
 
