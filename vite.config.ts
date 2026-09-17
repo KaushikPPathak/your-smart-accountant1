@@ -102,6 +102,13 @@ const sharedBuild = {
     output: {
       manualChunks(id: string) {
         if (!id.includes("node_modules")) return;
+        // React core MUST live in its own chunk. When it is left in the entry
+        // chunk while dependants (router, ui) sit in separate chunks, Rollup
+        // can emit a circular init order that runs React's CJS interop before
+        // its exports object exists -> "Cannot set properties of undefined
+        // (setting 'Activity')" and a blank window in the packaged build.
+        if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-is|use-sync-external-store)[\\/]/.test(id))
+          return "react-vendor";
         if (/[\\/]node_modules[\\/](jspdf|jspdf-autotable|pdf-lib)[\\/]/.test(id)) return "pdf";
         if (/[\\/]node_modules[\\/](xlsx|exceljs|sheetjs)[\\/]/.test(id)) return "xlsx";
         if (/[\\/]node_modules[\\/](docx|html-docx-js)[\\/]/.test(id)) return "docx";
