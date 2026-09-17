@@ -1,4 +1,4 @@
-import { createRouter, createHashHistory, useRouter } from "@tanstack/react-router";
+import { createRouter, createHashHistory, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { routeTree } from "./routeTree.gen";
 
@@ -6,7 +6,7 @@ import { routeTree } from "./routeTree.gen";
 // SPA-fallback rewrite required. Used everywhere (web + Tauri desktop).
 const appHistory = createHashHistory();
 
-function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function DefaultErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
 
