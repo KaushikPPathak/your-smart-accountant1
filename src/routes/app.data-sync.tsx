@@ -26,7 +26,7 @@ export const Route = createFileRoute("/app/data-sync")({
       <Card>
         <CardHeader>
           <CardTitle>Data Sync Error</CardTitle>
-          <CardDescription>{error?.message ?? "Unexpected error"}</CardDescription>
+          <CardDescription>{(error as Error | undefined)?.message ?? "Unexpected error"}</CardDescription>
         </CardHeader>
       </Card>
     </div>
