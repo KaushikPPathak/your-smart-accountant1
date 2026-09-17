@@ -533,6 +533,20 @@ async function openPrintPreviewAsync(
   `;
 
 
+  const runHeadHtml = `<div class="run-head"><span>${escape(company)}</span><span>${escape(fyShort)}</span></div>
+<div class="run-foot"><span>${escape(heading)}</span><span>${escape(new Date().toLocaleDateString("en-IN"))}</span></div>`;
+
+  const contentHtml = `${runHeadHtml}
+<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">
+  ${clone.outerHTML}
+</div>`;
+
+  // Desktop WebViews (Tauri/WebView2) print the TOP-LEVEL document even when
+  // an iframe asks to print, which produced a blank page with the app URL in
+  // the footer. So the actual print always runs from the host document using
+  // a dedicated print portal; the iframe stays a pure on-screen preview.
+  pendingPrintDoc = { css, contentHtml, title: `${company} — ${heading}` };
+
   const html = `<!doctype html>
 <html lang="${document.documentElement.getAttribute("lang") ?? "en"}" style="color-scheme: light">
 <head>
@@ -543,16 +557,11 @@ ${appStyles}
 </head>
 <body>
 <div class="preview-bar">
-  <button id="preview-print-btn" disabled onclick="window.print()">Print</button>
+  <button id="preview-print-btn" disabled>Print</button>
   <button onclick="window.parent.document.getElementById('report-preview-iframe').remove()">Close</button>
   <span style="margin-left:auto;color:#666">Print Preview</span>
 </div>
-<div class="run-head"><span>${escape(company)}</span><span>${escape(fyShort)}</span></div>
-<div class="run-foot"><span>${escape(heading)}</span><span>${escape(new Date().toLocaleDateString("en-IN"))}</span></div>
-
-<div class="preview-content report-print-root${orientation === "landscape" ? " report-print-landscape" : ""}">
-  ${clone.outerHTML}
-</div>
+${contentHtml}
 </body>
 </html>`;
 
@@ -594,14 +603,14 @@ ${appStyles}
     const btn = iframe.contentDocument?.getElementById("preview-print-btn") as
       | HTMLButtonElement
       | null;
-    if (btn) btn.disabled = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.addEventListener("click", () => {
+        printPendingDoc();
+      });
+    }
     if (autoPrint) {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch {
-        /* ignore */
-      }
+      printPendingDoc();
     }
   });
 
@@ -611,6 +620,67 @@ ${appStyles}
     auto_print: autoPrint,
     elapsed_ms: Date.now() - startTs,
   });
+}
+
+/** Last built preview document, printed from the host page on demand. */
+let pendingPrintDoc: { css: string; contentHtml: string; title: string } | null = null;
+
+const PORTAL_ID = "report-print-portal";
+const PORTAL_STYLE_ID = "report-print-portal-style";
+
+/**
+ * Print the prepared report from the HOST document. Everything else on the
+ * page is hidden for the duration, so the printer receives exactly the
+ * preview content instead of the (print-hidden, therefore blank) app shell.
+ */
+function printPendingDoc(): void {
+  const docData = pendingPrintDoc;
+  if (!docData) return;
+
+  document.getElementById(PORTAL_ID)?.remove();
+  document.getElementById(PORTAL_STYLE_ID)?.remove();
+
+  const style = document.createElement("style");
+  style.id = PORTAL_STYLE_ID;
+  style.textContent = `
+    #${PORTAL_ID} { display: none; }
+    @media print {
+      html.report-printing, html.report-printing body {
+        background: #fff !important; margin: 0 !important; padding: 0 !important;
+        height: auto !important; overflow: visible !important;
+      }
+      html.report-printing body > *:not(#${PORTAL_ID}) { display: none !important; }
+      html.report-printing #${PORTAL_ID} { display: block !important; }
+      ${docData.css}
+    }
+  `;
+  document.head.appendChild(style);
+
+  const portal = document.createElement("div");
+  portal.id = PORTAL_ID;
+  portal.innerHTML = docData.contentHtml;
+  document.body.appendChild(portal);
+
+  const cleanup = () => {
+    document.documentElement.classList.remove("report-printing");
+    document.getElementById(PORTAL_ID)?.remove();
+    document.getElementById(PORTAL_STYLE_ID)?.remove();
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+
+  document.documentElement.classList.add("report-printing");
+  recordStage("preview", "host-print", { html_len: docData.contentHtml.length });
+
+  window.setTimeout(() => {
+    try {
+      window.print();
+    } catch (err) {
+      recordFailure("preview", err as Error, { stage: "host-print" });
+    }
+    // Safety net for WebViews that never fire afterprint.
+    window.setTimeout(cleanup, 1500);
+  }, 60);
 }
 
 /** Navigate to the Diagnostics page from a toast action. */
