@@ -12,7 +12,6 @@
  * The production engine currently reads the app's offline cache directly.
  * These tests therefore validate the core algorithms with controlled fixtures.
  */
-
 import { describe, expect, it } from "vitest";
 
 // Keep these fixtures deliberately close to the known Smart Accountant ledgers.
@@ -85,15 +84,12 @@ function calculateBalance(
   const opening =
     (ledger.opening_balance_paise ?? 0) *
     (ledger.opening_balance_is_debit === false ? -1 : 1);
-
   const included = entries.filter(
     e => e.ledger_id === ledger.id && (!asOn || e.voucher_date <= asOn)
   );
-
   const debit = included.reduce((s, e) => s + e.debit_paise, 0);
   const credit = included.reduce((s, e) => s + e.credit_paise, 0);
   const closing = opening + debit - credit;
-
   return {
     opening,
     debit,
@@ -148,14 +144,11 @@ describe("Accounting Query Engine — balance calculation", () => {
       opening_balance_paise: 1000000,
       opening_balance_is_debit: true,
     };
-
     const entries: Entry[] = [
       { ledger_id: "hasmukh", voucher_date: "2026-04-01", debit_paise: 500000, credit_paise: 0 },
       { ledger_id: "hasmukh", voucher_date: "2026-05-01", debit_paise: 0, credit_paise: 250000 },
     ];
-
     const result = calculateBalance(ledger, entries);
-
     expect(result.closing).toBe(1250000);
     expect(result.direction).toBe("Dr");
   });
@@ -167,14 +160,11 @@ describe("Accounting Query Engine — balance calculation", () => {
       opening_balance_paise: 0,
       opening_balance_is_debit: true,
     };
-
     const entries: Entry[] = [
       { ledger_id: "cash", voucher_date: "2026-03-31", debit_paise: 29243328, credit_paise: 0 },
       { ledger_id: "cash", voucher_date: "2026-04-01", debit_paise: 10000000, credit_paise: 0 },
     ];
-
     const result = calculateBalance(ledger, entries, "2026-03-31");
-
     expect(result.closing).toBe(29243328);
   });
 
@@ -185,13 +175,10 @@ describe("Accounting Query Engine — balance calculation", () => {
       opening_balance_paise: 0,
       opening_balance_is_debit: true,
     };
-
     const entries: Entry[] = [
       { ledger_id: "loan", voucher_date: "2026-04-01", debit_paise: 0, credit_paise: 5000000 },
     ];
-
     const result = calculateBalance(ledger, entries);
-
     expect(result.closing).toBe(-5000000);
     expect(result.direction).toBe("Cr");
   });
