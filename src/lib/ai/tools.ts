@@ -256,43 +256,70 @@ async function activeCompanyId(): Promise<string | null> {
 //  TOOL EXECUTORS
 // ═════════════════════════════════════════════════════════════════════════════
 
-async function execGetPartyBalance(args: Record<string, unknown>): Promise<ToolResult> {
+/**
+ * Adapter over the authoritative Accounting Query Engine.
+ * The engine is the only calculator for party / cash / bank balances; results
+ * are returned verbatim and never cached, so every answer reflects the current
+ * books. Ambiguous or unknown ledgers return a clarification, never a number.
+ */
+async function execEngineBalance(
+  kind: "party_balance" | "cash_balance" | "bank_balance",
+  name: string | undefined,
+  asOn: string | undefined,
+): Promise<ToolResult> {
   const start = performance.now();
-  const name = String(args.name ?? "").trim();
-  const asOn = args.asOn ? String(args.asOn) : undefined;
-  if (!name) return { success: false, error: "missing 'name'", latencyMs: Math.round(performance.now() - start) };
-
   const cid = await activeCompanyId();
   if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
 
-  // Balance questions are live accounting data. Do not reuse an older
-  // party-balance result because a fuzzy/ambiguous name may have resolved to
-  // another ledger. Construct the route directly so the requested name is
-  // passed unchanged to the deterministic ledger resolver.
-  const routed = {
-    intent: "party_balance" as const,
-    confidence: 1,
-    requiresLLM: false,
-    requiresTools: true,
-    entity: {
-      partyName: name,
-      ...(asOn ? { dateRange: { to: asOn } } : {}),
+  const {
+    runAccountingQuery,
+    AMBIGUOUS_LEDGER_MESSAGE,
+    LEDGER_NOT_FOUND_MESSAGE,
+  } = await import("./accounting-query-engine");
+
+  const res = await runAccountingQuery({ kind, name, asOn: asOn ?? null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "ambiguous") {
+    return {
+      success: true,
+      data: { clarification: AMBIGUOUS_LEDGER_MESSAGE, candidates: res.candidates, facts: {} },
+      latencyMs,
+    };
+  }
+  if (res.status === "not_found") {
+    return { success: true, data: { clarification: LEDGER_NOT_FOUND_MESSAGE, facts: {} }, latencyMs };
+  }
+
+  return {
+    success: true,
+    data: {
+      scope: `${res.ledgerName}${res.asOn ? ` as on ${res.asOn}` : ""} (${res.entryCount} entries)`,
+      facts: {
+        as_on_date: res.asOn,
+        account_id: res.ledgerId,
+        account_name: res.ledgerName,
+        resolved_party_name: res.ledgerName,
+        resolved_party_group: res.ledgerGroup,
+        opening_balance_paise: res.openingPaise,
+        total_debit_paise: res.debitPaise,
+        total_credit_paise: res.creditPaise,
+        closing_balance_paise: res.closingPaise,
+        current_balance_paise: res.closingPaise,
+        direction: res.direction,
+        entry_count: res.entryCount,
+      },
     },
-    entityHints: [name],
-    ...(asOn ? { asOn, to: asOn } : {}),
-    deterministicAnswer: undefined,
+    latencyMs,
   };
+}
 
-  const slice = await retrieveForQuery(routed, cid);
-  const result = {
-    scope: slice.scope,
-    facts: slice.facts,
-    vouchers: (slice.data.vouchers as any[])?.slice(0, 10),
-  };
-
-  // Deliberately do not cache party balances. They must reflect the current
-  // local books and the exact resolved ledger.
-  return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
+async function execGetPartyBalance(args: Record<string, unknown>): Promise<ToolResult> {
+  const name = String(args.name ?? "").trim();
+  const asOn = args.asOn ? String(args.asOn) : undefined;
+  if (!name) return { success: false, error: "missing 'name'", latencyMs: 0 };
+  return execEngineBalance("party_balance", name, asOn);
 }
 
 async function execGetPartyLedger(args: Record<string, unknown>): Promise<ToolResult> {
