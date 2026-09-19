@@ -387,28 +387,12 @@ async function execGetStockSummary(): Promise<ToolResult> {
 }
 
 async function execGetCashBalance(args: Record<string, unknown>): Promise<ToolResult> {
-  const start = performance.now();
   const account = String(args.account ?? "cash").trim();
   const asOn = args.asOn ? String(args.asOn) : undefined;
-
-  const cid = await activeCompanyId();
-  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
-
-  // Direct ledger balance — cash/bank accounts are never the voucher party, so
-  // the party retrieval path would return a wrong (or zero) balance.
-  const { retrieveAccountBalance } = await import("./retrievers");
-  const slice = await retrieveAccountBalance(cid, account, asOn);
-  if (!slice.facts?.account_name) {
-    return {
-      success: false,
-      error: `no cash/bank account matched "${account}"`,
-      latencyMs: Math.round(performance.now() - start),
-    };
-  }
-  const result = { scope: slice.scope, facts: slice.facts, data: slice.data };
-
-  // Cash/bank balances are live book values; do not cache them.
-  return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
+  // Cash / bank balances go straight to the accounting engine — never through
+  // party fuzzy matching.
+  const isCash = !account || /^(cash|cash in hand|cash on hand|petty cash)$/i.test(account);
+  return execEngineBalance(isCash ? "cash_balance" : "bank_balance", account, asOn);
 }
 
 async function execListVouchers(args: Record<string, unknown>): Promise<ToolResult> {
