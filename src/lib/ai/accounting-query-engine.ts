@@ -85,7 +85,8 @@ export function stripHonorifics(value: string): string {
 }
 
 /** Trailing words a user adds to a balance question, never part of a name. */
-const QUERY_NOISE = /\b(balance|closing|opening|account|a\/c|ac|ledger|amount|as|on|of|the|current|total)\b/g;
+const QUERY_NOISE =
+  /\b(balance|closing|opening|account|a\/c|ac|ledger|amount|as|on|of|the|current|total)\b/g;
 
 export function stripQueryNoise(value: string): string {
   return stripHonorifics(value).replace(QUERY_NOISE, " ").replace(/\s+/g, " ").trim();
@@ -210,18 +211,24 @@ async function resolveCompanyId(companyIdIn?: string | null): Promise<string | n
       /* ignore */
     }
   }
-  const companies = (await readCompanies()) as any[];
+  const companies = (await readCompanies()) as Array<{ id?: unknown }>;
   return companies?.[0]?.id ? String(companies[0].id) : null;
 }
 
 /** Sum one ledger's live entries, optionally frozen at an as-on date. */
 async function sumLedgerTotals(companyId: string, ledgerId: string, asOn: string | null) {
   const { offlineDb } = await import("@/lib/offline/db");
-  const rows: any[] = [];
+  type EntryRow = {
+    voucher_id?: unknown;
+    debit_paise?: unknown;
+    credit_paise?: unknown;
+    is_deleted?: boolean;
+  };
+  const rows: EntryRow[] = [];
   await offlineDb.cache_voucher_entries
     .where("[company_id+ledger_id]")
     .equals([companyId, ledgerId])
-    .each((e: any) => {
+    .each((e: EntryRow) => {
       if (e?.is_deleted === true) return;
       rows.push(e);
     });
@@ -233,9 +240,14 @@ async function sumLedgerTotals(companyId: string, ledgerId: string, asOn: string
   const ids = [...new Set(rows.map((r) => String(r.voucher_id)))];
   const vouchers = await offlineDb.cache_vouchers.bulkGet(ids);
   const dateById = new Map<string, string>();
-  vouchers.forEach((v: any, i: number) => {
-    if (v && v.is_deleted !== true) dateById.set(ids[i], String(v.voucher_date ?? v.date ?? ""));
-  });
+  vouchers.forEach(
+    (
+      v: { voucher_date?: unknown; date?: unknown; is_deleted?: boolean } | undefined,
+      i: number,
+    ) => {
+      if (v && v.is_deleted !== true) dateById.set(ids[i], String(v.voucher_date ?? v.date ?? ""));
+    },
+  );
 
   for (const e of rows) {
     const date = dateById.get(String(e.voucher_id));
@@ -257,7 +269,7 @@ export async function runAccountingQuery(query: AccountingQuery): Promise<Accoun
   const companyId = await resolveCompanyId(query.companyId);
   if (!companyId) return { status: "no_company" };
 
-  const ledgers = ((await readLedgers(companyId)) as any[]) as EngineLedger[];
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
   const asOn = query.asOn ? String(query.asOn) : null;
 
   const resolution =
@@ -266,7 +278,10 @@ export async function runAccountingQuery(query: AccountingQuery): Promise<Accoun
       : resolveCashBankLedger(ledgers, query.kind, query.name);
 
   if (resolution.status === "ambiguous") {
-    return { status: "ambiguous", candidates: resolution.candidates.map((l) => String(l.name ?? "")) };
+    return {
+      status: "ambiguous",
+      candidates: resolution.candidates.map((l) => String(l.name ?? "")),
+    };
   }
   if (resolution.status === "not_found") {
     return { status: "not_found", query: String(query.name ?? query.kind) };
@@ -289,5 +304,4 @@ export async function runAccountingQuery(query: AccountingQuery): Promise<Accoun
 /** Standard, non-guessing replies for unresolved accounting lookups. */
 export const AMBIGUOUS_LEDGER_MESSAGE =
   "I found more than one matching account. Please specify the full ledger name.";
-export const LEDGER_NOT_FOUND_MESSAGE =
-  "I couldn't find that ledger in the current company.";
+export const LEDGER_NOT_FOUND_MESSAGE = "I couldn't find that ledger in the current company.";

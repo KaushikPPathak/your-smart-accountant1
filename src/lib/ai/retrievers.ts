@@ -497,8 +497,8 @@ const CASH_HINTS = /(^cash|petty cash|cash in hand)/i;
 const BANK_HINTS = /(bank|hdfc|icici|sbi|axis|kotak|yes bank|current a\/c|saving)/i;
 const STOCK_HINTS = /(stock-in-hand|stock in hand|inventory)/i;
 
-type LedgerKind = "direct_income"|"direct_expense"|"indirect_income"|"indirect_expense"|"cash"|"bank"|"stock"|"other";
-function classifyLedger(l: any): LedgerKind {
+export type LedgerKind = "direct_income"|"direct_expense"|"indirect_income"|"indirect_expense"|"cash"|"bank"|"stock"|"other";
+export function classifyLedger(l: any): LedgerKind {
   const g = String(l.group_name ?? "");
   const n = String(l.name ?? "");
   if (CASH_HINTS.test(n) || /cash/i.test(g)) return "cash";
