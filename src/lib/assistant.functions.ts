@@ -260,8 +260,14 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
         toolArgs = { name: route.entity.partyName, from: route.entity.dateRange?.from, to: route.entity.dateRange?.to };
       }
       break;
-    case "cash_balance": toolName = "get_cash_balance"; toolArgs = { account: "cash" }; break;
-    case "bank_balance": toolName = "get_cash_balance"; toolArgs = { account: route.entity?.accountName || "bank" }; break;
+    case "cash_balance":
+      toolName = "get_cash_balance";
+      toolArgs = { account: "cash", asOn: route.entity?.dateRange?.to };
+      break;
+    case "bank_balance":
+      toolName = "get_cash_balance";
+      toolArgs = { account: route.entity?.accountName || "bank", asOn: route.entity?.dateRange?.to };
+      break;
     case "trial_balance": toolName = "get_trial_balance"; break;
     case "voucher_lookup":
       toolName = "list_vouchers";
@@ -272,6 +278,12 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
   try {
     const result = await executeTool(toolName, toolArgs);
     if (!result.success || !result.data) return null;
+    // The accounting engine refused to guess a ledger — surface its
+    // clarification instead of any balance figure.
+    const clarification = (result.data as any)?.clarification;
+    if (typeof clarification === "string" && clarification) {
+      return { ok: true, text: clarification };
+    }
     const card = buildCardFromResult(route.intent, result.data, route.entity);
     if (!card) return null;
     const prose = localFirstAnswer(card);
