@@ -381,8 +381,8 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
     }
 
     // 2b. Speed path / Direct Tool — targeted local calculation, no LLM context.
-    if (companyId) {
-      const fastResult = await tryDirectToolAnswer(route, question, companyId);
+    if (companyId || earlyCompanyId) {
+      const fastResult = await tryDirectToolAnswer(route, question, companyId || earlyCompanyId);
       if (fastResult) {
         if (earlyCompanyId && !isLiveBalanceIntent) {
           storeAnswer(earlyCompanyId, route.intent, routeScope(route), question, fastResult.text);
