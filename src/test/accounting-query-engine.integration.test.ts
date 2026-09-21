@@ -38,6 +38,39 @@ describe("accounting query engine — deterministic ledger resolution", () => {
     expect(r.status).toBe("ambiguous");
   });
 
+  it("resolves a single word that is the first token of exactly one ledger", () => {
+    const liveLike: EngineLedger[] = [
+      { id: "hasmukh", name: "Hasmukhbhai A Shah", group_name: "Sundry Debtors" },
+      { id: "payal", name: "Miss Payal Hasmukhbhai Shah", group_name: "Sundry Debtors" },
+      { id: "avni", name: "Avni Jenish Shah", group_name: "Sundry Debtors" },
+    ];
+    const r = resolveLedgerDeterministic(liveLike, "Hasmukhbhai balance");
+    expect(r.status === "resolved" && r.ledger.id).toBe("hasmukh");
+  });
+
+  it("never picks a ledger where the word is only a middle token", () => {
+    const liveLike: EngineLedger[] = [
+      { id: "payal", name: "Miss Payal Hasmukhbhai Shah", group_name: "Sundry Debtors" },
+      { id: "avni", name: "Avni Jenish Shah", group_name: "Sundry Debtors" },
+    ];
+    expect(resolveLedgerDeterministic(liveLike, "Hasmukhbhai").status).toBe("not_found");
+  });
+
+  it("resolves a two-token query that matches one ledger's name", () => {
+    const liveLike: EngineLedger[] = [
+      { id: "hasmukh", name: "Hasmukhbhai A Shah", group_name: "Sundry Debtors" },
+      { id: "payal", name: "Miss Payal Hasmukhbhai Shah", group_name: "Sundry Debtors" },
+    ];
+    const r = resolveLedgerDeterministic(liveLike, "Hasmukhbhai Shah balance");
+    // Both ledgers contain both tokens, so this must not guess.
+    expect(r.status).toBe("ambiguous");
+    const r2 = resolveLedgerDeterministic(
+      [{ id: "hasmukh", name: "Hasmukhbhai A Shah", group_name: "Sundry Debtors" }],
+      "Hasmukhbhai Shah balance",
+    );
+    expect(r2.status === "resolved" && r2.ledger.id).toBe("hasmukh");
+  });
+
   it("never picks a merely similar ledger", () => {
     expect(resolveLedgerDeterministic(ledgers, "Hasmukh").status).toBe("not_found");
     expect(resolveLedgerDeterministic(ledgers, "Zzz Traders").status).toBe("not_found");
