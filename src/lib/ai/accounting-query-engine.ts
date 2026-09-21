@@ -139,6 +139,19 @@ export function resolveLedgerDeterministic(
   const qTokens = (qClean || qNoHonorific).split(" ").filter(Boolean);
   if (!qTokens.length) return { status: "not_found" };
 
+  // Single-word query: the word must be the FIRST meaningful token of the
+  // ledger name (after honorifics). Exactly one such ledger resolves; several
+  // is ambiguous; a word found only mid/end-name is never guessed.
+  if (qTokens.length === 1) {
+    const word = qTokens[0];
+    const firstTokenHits = ledgers.filter(
+      (l) => stripHonorifics(l.name).split(" ").filter(Boolean)[0] === word,
+    );
+    if (firstTokenHits.length === 1) return { status: "resolved", ledger: firstTokenHits[0] };
+    if (firstTokenHits.length > 1) return { status: "ambiguous", candidates: firstTokenHits };
+    return { status: "not_found" };
+  }
+
   const candidates = ledgers.filter((l) => {
     const tokens = new Set(stripHonorifics(l.name).split(" ").filter(Boolean));
     return qTokens.every((t) => tokens.has(t));
