@@ -293,7 +293,13 @@ function addTotals(
   target.totalTax += value.totalTax;
   target.grossValue += value.grossValue;
 }
-
+function addNatureSummary(
+  target: Gstr9NatureSummary,
+  value: Gstr9TaxTotals,
+): void {
+  addTotals(target, value);
+  target.voucherCount += 1;
+}
 function isRegistered(v: VoucherRow): boolean {
   return Boolean(
     v.ledgers?.gstin &&
@@ -470,12 +476,9 @@ export function buildGstr9(
           outward.zeroRatedWithPayment,
           totals,
         );
-        addTotals(
+        addNatureSummary(
           natureSummary.zero_rated_wp,
-          {
-            ...totals,
-            voucherCount: 1,
-          },
+          totals,
         );
         break;
 
@@ -484,12 +487,9 @@ export function buildGstr9(
           outward.zeroRatedWithoutPayment,
           totals,
         );
-        addTotals(
+        addNatureSummary(
           natureSummary.zero_rated_wop,
-          {
-            ...totals,
-            voucherCount: 1,
-          },
+          totals,
         );
         break;
 
@@ -498,12 +498,9 @@ export function buildGstr9(
           outward.deemedExport,
           totals,
         );
-        addTotals(
+        addNatureSummary(
           natureSummary.deemed_export,
-          {
-            ...totals,
-            voucherCount: 1,
-          },
+          totals,
         );
         break;
 
@@ -512,12 +509,9 @@ export function buildGstr9(
           outward.nilRated,
           totals,
         );
-        addTotals(
+        addNatureSummary(
           natureSummary.nil_rated,
-          {
-            ...totals,
-            voucherCount: 1,
-          },
+          totals,
         );
         break;
 
@@ -526,12 +520,9 @@ export function buildGstr9(
           outward.exempt,
           totals,
         );
-        addTotals(
+        addNatureSummary(
           natureSummary.exempt,
-          {
-            ...totals,
-            voucherCount: 1,
-          },
+          totals,
         );
         break;
 
@@ -540,12 +531,9 @@ export function buildGstr9(
           outward.nonGst,
           totals,
         );
-        addTotals(
+        addNatureSummary(
           natureSummary.non_gst,
-          {
-            ...totals,
-            voucherCount: 1,
-          },
+          totals,
         );
         break;
 
@@ -563,12 +551,9 @@ export function buildGstr9(
           );
         }
 
-        addTotals(
+        addNatureSummary(
           natureSummary.taxable,
-          {
-            ...totals,
-            voucherCount: 1,
-          },
+          totals,
         );
         break;
     }
