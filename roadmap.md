@@ -1,6 +1,8 @@
 # Roadmap
 
 ## In progress
+- [ ] Accounting Query Engine: tolerate minor ledger-name typos only when exactly one strong match exists (never guess between ledgers).
+- [ ] Trial Balance operation in the Accounting Query Engine (engine + tests only; no Mehtaji integration yet).
 - [x] Fix Cash/Bank and Journal grids hanging after rows load (worker accessor serialization failure); add worker-error fallback.
 - [ ] Print View collapses accounting tables vertically (root cause: preview iframe has no app CSS + virtualized grid clone)
 - [ ] Journal Book missing from main sidebar; needs Dr/Cr accounting columns
