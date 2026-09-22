@@ -29,6 +29,13 @@ const ledgers: EngineLedger[] = [
     opening_balance_is_debit: false,
   },
   {
+    id: "capital",
+    name: "Capital Account",
+    group_name: "Capital Account",
+    opening_balance_paise: 50000,
+    opening_balance_is_debit: false,
+  },
+  {
     id: "idle",
     name: "Office Equipment",
     group_name: "Fixed Assets",
@@ -96,7 +103,8 @@ describe("trial balance engine", () => {
     expect(row(r, "cash").closingPaise).toBe(300000);
     expect(row(r, "creditor").closingPaise).toBe(-50000);
     expect(r.totalDebitPaise).toBe(300000);
-    expect(r.totalCreditPaise).toBe(250000);
+    expect(r.totalCreditPaise).toBe(300000);
+    expect(r.balanced).toBe(true);
   });
 
   it("includes ledgers with no entries and no opening balance", () => {
@@ -109,8 +117,8 @@ describe("trial balance engine", () => {
 
   it("handles multiple ledgers in one pass", () => {
     const r = computeTrialBalance(ledgers, entries, "2026-03-31");
-    expect(r.rows).toHaveLength(4);
-    expect(new Set(r.rows.map((x) => x.ledgerId)).size).toBe(4);
+    expect(r.rows).toHaveLength(5);
+    expect(new Set(r.rows.map((x) => x.ledgerId)).size).toBe(5);
   });
 
   it("never double counts an entry", () => {
