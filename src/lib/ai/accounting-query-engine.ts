@@ -159,7 +159,66 @@ export function resolveLedgerDeterministic(
 
   if (candidates.length === 1) return { status: "resolved", ledger: candidates[0] };
   if (candidates.length > 1) return { status: "ambiguous", candidates };
+
+  // Last resort: tolerate a MINOR spelling difference (one edit) in at most one
+  // word, and only when a longer word of the query matched the ledger exactly.
+  // Anything less strict would be guessing between financial ledgers.
+  const nearCandidates = ledgers.filter((l) => {
+    const tokens = stripHonorifics(l.name).split(" ").filter(Boolean);
+    let exactHits = 0;
+    let nearHits = 0;
+    for (const t of qTokens) {
+      if (tokens.includes(t)) {
+        exactHits++;
+        continue;
+      }
+      if (tokens.some((lt) => isMinorTypo(t, lt))) {
+        nearHits++;
+        continue;
+      }
+      return false;
+    }
+    return nearHits <= 1 && exactHits >= 1;
+  });
+
+  if (nearCandidates.length === 1) return { status: "resolved", ledger: nearCandidates[0] };
+  if (nearCandidates.length > 1) return { status: "ambiguous", candidates: nearCandidates };
   return { status: "not_found" };
+}
+
+/**
+ * True when two words differ by at most one character edit (insert, delete or
+ * substitute) — e.g. "shah" vs "sha". Deliberately narrow: no phonetics, no
+ * scoring, and never applied to short words where one edit changes identity.
+ */
+export function isMinorTypo(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (Math.min(a.length, b.length) < 3) return false;
+  if (Math.abs(a.length - b.length) > 1) return false;
+
+  if (a.length === b.length) {
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i] && ++diff > 1) return false;
+    }
+    return diff === 1;
+  }
+
+  const [short, long] = a.length < b.length ? [a, b] : [b, a];
+  let i = 0;
+  let j = 0;
+  let skipped = false;
+  while (i < short.length && j < long.length) {
+    if (short[i] === long[j]) {
+      i++;
+      j++;
+      continue;
+    }
+    if (skipped) return false;
+    skipped = true;
+    j++;
+  }
+  return true;
 }
 
 /** Deterministic cash / bank resolution restricted to cash & bank ledgers. */
