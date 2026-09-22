@@ -377,3 +377,165 @@ export async function runAccountingQuery(query: AccountingQuery): Promise<Accoun
 export const AMBIGUOUS_LEDGER_MESSAGE =
   "I found more than one matching account. Please specify the full ledger name.";
 export const LEDGER_NOT_FOUND_MESSAGE = "I couldn't find that ledger in the current company.";
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Trial Balance (authoritative)
+//
+//  Mirrors the existing Trial Balance report exactly:
+//   • ledger source  : local ledger cache for the active company
+//   • opening        : opening_balance_paise signed by opening_balance_is_debit
+//   • movement       : sum(debit) − sum(credit) of live entries up to the date
+//   • closing        : opening + movement
+//   • classification : closing > 0 → Dr column, closing < 0 → Cr column
+//   • date/FY        : as-on date (inclusive); defaults to the active FY end
+//  No LLM involvement, no fuzzy matching, no caching.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TrialBalanceEntry {
+  ledgerId: string;
+  debitPaise: number;
+  creditPaise: number;
+  date: string;
+}
+
+export interface TrialBalanceRow {
+  ledgerId: string;
+  ledgerName: string;
+  ledgerGroup: string | null;
+  openingPaise: number;
+  entryDebitPaise: number;
+  entryCreditPaise: number;
+  closingPaise: number;
+  direction: "Dr" | "Cr" | "Nil";
+  /** Amount shown in the Debit column (0 when the balance is a credit). */
+  debitPaise: number;
+  /** Amount shown in the Credit column (0 when the balance is a debit). */
+  creditPaise: number;
+}
+
+export interface TrialBalanceResult {
+  status: "resolved";
+  asOn: string | null;
+  rows: TrialBalanceRow[];
+  totalDebitPaise: number;
+  totalCreditPaise: number;
+  balanced: boolean;
+}
+
+/** Pure Trial Balance calculation — the single authoritative implementation. */
+export function computeTrialBalance(
+  ledgers: EngineLedger[],
+  entries: TrialBalanceEntry[],
+  asOn?: string | null,
+): TrialBalanceResult {
+  const on = asOn ? String(asOn) : null;
+
+  const movement = new Map<string, { debit: number; credit: number }>();
+  for (const e of entries) {
+    if (!e || !e.ledgerId) continue;
+    if (on && String(e.date ?? "") > on) continue;
+    const key = String(e.ledgerId);
+    const acc = movement.get(key) ?? { debit: 0, credit: 0 };
+    acc.debit += Number(e.debitPaise ?? 0);
+    acc.credit += Number(e.creditPaise ?? 0);
+    movement.set(key, acc);
+  }
+
+  const rows: TrialBalanceRow[] = ledgers.map((l) => {
+    const opening =
+      Number(l.opening_balance_paise ?? 0) * (l.opening_balance_is_debit === false ? -1 : 1);
+    const m = movement.get(String(l.id)) ?? { debit: 0, credit: 0 };
+    const closing = opening + m.debit - m.credit;
+    return {
+      ledgerId: String(l.id),
+      ledgerName: String(l.name ?? ""),
+      ledgerGroup: (l.group_name as string | null) ?? null,
+      openingPaise: opening,
+      entryDebitPaise: m.debit,
+      entryCreditPaise: m.credit,
+      closingPaise: closing,
+      direction: closing > 0 ? "Dr" : closing < 0 ? "Cr" : "Nil",
+      debitPaise: closing > 0 ? closing : 0,
+      creditPaise: closing < 0 ? -closing : 0,
+    };
+  });
+
+  const totalDebitPaise = rows.reduce((s, r) => s + r.debitPaise, 0);
+  const totalCreditPaise = rows.reduce((s, r) => s + r.creditPaise, 0);
+
+  return {
+    status: "resolved",
+    asOn: on,
+    rows,
+    totalDebitPaise,
+    totalCreditPaise,
+    balanced: totalDebitPaise === totalCreditPaise,
+  };
+}
+
+/** Financial-year end (31 March) for a date, used when no as-on date is given. */
+export function fyEndFor(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const endYear = date.getMonth() + 1 >= 4 ? y + 1 : y;
+  return `${endYear}-03-31`;
+}
+
+/** Read every live entry of the company up to the as-on date. */
+async function readTrialBalanceEntries(
+  companyId: string,
+  asOn: string,
+): Promise<TrialBalanceEntry[]> {
+  const { offlineDb } = await import("@/lib/offline/db");
+  const vouchers = (await offlineDb.cache_vouchers
+    .where("[company_id+voucher_date]")
+    .between([companyId, ""], [companyId, asOn], true, true)
+    .toArray()) as Array<{ id?: unknown; voucher_date?: unknown; is_deleted?: boolean }>;
+
+  const live = vouchers.filter((v) => v?.is_deleted !== true);
+  const dateById = new Map(live.map((v) => [String(v.id), String(v.voucher_date ?? "")]));
+  const ids = [...dateById.keys()];
+
+  const out: TrialBalanceEntry[] = [];
+  for (let i = 0; i < ids.length; i += 500) {
+    const chunk = ids.slice(i, i + 500);
+    const rows = (await offlineDb.cache_voucher_entries
+      .where("voucher_id")
+      .anyOf(chunk)
+      .toArray()) as Array<{
+      voucher_id?: unknown;
+      ledger_id?: unknown;
+      debit_paise?: unknown;
+      credit_paise?: unknown;
+      is_deleted?: boolean;
+    }>;
+    for (const e of rows) {
+      if (e?.is_deleted === true) continue;
+      const date = dateById.get(String(e.voucher_id));
+      if (!date) continue;
+      out.push({
+        ledgerId: String(e.ledger_id),
+        debitPaise: Number(e.debit_paise ?? 0),
+        creditPaise: Number(e.credit_paise ?? 0),
+        date,
+      });
+    }
+  }
+  return out;
+}
+
+export interface TrialBalanceQuery {
+  asOn?: string | null;
+  companyId?: string | null;
+}
+
+export async function runTrialBalance(
+  query: TrialBalanceQuery = {},
+): Promise<TrialBalanceResult | { status: "no_company" }> {
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+
+  const asOn = query.asOn ? String(query.asOn) : fyEndFor();
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
+  const entries = await readTrialBalanceEntries(companyId, asOn);
+  return computeTrialBalance(ledgers, entries, asOn);
+}
