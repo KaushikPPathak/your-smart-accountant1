@@ -165,8 +165,18 @@ describe("accounting query engine — minor spelling tolerance", () => {
       { id: "a", name: "Madhuben Hasmukhbhai Sha", group_name: "Sundry Debtors" },
       { id: "b", name: "Madhuben Hasmukhbhai Shah", group_name: "Sundry Creditors" },
     ];
-    expect(resolveLedgerDeterministic(twins, "Madhuben Shah balance").status).toBe("ambiguous");
+    // Exactly spelled words win over a tolerated typo, so "Shah" picks ledger b.
+    const exactWins = resolveLedgerDeterministic(twins, "Madhuben Shah balance");
+    expect(exactWins.status === "resolved" && exactWins.ledger.id).toBe("b");
+    // Nothing distinguishes them here, so the engine must not guess.
     expect(resolveLedgerDeterministic(twins, "Madhuben balance").status).toBe("ambiguous");
+    const bothTypos: EngineLedger[] = [
+      { id: "a", name: "Madhuben Hasmukhbhai Sha", group_name: "Sundry Debtors" },
+      { id: "b", name: "Madhuben Hasmukhbhai Shaj", group_name: "Sundry Creditors" },
+    ];
+    expect(resolveLedgerDeterministic(bothTypos, "Madhuben Shah balance").status).toBe(
+      "ambiguous",
+    );
   });
 
   it("does not stretch tolerance to a different name", () => {
