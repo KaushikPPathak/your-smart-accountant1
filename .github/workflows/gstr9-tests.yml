@@ -11,6 +11,7 @@ on:
       - "src/lib/gst-returns.ts"
       - "src/lib/gst-returns.test.ts"
       - "src/routes/app.reports.gstr9.tsx"
+      - "src/components/AppSidebar.tsx"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/gstr9-tests.yml"
