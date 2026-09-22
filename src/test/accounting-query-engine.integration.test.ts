@@ -134,3 +134,42 @@ describe("accounting query engine — balance computation", () => {
     expect(r.closingPaise).toBe(-100000);
   });
 });
+
+describe("accounting query engine — minor spelling tolerance", () => {
+  const correct: EngineLedger[] = [
+    { id: "madhu", name: "Smt Madhuben Hasmukhbhai Shah", group_name: "Sundry Debtors" },
+    { id: "avni", name: "Avni Jenish Shah", group_name: "Sundry Debtors" },
+  ];
+  const typo: EngineLedger[] = [
+    { id: "madhu", name: "Smt Madhuben Hasmukhbhai Sha", group_name: "Sundry Debtors" },
+    { id: "avni", name: "Avni Jenish Shah", group_name: "Sundry Debtors" },
+  ];
+
+  it("resolves 'Madhuben balance' against the correctly spelled ledger", () => {
+    const r = resolveLedgerDeterministic(correct, "Madhuben balance");
+    expect(r.status === "resolved" && r.ledger.id).toBe("madhu");
+  });
+
+  it("resolves 'Madhuben balance' when the ledger surname has a typo", () => {
+    const r = resolveLedgerDeterministic(typo, "Madhuben balance");
+    expect(r.status === "resolved" && r.ledger.id).toBe("madhu");
+  });
+
+  it("resolves 'Madhuben Shah balance' against the typo'd ledger name", () => {
+    const r = resolveLedgerDeterministic(typo, "Madhuben Shah balance");
+    expect(r.status === "resolved" && r.ledger.id).toBe("madhu");
+  });
+
+  it("still reports ambiguity when two similar ledgers are plausible", () => {
+    const twins: EngineLedger[] = [
+      { id: "a", name: "Madhuben Hasmukhbhai Sha", group_name: "Sundry Debtors" },
+      { id: "b", name: "Madhuben Hasmukhbhai Shah", group_name: "Sundry Creditors" },
+    ];
+    expect(resolveLedgerDeterministic(twins, "Madhuben Shah balance").status).toBe("ambiguous");
+    expect(resolveLedgerDeterministic(twins, "Madhuben balance").status).toBe("ambiguous");
+  });
+
+  it("does not stretch tolerance to a different name", () => {
+    expect(resolveLedgerDeterministic(correct, "Madhavi Shah balance").status).toBe("not_found");
+  });
+});
