@@ -10,6 +10,7 @@ on:
       - "src/lib/gstr9.test.ts"
       - "src/lib/gst-returns.ts"
       - "src/lib/gst-returns.test.ts"
+      - "src/routes/app.reports.gstr9.tsx"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/gstr9-tests.yml"
@@ -35,6 +36,7 @@ jobs:
 
       - name: Run all tests
         run: bunx vitest run
+
       - name: TypeScript type check
         run: bunx tsc --noEmit
 
