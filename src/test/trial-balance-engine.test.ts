@@ -96,7 +96,6 @@ describe("trial balance engine", () => {
     expect(row(r, "cash").closingPaise).toBe(300000);
     expect(row(r, "creditor").closingPaise).toBe(-50000);
     expect(r.totalDebitPaise).toBe(300000);
-    expect(r.totalCreditPaise).toBe(250000 + 50000 - 200000 + 200000 - 250000 + 250000 - 250000);
     expect(r.totalCreditPaise).toBe(250000);
   });
 
