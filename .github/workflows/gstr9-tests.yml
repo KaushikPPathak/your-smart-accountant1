@@ -37,8 +37,8 @@ jobs:
       - name: Run all tests
         run: bunx vitest run
 
-      - name: TypeScript type check
-        run: bunx tsc --noEmit
-
       - name: Production build
         run: bun vite build
+
+      - name: TypeScript type check
+        run: bunx tsc --noEmit
