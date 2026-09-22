@@ -181,6 +181,7 @@ const MENUS: TopMenu[] = [
         label: "GST Reports",
         items: [
           { title: "GSTR-1 / 3B / 2B", url: "/app/reports/gstr1", icon: Receipt, i18nKey: "nav.gstReturns" },
+          { title: "GSTR-9 Annual Return", url: "/app/reports/gstr9", icon: FileSpreadsheet },
           { title: "GST Sales Book", url: "/app/reports/gst-sales-book", icon: Receipt, i18nKey: "nav.gstSalesBook" },
           { title: "GST Purchase Book", url: "/app/reports/gst-purchase-book", icon: Receipt, i18nKey: "nav.gstPurchaseBook" },
           { title: "HSN Summary", url: "/app/reports/hsn-summary", icon: Boxes },
