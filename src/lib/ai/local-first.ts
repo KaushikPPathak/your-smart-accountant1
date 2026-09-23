@@ -78,13 +78,19 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
 
     case "trial_balance": {
       if (!card.rows?.length) return "Trial balance is empty.";
-      const dr = card.rows.reduce((s, r) => s + (r.debitPaise > 0 ? r.debitPaise : 0), 0);
-      const cr = card.rows.reduce((s, r) => s + (r.creditPaise > 0 ? r.creditPaise : 0), 0);
+      // Prefer the accounting engine's authoritative totals when present.
+      const dr =
+        card.totalDebitPaise ??
+        card.rows.reduce((s, r) => s + (r.debitPaise > 0 ? r.debitPaise : 0), 0);
+      const cr =
+        card.totalCreditPaise ??
+        card.rows.reduce((s, r) => s + (r.creditPaise > 0 ? r.creditPaise : 0), 0);
       const diff = Math.abs(dr - cr);
+      const asOn = card.asOnDate ? ` as on ${card.asOnDate}` : "";
       return [
-        `Trial balance — ${card.rows.length} ledgers.`,
+        `Trial balance${asOn} — ${card.rows.length} ledgers.`,
         `Total Dr: ${formatInr(dr)} | Total Cr: ${formatInr(cr)}`,
-        diff < 1 ? "✅ Balanced." : `⚠️ Off by ${formatInr(diff)}.`,
+        (card.balanced ?? diff < 1) ? "✅ Balanced." : `⚠️ Off by ${formatInr(diff)}.`,
         `_Answered locally._`,
       ].join("\n\n");
     }

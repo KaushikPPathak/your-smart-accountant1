@@ -60,8 +60,8 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
   {
     name: "get_trial_balance",
     description:
-      "Trial balance snapshot — every ledger with opening, debit, credit, closing.",
-    argsHint: `{}`,
+      "Trial balance snapshot — every ledger with opening, debit, credit, closing, plus total Dr/Cr.",
+    argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
     name: "get_profit_loss",
@@ -545,7 +545,7 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     case "get_voucher":
       return execGetVoucher(args);
     case "get_trial_balance":
-      return execGetTrialBalance();
+      return execGetTrialBalance(args);
     case "get_journal_book":
       return execGetJournalBook(args);
     case "get_profit_loss":
