@@ -268,7 +268,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
       toolName = "get_cash_balance";
       toolArgs = { account: route.entity?.accountName || "bank", asOn: route.entity?.dateRange?.to };
       break;
-    case "trial_balance": toolName = "get_trial_balance"; break;
+    case "trial_balance":
+      toolName = "get_trial_balance";
+      toolArgs = { asOn: route.entity?.dateRange?.to };
+      break;
     case "voucher_lookup":
       toolName = "list_vouchers";
       toolArgs = { from: route.entity?.dateRange?.from, to: route.entity?.dateRange?.to, kind: route.entity?.voucherType };
@@ -329,12 +332,19 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
     if (!raw.length) return undefined;
     return {
       kind: "trial_balance",
+      asOnDate: facts.as_on_date ?? entity?.dateRange?.to ?? null,
+      // Figures are the engine's; nothing here recalculates them.
       rows: raw.map((r: any) => ({
         name: String(r.name ?? ""),
-        debitPaise: Number(r.closing_paise ?? 0) > 0 ? Number(r.closing_paise) : 0,
-        creditPaise: Number(r.closing_paise ?? 0) < 0 ? -Number(r.closing_paise) : 0,
+        debitPaise: Number(r.debit_paise ?? (Number(r.closing_paise ?? 0) > 0 ? r.closing_paise : 0)),
+        creditPaise: Number(r.credit_paise ?? (Number(r.closing_paise ?? 0) < 0 ? -Number(r.closing_paise) : 0)),
         closingPaise: Number(r.closing_paise ?? 0),
       })),
+      totalDebitPaise:
+        facts.total_debit_paise === undefined ? undefined : Number(facts.total_debit_paise),
+      totalCreditPaise:
+        facts.total_credit_paise === undefined ? undefined : Number(facts.total_credit_paise),
+      balanced: typeof facts.balanced === "boolean" ? facts.balanced : undefined,
     };
   }
   if (intent === "voucher_lookup") {
@@ -372,7 +382,8 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
     const isLiveBalanceIntent =
       route.intent === "party_balance" ||
       route.intent === "cash_balance" ||
-      route.intent === "bank_balance";
+      route.intent === "bank_balance" ||
+      route.intent === "trial_balance";
 
     // 2a. Cached deterministic answer — before any retrieval or context build.
     if (isDeterministic && earlyCompanyId && !isLiveBalanceIntent) {
