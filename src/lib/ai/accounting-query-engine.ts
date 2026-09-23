@@ -539,3 +539,259 @@ export async function runTrialBalance(
   const entries = await readTrialBalanceEntries(companyId, asOn);
   return computeTrialBalance(ledgers, entries, asOn);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Ledger Statement (authoritative)
+//
+//  Mirrors the existing Ledger Statement report exactly:
+//   • entries        : live voucher_entries of the ledger joined to their voucher
+//   • ordering       : voucher_date asc, then voucher_number compared numerically
+//   • opening        : signed opening balance + movement of everything BEFORE
+//                      the period start (same as the report's "openingBeforeFrom")
+//   • running balance: opening + Σ(debit − credit) row by row
+//   • totals         : debit / credit of the rows inside the period
+//   • closing        : opening + totalDebit − totalCredit
+//  No LLM involvement, no fuzzy matching, no caching.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LedgerStatementTxn {
+  voucherId: string;
+  date: string;
+  voucherNumber: string;
+  voucherType?: string | null;
+  referenceNo?: string | null;
+  narration?: string | null;
+  debitPaise: number;
+  creditPaise: number;
+}
+
+export interface LedgerStatementRow {
+  voucherId: string;
+  date: string;
+  voucherNumber: string;
+  voucherType: string | null;
+  referenceNo: string | null;
+  narration: string;
+  debitPaise: number;
+  creditPaise: number;
+  balancePaise: number;
+  balanceDirection: "Dr" | "Cr" | "Nil";
+}
+
+export interface LedgerStatementResult {
+  status: "resolved";
+  ledgerId: string;
+  ledgerName: string;
+  ledgerGroup: string | null;
+  from: string | null;
+  to: string | null;
+  openingPaise: number;
+  openingDirection: "Dr" | "Cr" | "Nil";
+  rows: LedgerStatementRow[];
+  totalDebitPaise: number;
+  totalCreditPaise: number;
+  closingPaise: number;
+  closingDirection: "Dr" | "Cr" | "Nil";
+}
+
+export type LedgerStatementOutcome =
+  | LedgerStatementResult
+  | { status: "ambiguous"; candidates: string[] }
+  | { status: "not_found"; query: string }
+  | { status: "no_company" };
+
+export interface LedgerStatementQuery {
+  /** Ledger name exactly as the user wrote it. */
+  name: string;
+  from?: string | null;
+  to?: string | null;
+  /** Include everything through this date (period start stays the FY start). */
+  asOn?: string | null;
+  companyId?: string | null;
+}
+
+function directionOf(paise: number): "Dr" | "Cr" | "Nil" {
+  return paise > 0 ? "Dr" : paise < 0 ? "Cr" : "Nil";
+}
+
+/** Numeric voucher-number sort key, matching the shared voucher ordering rule. */
+function vchSortKey(value: string | null | undefined): number {
+  if (!value) return 0;
+  const n = parseInt(String(value).replace(/\D+/g, ""), 10);
+  return Number.isNaN(n) ? 0 : n;
+}
+
+/** Pure Ledger Statement calculation — the single authoritative implementation. */
+export function computeLedgerStatement(
+  ledger: EngineLedger,
+  txns: LedgerStatementTxn[],
+  period: { from?: string | null; to?: string | null } = {},
+): Omit<LedgerStatementResult, "ledgerId" | "ledgerName" | "ledgerGroup"> {
+  const from = period.from ? String(period.from) : null;
+  const to = period.to ? String(period.to) : null;
+
+  const signedOpening =
+    Number(ledger.opening_balance_paise ?? 0) *
+    (ledger.opening_balance_is_debit === false ? -1 : 1);
+
+  let openingPaise = signedOpening;
+  const inPeriod: LedgerStatementTxn[] = [];
+
+  for (const t of txns ?? []) {
+    if (!t) continue;
+    const date = String(t.date ?? "");
+    if (!date) continue;
+    if (from && date < from) {
+      openingPaise += Number(t.debitPaise ?? 0) - Number(t.creditPaise ?? 0);
+      continue;
+    }
+    if (to && date > to) continue;
+    inPeriod.push(t);
+  }
+
+  inPeriod.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return vchSortKey(a.voucherNumber) - vchSortKey(b.voucherNumber);
+  });
+
+  let balance = openingPaise;
+  let totalDebitPaise = 0;
+  let totalCreditPaise = 0;
+
+  const rows: LedgerStatementRow[] = inPeriod.map((t) => {
+    const debitPaise = Number(t.debitPaise ?? 0);
+    const creditPaise = Number(t.creditPaise ?? 0);
+    balance += debitPaise - creditPaise;
+    totalDebitPaise += debitPaise;
+    totalCreditPaise += creditPaise;
+    return {
+      voucherId: String(t.voucherId ?? ""),
+      date: String(t.date ?? ""),
+      voucherNumber: String(t.voucherNumber ?? ""),
+      voucherType: (t.voucherType as string | null) ?? null,
+      referenceNo: (t.referenceNo as string | null) ?? null,
+      narration:
+        (t.narration && String(t.narration).trim()) ||
+        (t.referenceNo && String(t.referenceNo).trim()) ||
+        "",
+      debitPaise,
+      creditPaise,
+      balancePaise: balance,
+      balanceDirection: directionOf(balance),
+    };
+  });
+
+  const closingPaise = openingPaise + totalDebitPaise - totalCreditPaise;
+
+  return {
+    status: "resolved",
+    from,
+    to,
+    openingPaise,
+    openingDirection: directionOf(openingPaise),
+    rows,
+    totalDebitPaise,
+    totalCreditPaise,
+    closingPaise,
+    closingDirection: directionOf(closingPaise),
+  };
+}
+
+/** Financial-year start (1 April) for a date, used when no period is given. */
+export function fyStartFor(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const startYear = date.getMonth() + 1 >= 4 ? y : y - 1;
+  return `${startYear}-04-01`;
+}
+
+/** Read every live transaction of one ledger (unfiltered; the pure fn filters). */
+async function readLedgerStatementTxns(
+  companyId: string,
+  ledgerId: string,
+): Promise<LedgerStatementTxn[]> {
+  const { offlineDb } = await import("@/lib/offline/db");
+  type EntryRow = {
+    voucher_id?: unknown;
+    debit_paise?: unknown;
+    credit_paise?: unknown;
+    narration?: unknown;
+    is_deleted?: boolean;
+  };
+  const entries = (await offlineDb.cache_voucher_entries
+    .where("[company_id+ledger_id]")
+    .equals([companyId, ledgerId])
+    .toArray()) as EntryRow[];
+
+  const live = entries.filter((e) => e?.is_deleted !== true);
+  const ids = [...new Set(live.map((e) => String(e.voucher_id)))];
+
+  type VoucherRow = {
+    id?: unknown;
+    voucher_date?: unknown;
+    date?: unknown;
+    voucher_number?: unknown;
+    voucher_type?: unknown;
+    reference_no?: unknown;
+    narration?: unknown;
+    is_deleted?: boolean;
+  };
+  const byId = new Map<string, VoucherRow>();
+  for (let i = 0; i < ids.length; i += 500) {
+    const rows = (await offlineDb.cache_vouchers
+      .where("id")
+      .anyOf(ids.slice(i, i + 500))
+      .toArray()) as VoucherRow[];
+    for (const v of rows) {
+      if (v?.is_deleted !== true) byId.set(String(v.id), v);
+    }
+  }
+
+  const out: LedgerStatementTxn[] = [];
+  for (const e of live) {
+    const v = byId.get(String(e.voucher_id));
+    if (!v) continue;
+    out.push({
+      voucherId: String(v.id),
+      date: String(v.voucher_date ?? v.date ?? ""),
+      voucherNumber: String(v.voucher_number ?? ""),
+      voucherType: (v.voucher_type as string | null) ?? null,
+      referenceNo: (v.reference_no as string | null) ?? null,
+      narration:
+        (e.narration ? String(e.narration) : "") || (v.narration ? String(v.narration) : ""),
+      debitPaise: Number(e.debit_paise ?? 0),
+      creditPaise: Number(e.credit_paise ?? 0),
+    });
+  }
+  return out;
+}
+
+export async function runLedgerStatement(
+  query: LedgerStatementQuery,
+): Promise<LedgerStatementOutcome> {
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
+  const resolution = resolveLedgerDeterministic(ledgers, String(query.name ?? ""));
+
+  if (resolution.status === "ambiguous") {
+    return { status: "ambiguous", candidates: resolution.candidates.map((l) => String(l.name ?? "")) };
+  }
+  if (resolution.status === "not_found") {
+    return { status: "not_found", query: String(query.name ?? "") };
+  }
+
+  // Date rules: explicit from/to win; an as-on date runs from the FY start
+  // through that date; otherwise the current financial year. No invented dates.
+  const from = query.from ? String(query.from) : fyStartFor();
+  const to = query.to ? String(query.to) : query.asOn ? String(query.asOn) : fyEndFor();
+
+  const ledger = resolution.ledger;
+  const txns = await readLedgerStatementTxns(companyId, String(ledger.id));
+  return {
+    ledgerId: String(ledger.id),
+    ledgerName: String(ledger.name ?? ""),
+    ledgerGroup: (ledger.group_name as string | null) ?? null,
+    ...computeLedgerStatement(ledger, txns, { from, to }),
+  };
+}
