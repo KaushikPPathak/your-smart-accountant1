@@ -38,7 +38,7 @@ import {
   type Gstr9SourceStatus,
   type Gstr9TaxTotals,
 } from "@/lib/gstr9";
-import { exportGstr9Excel } from "@/lib/gstr9-export";
+import { exportGstr9Excel } from "../lib/gstr9-export";
 
 export const Route = createFileRoute("/app/reports/gstr9")({
   head: () => ({ meta: [{ title: "GSTR-9 — Reports" }] }),
