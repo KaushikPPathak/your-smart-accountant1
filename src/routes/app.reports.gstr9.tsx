@@ -287,9 +287,15 @@ function GSTR9Page() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  if (result) {
-                    void exportGstr9Excel(result);
-                  }
+                  if (!result) return;
+
+                  void exportGstr9Excel(result).catch((err) => {
+                    setError(
+                      err instanceof Error
+                        ? `Excel export failed: ${err.message}`
+                        : "Excel export failed.",
+                    );
+                  });
                 }}
                 disabled={!result || loading}
               >
