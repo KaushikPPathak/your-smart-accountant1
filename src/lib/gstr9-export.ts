@@ -4,7 +4,7 @@ import {
   type Gstr9Result,
   type Gstr9SourceStatus,
   type Gstr9TaxTotals,
-} from "@/lib/gstr9";
+} from "./gstr9";
 
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
