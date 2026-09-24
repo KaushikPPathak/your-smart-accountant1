@@ -545,7 +545,7 @@ function addSummarySheet(
   workbook: ExcelJS.Workbook,
   result: Gstr9Result,
 ): void {
-  const worksheet = workbook.addWorksheet("GSTR-9 Summary", 0);
+  const worksheet = workbook.addWorksheet("GSTR-9 Summary");
 
   addTitle(
     worksheet,
