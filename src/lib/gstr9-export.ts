@@ -647,6 +647,7 @@ export async function exportGstr9Excel(
   addSourceAndValidationSheet(workbook, result);
 
   const buffer = await workbook.xlsx.writeBuffer();
+  const bytes = new Uint8Array(buffer);
 
   const gstin = safeFilePart(
     result.company.gstin ?? "NO-GSTIN",
@@ -655,7 +656,7 @@ export async function exportGstr9Excel(
   await saveExport({
     subFolder: "Reports",
     fileName: `GSTR9_${gstin}_${result.period.financialYear}.xlsx`,
-    contents: buffer,
+    contents: bytes,
     mime: XLSX_MIME,
     toastTitle: `GSTR-9 ${result.period.financialYear}`,
   });
