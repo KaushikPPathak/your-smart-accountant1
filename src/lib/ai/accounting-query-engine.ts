@@ -781,9 +781,14 @@ export async function runLedgerStatement(
     return { status: "not_found", query: String(query.name ?? "") };
   }
 
-  // Date rules: explicit from/to win; an as-on date runs from the FY start
-  // through that date; otherwise the current financial year. No invented dates.
-  const from = query.from ? String(query.from) : fyStartFor();
+  // Date rules: explicit from/to win; an as-on date runs from the start of the
+  // financial year CONTAINING that date through the date itself; otherwise the
+  // current financial year. No invented dates.
+  const from = query.from
+    ? String(query.from)
+    : query.asOn
+      ? fyStartFor(new Date(`${String(query.asOn)}T00:00:00`))
+      : fyStartFor();
   const to = query.to ? String(query.to) : query.asOn ? String(query.asOn) : fyEndFor();
 
   const ledger = resolution.ledger;
