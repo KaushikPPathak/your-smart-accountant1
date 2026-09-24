@@ -5,6 +5,7 @@ import {
   type Gstr9SourceStatus,
   type Gstr9TaxTotals,
 } from "./gstr9";
+import { saveExport } from "./desktop-save";
 
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -647,25 +648,15 @@ export async function exportGstr9Excel(
 
   const buffer = await workbook.xlsx.writeBuffer();
 
-  const blob = new Blob([buffer as ArrayBuffer], {
-    type: XLSX_MIME,
-  });
-
-  const url = window.URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-
   const gstin = safeFilePart(
     result.company.gstin ?? "NO-GSTIN",
   );
 
-  anchor.href = url;
-  anchor.download = `GSTR9_${gstin}_${result.period.financialYear}.xlsx`;
-
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-
-  window.setTimeout(() => {
-    window.URL.revokeObjectURL(url);
-  }, 1000);
+  await saveExport({
+    subFolder: "Reports",
+    fileName: `GSTR9_${gstin}_${result.period.financialYear}.xlsx`,
+    contents: buffer,
+    mime: XLSX_MIME,
+    toastTitle: `GSTR-9 ${result.period.financialYear}`,
+  });
 }
