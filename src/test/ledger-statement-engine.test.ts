@@ -173,3 +173,18 @@ describe("ledger statement engine", () => {
     expect(fyStartFor(new Date("2026-02-10T00:00:00Z"))).toBe("2025-04-01");
   });
 });
+
+it("asOn determines the FY start: asOn 2026-03-31 uses period 2025-04-01 to 2026-03-31", () => {
+  // 10. as-on date: earlier-FY txns fold into opening, in-FY txns listed.
+  const r = computeLedgerStatement(LEDGER, TXNS, { from: "2025-04-01", to: "2026-03-31" });
+  expect(r.openingPaise).toBe(50000 + 100000 - 30000); // opening + 2024-01-10 + 2024-12-31
+  expect(r.transactions.map((t) => t.date)).toEqual(["2025-06-15", "2025-11-20"]);
+  expect(r.closingPaise).toBe(r.openingPaise + 250000 - 40000);
+});
+
+it("runLedgerStatement date rules: explicit from/to preserved; asOn picks its own FY", () => {
+  // fyStartFor must derive the FY from the asOn date, not from today.
+  expect(fyStartFor(new Date("2026-03-31T00:00:00"))).toBe("2025-04-01");
+  expect(fyStartFor(new Date("2026-04-01T00:00:00"))).toBe("2026-04-01");
+  expect(fyStartFor(new Date("2025-04-01T00:00:00"))).toBe("2025-04-01");
+});
