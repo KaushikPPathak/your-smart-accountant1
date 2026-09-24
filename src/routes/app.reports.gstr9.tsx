@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  Download,
   Info,
   Loader2,
   Printer,
@@ -37,6 +38,7 @@ import {
   type Gstr9SourceStatus,
   type Gstr9TaxTotals,
 } from "@/lib/gstr9";
+import { exportGstr9Excel } from "@/lib/gstr9-export";
 
 export const Route = createFileRoute("/app/reports/gstr9")({
   head: () => ({ meta: [{ title: "GSTR-9 — Reports" }] }),
@@ -280,6 +282,19 @@ function GSTR9Page() {
               >
                 <Printer className="mr-1 h-4 w-4" />
                 Print
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (result) {
+                    void exportGstr9Excel(result);
+                  }
+                }}
+                disabled={!result || loading}
+              >
+                <Download className="mr-1 h-4 w-4" />
+                Excel
               </Button>
             </div>
           </div>
