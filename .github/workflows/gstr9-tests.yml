@@ -8,6 +8,7 @@ on:
     paths:
       - "src/lib/gstr9.ts"
       - "src/lib/gstr9.test.ts"
+      - "src/lib/gstr9-export.ts"
       - "src/lib/gst-returns.ts"
       - "src/lib/gst-returns.test.ts"
       - "src/routes/app.reports.gstr9.tsx"
