@@ -99,7 +99,7 @@ function buildCellXml(
   openingTag: string,
   value: number | string | null,
 ): string {
-  let cleanOpeningTag = openingTag
+  const cleanOpeningTag = openingTag
     .replace(/\s+t=["'][^"']*["']/i, "")
     .replace(/\s+t=[^\s>]+/i, "")
     .replace(/\s*\/?>$/, "");
@@ -117,6 +117,75 @@ function buildCellXml(
   )}</t></is></c>`;
 }
 
+function replaceCellInRow(
+  rowXml: string,
+  reference: string,
+  value: number | string | null,
+): string | null {
+  const escapedReference = reference.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&",
+  );
+
+  const selfClosingPattern = new RegExp(
+    `<c\\b(?=[^>]*\\br=["']${escapedReference}["'])[^>]*/>`,
+  );
+
+  const selfClosingMatch = selfClosingPattern.exec(
+    rowXml,
+  );
+
+  if (selfClosingMatch) {
+    const replacement = buildCellXml(
+      selfClosingMatch[0],
+      value,
+    );
+
+    return (
+      rowXml.slice(0, selfClosingMatch.index) +
+      replacement +
+      rowXml.slice(
+        selfClosingMatch.index +
+          selfClosingMatch[0].length,
+      )
+    );
+  }
+
+  const normalCellPattern = new RegExp(
+    `<c\\b(?=[^>]*\\br=["']${escapedReference}["'])[^>]*>[\\s\\S]*?</c>`,
+  );
+
+  const normalCellMatch = normalCellPattern.exec(
+    rowXml,
+  );
+
+  if (!normalCellMatch) {
+    return null;
+  }
+
+  const openingEnd =
+    normalCellMatch[0].indexOf(">") + 1;
+
+  const openingTag = normalCellMatch[0].slice(
+    0,
+    openingEnd,
+  );
+
+  const replacement = buildCellXml(
+    openingTag,
+    value,
+  );
+
+  return (
+    rowXml.slice(0, normalCellMatch.index) +
+    replacement +
+    rowXml.slice(
+      normalCellMatch.index +
+        normalCellMatch[0].length,
+    )
+  );
+}
+
 function setCellValue(
   worksheetXml: string,
   reference: string,
@@ -126,94 +195,61 @@ function setCellValue(
   const { row: rowNumber } =
     cellReferenceParts(normalizedReference);
 
-  const cellPattern =
-    /<c\b[^>]*(?:\/>|>[\s\S]*?<\/c>)/g;
+  const rowPattern = new RegExp(
+    `<row\\b(?=[^>]*\\br=["']${rowNumber}["'])[^>]*>[\\s\\S]*?</row>`,
+  );
 
-  let cellMatch: RegExpExecArray | null;
+  const rowMatch = rowPattern.exec(worksheetXml);
 
-  while ((cellMatch = cellPattern.exec(worksheetXml)) !== null) {
-    const openingEnd = cellMatch[0].indexOf(">");
-    if (openingEnd < 0) {
-      continue;
-    }
-
-    const openingTag = cellMatch[0].slice(0, openingEnd + 1);
-    const cellReference = getXmlAttribute(openingTag, "r");
-
-    if (
-      cellReference?.toUpperCase() !==
-      normalizedReference
-    ) {
-      continue;
-    }
-
-    const replacement = buildCellXml(
-      openingTag,
-      value,
-    );
-
-    return (
-      worksheetXml.slice(0, cellMatch.index) +
-      replacement +
-      worksheetXml.slice(
-        cellMatch.index + cellMatch[0].length,
-      )
+  if (!rowMatch) {
+    throw new Error(
+      `GSTN template row ${rowNumber} was not found while writing ${normalizedReference}.`,
     );
   }
 
-  const rowPattern =
-    /<row\b[^>]*(?:\/>|>[\s\S]*?<\/row>)/g;
+  const rowXml = rowMatch[0];
+  const replacedRow = replaceCellInRow(
+    rowXml,
+    normalizedReference,
+    value,
+  );
 
-  let rowMatch: RegExpExecArray | null;
-
-  while ((rowMatch = rowPattern.exec(worksheetXml)) !== null) {
-    const openingEnd = rowMatch[0].indexOf(">");
-    if (openingEnd < 0) {
-      continue;
-    }
-
-    const openingTag = rowMatch[0].slice(0, openingEnd + 1);
-    const rowReference = getXmlAttribute(
-      openingTag,
-      "r",
-    );
-
-    if (Number(rowReference) !== rowNumber) {
-      continue;
-    }
-
-    const newCell = buildCellXml(
-      `<c r="${normalizedReference}">`,
-      value,
-    );
-
-    const rowXml = rowMatch[0];
-    const closeRowIndex = rowXml.lastIndexOf(
-      "</row>",
-    );
-
-    if (closeRowIndex < 0) {
-      throw new Error(
-        `GSTN template row ${rowNumber} has invalid XML while writing ${normalizedReference}.`,
-      );
-    }
-
-    const updatedRow =
-      rowXml.slice(0, closeRowIndex) +
-      newCell +
-      rowXml.slice(closeRowIndex);
-
+  if (replacedRow !== null) {
     return (
       worksheetXml.slice(0, rowMatch.index) +
-      updatedRow +
+      replacedRow +
       worksheetXml.slice(
         rowMatch.index + rowXml.length,
       )
     );
   }
 
-  throw new Error(
-    `GSTN template row ${rowNumber} was not found while writing ${normalizedReference}.`,
+  const newCell = buildCellXml(
+    `<c r="${normalizedReference}">`,
+    value,
+  );
+
+  const closeRowIndex = rowXml.lastIndexOf(
+    "</row>",
+  );
+
+  if (closeRowIndex < 0) {
+    throw new Error(
+      `GSTN template row ${rowNumber} has invalid XML while writing ${normalizedReference}.`,
+    );
+  }
+
+  const updatedRow =
+    rowXml.slice(0, closeRowIndex) +
+    newCell +
+    rowXml.slice(closeRowIndex);
+
+  return (
+    worksheetXml.slice(0, rowMatch.index) +
+    updatedRow +
+    worksheetXml.slice(
+      rowMatch.index + rowXml.length,
+    )
   );
 }
 
