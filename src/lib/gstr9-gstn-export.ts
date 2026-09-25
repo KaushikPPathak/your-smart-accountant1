@@ -82,112 +82,62 @@ function setCellValue(
   reference: string,
   value: number | string | null,
 ): string {
-  const { column, row: rowNumber } =
-    cellReferenceParts(reference);
+  const { row: rowNumber } = cellReferenceParts(reference);
 
   const cellPattern = new RegExp(
-    `<c\\b[^>]*\\br=["']${reference}["'][^>]*>([\\s\\S]*?)</c>`,
+    `<c\\b(?=[^>]*\\br=["']${reference}["'])[^>]*(?:/>|>[\\s\\S]*?</c>)`,
   );
 
-  const selfClosingPattern = new RegExp(
-    `<c\\b([^>]*)\\br=["']${reference}["']([^>]*)\\/>`,
-  );
+  const match = cellPattern.exec(worksheetXml);
 
-  const valueXml =
-    value === null
-      ? ""
-      : typeof value === "number"
-        ? `<v>${Number.isFinite(value) ? value : 0}</v>`
-        : `<is><t>${xmlEscape(value)}</t></is>`;
+  const buildCell = (openingTag: string): string => {
+    const cleanOpeningTag = openingTag
+      .replace(/\s+t=["'][^"']*["']/i, "")
+      .replace(/\s+t=[^\s>]+/i, "");
 
-  if (value !== null && typeof value === "string") {
-    if (cellPattern.test(worksheetXml)) {
-      return worksheetXml.replace(
-        cellPattern,
-        (_match, attributesAndChildren) => {
-          const openingMatch =
-            /^([\s\S]*?)<\/c>$/.exec(
-              `<c>${attributesAndChildren}</c>`,
-            );
+    const normalizedOpeningTag = cleanOpeningTag.replace(
+      /\s*\/?>$/,
+      ">",
+    );
 
-          void openingMatch;
+    if (value === null) {
+      return `${normalizedOpeningTag}</c>`;
+    }
 
-          const original = _match;
-          const openEnd = original.indexOf(">");
+    if (typeof value === "number") {
+      return `${normalizedOpeningTag}<v>${value}</v></c>`;
+    }
 
-          if (openEnd < 0) {
-            return original;
-          }
+    return `${normalizedOpeningTag} t="inlineStr"><is><t>${xmlEscape(
+      value,
+    )}</t></is></c>`;
+  };
 
-          const opening = original.slice(
-            0,
-            openEnd + 1,
-          );
+  if (match) {
+    const originalCell = match[0];
+    const openingEnd = originalCell.indexOf(">");
 
-          const cleanedOpening =
-            opening
-              .replace(/\s+t="[^"]*"/g, "")
-              .replace(/\s+t='[^']*'/g, "");
-
-          return `${cleanedOpening.slice(0, -1)} t="inlineStr">${valueXml}</c>`;
-        },
+    if (openingEnd === -1) {
+      throw new Error(
+        `GSTN template cell ${reference} has an invalid XML opening tag.`,
       );
     }
 
-    if (selfClosingPattern.test(worksheetXml)) {
-      return worksheetXml.replace(
-        selfClosingPattern,
-        (_match, before, after) =>
-          `<c${before}${after} t="inlineStr">${valueXml}</c>`,
-      );
-    }
-  }
+    const openingTag = originalCell.slice(0, openingEnd + 1);
+    const replacement = buildCell(openingTag);
 
-  if (typeof value === "number" || value === null) {
-    const replaceExisting = (
-      original: string,
-    ): string => {
-      const openEnd = original.indexOf(">");
-
-      if (openEnd < 0) {
-        return original;
-      }
-
-      const opening = original.slice(
-        0,
-        openEnd + 1,
-      );
-
-      const cleanedOpening =
-        opening
-          .replace(/\s+t="[^"]*"/g, "")
-          .replace(/\s+t='[^']*'/g, "");
-
-      return `${cleanedOpening}${valueXml}</c>`;
-    };
-
-    if (cellPattern.test(worksheetXml)) {
-      return worksheetXml.replace(
-        cellPattern,
-        replaceExisting,
-      );
-    }
-
-    if (selfClosingPattern.test(worksheetXml)) {
-      return worksheetXml.replace(
-        selfClosingPattern,
-        (_match, before, after) =>
-          `<c${before}${after}>${valueXml}</c>`,
-      );
-    }
+    return (
+      worksheetXml.slice(0, match.index) +
+      replacement +
+      worksheetXml.slice(match.index + originalCell.length)
+    );
   }
 
   const rowPattern = new RegExp(
-    `<row\\b[^>]*\\br=["']${rowNumber}["'][^>]*>[\\s\\S]*?</row>`,
+    `<row\\b(?=[^>]*\\br=["']${rowNumber}["'])[^>]*>[\\s\\S]*?</row>`,
   );
 
-  const rowMatch =
-    rowPattern.exec(worksheetXml);
+  const rowMatch = rowPattern.exec(worksheetXml);
 
   if (!rowMatch) {
     throw new Error(
@@ -197,48 +147,23 @@ function setCellValue(
 
   const rowXml = rowMatch[0];
 
-  const newCell =
-    typeof value === "string"
-      ? `<c r="${reference}" t="inlineStr">${valueXml}</c>`
-      : `<c r="${reference}">${valueXml}</c>`;
+  const newCell = buildCell(
+    `<c r="${reference}">`,
+  );
 
-  const targetColumnNumber =
-    columnNumber(column);
-
-  const existingCells = [
-    ...rowXml.matchAll(
-      /<c\b[^>]*\br=["']([A-Z]+)\d+["'][^>]*>/g,
-    ),
-  ];
-
-  let insertBeforeOffset =
-    rowXml.length - "</row>".length;
-
-  for (const cellMatch of existingCells) {
-    const existingColumn =
-      columnNumber(cellMatch[1]);
-
-    if (existingColumn > targetColumnNumber) {
-      insertBeforeOffset =
-        cellMatch.index ?? insertBeforeOffset;
-      break;
-    }
-  }
-
-  const updatedRow =
-    rowXml.slice(0, insertBeforeOffset) +
-    newCell +
-    rowXml.slice(insertBeforeOffset);
+  const updatedRow = rowXml.replace(
+    /<\/row>\s*$/,
+    `${newCell}</row>`,
+  );
 
   return (
     worksheetXml.slice(0, rowMatch.index) +
     updatedRow +
-    worksheetXml.slice(
-      rowMatch.index + rowMatch[0].length,
-    )
+    worksheetXml.slice(rowMatch.index + rowXml.length)
   );
 }
 
+         
 function setCells(
   worksheetXml: string,
   values: Record<
