@@ -39,7 +39,7 @@ import {
   type Gstr9TaxTotals,
 } from "@/lib/gstr9";
 import { exportGstr9Excel } from "../lib/gstr9-export";
-
+import { exportGstr9GstnUtility } from "../lib/gstr9-gstn-export";
 export const Route = createFileRoute("/app/reports/gstr9")({
   head: () => ({ meta: [{ title: "GSTR-9 — Reports" }] }),
   component: GSTR9Page,
@@ -284,24 +284,42 @@ function GSTR9Page() {
                 Print
               </Button>
               <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (!result) return;
+  variant="outline"
+  size="sm"
+  onClick={() => {
+    if (!result) return;
+    void exportGstr9Excel(result).catch((err) => {
+      setError(
+        err instanceof Error
+          ? `GSTR-9 Report export failed: ${err.message}`
+          : "GSTR-9 Report export failed.",
+      );
+    });
+  }}
+  disabled={!result || loading}
+>
+  <Download className="mr-1 h-4 w-4" />
+  A — GSTR-9 Report
+</Button>
 
-                  void exportGstr9Excel(result).catch((err) => {
-                    setError(
-                      err instanceof Error
-                        ? `Excel export failed: ${err.message}`
-                        : "Excel export failed.",
-                    );
-                  });
-                }}
-                disabled={!result || loading}
-              >
-                <Download className="mr-1 h-4 w-4" />
-                Excel
-              </Button>
+<Button
+  variant="outline"
+  size="sm"
+  onClick={() => {
+    if (!result) return;
+    void exportGstr9GstnUtility(result).catch((err) => {
+      setError(
+        err instanceof Error
+          ? `GSTN Offline Utility export failed: ${err.message}`
+          : "GSTN Offline Utility export failed.",
+      );
+    });
+  }}
+  disabled={!result || loading}
+>
+  <Download className="mr-1 h-4 w-4" />
+  B — GSTN Offline Utility
+</Button>
             </div>
           </div>
 
