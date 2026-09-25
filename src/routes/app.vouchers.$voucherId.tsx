@@ -351,6 +351,15 @@ function VoucherEditPage() {
       );
       if (!ok) return;
     }
+    // Enforce the active financial-year rule on EDIT too — the date box
+    // alone is not enough (paste/autofill can bypass it).
+    try {
+      const { assertDateInOpenFy } = await import("@/lib/offline/voucher-executors");
+      await assertDateInOpenFy(voucher.company_id, voucher.voucher_date);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Date is outside the open financial year");
+      return;
+    }
     setSaving(true);
     try {
       // -----------------------------------------------------------------
