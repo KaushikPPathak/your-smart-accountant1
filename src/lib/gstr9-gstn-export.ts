@@ -77,93 +77,146 @@ function cellReferenceParts(
  * If a cell is not present in the XML, this function creates it while
  * retaining the row's existing formatting structure.
  */
+function getXmlAttribute(
+  tag: string,
+  attribute: string,
+): string | null {
+  const escapedAttribute = attribute.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&",
+  );
+
+  const pattern = new RegExp(
+    `\\b${escapedAttribute}\\s*=\\s*["']([^"']*)["']`,
+    "i",
+  );
+
+  const match = pattern.exec(tag);
+  return match?.[1] ?? null;
+}
+
+function buildCellXml(
+  openingTag: string,
+  value: number | string | null,
+): string {
+  let cleanOpeningTag = openingTag
+    .replace(/\s+t=["'][^"']*["']/i, "")
+    .replace(/\s+t=[^\s>]+/i, "")
+    .replace(/\s*\/?>$/, "");
+
+  if (value === null) {
+    return `${cleanOpeningTag}/>`;
+  }
+
+  if (typeof value === "number") {
+    return `${cleanOpeningTag}><v>${Number.isFinite(value) ? value : 0}</v></c>`;
+  }
+
+  return `${cleanOpeningTag} t="inlineStr"><is><t>${xmlEscape(
+    value,
+  )}</t></is></c>`;
+}
+
 function setCellValue(
   worksheetXml: string,
   reference: string,
   value: number | string | null,
 ): string {
-  const { row: rowNumber } = cellReferenceParts(reference);
+  const normalizedReference = reference.toUpperCase();
+  const { row: rowNumber } =
+    cellReferenceParts(normalizedReference);
 
-  const cellPattern = new RegExp(
-    `<c\\b(?=[^>]*\\br=["']${reference}["'])[^>]*(?:/>|>[\\s\\S]*?</c>)`,
-  );
+  const cellPattern =
+    /<c\b[^>]*(?:\/>|>[\s\S]*?<\/c>)/g;
 
-  const match = cellPattern.exec(worksheetXml);
+  let cellMatch: RegExpExecArray | null;
 
-  const buildCell = (openingTag: string): string => {
-    const cleanOpeningTag = openingTag
-      .replace(/\s+t=["'][^"']*["']/i, "")
-      .replace(/\s+t=[^\s>]+/i, "");
+  while ((cellMatch = cellPattern.exec(worksheetXml)) !== null) {
+    const openingEnd = cellMatch[0].indexOf(">");
+    if (openingEnd < 0) {
+      continue;
+    }
 
-    const normalizedOpeningTag = cleanOpeningTag.replace(
-      /\s*\/?>$/,
-      ">",
+    const openingTag = cellMatch[0].slice(0, openingEnd + 1);
+    const cellReference = getXmlAttribute(openingTag, "r");
+
+    if (
+      cellReference?.toUpperCase() !==
+      normalizedReference
+    ) {
+      continue;
+    }
+
+    const replacement = buildCellXml(
+      openingTag,
+      value,
     );
 
-    if (value === null) {
-      return `${normalizedOpeningTag}</c>`;
+    return (
+      worksheetXml.slice(0, cellMatch.index) +
+      replacement +
+      worksheetXml.slice(
+        cellMatch.index + cellMatch[0].length,
+      )
+    );
+  }
+
+  const rowPattern =
+    /<row\b[^>]*(?:\/>|>[\s\S]*?<\/row>)/g;
+
+  let rowMatch: RegExpExecArray | null;
+
+  while ((rowMatch = rowPattern.exec(worksheetXml)) !== null) {
+    const openingEnd = rowMatch[0].indexOf(">");
+    if (openingEnd < 0) {
+      continue;
     }
 
-    if (typeof value === "number") {
-      return `${normalizedOpeningTag}<v>${value}</v></c>`;
+    const openingTag = rowMatch[0].slice(0, openingEnd + 1);
+    const rowReference = getXmlAttribute(
+      openingTag,
+      "r",
+    );
+
+    if (Number(rowReference) !== rowNumber) {
+      continue;
     }
 
-    return `${normalizedOpeningTag} t="inlineStr"><is><t>${xmlEscape(
+    const newCell = buildCellXml(
+      `<c r="${normalizedReference}">`,
       value,
-    )}</t></is></c>`;
-  };
+    );
 
-  if (match) {
-    const originalCell = match[0];
-    const openingEnd = originalCell.indexOf(">");
+    const rowXml = rowMatch[0];
+    const closeRowIndex = rowXml.lastIndexOf(
+      "</row>",
+    );
 
-    if (openingEnd === -1) {
+    if (closeRowIndex < 0) {
       throw new Error(
-        `GSTN template cell ${reference} has an invalid XML opening tag.`,
+        `GSTN template row ${rowNumber} has invalid XML while writing ${normalizedReference}.`,
       );
     }
 
-    const openingTag = originalCell.slice(0, openingEnd + 1);
-    const replacement = buildCell(openingTag);
+    const updatedRow =
+      rowXml.slice(0, closeRowIndex) +
+      newCell +
+      rowXml.slice(closeRowIndex);
 
     return (
-      worksheetXml.slice(0, match.index) +
-      replacement +
-      worksheetXml.slice(match.index + originalCell.length)
+      worksheetXml.slice(0, rowMatch.index) +
+      updatedRow +
+      worksheetXml.slice(
+        rowMatch.index + rowXml.length,
+      )
     );
   }
 
-  const rowPattern = new RegExp(
-    `<row\\b(?=[^>]*\\br=["']${rowNumber}["'])[^>]*>[\\s\\S]*?</row>`,
-  );
-
-  const rowMatch = rowPattern.exec(worksheetXml);
-
-  if (!rowMatch) {
-    throw new Error(
-      `GSTN template row ${rowNumber} was not found while writing ${reference}.`,
-    );
-  }
-
-  const rowXml = rowMatch[0];
-
-  const newCell = buildCell(
-    `<c r="${reference}">`,
-  );
-
-  const updatedRow = rowXml.replace(
-    /<\/row>\s*$/,
-    `${newCell}</row>`,
-  );
-
-  return (
-    worksheetXml.slice(0, rowMatch.index) +
-    updatedRow +
-    worksheetXml.slice(rowMatch.index + rowXml.length)
+  throw new Error(
+    `GSTN template row ${rowNumber} was not found while writing ${normalizedReference}.`,
   );
 }
 
-         
 function setCells(
   worksheetXml: string,
   values: Record<
@@ -396,17 +449,160 @@ function populateTable17(
 function updateCalculationSettings(
   workbookXml: string,
 ): string {
-  if (/<calcPr\b[^>]*\/>/.test(workbookXml)) {
+  const calcPrPattern =
+    /<calcPr\b([^>]*)\/>/;
+
+  const upsertAttribute = (
+    attributes: string,
+    name: string,
+    value: string,
+  ): string => {
+    const attributePattern = new RegExp(
+      `\\b${name}\\s*=\\s*["'][^"']*["']`,
+      "i",
+    );
+
+    if (attributePattern.test(attributes)) {
+      return attributes.replace(
+        attributePattern,
+        `${name}="${value}"`,
+      );
+    }
+
+    return `${attributes} ${name}="${value}"`;
+  };
+
+  const calcPrMatch = calcPrPattern.exec(
+    workbookXml,
+  );
+
+  if (calcPrMatch) {
+    let attributes = calcPrMatch[1];
+    attributes = upsertAttribute(
+      attributes,
+      "fullCalcOnLoad",
+      "1",
+    );
+    attributes = upsertAttribute(
+      attributes,
+      "forceFullCalc",
+      "1",
+    );
+
     return workbookXml.replace(
-      /<calcPr\b([^>]*)\/>/,
-      (_match, attributes) =>
-        `<calcPr${attributes} fullCalcOnLoad="1" forceFullCalc="1"/>`,
+      calcPrPattern,
+      `<calcPr${attributes}/>`,
     );
   }
 
   return workbookXml.replace(
     "</workbook>",
     '<calcPr calcId="191029" fullPrecision="0" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>',
+  );
+}
+
+async function resolveWorksheetPath(
+  zip: JSZip,
+  workbookXml: string,
+  sheetName: string,
+): Promise<string> {
+  const sheetsMatch = /<sheets\b[\s\S]*?<\/sheets>/.exec(
+    workbookXml,
+  );
+
+  if (!sheetsMatch) {
+    throw new Error(
+      "The GSTN GSTR-9 workbook does not contain a sheets section.",
+    );
+  }
+
+  const sheetTagPattern =
+    /<sheet\b[^>]*\/>/g;
+
+  let sheetMatch: RegExpExecArray | null;
+  let relationshipId: string | null = null;
+
+  while (
+    (sheetMatch = sheetTagPattern.exec(
+      sheetsMatch[0],
+    )) !== null
+  ) {
+    const tag = sheetMatch[0];
+    const name = getXmlAttribute(tag, "name");
+
+    if (name === sheetName) {
+      relationshipId = getXmlAttribute(
+        tag,
+        "id",
+      );
+
+      if (!relationshipId) {
+        throw new Error(
+          `GSTN worksheet "${sheetName}" has no relationship id.`,
+        );
+      }
+
+      break;
+    }
+  }
+
+  if (!relationshipId) {
+    throw new Error(
+      `GSTN worksheet "${sheetName}" was not found in the official template.`,
+    );
+  }
+
+  const relationshipsFile = zip.file(
+    "xl/_rels/workbook.xml.rels",
+  );
+
+  if (!relationshipsFile) {
+    throw new Error(
+      "The GSTN GSTR-9 workbook relationships file is missing.",
+    );
+  }
+
+  const relationshipsXml =
+    await relationshipsFile.async("string");
+
+  const relationshipPattern =
+    /<Relationship\b[^>]*\/>/g;
+
+  let relationshipMatch: RegExpExecArray | null;
+
+  while (
+    (relationshipMatch =
+      relationshipPattern.exec(
+        relationshipsXml,
+      )) !== null
+  ) {
+    const tag = relationshipMatch[0];
+
+    if (
+      getXmlAttribute(tag, "Id") !==
+      relationshipId
+    ) {
+      continue;
+    }
+
+    const target = getXmlAttribute(
+      tag,
+      "Target",
+    );
+
+    if (!target) {
+      break;
+    }
+
+    const normalizedTarget = target
+      .replace(/^\/+/, "")
+      .replace(/^xl\//, "");
+
+    return `xl/${normalizedTarget}`;
+  }
+
+  throw new Error(
+    `GSTN worksheet relationship "${relationshipId}" for "${sheetName}" was not found.`,
   );
 }
 
@@ -430,47 +626,82 @@ export async function exportGstr9GstnUtility(
     templateBytes,
   );
 
-  const home = zip.file(
-    "xl/worksheets/sheet3.xml",
-  );
-  const table4 = zip.file(
-    "xl/worksheets/sheet4.xml",
-  );
-  const table5 = zip.file(
-    "xl/worksheets/sheet5.xml",
-  );
-  const table17 = zip.file(
-    "xl/worksheets/sheet14.xml",
-  );
-  const workbook = zip.file(
+  const workbookFile = zip.file(
     "xl/workbook.xml",
   );
+
+  if (!workbookFile) {
+    throw new Error(
+      "The GSTN GSTR-9 template workbook.xml is missing.",
+    );
+  }
+
+  let workbookXml =
+    await workbookFile.async("string");
+
+  // Resolve worksheets by their official GSTN sheet names
+  // instead of relying on fixed sheet numbers. This keeps the
+  // exporter aligned with the actual v2.1 workbook structure.
+  const homePath = await resolveWorksheetPath(
+    zip,
+    workbookXml,
+    "Home",
+  );
+
+  const table4Path =
+    await resolveWorksheetPath(
+      zip,
+      workbookXml,
+      "4 Outward",
+    );
+
+  const table5Path =
+    await resolveWorksheetPath(
+      zip,
+      workbookXml,
+      "5 Outward",
+    );
+
+  const table17Path =
+    await resolveWorksheetPath(
+      zip,
+      workbookXml,
+      "17 HSN Outward",
+    );
+
+  const home = zip.file(homePath);
+  const table4 = zip.file(table4Path);
+  const table5 = zip.file(table5Path);
+  const table17 = zip.file(table17Path);
 
   if (
     !home ||
     !table4 ||
     !table5 ||
-    !table17 ||
-    !workbook
+    !table17
   ) {
     throw new Error(
-      "The GSTN GSTR-9 template structure is not recognized.",
+      "The GSTN GSTR-9 template does not contain all required worksheets.",
     );
   }
 
-  let homeXml = await home.async("string");
+  let homeXml =
+    await home.async("string");
+
   let table4Xml =
     await table4.async("string");
+
   let table5Xml =
     await table5.async("string");
+
   let table17Xml =
     await table17.async("string");
-  let workbookXml =
-    await workbook.async("string");
 
   homeXml = setCells(homeXml, {
-    B6: result.company.gstin ?? "",
-    D6: result.period.financialYear,
+    B6:
+      result.company.gstin ?? "",
+    D6:
+      result.period.financialYear,
   });
 
   table4Xml = populateTable4(
@@ -493,26 +724,10 @@ export async function exportGstr9GstnUtility(
       workbookXml,
     );
 
-  zip.file(
-    "xl/worksheets/sheet3.xml",
-    homeXml,
-  );
-
-  zip.file(
-    "xl/worksheets/sheet4.xml",
-    table4Xml,
-  );
-
-  zip.file(
-    "xl/worksheets/sheet5.xml",
-    table5Xml,
-  );
-
-  zip.file(
-    "xl/worksheets/sheet14.xml",
-    table17Xml,
-  );
-
+  zip.file(homePath, homeXml);
+  zip.file(table4Path, table4Xml);
+  zip.file(table5Path, table5Xml);
+  zip.file(table17Path, table17Xml);
   zip.file(
     "xl/workbook.xml",
     workbookXml,
