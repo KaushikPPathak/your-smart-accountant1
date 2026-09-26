@@ -10,6 +10,8 @@ on:
       - "src/lib/gstr9.test.ts"
       - "src/lib/gstr9-export.ts"
       - "src/lib/gstr9-gstn-export.ts"
+      - "src/lib/gstr9-inputs.ts"
+      - "src/lib/gstr9-inputs.test.ts" 
       - "src/lib/gst-returns.ts"
       - "src/lib/gst-returns.test.ts"
       - "src/routes/app.reports.gstr9.tsx"
