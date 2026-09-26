@@ -111,6 +111,8 @@ class OfflineDatabase extends Dexie {
   cache_gstr2b_lines!: Table<any, any>;
   // E5 — GST Calculation Caching.
   cache_gst_rates!: Table<any, any>;
+  // E6 — GSTR-9 annual input store (local-first, company + FY scoped).
+  cache_gstr9_inputs!: Table<any, any>;
 
   constructor() {
     super("ym_offline_cache_v5");
@@ -260,6 +262,7 @@ function makeStubDb(): OfflineDatabase {
     "cache_bank_statements", "cache_bank_statement_lines",
     "cache_gstr2b_imports", "cache_gstr2b_lines",
     "cache_gst_rates",
+    "cache_gstr9_inputs",
   ];
   const stub: Record<string, unknown> = {
     async transaction(_mode: string, ...args: unknown[]) {
@@ -312,5 +315,12 @@ export async function getMeta<T = unknown>(key: string): Promise<T | undefined> 
     return row?.value as T | undefined;
   } catch {
     return undefined;
+    // v13 — GSTR-9 annual input store.
+    // The payload is intentionally not indexed; only company/FY lookup is needed.
+    this.version(13).stores({
+      cache_gstr9_inputs:
+        "id, company_id, financial_year, updated_at, [company_id+financial_year]",
+    });
+
   }
 }
