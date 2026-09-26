@@ -11,7 +11,10 @@ on:
       - "src/lib/gstr9-export.ts"
       - "src/lib/gstr9-gstn-export.ts"
       - "src/lib/gstr9-inputs.ts"
-      - "src/lib/gstr9-inputs.test.ts" 
+      - "src/lib/gstr9-inputs.test.ts"
+      - "src/lib/gstr9-input-store.ts"
+      - "src/lib/gstr9-input-store.test.ts"
+      - "src/lib/offline/db.ts"
       - "src/lib/gst-returns.ts"
       - "src/lib/gst-returns.test.ts"
       - "src/routes/app.reports.gstr9.tsx"
@@ -37,7 +40,11 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run GSTR-9 tests
-        run: bunx vitest run src/lib/gstr9.test.ts
+        run: >
+          bunx vitest run
+          src/lib/gstr9.test.ts
+          src/lib/gstr9-inputs.test.ts
+          src/lib/gstr9-input-store.test.ts
 
       - name: Run all tests
         run: bunx vitest run
