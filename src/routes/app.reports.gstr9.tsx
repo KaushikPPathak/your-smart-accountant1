@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
-  Download,
   Info,
   Loader2,
   Printer,
@@ -38,8 +37,7 @@ import {
   type Gstr9SourceStatus,
   type Gstr9TaxTotals,
 } from "@/lib/gstr9";
-import { exportGstr9Excel } from "../lib/gstr9-export";
-import { exportGstr9GstnUtility } from "../lib/gstr9-gstn-export";
+
 export const Route = createFileRoute("/app/reports/gstr9")({
   head: () => ({ meta: [{ title: "GSTR-9 — Reports" }] }),
   component: GSTR9Page,
@@ -99,23 +97,393 @@ function sourceClass(status: Gstr9SourceStatus): string {
 function SourceStatus({
   label,
   status,
+  actionLabel,
+  onAction,
+  disabled = false,
 }: {
   label: string;
-  status: Gstr9SourceStatus;
+  status: Gstr9SourceStatus | "MANUAL" | "IMPORTED";
+  actionLabel?: string;
+  onAction?: () => void;
+  disabled?: boolean;
 }) {
+  const isInput = status === "INPUT_REQUIRED";
+  const isManual = status === "MANUAL";
+  const isImported = status === "IMPORTED";
+  const visualStatus: Gstr9SourceStatus = isManual || isImported ? "AUTO" : status;
+
   return (
-    <div className={`rounded-md border px-3 py-2 ${sourceClass(status)}`}>
-      <div className="text-xs font-medium">{label}</div>
-      <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold">
-        {status === "AUTO" ? (
-          <CheckCircle2 className="h-4 w-4" />
-        ) : status === "INPUT_REQUIRED" ? (
-          <AlertTriangle className="h-4 w-4" />
-        ) : (
-          <Info className="h-4 w-4" />
+    <div className={`rounded-md border px-3 py-2 ${sourceClass(visualStatus)}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-xs font-medium">{label}</div>
+          <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold">
+            {visualStatus === "AUTO" ? (
+              <CheckCircle2 className="h-4 w-4" />
+            ) : visualStatus === "INPUT_REQUIRED" ? (
+              <AlertTriangle className="h-4 w-4" />
+            ) : (
+              <Info className="h-4 w-4" />
+            )}
+            {isManual ? "Manual entry saved" : isImported ? "Imported" : sourceLabel(status as Gstr9SourceStatus)}
+          </div>
+        </div>
+        {actionLabel && (
+          <Button size="sm" variant="outline" onClick={onAction} disabled={disabled}>
+            {actionLabel}
+          </Button>
         )}
-        {sourceLabel(status)}
       </div>
+      {disabled && <div className="mt-1 text-[11px] text-muted-foreground">Next input phase</div>}
+    </div>
+  );
+}
+
+
+
+const GSTR1_TABLE4_FIELDS: Array<[keyof Gstr9Table4, string]> = [
+  ["b2b", "B2B supplies"],
+  ["b2cLarge", "B2C large"],
+  ["exportsWithPayment", "Exports with payment"],
+  ["sezWithPayment", "SEZ with payment"],
+  ["deemedExports", "Deemed exports"],
+  ["advancesTaxPaid", "Advances on which tax paid"],
+  ["inwardSuppliesRcm", "Inward supplies liable to RCM"],
+  ["b2cOther", "B2C other"],
+  ["exportsWithoutPayment", "Exports without payment"],
+  ["sezWithoutPayment", "SEZ without payment"],
+  ["advancesTaxAdjusted", "Advances adjusted"],
+  ["otherOutwardTaxableSupplies", "Other outward taxable supplies"],
+];
+
+const GSTR1_TABLE5_FIELDS: Array<[keyof Gstr9Table5, string]> = [
+  ["exportsWithoutPayment", "Exports without payment"],
+  ["sezWithoutPayment", "SEZ without payment"],
+  ["suppliesOnWhichTaxPayableByRecipient", "Tax payable by recipient"],
+  ["exemptSupplies", "Exempt supplies"],
+  ["nilRatedSupplies", "Nil-rated supplies"],
+  ["nonGstSupplies", "Non-GST supplies"],
+];
+
+function emptyGstr9Table4(): Gstr9Table4 {
+  return {
+    b2b: emptyTaxAmount(),
+    b2cLarge: emptyTaxAmount(),
+    exportsWithPayment: emptyTaxAmount(),
+    sezWithPayment: emptyTaxAmount(),
+    deemedExports: emptyTaxAmount(),
+    advancesTaxPaid: emptyTaxAmount(),
+    inwardSuppliesRcm: emptyTaxAmount(),
+    b2cOther: emptyTaxAmount(),
+    exportsWithoutPayment: emptyTaxAmount(),
+    sezWithoutPayment: emptyTaxAmount(),
+    advancesTaxAdjusted: emptyTaxAmount(),
+    otherOutwardTaxableSupplies: emptyTaxAmount(),
+    total: emptyTaxAmount(),
+  };
+}
+
+function emptyGstr9Table5(): Gstr9Table5 {
+  return {
+    exportsWithoutPayment: emptyTaxAmount(),
+    sezWithoutPayment: emptyTaxAmount(),
+    suppliesOnWhichTaxPayableByRecipient: emptyTaxAmount(),
+    exemptSupplies: emptyTaxAmount(),
+    nilRatedSupplies: emptyTaxAmount(),
+    nonGstSupplies: emptyTaxAmount(),
+    total: emptyTaxAmount(),
+  };
+}
+
+function cloneTaxAmount(value: Gstr9TaxAmount): Gstr9TaxAmount {
+  return { ...value };
+}
+
+function cloneTable4(value: Gstr9Table4): Gstr9Table4 {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, cloneTaxAmount(item as Gstr9TaxAmount)]),
+  ) as Gstr9Table4;
+}
+
+function cloneTable5(value: Gstr9Table5): Gstr9Table5 {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, cloneTaxAmount(item as Gstr9TaxAmount)]),
+  ) as Gstr9Table5;
+}
+
+function numberValue(value: string): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normaliseTaxAmount(value: unknown): Gstr9TaxAmount {
+  const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    taxableValue: numberValue(String(source.taxableValue ?? 0)),
+    igst: numberValue(String(source.igst ?? 0)),
+    cgst: numberValue(String(source.cgst ?? 0)),
+    sgst: numberValue(String(source.sgst ?? 0)),
+    cess: numberValue(String(source.cess ?? 0)),
+  };
+}
+
+function normaliseGstr1Import(value: unknown): {
+  table4: Gstr9Table4;
+  table5: Gstr9Table5;
+  sourceName?: string;
+  sourceReference?: string;
+  notes?: string;
+} {
+  const root = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const payload = root.gstr1 && typeof root.gstr1 === "object"
+    ? root.gstr1 as Record<string, unknown>
+    : root;
+  const sourceTable4 = payload.table4 && typeof payload.table4 === "object"
+    ? payload.table4 as Record<string, unknown>
+    : {};
+  const sourceTable5 = payload.table5 && typeof payload.table5 === "object"
+    ? payload.table5 as Record<string, unknown>
+    : {};
+
+  const table4 = emptyGstr9Table4();
+  for (const [key] of GSTR1_TABLE4_FIELDS) {
+    table4[key] = normaliseTaxAmount(sourceTable4[key]);
+  }
+  table4.total = normaliseTaxAmount(sourceTable4.total);
+
+  const table5 = emptyGstr9Table5();
+  for (const [key] of GSTR1_TABLE5_FIELDS) {
+    table5[key] = normaliseTaxAmount(sourceTable5[key]);
+  }
+  table5.total = normaliseTaxAmount(sourceTable5.total);
+
+  const metadata = payload.metadata && typeof payload.metadata === "object"
+    ? payload.metadata as Record<string, unknown>
+    : {};
+
+  return {
+    table4,
+    table5,
+    sourceName: String(metadata.sourceName ?? root.sourceName ?? "").trim() || undefined,
+    sourceReference: String(metadata.sourceReference ?? root.sourceReference ?? "").trim() || undefined,
+    notes: String(metadata.notes ?? root.notes ?? "").trim() || undefined,
+  };
+}
+
+function TaxAmountFields({
+  value,
+  onChange,
+}: {
+  value: Gstr9TaxAmount;
+  onChange: (value: Gstr9TaxAmount) => void;
+}) {
+  const fields: Array<[keyof Gstr9TaxAmount, string]> = [
+    ["taxableValue", "Taxable"],
+    ["igst", "IGST"],
+    ["cgst", "CGST"],
+    ["sgst", "SGST"],
+    ["cess", "Cess"],
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+      {fields.map(([field, label]) => (
+        <label key={field} className="space-y-1">
+          <span className="text-[11px] text-muted-foreground">{label}</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={value[field]}
+            onChange={(event) =>
+              onChange({ ...value, [field]: numberValue(event.target.value) })
+            }
+            className="h-8 w-full rounded-md border bg-background px-2 text-right text-xs outline-none focus:ring-1 focus:ring-ring"
+          />
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function Gstr1InputPanel({
+  financialYear,
+  companyId,
+  existing,
+  onClose,
+  onSaved,
+}: {
+  financialYear: string;
+  companyId: string;
+  existing: Gstr9InputRecord | undefined;
+  onClose: () => void;
+  onSaved: (record: Gstr9InputRecord) => void;
+}) {
+  const existingGstr1 = existing?.gstr1;
+  const [tab, setTab] = useState<"MANUAL" | "IMPORT">("MANUAL");
+  const [table4, setTable4] = useState<Gstr9Table4>(
+    () => existingGstr1 ? cloneTable4(existingGstr1.table4) : emptyGstr9Table4(),
+  );
+  const [table5, setTable5] = useState<Gstr9Table5>(
+    () => existingGstr1 ? cloneTable5(existingGstr1.table5) : emptyGstr9Table5(),
+  );
+  const [sourceName, setSourceName] = useState(existingGstr1?.metadata.sourceName ?? "Filed GSTR-1");
+  const [sourceReference, setSourceReference] = useState(existingGstr1?.metadata.sourceReference ?? "");
+  const [notes, setNotes] = useState(existingGstr1?.metadata.notes ?? "");
+  const [message, setMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const updateTable4 = (field: keyof Gstr9Table4, value: Gstr9TaxAmount) => {
+    setTable4((current) => ({ ...current, [field]: value }));
+  };
+
+  const updateTable5 = (field: keyof Gstr9Table5, value: Gstr9TaxAmount) => {
+    setTable5((current) => ({ ...current, [field]: value }));
+  };
+
+  const save = async (source: Gstr9InputSource) => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const now = new Date().toISOString();
+      const metadata: Gstr9InputMetadata = {
+        source,
+        enteredAt: existingGstr1?.metadata.enteredAt ?? now,
+        updatedAt: now,
+        sourceName: sourceName.trim() || undefined,
+        sourceReference: sourceReference.trim() || undefined,
+        notes: notes.trim() || undefined,
+      };
+      const record: Gstr9InputRecord = {
+        ...(existing ?? {
+          id: `${companyId}:${financialYear}`,
+          companyId,
+          financialYear,
+        }),
+        gstr1: { table4, table5, metadata },
+      };
+      await saveGstr9InputRecord(record);
+      onSaved(record);
+      setMessage(`${source === "IMPORT" ? "Imported" : "Manual entry"} saved successfully.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save GSTR-1 input.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const importJson = async (file: File) => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const imported = normaliseGstr1Import(parsed);
+      setTable4(imported.table4);
+      setTable5(imported.table5);
+      if (imported.sourceName) setSourceName(imported.sourceName);
+      if (imported.sourceReference) setSourceReference(imported.sourceReference);
+      if (imported.notes) setNotes(imported.notes);
+      setTab("IMPORT");
+      setMessage("JSON loaded. Review the values, then click Save imported GSTR-1.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to read the JSON file.");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Card className="max-h-[92vh] w-full max-w-6xl overflow-hidden shadow-xl">
+        <CardHeader className="flex flex-row items-center justify-between border-b pb-3">
+          <div>
+            <CardTitle className="text-base">Filed GSTR-1 Input — FY {financialYear}</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Manual entry and JSON import use the same local GSTR-9 input store.
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="max-h-[calc(92vh-76px)] overflow-y-auto p-4">
+          <div className="mb-4 flex gap-2 border-b pb-3">
+            <Button size="sm" variant={tab === "MANUAL" ? "default" : "outline"} onClick={() => setTab("MANUAL")}>
+              Manual Entry
+            </Button>
+            <Button size="sm" variant={tab === "IMPORT" ? "default" : "outline"} onClick={() => setTab("IMPORT")}>
+              <Upload className="mr-1 h-4 w-4" /> Import JSON
+            </Button>
+          </div>
+
+          {tab === "IMPORT" && (
+            <div className="mb-4 rounded-md border border-dashed p-4">
+              <div className="text-sm font-medium">Import GSTR-1 structured JSON</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Import a JSON containing <code>table4</code> and <code>table5</code>, or a wrapper containing <code>gstr1</code>.
+              </p>
+              <input
+                type="file"
+                accept=".json,application/json"
+                className="mt-3 block text-sm"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void importJson(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </div>
+          )}
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="space-y-1">
+              <span className="text-xs font-medium">Source name</span>
+              <input value={sourceName} onChange={(event) => setSourceName(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-medium">Source reference</span>
+              <input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} placeholder="e.g. ARN / file name" className="h-9 w-full rounded-md border bg-background px-3 text-sm" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-medium">Notes</span>
+              <input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" />
+            </label>
+          </div>
+
+          <div className="mt-5 space-y-5">
+            <section>
+              <h3 className="mb-2 text-sm font-semibold">Table 4 — Details of outward supplies and inward supplies liable to reverse charge</h3>
+              <div className="space-y-2">
+                {GSTR1_TABLE4_FIELDS.map(([field, label]) => (
+                  <div key={field} className="rounded-md border p-3">
+                    <div className="mb-2 text-xs font-medium">{label}</div>
+                    <TaxAmountFields value={table4[field]} onChange={(value) => updateTable4(field, value)} />
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="mb-2 text-sm font-semibold">Table 5 — Details of outward supplies on which tax is not payable</h3>
+              <div className="space-y-2">
+                {GSTR1_TABLE5_FIELDS.map(([field, label]) => (
+                  <div key={field} className="rounded-md border p-3">
+                    <div className="mb-2 text-xs font-medium">{label}</div>
+                    <TaxAmountFields value={table5[field]} onChange={(value) => updateTable5(field, value)} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          {message && <div className="mt-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">{message}</div>}
+
+          <div className="mt-5 flex justify-end gap-2 border-t pt-4">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={() => void save(tab === "IMPORT" ? "IMPORT" : "MANUAL")} disabled={saving}>
+              <Save className="mr-1 h-4 w-4" />
+              {saving ? "Saving…" : tab === "IMPORT" ? "Save imported GSTR-1" : "Save manual GSTR-1"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -164,6 +532,8 @@ function GSTR9Page() {
   const [result, setResult] = useState<Gstr9Result | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inputRecord, setInputRecord] = useState<Gstr9InputRecord | undefined>();
+  const [gstr1Open, setGstr1Open] = useState(false);
 
   const years = useMemo(() => financialYearOptions(), []);
 
@@ -205,10 +575,25 @@ function GSTR9Page() {
   };
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    if (!activeCompanyId) {
+      setInputRecord(undefined);
+      return;
+    }
+    void loadGstr9InputRecord(activeCompanyId, financialYear)
+      .then((record) => {
+        if (!cancelled) setInputRecord(record);
+      })
+      .catch(() => {
+        if (!cancelled) setInputRecord(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [activeCompanyId, financialYear]);
 
   const issues = result ? validateGstr9(result) : [];
+  const inputStatus = getGstr9InputStatus(inputRecord);
 
   const outwardRows = result
     ? [
@@ -283,43 +668,6 @@ function GSTR9Page() {
                 <Printer className="mr-1 h-4 w-4" />
                 Print
               </Button>
-              <Button
-  variant="outline"
-  size="sm"
-  onClick={() => {
-    if (!result) return;
-    void exportGstr9Excel(result).catch((err) => {
-      setError(
-        err instanceof Error
-          ? `GSTR-9 Report export failed: ${err.message}`
-          : "GSTR-9 Report export failed.",
-      );
-    });
-  }}
-  disabled={!result || loading}
->
-  <Download className="mr-1 h-4 w-4" />
-  A — GSTR-9 Report
-</Button>
-
-<Button
-  variant="outline"
-  size="sm"
-  onClick={() => {
-    if (!result) return;
-    void exportGstr9GstnUtility(result).catch((err) => {
-      setError(
-        err instanceof Error
-          ? `GSTN Offline Utility export failed: ${err.message}`
-          : "GSTN Offline Utility export failed.",
-      );
-    });
-  }}
-  disabled={!result || loading}
->
-  <Download className="mr-1 h-4 w-4" />
-  B — GSTN Offline Utility
-</Button>
             </div>
           </div>
 
@@ -404,23 +752,33 @@ function GSTR9Page() {
               />
               <SourceStatus
                 label="Filed GSTR-1"
-                status={result.sourceInfo.filedGstr1}
+                status={inputStatus.gstr1}
+                actionLabel="Enter / Import"
+                onAction={() => setGstr1Open(true)}
               />
               <SourceStatus
                 label="Filed GSTR-3B"
                 status={result.sourceInfo.filedGstr3b}
+                actionLabel="Next"
+                disabled
               />
               <SourceStatus
                 label="GSTR-2B"
                 status={result.sourceInfo.gstr2b}
+                actionLabel="Next"
+                disabled
               />
               <SourceStatus
                 label="ITC tables"
                 status={result.sourceInfo.itcTables}
+                actionLabel="Next"
+                disabled
               />
               <SourceStatus
                 label="Tax payment data"
                 status={result.sourceInfo.taxPaymentTable}
+                actionLabel="Next"
+                disabled
               />
             </CardContent>
           </Card>
@@ -685,6 +1043,18 @@ function GSTR9Page() {
                 ))}
               </CardContent>
             </Card>
+          )}
+          {gstr1Open && activeCompanyId && (
+            <Gstr1InputPanel
+              financialYear={financialYear}
+              companyId={activeCompanyId}
+              existing={inputRecord}
+              onClose={() => setGstr1Open(false)}
+              onSaved={(record) => {
+                setInputRecord(record);
+                setGstr1Open(false);
+              }}
+            />
           )}
         </>
       )}
