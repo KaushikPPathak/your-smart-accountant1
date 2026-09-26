@@ -217,6 +217,12 @@ class OfflineDatabase extends Dexie {
       // high-speed voucher entry.
       cache_gst_rates: "id, [item_id+ledger_id+is_interstate], company_id, updated_at",
     });
+    // v13 — GSTR-9 annual input store.
+    // The payload is intentionally not indexed; only company/FY lookup is needed.
+    this.version(13).stores({
+      cache_gstr9_inputs:
+        "id, company_id, financial_year, updated_at, [company_id+financial_year]",
+    });
   }
 }
 
@@ -315,12 +321,5 @@ export async function getMeta<T = unknown>(key: string): Promise<T | undefined> 
     return row?.value as T | undefined;
   } catch {
     return undefined;
-    // v13 — GSTR-9 annual input store.
-    // The payload is intentionally not indexed; only company/FY lookup is needed.
-    this.version(13).stores({
-      cache_gstr9_inputs:
-        "id, company_id, financial_year, updated_at, [company_id+financial_year]",
-    });
-
   }
 }
