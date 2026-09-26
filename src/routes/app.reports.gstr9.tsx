@@ -7,6 +7,9 @@ import {
   Loader2,
   Printer,
   RefreshCw,
+  Save,
+  Upload,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -37,6 +40,20 @@ import {
   type Gstr9SourceStatus,
   type Gstr9TaxTotals,
 } from "@/lib/gstr9";
+import {
+  emptyTaxAmount,
+  getGstr9InputStatus,
+  type Gstr9InputMetadata,
+  type Gstr9InputRecord,
+  type Gstr9InputSource,
+  type Gstr9Table4,
+  type Gstr9Table5,
+  type Gstr9TaxAmount,
+} from "@/lib/gstr9-inputs";
+import {
+  loadGstr9InputRecord,
+  saveGstr9InputRecord,
+} from "@/lib/gstr9-input-store";
 
 export const Route = createFileRoute("/app/reports/gstr9")({
   head: () => ({ meta: [{ title: "GSTR-9 — Reports" }] }),
