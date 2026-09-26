@@ -217,15 +217,33 @@ function cloneTaxAmount(value: Gstr9TaxAmount): Gstr9TaxAmount {
 }
 
 function cloneTable4(value: Gstr9Table4): Gstr9Table4 {
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, cloneTaxAmount(item as Gstr9TaxAmount)]),
-  ) as Gstr9Table4;
+  return {
+    b2b: cloneTaxAmount(value.b2b),
+    b2cLarge: cloneTaxAmount(value.b2cLarge),
+    exportsWithPayment: cloneTaxAmount(value.exportsWithPayment),
+    sezWithPayment: cloneTaxAmount(value.sezWithPayment),
+    deemedExports: cloneTaxAmount(value.deemedExports),
+    advancesTaxPaid: cloneTaxAmount(value.advancesTaxPaid),
+    inwardSuppliesRcm: cloneTaxAmount(value.inwardSuppliesRcm),
+    b2cOther: cloneTaxAmount(value.b2cOther),
+    exportsWithoutPayment: cloneTaxAmount(value.exportsWithoutPayment),
+    sezWithoutPayment: cloneTaxAmount(value.sezWithoutPayment),
+    advancesTaxAdjusted: cloneTaxAmount(value.advancesTaxAdjusted),
+    otherOutwardTaxableSupplies: cloneTaxAmount(value.otherOutwardTaxableSupplies),
+    total: cloneTaxAmount(value.total),
+  };
 }
 
 function cloneTable5(value: Gstr9Table5): Gstr9Table5 {
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, cloneTaxAmount(item as Gstr9TaxAmount)]),
-  ) as Gstr9Table5;
+  return {
+    exportsWithoutPayment: cloneTaxAmount(value.exportsWithoutPayment),
+    sezWithoutPayment: cloneTaxAmount(value.sezWithoutPayment),
+    suppliesOnWhichTaxPayableByRecipient: cloneTaxAmount(value.suppliesOnWhichTaxPayableByRecipient),
+    exemptSupplies: cloneTaxAmount(value.exemptSupplies),
+    nilRatedSupplies: cloneTaxAmount(value.nilRatedSupplies),
+    nonGstSupplies: cloneTaxAmount(value.nonGstSupplies),
+    total: cloneTaxAmount(value.total),
+  };
 }
 
 function numberValue(value: string): number {
