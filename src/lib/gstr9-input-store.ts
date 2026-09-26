@@ -1,5 +1,3 @@
-import type { Table } from "dexie";
-
 import {
   createGstr9InputId,
   type Gstr9InputRecord,
@@ -14,10 +12,11 @@ export interface Gstr9InputCacheRow {
   payload: Gstr9InputRecord;
 }
 
-type Gstr9InputTable = Pick<
-  Table<Gstr9InputCacheRow, string>,
-  "get" | "put" | "delete"
->;
+interface Gstr9InputTable {
+  get(id: string): Promise<Gstr9InputCacheRow | undefined>;
+  put(row: Gstr9InputCacheRow): Promise<unknown>;
+  delete(id: string): Promise<unknown>;
+}
 
 export function toGstr9InputCacheRow(
   record: Gstr9InputRecord,
