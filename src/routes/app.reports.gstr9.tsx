@@ -513,6 +513,120 @@ const GSTR3B_TAX_PAID_FIELDS: Array<[keyof Gstr9TaxPaid, string]> = [
   ["others", "Others"],
 ];
 
+
+function Gstr3bReviewSummary({ periods }: { periods: Gstr9Gstr3bPeriod[] }) {
+  const totals = periods.reduce(
+    (acc, period) => ({
+      taxableValue: acc.taxableValue + period.outwardTax.taxableValue,
+      igst: acc.igst + period.outwardTax.igst,
+      cgst: acc.cgst + period.outwardTax.cgst,
+      sgst: acc.sgst + period.outwardTax.sgst,
+      cess: acc.cess + period.outwardTax.cess,
+      itc: acc.itc + period.itc.totalItcAvailed,
+      reversal: acc.reversal + period.itcReversal.total,
+      taxPaid: acc.taxPaid + period.taxPaid.igst + period.taxPaid.cgst + period.taxPaid.sgst + period.taxPaid.cess,
+      interest: acc.interest + period.taxPaid.interest,
+      lateFee: acc.lateFee + period.taxPaid.lateFee,
+      penalty: acc.penalty + period.taxPaid.penalty,
+      others: acc.others + period.taxPaid.others,
+    }),
+    {
+      taxableValue: 0,
+      igst: 0,
+      cgst: 0,
+      sgst: 0,
+      cess: 0,
+      itc: 0,
+      reversal: 0,
+      taxPaid: 0,
+      interest: 0,
+      lateFee: 0,
+      penalty: 0,
+      others: 0,
+    },
+  );
+
+  const enteredMonths = periods.filter((period) =>
+    period.outwardTax.taxableValue !== 0 ||
+    period.outwardTax.igst !== 0 ||
+    period.outwardTax.cgst !== 0 ||
+    period.outwardTax.sgst !== 0 ||
+    period.outwardTax.cess !== 0 ||
+    period.itc.totalItcAvailed !== 0 ||
+    period.itcReversal.total !== 0 ||
+    period.taxPaid.igst !== 0 ||
+    period.taxPaid.cgst !== 0 ||
+    period.taxPaid.sgst !== 0 ||
+    period.taxPaid.cess !== 0 ||
+    period.taxPaid.interest !== 0 ||
+    period.taxPaid.lateFee !== 0 ||
+    period.taxPaid.penalty !== 0 ||
+    period.taxPaid.others !== 0,
+  ).length;
+
+  return (
+    <section className="mt-5 rounded-md border">
+      <div className="border-b bg-muted/20 px-4 py-3">
+        <div className="text-sm font-semibold">Review before saving</div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          {enteredMonths} of {periods.length} months contain entered values. Check these totals before saving.
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Particulars</TableHead>
+              <TableHead className="text-right">Taxable</TableHead>
+              <TableHead className="text-right">IGST</TableHead>
+              <TableHead className="text-right">CGST</TableHead>
+              <TableHead className="text-right">SGST</TableHead>
+              <TableHead className="text-right">Cess</TableHead>
+              <TableHead className="text-right">ITC</TableHead>
+              <TableHead className="text-right">Reversal</TableHead>
+              <TableHead className="text-right">GST paid</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {periods.map((period) => (
+              <TableRow key={period.period}>
+                <TableCell className="font-medium">{period.period}</TableCell>
+                <TableCell className="text-right">{money(period.outwardTax.taxableValue)}</TableCell>
+                <TableCell className="text-right">{money(period.outwardTax.igst)}</TableCell>
+                <TableCell className="text-right">{money(period.outwardTax.cgst)}</TableCell>
+                <TableCell className="text-right">{money(period.outwardTax.sgst)}</TableCell>
+                <TableCell className="text-right">{money(period.outwardTax.cess)}</TableCell>
+                <TableCell className="text-right">{money(period.itc.totalItcAvailed)}</TableCell>
+                <TableCell className="text-right">{money(period.itcReversal.total)}</TableCell>
+                <TableCell className="text-right">{money(period.taxPaid.igst + period.taxPaid.cgst + period.taxPaid.sgst + period.taxPaid.cess)}</TableCell>
+              </TableRow>
+            ))}
+            <TableRow className="font-semibold">
+              <TableCell>Total</TableCell>
+              <TableCell className="text-right">{money(totals.taxableValue)}</TableCell>
+              <TableCell className="text-right">{money(totals.igst)}</TableCell>
+              <TableCell className="text-right">{money(totals.cgst)}</TableCell>
+              <TableCell className="text-right">{money(totals.sgst)}</TableCell>
+              <TableCell className="text-right">{money(totals.cess)}</TableCell>
+              <TableCell className="text-right">{money(totals.itc)}</TableCell>
+              <TableCell className="text-right">{money(totals.reversal)}</TableCell>
+              <TableCell className="text-right">{money(totals.taxPaid)}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="grid gap-2 border-t p-3 text-xs sm:grid-cols-4">
+        <div><span className="text-muted-foreground">Interest:</span> <strong>{money(totals.interest)}</strong></div>
+        <div><span className="text-muted-foreground">Late fee:</span> <strong>{money(totals.lateFee)}</strong></div>
+        <div><span className="text-muted-foreground">Penalty:</span> <strong>{money(totals.penalty)}</strong></div>
+        <div><span className="text-muted-foreground">Other payments:</span> <strong>{money(totals.others)}</strong></div>
+      </div>
+    </section>
+  );
+}
+
 function Gstr3bInputPanel({
   financialYear,
   companyId,
@@ -599,9 +713,9 @@ function Gstr3bInputPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <Card className="max-h-[94vh] w-full max-w-7xl overflow-hidden shadow-xl">
-        <CardHeader className="flex flex-row items-center justify-between border-b pb-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+      <Card className="flex h-[calc(100vh-24px)] max-h-[calc(100vh-24px)] w-full max-w-7xl flex-col overflow-hidden shadow-xl">
+        <CardHeader className="flex flex-none flex-row items-center justify-between border-b pb-3">
           <div>
             <CardTitle className="text-base">Filed GSTR-3B Input — FY {financialYear}</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -612,7 +726,7 @@ function Gstr3bInputPanel({
             <X className="h-4 w-4" />
           </Button>
         </CardHeader>
-        <CardContent className="max-h-[calc(94vh-76px)] overflow-y-auto p-4">
+        <CardContent className="min-h-0 flex-1 overflow-y-auto p-4">
           <div className="mb-4 flex gap-2 border-b pb-3">
             <Button size="sm" variant={tab === "MANUAL" ? "default" : "outline"} onClick={() => setTab("MANUAL")}>
               Manual Entry
@@ -748,16 +862,24 @@ function Gstr3bInputPanel({
             ))}
           </div>
 
-          {message && <div className="mt-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">{message}</div>}
-
-          <div className="mt-5 flex justify-end gap-2 border-t pt-4">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={() => void save(tab === "IMPORT" ? "IMPORT" : "MANUAL")} disabled={saving}>
-              <Save className="mr-1 h-4 w-4" />
-              {saving ? "Saving…" : tab === "IMPORT" ? "Save imported GSTR-3B" : "Save manual GSTR-3B"}
-            </Button>
-          </div>
+          <Gstr3bReviewSummary periods={periods} />
         </CardContent>
+
+        <div className="flex-none border-t bg-background px-4 py-3">
+          {message && <div className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-sm">{message}</div>}
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs text-muted-foreground">
+              Review the totals above, then save. The saved record can be reopened from the GSTR-3B card.
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button onClick={() => void save(tab === "IMPORT" ? "IMPORT" : "MANUAL")} disabled={saving}>
+                <Save className="mr-1 h-4 w-4" />
+                {saving ? "Saving…" : tab === "IMPORT" ? "Save imported GSTR-3B" : "Save manual GSTR-3B"}
+              </Button>
+            </div>
+          </div>
+        </div>
       </Card>
     </div>
   );
@@ -847,9 +969,9 @@ function Gstr1InputPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <Card className="max-h-[92vh] w-full max-w-6xl overflow-hidden shadow-xl">
-        <CardHeader className="flex flex-row items-center justify-between border-b pb-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+      <Card className="flex h-[calc(100vh-24px)] max-h-[calc(100vh-24px)] w-full max-w-6xl flex-col overflow-hidden shadow-xl">
+        <CardHeader className="flex flex-none flex-row items-center justify-between border-b pb-3">
           <div>
             <CardTitle className="text-base">Filed GSTR-1 Input — FY {financialYear}</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -860,7 +982,7 @@ function Gstr1InputPanel({
             <X className="h-4 w-4" />
           </Button>
         </CardHeader>
-        <CardContent className="max-h-[calc(92vh-76px)] overflow-y-auto p-4">
+        <CardContent className="min-h-0 flex-1 overflow-y-auto p-4">
           <div className="mb-4 flex gap-2 border-b pb-3">
             <Button size="sm" variant={tab === "MANUAL" ? "default" : "outline"} onClick={() => setTab("MANUAL")}>
               Manual Entry
@@ -931,15 +1053,15 @@ function Gstr1InputPanel({
           </div>
 
           {message && <div className="mt-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">{message}</div>}
-
-          <div className="mt-5 flex justify-end gap-2 border-t pt-4">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={() => void save(tab === "IMPORT" ? "IMPORT" : "MANUAL")} disabled={saving}>
-              <Save className="mr-1 h-4 w-4" />
-              {saving ? "Saving…" : tab === "IMPORT" ? "Save imported GSTR-1" : "Save manual GSTR-1"}
-            </Button>
-          </div>
         </CardContent>
+
+        <div className="flex flex-none items-center justify-end gap-2 border-t bg-background px-4 py-3">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => void save(tab === "IMPORT" ? "IMPORT" : "MANUAL")} disabled={saving}>
+            <Save className="mr-1 h-4 w-4" />
+            {saving ? "Saving…" : tab === "IMPORT" ? "Save imported GSTR-1" : "Save manual GSTR-1"}
+          </Button>
+        </div>
       </Card>
     </div>
   );
