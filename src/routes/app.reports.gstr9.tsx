@@ -49,6 +49,8 @@ import {
   type Gstr9Table4,
   type Gstr9Table5,
   type Gstr9TaxAmount,
+  type Gstr9Gstr3bPeriod,
+  type Gstr9TaxPaid,
 } from "@/lib/gstr9-inputs";
 import {
   loadGstr9InputRecord,
@@ -341,6 +343,426 @@ function TaxAmountFields({
   );
 }
 
+function emptyGstr9TaxPaid(): Gstr9TaxPaid {
+  return {
+    igst: 0,
+    cgst: 0,
+    sgst: 0,
+    cess: 0,
+    interest: 0,
+    lateFee: 0,
+    penalty: 0,
+    others: 0,
+  };
+}
+
+function emptyGstr3bPeriod(period: string): Gstr9Gstr3bPeriod {
+  return {
+    period,
+    outwardTax: emptyTaxAmount(),
+    itc: {
+      table4A1ImportOfGoods: 0,
+      table4A2ImportOfServices: 0,
+      table4A3Rcm: 0,
+      table4A4Isd: 0,
+      table4A5Other: 0,
+      totalItcAvailed: 0,
+    },
+    itcReversal: {
+      rule38: 0,
+      rule42: 0,
+      rule43: 0,
+      section17_5: 0,
+      other: 0,
+      total: 0,
+    },
+    taxPaid: emptyGstr9TaxPaid(),
+  };
+}
+
+function gstr3bPeriodsForFinancialYear(financialYear: string): string[] {
+  const startYear = Number(financialYear.slice(0, 4));
+  if (!Number.isFinite(startYear)) return [];
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = (index + 3) % 12;
+    const year = startYear + (index >= 9 ? 1 : 0);
+    return new Date(year, month, 1).toLocaleString("en-IN", {
+      month: "long",
+      year: "numeric",
+    });
+  });
+}
+
+function cloneGstr3bPeriod(value: Gstr9Gstr3bPeriod): Gstr9Gstr3bPeriod {
+  return {
+    period: value.period,
+    outwardTax: { ...value.outwardTax },
+    itc: { ...value.itc },
+    itcReversal: { ...value.itcReversal },
+    taxPaid: { ...value.taxPaid },
+  };
+}
+
+function normaliseGstr3bPeriod(value: unknown, fallbackPeriod: string): Gstr9Gstr3bPeriod {
+  const root = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const outward = normaliseTaxAmount(root.outwardTax);
+  const itcSource = root.itc && typeof root.itc === "object" ? root.itc as Record<string, unknown> : {};
+  const reversalSource = root.itcReversal && typeof root.itcReversal === "object" ? root.itcReversal as Record<string, unknown> : {};
+  const taxSource = root.taxPaid && typeof root.taxPaid === "object" ? root.taxPaid as Record<string, unknown> : {};
+  const n = (source: Record<string, unknown>, key: string) => numberValue(String(source[key] ?? 0));
+
+  const itc = {
+    table4A1ImportOfGoods: n(itcSource, "table4A1ImportOfGoods"),
+    table4A2ImportOfServices: n(itcSource, "table4A2ImportOfServices"),
+    table4A3Rcm: n(itcSource, "table4A3Rcm"),
+    table4A4Isd: n(itcSource, "table4A4Isd"),
+    table4A5Other: n(itcSource, "table4A5Other"),
+    totalItcAvailed: 0,
+  };
+  itc.totalItcAvailed =
+    itc.table4A1ImportOfGoods +
+    itc.table4A2ImportOfServices +
+    itc.table4A3Rcm +
+    itc.table4A4Isd +
+    itc.table4A5Other;
+
+  const itcReversal = {
+    rule38: n(reversalSource, "rule38"),
+    rule42: n(reversalSource, "rule42"),
+    rule43: n(reversalSource, "rule43"),
+    section17_5: n(reversalSource, "section17_5"),
+    other: n(reversalSource, "other"),
+    total: 0,
+  };
+  itcReversal.total =
+    itcReversal.rule38 +
+    itcReversal.rule42 +
+    itcReversal.rule43 +
+    itcReversal.section17_5 +
+    itcReversal.other;
+
+  return {
+    period: String(root.period ?? fallbackPeriod),
+    outwardTax: outward,
+    itc,
+    itcReversal,
+    taxPaid: {
+      igst: n(taxSource, "igst"),
+      cgst: n(taxSource, "cgst"),
+      sgst: n(taxSource, "sgst"),
+      cess: n(taxSource, "cess"),
+      interest: n(taxSource, "interest"),
+      lateFee: n(taxSource, "lateFee"),
+      penalty: n(taxSource, "penalty"),
+      others: n(taxSource, "others"),
+    },
+  };
+}
+
+function normaliseGstr3bImport(value: unknown, financialYear: string): {
+  periods: Gstr9Gstr3bPeriod[];
+  sourceName?: string;
+  sourceReference?: string;
+  notes?: string;
+} {
+  const root = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const payload = root.gstr3b && typeof root.gstr3b === "object"
+    ? root.gstr3b as Record<string, unknown>
+    : root;
+  const defaults = gstr3bPeriodsForFinancialYear(financialYear);
+  const sourcePeriods = Array.isArray(payload.periods) ? payload.periods : [];
+  const periods = defaults.map((period, index) =>
+    normaliseGstr3bPeriod(sourcePeriods[index], period),
+  );
+  const metadata = payload.metadata && typeof payload.metadata === "object"
+    ? payload.metadata as Record<string, unknown>
+    : {};
+
+  return {
+    periods,
+    sourceName: String(metadata.sourceName ?? root.sourceName ?? "").trim() || undefined,
+    sourceReference: String(metadata.sourceReference ?? root.sourceReference ?? "").trim() || undefined,
+    notes: String(metadata.notes ?? root.notes ?? "").trim() || undefined,
+  };
+}
+
+const GSTR3B_ITC_FIELDS: Array<[keyof Gstr9Gstr3bPeriod["itc"], string]> = [
+  ["table4A1ImportOfGoods", "4A(1) Import of goods"],
+  ["table4A2ImportOfServices", "4A(2) Import of services"],
+  ["table4A3Rcm", "4A(3) RCM"],
+  ["table4A4Isd", "4A(4) ISD"],
+  ["table4A5Other", "4A(5) Other ITC"],
+];
+
+const GSTR3B_REVERSAL_FIELDS: Array<[keyof Gstr9Gstr3bPeriod["itcReversal"], string]> = [
+  ["rule38", "Rule 38"],
+  ["rule42", "Rule 42"],
+  ["rule43", "Rule 43"],
+  ["section17_5", "Section 17(5)"],
+  ["other", "Other reversals"],
+];
+
+const GSTR3B_TAX_PAID_FIELDS: Array<[keyof Gstr9TaxPaid, string]> = [
+  ["igst", "IGST"],
+  ["cgst", "CGST"],
+  ["sgst", "SGST"],
+  ["cess", "Cess"],
+  ["interest", "Interest"],
+  ["lateFee", "Late fee"],
+  ["penalty", "Penalty"],
+  ["others", "Others"],
+];
+
+function Gstr3bInputPanel({
+  financialYear,
+  companyId,
+  existing,
+  onClose,
+  onSaved,
+}: {
+  financialYear: string;
+  companyId: string;
+  existing: Gstr9InputRecord | undefined;
+  onClose: () => void;
+  onSaved: (record: Gstr9InputRecord) => void;
+}) {
+  const existingGstr3b = existing?.gstr3b;
+  const [tab, setTab] = useState<"MANUAL" | "IMPORT">("MANUAL");
+  const [periods, setPeriods] = useState<Gstr9Gstr3bPeriod[]>(() => {
+    const defaults = gstr3bPeriodsForFinancialYear(financialYear);
+    if (existingGstr3b?.periods?.length) {
+      return defaults.map((period, index) =>
+        existingGstr3b.periods[index]
+          ? cloneGstr3bPeriod(existingGstr3b.periods[index])
+          : emptyGstr3bPeriod(period),
+      );
+    }
+    return defaults.map(emptyGstr3bPeriod);
+  });
+  const [sourceName, setSourceName] = useState(existingGstr3b?.metadata.sourceName ?? "Filed GSTR-3B");
+  const [sourceReference, setSourceReference] = useState(existingGstr3b?.metadata.sourceReference ?? "");
+  const [notes, setNotes] = useState(existingGstr3b?.metadata.notes ?? "");
+  const [message, setMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const updatePeriod = (index: number, updater: (current: Gstr9Gstr3bPeriod) => Gstr9Gstr3bPeriod) => {
+    setPeriods((current) => current.map((period, periodIndex) =>
+      periodIndex === index ? updater(period) : period,
+    ));
+  };
+
+  const save = async (source: Gstr9InputSource) => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const now = new Date().toISOString();
+      const metadata: Gstr9InputMetadata = {
+        source,
+        enteredAt: existingGstr3b?.metadata.enteredAt ?? now,
+        updatedAt: now,
+        sourceName: sourceName.trim() || undefined,
+        sourceReference: sourceReference.trim() || undefined,
+        notes: notes.trim() || undefined,
+      };
+      const record: Gstr9InputRecord = {
+        ...(existing ?? {
+          id: `${companyId}:${financialYear}`,
+          companyId,
+          financialYear,
+        }),
+        gstr3b: { periods, metadata },
+      };
+      await saveGstr9InputRecord(record);
+      onSaved(record);
+      setMessage(`${source === "IMPORT" ? "Imported" : "Manual entry"} saved successfully.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save GSTR-3B input.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const importJson = async (file: File) => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const imported = normaliseGstr3bImport(parsed, financialYear);
+      setPeriods(imported.periods);
+      if (imported.sourceName) setSourceName(imported.sourceName);
+      if (imported.sourceReference) setSourceReference(imported.sourceReference);
+      if (imported.notes) setNotes(imported.notes);
+      setTab("IMPORT");
+      setMessage("JSON loaded. Review the values, then click Save imported GSTR-3B.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to read the JSON file.");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Card className="max-h-[94vh] w-full max-w-7xl overflow-hidden shadow-xl">
+        <CardHeader className="flex flex-row items-center justify-between border-b pb-3">
+          <div>
+            <CardTitle className="text-base">Filed GSTR-3B Input — FY {financialYear}</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Enter or import monthly GSTR-3B figures. Manual entry and import use the same local GSTR-9 input store.
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="max-h-[calc(94vh-76px)] overflow-y-auto p-4">
+          <div className="mb-4 flex gap-2 border-b pb-3">
+            <Button size="sm" variant={tab === "MANUAL" ? "default" : "outline"} onClick={() => setTab("MANUAL")}>
+              Manual Entry
+            </Button>
+            <Button size="sm" variant={tab === "IMPORT" ? "default" : "outline"} onClick={() => setTab("IMPORT")}>
+              <Upload className="mr-1 h-4 w-4" /> Import JSON
+            </Button>
+          </div>
+
+          {tab === "IMPORT" && (
+            <div className="mb-4 rounded-md border border-dashed p-4">
+              <div className="text-sm font-medium">Import GSTR-3B structured JSON</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Import a JSON containing a <code>periods</code> array, or a wrapper containing <code>gstr3b.periods</code>. Periods are matched April-to-March.
+              </p>
+              <input
+                type="file"
+                accept=".json,application/json"
+                className="mt-3 block text-sm"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void importJson(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </div>
+          )}
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="space-y-1">
+              <span className="text-xs font-medium">Source name</span>
+              <input value={sourceName} onChange={(event) => setSourceName(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-medium">Source reference</span>
+              <input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} placeholder="e.g. ARN / file name" className="h-9 w-full rounded-md border bg-background px-3 text-sm" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-medium">Notes</span>
+              <input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" />
+            </label>
+          </div>
+
+          <div className="mt-4 rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            <strong>Tax payment:</strong> IGST, CGST, SGST and Cess are stored as GST tax paid. Interest, late fee, penalty and other payments are captured separately and are not included in GST tax-paid totals.
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {periods.map((period, index) => (
+              <details key={`${period.period}-${index}`} open={index === 0} className="rounded-md border">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">{period.period}</summary>
+                <div className="space-y-5 border-t p-4">
+                  <section>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Outward supplies / tax liability</h3>
+                    <TaxAmountFields
+                      value={period.outwardTax}
+                      onChange={(value) => updatePeriod(index, (current) => ({ ...current, outwardTax: value }))}
+                    />
+                  </section>
+
+                  <section>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">ITC availed — Table 4(A)</h3>
+                    <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-5">
+                      {GSTR3B_ITC_FIELDS.map(([field, label]) => (
+                        <label key={field} className="space-y-1">
+                          <span className="text-[11px] text-muted-foreground">{label}</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={period.itc[field]}
+                            onChange={(event) => updatePeriod(index, (current) => {
+                              const itc = { ...current.itc, [field]: numberValue(event.target.value) };
+                              itc.totalItcAvailed =
+                                itc.table4A1ImportOfGoods + itc.table4A2ImportOfServices + itc.table4A3Rcm + itc.table4A4Isd + itc.table4A5Other;
+                              return { ...current, itc };
+                            })}
+                            className="h-8 w-full rounded-md border bg-background px-2 text-right text-xs"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-right text-xs font-semibold">Total ITC availed: {money(period.itc.totalItcAvailed)}</div>
+                  </section>
+
+                  <section>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">ITC reversals</h3>
+                    <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-5">
+                      {GSTR3B_REVERSAL_FIELDS.map(([field, label]) => (
+                        <label key={field} className="space-y-1">
+                          <span className="text-[11px] text-muted-foreground">{label}</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={period.itcReversal[field]}
+                            onChange={(event) => updatePeriod(index, (current) => {
+                              const itcReversal = { ...current.itcReversal, [field]: numberValue(event.target.value) };
+                              itcReversal.total = itcReversal.rule38 + itcReversal.rule42 + itcReversal.rule43 + itcReversal.section17_5 + itcReversal.other;
+                              return { ...current, itcReversal };
+                            })}
+                            className="h-8 w-full rounded-md border bg-background px-2 text-right text-xs"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-right text-xs font-semibold">Total ITC reversal: {money(period.itcReversal.total)}</div>
+                  </section>
+
+                  <section>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tax paid</h3>
+                    <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+                      {GSTR3B_TAX_PAID_FIELDS.map(([field, label]) => (
+                        <label key={field} className="space-y-1">
+                          <span className="text-[11px] text-muted-foreground">{label}</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={period.taxPaid[field]}
+                            onChange={(event) => updatePeriod(index, (current) => ({
+                              ...current,
+                              taxPaid: { ...current.taxPaid, [field]: numberValue(event.target.value) },
+                            }))}
+                            className="h-8 w-full rounded-md border bg-background px-2 text-right text-xs"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              </details>
+            ))}
+          </div>
+
+          {message && <div className="mt-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">{message}</div>}
+
+          <div className="mt-5 flex justify-end gap-2 border-t pt-4">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={() => void save(tab === "IMPORT" ? "IMPORT" : "MANUAL")} disabled={saving}>
+              <Save className="mr-1 h-4 w-4" />
+              {saving ? "Saving…" : tab === "IMPORT" ? "Save imported GSTR-3B" : "Save manual GSTR-3B"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function Gstr1InputPanel({
   financialYear,
   companyId,
@@ -569,6 +991,7 @@ function GSTR9Page() {
   const [error, setError] = useState<string | null>(null);
   const [inputRecord, setInputRecord] = useState<Gstr9InputRecord | undefined>();
   const [gstr1Open, setGstr1Open] = useState(false);
+  const [gstr3bOpen, setGstr3bOpen] = useState(false);
 
   const years = useMemo(() => financialYearOptions(), []);
 
@@ -793,9 +1216,9 @@ function GSTR9Page() {
               />
               <SourceStatus
                 label="Filed GSTR-3B"
-                status={result.sourceInfo.filedGstr3b}
-                actionLabel="Next"
-                disabled
+                status={inputStatus.gstr3b}
+                actionLabel="Enter / Import"
+                onAction={() => setGstr3bOpen(true)}
               />
               <SourceStatus
                 label="GSTR-2B"
@@ -1088,6 +1511,18 @@ function GSTR9Page() {
               onSaved={(record) => {
                 setInputRecord(record);
                 setGstr1Open(false);
+              }}
+            />
+          )}
+          {gstr3bOpen && activeCompanyId && (
+            <Gstr3bInputPanel
+              financialYear={financialYear}
+              companyId={activeCompanyId}
+              existing={inputRecord}
+              onClose={() => setGstr3bOpen(false)}
+              onSaved={(record) => {
+                setInputRecord(record);
+                setGstr3bOpen(false);
               }}
             />
           )}
