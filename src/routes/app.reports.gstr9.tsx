@@ -713,8 +713,8 @@ function Gstr3bInputPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
-      <Card className="flex h-[calc(100vh-24px)] max-h-[calc(100vh-24px)] w-full max-w-7xl flex-col overflow-hidden shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-3 pt-3 pb-20">
+      <Card className="flex h-[calc(100vh-92px)] max-h-[calc(100vh-92px)] w-full max-w-7xl flex-col overflow-hidden shadow-xl">
         <CardHeader className="flex flex-none flex-row items-center justify-between border-b pb-3">
           <div>
             <CardTitle className="text-base">Filed GSTR-3B Input — FY {financialYear}</CardTitle>
@@ -969,8 +969,8 @@ function Gstr1InputPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
-      <Card className="flex h-[calc(100vh-24px)] max-h-[calc(100vh-24px)] w-full max-w-6xl flex-col overflow-hidden shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-3 pt-3 pb-20">
+      <Card className="flex h-[calc(100vh-92px)] max-h-[calc(100vh-92px)] w-full max-w-6xl flex-col overflow-hidden shadow-xl">
         <CardHeader className="flex flex-none flex-row items-center justify-between border-b pb-3">
           <div>
             <CardTitle className="text-base">Filed GSTR-1 Input — FY {financialYear}</CardTitle>
