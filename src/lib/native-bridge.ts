@@ -222,6 +222,13 @@ export async function closeNativeApp(): Promise<SaveNativeResult> {
   const eb = electronBridge();
   if (eb?.closeApp) return eb.closeApp();
   if (hasTauri()) {
+    // Preferred: native command that ends the whole process. Closing only the
+    // main window can leave the hidden WhatsApp window keeping the app alive.
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("exit_app");
+      return { ok: true };
+    } catch { /* older desktop build without exit_app — fall through */ }
     try {
       const w = window as unknown as {
         __TAURI__?: {

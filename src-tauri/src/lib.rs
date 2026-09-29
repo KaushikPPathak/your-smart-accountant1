@@ -16,6 +16,13 @@ fn extract_phone(url: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// Terminates the whole desktop process (main window + hidden WhatsApp
+/// window). Used by the "Exit Software" confirmation.
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 #[tauri::command]
 fn copy_files_to_clipboard(paths: Vec<String>) -> Result<(), String> {
     if paths.is_empty() {
@@ -108,6 +115,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             copy_files_to_clipboard,
             show_whatsapp_web,
+            exit_app,
         ])
         .setup(|app| {
             let local_data = app.path().local_data_dir()?;
