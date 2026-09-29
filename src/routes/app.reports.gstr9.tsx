@@ -50,6 +50,7 @@ import {
   type Gstr9Table5,
   type Gstr9TaxAmount,
   type Gstr9Gstr3bPeriod,
+  type Gstr9Gstr2bPeriod,
   type Gstr9TaxPaid,
 } from "@/lib/gstr9-inputs";
 import {
@@ -486,6 +487,125 @@ function normaliseGstr3bImport(value: unknown, financialYear: string): {
   };
 }
 
+
+function gstr2bPeriodsForFinancialYear(financialYear: string): string[] {
+  const match = /^(\d{4})-(\d{2})$/.exec(financialYear);
+  const startYear = match ? Number(match[1]) : new Date().getFullYear();
+  return Array.from({ length: 12 }, (_, index) => {
+    const year = index < 9 ? startYear : startYear + 1;
+    const month = index < 9 ? index + 4 : index - 8;
+    return new Date(year, month - 1, 1).toLocaleString("en-IN", {
+      month: "long",
+      year: "numeric",
+    });
+  });
+}
+
+function emptyGstr2bPeriod(period: string): Gstr9Gstr2bPeriod {
+  return {
+    period,
+    itcAvailable: {
+      importOfGoods: 0,
+      importOfServices: 0,
+      reverseCharge: 0,
+      isd: 0,
+      otherRegisteredSupplies: 0,
+      total: 0,
+    },
+    itcNotAvailable: {
+      section16_4: 0,
+      posRestriction: 0,
+      other: 0,
+      total: 0,
+    },
+  };
+}
+
+function cloneGstr2bPeriod(period: Gstr9Gstr2bPeriod): Gstr9Gstr2bPeriod {
+  return {
+    period: period.period,
+    itcAvailable: { ...period.itcAvailable },
+    itcNotAvailable: { ...period.itcNotAvailable },
+  };
+}
+
+function normaliseGstr2bPeriod(value: unknown, fallbackPeriod: string): Gstr9Gstr2bPeriod {
+  const root = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const available = root.itcAvailable && typeof root.itcAvailable === "object"
+    ? root.itcAvailable as Record<string, unknown>
+    : {};
+  const notAvailable = root.itcNotAvailable && typeof root.itcNotAvailable === "object"
+    ? root.itcNotAvailable as Record<string, unknown>
+    : {};
+  const n = (source: Record<string, unknown>, key: string) => {
+    const value = Number(source[key] ?? 0);
+    return Number.isFinite(value) && value >= 0 ? value : 0;
+  };
+  const importOfGoods = n(available, "importOfGoods");
+  const importOfServices = n(available, "importOfServices");
+  const reverseCharge = n(available, "reverseCharge");
+  const isd = n(available, "isd");
+  const otherRegisteredSupplies = n(available, "otherRegisteredSupplies");
+  const section16_4 = n(notAvailable, "section16_4");
+  const posRestriction = n(notAvailable, "posRestriction");
+  const other = n(notAvailable, "other");
+  return {
+    period: String(root.period ?? fallbackPeriod),
+    itcAvailable: {
+      importOfGoods,
+      importOfServices,
+      reverseCharge,
+      isd,
+      otherRegisteredSupplies,
+      total: importOfGoods + importOfServices + reverseCharge + isd + otherRegisteredSupplies,
+    },
+    itcNotAvailable: {
+      section16_4,
+      posRestriction,
+      other,
+      total: section16_4 + posRestriction + other,
+    },
+  };
+}
+
+function normaliseGstr2bImport(value: unknown, financialYear: string): {
+  periods: Gstr9Gstr2bPeriod[];
+  sourceName?: string;
+  sourceReference?: string;
+  notes?: string;
+} {
+  const root = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const payload = root.gstr2b && typeof root.gstr2b === "object"
+    ? root.gstr2b as Record<string, unknown>
+    : root;
+  const defaults = gstr2bPeriodsForFinancialYear(financialYear);
+  const sourcePeriods = Array.isArray(payload.periods) ? payload.periods : [];
+  const periods = defaults.map((period, index) => normaliseGstr2bPeriod(sourcePeriods[index], period));
+  const metadata = payload.metadata && typeof payload.metadata === "object"
+    ? payload.metadata as Record<string, unknown>
+    : {};
+  return {
+    periods,
+    sourceName: String(metadata.sourceName ?? root.sourceName ?? "").trim() || undefined,
+    sourceReference: String(metadata.sourceReference ?? root.sourceReference ?? "").trim() || undefined,
+    notes: String(metadata.notes ?? root.notes ?? "").trim() || undefined,
+  };
+}
+
+const GSTR2B_AVAILABLE_FIELDS: Array<[keyof Gstr9Gstr2bPeriod["itcAvailable"], string]> = [
+  ["importOfGoods", "Import of goods"],
+  ["importOfServices", "Import of services"],
+  ["reverseCharge", "Reverse charge"],
+  ["isd", "ISD"],
+  ["otherRegisteredSupplies", "Other registered supplies"],
+];
+
+const GSTR2B_NOT_AVAILABLE_FIELDS: Array<[keyof Gstr9Gstr2bPeriod["itcNotAvailable"], string]> = [
+  ["section16_4", "Section 16(4)"],
+  ["posRestriction", "Place-of-supply restriction"],
+  ["other", "Other ITC not available"],
+];
+
 const GSTR3B_ITC_FIELDS: Array<[keyof Gstr9Gstr3bPeriod["itc"], string]> = [
   ["table4A1ImportOfGoods", "4A(1) Import of goods"],
   ["table4A2ImportOfServices", "4A(2) Import of services"],
@@ -624,6 +744,216 @@ function Gstr3bReviewSummary({ periods }: { periods: Gstr9Gstr3bPeriod[] }) {
         <div><span className="text-muted-foreground">Other payments:</span> <strong>{money(totals.others)}</strong></div>
       </div>
     </section>
+  );
+}
+
+
+function Gstr2bReviewSummary({ periods }: { periods: Gstr9Gstr2bPeriod[] }) {
+  const totals = periods.reduce(
+    (acc, period) => ({
+      importOfGoods: acc.importOfGoods + period.itcAvailable.importOfGoods,
+      importOfServices: acc.importOfServices + period.itcAvailable.importOfServices,
+      reverseCharge: acc.reverseCharge + period.itcAvailable.reverseCharge,
+      isd: acc.isd + period.itcAvailable.isd,
+      otherRegisteredSupplies: acc.otherRegisteredSupplies + period.itcAvailable.otherRegisteredSupplies,
+      available: acc.available + period.itcAvailable.total,
+      section16_4: acc.section16_4 + period.itcNotAvailable.section16_4,
+      posRestriction: acc.posRestriction + period.itcNotAvailable.posRestriction,
+      otherNotAvailable: acc.otherNotAvailable + period.itcNotAvailable.other,
+      notAvailable: acc.notAvailable + period.itcNotAvailable.total,
+    }),
+    {
+      importOfGoods: 0,
+      importOfServices: 0,
+      reverseCharge: 0,
+      isd: 0,
+      otherRegisteredSupplies: 0,
+      available: 0,
+      section16_4: 0,
+      posRestriction: 0,
+      otherNotAvailable: 0,
+      notAvailable: 0,
+    },
+  );
+
+  return (
+    <section className="rounded-md border bg-muted/20 p-4">
+      <h3 className="text-sm font-semibold">Annual GSTR-2B review</h3>
+      <p className="mt-1 text-xs text-muted-foreground">Review the April-to-March totals before saving.</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {[
+          ["Import of goods", totals.importOfGoods],
+          ["Import of services", totals.importOfServices],
+          ["Reverse charge", totals.reverseCharge],
+          ["ISD", totals.isd],
+          ["Other registered supplies", totals.otherRegisteredSupplies],
+          ["Total ITC available", totals.available],
+          ["Section 16(4)", totals.section16_4],
+          ["POS restriction", totals.posRestriction],
+          ["Other ITC not available", totals.otherNotAvailable],
+          ["Total ITC not available", totals.notAvailable],
+        ].map(([label, value]) => (
+          <div key={String(label)} className="rounded-md border bg-background px-3 py-2">
+            <div className="text-[11px] text-muted-foreground">{label}</div>
+            <div className="mt-1 text-sm font-semibold text-right">{money(Number(value))}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Gstr2bInputPanel({
+  financialYear,
+  companyId,
+  existing,
+  onClose,
+  onSaved,
+}: {
+  financialYear: string;
+  companyId: string;
+  existing: Gstr9InputRecord | undefined;
+  onClose: () => void;
+  onSaved: (record: Gstr9InputRecord) => void;
+}) {
+  const existingGstr2b = existing?.gstr2b;
+  const [tab, setTab] = useState<"MANUAL" | "IMPORT">("MANUAL");
+  const [periods, setPeriods] = useState<Gstr9Gstr2bPeriod[]>(() => {
+    const defaults = gstr2bPeriodsForFinancialYear(financialYear);
+    if (existingGstr2b?.periods?.length) {
+      return defaults.map((period, index) => existingGstr2b.periods[index]
+        ? cloneGstr2bPeriod(existingGstr2b.periods[index])
+        : emptyGstr2bPeriod(period));
+    }
+    return defaults.map(emptyGstr2bPeriod);
+  });
+  const [sourceName, setSourceName] = useState(existingGstr2b?.metadata.sourceName ?? "GSTR-2B");
+  const [sourceReference, setSourceReference] = useState(existingGstr2b?.metadata.sourceReference ?? "");
+  const [notes, setNotes] = useState(existingGstr2b?.metadata.notes ?? "");
+  const [message, setMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const updatePeriod = (index: number, updater: (current: Gstr9Gstr2bPeriod) => Gstr9Gstr2bPeriod) => {
+    setPeriods((current) => current.map((period, periodIndex) => periodIndex === index ? updater(period) : period));
+  };
+
+  const save = async (source: Gstr9InputSource) => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const now = new Date().toISOString();
+      const metadata: Gstr9InputMetadata = {
+        source,
+        enteredAt: existingGstr2b?.metadata.enteredAt ?? now,
+        updatedAt: now,
+        sourceName: sourceName.trim() || undefined,
+        sourceReference: sourceReference.trim() || undefined,
+        notes: notes.trim() || undefined,
+      };
+      const record: Gstr9InputRecord = {
+        ...(existing ?? { id: `${companyId}:${financialYear}`, companyId, financialYear }),
+        gstr2b: { periods, metadata },
+      };
+      await saveGstr9InputRecord(record);
+      onSaved(record);
+      setMessage(`${source === "IMPORT" ? "Imported" : "Manual entry"} saved successfully.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save GSTR-2B input.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const importJson = async (file: File) => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const imported = normaliseGstr2bImport(parsed, financialYear);
+      setPeriods(imported.periods);
+      if (imported.sourceName) setSourceName(imported.sourceName);
+      if (imported.sourceReference) setSourceReference(imported.sourceReference);
+      if (imported.notes) setNotes(imported.notes);
+      setTab("IMPORT");
+      setMessage("JSON loaded. Review the values, then click Save imported GSTR-2B.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to read the JSON file.");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Card className="flex h-[calc(100vh-32px)] w-full max-w-7xl flex-col overflow-hidden shadow-xl">
+        <CardHeader className="flex flex-row items-center justify-between border-b pb-3">
+          <div>
+            <CardTitle className="text-base">GSTR-2B Input — FY {financialYear}</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">Enter or import monthly GSTR-2B figures. The input is kept separate from GSTR-3B ITC claimed.</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close"><X className="h-4 w-4" /></Button>
+        </CardHeader>
+        <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+          <div className="mb-4 flex shrink-0 gap-2 border-b pb-3">
+            <Button size="sm" variant={tab === "MANUAL" ? "default" : "outline"} onClick={() => setTab("MANUAL")}>Manual Entry</Button>
+            <Button size="sm" variant={tab === "IMPORT" ? "default" : "outline"} onClick={() => setTab("IMPORT")}><Upload className="mr-1 h-4 w-4" /> Import JSON</Button>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            {tab === "IMPORT" && (
+              <div className="mb-4 rounded-md border border-dashed p-4">
+                <div className="text-sm font-medium">Import GSTR-2B structured JSON</div>
+                <p className="mt-1 text-xs text-muted-foreground">Import a JSON containing a <code>periods</code> array, or a wrapper containing <code>gstr2b.periods</code>. Periods are matched April-to-March.</p>
+                <input type="file" accept=".json,application/json" className="mt-3 block text-sm" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importJson(file); event.currentTarget.value = ""; }} />
+              </div>
+            )}
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className="space-y-1"><span className="text-xs font-medium">Source name</span><input value={sourceName} onChange={(event) => setSourceName(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
+              <label className="space-y-1"><span className="text-xs font-medium">Source reference</span><input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} placeholder="e.g. downloaded file name" className="h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
+              <label className="space-y-1"><span className="text-xs font-medium">Notes</span><input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
+            </div>
+
+            <div className="mt-4 rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground"><strong>Important:</strong> GSTR-2B is the static auto-drafted ITC statement. These figures are stored separately from GSTR-3B ITC claimed so differences can be reviewed later.</div>
+
+            <div className="mt-5 space-y-3">
+              {periods.map((period, index) => (
+                <details key={`${period.period}-${index}`} open={index === 0} className="rounded-md border">
+                  <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">{period.period}</summary>
+                  <div className="space-y-5 border-t p-4">
+                    <section>
+                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">ITC available</h3>
+                      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-5">
+                        {GSTR2B_AVAILABLE_FIELDS.map(([field, label]) => (
+                          <label key={field} className="space-y-1"><span className="text-[11px] text-muted-foreground">{label}</span><input type="number" min="0" step="0.01" value={period.itcAvailable[field]} onChange={(event) => updatePeriod(index, (current) => { const itcAvailable = { ...current.itcAvailable, [field]: numberValue(event.target.value) }; itcAvailable.total = itcAvailable.importOfGoods + itcAvailable.importOfServices + itcAvailable.reverseCharge + itcAvailable.isd + itcAvailable.otherRegisteredSupplies; return { ...current, itcAvailable }; })} className="h-8 w-full rounded-md border bg-background px-2 text-right text-xs" /></label>
+                        ))}
+                      </div>
+                      <div className="mt-2 text-right text-xs font-semibold">Total ITC available: {money(period.itcAvailable.total)}</div>
+                    </section>
+
+                    <section>
+                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">ITC not available</h3>
+                      <div className="grid gap-2 md:grid-cols-3">
+                        {GSTR2B_NOT_AVAILABLE_FIELDS.map(([field, label]) => (
+                          <label key={field} className="space-y-1"><span className="text-[11px] text-muted-foreground">{label}</span><input type="number" min="0" step="0.01" value={period.itcNotAvailable[field]} onChange={(event) => updatePeriod(index, (current) => { const itcNotAvailable = { ...current.itcNotAvailable, [field]: numberValue(event.target.value) }; itcNotAvailable.total = itcNotAvailable.section16_4 + itcNotAvailable.posRestriction + itcNotAvailable.other; return { ...current, itcNotAvailable }; })} className="h-8 w-full rounded-md border bg-background px-2 text-right text-xs" /></label>
+                        ))}
+                      </div>
+                      <div className="mt-2 text-right text-xs font-semibold">Total ITC not available: {money(period.itcNotAvailable.total)}</div>
+                    </section>
+                  </div>
+                </details>
+              ))}
+            </div>
+
+            <div className="mt-5"><Gstr2bReviewSummary periods={periods} /></div>
+
+            {message && <div className="mt-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">{message}</div>}
+          </div>
+
+          <div className="mt-4 shrink-0 flex justify-end gap-2 border-t bg-background pb-2 pt-4">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={() => void save(tab === "IMPORT" ? "IMPORT" : "MANUAL")} disabled={saving}><Save className="mr-1 h-4 w-4" />{saving ? "Saving…" : tab === "IMPORT" ? "Save imported GSTR-2B" : "Save manual GSTR-2B"}</Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -1114,6 +1444,7 @@ function GSTR9Page() {
   const [inputRecord, setInputRecord] = useState<Gstr9InputRecord | undefined>();
   const [gstr1Open, setGstr1Open] = useState(false);
   const [gstr3bOpen, setGstr3bOpen] = useState(false);
+  const [gstr2bOpen, setGstr2bOpen] = useState(false);
 
   const years = useMemo(() => financialYearOptions(), []);
 
@@ -1344,9 +1675,9 @@ function GSTR9Page() {
               />
               <SourceStatus
                 label="GSTR-2B"
-                status={result.sourceInfo.gstr2b}
-                actionLabel="Next"
-                disabled
+                status={inputStatus.gstr2b}
+                actionLabel="Enter / Import"
+                onAction={() => setGstr2bOpen(true)}
               />
               <SourceStatus
                 label="ITC tables"
@@ -1645,6 +1976,18 @@ function GSTR9Page() {
               onSaved={(record) => {
                 setInputRecord(record);
                 setGstr3bOpen(false);
+              }}
+            />
+          )}
+          {gstr2bOpen && activeCompanyId && (
+            <Gstr2bInputPanel
+              financialYear={financialYear}
+              companyId={activeCompanyId}
+              existing={inputRecord}
+              onClose={() => setGstr2bOpen(false)}
+              onSaved={(record) => {
+                setInputRecord(record);
+                setGstr2bOpen(false);
               }}
             />
           )}
