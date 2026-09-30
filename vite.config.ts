@@ -101,7 +101,13 @@ const sharedBuild = {
   rollupOptions: {
     output: {
       manualChunks(id: string) {
+        // Tiny helpers shared by the entry AND heavy libraries. Without this,
+        // Rollup parks them inside the pdf/charts chunks, forcing those 1MB+
+        // chunks to load before first paint.
+        if (id.includes("vite/preload-helper") || id.includes("commonjsHelpers")) return "react-vendor";
         if (!id.includes("node_modules")) return;
+        if (/[\\/]node_modules[\\/](clsx|tailwind-merge|@babel[\\/]runtime|tslib)[\\/]/.test(id))
+          return "react-vendor";
         // React core MUST live in its own chunk. When it is left in the entry
         // chunk while dependants (router, ui) sit in separate chunks, Rollup
         // can emit a circular init order that runs React's CJS interop before

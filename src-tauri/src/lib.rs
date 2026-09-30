@@ -126,21 +126,13 @@ pub fn run() {
                 .title("Smart Accountant")
                 .inner_size(1280.0, 800.0)
                 .resizable(true)
-                .data_directory(webview_dir.clone())
+                .data_directory(webview_dir)
                 .build()?;
 
-            if let Ok(wa_url) = "https://web.whatsapp.com".parse() {
-                let _ = WebviewWindowBuilder::new(
-                    app,
-                    WA_WINDOW_LABEL,
-                    WebviewUrl::External(wa_url),
-                )
-                .title("WhatsApp Web")
-                .inner_size(1024.0, 768.0)
-                .visible(false)
-                .data_directory(webview_dir)
-                .build();
-            }
+            // WhatsApp Web is NOT pre-loaded at startup: it competed with the
+            // main window for CPU, disk and network during launch. The window
+            // is created on first use by `show_whatsapp_web`.
+
 
             Ok(())
         })
