@@ -174,17 +174,23 @@ function LockGate({ children }: { children: React.ReactNode }) {
 
           void (async () => {
             try {
+              const { runOncePerLaunch, snapshotDiscoveryDue, markSnapshotDiscoveryDone } =
+                await import("@/lib/startup-once");
               if (companies.length > 0) {
-                // Snapshot discovery for existing installs runs in background.
-                const { discoverCompaniesFromSnapshots } = await import(
-                  "@/lib/offline/snapshot-discovery"
-                );
-                await discoverCompaniesFromSnapshots();
+                // Existing installs: scan the snapshot folder at most once a day.
+                if (snapshotDiscoveryDue()) {
+                  const { discoverCompaniesFromSnapshots } = await import(
+                    "@/lib/offline/snapshot-discovery"
+                  );
+                  await discoverCompaniesFromSnapshots();
+                  markSnapshotDiscoveryDone();
+                }
                 const { runAutoRestore } = await import("@/lib/auto-restore");
-                await runAutoRestore(await offlineDb.companies.toArray());
+                const list = await offlineDb.companies.toArray();
+                await runOncePerLaunch("auto-restore", () => runAutoRestore(list));
               }
               const { checkUpdateSafety } = await import("@/lib/update-safety");
-              await checkUpdateSafety();
+              await runOncePerLaunch("update-safety", () => checkUpdateSafety());
               const { dedupeLocalCompaniesOnce } = await import(
                 "@/lib/dedupe-local-companies"
               );
