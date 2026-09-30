@@ -130,7 +130,8 @@ function AppLayout() {
         // every launch, on every platform.
         try {
           const { checkUpdateSafety } = await import("@/lib/update-safety");
-          await checkUpdateSafety();
+          const { runOncePerLaunch } = await import("@/lib/startup-once");
+          await runOncePerLaunch("update-safety", () => checkUpdateSafety());
         } catch { /* silent — never block boot on the safety check */ }
 
         if (isDesktopRuntime()) {
@@ -147,7 +148,8 @@ function AppLayout() {
               // Defer auto-restore further (10s) to ensure zero startup jank.
               await new Promise(r => setTimeout(r, 10000));
               const { runAutoRestore } = await import("@/lib/auto-restore");
-              const outcomes = await runAutoRestore(list);
+              const { runOncePerLaunch } = await import("@/lib/startup-once");
+              const outcomes = await runOncePerLaunch("auto-restore", () => runAutoRestore(list));
               const restored = outcomes.filter((o) => o.status === "restored");
               if (restored.length > 0) {
                 // Providers mount outside this maintenance effect, so refresh

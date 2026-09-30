@@ -53,6 +53,10 @@ export interface StructuredCard {
   /** Cash / bank / trial balance fields */
   accountName?: string;
   rows?: Array<{ name: string; debitPaise: number; creditPaise: number; closingPaise: number }>;
+  /** Trial balance totals — supplied by the accounting engine, never recomputed. */
+  totalDebitPaise?: number;
+  totalCreditPaise?: number;
+  balanced?: boolean;
   /** Voucher lookup fields */
   voucher?: any;
   vouchers?: any[];

@@ -11,6 +11,8 @@ import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { readLedgers, readVouchers } from "@/lib/offline/cache-read";
 import { formatINR } from "@/lib/money";
 import { Pencil } from "lucide-react";
+import { format } from "date-fns";
+import { useFyRange } from "@/components/ui/fy-date-picker";
 
 interface RecentRow {
   id: string;
@@ -35,6 +37,9 @@ export function RecentVouchersPanel({
   limit?: number;
 }) {
   const { activeCompanyId } = useCompany();
+  const { start: fyStart, end: fyEnd } = useFyRange();
+  const fromIso = format(fyStart, "yyyy-MM-dd");
+  const toIso = format(fyEnd, "yyyy-MM-dd");
   const navigate = useNavigate();
   const [rows, setRows] = useState<RecentRow[]>([]);
   const [partyNames, setPartyNames] = useState<Record<string, string>>({});
@@ -50,7 +55,10 @@ export function RecentVouchersPanel({
           readLedgers(activeCompanyId),
         ]);
         if (cancelled) return;
-        const list = (vouchers as RecentRow[]).slice(0, limit);
+        // Only bills of the financial year currently open.
+        const list = (vouchers as RecentRow[])
+          .filter((v) => v.voucher_date >= fromIso && v.voucher_date <= toIso)
+          .slice(0, limit);
         setRows(list);
         const m: Record<string, string> = {};
         for (const l of ledgers as Array<{ id: string; name: string }>) m[l.id] = l.name;
@@ -62,6 +70,8 @@ export function RecentVouchersPanel({
         .select("id, voucher_number, voucher_date, total_paise, party_ledger_id")
         .eq("company_id", activeCompanyId)
         .eq("voucher_type", voucherType as Database["public"]["Enums"]["voucher_type"])
+        .gte("voucher_date", fromIso)
+        .lte("voucher_date", toIso)
         .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(limit);
@@ -83,7 +93,7 @@ export function RecentVouchersPanel({
     return () => {
       cancelled = true;
     };
-  }, [activeCompanyId, voucherType, refreshKey, limit, open]);
+  }, [activeCompanyId, voucherType, refreshKey, limit, open, fromIso, toIso]);
 
   if (!open) {
     return (

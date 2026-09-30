@@ -73,6 +73,32 @@ const ITEM_COLUMNS = [
 
 // Functions moved to sys-utils.ts
 
+/**
+ * Global rule: a voucher may only be saved inside the company's open
+ * financial year (e.g. while in 2026-27, a 2025-26 date is rejected).
+ */
+export async function assertDateInOpenFy(companyId: string, date: string): Promise<void> {
+  if (!date) return;
+  let fyStart: string | undefined;
+  try {
+    const { offlineDb } = await import("./db");
+    const row: any =
+      (await offlineDb.cache_companies.get(companyId).catch(() => undefined)) ??
+      (await offlineDb.companies.get(companyId).catch(() => undefined));
+    fyStart = row?.financial_year_start;
+  } catch { /* fall through */ }
+  if (!fyStart || !/^\d{4}-\d{2}-\d{2}/.test(fyStart)) return;
+  const y = Number(fyStart.slice(0, 4));
+  const start = `${y}-${fyStart.slice(5, 10)}`;
+  const end = `${y + 1}-${fyStart.slice(5, 7)}-${fyStart.slice(8, 10)}`;
+  const d = date.slice(0, 10);
+  if (d < start || d >= end) {
+    const fmt = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+    const endIncl = new Date(Date.UTC(y + 1, Number(fyStart.slice(5, 7)) - 1, Number(fyStart.slice(8, 10)) - 1)).toISOString().slice(0, 10);
+    throw new Error(`Date ${fmt(d)} is outside the open financial year (${fmt(start)} – ${fmt(endIncl)}). Switch to that year to enter it.`);
+  }
+}
+
 
 
 async function nextLocalVoucherNumber(
@@ -603,6 +629,7 @@ export interface EntryVoucherSnap {
 // ---------- Item voucher executor -------------------------------------------
 
 export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
+  await assertDateInOpenFy(snap.companyId, snap.voucherDate);
   if (snap.voucherType === "physical_stock") {
     return runPhysicalStockCreate(snap);
   }
@@ -747,6 +774,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
 // ---------- Entry voucher executor ------------------------------------------
 
 export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void> {
+  await assertDateInOpenFy(snap.companyId, snap.voucherDate);
   const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
   if (isLocalOnlyMode()) {
     await runLocalEntryVoucherCreate(snap);
@@ -843,6 +871,7 @@ export async function runEntryVoucherCreate(snap: EntryVoucherSnap): Promise<voi
 // postings and no party ledger.
 
 export async function runPhysicalStockCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
+  await assertDateInOpenFy(snap.companyId, snap.voucherDate);
   const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
   if (isLocalOnlyMode()) {
     const r = await runLocalPhysicalStockCreate(snap);

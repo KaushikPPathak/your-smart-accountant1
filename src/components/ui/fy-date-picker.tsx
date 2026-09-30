@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { useCompany } from "@/lib/company-context";
 import { fmtIndianDate } from "@/lib/format-date";
+import { toast } from "sonner";
 
 /**
  * Returns the active financial year [start, end] for the active company.
@@ -137,6 +138,12 @@ export function FyDatePicker({
     }
     const d = new Date(yyyy, mm - 1, dd);
     if (!isValid(d) || d.getDate() !== dd || d.getMonth() !== mm - 1) return null;
+    if (!unrestricted && (d < start || d > end)) {
+      toast.error(
+        `Date is outside the open financial year (${format(start, "dd/MM/yyyy")} – ${format(end, "dd/MM/yyyy")}). Switch to that year to enter it.`,
+      );
+      return null;
+    }
     return format(d, "yyyy-MM-dd");
   }
 

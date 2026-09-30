@@ -60,8 +60,8 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
   {
     name: "get_trial_balance",
     description:
-      "Trial balance snapshot — every ledger with opening, debit, credit, closing.",
-    argsHint: `{}`,
+      "Trial balance snapshot — every ledger with opening, debit, credit, closing, plus total Dr/Cr.",
+    argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
     name: "get_profit_loss",
@@ -450,21 +450,50 @@ async function execGetVoucher(args: Record<string, unknown>): Promise<ToolResult
   return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
 }
 
-async function execGetTrialBalance(): Promise<ToolResult> {
+/**
+ * Trial Balance comes from the authoritative Accounting Query Engine.
+ * Rows and totals are returned verbatim — never cached, never recomputed by
+ * the model. Without an as-on date the engine's current-FY-end rule applies.
+ */
+async function execGetTrialBalance(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
   const cid = await activeCompanyId();
   if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
 
-  const cached = await getCached("get_trial_balance", {});
-  if (cached) return { success: true, data: cached, cached: true, latencyMs: 0 };
+  const asOn = args.asOn ? String(args.asOn) : null;
+  const { runTrialBalance } = await import("./accounting-query-engine");
+  const res = await runTrialBalance({ asOn, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
 
-  const routed = routeQuery("trial balance");
-  routed.intent = "trial_balance";
-  const slice = await retrieveForQuery(routed, cid);
-  const result = { scope: slice.scope, data: slice.data, facts: slice.facts };
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
 
-  await setCached("get_trial_balance", {}, result);
-  return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
+  const rows = res.rows
+    .filter((r) => r.closingPaise !== 0 || r.entryDebitPaise !== 0 || r.entryCreditPaise !== 0)
+    .map((r) => ({
+      name: r.ledgerName,
+      group: r.ledgerGroup,
+      opening_paise: r.openingPaise,
+      debit_paise: r.debitPaise,
+      credit_paise: r.creditPaise,
+      closing_paise: r.closingPaise,
+      direction: r.direction,
+    }));
+
+  return {
+    success: true,
+    data: {
+      scope: `Trial balance as on ${res.asOn} (${rows.length} ledgers)`,
+      data: { trial_balance: rows },
+      facts: {
+        as_on_date: res.asOn,
+        ledger_count: rows.length,
+        total_debit_paise: res.totalDebitPaise,
+        total_credit_paise: res.totalCreditPaise,
+        balanced: res.balanced,
+      },
+    },
+    latencyMs,
+  };
 }
 
 async function execGetJournalBook(args: Record<string, unknown>): Promise<ToolResult> {
@@ -516,7 +545,7 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     case "get_voucher":
       return execGetVoucher(args);
     case "get_trial_balance":
-      return execGetTrialBalance();
+      return execGetTrialBalance(args);
     case "get_journal_book":
       return execGetJournalBook(args);
     case "get_profit_loss":

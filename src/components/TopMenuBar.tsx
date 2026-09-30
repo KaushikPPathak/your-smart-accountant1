@@ -869,13 +869,17 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
             <AlertDialogCancel autoFocus>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
+              onClick={async () => {
                 setExitConfirmOpen(false);
                 if (typeof window !== "undefined" && (window as any).yourMehtaji?.closeApp) {
                   (window as any).yourMehtaji.closeApp();
-                } else {
-                  window.close();
+                  return;
                 }
+                const { closeNativeApp } = await import("@/lib/native-bridge");
+                const closed = await closeNativeApp();
+                if (closed.ok) return;
+                window.open("", "_self");
+                window.close();
               }}
             >
               Exit Software
