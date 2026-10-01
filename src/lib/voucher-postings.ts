@@ -29,6 +29,9 @@ const OUT_IGST: SystemLedgerSpec = { name: "Output IGST", type: "duties_taxes" }
 const IN_CGST: SystemLedgerSpec = { name: "Input CGST", type: "duties_taxes" };
 const IN_SGST: SystemLedgerSpec = { name: "Input SGST", type: "duties_taxes" };
 const IN_IGST: SystemLedgerSpec = { name: "Input IGST", type: "duties_taxes" };
+const RCM_CGST: SystemLedgerSpec = { name: "RCM CGST Payable", type: "duties_taxes" };
+const RCM_SGST: SystemLedgerSpec = { name: "RCM SGST Payable", type: "duties_taxes" };
+const RCM_IGST: SystemLedgerSpec = { name: "RCM IGST Payable", type: "duties_taxes" };
 const ROUND_OFF: SystemLedgerSpec = { name: "Round Off", type: "expense_indirect" };
 
 async function getOrCreateLedger(companyId: string, spec: SystemLedgerSpec): Promise<string> {
@@ -110,6 +113,12 @@ export interface PostingOptions {
    * party leg stays consistent.
    */
   sundries?: PostingSundry[];
+  /**
+   * Reverse charge (purchase only). The supplier is paid the bill WITHOUT GST;
+   * the GST is credited to "RCM … Payable" ledgers (paid by the buyer to the
+   * government). Input GST is still debited when ITC is eligible.
+   */
+  rcm?: boolean;
 }
 
 export interface CapitalItemLine {
@@ -226,7 +235,14 @@ export async function buildItemVoucherPostings(
     if (postCgst && cgstId) entries.push({ ledger_id: cgstId, debit_paise: totals.cgst_paise, credit_paise: 0, line_no: line++ });
     if (postSgst && sgstId) entries.push({ ledger_id: sgstId, debit_paise: totals.sgst_paise, credit_paise: 0, line_no: line++ });
     if (postIgst && igstId) entries.push({ ledger_id: igstId, debit_paise: totals.igst_paise, credit_paise: 0, line_no: line++ });
-    entries.push({ ledger_id: partyLedgerId, debit_paise: 0, credit_paise: totals.total_paise, line_no: line++ });
+    const rcm = options.rcm === true;
+    const rcmTax = rcm ? totals.cgst_paise + totals.sgst_paise + totals.igst_paise : 0;
+    entries.push({ ledger_id: partyLedgerId, debit_paise: 0, credit_paise: totals.total_paise - rcmTax, line_no: line++ });
+    if (rcm) {
+      if (totals.cgst_paise > 0) entries.push({ ledger_id: await getOrCreateLedger(companyId, RCM_CGST), debit_paise: 0, credit_paise: totals.cgst_paise, line_no: line++ });
+      if (totals.sgst_paise > 0) entries.push({ ledger_id: await getOrCreateLedger(companyId, RCM_SGST), debit_paise: 0, credit_paise: totals.sgst_paise, line_no: line++ });
+      if (totals.igst_paise > 0) entries.push({ ledger_id: await getOrCreateLedger(companyId, RCM_IGST), debit_paise: 0, credit_paise: totals.igst_paise, line_no: line++ });
+    }
     if (roundOffId && roundOff > 0) entries.push({ ledger_id: roundOffId, debit_paise: roundOff, credit_paise: 0, line_no: line++ });
     if (roundOffId && roundOff < 0) entries.push({ ledger_id: roundOffId, debit_paise: 0, credit_paise: -roundOff, line_no: line++ });
   } else if (kind === "credit_note") {

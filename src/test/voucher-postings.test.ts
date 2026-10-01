@@ -209,5 +209,18 @@ describe("buildItemVoucherPostings — invariants", () => {
     const disc = entries.find((e) => e.ledger_id === idFor("Discount Received"))!;
     expect(disc.credit_paise).toBe(200);
   });
+  it("RCM purchase: cash paid excludes GST, GST credited to RCM payable, ITC debited, balanced", async () => {
+    const t = totals();
+    const entries = await buildItemVoucherPostings("co", "purchase", PARTY, t, { itcClass: "inputs", itcEligible: true, rcm: true });
+    expect(balanced(entries).ok).toBe(true);
+    expect(entries.find((e) => e.ledger_id === PARTY)!.credit_paise).toBe(t.subtotal_paise);
+    expect(entries.some((e) => e.ledger_id === idFor("RCM CGST Payable") && e.credit_paise === t.cgst_paise)).toBe(true);
+    expect(entries.some((e) => e.ledger_id === idFor("Input CGST") && e.debit_paise === t.cgst_paise)).toBe(true);
+  });
+
+  it("non-RCM purchase posts no RCM payable", async () => {
+    const entries = await buildItemVoucherPostings("co", "purchase", PARTY, totals(), { itcClass: "inputs", itcEligible: true });
+    expect(entries.some((e) => e.ledger_id === idFor("RCM CGST Payable"))).toBe(false);
+  });
 });
 
