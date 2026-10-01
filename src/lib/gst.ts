@@ -3,7 +3,6 @@ import { rupeesToPaise } from "./money";
 import { offlineDb } from "./offline/db";
 import { GST_STATE_CODES } from "../utils/stateCodes";
 
-
 export interface GstLineInput {
   item_id?: string;
   ledger_id?: string;
@@ -11,6 +10,15 @@ export interface GstLineInput {
   rate: number; // rupees
   discount: number; // rupees (line-level)
   gstRate: number; // %
+  /**
+   * Whether GST is actually charged on this line.
+   *
+   * Important:
+   * - The item's gstRate is still retained for tax classification/reporting.
+   * - When chargeGst is false, actual GST charged is zero.
+   * - Used for normal URD cash purchases where RCM is not applicable.
+   */
+  chargeGst?: boolean;
 }
 
 /** Precomputed GST result for caching */
@@ -39,22 +47,32 @@ export interface GstLineResult {
 }
 
 /** Compute one line. interstate=true => IGST, else CGST+SGST split */
-export function computeLine(input: GstLineInput, interstate: boolean): GstLineResult {
+export function computeLine(
+  input: GstLineInput,
+  interstate: boolean,
+): GstLineResult {
   const amount_paise = rupeesToPaise(input.qty * input.rate);
   const discount_paise = rupeesToPaise(input.discount);
   const taxable_paise = Math.max(0, amount_paise - discount_paise);
-  const gstAmount = Math.round((taxable_paise * input.gstRate) / 100);
+
+  // The item's GST rate remains available as its tax classification,
+  // but GST is only actually charged when chargeGst is not explicitly false.
+  const gstAmount =
+    input.chargeGst === false
+      ? 0
+      : Math.round((taxable_paise * input.gstRate) / 100);
 
   let cgst = 0,
     sgst = 0,
     igst = 0,
     rounding = 0;
+
   if (interstate) {
     igst = gstAmount;
   } else {
     // GST law requires CGST = SGST on every B2B invoice (GSTN portal validates).
-    // If gstAmount is odd, the leftover 1 paise becomes a voucher-level round-off
-    // so each line still has CGST exactly equal to SGST.
+    // If gstAmount is odd, the leftover 1 paise becomes a voucher-level
+    // round-off so each line still has CGST exactly equal to SGST.
     const half = Math.floor(gstAmount / 2);
     cgst = half;
     sgst = half;
@@ -65,6 +83,7 @@ export function computeLine(input: GstLineInput, interstate: boolean): GstLineRe
     amount_paise,
     discount_paise,
     taxable_paise,
+    // Preserve the item's GST classification even when GST actually charged is 0.
     gst_rate: input.gstRate,
     cgst_paise: cgst,
     sgst_paise: sgst,
@@ -94,20 +113,32 @@ export function sumLines(lines: GstLineResult[]): VoucherTotals {
       total_paise: acc.total_paise + l.total_paise,
       rounding_paise: acc.rounding_paise + l.rounding_paise,
     }),
-    { subtotal_paise: 0, cgst_paise: 0, sgst_paise: 0, igst_paise: 0, total_paise: 0, rounding_paise: 0 },
+    {
+      subtotal_paise: 0,
+      cgst_paise: 0,
+      sgst_paise: 0,
+      igst_paise: 0,
+      total_paise: 0,
+      rounding_paise: 0,
+    },
   );
 }
 
 /** Reverse lookup: state / UT name (upper-case) -> GST state code. */
-const STATE_NAME_TO_CODE: Record<string, string> = Object.entries(GST_STATE_CODES).reduce(
+const STATE_NAME_TO_CODE: Record<string, string> = Object.entries(
+  GST_STATE_CODES,
+).reduce(
   (acc, [code, name]) => {
     acc[name.toUpperCase()] = code;
+
     // Common spelling variants without the ampersand / with "and"
     acc[name.toUpperCase().replace(/&/g, "AND")] = code;
+
     return acc;
   },
   {} as Record<string, string>,
 );
+
 // Frequently used aliases that don't match the canonical label exactly.
 STATE_NAME_TO_CODE["ORISSA"] = "21";
 STATE_NAME_TO_CODE["PONDICHERRY"] = "34";
@@ -119,6 +150,7 @@ STATE_NAME_TO_CODE["ANDHRA PRADESH"] = "37";
 /** Resolve any state-ish value (code, GSTIN, or state name) to a 2-digit GST state code. */
 export function toStateCode(val?: string | null): string | null {
   if (!val) return null;
+
   const str = String(val).trim().toUpperCase();
   if (!str) return null;
 
@@ -127,7 +159,11 @@ export function toStateCode(val?: string | null): string | null {
   if (lead && GST_STATE_CODES[lead[1]]) return lead[1];
 
   // Exact state / UT name.
-  const cleaned = str.replace(/[.\-_]/g, " ").replace(/\s+/g, " ").trim();
+  const cleaned = str
+    .replace(/[.\-_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
   if (STATE_NAME_TO_CODE[cleaned]) return STATE_NAME_TO_CODE[cleaned];
 
   // Name embedded in a longer string (e.g. "Hyderabad, Telangana 500001").
@@ -147,13 +183,15 @@ export function isInterstate(
   companyStateCode: string | null | undefined,
   partyStateCode: string | null | undefined,
   partyGstin?: string | null,
-  placeOfSupply?: string | null 
+  placeOfSupply?: string | null,
 ): boolean {
   const compCode = toStateCode(companyStateCode);
 
   // Priority: 1) Invoice PoS, 2) Party GSTIN, 3) Ledger State
   const destCode =
-    toStateCode(placeOfSupply) || toStateCode(partyGstin) || toStateCode(partyStateCode);
+    toStateCode(placeOfSupply) ||
+    toStateCode(partyGstin) ||
+    toStateCode(partyStateCode);
 
   // Without both sides we cannot prove an interstate supply — stay local.
   if (!compCode || !destCode) return false;
@@ -161,33 +199,34 @@ export function isInterstate(
   return compCode !== destCode;
 }
 
-
-/** 
+/**
  * High-performance GST resolver with local caching.
  * Accelerates invoice creation by avoiding repeated math for identical item/party pairs.
  */
 export async function resolveGstWithCache(
-  input: GstLineInput, 
+  input: GstLineInput,
   interstate: boolean,
-  companyId: string
+  companyId: string,
 ): Promise<GstLineResult> {
   const result = computeLine(input, interstate);
-  
+
   if (input.item_id && input.ledger_id) {
     // Fire-and-forget cache update to keep the warm loop ready for bulk ops
-    void offlineDb.cache_gst_rates.put({
-      id: `${input.item_id}:${input.ledger_id}:${interstate}`,
-      item_id: input.item_id,
-      ledger_id: input.ledger_id,
-      is_interstate: interstate,
-      gst_rate: result.gst_rate,
-      cgst_paise: result.cgst_paise,
-      sgst_paise: result.sgst_paise,
-      igst_paise: result.igst_paise,
-      company_id: companyId,
-      updated_at: new Date().toISOString()
-    }).catch(() => {});
+    void offlineDb.cache_gst_rates
+      .put({
+        id: `${input.item_id}:${input.ledger_id}:${interstate}`,
+        item_id: input.item_id,
+        ledger_id: input.ledger_id,
+        is_interstate: interstate,
+        gst_rate: result.gst_rate,
+        cgst_paise: result.cgst_paise,
+        sgst_paise: result.sgst_paise,
+        igst_paise: result.igst_paise,
+        company_id: companyId,
+        updated_at: new Date().toISOString(),
+      })
+      .catch(() => {});
   }
-  
+
   return result;
 }
