@@ -567,6 +567,7 @@ export function DataGrid<T>({
                 );
               }
               const isFocused = vi.index === focusedIndex;
+              if (rows[(item as any).row.__index] === undefined) return null;
               return (
                 <div
                   key={vi.key}
@@ -670,6 +671,7 @@ export function DataGrid<T>({
                   );
                 }
                 const src = rows[(item as any).row.__index];
+                if (src === undefined) return null;
                 return (
                   <tr key={`r-${i}`}>
                     {visibleColumns.map((c) => (
