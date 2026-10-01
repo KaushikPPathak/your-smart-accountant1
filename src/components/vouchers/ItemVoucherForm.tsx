@@ -173,6 +173,13 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [supplyNature, setSupplyNature] = useState<
     "taxable" | "zero_rated_wp" | "zero_rated_wop" | "nil_rated" | "exempt" | "non_gst"
   >("taxable");
+  // Cash Purchase: no supplier ledger — the bill is paid from Cash A/c.
+  const [cashPurchase, setCashPurchase] = useState(false);
+  // Reverse charge applies only when the user explicitly says Yes.
+  const [rcmApplicable, setRcmApplicable] = useState(false);
+  useEffect(() => {
+    if (partyId) setCashPurchase(false);
+  }, [partyId]);
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [miscPreGst, setMiscPreGst] = useState<string>("0");
   const [miscPostGst, setMiscPostGst] = useState<string>("0");
@@ -734,8 +741,21 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
 
   const canWrite = activeMembership?.role === "admin" || activeMembership?.role === "accountant";
 
+  const partyIdState = partyId;
   const performSave = useCallback(async () => {
     if (!activeCompanyId || !canWrite) return;
+    const cashLedgerId = cashPurchase && voucherType === "purchase"
+      ? ledgers.find((l) => l.type === "cash" && (l as { is_active?: boolean }).is_active !== false)?.id ?? ""
+      : "";
+    if (cashPurchase && voucherType === "purchase" && !cashLedgerId) {
+      toast.error("No Cash ledger found. Create a Cash ledger first.");
+      return;
+    }
+    const partyId = cashLedgerId || partyIdState;
+    const effSupplyNature =
+      voucherType === "purchase" && cashPurchase && supplyNature === "taxable" && rcmApplicable
+        ? ("rcm_inward" as const)
+        : supplyNature;
     if (!partyId) {
       toast.error(`Select a ${cfg.partyLabel.toLowerCase()}`);
       return;
@@ -801,7 +821,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       interstate,
       itcClass: isPurchaseSide ? itcClass : "na",
       itcEligible: isPurchaseSide ? itcEligible : true,
-      supplyNature,
+      supplyNature: effSupplyNature,
       // Note → original bill; sales cycle → the quotation / order / challan
       // this document was carried forward from.
       originalVoucherId: originalVoucherId,
@@ -853,6 +873,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setMiscPostGst("0");
     setSundries([]);
     setSupplyNature("taxable");
+    setCashPurchase(false);
+    setRcmApplicable(false);
     setFocusedLine(0);
     setSavedTick((n) => n + 1);
     if (draftKey) {
@@ -912,6 +934,9 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     itcClass,
     itcEligible,
     supplyNature,
+    cashPurchase,
+    rcmApplicable,
+    ledgers,
   ]);
 
   const save = useCallback(() => {
@@ -1094,6 +1119,16 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onCreate={() => setLedgerDlg({ open: true, editId: null })}
                   createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
                 />
+                {voucherType === "purchase" && !partyId && !isPartyLocked && (
+                  <label className="flex items-center gap-1.5 pt-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={cashPurchase}
+                      onChange={(e) => setCashPurchase(e.target.checked)}
+                    />
+                    Cash Purchase (paid from Cash A/c, no supplier)
+                  </label>
+                )}
                 {partyId && (
                   <div className="pt-1">
                     <LedgerBalanceChip ledgerId={partyId} prefix="Bal" />
@@ -1246,6 +1281,27 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   <SelectItem value="zero_rated_wop">Zero-rated (without payment / LUT-WOPAY)</SelectItem>
                 </SelectContent>
               </Select>
+              {voucherType === "purchase" && cashPurchase && supplyNature === "taxable" && (
+                <>
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    RCM Applicable
+                  </Label>
+                  <Select value={rcmApplicable ? "yes" : "no"} onValueChange={(v) => setRcmApplicable(v === "yes")}>
+                    <SelectTrigger className="h-8 w-[90px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="no">No</SelectItem>
+                      <SelectItem value="yes">Yes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {rcmApplicable && (
+                    <span className="text-[11px] text-muted-foreground">
+                      GST payable under reverse charge — shown in GSTR-3B 3.1(d) and ITC 4(A)(3)
+                    </span>
+                  )}
+                </>
+              )}
               {supplyNature !== "taxable" && (
                 <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
                   Will be reported under GSTR-1 {supplyNature === "nil_rated" || supplyNature === "exempt" || supplyNature === "non_gst" ? "Nil / Exempt / Non-GST" : "Exports"} section
