@@ -567,11 +567,25 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             rate: parseFloat(l.rate) || 0,
             discount: parseFloat(l.discount) || 0,
             gstRate: parseFloat(l.gst_rate) || 0,
+            chargeGst: !(
+              voucherType === "purchase" &&
+              cashPurchase &&
+              supplyNature === "taxable" &&
+              !rcmApplicable
+            ),
           },
           interstate,
         ),
       ),
-    [deferredLines, interstate, partyId],
+    [
+      deferredLines,
+      interstate,
+      partyId,
+      voucherType,
+      cashPurchase,
+      supplyNature,
+      rcmApplicable,
+    ],
   );
   const rawTotals = useMemo(() => sumLines(computed), [computed]);
   // Misc adjustments: pre-GST is added to taxable and taxed at the weighted-avg line GST rate;
@@ -855,6 +869,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
               rate: parseFloat(line.l.rate) || 0,
               discount: parseFloat(line.l.discount) || 0,
               gstRate: parseFloat(line.l.gst_rate) || 0,
+              chargeGst: !(
+                voucherType === "purchase" &&
+                cashPurchase &&
+                supplyNature === "taxable" &&
+                !rcmApplicable
+              ),
             },
             snap.interstate,
             activeCompanyId
