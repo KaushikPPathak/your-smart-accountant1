@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -960,6 +961,653 @@ function Gstr2bInputPanel({
   );
 }
 
+function Gstr9ItcInputPanel({
+  financialYear,
+  companyId,
+  existing,
+  onClose,
+  onSaved,
+}: {
+  financialYear: string;
+  companyId: string;
+  existing: Gstr9InputRecord | undefined;
+  onClose: () => void;
+  onSaved: (record: Gstr9InputRecord) => void;
+}) {
+  const existingItc = existing?.itcTables;
+
+  const emptyTable6 = (): Gstr9Table6 => ({
+    importOfGoods: 0,
+    importOfServices: 0,
+    inwardSuppliesRcm: 0,
+    inwardSuppliesIsd: 0,
+    allOtherItc: 0,
+    totalItcAvailed: 0,
+    precedingFinancialYearItc: 0,
+  });
+
+  const emptyTable7 = (): Gstr9Table7 => ({
+    rule38: 0,
+    rule39: 0,
+    rule42: 0,
+    rule43: 0,
+    section17_5: 0,
+    reversalUnderRule37: 0,
+    reversalUnderRule37A: 0,
+    otherReversals: 0,
+    total: 0,
+  });
+
+  const emptyTable8 = (): Gstr9Table8 => ({
+    itcAsPerGstr2bTable8A: 0,
+    itcAsPerBooks: 0,
+    creditAvailableButNotAvailed: 0,
+    creditAvailableIneligible: 0,
+    creditIneligibleUnderSection16_4: 0,
+    totalOtherItc: 0,
+  });
+
+  const [table6, setTable6] = useState<Gstr9Table6>(
+    () => existingItc?.table6
+      ? { ...existingItc.table6 }
+      : emptyTable6(),
+  );
+
+  const [table7, setTable7] = useState<Gstr9Table7>(
+    () => existingItc?.table7
+      ? { ...existingItc.table7 }
+      : emptyTable7(),
+  );
+
+  const [table8, setTable8] = useState<Gstr9Table8>(
+    () => existingItc?.table8
+      ? { ...existingItc.table8 }
+      : emptyTable8(),
+  );
+
+  const [tab, setTab] = useState<"MANUAL" | "IMPORT">("MANUAL");
+  const [sourceName, setSourceName] = useState(
+    existingItc?.metadata.sourceName ?? "ITC Tables 6-8",
+  );
+  const [sourceReference, setSourceReference] = useState(
+    existingItc?.metadata.sourceReference ?? "",
+  );
+  const [notes, setNotes] = useState(
+    existingItc?.metadata.notes ?? "",
+  );
+  const [message, setMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const numberValue = (value: string) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  };
+
+  const calculateTotals = (
+    next6: Gstr9Table6,
+    next7: Gstr9Table7,
+    next8: Gstr9Table8,
+  ) => ({
+    table6: {
+      ...next6,
+      totalItcAvailed:
+        next6.importOfGoods +
+        next6.importOfServices +
+        next6.inwardSuppliesRcm +
+        next6.inwardSuppliesIsd +
+        next6.allOtherItc +
+        next6.precedingFinancialYearItc,
+    },
+    table7: {
+      ...next7,
+      total:
+        next7.rule38 +
+        next7.rule39 +
+        next7.rule42 +
+        next7.rule43 +
+        next7.section17_5 +
+        next7.reversalUnderRule37 +
+        next7.reversalUnderRule37A +
+        next7.otherReversals,
+    },
+    table8: {
+      ...next8,
+      totalOtherItc:
+        next8.itcAsPerGstr2bTable8A +
+        next8.itcAsPerBooks +
+        next8.creditAvailableButNotAvailed +
+        next8.creditAvailableIneligible +
+        next8.creditIneligibleUnderSection16_4,
+    },
+  });
+
+  const save = async (source: Gstr9InputSource) => {
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const totals = calculateTotals(table6, table7, table8);
+      const now = new Date().toISOString();
+
+      const metadata: Gstr9InputMetadata = {
+        source,
+        enteredAt: existingItc?.metadata.enteredAt ?? now,
+        updatedAt: now,
+        sourceName: sourceName.trim() || undefined,
+        sourceReference: sourceReference.trim() || undefined,
+        notes: notes.trim() || undefined,
+      };
+
+      const record: Gstr9InputRecord = {
+        ...(existing ?? {
+          id: `${companyId}:${financialYear}`,
+          companyId,
+          financialYear,
+        }),
+        itcTables: {
+          table6: totals.table6,
+          table7: totals.table7,
+          table8: totals.table8,
+          metadata,
+        },
+      };
+
+      await saveGstr9InputRecord(record);
+      onSaved(record);
+
+      setMessage(
+        `${source === "IMPORT" ? "Imported" : "Manual entry"} saved successfully.`,
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to save ITC Tables 6-8 input.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const importJson = async (file: File) => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+
+      const root = parsed.itcTables &&
+        typeof parsed.itcTables === "object"
+        ? parsed.itcTables as Record<string, unknown>
+        : parsed;
+
+      const imported6 =
+        root.table6 && typeof root.table6 === "object"
+          ? root.table6 as Partial<Gstr9Table6>
+          : {};
+
+      const imported7 =
+        root.table7 && typeof root.table7 === "object"
+          ? root.table7 as Partial<Gstr9Table7>
+          : {};
+
+      const imported8 =
+        root.table8 && typeof root.table8 === "object"
+          ? root.table8 as Partial<Gstr9Table8>
+          : {};
+
+      const n = (value: unknown) => {
+        const parsedValue = Number(value ?? 0);
+        return Number.isFinite(parsedValue) && parsedValue >= 0
+          ? parsedValue
+          : 0;
+      };
+
+      const next6: Gstr9Table6 = {
+        importOfGoods: n(imported6.importOfGoods),
+        importOfServices: n(imported6.importOfServices),
+        inwardSuppliesRcm: n(imported6.inwardSuppliesRcm),
+        inwardSuppliesIsd: n(imported6.inwardSuppliesIsd),
+        allOtherItc: n(imported6.allOtherItc),
+        totalItcAvailed: 0,
+        precedingFinancialYearItc: n(imported6.precedingFinancialYearItc),
+      };
+
+      const next7: Gstr9Table7 = {
+        rule38: n(imported7.rule38),
+        rule39: n(imported7.rule39),
+        rule42: n(imported7.rule42),
+        rule43: n(imported7.rule43),
+        section17_5: n(imported7.section17_5),
+        reversalUnderRule37: n(imported7.reversalUnderRule37),
+        reversalUnderRule37A: n(imported7.reversalUnderRule37A),
+        otherReversals: n(imported7.otherReversals),
+        total: 0,
+      };
+
+      const next8: Gstr9Table8 = {
+        itcAsPerGstr2bTable8A: n(imported8.itcAsPerGstr2bTable8A),
+        itcAsPerBooks: n(imported8.itcAsPerBooks),
+        creditAvailableButNotAvailed: n(
+          imported8.creditAvailableButNotAvailed,
+        ),
+        creditAvailableIneligible: n(
+          imported8.creditAvailableIneligible,
+        ),
+        creditIneligibleUnderSection16_4: n(
+          imported8.creditIneligibleUnderSection16_4,
+        ),
+        totalOtherItc: 0,
+      };
+
+      const totals = calculateTotals(next6, next7, next8);
+
+      setTable6(totals.table6);
+      setTable7(totals.table7);
+      setTable8(totals.table8);
+
+      const metadata =
+        root.metadata && typeof root.metadata === "object"
+          ? root.metadata as Record<string, unknown>
+          : {};
+
+      const importedSourceName = String(
+        metadata.sourceName ?? root.sourceName ?? "",
+      ).trim();
+
+      const importedSourceReference = String(
+        metadata.sourceReference ?? root.sourceReference ?? "",
+      ).trim();
+
+      const importedNotes = String(
+        metadata.notes ?? root.notes ?? "",
+      ).trim();
+
+      if (importedSourceName) setSourceName(importedSourceName);
+      if (importedSourceReference) {
+        setSourceReference(importedSourceReference);
+      }
+      if (importedNotes) setNotes(importedNotes);
+
+      setTab("IMPORT");
+      setMessage(
+        "JSON loaded. Review the values, then click Save imported ITC Tables.",
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to read the JSON file.",
+      );
+    }
+  };
+
+  const updateTable6 = (
+    key: keyof Gstr9Table6,
+    value: string,
+  ) => {
+    setTable6((current) => ({
+      ...current,
+      [key]: numberValue(value),
+    }));
+  };
+
+  const updateTable7 = (
+    key: keyof Gstr9Table7,
+    value: string,
+  ) => {
+    setTable7((current) => ({
+      ...current,
+      [key]: numberValue(value),
+    }));
+  };
+
+  const updateTable8 = (
+    key: keyof Gstr9Table8,
+    value: string,
+  ) => {
+    setTable8((current) => ({
+      ...current,
+      [key]: numberValue(value),
+    }));
+  };
+
+  const field = (
+    label: string,
+    value: number,
+    onChange: (value: string) => void,
+  ) => (
+    <div className="rounded-md border bg-background p-3">
+      <label className="text-sm font-medium">{label}</label>
+      <Input
+        type="number"
+        min="0"
+        step="0.01"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2"
+      />
+    </div>
+  );
+
+  return (
+    <Card className="mt-4">
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div>
+            <h3 className="font-semibold">
+              ITC Tables 6, 7 &amp; 8 — FY {financialYear}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Enter or import annual ITC figures separately from GSTR-2B
+              and GSTR-3B.
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="max-h-[70vh] overflow-y-auto p-4">
+          <div className="mb-4 flex gap-2">
+            <Button
+              variant={tab === "MANUAL" ? "default" : "outline"}
+              onClick={() => setTab("MANUAL")}
+            >
+              Manual Entry
+            </Button>
+
+            <Button
+              variant={tab === "IMPORT" ? "default" : "outline"}
+              onClick={() => setTab("IMPORT")}
+            >
+              Import JSON
+            </Button>
+          </div>
+
+          {tab === "IMPORT" && (
+            <div className="mb-5 rounded-md border border-dashed p-4">
+              <label className="text-sm font-medium">
+                Select ITC JSON file
+              </label>
+
+              <Input
+                type="file"
+                accept=".json,application/json"
+                className="mt-2"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void importJson(file);
+                }}
+              />
+
+              <p className="mt-2 text-xs text-muted-foreground">
+                Expected sections: table6, table7 and table8.
+                Review imported values before saving.
+              </p>
+            </div>
+          )}
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <Input
+              placeholder="Source name"
+              value={sourceName}
+              onChange={(event) => setSourceName(event.target.value)}
+            />
+
+            <Input
+              placeholder="Source reference"
+              value={sourceReference}
+              onChange={(event) => setSourceReference(event.target.value)}
+            />
+
+            <Input
+              placeholder="Notes"
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+            />
+          </div>
+
+          <section className="mt-5 rounded-md border p-4">
+            <h4 className="font-semibold">
+              Table 6 — ITC Availed
+            </h4>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {field(
+                "Import of goods",
+                table6.importOfGoods,
+                (value) => updateTable6("importOfGoods", value),
+              )}
+
+              {field(
+                "Import of services",
+                table6.importOfServices,
+                (value) => updateTable6("importOfServices", value),
+              )}
+
+              {field(
+                "Inward supplies liable to RCM",
+                table6.inwardSuppliesRcm,
+                (value) => updateTable6("inwardSuppliesRcm", value),
+              )}
+
+              {field(
+                "Inward supplies from ISD",
+                table6.inwardSuppliesIsd,
+                (value) => updateTable6("inwardSuppliesIsd", value),
+              )}
+
+              {field(
+                "All other ITC",
+                table6.allOtherItc,
+                (value) => updateTable6("allOtherItc", value),
+              )}
+
+              {field(
+                "Preceding FY ITC",
+                table6.precedingFinancialYearItc,
+                (value) =>
+                  updateTable6("precedingFinancialYearItc", value),
+              )}
+            </div>
+
+            <div className="mt-3 rounded-md bg-muted p-3">
+              <div className="text-sm text-muted-foreground">
+                Total ITC availed
+              </div>
+              <div className="text-lg font-semibold">
+                {money(
+                  table6.importOfGoods +
+                  table6.importOfServices +
+                  table6.inwardSuppliesRcm +
+                  table6.inwardSuppliesIsd +
+                  table6.allOtherItc +
+                  table6.precedingFinancialYearItc,
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-5 rounded-md border p-4">
+            <h4 className="font-semibold">
+              Table 7 — ITC Reversed / Ineligible
+            </h4>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {field(
+                "Rule 38",
+                table7.rule38,
+                (value) => updateTable7("rule38", value),
+              )}
+
+              {field(
+                "Rule 39",
+                table7.rule39,
+                (value) => updateTable7("rule39", value),
+              )}
+
+              {field(
+                "Rule 42",
+                table7.rule42,
+                (value) => updateTable7("rule42", value),
+              )}
+
+              {field(
+                "Rule 43",
+                table7.rule43,
+                (value) => updateTable7("rule43", value),
+              )}
+
+              {field(
+                "Section 17(5)",
+                table7.section17_5,
+                (value) => updateTable7("section17_5", value),
+              )}
+
+              {field(
+                "Reversal under Rule 37",
+                table7.reversalUnderRule37,
+                (value) =>
+                  updateTable7("reversalUnderRule37", value),
+              )}
+
+              {field(
+                "Reversal under Rule 37A",
+                table7.reversalUnderRule37A,
+                (value) =>
+                  updateTable7("reversalUnderRule37A", value),
+              )}
+
+              {field(
+                "Other reversals",
+                table7.otherReversals,
+                (value) => updateTable7("otherReversals", value),
+              )}
+            </div>
+
+            <div className="mt-3 rounded-md bg-muted p-3">
+              <div className="text-sm text-muted-foreground">
+                Total ITC reversed / ineligible
+              </div>
+              <div className="text-lg font-semibold">
+                {money(
+                  table7.rule38 +
+                  table7.rule39 +
+                  table7.rule42 +
+                  table7.rule43 +
+                  table7.section17_5 +
+                  table7.reversalUnderRule37 +
+                  table7.reversalUnderRule37A +
+                  table7.otherReversals,
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-5 rounded-md border p-4">
+            <h4 className="font-semibold">
+              Table 8 — Other ITC Information
+            </h4>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {field(
+                "ITC as per GSTR-2B — Table 8A",
+                table8.itcAsPerGstr2bTable8A,
+                (value) =>
+                  updateTable8("itcAsPerGstr2bTable8A", value),
+              )}
+
+              {field(
+                "ITC as per books",
+                table8.itcAsPerBooks,
+                (value) => updateTable8("itcAsPerBooks", value),
+              )}
+
+              {field(
+                "Credit available but not availed",
+                table8.creditAvailableButNotAvailed,
+                (value) =>
+                  updateTable8(
+                    "creditAvailableButNotAvailed",
+                    value,
+                  ),
+              )}
+
+              {field(
+                "Credit available but ineligible",
+                table8.creditAvailableIneligible,
+                (value) =>
+                  updateTable8(
+                    "creditAvailableIneligible",
+                    value,
+                  ),
+              )}
+
+              {field(
+                "Credit ineligible under Section 16(4)",
+                table8.creditIneligibleUnderSection16_4,
+                (value) =>
+                  updateTable8(
+                    "creditIneligibleUnderSection16_4",
+                    value,
+                  ),
+              )}
+            </div>
+
+            <div className="mt-3 rounded-md bg-muted p-3">
+              <div className="text-sm text-muted-foreground">
+                Total Table 8 input
+              </div>
+              <div className="text-lg font-semibold">
+                {money(
+                  table8.itcAsPerGstr2bTable8A +
+                  table8.itcAsPerBooks +
+                  table8.creditAvailableButNotAvailed +
+                  table8.creditAvailableIneligible +
+                  table8.creditIneligibleUnderSection16_4,
+                )}
+              </div>
+            </div>
+          </section>
+
+          {message && (
+            <div className="mt-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              {message}
+            </div>
+          )}
+
+          <div className="mt-5 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+            GSTR-2B and GSTR-3B inputs remain separate. These Tables 6-8
+            figures are stored as their own input and can be reconciled
+            later.
+          </div>
+        </div>
+
+        <div className="flex shrink-0 justify-end gap-2 border-t bg-background px-4 pb-3 pt-4">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+
+          <Button
+            onClick={() =>
+              void save(tab === "IMPORT" ? "IMPORT" : "MANUAL")
+            }
+            disabled={saving}
+          >
+            <Save className="mr-1 h-4 w-4" />
+            {saving
+              ? "Saving…"
+              : tab === "IMPORT"
+                ? "Save imported ITC Tables"
+                : "Save manual ITC Tables"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+
+
 function Gstr3bInputPanel({
   financialYear,
   companyId,
@@ -1448,6 +2096,7 @@ function GSTR9Page() {
   const [gstr1Open, setGstr1Open] = useState(false);
   const [gstr3bOpen, setGstr3bOpen] = useState(false);
   const [gstr2bOpen, setGstr2bOpen] = useState(false);
+  const [gstr9ItcOpen, setGstr9ItcOpen] = useState(false);
 
   const years = useMemo(() => financialYearOptions(), []);
 
@@ -1684,9 +2333,9 @@ function GSTR9Page() {
               />
               <SourceStatus
                 label="ITC tables"
-                status={result.sourceInfo.itcTables}
-                actionLabel="Next"
-                disabled
+                status={inputStatus.itcTables}
+                actionLabel="Enter / Import"
+                onAction={() => setGstr9ItcOpen(true)}
               />
               <SourceStatus
                 label="Tax payment data"
@@ -1991,6 +2640,18 @@ function GSTR9Page() {
               onSaved={(record) => {
                 setInputRecord(record);
                 setGstr2bOpen(false);
+              }}
+            />
+          )}
+          {gstr9ItcOpen && activeCompanyId && (
+            <Gstr9ItcInputPanel
+              financialYear={financialYear}
+              companyId={activeCompanyId}
+              existing={inputRecord}
+              onClose={() => setGstr9ItcOpen(false)}
+              onSaved={(record) => {
+                setInputRecord(record);
+                setGstr9ItcOpen(false);
               }}
             />
           )}
