@@ -50,8 +50,22 @@ jobs:
       - name: Run all tests
         run: bunx vitest run
 
-      - name: Production build
+      - name: Run Vite build and route generation
         run: bun vite build
+
+      - name: Inspect generated route tree
+        shell: bash
+        run: |
+          echo "===== GSTR-9 references in generated route tree ====="
+          grep -n -i "gstr9" src/routeTree.gen.ts || true
+
+          echo ""
+          echo "===== Git status after Vite build ====="
+          git status --short
+
+          echo ""
+          echo "===== Changes made to routeTree.gen.ts by Vite ====="
+          git diff -- src/routeTree.gen.ts || true
 
       - name: TypeScript type check
         run: bunx tsc --noEmit
