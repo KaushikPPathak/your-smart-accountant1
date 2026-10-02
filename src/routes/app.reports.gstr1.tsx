@@ -25,6 +25,7 @@ import { ValidationPanel } from "@/components/reports/ValidationPanel";
 import { PeriodLockCard } from "@/components/reports/PeriodLockCard";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { GstSectionTable } from "@/components/reports/GstSectionTable";
+import { useFyRange } from "@/components/ui/fy-date-picker";
 
 export const Route = createFileRoute("/app/reports/gstr1")({
   head: () => ({ meta: [{ title: "GSTR-1 — Reports" }] }),
@@ -49,10 +50,24 @@ function GSTR1Page() {
   // to a plain workbook if the CDN is unreachable.
   useEffect(() => { prefetchGstr1Template(); }, []);
 
+  const { start: openFyStart } = useFyRange();
+  const fyMonths = useMemo(() => {
+    const out: { value: string; label: string }[] = [];
+    const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(openFyStart.getFullYear(), openFyStart.getMonth() + i, 1);
+      out.push({ value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: `${names[d.getMonth()]} ${d.getFullYear()}` });
+    }
+    return out;
+  }, [openFyStart]);
   const [cadence, setCadence] = useState<"monthly" | "quarterly">("monthly");
   const [iffMode, setIffMode] = useState(false);
   const [year, setYear] = useState<number>(today.getFullYear());
   const [month, setMonth] = useState<string>(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`);
+  useEffect(() => {
+    if (!fyMonths.some((m) => m.value === month)) setMonth(fyMonths[0].value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fyMonths]);
   const [quarter, setQuarter] = useState<1 | 2 | 3 | 4>(((Math.floor(today.getMonth() / 3) + 1) as 1 | 2 | 3 | 4));
 
   const [company, setCompany] = useState<CompanyMeta | null>(null);
@@ -216,7 +231,7 @@ function GSTR1Page() {
                 <Select value={month} onValueChange={setMonth}>
                   <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[fyYear, fyYear + 1].flatMap((y) => monthsOfYear(y)).map((m) => (
+                    {fyMonths.map((m) => (
                       <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                     ))}
                   </SelectContent>
