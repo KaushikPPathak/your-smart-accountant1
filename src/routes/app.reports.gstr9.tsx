@@ -63,7 +63,7 @@ import {
   saveGstr9InputRecord,
 } from "@/lib/gstr9-input-store";
 
-export const Route = createFileRoute("/app/reports/gstr9")({
+export const Route = createFileRoute("/app/reports/gstr9" as any)({
   head: () => ({ meta: [{ title: "GSTR-9 — Reports" }] }),
   component: GSTR9Page,
 });
@@ -2153,42 +2153,9 @@ const GSTR9_TAX_PAID_OTHER_ROWS: Array<[keyof Pick<Gstr9TaxPaid, "interest" | "l
   ["others", "Others"],
 ];
 
-function emptyGstr9TaxPaidInput(): Gstr9TaxPaid {
-  return {
-    igst: { taxPayable: 0, paidThroughCash: 0, paidThroughItc: 0 },
-    cgst: { taxPayable: 0, paidThroughCash: 0, paidThroughItc: 0 },
-    sgst: { taxPayable: 0, paidThroughCash: 0, paidThroughItc: 0 },
-    cess: { taxPayable: 0, paidThroughCash: 0, paidThroughItc: 0 },
-    interest: 0,
-    lateFee: 0,
-    penalty: 0,
-    others: 0,
-  };
-}
-
-function normaliseGstr9TaxPaidRow(value: unknown): Gstr9TaxPaidRow {
-  const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
-  const numeric = (key: string) => numberValue(String(source[key] ?? 0));
-
-  // Accept both the new Table-9 row structure and the older single-number structure.
-  if (typeof value === "number" || typeof value === "string") {
-    return {
-      taxPayable: numberValue(String(value)),
-      paidThroughCash: 0,
-      paidThroughItc: 0,
-    };
-  }
-
-  return {
-    taxPayable: numeric("taxPayable"),
-    paidThroughCash: numeric("paidThroughCash"),
-    paidThroughItc: numeric("paidThroughItc"),
-  };
-}
-
 function normaliseGstr9TaxPaid(value: unknown): Gstr9TaxPaid {
   const root = value && typeof value === "object" ? value as Record<string, unknown> : {};
-  const result = emptyGstr9TaxPaidInput();
+  const result = emptyGstr9TaxPaid();
 
   for (const [field] of GSTR9_TAX_PAID_TAX_ROWS) {
     result[field] = normaliseGstr9TaxPaidRow(root[field]);
@@ -2220,7 +2187,7 @@ function Gstr9TaxPaymentInputPanel({
     existingTaxPayment?.basedOnBooks ? "BOOKS" : "GSTN",
   );
   const [taxPaid, setTaxPaid] = useState<Gstr9TaxPaid>(
-    existingTaxPayment?.table9.taxPaid ?? emptyGstr9TaxPaidInput(),
+    existingTaxPayment?.table9.taxPaid ?? emptyGstr9TaxPaid(),
   );
   const [sourceName, setSourceName] = useState(existingTaxPayment?.metadata.sourceName ?? "");
   const [sourceReference, setSourceReference] = useState(existingTaxPayment?.metadata.sourceReference ?? "");
