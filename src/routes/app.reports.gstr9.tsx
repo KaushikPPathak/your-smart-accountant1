@@ -63,7 +63,7 @@ import {
   saveGstr9InputRecord,
 } from "@/lib/gstr9-input-store";
 
-export const Route = createFileRoute("/app/reports/gstr9" as any)({
+export const Route = createFileRoute("/app/reports/gstr9")({
   head: () => ({ meta: [{ title: "GSTR-9 — Reports" }] }),
   component: GSTR9Page,
 });
