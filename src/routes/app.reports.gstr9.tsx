@@ -2298,8 +2298,8 @@ function Gstr9TaxPaymentInputPanel({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <Card className="flex h-[calc(100vh-32px)] w-full max-w-6xl flex-col overflow-hidden shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-3 pt-3 pb-20">
+      <Card className="flex h-[calc(100vh-92px)] max-h-[calc(100vh-92px)] w-full max-w-6xl flex-col overflow-hidden shadow-xl">
         <CardHeader className="flex flex-row items-center justify-between border-b pb-3">
           <div>
             <CardTitle className="text-base">GSTR-9 Table 9 — Tax Payment Data — FY {financialYear}</CardTitle>
