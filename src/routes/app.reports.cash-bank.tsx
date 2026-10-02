@@ -24,6 +24,8 @@ import { useReportUrlSync } from "@/lib/report-url-state";
 
 type Search = { ledgerId?: string; from?: string; to?: string };
 
+const CASH_PURCHASES_ID = "__cash_purchases__";
+
 export const Route = createFileRoute("/app/reports/cash-bank")({
   head: () => ({ meta: [{ title: "Cash & Bank Book — Reports" }] }),
   validateSearch: (s: Record<string, unknown>): Search => ({
@@ -86,6 +88,10 @@ function CashBankBook() {
     [offlineLedgers],
   );
   const cashBankLedgers = masterCashBankLedgers.length > 0 ? masterCashBankLedgers : offlineCashBankLedgers;
+  const cashLedgers = useMemo(
+    () => cashBankLedgers.filter((l) => l.type === "cash"),
+    [cashBankLedgers],
+  );
   const ledgerNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const l of offlineLedgers) map.set(l.id, l.name);
@@ -123,70 +129,147 @@ function CashBankBook() {
   const [opening, setOpening] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const ledger = getLedger(ledgerId);
+  const isCashPurchasesView = ledgerId === CASH_PURCHASES_ID;
+  const ledger = isCashPurchasesView ? undefined : getLedger(ledgerId);
   const selectedCashBankLedger = cashBankLedgers.find((l) => l.id === ledgerId);
-  const selectedLedgerName = ledger?.name ?? selectedCashBankLedger?.name ?? "";
-  const selectedLedgerType = ledger?.type ?? selectedCashBankLedger?.type ?? "";
+  const selectedLedgerName = isCashPurchasesView
+    ? "Cash Purchases"
+    : ledger?.name ?? selectedCashBankLedger?.name ?? "";
+  const selectedLedgerType = isCashPurchasesView
+    ? "cash"
+    : ledger?.type ?? selectedCashBankLedger?.type ?? "";
 
-  // Load opening (paise) for the chosen ledger from base ledger row
+  // Cash Purchases is a report filter, not a separate ledger. Cash Purchase
+  // vouchers are posted to actual Cash ledgers; this view filters those
+  // purchase vouchers without changing the underlying accounting entries.
+  const selectedLedgerIds = useMemo(
+    () => isCashPurchasesView ? cashLedgers.map((l) => l.id) : [ledgerId],
+    [isCashPurchasesView, cashLedgers, ledgerId],
+  );
+
+  // Load the selected ledger, or the virtual Cash Purchases filter.
   useEffect(() => {
     if (!ledgerId || !activeCompanyId) return;
     let cancelled = false;
+
     void (async () => {
       setLoading(true);
       try {
-      const dataset = await readLocalBookDataset(activeCompanyId);
-      const baseRow = dataset.ledgers.find((l: any) => String(l.id) === ledgerId) as any;
-      const base = baseRow ? {
-        opening_balance_paise: Number(baseRow.opening_balance_paise ?? 0),
-        opening_balance_is_debit: Boolean(baseRow.opening_balance_is_debit),
-      } : null;
-      const ob = base
-        ? (base.opening_balance_is_debit ? 1 : -1) * base.opening_balance_paise
-        : 0;
-      const ledgerEntries = dataset.entries.filter((entry: any) => String(entry.ledger_id) === ledgerId);
-      const prior = ledgerEntries.filter((entry: any) => String(entry.vouchers?.voucher_date ?? "") < from);
-      const movement = prior.reduce(
-        (s, e) => s + (e.debit_paise as number) - (e.credit_paise as number),
-        0,
-      );
-      if (cancelled) return;
-      setOpening(ob + movement);
+        const dataset = await readLocalBookDataset(activeCompanyId);
+        const selectedIds = new Set(selectedLedgerIds);
 
-      const list = ledgerEntries.filter((entry: any) => {
-        const date = String(entry.vouchers?.voucher_date ?? "");
-        return date >= from && date <= to;
-      }) as EntryRow[];
-      if (cancelled) return;
-      setEntries(list);
+        if (isCashPurchasesView) {
+          // Cash Purchases is a filtered transaction view, not a real ledger.
+          // Keep the actual Cash Book responsible for the running cash balance.
+          if (cancelled) return;
+          setOpening(0);
 
-      const ids = list.map((e) => e.vouchers?.id).filter(Boolean) as string[];
-      if (ids.length === 0) {
-        setSiblings(new Map());
-      } else {
-        const idSet = new Set(ids);
-        const sibs = dataset.entries
-          .filter((e: any) => idSet.has(String(e.voucher_id)) && String(e.ledger_id) !== ledgerId)
-          .map((e: any) => ({
-            voucher_id: String(e.voucher_id),
-            ledger_id: String(e.ledger_id),
-            debit_paise: Number(e.debit_paise ?? 0),
-            credit_paise: Number(e.credit_paise ?? 0),
-          })) as SiblingRow[];
-        const map = new Map<string, SiblingRow[]>();
-        for (const s of sibs) {
-          const arr = map.get(s.voucher_id) ?? [];
-          arr.push(s);
-          map.set(s.voucher_id, arr);
+          const list = dataset.entries.filter((entry: any) => {
+            const ledgerMatch = selectedIds.has(String(entry.ledger_id));
+            const voucherDate = String(entry.vouchers?.voucher_date ?? "");
+            const purchaseMatch = String(entry.vouchers?.voucher_type ?? "") === "purchase";
+            return ledgerMatch && purchaseMatch && voucherDate >= from && voucherDate <= to;
+          }) as EntryRow[];
+
+          if (cancelled) return;
+          setEntries(list);
+
+          const ids = list.map((e) => e.vouchers?.id).filter(Boolean) as string[];
+          if (ids.length === 0) {
+            setSiblings(new Map());
+          } else {
+            const idSet = new Set(ids);
+            const sibs = dataset.entries
+              .filter(
+                (e: any) =>
+                  idSet.has(String(e.voucher_id)) &&
+                  !selectedIds.has(String(e.ledger_id)),
+              )
+              .map((e: any) => ({
+                voucher_id: String(e.voucher_id),
+                ledger_id: String(e.ledger_id),
+                debit_paise: Number(e.debit_paise ?? 0),
+                credit_paise: Number(e.credit_paise ?? 0),
+              })) as SiblingRow[];
+
+            const map = new Map<string, SiblingRow[]>();
+            for (const s of sibs) {
+              const arr = map.get(s.voucher_id) ?? [];
+              arr.push(s);
+              map.set(s.voucher_id, arr);
+            }
+            if (cancelled) return;
+            setSiblings(map);
+          }
+          return;
         }
+
+        const baseRow = dataset.ledgers.find((l: any) => String(l.id) === ledgerId) as any;
+        const base = baseRow
+          ? {
+              opening_balance_paise: Number(baseRow.opening_balance_paise ?? 0),
+              opening_balance_is_debit: Boolean(baseRow.opening_balance_is_debit),
+            }
+          : null;
+        const ob = base
+          ? (base.opening_balance_is_debit ? 1 : -1) * base.opening_balance_paise
+          : 0;
+
+        const ledgerEntries = dataset.entries.filter(
+          (entry: any) => String(entry.ledger_id) === ledgerId,
+        );
+        const prior = ledgerEntries.filter(
+          (entry: any) => String(entry.vouchers?.voucher_date ?? "") < from,
+        );
+        const movement = prior.reduce(
+          (s, e) => s + Number(e.debit_paise ?? 0) - Number(e.credit_paise ?? 0),
+          0,
+        );
+
         if (cancelled) return;
-        setSiblings(map);
-      }
+        setOpening(ob + movement);
+
+        const list = ledgerEntries.filter((entry: any) => {
+          const date = String(entry.vouchers?.voucher_date ?? "");
+          return date >= from && date <= to;
+        }) as EntryRow[];
+
+        if (cancelled) return;
+        setEntries(list);
+
+        const ids = list.map((e) => e.vouchers?.id).filter(Boolean) as string[];
+        if (ids.length === 0) {
+          setSiblings(new Map());
+        } else {
+          const idSet = new Set(ids);
+          const sibs = dataset.entries
+            .filter(
+              (e: any) =>
+                idSet.has(String(e.voucher_id)) &&
+                String(e.ledger_id) !== ledgerId,
+            )
+            .map((e: any) => ({
+              voucher_id: String(e.voucher_id),
+              ledger_id: String(e.ledger_id),
+              debit_paise: Number(e.debit_paise ?? 0),
+              credit_paise: Number(e.credit_paise ?? 0),
+            })) as SiblingRow[];
+
+          const map = new Map<string, SiblingRow[]>();
+          for (const s of sibs) {
+            const arr = map.get(s.voucher_id) ?? [];
+            arr.push(s);
+            map.set(s.voucher_id, arr);
+          }
+          if (cancelled) return;
+          setSiblings(map);
+        }
       } catch (err) {
         console.error("Cash & Bank Book failure:", err);
         if (!cancelled) {
           setEntries([]);
           setSiblings(new Map());
+          setOpening(0);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -196,7 +279,7 @@ function CashBankBook() {
     return () => {
       cancelled = true;
     };
-  }, [ledgerId, activeCompanyId, from, to]);
+  }, [ledgerId, activeCompanyId, from, to, isCashPurchasesView, selectedLedgerIds]);
 
   // Build rows in a single pass with running balance — integer (paise) math.
   const rows = useMemo(() => {
@@ -351,6 +434,11 @@ function CashBankBook() {
                     <SelectValue placeholder="Select ledger" />
                   </SelectTrigger>
                   <SelectContent>
+                    {cashLedgers.length > 0 && (
+                      <SelectItem value={CASH_PURCHASES_ID}>
+                        Cash Purchases
+                      </SelectItem>
+                    )}
                     {cashBankLedgers.map((l) => (
                       <SelectItem key={l.id} value={l.id}>
                         {l.name} ({l.type === "cash" ? "Cash" : "Bank"})
@@ -386,11 +474,13 @@ function CashBankBook() {
     );
   }
 
-  const accountHeading = selectedLedgerName
-    ? selectedLedgerType === "cash"
-      ? `Cash Book${selectedLedgerName ? `: ${selectedLedgerName}` : ""}`
-      : `Bank Book: ${selectedLedgerName}`
-    : "Cash & Bank Book";
+  const accountHeading = isCashPurchasesView
+    ? "Cash Purchases"
+    : selectedLedgerName
+      ? selectedLedgerType === "cash"
+        ? `Cash Book${selectedLedgerName ? `: ${selectedLedgerName}` : ""}`
+        : `Bank Book: ${selectedLedgerName}`
+      : "Cash & Bank Book";
 
   return (
     <ReportViewer
