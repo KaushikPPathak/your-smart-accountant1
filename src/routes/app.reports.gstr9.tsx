@@ -348,16 +348,56 @@ function TaxAmountFields({
   );
 }
 
+type Gstr9TaxPaidTaxKey = "igst" | "cgst" | "sgst" | "cess";
+type Gstr9TaxPaidOtherKey = "interest" | "lateFee" | "penalty" | "others";
+type Gstr9TaxPaidRowField = "taxPayable" | "paidThroughCash" | "paidThroughItc";
+
+function emptyGstr9TaxPaidRow(): Gstr9TaxPaid["igst"] {
+  return {
+    taxPayable: 0,
+    paidThroughCash: 0,
+    paidThroughItc: 0,
+  };
+}
+
 function emptyGstr9TaxPaid(): Gstr9TaxPaid {
   return {
-    igst: 0,
-    cgst: 0,
-    sgst: 0,
-    cess: 0,
+    igst: emptyGstr9TaxPaidRow(),
+    cgst: emptyGstr9TaxPaidRow(),
+    sgst: emptyGstr9TaxPaidRow(),
+    cess: emptyGstr9TaxPaidRow(),
     interest: 0,
     lateFee: 0,
     penalty: 0,
     others: 0,
+  };
+}
+
+function taxPaidRowTotal(row: Gstr9TaxPaid["igst"]): number {
+  return row.paidThroughCash + row.paidThroughItc;
+}
+
+function taxPaidRowHasValue(row: Gstr9TaxPaid["igst"]): boolean {
+  return row.taxPayable !== 0 || taxPaidRowTotal(row) !== 0;
+}
+
+function normaliseGstr9TaxPaidRow(value: unknown): Gstr9TaxPaid["igst"] {
+  if (typeof value === "number") {
+    return {
+      taxPayable: numberValue(String(value)),
+      paidThroughCash: 0,
+      paidThroughItc: 0,
+    };
+  }
+
+  const row = value && typeof value === "object"
+    ? value as Record<string, unknown>
+    : {};
+
+  return {
+    taxPayable: numberValue(String(row.taxPayable ?? 0)),
+    paidThroughCash: numberValue(String(row.paidThroughCash ?? 0)),
+    paidThroughItc: numberValue(String(row.paidThroughItc ?? 0)),
   };
 }
 
@@ -452,10 +492,10 @@ function normaliseGstr3bPeriod(value: unknown, fallbackPeriod: string): Gstr9Gst
     itc,
     itcReversal,
     taxPaid: {
-      igst: n(taxSource, "igst"),
-      cgst: n(taxSource, "cgst"),
-      sgst: n(taxSource, "sgst"),
-      cess: n(taxSource, "cess"),
+      igst: normaliseGstr9TaxPaidRow(taxSource.igst),
+      cgst: normaliseGstr9TaxPaidRow(taxSource.cgst),
+      sgst: normaliseGstr9TaxPaidRow(taxSource.sgst),
+      cess: normaliseGstr9TaxPaidRow(taxSource.cess),
       interest: n(taxSource, "interest"),
       lateFee: n(taxSource, "lateFee"),
       penalty: n(taxSource, "penalty"),
@@ -626,11 +666,14 @@ const GSTR3B_REVERSAL_FIELDS: Array<[keyof Gstr9Gstr3bPeriod["itcReversal"], str
   ["other", "Other reversals"],
 ];
 
-const GSTR3B_TAX_PAID_FIELDS: Array<[keyof Gstr9TaxPaid, string]> = [
+const GSTR3B_TAX_PAID_TAX_FIELDS: Array<[Gstr9TaxPaidTaxKey, string]> = [
   ["igst", "IGST"],
   ["cgst", "CGST"],
   ["sgst", "SGST"],
   ["cess", "Cess"],
+];
+
+const GSTR3B_TAX_PAID_OTHER_FIELDS: Array<[Gstr9TaxPaidOtherKey, string]> = [
   ["interest", "Interest"],
   ["lateFee", "Late fee"],
   ["penalty", "Penalty"],
@@ -648,7 +691,12 @@ function Gstr3bReviewSummary({ periods }: { periods: Gstr9Gstr3bPeriod[] }) {
       cess: acc.cess + period.outwardTax.cess,
       itc: acc.itc + period.itc.totalItcAvailed,
       reversal: acc.reversal + period.itcReversal.total,
-      taxPaid: acc.taxPaid + period.taxPaid.igst + period.taxPaid.cgst + period.taxPaid.sgst + period.taxPaid.cess,
+      taxPaid:
+        acc.taxPaid +
+        taxPaidRowTotal(period.taxPaid.igst) +
+        taxPaidRowTotal(period.taxPaid.cgst) +
+        taxPaidRowTotal(period.taxPaid.sgst) +
+        taxPaidRowTotal(period.taxPaid.cess),
       interest: acc.interest + period.taxPaid.interest,
       lateFee: acc.lateFee + period.taxPaid.lateFee,
       penalty: acc.penalty + period.taxPaid.penalty,
@@ -678,10 +726,10 @@ function Gstr3bReviewSummary({ periods }: { periods: Gstr9Gstr3bPeriod[] }) {
     period.outwardTax.cess !== 0 ||
     period.itc.totalItcAvailed !== 0 ||
     period.itcReversal.total !== 0 ||
-    period.taxPaid.igst !== 0 ||
-    period.taxPaid.cgst !== 0 ||
-    period.taxPaid.sgst !== 0 ||
-    period.taxPaid.cess !== 0 ||
+    taxPaidRowHasValue(period.taxPaid.igst) ||
+    taxPaidRowHasValue(period.taxPaid.cgst) ||
+    taxPaidRowHasValue(period.taxPaid.sgst) ||
+    taxPaidRowHasValue(period.taxPaid.cess) ||
     period.taxPaid.interest !== 0 ||
     period.taxPaid.lateFee !== 0 ||
     period.taxPaid.penalty !== 0 ||
@@ -723,7 +771,12 @@ function Gstr3bReviewSummary({ periods }: { periods: Gstr9Gstr3bPeriod[] }) {
                 <TableCell className="text-right">{money(period.outwardTax.cess)}</TableCell>
                 <TableCell className="text-right">{money(period.itc.totalItcAvailed)}</TableCell>
                 <TableCell className="text-right">{money(period.itcReversal.total)}</TableCell>
-                <TableCell className="text-right">{money(period.taxPaid.igst + period.taxPaid.cgst + period.taxPaid.sgst + period.taxPaid.cess)}</TableCell>
+                <TableCell className="text-right">{money(
+                    taxPaidRowTotal(period.taxPaid.igst) +
+                    taxPaidRowTotal(period.taxPaid.cgst) +
+                    taxPaidRowTotal(period.taxPaid.sgst) +
+                    taxPaidRowTotal(period.taxPaid.cess),
+                  )}</TableCell>
               </TableRow>
             ))}
             <TableRow className="font-semibold">
@@ -1819,23 +1872,60 @@ function Gstr3bInputPanel({
 
                   <section>
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tax paid</h3>
-                    <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-                      {GSTR3B_TAX_PAID_FIELDS.map(([field, label]) => (
-                        <label key={field} className="space-y-1">
-                          <span className="text-[11px] text-muted-foreground">{label}</span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={period.taxPaid[field]}
-                            onChange={(event) => updatePeriod(index, (current) => ({
-                              ...current,
-                              taxPaid: { ...current.taxPaid, [field]: numberValue(event.target.value) },
-                            }))}
-                            className="h-8 w-full rounded-md border bg-background px-2 text-right text-xs"
-                          />
-                        </label>
+
+                    <div className="space-y-3">
+                      {GSTR3B_TAX_PAID_TAX_FIELDS.map(([field, label]) => (
+                        <div key={field} className="rounded-md border p-3">
+                          <div className="mb-2 text-xs font-semibold">{label}</div>
+                          <div className="grid gap-2 md:grid-cols-3">
+                            {([
+                              ["taxPayable", "Tax payable"],
+                              ["paidThroughCash", "Paid through cash"],
+                              ["paidThroughItc", "Paid through ITC"],
+                            ] as Array<[Gstr9TaxPaidRowField, string]>).map(([rowField, rowLabel]) => (
+                              <label key={rowField} className="space-y-1">
+                                <span className="text-[11px] text-muted-foreground">{rowLabel}</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={period.taxPaid[field][rowField]}
+                                  onChange={(event) => updatePeriod(index, (current) => ({
+                                    ...current,
+                                    taxPaid: {
+                                      ...current.taxPaid,
+                                      [field]: {
+                                        ...current.taxPaid[field],
+                                        [rowField]: numberValue(event.target.value),
+                                      },
+                                    },
+                                  }))}
+                                  className="h-8 w-full rounded-md border bg-background px-2 text-right text-xs"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                       ))}
+
+                      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+                        {GSTR3B_TAX_PAID_OTHER_FIELDS.map(([field, label]) => (
+                          <label key={field} className="space-y-1">
+                            <span className="text-[11px] text-muted-foreground">{label}</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={period.taxPaid[field]}
+                              onChange={(event) => updatePeriod(index, (current) => ({
+                                ...current,
+                                taxPaid: { ...current.taxPaid, [field]: numberValue(event.target.value) },
+                              }))}
+                              className="h-8 w-full rounded-md border bg-background px-2 text-right text-xs"
+                            />
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   </section>
                 </div>
