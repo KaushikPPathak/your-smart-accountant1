@@ -19,6 +19,7 @@ on:
       - "src/lib/gst-returns.test.ts"
       - "src/routes/app.reports.gstr9.tsx"
       - "src/components/AppSidebar.tsx"
+      - "src/routeTree.gen.ts"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/gstr9-tests.yml"
@@ -38,9 +39,6 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
-      - name: Generate TanStack Router route tree
-        run: bunx tsr generate
 
       - name: Run GSTR-9 tests
         run: >
