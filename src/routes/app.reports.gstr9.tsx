@@ -56,6 +56,7 @@ import {
   type Gstr9Gstr3bPeriod,
   type Gstr9Gstr2bPeriod,
   type Gstr9TaxPaid,
+  type Gstr9TaxPaidRow,
 } from "@/lib/gstr9-inputs";
 import {
   loadGstr9InputRecord,
@@ -2138,6 +2139,343 @@ function Gstr1InputPanel({
   );
 }
 
+const GSTR9_TAX_PAID_TAX_ROWS: Array<[keyof Pick<Gstr9TaxPaid, "igst" | "cgst" | "sgst" | "cess">, string]> = [
+  ["igst", "Integrated Tax (IGST)"],
+  ["cgst", "Central Tax (CGST)"],
+  ["sgst", "State / UT Tax (SGST/UTGST)"],
+  ["cess", "Cess"],
+];
+
+const GSTR9_TAX_PAID_OTHER_ROWS: Array<[keyof Pick<Gstr9TaxPaid, "interest" | "lateFee" | "penalty" | "others">, string]> = [
+  ["interest", "Interest"],
+  ["lateFee", "Late Fee"],
+  ["penalty", "Penalty"],
+  ["others", "Others"],
+];
+
+function emptyGstr9TaxPaidInput(): Gstr9TaxPaid {
+  return {
+    igst: { taxPayable: 0, paidThroughCash: 0, paidThroughItc: 0 },
+    cgst: { taxPayable: 0, paidThroughCash: 0, paidThroughItc: 0 },
+    sgst: { taxPayable: 0, paidThroughCash: 0, paidThroughItc: 0 },
+    cess: { taxPayable: 0, paidThroughCash: 0, paidThroughItc: 0 },
+    interest: 0,
+    lateFee: 0,
+    penalty: 0,
+    others: 0,
+  };
+}
+
+function normaliseGstr9TaxPaidRow(value: unknown): Gstr9TaxPaidRow {
+  const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const numeric = (key: string) => numberValue(String(source[key] ?? 0));
+
+  // Accept both the new Table-9 row structure and the older single-number structure.
+  if (typeof value === "number" || typeof value === "string") {
+    return {
+      taxPayable: numberValue(String(value)),
+      paidThroughCash: 0,
+      paidThroughItc: 0,
+    };
+  }
+
+  return {
+    taxPayable: numeric("taxPayable"),
+    paidThroughCash: numeric("paidThroughCash"),
+    paidThroughItc: numeric("paidThroughItc"),
+  };
+}
+
+function normaliseGstr9TaxPaid(value: unknown): Gstr9TaxPaid {
+  const root = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const result = emptyGstr9TaxPaidInput();
+
+  for (const [field] of GSTR9_TAX_PAID_TAX_ROWS) {
+    result[field] = normaliseGstr9TaxPaidRow(root[field]);
+  }
+
+  for (const [field] of GSTR9_TAX_PAID_OTHER_ROWS) {
+    result[field] = numberValue(String(root[field] ?? 0));
+  }
+
+  return result;
+}
+
+function Gstr9TaxPaymentInputPanel({
+  financialYear,
+  companyId,
+  existing,
+  onClose,
+  onSaved,
+}: {
+  financialYear: string;
+  companyId: string;
+  existing: Gstr9InputRecord | undefined;
+  onClose: () => void;
+  onSaved: (record: Gstr9InputRecord) => void;
+}) {
+  const existingTaxPayment = existing?.taxPayment;
+  const [tab, setTab] = useState<"MANUAL" | "IMPORT">("MANUAL");
+  const [sourceMode, setSourceMode] = useState<"GSTN" | "BOOKS">(
+    existingTaxPayment?.basedOnBooks ? "BOOKS" : "GSTN",
+  );
+  const [taxPaid, setTaxPaid] = useState<Gstr9TaxPaid>(
+    existingTaxPayment?.table9.taxPaid ?? emptyGstr9TaxPaidInput(),
+  );
+  const [sourceName, setSourceName] = useState(existingTaxPayment?.metadata.sourceName ?? "");
+  const [sourceReference, setSourceReference] = useState(existingTaxPayment?.metadata.sourceReference ?? "");
+  const [notes, setNotes] = useState(existingTaxPayment?.metadata.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const updateTaxRow = (
+    field: "igst" | "cgst" | "sgst" | "cess",
+    key: keyof Gstr9TaxPaidRow,
+    value: string,
+  ) => {
+    setTaxPaid((current) => ({
+      ...current,
+      [field]: {
+        ...current[field],
+        [key]: numberValue(value),
+      },
+    }));
+  };
+
+  const updateOther = (
+    field: "interest" | "lateFee" | "penalty" | "others",
+    value: string,
+  ) => {
+    setTaxPaid((current) => ({
+      ...current,
+      [field]: numberValue(value),
+    }));
+  };
+
+  const importJson = async (file: File) => {
+    try {
+      const parsed = JSON.parse(await file.text()) as unknown;
+      const root = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
+      const taxPaymentRoot = root.taxPayment && typeof root.taxPayment === "object"
+        ? root.taxPayment as Record<string, unknown>
+        : {};
+      const table9Root = root.table9 && typeof root.table9 === "object"
+        ? root.table9 as Record<string, unknown>
+        : taxPaymentRoot.table9 && typeof taxPaymentRoot.table9 === "object"
+          ? taxPaymentRoot.table9 as Record<string, unknown>
+          : {};
+      const rawTaxPaid = table9Root.taxPaid ?? taxPaymentRoot.taxPaid ?? root.taxPaid ?? parsed;
+      setTaxPaid(normaliseGstr9TaxPaid(rawTaxPaid));
+
+      const basedOnBooks = Boolean(
+        table9Root.basedOnBooks ?? taxPaymentRoot.basedOnBooks ?? root.basedOnBooks ?? false,
+      );
+      setSourceMode(basedOnBooks ? "BOOKS" : "GSTN");
+
+      const metadata = [table9Root.metadata, taxPaymentRoot.metadata, root.metadata].find(
+        (item) => item && typeof item === "object",
+      ) as Record<string, unknown> | undefined;
+      const importedSourceName = String(metadata?.sourceName ?? root.sourceName ?? "").trim();
+      const importedSourceReference = String(metadata?.sourceReference ?? root.sourceReference ?? "").trim();
+      const importedNotes = String(metadata?.notes ?? root.notes ?? "").trim();
+
+      if (importedSourceName) setSourceName(importedSourceName);
+      if (importedSourceReference) setSourceReference(importedSourceReference);
+      if (importedNotes) setNotes(importedNotes);
+
+      setTab("IMPORT");
+      setMessage("JSON loaded. Review the values, then click Save imported Table 9.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to read the JSON file.");
+    }
+  };
+
+  const save = async (source: Gstr9InputSource) => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const now = new Date().toISOString();
+      const metadata: Gstr9InputMetadata = {
+        source,
+        enteredAt: existingTaxPayment?.metadata.enteredAt ?? now,
+        updatedAt: now,
+        sourceName: sourceName.trim() || undefined,
+        sourceReference: sourceReference.trim() || undefined,
+        notes: notes.trim() || undefined,
+      };
+      const record: Gstr9InputRecord = {
+        ...(existing ?? { id: `${companyId}:${financialYear}`, companyId, financialYear }),
+        taxPayment: {
+          table9: { taxPaid },
+          basedOnBooks: sourceMode === "BOOKS",
+          metadata,
+        },
+      };
+      await saveGstr9InputRecord(record);
+      onSaved(record);
+      setMessage(`${source === "IMPORT" ? "Imported" : "Manual entry"} Table 9 saved successfully.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save Table 9 input.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const taxTotal = GSTR9_TAX_PAID_TAX_ROWS.reduce(
+    (sum, [field]) => sum + taxPaid[field].paidThroughCash + taxPaid[field].paidThroughItc,
+    0,
+  );
+  const nonTaxTotal = GSTR9_TAX_PAID_OTHER_ROWS.reduce(
+    (sum, [field]) => sum + taxPaid[field],
+    0,
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Card className="flex h-[calc(100vh-32px)] w-full max-w-6xl flex-col overflow-hidden shadow-xl">
+        <CardHeader className="flex flex-row items-center justify-between border-b pb-3">
+          <div>
+            <CardTitle className="text-base">GSTR-9 Table 9 — Tax Payment Data — FY {financialYear}</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Details of tax paid as declared in returns filed during the financial year.
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close"><X className="h-4 w-4" /></Button>
+        </CardHeader>
+
+        <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+          <div className="mb-4 flex shrink-0 gap-2 border-b pb-3">
+            <Button size="sm" variant={tab === "MANUAL" ? "default" : "outline"} onClick={() => setTab("MANUAL")}>Manual Entry</Button>
+            <Button size="sm" variant={tab === "IMPORT" ? "default" : "outline"} onClick={() => setTab("IMPORT")}>
+              <Upload className="mr-1 h-4 w-4" /> Import JSON
+            </Button>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            {tab === "IMPORT" && (
+              <div className="mb-4 rounded-md border border-dashed p-4">
+                <div className="text-sm font-medium">Import Table 9 structured JSON</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Accepted forms include <code>taxPayment.table9.taxPaid</code>, <code>table9.taxPaid</code>, or a top-level <code>taxPaid</code> object.
+                </p>
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  className="mt-3 block text-sm"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void importJson(file);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="rounded-md border p-4">
+              <div className="text-sm font-semibold">Data source</div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  className={`rounded-md border p-3 text-left ${sourceMode === "GSTN" ? "border-primary bg-primary/5" : "bg-background"}`}
+                  onClick={() => setSourceMode("GSTN")}
+                >
+                  <div className="text-sm font-medium">GSTR-3B / GSTN reported values</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Enter or import values reported in filed returns. This app does not claim live GSTN reconciliation.</div>
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md border p-3 text-left ${sourceMode === "BOOKS" ? "border-primary bg-primary/5" : "bg-background"}`}
+                  onClick={() => setSourceMode("BOOKS")}
+                >
+                  <div className="text-sm font-medium">Books Based</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Use payment/challan information from books when filed return or electronic cash-ledger data is unavailable.</div>
+                </button>
+              </div>
+              <div className={`mt-3 rounded-md border px-3 py-2 text-xs ${sourceMode === "BOOKS" ? "border-amber-300/50 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" : "bg-muted/30 text-muted-foreground"}`}>
+                {sourceMode === "BOOKS"
+                  ? "Books Based – Not GSTN Reconciled. Keep this separate from GSTN/system-populated figures."
+                  : "GSTR-3B / GSTN reported values – user-entered or imported; verify against filed returns before filing."}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <label className="space-y-1"><span className="text-xs font-medium">Source name</span><input value={sourceName} onChange={(event) => setSourceName(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" placeholder={sourceMode === "BOOKS" ? "e.g. GST payment challans" : "e.g. GSTR-3B FY 2025-26"} /></label>
+              <label className="space-y-1"><span className="text-xs font-medium">Source reference</span><input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" placeholder="e.g. ARN / file name / challan reference" /></label>
+              <label className="space-y-1"><span className="text-xs font-medium">Notes</span><input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
+            </div>
+
+            <div className="mt-5 overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Particulars</TableHead>
+                    <TableHead className="text-right">Tax Payable</TableHead>
+                    <TableHead className="text-right">Paid through Cash</TableHead>
+                    <TableHead className="text-right">Paid through ITC</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {GSTR9_TAX_PAID_TAX_ROWS.map(([field, label]) => (
+                    <TableRow key={field}>
+                      <TableCell className="font-medium">{label}</TableCell>
+                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field].taxPayable} onChange={(event) => updateTaxRow(field, "taxPayable", event.target.value)} className="h-8 text-right" /></TableCell>
+                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field].paidThroughCash} onChange={(event) => updateTaxRow(field, "paidThroughCash", event.target.value)} className="h-8 text-right" /></TableCell>
+                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field].paidThroughItc} onChange={(event) => updateTaxRow(field, "paidThroughItc", event.target.value)} className="h-8 text-right" /></TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="font-semibold bg-muted/30">
+                    <TableCell>Tax payment total</TableCell>
+                    <TableCell />
+                    <TableCell className="text-right">{money(GSTR9_TAX_PAID_TAX_ROWS.reduce((sum, [field]) => sum + taxPaid[field].paidThroughCash, 0))}</TableCell>
+                    <TableCell className="text-right">{money(GSTR9_TAX_PAID_TAX_ROWS.reduce((sum, [field]) => sum + taxPaid[field].paidThroughItc, 0))}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="mt-5 overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Other payment particulars</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {GSTR9_TAX_PAID_OTHER_ROWS.map(([field, label]) => (
+                    <TableRow key={field}>
+                      <TableCell className="font-medium">{label}</TableCell>
+                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field]} onChange={(event) => updateOther(field, event.target.value)} className="h-8 text-right" /></TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="font-semibold bg-muted/30">
+                    <TableCell>Other payment total</TableCell>
+                    <TableCell className="text-right">{money(nonTaxTotal)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="mt-4 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              GST tax paid through Cash + ITC currently totals <strong>{money(taxTotal)}</strong>. Interest, Late Fee, Penalty and Others are intentionally kept separate from GST tax.
+            </div>
+
+            {message && <div className="mt-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">{message}</div>}
+          </div>
+
+          <div className="mt-4 flex shrink-0 justify-end gap-2 border-t bg-background pt-4">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={() => void save(tab === "IMPORT" ? "IMPORT" : "MANUAL")} disabled={saving}>
+              <Save className="mr-1 h-4 w-4" />
+              {saving ? "Saving…" : tab === "IMPORT" ? "Save imported Table 9" : "Save manual Table 9"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function TotalsTable({
   rows,
 }: {
@@ -2187,6 +2525,7 @@ function GSTR9Page() {
   const [gstr3bOpen, setGstr3bOpen] = useState(false);
   const [gstr2bOpen, setGstr2bOpen] = useState(false);
   const [gstr9ItcOpen, setGstr9ItcOpen] = useState(false);
+  const [gstr9TaxPaymentOpen, setGstr9TaxPaymentOpen] = useState(false);
 
   const years = useMemo(() => financialYearOptions(), []);
 
@@ -2429,9 +2768,9 @@ function GSTR9Page() {
               />
               <SourceStatus
                 label="Tax payment data"
-                status={result.sourceInfo.taxPaymentTable}
-                actionLabel="Next"
-                disabled
+                status={inputStatus.taxPayment}
+                actionLabel="Enter / Import"
+                onAction={() => setGstr9TaxPaymentOpen(true)}
               />
             </CardContent>
           </Card>
@@ -2742,6 +3081,18 @@ function GSTR9Page() {
               onSaved={(record) => {
                 setInputRecord(record);
                 setGstr9ItcOpen(false);
+              }}
+            />
+          )}
+          {gstr9TaxPaymentOpen && activeCompanyId && (
+            <Gstr9TaxPaymentInputPanel
+              financialYear={financialYear}
+              companyId={activeCompanyId}
+              existing={inputRecord}
+              onClose={() => setGstr9TaxPaymentOpen(false)}
+              onSaved={(record) => {
+                setInputRecord(record);
+                setGstr9TaxPaymentOpen(false);
               }}
             />
           )}
