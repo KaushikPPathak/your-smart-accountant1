@@ -161,12 +161,15 @@ function SettingsPage() {
   useEffect(() => {
     if (!activeCompanyId) return;
     (async () => {
-      const { data } = await supabase
-        .from("company_settings")
-        .select("invoice_prefix, invoice_starting_number, invoice_footer_note, invoice_terms, show_bank_details, show_signatory, gst_filing_frequency, reminders_enabled, audit_case_reminders, gst_check_interval")
-        .eq("company_id", activeCompanyId)
-        .maybeSingle();
-      if (data) setSettings(data as Settings);
+      const { offlineDb } = await import("@/lib/offline/db");
+      const local = await offlineDb.cache_company_settings.where("company_id").equals(activeCompanyId).first();
+      if (local) {
+        setSettings((cur) => {
+          const merged: any = { ...cur };
+          for (const k of Object.keys(cur)) if (local[k] !== undefined && local[k] !== null) merged[k] = local[k];
+          return merged;
+        });
+      }
 
       const { data: mem } = await supabase
         .from("company_members")
@@ -293,14 +296,15 @@ function SettingsPage() {
     setSavingSettings(true);
     const next = { ...settings, ...overrides };
     try {
-      const { error } = await supabase
-        .from("company_settings")
-        .upsert({
-          company_id: activeCompanyId,
-          ...next,
-          updated_at: new Date().toISOString(),
-        });
-      if (error) throw error;
+      // Settings are business data: keep them in the local store on this device.
+      const { offlineDb } = await import("@/lib/offline/db");
+      const now = new Date().toISOString();
+      const existing = await offlineDb.cache_company_settings.where("company_id").equals(activeCompanyId).first();
+      if (existing) {
+        await offlineDb.cache_company_settings.update(existing.id, { ...overrides, ...next, updated_at: now });
+      } else {
+        await offlineDb.cache_company_settings.put({ id: activeCompanyId, company_id: activeCompanyId, ...next, updated_at: now });
+      }
       setSettings(next);
       toast.success("Settings saved");
     } catch (e) {
