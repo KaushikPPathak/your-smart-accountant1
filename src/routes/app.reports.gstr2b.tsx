@@ -43,6 +43,7 @@ interface G2BLine {
   igst_paise: number;
   cgst_paise: number;
   sgst_paise: number;
+  cess_paise: number;
   section?: "B2B" | "RCM" | "CDNR";
   itc_eligible?: boolean | null;
   itc_reason?: string | null;
