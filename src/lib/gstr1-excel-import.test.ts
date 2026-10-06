@@ -45,6 +45,7 @@ function workbookBuffer(): ArrayBuffer {
     ["Nil", 5000, 0, 0],
     ["Exempt", 0, 12000, 0],
     ["Non-GST", 0, 0, 3000],
+    ["Grand Total", 5000, 12000, 3000],
   ]);
 
   addSheet("at", [
