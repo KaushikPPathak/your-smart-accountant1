@@ -22,6 +22,7 @@ import {
   normGstin,
   normInvoiceNo,
 } from "@/lib/gstr2b-recon";
+import { analyseGstr2bExcelBuffer } from "@/lib/gstr2b-excel-import";
 import {
   loadLocalPurchases, latestImport, loadImportLines, saveImport, patchG2BLine,
 } from "@/lib/gstr2b-local-store";
@@ -42,6 +43,13 @@ interface G2BLine {
   igst_paise: number;
   cgst_paise: number;
   sgst_paise: number;
+  section?: "B2B" | "RCM" | "CDNR";
+  itc_eligible?: boolean | null;
+  itc_reason?: string | null;
+  gstr2b_period?: string | null;
+  gstr1_period?: string | null;
+  gstr1_filing_date?: string | null;
+  document_type?: string | null;
   match_status: string;
   matched_voucher_id: string | null;
   remarks: string | null;
@@ -64,6 +72,8 @@ const STATUS_VARIANTS: Record<string, { label: string; variant: "default" | "sec
   invoice_no_mismatch: { label: "Inv# Δ", variant: "secondary" },
   probable_match: { label: "Probable", variant: "secondary" },
   unmatched: { label: "Not in books", variant: "outline" },
+  rcm: { label: "RCM", variant: "secondary" },
+  cdnr: { label: "CDNR", variant: "secondary" },
 };
 
 const MATCHED_STATUSES = new Set(["matched", "matched_with_tolerance", "manual_match", "accept_as_matched"]);
@@ -80,6 +90,11 @@ function Gstr2BPage() {
   const [tol, setTol] = useState<ReconTolerances>(DEFAULT_TOLERANCES);
   const [busy, setBusy] = useState(false);
   const [onlyMismatch, setOnlyMismatch] = useState(false);
+  const [excelPreview, setExcelPreview] = useState<{
+    fileName: string;
+    analysis: Awaited<ReturnType<typeof analyseGstr2bExcelBuffer>>;
+    lines: Omit<G2BLine, "id" | "remarks" | "manual_override">[];
+  } | null>(null);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -107,11 +122,124 @@ function Gstr2BPage() {
     setBusy(true);
     try {
       const ext = file.name.toLowerCase().split(".").pop() || "";
+
+      // The yearly GSTN/ZAVERI workbook has a richer structure than the
+      // generic portal-style parser. Analyse it first and require an explicit
+      // Save after the user reviews the B2B / RCM / CDNR summary.
+      if (ext === "xlsx" || ext === "xls") {
+        const analysis = await analyseGstr2bExcelBuffer(await file.arrayBuffer(), {
+          fileName: file.name,
+        });
+
+        const regularResults = reconcile(
+          analysis.reconcilableB2B.map((r) => ({
+            supplier_gstin: r.supplier_gstin,
+            supplier_name: r.supplier_name,
+            invoice_no: r.invoice_no,
+            invoice_date: r.invoice_date,
+            invoice_value_paise: r.invoice_value_paise,
+            taxable_paise: r.taxable_paise,
+            igst_paise: r.igst_paise,
+            cgst_paise: r.cgst_paise,
+            sgst_paise: r.sgst_paise,
+            cess_paise: r.cess_paise,
+          })),
+          purchases,
+          tol,
+        );
+
+        const b2bRows: Omit<G2BLine, "id" | "remarks" | "manual_override">[] =
+          regularResults.map((result, index) => {
+            const source = analysis.reconcilableB2B[index];
+            return {
+              supplier_gstin: result.row.supplier_gstin,
+              supplier_name: result.row.supplier_name,
+              invoice_no: result.row.invoice_no,
+              invoice_date: result.row.invoice_date,
+              invoice_value_paise: result.row.invoice_value_paise,
+              taxable_paise: result.row.taxable_paise,
+              igst_paise: result.row.igst_paise,
+              cgst_paise: result.row.cgst_paise,
+              sgst_paise: result.row.sgst_paise,
+              cess_paise: result.row.cess_paise ?? 0,
+              section: "B2B",
+              itc_eligible: source.itc_eligible,
+              itc_reason: source.itc_reason,
+              gstr2b_period: source.gstr2b_period,
+              gstr1_period: source.gstr1_period,
+              gstr1_filing_date: source.gstr1_filing_date,
+              document_type: source.invoice_sub_type || source.source_type || null,
+              match_status: result.match_status,
+              matched_voucher_id: result.matched_voucher_id,
+            };
+          });
+
+        const rcmRows: Omit<G2BLine, "id" | "remarks" | "manual_override">[] =
+          analysis.rcm.map((source) => ({
+            supplier_gstin: source.supplier_gstin,
+            supplier_name: source.supplier_name,
+            invoice_no: source.invoice_no,
+            invoice_date: source.invoice_date,
+            invoice_value_paise: source.invoice_value_paise,
+            taxable_paise: source.taxable_paise,
+            igst_paise: source.igst_paise,
+            cgst_paise: source.cgst_paise,
+            sgst_paise: source.sgst_paise,
+            cess_paise: source.cess_paise,
+            section: "RCM",
+            itc_eligible: source.itc_eligible,
+            itc_reason: source.itc_reason,
+            gstr2b_period: source.gstr2b_period,
+            gstr1_period: source.gstr1_period,
+            gstr1_filing_date: source.gstr1_filing_date,
+            document_type: source.invoice_sub_type || source.source_type || null,
+            match_status: "rcm",
+            matched_voucher_id: null,
+          }));
+
+        const cdnrRows: Omit<G2BLine, "id" | "remarks" | "manual_override">[] =
+          analysis.cdnr.map((source) => ({
+            supplier_gstin: source.supplier_gstin,
+            supplier_name: source.supplier_name,
+            invoice_no: source.cdnr_no || "",
+            invoice_date: source.cdnr_date || source.invoice_date,
+            invoice_value_paise: source.invoice_value_paise,
+            taxable_paise: source.taxable_paise,
+            igst_paise: source.igst_paise,
+            cgst_paise: source.cgst_paise,
+            sgst_paise: source.sgst_paise,
+            cess_paise: source.cess_paise,
+            section: "CDNR",
+            itc_eligible: source.itc_eligible,
+            itc_reason: source.itc_reason,
+            gstr2b_period: source.gstr2b_period,
+            gstr1_period: source.gstr1_period,
+            gstr1_filing_date: source.gstr1_filing_date,
+            document_type: source.cdnr_type || source.invoice_sub_type || source.source_type || null,
+            match_status: "cdnr",
+            matched_voucher_id: null,
+          }));
+
+        setExcelPreview({
+          fileName: file.name,
+          analysis,
+          lines: [...b2bRows, ...rcmRows, ...cdnrRows],
+        });
+        toast.success(
+          `Excel analysed: ${analysis.regularB2B.length} B2B · ${analysis.rcm.length} RCM · ${analysis.cdnr.length} CDNR. Review and Save.`,
+        );
+        return;
+      }
+
+      // Existing JSON/CSV workflow remains immediate and unchanged.
       const parsed = await parseAny(file);
-      if (!parsed.length) { toast.error("No rows parsed — check file format"); return; }
+      if (!parsed.length) {
+        toast.error("No rows parsed — check file format");
+        return;
+      }
 
       const results = reconcile(parsed, purchases, tol);
-      const source = ext === "json" ? "json" : ext === "xlsx" || ext === "xls" ? "xlsx" : "csv";
+      const source = ext === "json" ? "json" : "csv";
       const rows = results.map((r) => ({
         supplier_gstin: r.row.supplier_gstin,
         supplier_name: r.row.supplier_name,
@@ -132,6 +260,34 @@ function Gstr2BPage() {
       toast.success(`Imported ${parsed.length} rows · ${matched} matched (stored on this device only)`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveExcelPreview() {
+    if (!activeCompanyId || !excelPreview) return;
+
+    setBusy(true);
+    try {
+      const matched = excelPreview.lines.filter((row) => MATCHED_STATUSES.has(row.match_status)).length;
+      const savePeriod = excelPreview.analysis.financialYear || period;
+      const imp = await saveImport(
+        activeCompanyId,
+        savePeriod,
+        "xlsx",
+        excelPreview.fileName,
+        excelPreview.lines,
+        matched,
+      );
+      setPeriod(savePeriod);
+      await loadLines(imp.id);
+      setExcelPreview(null);
+      toast.success(
+        `Saved ${excelPreview.lines.length} GSTR-2B rows · ${excelPreview.analysis.regularB2B.length} B2B · ${excelPreview.analysis.rcm.length} RCM · ${excelPreview.analysis.cdnr.length} CDNR`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save Excel import");
     } finally {
       setBusy(false);
     }
@@ -229,8 +385,8 @@ function Gstr2BPage() {
       <Card className="no-print">
         <CardContent className="grid gap-3 p-4 md:grid-cols-4">
           <div className="space-y-1">
-            <Label>Period (MMYYYY)</Label>
-            <Input value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="042026" />
+            <Label>Period / FY</Label>
+            <Input value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="042026 or 2025-26" />
           </div>
           <div className="space-y-1 md:col-span-2">
             <Label>Upload GSTR-2B (JSON · Excel · CSV)</Label>
@@ -247,6 +403,83 @@ function Gstr2BPage() {
           </div>
         </CardContent>
       </Card>
+
+      {excelPreview && (
+        <Card className="no-print border-primary/40">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div className="text-sm font-semibold">GSTR-2B Excel Preview</div>
+                <div className="text-xs text-muted-foreground">{excelPreview.fileName}</div>
+              </div>
+              <Badge variant="secondary">Not saved yet</Badge>
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-4 text-xs">
+              <div><span className="text-muted-foreground">Company:</span> {excelPreview.analysis.companyName || "—"}</div>
+              <div><span className="text-muted-foreground">GSTIN:</span> {excelPreview.analysis.gstin || "—"}</div>
+              <div><span className="text-muted-foreground">FY:</span> {excelPreview.analysis.financialYear || "—"}</div>
+              <div><span className="text-muted-foreground">Sheet:</span> {excelPreview.analysis.sheetName}</div>
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-3">
+              <div className="rounded-md border p-3 text-xs">
+                <div className="font-semibold">Regular B2B</div>
+                <div>{excelPreview.analysis.regularB2B.length} invoices</div>
+                <div className="text-muted-foreground">
+                  Taxable {formatINR(excelPreview.analysis.totals.B2B.taxable_paise)}
+                  {" · "}ITC {excelPreview.analysis.regularB2B.filter((r) => r.itc_eligible === true).length}
+                </div>
+              </div>
+              <div className="rounded-md border p-3 text-xs">
+                <div className="font-semibold">RCM</div>
+                <div>{excelPreview.analysis.rcm.length} invoices</div>
+                <div className="text-muted-foreground">
+                  Taxable {formatINR(excelPreview.analysis.totals.RCM.taxable_paise)}
+                </div>
+              </div>
+              <div className="rounded-md border p-3 text-xs">
+                <div className="font-semibold">CDNR</div>
+                <div>{excelPreview.analysis.cdnr.length} adjustments</div>
+                <div className="text-muted-foreground">
+                  Taxable {formatINR(excelPreview.analysis.totals.CDNR.taxable_paise)}
+                </div>
+              </div>
+            </div>
+
+            {excelPreview.analysis.warnings.length > 0 && (
+              <div className="rounded-md border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                {excelPreview.analysis.warnings.map((warning) => (
+                  <div key={warning}>{warning}</div>
+                ))}
+              </div>
+            )}
+
+            <div className="text-[11px] text-muted-foreground">
+              Regular B2B rows are reconciled against your purchase register.
+              RCM and CDNR remain separate and are not silently merged into normal B2B matching.
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setExcelPreview(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={busy || excelPreview.lines.length === 0 || excelPreview.analysis.warnings.length > 0}
+                onClick={() => void saveExcelPreview()}
+              >
+                Save Excel Import
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="no-print">
         <CardContent className="p-4">
@@ -298,8 +531,9 @@ function Gstr2BPage() {
             view={view}
             reportId="gstr2b"
             title="2B lines vs Purchase Register"
-            headers={["Supplier GSTIN", "Supplier", "Inv No", "Inv Date", "Status", "Value", "IGST", "CGST", "SGST", "Remarks"]}
+            headers={["Section", "Supplier GSTIN", "Supplier", "Inv No", "Inv Date", "Status", "Value", "IGST", "CGST", "SGST", "Remarks"]}
             rows={visibleLines.map((l) => [
+              l.section ?? "B2B",
               l.supplier_gstin,
               l.supplier_name ?? "",
               l.invoice_no,
@@ -311,7 +545,7 @@ function Gstr2BPage() {
               formatINR(l.sgst_paise),
               l.remarks ?? "",
             ])}
-            numericFromCol={5}
+            numericFromCol={6}
           />
         ) : (
         <Card className="print-area">
@@ -324,7 +558,7 @@ function Gstr2BPage() {
             </div>
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Supplier GSTIN</TableHead><TableHead>Supplier</TableHead>
+                <TableHead>Section</TableHead><TableHead>Supplier GSTIN</TableHead><TableHead>Supplier</TableHead>
                 <TableHead>Inv No</TableHead><TableHead>Inv Date</TableHead>
                 <TableHead className="text-right">Value</TableHead>
                 <TableHead className="text-right">IGST</TableHead>
@@ -340,6 +574,7 @@ function Gstr2BPage() {
                   const cands = candidatesFor(l);
                   return (
                   <TableRow key={l.id}>
+                    <TableCell><Badge variant="outline">{l.section ?? "B2B"}</Badge></TableCell>
                     <TableCell className="font-mono text-xs">{l.supplier_gstin}</TableCell>
                     <TableCell className="text-xs">{l.supplier_name}</TableCell>
                     <TableCell className="font-mono text-xs">{l.invoice_no}</TableCell>
