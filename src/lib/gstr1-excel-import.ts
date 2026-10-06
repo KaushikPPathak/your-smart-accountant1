@@ -214,12 +214,7 @@ function isTotalRow(row: RawRow): boolean {
     .join(" ")
     .toUpperCase();
 
-  return (
-    firstText === "TOTAL" ||
-    firstText.startsWith("TOTAL ") ||
-    firstText === "GRAND TOTAL" ||
-    firstText.startsWith("GRAND TOTAL ")
-  );
+  return firstText === "TOTAL" || firstText.startsWith("TOTAL ");
 }
 
 function findHeaderRow(
@@ -585,7 +580,12 @@ function analyseExempt(
   let recognisedRows = 0;
 
   for (const row of rows.slice(header.index + 1)) {
-    if (!isNonEmptyRow(row) || isTotalRow(row)) continue;
+    // In the client-style EXEMP sheet, the detail rows are followed by a
+    // TOTAL marker and then a category summary section. The summary section
+    // repeats the same amounts, so processing rows after TOTAL would double
+    // count the exempt/nil-rated/non-GST values.
+    if (isTotalRow(row)) break;
+    if (!isNonEmptyRow(row)) continue;
 
     dataRows += 1;
 
