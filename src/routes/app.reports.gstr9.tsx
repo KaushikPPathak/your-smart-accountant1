@@ -62,6 +62,7 @@ import {
   loadGstr9InputRecord,
   saveGstr9InputRecord,
 } from "@/lib/gstr9-input-store";
+import { analyseGstr1ExcelBuffer } from "@/lib/gstr1-excel-import";
 
 export const Route = createFileRoute("/app/reports/gstr9")({
   head: () => ({ meta: [{ title: "GSTR-9 — Reports" }] }),
@@ -1971,7 +1972,7 @@ function Gstr1InputPanel({
   onSaved: (record: Gstr9InputRecord) => void;
 }) {
   const existingGstr1 = existing?.gstr1;
-  const [tab, setTab] = useState<"MANUAL" | "IMPORT">("MANUAL");
+  const [tab, setTab] = useState<"MANUAL" | "JSON" | "EXCEL">("MANUAL");
   const [table4, setTable4] = useState<Gstr9Table4>(
     () => existingGstr1 ? cloneTable4(existingGstr1.table4) : emptyGstr9Table4(),
   );
@@ -1983,6 +1984,15 @@ function Gstr1InputPanel({
   const [notes, setNotes] = useState(existingGstr1?.metadata.notes ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [excelWarnings, setExcelWarnings] = useState<string[]>([]);
+  const [excelSummary, setExcelSummary] = useState<{
+    companyName?: string;
+    gstin?: string;
+    financialYear?: string;
+    sheetCount: number;
+    adjustmentCount: number;
+    hsnRowCount: number;
+  } | null>(null);
 
   const updateTable4 = (field: keyof Gstr9Table4, value: Gstr9TaxAmount) => {
     setTable4((current) => ({ ...current, [field]: value }));
@@ -2033,12 +2043,71 @@ function Gstr1InputPanel({
       if (imported.sourceName) setSourceName(imported.sourceName);
       if (imported.sourceReference) setSourceReference(imported.sourceReference);
       if (imported.notes) setNotes(imported.notes);
-      setTab("IMPORT");
+      setExcelWarnings([]);
+      setExcelSummary(null);
+      setTab("JSON");
       setMessage("JSON loaded. Review the values, then click Save imported GSTR-1.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to read the JSON file.");
     }
   };
+
+  const importExcel = async (file: File) => {
+    try {
+      setMessage(null);
+      setExcelWarnings([]);
+      setExcelSummary(null);
+
+      const analysis = analyseGstr1ExcelBuffer(await file.arrayBuffer(), {
+        fileName: file.name,
+        expectedFinancialYear: financialYear,
+      });
+
+      const financialYearMismatch = analysis.warnings.find((warning) =>
+        warning.includes("does not match selected FY") && warning.includes("Nothing was saved"),
+      );
+
+      if (financialYearMismatch) {
+        setExcelWarnings(analysis.warnings);
+        setMessage(financialYearMismatch);
+        setTab("EXCEL");
+        return;
+      }
+
+      setTable4(analysis.table4);
+      setTable5(analysis.table5);
+      setSourceName(
+        analysis.companyName?.trim()
+          ? `Filed GSTR-1 Excel — ${analysis.companyName.trim()}`
+          : "Filed GSTR-1 Excel",
+      );
+      setSourceReference(file.name);
+      setNotes(
+        analysis.warnings.length > 0
+          ? `Imported from GSTR-1 Excel. Warnings: ${analysis.warnings.join(" | ")}`
+          : "Imported from GSTR-1 Excel.",
+      );
+      setExcelWarnings(analysis.warnings);
+      setExcelSummary({
+        companyName: analysis.companyName,
+        gstin: analysis.gstin,
+        financialYear: analysis.financialYear,
+        sheetCount: analysis.sheetSummary.length,
+        adjustmentCount: analysis.adjustments.length,
+        hsnRowCount: analysis.hsn.rowCount,
+      });
+      setTab("EXCEL");
+      setMessage("Excel loaded. Review the values and warnings, then click Save imported GSTR-1.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to read the GSTR-1 Excel file.");
+      setTab("EXCEL");
+    }
+  };
+
+  const isImportedTab = tab === "JSON" || tab === "EXCEL";
+  const canSaveExcel = tab !== "EXCEL" || !excelWarnings.some((warning) =>
+    warning.includes("does not match selected FY") && warning.includes("Nothing was saved"),
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-3 pt-3 pb-20">
@@ -2047,24 +2116,28 @@ function Gstr1InputPanel({
           <div>
             <CardTitle className="text-base">Filed GSTR-1 Input — FY {financialYear}</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              Manual entry and JSON import use the same local GSTR-9 input store.
+              Manual entry, JSON import and Excel import use the same local GSTR-9 input store.
             </p>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
             <X className="h-4 w-4" />
           </Button>
         </CardHeader>
+
         <CardContent className="min-h-0 flex-1 overflow-y-auto p-4">
-          <div className="mb-4 flex gap-2 border-b pb-3">
+          <div className="mb-4 flex flex-wrap gap-2 border-b pb-3">
             <Button size="sm" variant={tab === "MANUAL" ? "default" : "outline"} onClick={() => setTab("MANUAL")}>
               Manual Entry
             </Button>
-            <Button size="sm" variant={tab === "IMPORT" ? "default" : "outline"} onClick={() => setTab("IMPORT")}>
+            <Button size="sm" variant={tab === "JSON" ? "default" : "outline"} onClick={() => setTab("JSON")}>
               <Upload className="mr-1 h-4 w-4" /> Import JSON
+            </Button>
+            <Button size="sm" variant={tab === "EXCEL" ? "default" : "outline"} onClick={() => setTab("EXCEL")}>
+              <Upload className="mr-1 h-4 w-4" /> Import Excel
             </Button>
           </div>
 
-          {tab === "IMPORT" && (
+          {tab === "JSON" && (
             <div className="mb-4 rounded-md border border-dashed p-4">
               <div className="text-sm font-medium">Import GSTR-1 structured JSON</div>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -2080,6 +2153,65 @@ function Gstr1InputPanel({
                   event.currentTarget.value = "";
                 }}
               />
+            </div>
+          )}
+
+          {tab === "EXCEL" && (
+            <div className="mb-4 rounded-md border border-dashed p-4">
+              <div className="text-sm font-medium">Import GSTR-1 Excel workbook</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Select the GSTR-1 Excel workbook. The analyser reads the supported GSTR-1 sheets and loads Table 4 and Table 5 for review. Nothing is saved until you click Save imported GSTR-1.
+              </p>
+              <input
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                className="mt-3 block text-sm"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void importExcel(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+
+              {excelSummary && (
+                <div className="mt-4 grid gap-2 rounded-md border bg-muted/30 p-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <div className="text-muted-foreground">Workbook company</div>
+                    <div className="font-medium">{excelSummary.companyName || "Not detected"}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Workbook GSTIN</div>
+                    <div className="font-medium">{excelSummary.gstin || "Not detected"}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Workbook FY</div>
+                    <div className="font-medium">{excelSummary.financialYear || "Not detected"}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Sheets analysed</div>
+                    <div className="font-medium">{excelSummary.sheetCount}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Adjustment sheets with data</div>
+                    <div className="font-medium">{excelSummary.adjustmentCount}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">HSN rows detected</div>
+                    <div className="font-medium">{excelSummary.hsnRowCount}</div>
+                  </div>
+                </div>
+              )}
+
+              {excelWarnings.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {excelWarnings.map((warning) => (
+                    <div key={warning} className="flex items-start gap-2 rounded-md border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{warning}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -2129,9 +2261,9 @@ function Gstr1InputPanel({
 
         <div className="flex flex-none items-center justify-end gap-2 border-t bg-background px-4 py-3">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => void save(tab === "IMPORT" ? "IMPORT" : "MANUAL")} disabled={saving}>
+          <Button onClick={() => void save(isImportedTab ? "IMPORT" : "MANUAL")} disabled={saving || !canSaveExcel}>
             <Save className="mr-1 h-4 w-4" />
-            {saving ? "Saving…" : tab === "IMPORT" ? "Save imported GSTR-1" : "Save manual GSTR-1"}
+            {saving ? "Saving…" : isImportedTab ? "Save imported GSTR-1" : "Save manual GSTR-1"}
           </Button>
         </div>
       </Card>
