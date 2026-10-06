@@ -314,13 +314,29 @@ function extractMetadata(matrix: unknown[][]): {
   let gstin: string | null = null;
   let financialYear: string | null = null;
 
+  // The yearly ZAVERI workbook contains metadata before the tabular header.
+  // Do not scan the column-header row for labels such as NAME/GSTIN/YEAR:
+  // e.g. "NAME" is also a legitimate table column and its next cell is
+  // "GSTR 3B FILED", not the company name.
   for (const row of matrix.slice(0, 10)) {
     const values = row.map(normaliseText);
+
+    // Ignore a tabular header row. This also makes the metadata extraction
+    // robust if the header happens to contain NAME or GSTIN.
+    const hasTableHeader = values.some(
+      (value) => normaliseHeader(value) === "SR NO",
+    );
+    if (hasTableHeader) continue;
+
     for (let i = 0; i < values.length - 1; i += 1) {
       const label = values[i].toUpperCase().replace(/[:\s]+$/, "");
-      if (label === "NAME") companyName = values[i + 1] || companyName;
-      if (label === "GSTIN") gstin = values[i + 1] || gstin;
-      if (label === "YEAR") financialYear = normaliseFinancialYear(values[i + 1]) || financialYear;
+      const candidate = values[i + 1];
+
+      if (label === "NAME" && candidate) companyName = candidate;
+      if (label === "GSTIN" && candidate) gstin = candidate;
+      if (label === "YEAR" && candidate) {
+        financialYear = normaliseFinancialYear(candidate);
+      }
     }
   }
 
