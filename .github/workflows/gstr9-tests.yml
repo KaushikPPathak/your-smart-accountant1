@@ -14,17 +14,19 @@ on:
       - "src/lib/gstr9-inputs.test.ts"
       - "src/lib/gstr9-input-store.ts"
       - "src/lib/gstr9-input-store.test.ts"
-
-      # GSTR-1 Excel import
-      - "src/lib/gstr1-excel-import.ts"
-      - "src/lib/gstr1-excel-import.test.ts"
-
       - "src/lib/offline/db.ts"
       - "src/lib/gst-returns.ts"
       - "src/lib/gst-returns.test.ts"
       - "src/routes/app.reports.gstr9.tsx"
       - "src/components/AppSidebar.tsx"
       - "src/routeTree.gen.ts"
+      - "src/lib/gstr1-excel-import.ts"
+      - "src/lib/gstr1-excel-import.test.ts"
+      - "src/lib/gstr2b-excel-import.ts"
+      - "src/lib/gstr2b-excel-import.test.ts"
+      - "src/lib/gstr2b-recon.ts"
+      - "src/lib/gstr2b-local-store.ts"
+      - "src/routes/app.reports.gstr2b.tsx"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/gstr9-tests.yml"
@@ -54,6 +56,9 @@ jobs:
 
       - name: Run GSTR-1 Excel import tests
         run: bunx vitest run src/lib/gstr1-excel-import.test.ts
+
+      - name: Run GSTR-2B Excel import tests
+        run: bunx vitest run src/lib/gstr2b-excel-import.test.ts
 
       - name: Run all tests
         run: bunx vitest run
