@@ -214,7 +214,12 @@ function isTotalRow(row: RawRow): boolean {
     .join(" ")
     .toUpperCase();
 
-  return firstText === "TOTAL" || firstText.startsWith("TOTAL ");
+  return (
+    firstText === "TOTAL" ||
+    firstText.startsWith("TOTAL ") ||
+    firstText === "GRAND TOTAL" ||
+    firstText.startsWith("GRAND TOTAL ")
+  );
 }
 
 function findHeaderRow(
