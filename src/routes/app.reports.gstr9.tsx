@@ -2932,6 +2932,422 @@ function Gstr9ItcReconciliationPanel({
   );
 }
 
+
+function Gstr9PrintInputWorking({
+  record,
+  financialYear,
+  companyId,
+}: {
+  record: Gstr9InputRecord | undefined;
+  financialYear: string;
+  companyId: string;
+}) {
+  const [reconciliationLines, setReconciliationLines] = useState<Gstr9ItcReconciliationLine[]>([]);
+  const [reconciliationLoading, setReconciliationLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPrintReconciliation = async () => {
+      setReconciliationLoading(true);
+      try {
+        const latest = await latestGstr2bImport(companyId);
+        if (!latest) {
+          if (!cancelled) setReconciliationLines([]);
+          return;
+        }
+
+        const rows = await loadGstr2bImportLines(latest.id);
+        const sourceLines = rows.map((row) => ({
+          section: row.section ?? "B2B",
+          supplier_gstin: row.supplier_gstin,
+          supplier_name: row.supplier_name ?? "",
+          invoice_no: row.invoice_no,
+          invoice_date: row.invoice_date,
+          invoice_value_paise: row.invoice_value_paise,
+          taxable_paise: row.taxable_paise,
+          igst_paise: row.igst_paise,
+          cgst_paise: row.cgst_paise,
+          sgst_paise: row.sgst_paise,
+          cess_paise: row.cess_paise,
+          rev_charge: row.section === "RCM",
+          gstr2b_period: row.gstr2b_period ?? null,
+          gstr1_period: row.gstr1_period ?? null,
+          gstr1_filing_date: row.gstr1_filing_date ?? null,
+          source_type: "Stored GSTR-2B",
+          is_einvoice_enabled: null,
+          invoice_sub_type: row.document_type ?? "",
+          is_ecom: null,
+          itc_eligible: row.itc_eligible ?? null,
+          itc_reason: row.itc_reason ?? null,
+          cdnr_no: row.section === "CDNR" ? row.invoice_no : null,
+          cdnr_date: row.section === "CDNR" ? row.invoice_date : null,
+          cdnr_type: null,
+        }));
+
+        const localPurchases = await loadLocalPurchases(companyId);
+        const purchases = localPurchases.map((purchase) => ({
+          id: purchase.id,
+          supplier_gstin: purchase.ledgers?.gstin ?? null,
+          invoice_no: purchase.vendor_invoice_no ?? purchase.voucher_number ?? null,
+          invoice_date: purchase.voucher_date ?? null,
+          total_paise: purchase.total_paise,
+        }));
+
+        const reconciliation = buildGstr9ItcReconciliation(
+          sourceLines,
+          purchases,
+          { inclusionByKey: record.gstr9ItcInclusionByKey ?? {} },
+        );
+
+        if (!cancelled) setReconciliationLines(reconciliation.regularB2b);
+      } catch {
+        if (!cancelled) setReconciliationLines([]);
+      } finally {
+        if (!cancelled) setReconciliationLoading(false);
+      }
+    };
+
+    void loadPrintReconciliation();
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, financialYear, record?.gstr9ItcInclusionByKey]);
+
+  if (!record) return null;
+
+  const table4 = record.gstr1?.table4;
+  const table5 = record.gstr1?.table5;
+  const gstr3bPeriods = record.gstr3b?.periods ?? [];
+  const gstr2bPeriods = record.gstr2b?.periods ?? [];
+  const table6 = record.itcTables?.table6;
+  const table7 = record.itcTables?.table7;
+  const table8 = record.itcTables?.table8;
+  const taxPaid = record.taxPayment?.table9.taxPaid;
+
+  const inclusionEntries = Object.entries(record.gstr9ItcInclusionByKey ?? {});
+  const includedChoices = inclusionEntries.filter(([, included]) => included).length;
+  const excludedChoices = inclusionEntries.filter(([, included]) => !included).length;
+
+  const table4Rows: Array<[string, Gstr9TaxAmount]> = table4
+    ? [
+        ["B2B", table4.b2b],
+        ["B2C Large", table4.b2cLarge],
+        ["Exports with payment", table4.exportsWithPayment],
+        ["SEZ with payment", table4.sezWithPayment],
+        ["Deemed exports", table4.deemedExports],
+        ["Advances tax paid", table4.advancesTaxPaid],
+        ["Inward supplies RCM", table4.inwardSuppliesRcm],
+        ["B2C Other", table4.b2cOther],
+        ["Exports without payment", table4.exportsWithoutPayment],
+        ["SEZ without payment", table4.sezWithoutPayment],
+        ["Advances tax adjusted", table4.advancesTaxAdjusted],
+        ["Other outward taxable supplies", table4.otherOutwardTaxableSupplies],
+        ["Total", table4.total],
+      ]
+    : [];
+
+  const table5Rows: Array<[string, Gstr9TaxAmount]> = table5
+    ? [
+        ["Exports without payment", table5.exportsWithoutPayment],
+        ["SEZ without payment", table5.sezWithoutPayment],
+        ["Supplies on which tax payable by recipient", table5.suppliesOnWhichTaxPayableByRecipient],
+        ["Exempt supplies", table5.exemptSupplies],
+        ["Nil-rated supplies", table5.nilRatedSupplies],
+        ["Non-GST supplies", table5.nonGstSupplies],
+        ["Total", table5.total],
+      ]
+    : [];
+
+  const taxAmountTable = (rows: Array<[string, Gstr9TaxAmount]>) => (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Particulars</TableHead>
+            <TableHead className="text-right">Taxable value</TableHead>
+            <TableHead className="text-right">IGST</TableHead>
+            <TableHead className="text-right">CGST</TableHead>
+            <TableHead className="text-right">SGST</TableHead>
+            <TableHead className="text-right">Cess</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map(([label, value]) => (
+            <TableRow key={label}>
+              <TableCell className="font-medium">{label}</TableCell>
+              <TableCell className="text-right">{money(value.taxableValue)}</TableCell>
+              <TableCell className="text-right">{money(value.igst)}</TableCell>
+              <TableCell className="text-right">{money(value.cgst)}</TableCell>
+              <TableCell className="text-right">{money(value.sgst)}</TableCell>
+              <TableCell className="text-right">{money(value.cess)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  return (
+    <div className="hidden print:block" style={{ breakBefore: "page" }}>
+      <div className="space-y-5 text-[10px]">
+        <div>
+          <h2 className="text-base font-bold">GSTR-9 — Input & Reconciliation Working</h2>
+          <p className="mt-1 text-[9px] text-muted-foreground">
+            Financial year {financialYear}. This section prints the saved GSTR-1, GSTR-3B,
+            GSTR-2B, GSTR-2B reconciliation, Table 6-8 and Table 9 inputs used for the
+            annual return working paper.
+          </p>
+        </div>
+
+        {table4 && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold">Filed GSTR-1 — Table 4 working</h3>
+            {taxAmountTable(table4Rows)}
+            <p className="mt-1 text-[8px] text-muted-foreground">
+              Source: {record.gstr1?.metadata.sourceName ?? "Filed GSTR-1"}
+              {record.gstr1?.metadata.sourceReference ? ` · ${record.gstr1.metadata.sourceReference}` : ""}
+            </p>
+          </section>
+        )}
+
+        {table5 && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold">Filed GSTR-1 — Table 5 working</h3>
+            {taxAmountTable(table5Rows)}
+          </section>
+        )}
+
+        {gstr3bPeriods.length > 0 && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold">Filed GSTR-3B — period-wise ITC working</h3>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Period</TableHead>
+                    <TableHead className="text-right">4A(1) Import goods</TableHead>
+                    <TableHead className="text-right">4A(2) Import services</TableHead>
+                    <TableHead className="text-right">4A(3) RCM</TableHead>
+                    <TableHead className="text-right">4A(4) ISD</TableHead>
+                    <TableHead className="text-right">4A(5) Other</TableHead>
+                    <TableHead className="text-right">Total ITC</TableHead>
+                    <TableHead className="text-right">Reversal</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {gstr3bPeriods.map((period: Gstr9Gstr3bPeriod) => (
+                    <TableRow key={period.period}>
+                      <TableCell className="font-medium">{period.period}</TableCell>
+                      <TableCell className="text-right">{money(period.itc.table4A1ImportOfGoods)}</TableCell>
+                      <TableCell className="text-right">{money(period.itc.table4A2ImportOfServices)}</TableCell>
+                      <TableCell className="text-right">{money(period.itc.table4A3Rcm)}</TableCell>
+                      <TableCell className="text-right">{money(period.itc.table4A4Isd)}</TableCell>
+                      <TableCell className="text-right">{money(period.itc.table4A5Other)}</TableCell>
+                      <TableCell className="text-right">{money(period.itc.totalItcAvailed)}</TableCell>
+                      <TableCell className="text-right">{money(period.itcReversal.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="mt-1 text-[8px] text-muted-foreground">
+              Source: {record.gstr3b?.metadata.sourceName ?? "Filed GSTR-3B"}
+            </p>
+          </section>
+        )}
+
+        {gstr2bPeriods.length > 0 && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold">GSTR-2B — period-wise ITC working</h3>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Period</TableHead>
+                    <TableHead className="text-right">Import goods</TableHead>
+                    <TableHead className="text-right">Import services</TableHead>
+                    <TableHead className="text-right">RCM</TableHead>
+                    <TableHead className="text-right">ISD</TableHead>
+                    <TableHead className="text-right">Other registered supplies</TableHead>
+                    <TableHead className="text-right">ITC available</TableHead>
+                    <TableHead className="text-right">ITC not available</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {gstr2bPeriods.map((period: Gstr9Gstr2bPeriod) => (
+                    <TableRow key={period.period}>
+                      <TableCell className="font-medium">{period.period}</TableCell>
+                      <TableCell className="text-right">{money(period.itcAvailable.importOfGoods)}</TableCell>
+                      <TableCell className="text-right">{money(period.itcAvailable.importOfServices)}</TableCell>
+                      <TableCell className="text-right">{money(period.itcAvailable.reverseCharge)}</TableCell>
+                      <TableCell className="text-right">{money(period.itcAvailable.isd)}</TableCell>
+                      <TableCell className="text-right">{money(period.itcAvailable.otherRegisteredSupplies)}</TableCell>
+                      <TableCell className="text-right">{money(period.itcAvailable.total)}</TableCell>
+                      <TableCell className="text-right">{money(period.itcNotAvailable.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="mt-1 text-[8px] text-muted-foreground">
+              Source: {record.gstr2b?.metadata.sourceName ?? "GSTR-2B"}
+            </p>
+          </section>
+        )}
+
+        {record.gstr9ItcInclusionByKey && table8 && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold">GSTR-2B → GSTR-9 reconciliation working</h3>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>GSTR-9 Table 8A working ITC — selected eligible Regular B2B</TableCell>
+                    <TableCell className="text-right font-semibold">{money(table8.itcAsPerGstr2bTable8A)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Saved included checkbox decisions</TableCell>
+                    <TableCell className="text-right">{includedChoices}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Saved excluded checkbox decisions</TableCell>
+                    <TableCell className="text-right">{excludedChoices}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>RCM / CDNR</TableCell>
+                    <TableCell className="text-right">Kept separate from Regular B2B Table 8A</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+            <p className="mt-1 text-[8px] text-muted-foreground">
+              “Not in Books” and “Excluded from GSTR-9” are separate concepts. The saved
+              checkbox decisions control the Table 8A working credit without deleting the
+              underlying GSTR-2B records.
+            </p>
+
+            <div className="mt-3 overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Include</TableHead>
+                    <TableHead>Supplier</TableHead>
+                    <TableHead>Invoice</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Eligibility</TableHead>
+                    <TableHead className="text-right">ITC</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reconciliationLoading ? (
+                    <TableRow><TableCell colSpan={7}>Loading saved GSTR-2B reconciliation detail…</TableCell></TableRow>
+                  ) : reconciliationLines.length === 0 ? (
+                    <TableRow><TableCell colSpan={7}>No Regular B2B reconciliation detail is available for this printout.</TableCell></TableRow>
+                  ) : (
+                    reconciliationLines.map((line) => (
+                      <TableRow key={line.key}>
+                        <TableCell>{line.includedInGstr9 ? "YES" : "NO"}</TableCell>
+                        <TableCell>{line.supplier_name || "—"}</TableCell>
+                        <TableCell>{line.invoice_no || "—"}</TableCell>
+                        <TableCell>{line.invoice_date || "—"}</TableCell>
+                        <TableCell>{line.match_status === "NOT_IN_BOOKS" ? "Not in Books" : line.match_status === "BOOKS_VALUE_MISMATCH" ? "Books value mismatch" : line.match_status === "MATCHED_WITH_TOLERANCE" ? "Matched ± tolerance" : "Matched"}</TableCell>
+                        <TableCell>{line.itc_eligible === false ? `Ineligible${line.itc_reason ? ` — ${line.itc_reason}` : ""}` : "Eligible"}</TableCell>
+                        <TableCell className="text-right">{money(line.itc_paise / 100)}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        )}
+
+        {table6 && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold">GSTR-9 Table 6 — ITC availed</h3>
+            <div className="overflow-x-auto">
+              <Table><TableBody>
+                <TableRow><TableCell>Import of goods</TableCell><TableCell className="text-right">{money(table6.importOfGoods)}</TableCell></TableRow>
+                <TableRow><TableCell>Import of services</TableCell><TableCell className="text-right">{money(table6.importOfServices)}</TableCell></TableRow>
+                <TableRow><TableCell>Inward supplies RCM</TableCell><TableCell className="text-right">{money(table6.inwardSuppliesRcm)}</TableCell></TableRow>
+                <TableRow><TableCell>ISD</TableCell><TableCell className="text-right">{money(table6.inwardSuppliesIsd)}</TableCell></TableRow>
+                <TableRow><TableCell>Other ITC</TableCell><TableCell className="text-right">{money(table6.allOtherItc)}</TableCell></TableRow>
+                <TableRow><TableCell>Preceding FY ITC</TableCell><TableCell className="text-right">{money(table6.precedingFinancialYearItc)}</TableCell></TableRow>
+                <TableRow><TableCell className="font-semibold">Total ITC availed</TableCell><TableCell className="text-right font-semibold">{money(table6.totalItcAvailed)}</TableCell></TableRow>
+              </TableBody></Table>
+            </div>
+          </section>
+        )}
+
+        {table7 && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold">GSTR-9 Table 7 — ITC reversed / ineligible</h3>
+            <div className="overflow-x-auto">
+              <Table><TableBody>
+                <TableRow><TableCell>Rule 38</TableCell><TableCell className="text-right">{money(table7.rule38)}</TableCell></TableRow>
+                <TableRow><TableCell>Rule 39</TableCell><TableCell className="text-right">{money(table7.rule39)}</TableCell></TableRow>
+                <TableRow><TableCell>Rule 42</TableCell><TableCell className="text-right">{money(table7.rule42)}</TableCell></TableRow>
+                <TableRow><TableCell>Rule 43</TableCell><TableCell className="text-right">{money(table7.rule43)}</TableCell></TableRow>
+                <TableRow><TableCell>Section 17(5)</TableCell><TableCell className="text-right">{money(table7.section17_5)}</TableCell></TableRow>
+                <TableRow><TableCell>Rule 37</TableCell><TableCell className="text-right">{money(table7.reversalUnderRule37)}</TableCell></TableRow>
+                <TableRow><TableCell>Rule 37A</TableCell><TableCell className="text-right">{money(table7.reversalUnderRule37A)}</TableCell></TableRow>
+                <TableRow><TableCell>Other reversals</TableCell><TableCell className="text-right">{money(table7.otherReversals)}</TableCell></TableRow>
+                <TableRow><TableCell className="font-semibold">Total</TableCell><TableCell className="text-right font-semibold">{money(table7.total)}</TableCell></TableRow>
+              </TableBody></Table>
+            </div>
+          </section>
+        )}
+
+        {table8 && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold">GSTR-9 Table 8 — Other ITC information</h3>
+            <div className="overflow-x-auto">
+              <Table><TableBody>
+                <TableRow><TableCell>ITC as per GSTR-2B — Table 8A</TableCell><TableCell className="text-right">{money(table8.itcAsPerGstr2bTable8A)}</TableCell></TableRow>
+                <TableRow><TableCell>ITC as per books</TableCell><TableCell className="text-right">{money(table8.itcAsPerBooks)}</TableCell></TableRow>
+                <TableRow><TableCell>Credit available but not availed</TableCell><TableCell className="text-right">{money(table8.creditAvailableButNotAvailed)}</TableCell></TableRow>
+                <TableRow><TableCell>Credit available but ineligible</TableCell><TableCell className="text-right">{money(table8.creditAvailableIneligible)}</TableCell></TableRow>
+                <TableRow><TableCell>Credit ineligible under Section 16(4)</TableCell><TableCell className="text-right">{money(table8.creditIneligibleUnderSection16_4)}</TableCell></TableRow>
+                <TableRow><TableCell className="font-semibold">Total other ITC</TableCell><TableCell className="text-right font-semibold">{money(table8.totalOtherItc)}</TableCell></TableRow>
+              </TableBody></Table>
+            </div>
+          </section>
+        )}
+
+        {taxPaid && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold">GSTR-9 Table 9 — Tax payment working</h3>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Tax</TableHead><TableHead className="text-right">Tax payable</TableHead><TableHead className="text-right">Paid through cash</TableHead><TableHead className="text-right">Paid through ITC</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  <TableRow><TableCell>IGST</TableCell><TableCell className="text-right">{money(taxPaid.igst.taxPayable)}</TableCell><TableCell className="text-right">{money(taxPaid.igst.paidThroughCash)}</TableCell><TableCell className="text-right">{money(taxPaid.igst.paidThroughItc)}</TableCell></TableRow>
+                  <TableRow><TableCell>CGST</TableCell><TableCell className="text-right">{money(taxPaid.cgst.taxPayable)}</TableCell><TableCell className="text-right">{money(taxPaid.cgst.paidThroughCash)}</TableCell><TableCell className="text-right">{money(taxPaid.cgst.paidThroughItc)}</TableCell></TableRow>
+                  <TableRow><TableCell>SGST / UTGST</TableCell><TableCell className="text-right">{money(taxPaid.sgst.taxPayable)}</TableCell><TableCell className="text-right">{money(taxPaid.sgst.paidThroughCash)}</TableCell><TableCell className="text-right">{money(taxPaid.sgst.paidThroughItc)}</TableCell></TableRow>
+                  <TableRow><TableCell>Cess</TableCell><TableCell className="text-right">{money(taxPaid.cess.taxPayable)}</TableCell><TableCell className="text-right">{money(taxPaid.cess.paidThroughCash)}</TableCell><TableCell className="text-right">{money(taxPaid.cess.paidThroughItc)}</TableCell></TableRow>
+                </TableBody>
+              </Table>
+            </div>
+            <div className="mt-2 overflow-x-auto">
+              <Table><TableBody>
+                <TableRow><TableCell>Interest</TableCell><TableCell className="text-right">{money(taxPaid.interest)}</TableCell></TableRow>
+                <TableRow><TableCell>Late fee</TableCell><TableCell className="text-right">{money(taxPaid.lateFee)}</TableCell></TableRow>
+                <TableRow><TableCell>Penalty</TableCell><TableCell className="text-right">{money(taxPaid.penalty)}</TableCell></TableRow>
+                <TableRow><TableCell>Others</TableCell><TableCell className="text-right">{money(taxPaid.others)}</TableCell></TableRow>
+              </TableBody></Table>
+            </div>
+            <p className="mt-1 text-[8px] text-muted-foreground">
+              Interest, late fee, penalty and other amounts are printed separately from GST tax.
+            </p>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function GSTR9Page() {
   const { activeCompanyId } = useCompany();
   const [financialYear, setFinancialYear] = useState(currentFinancialYear);
@@ -3201,6 +3617,12 @@ function GSTR9Page() {
             </CardContent>
           </Card>
 
+          <Gstr9PrintInputWorking
+            record={inputRecord}
+            financialYear={financialYear}
+            companyId={activeCompanyId}
+          />
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">
@@ -3394,7 +3816,7 @@ function GSTR9Page() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="print:hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">
                 Validation and filing-readiness notes
@@ -3445,7 +3867,7 @@ function GSTR9Page() {
           </Card>
 
           {result.warnings.length > 0 && (
-            <Card>
+            <Card className="print:hidden">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Engine warnings</CardTitle>
               </CardHeader>
