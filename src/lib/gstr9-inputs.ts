@@ -171,6 +171,9 @@ export interface Gstr9InputRecord {
   companyId: string;
   financialYear: string;
 
+  /** Stable GSTR-2B Regular B2B inclusion choices used by GSTR-9 reconciliation. */
+  gstr9ItcInclusionByKey?: Record<string, boolean>;
+
   gstr1?: {
     table4: Gstr9Table4;
     table5: Gstr9Table5;
