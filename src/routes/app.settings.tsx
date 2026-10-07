@@ -38,6 +38,10 @@ import { UpiQrSettingsCard } from "@/components/settings/UpiQrSettingsCard";
 import { ConnectAccountCard } from "@/components/settings/ConnectAccountCard";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import {
+  listCompanyUsers, upsertCompanyUser, resetUserPassword, setUserRole, removeCompanyUser,
+  clearCompanyAccess, OWNER_NAME, type LocalCompanyUser,
+} from "@/lib/local-company-access";
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({ meta: [{ title: "Settings — Your Mehtaji" }] }),
@@ -118,39 +122,38 @@ function SettingsPage() {
 
   const isAdmin = activeMembership?.role === "admin";
 
-  // ---- Company access password ----
+  // ---- Company access password & users (saved only on this computer) ----
   const [hasCompanyPwd, setHasCompanyPwd] = useState<boolean>(false);
   const [newCompanyPwd, setNewCompanyPwd] = useState("");
   const [savingCompanyPwd, setSavingCompanyPwd] = useState(false);
+  const [localUsers, setLocalUsers] = useState<LocalCompanyUser[]>([]);
+  const [newUserPwd, setNewUserPwd] = useState("");
 
-  useEffect(() => {
+  const refreshLocalUsers = () => {
     if (!activeCompanyId) return;
-    (async () => {
-      const { data } = await supabase
-        .from("companies_picker")
-        .select("has_password")
-        .eq("id", activeCompanyId)
-        .maybeSingle();
-      setHasCompanyPwd(!!data?.has_password);
-    })();
-  }, [activeCompanyId]);
+    const list = listCompanyUsers(activeCompanyId);
+    setLocalUsers(list);
+    setHasCompanyPwd(list.length > 0);
+  };
+
+  useEffect(() => { refreshLocalUsers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeCompanyId]);
 
   const saveCompanyPwd = async (clear: boolean) => {
     if (!activeCompanyId) return;
-    if (!clear && newCompanyPwd.length < 4) {
-      toast.error("Password must be at least 4 characters");
+    if (clear) {
+      if (!confirm("Remove the password and all users for this company? It will then open without a password.")) return;
+      clearCompanyAccess(activeCompanyId);
+      refreshLocalUsers();
+      toast.success("Password removed");
       return;
     }
     setSavingCompanyPwd(true);
     try {
-      const { error } = await supabase.rpc("set_company_password", {
-        _company_id: activeCompanyId,
-        _new_password: clear ? "" : newCompanyPwd,
-      });
-      if (error) throw error;
-      toast.success(clear ? "Password removed" : "Password set");
-      setHasCompanyPwd(!clear);
+      const owner = listCompanyUsers(activeCompanyId).find((u) => u.name.toLowerCase() === OWNER_NAME.toLowerCase());
+      await upsertCompanyUser(activeCompanyId, OWNER_NAME, owner?.role ?? "admin", newCompanyPwd);
+      toast.success(hasCompanyPwd ? "Password changed" : "Password set");
       setNewCompanyPwd("");
+      refreshLocalUsers();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save password");
     } finally {
@@ -169,48 +172,65 @@ function SettingsPage() {
           for (const k of Object.keys(cur)) if (local[k] !== undefined && local[k] !== null) merged[k] = local[k];
           return merged;
         });
-      }
-
-      const { data: mem } = await supabase
-        .from("company_members")
-        .select("user_id, role")
-        .eq("company_id", activeCompanyId);
-      if (mem) {
-        const ids = mem.map((m: any) => m.user_id);
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("user_id, email, full_name")
-          .in("user_id", ids);
-        const profMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
-        setMembers(
-          mem.map((m: any) => ({
-            user_id: m.user_id,
-            role: m.role as Member["role"],
-            email: (profMap.get(m.user_id) as any)?.email ?? null,
-            full_name: (profMap.get(m.user_id) as any)?.full_name ?? null,
-          })),
-        );
+        if (typeof local.einvoice_enabled === "boolean") setEiEnabled(local.einvoice_enabled);
+        if (typeof local.ewaybill_enabled === "boolean") setEwbEnabled(local.ewaybill_enabled);
       }
     })();
   }, [activeCompanyId]);
 
-  const updateRole = async (userId: string, role: Member["role"]) => {
+  const addLocalUser = async () => {
     if (!activeCompanyId) return;
-    const { error } = await supabase
-      .from("company_members").update({ role }).eq("company_id", activeCompanyId).eq("user_id", userId);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Role updated");
-    setMembers((cur) => cur.map((m) => (m.user_id === userId ? { ...m, role } : m)));
+    if (listCompanyUsers(activeCompanyId).some((u) => u.name.toLowerCase() === inviteEmail.trim().toLowerCase())) {
+      toast.error("A user with this name already exists. Use Reset password instead.");
+      return;
+    }
+    try {
+      const firstUser = listCompanyUsers(activeCompanyId).length === 0;
+      await upsertCompanyUser(activeCompanyId, inviteEmail, firstUser ? "admin" : inviteRole, newUserPwd);
+      toast.success(firstUser ? "User added as Admin (first user)" : "User added");
+      setInviteEmail("");
+      setNewUserPwd("");
+      refreshLocalUsers();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to add user");
+    }
   };
 
-  const removeMember = async (userId: string) => {
+  const resetLocalPwd = async (userId: string, name: string) => {
     if (!activeCompanyId) return;
+    const pwd = window.prompt(`New password for ${name} (min 4 characters):`);
+    if (pwd == null) return;
+    try {
+      await resetUserPassword(activeCompanyId, userId, pwd);
+      toast.success(`Password reset for ${name}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to reset password");
+    }
+  };
+
+  const updateRole = (userId: string, role: Member["role"]) => {
+    if (!activeCompanyId) return;
+    try {
+      setUserRole(activeCompanyId, userId, role);
+      toast.success("Role updated");
+      refreshLocalUsers();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update role");
+    }
+  };
+
+  const removeMember = (userId: string) => {
+    if (!activeCompanyId) return;
+    const list = listCompanyUsers(activeCompanyId);
+    const target = list.find((u) => u.id === userId);
+    if (target?.role === "admin" && list.filter((u) => u.role === "admin").length === 1 && list.length > 1) {
+      toast.error("At least one admin is required");
+      return;
+    }
     if (!confirm("Remove this user from the company?")) return;
-    const { error } = await supabase
-      .from("company_members").delete().eq("company_id", activeCompanyId).eq("user_id", userId);
-    if (error) { toast.error(error.message); return; }
+    removeCompanyUser(activeCompanyId, userId);
     toast.success("Removed");
-    setMembers((cur) => cur.filter((m: any) => m.user_id !== userId));
+    refreshLocalUsers();
   };
 
   const exportBackup = async () => {
@@ -291,7 +311,9 @@ function SettingsPage() {
     }
   };
 
-  const saveSettings = async (overrides: Partial<Settings> = {}) => {
+  // `onlyOverrides`: single switches save just their own value, so unsaved
+  // edits in other sections aren't written by accident.
+  const saveSettings = async (overrides: Partial<Settings> = {}, onlyOverrides = Object.keys(overrides).length > 0) => {
     if (!activeCompanyId) return;
     setSavingSettings(true);
     const next = { ...settings, ...overrides };
@@ -301,11 +323,11 @@ function SettingsPage() {
       const now = new Date().toISOString();
       const existing = await offlineDb.cache_company_settings.where("company_id").equals(activeCompanyId).first();
       if (existing) {
-        await offlineDb.cache_company_settings.update(existing.id, { ...overrides, ...next, updated_at: now });
+        await offlineDb.cache_company_settings.update(existing.id, { ...(onlyOverrides ? overrides : next), updated_at: now });
       } else {
-        await offlineDb.cache_company_settings.put({ id: activeCompanyId, company_id: activeCompanyId, ...next, updated_at: now });
+        await offlineDb.cache_company_settings.put({ id: activeCompanyId, company_id: activeCompanyId, ...(onlyOverrides ? overrides : next), updated_at: now });
       }
-      setSettings(next);
+      setSettings((cur) => ({ ...cur, ...(onlyOverrides ? overrides : next) }));
       toast.success("Settings saved");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save settings");
@@ -613,7 +635,7 @@ function SettingsPage() {
               <p className="text-xs text-muted-foreground">{t("settings.invoice.gstFreq.help")}</p>
             </div>
           </div>
-          <Button onClick={() => {}} disabled={savingSettings || !isAdmin}>
+          <Button onClick={() => saveSettings()} disabled={savingSettings || !isAdmin}>
             <Save className="mr-2 h-4 w-4" /> {savingSettings ? t("settings.invoice.saving") : t("settings.invoice.save")}
           </Button>
         </CardContent>
@@ -626,9 +648,13 @@ function SettingsPage() {
         <CardContent className="space-y-4">
           {isAdmin && (
             <div className="flex flex-wrap items-end gap-2">
-              <div className="flex-1 min-w-[200px] space-y-1.5">
-                <Label>Email</Label>
-                <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="user@example.com" />
+              <div className="flex-1 min-w-[160px] space-y-1.5">
+                <Label>Name</Label>
+                <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="User name" />
+              </div>
+              <div className="flex-1 min-w-[160px] space-y-1.5">
+                <Label>Password</Label>
+                <Input type="password" autoComplete="new-password" value={newUserPwd} onChange={(e) => setNewUserPwd(e.target.value)} placeholder="Min 4 characters" />
               </div>
               <div className="space-y-1.5">
                 <Label>Role</Label>
@@ -641,26 +667,24 @@ function SettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={() => {}}><UserPlus className="mr-2 h-4 w-4" /> Add user</Button>
+              <Button onClick={addLocalUser}><UserPlus className="mr-2 h-4 w-4" /> Add user</Button>
             </div>
           )}
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
-                {isAdmin && <TableHead className="w-[100px]"></TableHead>}
+                {isAdmin && <TableHead className="w-[220px]"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((m) => (
-                <TableRow key={m.user_id}>
-                  <TableCell>{m.full_name ?? "—"}</TableCell>
-                  <TableCell>{m.email ?? "—"}</TableCell>
+              {localUsers.map((m) => (
+                <TableRow key={m.id}>
+                  <TableCell>{m.name}</TableCell>
                   <TableCell>
                     {isAdmin ? (
-                      <Select value={m.role} onValueChange={(v) => updateRole(m.user_id, v as Member["role"])}>
+                      <Select value={m.role} onValueChange={(v) => updateRole(m.id, v as Member["role"])}>
                         <SelectTrigger className="h-8 w-[120px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="admin">Admin</SelectItem>
@@ -671,8 +695,9 @@ function SettingsPage() {
                     ) : <span className="capitalize">{m.role}</span>}
                   </TableCell>
                   {isAdmin && (
-                    <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => removeMember(m.user_id)}>Remove</Button>
+                    <TableCell className="space-x-1">
+                      <Button variant="outline" size="sm" onClick={() => resetLocalPwd(m.id, m.name)}>Reset password</Button>
+                      <Button variant="ghost" size="sm" onClick={() => removeMember(m.id)}>Remove</Button>
                     </TableCell>
                   )}
                 </TableRow>
@@ -680,7 +705,7 @@ function SettingsPage() {
             </TableBody>
           </Table>
           <p className="text-xs text-muted-foreground">
-            Multi-user invites are disabled in this build. Use Company access password above to control who can open this company.
+            Users and passwords are saved only on this computer. When a company has users, opening it asks you to pick your name and enter your password.
           </p>
         </CardContent>
       </Card>
@@ -728,7 +753,7 @@ function SettingsPage() {
                 <Switch checked={ewbEnabled} onCheckedChange={setEwbEnabled} />
               </div>
             </div>
-            <Button onClick={() => {}} disabled={savingSetu}>
+            <Button onClick={() => saveSettings({ einvoice_enabled: eiEnabled, ewaybill_enabled: ewbEnabled } as any, true)} disabled={savingSetu || savingSettings}>
               <Save className="mr-2 h-4 w-4" /> {savingSetu ? "Saving…" : "Save GST API credentials"}
             </Button>
           </CardContent>
