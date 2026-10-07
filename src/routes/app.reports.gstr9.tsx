@@ -2951,6 +2951,10 @@ function Gstr9PrintInputWorking({
     const loadPrintReconciliation = async () => {
       setReconciliationLoading(true);
       try {
+        if (!record) {
+          if (!cancelled) setReconciliationLines([]);
+          return;
+        }
         const latest = await latestGstr2bImport(companyId);
         if (!latest) {
           if (!cancelled) setReconciliationLines([]);
@@ -3617,11 +3621,13 @@ function GSTR9Page() {
             </CardContent>
           </Card>
 
-          <Gstr9PrintInputWorking
-            record={inputRecord}
-            financialYear={financialYear}
-            companyId={activeCompanyId}
-          />
+          {inputRecord && activeCompanyId && (
+            <Gstr9PrintInputWorking
+              record={inputRecord}
+              financialYear={financialYear}
+              companyId={activeCompanyId}
+            />
+          )}
 
           <Card>
             <CardHeader className="pb-3">
