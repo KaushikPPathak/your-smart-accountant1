@@ -610,14 +610,14 @@ function StartScreen() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-[15px] font-semibold tracking-tight">{c.name}</span>
-                    {c.has_password ? (
+                    {(c.has_password || listCompanyUsers(c.id).length > 0) ? (
                       <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                     ) : (
                       <Unlock className="h-3.5 w-3.5 text-success" />
                     )}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    {c.has_password ? t("company.passwordProtected") : t("company.opensDirectly")}
+                    {(c.has_password || listCompanyUsers(c.id).length > 0) ? t("company.passwordProtected") : t("company.opensDirectly")}
                   </div>
                 </div>
                 <div className="text-muted-foreground/60 transition-all group-hover:translate-x-0.5 group-hover:text-primary">

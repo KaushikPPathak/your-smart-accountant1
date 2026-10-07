@@ -94,11 +94,9 @@ function GSTR1Page() {
     (async () => {
       const meta = await fetchCompanyMeta(activeCompanyId);
       setCompany(meta);
-      const { data: s } = await supabase
-        .from("company_settings")
-        .select("gst_filing_frequency")
-        .eq("company_id", activeCompanyId)
-        .maybeSingle();
+      // Filing frequency chosen in Settings is saved on this computer.
+      const { offlineDb } = await import("@/lib/offline/db");
+      const s = await offlineDb.cache_company_settings.where("company_id").equals(activeCompanyId).first();
       if (s?.gst_filing_frequency) setCadence(s.gst_filing_frequency as "monthly" | "quarterly");
     })();
   }, [activeCompanyId]);
