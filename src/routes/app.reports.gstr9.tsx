@@ -3335,14 +3335,14 @@ function Gstr9PrintInputWorking({
       <p className="mb-5 text-[8px] text-muted-foreground">Table 8A shown here is the saved GSTR-2B reconciliation working value. RCM and CDNR remain separate, and “Not in Books” is not treated as “Excluded”. Invoice-level details remain only in the Reconcile ITC screen.</p>
 
       <OfficialTable title="Table 9 — Details of tax paid as declared in returns filed during the financial year" columns={["Description", "Tax Payable", "Paid through Cash", "Paid through ITC", "Total Tax Paid"]} rows={[
-        ["9A — Integrated Tax", "—", fmt(tax?.igst), "—", fmt(tax?.igst)],
-        ["9B — Central Tax", "—", fmt(tax?.cgst), "—", fmt(tax?.cgst)],
-        ["9C — State/UT Tax", "—", fmt(tax?.sgst), "—", fmt(tax?.sgst)],
-        ["9D — Cess", "—", fmt(tax?.cess), "—", fmt(tax?.cess)],
-        ["9E — Interest", "—", fmt(tax?.interest), "—", fmt(tax?.interest)],
-        ["9F — Late fee", "—", fmt(tax?.lateFee), "—", fmt(tax?.lateFee)],
-        ["9G — Penalty", "—", fmt(tax?.penalty), "—", fmt(tax?.penalty)],
-        ["9H — Other", "—", fmt(tax?.others), "—", fmt(tax?.others)],
+        ["9A — Integrated Tax", fmt(tax?.igst?.taxPayable), fmt(tax?.igst?.paidThroughCash), fmt(tax?.igst?.paidThroughItc), fmt((tax?.igst?.paidThroughCash ?? 0) + (tax?.igst?.paidThroughItc ?? 0))],
+        ["9B — Central Tax", fmt(tax?.cgst?.taxPayable), fmt(tax?.cgst?.paidThroughCash), fmt(tax?.cgst?.paidThroughItc), fmt((tax?.cgst?.paidThroughCash ?? 0) + (tax?.cgst?.paidThroughItc ?? 0))],
+        ["9C — State/UT Tax", fmt(tax?.sgst?.taxPayable), fmt(tax?.sgst?.paidThroughCash), fmt(tax?.sgst?.paidThroughItc), fmt((tax?.sgst?.paidThroughCash ?? 0) + (tax?.sgst?.paidThroughItc ?? 0))],
+        ["9D — Cess", fmt(tax?.cess?.taxPayable), fmt(tax?.cess?.paidThroughCash), fmt(tax?.cess?.paidThroughItc), fmt((tax?.cess?.paidThroughCash ?? 0) + (tax?.cess?.paidThroughItc ?? 0))],
+        ["9E — Interest", fmt(tax?.interest), "—", "—", fmt(tax?.interest)],
+        ["9F — Late fee", fmt(tax?.lateFee), "—", "—", fmt(tax?.lateFee)],
+        ["9G — Penalty", fmt(tax?.penalty), "—", "—", fmt(tax?.penalty)],
+        ["9H — Other", fmt(tax?.others), "—", "—", fmt(tax?.others)],
       ]} />
 
       <OfficialTable title="Tables 10–14 — Transactions of the financial year declared in returns of the next financial year" columns={["Table", "Working value"]} rows={[
