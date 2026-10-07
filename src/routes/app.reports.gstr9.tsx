@@ -63,6 +63,17 @@ import {
   saveGstr9InputRecord,
 } from "@/lib/gstr9-input-store";
 import { analyseGstr1ExcelBuffer } from "@/lib/gstr1-excel-import";
+import type { Gstr2bExcelLine } from "@/lib/gstr2b-excel-import";
+import {
+  buildGstr9ItcReconciliation,
+  setAllEligibleGstr9ItcInclusion,
+  type Gstr9ItcReconciliationLine,
+} from "@/lib/gstr9-itc-reconciliation";
+import {
+  latestImport as latestGstr2bImport,
+  loadImportLines as loadGstr2bImportLines,
+  loadLocalPurchases,
+} from "@/lib/gstr2b-local-store";
 
 export const Route = createFileRoute("/app/reports/gstr9")({
   head: () => ({ meta: [{ title: "GSTR-9 — Reports" }] }),
@@ -2612,6 +2623,315 @@ function TotalsTable({
   );
 }
 
+function Gstr9ItcReconciliationPanel({
+  financialYear,
+  companyId,
+  existing,
+  onClose,
+  onSaved,
+}: {
+  financialYear: string;
+  companyId: string;
+  existing: Gstr9InputRecord | undefined;
+  onClose: () => void;
+  onSaved: (record: Gstr9InputRecord) => void;
+}) {
+  const [sourceLines, setSourceLines] = useState<Gstr2bExcelLine[]>([]);
+  const [purchases, setPurchases] = useState<{
+    id: string;
+    supplier_gstin: string | null;
+    invoice_no: string | null;
+    invoice_date: string | null;
+    total_paise: number;
+  }[]>([]);
+  const [inclusionByKey, setInclusionByKey] = useState<Record<string, boolean>>(
+    () => ({ ...(existing?.gstr9ItcInclusionByKey ?? {}) }),
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const reconciliation = useMemo(
+    () => buildGstr9ItcReconciliation(
+      sourceLines,
+      purchases,
+      { inclusionByKey },
+    ),
+    [sourceLines, purchases, inclusionByKey],
+  );
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const latest = await latestGstr2bImport(companyId);
+      if (!latest) {
+        setSourceLines([]);
+        setPurchases([]);
+        throw new Error(`No GSTR-2B import is available for ${financialYear}. Import GSTR-2B first.`);
+      }
+
+      const rows = await loadGstr2bImportLines(latest.id);
+      const regularSourceRows = rows.map((row) => ({
+        section: row.section ?? "B2B",
+        supplier_gstin: row.supplier_gstin,
+        supplier_name: row.supplier_name ?? "",
+        invoice_no: row.invoice_no,
+        invoice_date: row.invoice_date,
+        invoice_value_paise: row.invoice_value_paise,
+        taxable_paise: row.taxable_paise,
+        igst_paise: row.igst_paise,
+        cgst_paise: row.cgst_paise,
+        sgst_paise: row.sgst_paise,
+        cess_paise: row.cess_paise,
+        rev_charge: row.section === "RCM",
+        gstr2b_period: row.gstr2b_period ?? null,
+        gstr1_period: row.gstr1_period ?? null,
+        gstr1_filing_date: row.gstr1_filing_date ?? null,
+        source_type: "Stored GSTR-2B",
+        is_einvoice_enabled: null,
+        invoice_sub_type: row.document_type ?? "",
+        is_ecom: null,
+        itc_eligible: row.itc_eligible ?? null,
+        itc_reason: row.itc_reason ?? null,
+        cdnr_no: row.section === "CDNR" ? row.invoice_no : null,
+        cdnr_date: row.section === "CDNR" ? row.invoice_date : null,
+        cdnr_type: null,
+      }));
+
+      const localPurchases = await loadLocalPurchases(companyId);
+      setSourceLines(regularSourceRows);
+      setPurchases(localPurchases.map((purchase) => ({
+        id: purchase.id,
+        supplier_gstin: purchase.ledgers?.gstin ?? null,
+        invoice_no: purchase.vendor_invoice_no ?? purchase.voucher_number ?? null,
+        invoice_date: purchase.voucher_date ?? null,
+        total_paise: purchase.total_paise,
+      })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load GSTR-2B reconciliation.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, [companyId, financialYear]);
+
+  const updateLine = (line: Gstr9ItcReconciliationLine, include: boolean) => {
+    setInclusionByKey((current) => ({
+      ...current,
+      [line.key]: include,
+    }));
+  };
+
+  const setAll = (include: boolean) => {
+    const nextLines = setAllEligibleGstr9ItcInclusion(reconciliation.regularB2b, include);
+    setInclusionByKey((current) => {
+      const next = { ...current };
+      for (const line of nextLines) next[line.key] = line.includedInGstr9;
+      return next;
+    });
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const now = new Date().toISOString();
+      const nextTable8A = reconciliation.table8AWorkingPaise / 100;
+      const existingItc = existing?.itcTables;
+      const table6: Gstr9Table6 = existingItc?.table6 ?? {
+        importOfGoods: 0,
+        importOfServices: 0,
+        inwardSuppliesRcm: 0,
+        inwardSuppliesIsd: 0,
+        allOtherItc: 0,
+        totalItcAvailed: 0,
+        precedingFinancialYearItc: 0,
+      };
+      const table7: Gstr9Table7 = existingItc?.table7 ?? {
+        rule38: 0,
+        rule39: 0,
+        rule42: 0,
+        rule43: 0,
+        section17_5: 0,
+        reversalUnderRule37: 0,
+        reversalUnderRule37A: 0,
+        otherReversals: 0,
+        total: 0,
+      };
+      const oldTable8: Gstr9Table8 = existingItc?.table8 ?? {
+        itcAsPerGstr2bTable8A: 0,
+        itcAsPerBooks: 0,
+        creditAvailableButNotAvailed: 0,
+        creditAvailableIneligible: 0,
+        creditIneligibleUnderSection16_4: 0,
+        totalOtherItc: 0,
+      };
+      const table8: Gstr9Table8 = {
+        ...oldTable8,
+        itcAsPerGstr2bTable8A: nextTable8A,
+        totalOtherItc:
+          nextTable8A +
+          oldTable8.itcAsPerBooks +
+          oldTable8.creditAvailableButNotAvailed +
+          oldTable8.creditAvailableIneligible +
+          oldTable8.creditIneligibleUnderSection16_4,
+      };
+
+      const record: Gstr9InputRecord = {
+        ...(existing ?? { id: `${companyId}:${financialYear}`, companyId, financialYear }),
+        gstr9ItcInclusionByKey: { ...inclusionByKey },
+        itcTables: {
+          table6,
+          table7,
+          table8,
+          metadata: {
+            source: "IMPORT",
+            enteredAt: existingItc?.metadata.enteredAt ?? now,
+            updatedAt: now,
+            sourceName: "GSTR-2B reconciliation for GSTR-9",
+            sourceReference: "GSTR-2B local import",
+            notes: `Table 8A working figure based on ${reconciliation.selectedRegularB2bTotals.count} selected eligible Regular B2B invoice(s). RCM and CDNR are kept separate.`,
+          },
+        },
+      };
+
+      await saveGstr9InputRecord(record);
+      onSaved(record);
+      setMessage(`Saved. GSTR-9 Table 8A working ITC: ${money(nextTable8A)}.`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Unable to save GSTR-9 reconciliation.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectedAll = reconciliation.regularB2b.length > 0 &&
+    reconciliation.regularB2b.filter((line) => line.itc_eligible !== false).every((line) => line.includedInGstr9);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-3 pt-3 pb-20">
+      <Card className="flex h-[calc(100vh-92px)] max-h-[calc(100vh-92px)] w-full max-w-7xl flex-col overflow-hidden shadow-xl">
+        <CardHeader className="flex flex-none flex-row items-center justify-between border-b pb-3">
+          <div>
+            <CardTitle className="text-base">GSTR-2B → GSTR-9 ITC Reconciliation — FY {financialYear}</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Regular B2B invoices can be included in GSTR-9 independently of whether the purchase is already in Books. RCM and CDNR remain separate.
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+
+        <CardContent className="min-h-0 flex-1 overflow-y-auto p-4">
+          {loading && (
+            <div className="flex items-center gap-2 rounded-md border p-4 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading the latest saved GSTR-2B…
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          {!loading && !error && (
+            <>
+              <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Regular B2B</div><div className="text-lg font-semibold">{reconciliation.regularB2bTotals.count}</div></div>
+                <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Matched</div><div className="text-lg font-semibold">{reconciliation.matchedCount}</div></div>
+                <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Not in Books</div><div className="text-lg font-semibold">{reconciliation.notInBooksCount}</div></div>
+                <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">Selected ITC</div><div className="text-lg font-semibold">{money(reconciliation.table8AWorkingPaise / 100)}</div></div>
+                <div className="rounded-md border p-3"><div className="text-xs text-muted-foreground">RCM / CDNR</div><div className="text-lg font-semibold">{reconciliation.rcm.length} / {reconciliation.cdnr.length}</div></div>
+              </div>
+
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 p-3">
+                <Button size="sm" onClick={() => setAll(true)} disabled={selectedAll || reconciliation.regularB2b.length === 0}>Select All Eligible</Button>
+                <Button size="sm" variant="outline" onClick={() => setAll(false)} disabled={reconciliation.regularB2b.length === 0}>Unselect All</Button>
+                <Button size="sm" variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="mr-1 h-4 w-4" />Refresh</Button>
+                <div className="ml-auto text-xs text-muted-foreground">Ineligible ITC is never selected by Select All.</div>
+              </div>
+
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Include</TableHead>
+                      <TableHead>Supplier</TableHead>
+                      <TableHead>Invoice</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Eligibility</TableHead>
+                      <TableHead className="text-right">ITC</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reconciliation.regularB2b.map((line) => {
+                      const eligible = line.itc_eligible !== false;
+                      return (
+                        <TableRow key={line.key}>
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              checked={line.includedInGstr9}
+                              disabled={!eligible}
+                              onChange={(event) => updateLine(line, event.target.checked)}
+                              aria-label={`Include ${line.invoice_no} in GSTR-9`}
+                            />
+                          </TableCell>
+                          <TableCell className="min-w-[180px]">
+                            <div className="font-medium">{line.supplier_name || "—"}</div>
+                            <div className="text-[11px] text-muted-foreground">{line.supplier_gstin}</div>
+                          </TableCell>
+                          <TableCell>{line.invoice_no || "—"}</TableCell>
+                          <TableCell>{line.invoice_date || "—"}</TableCell>
+                          <TableCell>{line.match_status === "NOT_IN_BOOKS" ? "Not in Books" : line.match_status === "BOOKS_VALUE_MISMATCH" ? "Books value mismatch" : line.match_status === "MATCHED_WITH_TOLERANCE" ? "Matched ± tolerance" : "Matched"}</TableCell>
+                          <TableCell>{eligible ? "Eligible" : `Ineligible${line.itc_reason ? ` — ${line.itc_reason}` : ""}`}</TableCell>
+                          <TableCell className="text-right">{money(line.itc_paise / 100)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border p-3 text-sm"><div className="text-muted-foreground">Eligible Regular B2B ITC</div><div className="font-semibold">{money(reconciliation.regularB2b.filter((x) => x.itc_eligible !== false).reduce((sum, x) => sum + x.itc_paise, 0) / 100)}</div></div>
+                <div className="rounded-md border p-3 text-sm"><div className="text-muted-foreground">Excluded from GSTR-9</div><div className="font-semibold">{money(reconciliation.excludedRegularB2bTotals.itc_paise / 100)}</div></div>
+                <div className="rounded-md border bg-muted/20 p-3 text-sm"><div className="text-muted-foreground">GSTR-9 Table 8A working credit</div><div className="text-lg font-semibold">{money(reconciliation.table8AWorkingPaise / 100)}</div></div>
+              </div>
+
+              <div className="mt-3 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
+                <strong>Important:</strong> “Not in Books” and “Excluded from GSTR-9” are different statuses. Unticking an invoice does not delete it from GSTR-2B; it only removes its ITC from the GSTR-9 working credit.
+              </div>
+            </>
+          )}
+        </CardContent>
+
+        <div className="flex-none border-t bg-background px-4 py-3">
+          {message && <div className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-sm">{message}</div>}
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs text-muted-foreground">Save stores the checkbox decisions and updates GSTR-9 Table 8A working credit.</div>
+            <div className="flex shrink-0 gap-2">
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button onClick={() => void save()} disabled={saving || loading || !!error}>
+                <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save Reconciliation"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function GSTR9Page() {
   const { activeCompanyId } = useCompany();
   const [financialYear, setFinancialYear] = useState(currentFinancialYear);
@@ -2624,6 +2944,7 @@ function GSTR9Page() {
   const [gstr3bOpen, setGstr3bOpen] = useState(false);
   const [gstr2bOpen, setGstr2bOpen] = useState(false);
   const [gstr9ItcOpen, setGstr9ItcOpen] = useState(false);
+  const [gstr9ItcReconciliationOpen, setGstr9ItcReconciliationOpen] = useState(false);
   const [gstr9TaxPaymentOpen, setGstr9TaxPaymentOpen] = useState(false);
 
   const years = useMemo(() => financialYearOptions(), []);
@@ -2858,6 +3179,12 @@ function GSTR9Page() {
                 status={inputStatus.gstr2b}
                 actionLabel="Enter / Import"
                 onAction={() => setGstr2bOpen(true)}
+              />
+              <SourceStatus
+                label="GSTR-2B → GSTR-9 reconciliation"
+                status={inputRecord?.gstr9ItcInclusionByKey ? "IMPORTED" : inputStatus.gstr2b}
+                actionLabel="Reconcile ITC"
+                onAction={() => setGstr9ItcReconciliationOpen(true)}
               />
               <SourceStatus
                 label="ITC tables"
@@ -3168,6 +3495,18 @@ function GSTR9Page() {
               onSaved={(record) => {
                 setInputRecord(record);
                 setGstr2bOpen(false);
+              }}
+            />
+          )}
+          {gstr9ItcReconciliationOpen && activeCompanyId && (
+            <Gstr9ItcReconciliationPanel
+              financialYear={financialYear}
+              companyId={activeCompanyId}
+              existing={inputRecord}
+              onClose={() => setGstr9ItcReconciliationOpen(false)}
+              onSaved={(record) => {
+                setInputRecord(record);
+                setGstr9ItcReconciliationOpen(false);
               }}
             />
           )}
