@@ -14,6 +14,8 @@ on:
       - "src/lib/gstr9-inputs.test.ts"
       - "src/lib/gstr9-input-store.ts"
       - "src/lib/gstr9-input-store.test.ts"
+      - "src/lib/gstr9-itc-reconciliation.ts"
+      - "src/lib/gstr9-itc-reconciliation.test.ts"
       - "src/lib/offline/db.ts"
       - "src/lib/gst-returns.ts"
       - "src/lib/gst-returns.test.ts"
@@ -53,6 +55,9 @@ jobs:
           src/lib/gstr9.test.ts
           src/lib/gstr9-inputs.test.ts
           src/lib/gstr9-input-store.test.ts
+
+      - name: Run GSTR-9 ITC reconciliation tests
+        run: bunx vitest run src/lib/gstr9-itc-reconciliation.test.ts
 
       - name: Run GSTR-1 Excel import tests
         run: bunx vitest run src/lib/gstr1-excel-import.test.ts
