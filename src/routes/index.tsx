@@ -38,6 +38,10 @@ import { isOnlineNow } from "@/lib/offline/online-status";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { dedupeLocalCompaniesOnce } from "@/lib/dedupe-local-companies";
 import { consumeReturnTo } from "@/lib/return-to";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  listCompanyUsers, verifyCompanyUser, resetUserPassword, recoveryMatches, type LocalCompanyUser,
+} from "@/lib/local-company-access";
 
 function gotoAfterUnlock(navigate: ReturnType<typeof useNavigate>) {
   const back = consumeReturnTo();
@@ -82,6 +86,10 @@ function StartScreen() {
   const [companies, setCompanies] = useState<PickerCompany[]>([]);
   const [pendingCompany, setPendingCompany] = useState<PickerCompany | null>(null);
   const [pwd, setPwd] = useState("");
+  const [pendingUsers, setPendingUsers] = useState<LocalCompanyUser[]>([]);
+  const [pendingUserId, setPendingUserId] = useState("");
+  const [forgotMode, setForgotMode] = useState(false);
+  const [recoveryAnswer, setRecoveryAnswer] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [focusedCompanyIndex, setFocusedCompanyIndex] = useState(0);
   const companyGridRef = useRef<HTMLDivElement>(null);
@@ -356,15 +364,29 @@ function StartScreen() {
     if (cl) setLang(cl);
     else setCompanyLang(c.id, lang);
     
-    if (!c.has_password || isCompanyUnlocked(c.id)) {
+    const users = listCompanyUsers(c.id);
+    if ((users.length === 0 && !c.has_password) || isCompanyUnlocked(c.id)) {
       localStorage.setItem("ym_active_company_id", c.id);
       setActiveCompanyId(c.id);
       markCompanyUnlocked(c.id);
       gotoAfterUnlock(navigate);
       return;
     }
+    setPendingUsers(users);
+    setPendingUserId(users[0]?.id ?? "");
+    setForgotMode(false);
+    setRecoveryAnswer("");
     setPendingCompany(c);
     setPwd("");
+  };
+
+  const finishUnlock = (companyId: string) => {
+    markCompanyUnlocked(companyId);
+    localStorage.setItem("ym_active_company_id", companyId);
+    setActiveCompanyId(companyId);
+    setCompanyLang(companyId, lang);
+    setPendingCompany(null);
+    gotoAfterUnlock(navigate);
   };
 
   const submitPassword = async (e: React.FormEvent) => {
@@ -372,6 +394,29 @@ function StartScreen() {
     if (!pendingCompany) return;
     setVerifying(true);
     try {
+      // Local users & passwords (saved on this computer).
+      if (pendingUsers.length > 0) {
+        if (forgotMode) {
+          const { offlineDb } = await import("@/lib/offline/db");
+          const co = (await offlineDb.cache_companies.get(pendingCompany.id)) as any;
+          if (!recoveryMatches(recoveryAnswer, { pan: co?.pan, gstin: co?.gstin, name: co?.name ?? pendingCompany.name })) {
+            toast.error("That doesn't match the company's PAN or GSTIN");
+            return;
+          }
+          await resetUserPassword(pendingCompany.id, pendingUserId, pwd);
+          toast.success("Password reset");
+          finishUnlock(pendingCompany.id);
+          return;
+        }
+        const ok = await verifyCompanyUser(pendingCompany.id, pendingUserId, pwd);
+        if (!ok) {
+          toast.error("Wrong password");
+          setPwd("");
+          return;
+        }
+        finishUnlock(pendingCompany.id);
+        return;
+      }
       if (!isOnlineNow()) {
         console.warn("Offline system bypass: local voucher lock validated.");
         markCompanyUnlocked(pendingCompany.id);
@@ -590,17 +635,45 @@ function StartScreen() {
             <DialogTitle>{t("common.open")} “{pendingCompany?.name}”</DialogTitle>
           </DialogHeader>
           <form onSubmit={submitPassword} className="space-y-4">
+            {pendingUsers.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>User</Label>
+                <Select value={pendingUserId} onValueChange={setPendingUserId}>
+                  <SelectTrigger><SelectValue placeholder="Select user" /></SelectTrigger>
+                  <SelectContent>
+                    {pendingUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {forgotMode && (
+              <div className="space-y-1.5">
+                <Label htmlFor="crec">Company PAN or GSTIN</Label>
+                <Input id="crec" autoFocus value={recoveryAnswer} onChange={(e) => setRecoveryAnswer(e.target.value)} placeholder="If none recorded, type the company name" />
+              </div>
+            )}
             <div className="space-y-1.5">
-              <Label htmlFor="cpwd">{t("company.password")}</Label>
+              <Label htmlFor="cpwd">{forgotMode ? "New password" : t("company.password")}</Label>
               <Input
                 id="cpwd"
                 type="password"
-                autoFocus
+                autoFocus={!forgotMode}
                 value={pwd}
                 onChange={(e) => setPwd(e.target.value)}
-                placeholder={t("company.passwordPlaceholder")}
+                placeholder={forgotMode ? "Min 4 characters" : t("company.passwordPlaceholder")}
               />
             </div>
+            {pendingUsers.length > 0 && (
+              <button
+                type="button"
+                className="text-xs text-primary underline"
+                onClick={() => { setForgotMode((f) => !f); setPwd(""); setRecoveryAnswer(""); }}
+              >
+                {forgotMode ? "Back to sign in" : "Forgot password?"}
+              </button>
+            )}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setPendingCompany(null)}>
                 {t("common.cancel")}
