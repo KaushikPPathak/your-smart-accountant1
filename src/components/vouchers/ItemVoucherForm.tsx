@@ -498,8 +498,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const isPartyLocked = !!originalVoucherId;
 
   const partyOpts = useMemo(
-    () => ledgers.filter((l) => cfg.partyTypes.includes(l.type)),
-    [ledgers, cfg.partyTypes],
+    () => ledgers.filter((l) =>
+      cfg.partyTypes.includes(l.type) ||
+      // Older purchase entries used the Cash ledger itself as the party;
+      // keep it selectable (and visible when such a bill is opened).
+      (voucherType === "purchase" && l.type === "cash")),
+    [ledgers, cfg.partyTypes, voucherType],
   );
   const partyLedger = useMemo(() => ledgers.find((l) => l.id === partyId), [ledgers, partyId]);
   // Place of supply is derived strictly from the party's GSTIN (first 2 digits = state code)
@@ -758,9 +762,19 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const partyIdState = partyId;
   const performSave = useCallback(async () => {
     if (!activeCompanyId || !canWrite) return;
-    const cashLedgerId = cashPurchase && voucherType === "purchase"
-      ? ledgers.find((l) => l.type === "cash" && (l as { is_active?: boolean }).is_active !== false)?.id ?? ""
-      : "";
+    // Post to the main cash ledger: "Cash Book"/"Cash"/"Cash in Hand" first,
+    // never a ledger merely named like "Cash Purchases" when a main one exists.
+    const cashLedgerId = (() => {
+      if (!(cashPurchase && voucherType === "purchase")) return "";
+      const cash = ledgers.filter((l) => l.type === "cash" && (l as { is_active?: boolean }).is_active !== false);
+      const n = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+      const preferred = ["cash book", "cash", "cash in hand", "cash-in-hand", "cash a/c"];
+      for (const p of preferred) {
+        const hit = cash.find((l) => n(l.name) === p);
+        if (hit) return hit.id;
+      }
+      return (cash.find((l) => !/purchase/i.test(l.name)) ?? cash[0])?.id ?? "";
+    })();
     if (cashPurchase && voucherType === "purchase" && !cashLedgerId) {
       toast.error("No Cash ledger found. Create a Cash ledger first.");
       return;
@@ -1139,12 +1153,16 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   onCreate={() => setLedgerDlg({ open: true, editId: null })}
                   createLabel={`New ${cfg.partyLabel.toLowerCase()}`}
                 />
-                {voucherType === "purchase" && !partyId && !isPartyLocked && (
+                {voucherType === "purchase" && !isPartyLocked && (
                   <label className="flex items-center gap-1.5 pt-1 text-xs">
                     <input
                       type="checkbox"
                       checked={cashPurchase}
-                      onChange={(e) => setCashPurchase(e.target.checked)}
+                      onChange={(e) => {
+                        // Ticking Cash Purchase clears any (remembered) supplier.
+                        if (e.target.checked && partyId) setPartyId("");
+                        setCashPurchase(e.target.checked);
+                      }}
                     />
                     Cash Purchase (paid from Cash A/c, no supplier)
                   </label>
