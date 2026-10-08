@@ -29,7 +29,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/utils/currency-utils";
-import { computeLine, sumLines, isInterstate, toStateCode, resolveGstWithCache, type GstLineResult } from "@/lib/gst";
+import { computeLine, sumLines, isInterstate, toStateCode, resolveGstWithCache, applyGstOverride, type GstLineResult, type GstOverride } from "@/lib/gst";
+import { GstAmountRow } from "./GstAmountRow";
 
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
@@ -632,6 +633,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     () => Math.round((preGstSundryNetPaise * weightedGstRate) / 100),
     [preGstSundryNetPaise, weightedGstRate],
   );
+  const [gstOverride, setGstOverride] = useState<GstOverride>({});
   const adjustedTotals = useMemo(() => {
     const taxableAdd = miscPreGstPaise + preGstSundryNetPaise;
     const taxAddTotal = miscPreTaxPaise + preGstSundryTaxPaise;
@@ -639,7 +641,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     const sgstAdd = interstate ? 0 : Math.floor(taxAddTotal / 2);
     const igstAdd = interstate ? taxAddTotal : 0;
     const taxLeftover = interstate ? 0 : taxAddTotal - cgstAdd - sgstAdd;
-    return {
+    const base = {
       subtotal_paise: rawTotals.subtotal_paise + taxableAdd,
       cgst_paise: rawTotals.cgst_paise + cgstAdd,
       sgst_paise: rawTotals.sgst_paise + sgstAdd,
@@ -648,7 +650,8 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       total_paise:
         rawTotals.total_paise + taxableAdd + taxAddTotal + miscPostGstPaise + postGstSundryNetPaise,
     };
-  }, [rawTotals, miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, preGstSundryNetPaise, preGstSundryTaxPaise, postGstSundryNetPaise, interstate]);
+    return applyGstOverride(base, gstOverride, interstate);
+  }, [rawTotals, miscPreGstPaise, miscPreTaxPaise, miscPostGstPaise, preGstSundryNetPaise, preGstSundryTaxPaise, postGstSundryNetPaise, interstate, gstOverride]);
   const roundOffPaise = useMemo(() => {
     if (!roundOff) return 0;
     const rounded = Math.round(adjustedTotals.total_paise / 100) * 100;
@@ -904,6 +907,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     setNarration("");
     setLines([blankLine()]);
     setMiscPreGst("0");
+    setGstOverride({});
     setMiscPostGst("0");
     setSundries([]);
     setSupplyNature("taxable");
@@ -1429,14 +1433,15 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           <Card>
             <CardContent className="space-y-1.5 p-4 text-sm">
               <Row label="Taxable" value={formatINR(totals.subtotal_paise)} />
-              {interstate ? (
-                <Row label="IGST" value={formatINR(totals.igst_paise)} />
-              ) : (
-                <>
-                  <Row label="CGST" value={formatINR(totals.cgst_paise)} />
-                  <Row label="SGST" value={formatINR(totals.sgst_paise)} />
-                </>
-              )}
+              {(interstate ? (["igst"] as const) : (["cgst", "sgst"] as const)).map((k) => (
+                <GstAmountRow
+                  key={k}
+                  label={k.toUpperCase()}
+                  paise={totals[`${k}_paise`]}
+                  overridden={gstOverride[k] !== undefined}
+                  onCommit={(v) => setGstOverride((o) => ({ ...o, [k]: v }))}
+                />
+              ))}
               <div className="my-2 border-t" />
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-0.5">

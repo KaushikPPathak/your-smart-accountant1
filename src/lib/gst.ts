@@ -124,6 +124,36 @@ export function sumLines(lines: GstLineResult[]): VoucherTotals {
   );
 }
 
+/** User-typed bill-level GST amounts (rupee strings) matching a supplier's rounding. */
+export interface GstOverride {
+  cgst?: string;
+  sgst?: string;
+  igst?: string;
+}
+
+/**
+ * Replace calculated bill-level tax with user-entered amounts; grand total
+ * shifts by the same difference so the voucher stays balanced.
+ */
+export function applyGstOverride<T extends { cgst_paise: number; sgst_paise: number; igst_paise: number; total_paise: number }>(
+  totals: T,
+  o: GstOverride | undefined,
+  interstate: boolean,
+): T {
+  if (!o) return totals;
+  const pick = (v: string | undefined, fallback: number) => {
+    if (v === undefined || v === "") return fallback;
+    const n = parseFloat(v);
+    return isFinite(n) && n >= 0 ? rupeesToPaise(n) : fallback;
+  };
+  const cgst = interstate ? totals.cgst_paise : pick(o.cgst, totals.cgst_paise);
+  const sgst = interstate ? totals.sgst_paise : pick(o.sgst, totals.sgst_paise);
+  const igst = interstate ? pick(o.igst, totals.igst_paise) : totals.igst_paise;
+  const diff = cgst + sgst + igst - (totals.cgst_paise + totals.sgst_paise + totals.igst_paise);
+  if (diff === 0 && cgst === totals.cgst_paise && igst === totals.igst_paise) return totals;
+  return { ...totals, cgst_paise: cgst, sgst_paise: sgst, igst_paise: igst, total_paise: totals.total_paise + diff };
+}
+
 /** Reverse lookup: state / UT name (upper-case) -> GST state code. */
 const STATE_NAME_TO_CODE: Record<string, string> = Object.entries(
   GST_STATE_CODES,
