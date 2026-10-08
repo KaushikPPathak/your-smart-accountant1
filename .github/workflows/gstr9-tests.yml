@@ -27,6 +27,8 @@ on:
       - "src/lib/gstr1-excel-import.ts"
       - "src/lib/gstr1-excel-import.test.ts"
       - "src/lib/gstr2b-excel-import.ts"
+      - "src/lib/gstr3b-excel-import.ts"
+      - "src/lib/gstr3b-excel-import.test.ts"
       - "src/lib/gstr2b-excel-import.test.ts"
       - "src/lib/gstr2b-recon.ts"
       - "src/lib/gstr2b-local-store.ts"
@@ -59,6 +61,8 @@ jobs:
         run: bunx vitest run src/lib/gstr1-excel-import.test.ts
       - name: Run GSTR-2B Excel import tests
         run: bunx vitest run src/lib/gstr2b-excel-import.test.ts
+      - name: Run GSTR-3B Excel import tests
+        run: bunx vitest run src/lib/gstr3b-excel-import.test.ts
       - name: Run all tests
         run: bunx vitest run
       - name: Run Vite build and route generation
