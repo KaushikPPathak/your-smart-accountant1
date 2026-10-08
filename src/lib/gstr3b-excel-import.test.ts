@@ -26,12 +26,28 @@ function workbookBuffer(options?: {
   rows[5][2] = "TEST CO";
   rows[5][5] = options?.month ?? "April";
 
+  /*
+   * GSTN GSTR-3B numeric columns start from Column C:
+   *
+   * C = Taxable value / tax payable
+   * D = IGST
+   * E = CGST
+   * F = SGST
+   * G = Cess
+   *
+   * For payment rows:
+   * I = Tax paid through cash
+   * J = Interest / other payment column as applicable
+   *
+   * Therefore the test data must start at index 2 (Column C),
+   * not index 1 (Column B).
+   */
   const set = (
     row: number,
     values: unknown[],
   ) => {
     for (let i = 0; i < values.length; i += 1) {
-      rows[row - 1][i + 1] = values[i];
+      rows[row - 1][i + 2] = values[i];
     }
   };
 
@@ -166,6 +182,7 @@ describe("GSTR-3B Excel importer", () => {
 
   it("throws when the GSTN GSTR-3B worksheet is missing", () => {
     const workbook = XLSX.utils.book_new();
+
     XLSX.utils.book_append_sheet(
       workbook,
       XLSX.utils.aoa_to_sheet([["Not GSTR-3B"]]),
