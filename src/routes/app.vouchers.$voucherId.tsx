@@ -19,7 +19,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR, rupeesToPaise, paiseToRupees, amountInWords } from "@/lib/money";
-import { computeLine, sumLines, resolveGstWithCache, type GstLineResult } from "@/lib/gst";
+import { computeLine, sumLines, resolveGstWithCache, applyGstOverride, type GstLineResult, type GstOverride } from "@/lib/gst";
+import { GstAmountRow } from "@/components/vouchers/GstAmountRow";
 import { GST_RATES } from "@/lib/constants";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
@@ -181,7 +182,32 @@ function VoucherEditPage() {
             : []
         )
       );
-      setItems((masterItems as unknown as ItemOpt[]).filter((i) => (i as unknown as { is_active?: boolean }).is_active !== false));
+      // Keep inactive items (and placeholders for missing ones) that this
+      // voucher already uses, otherwise their rows show a blank item.
+      const usedIds = new Set(mappedItems.map((m) => m.item_id).filter(Boolean));
+      const allItems = masterItems as unknown as (ItemOpt & { is_active?: boolean })[];
+      const itemList: ItemOpt[] = allItems.filter((i) => i.is_active !== false || usedIds.has(i.id));
+      const known = new Set(itemList.map((i) => i.id));
+      for (const m of mappedItems) {
+        if (m.item_id && !known.has(m.item_id)) {
+          known.add(m.item_id);
+          itemList.push({ id: m.item_id, name: m.description || "(deleted item)", gst_rate: Number(m.gst_rate) || 0 } as ItemOpt);
+        }
+      }
+      setItems(itemList);
+      // Restore a bill-level GST amount that was typed to match the supplier.
+      {
+        const inter = !!vRow.is_interstate;
+        const calc = sumLines(mappedItems.map((m) => computeLine({ qty: parseFloat(m.qty) || 0, rate: parseFloat(m.rate) || 0, discount: parseFloat(m.discount) || 0, gstRate: parseFloat(m.gst_rate) || 0 }, inter)));
+        const o: GstOverride = {};
+        const v = vRow as unknown as { cgst_paise?: number; sgst_paise?: number; igst_paise?: number };
+        if (inter) { if (typeof v.igst_paise === "number" && v.igst_paise !== calc.igst_paise) o.igst = (v.igst_paise / 100).toFixed(2); }
+        else {
+          if (typeof v.cgst_paise === "number" && v.cgst_paise !== calc.cgst_paise) o.cgst = (v.cgst_paise / 100).toFixed(2);
+          if (typeof v.sgst_paise === "number" && v.sgst_paise !== calc.sgst_paise) o.sgst = (v.sgst_paise / 100).toFixed(2);
+        }
+        setGstOverride(o);
+      }
       const ledgerList = (masterLedgers as unknown as LedgerOpt[]).filter((l) => (l as unknown as { is_active?: boolean }).is_active !== false);
       setLedgers(ledgerList);
       const itcCls = (vRow as unknown as { itc_class?: string }).itc_class;
@@ -308,7 +334,11 @@ function VoucherEditPage() {
       ),
     [itemLines, voucher],
   );
-  const totals = useMemo(() => sumLines(computed), [computed]);
+  const [gstOverride, setGstOverride] = useState<GstOverride>({});
+  const totals = useMemo(
+    () => applyGstOverride(sumLines(computed), gstOverride, voucher?.is_interstate ?? false),
+    [computed, gstOverride, voucher?.is_interstate],
+  );
   const entryTotals = useMemo(() => {
     return entryLines.reduce(
       (acc, l) => ({
@@ -795,7 +825,18 @@ function VoucherEditPage() {
               </TableBody>
             </Table>
             <div className="border-t p-3 flex justify-between text-sm">
-              <span className="text-muted-foreground">Taxable {formatINR(totals.subtotal_paise)} · {voucher.is_interstate ? `IGST ${formatINR(totals.igst_paise)}` : `CGST ${formatINR(totals.cgst_paise)} · SGST ${formatINR(totals.sgst_paise)}`}</span>
+              <div className="space-y-1 text-sm">
+                <span className="text-muted-foreground">Taxable {formatINR(totals.subtotal_paise)}</span>
+                {(voucher.is_interstate ? (["igst"] as const) : (["cgst", "sgst"] as const)).map((k) => (
+                  <GstAmountRow
+                    key={k}
+                    label={k.toUpperCase()}
+                    paise={totals[`${k}_paise`]}
+                    overridden={gstOverride[k] !== undefined}
+                    onCommit={(v) => setGstOverride((o) => ({ ...o, [k]: v }))}
+                  />
+                ))}
+              </div>
               <span className="font-semibold font-mono">Total {formatINR(totals.total_paise)}</span>
             </div>
             <p className="px-3 pb-3 text-xs italic text-muted-foreground">{amountInWords(totals.total_paise)}</p>
