@@ -114,3 +114,22 @@ describe("interstate detection from state names and GSTINs", () => {
     expect(isInterstate("24", null)).toBe(false);
   });
 });
+
+import { applyGstOverride } from "../lib/gst";
+describe("bill-level GST override", () => {
+  const base = { cgst_paise: 4499, sgst_paise: 4499, igst_paise: 0, total_paise: 58998 };
+  it("uses typed CGST/SGST and shifts total by the difference", () => {
+    const r = applyGstOverride(base, { cgst: "45", sgst: "45" }, false);
+    expect(r.cgst_paise).toBe(4500);
+    expect(r.sgst_paise).toBe(4500);
+    expect(r.total_paise).toBe(59000);
+  });
+  it("empty override keeps calculated amounts", () => {
+    expect(applyGstOverride(base, {}, false)).toEqual(base);
+  });
+  it("ignores CGST override on interstate bills", () => {
+    const r = applyGstOverride({ ...base, cgst_paise: 0, sgst_paise: 0, igst_paise: 8998 }, { cgst: "50", igst: "90" }, true);
+    expect(r.igst_paise).toBe(9000);
+    expect(r.cgst_paise).toBe(0);
+  });
+});
