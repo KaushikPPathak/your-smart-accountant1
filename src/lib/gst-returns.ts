@@ -880,7 +880,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
       // UQC "NA" and rejects any quantity value. Force both here so the
       // GSTR-1 sheet is portal-clean regardless of the item's stored unit.
       const rawUnit = (it.items?.unit || "OTH").toUpperCase();
-      const uqcVal = isService ? "NA" : (rawUnit.slice(0, 3) + "-" + rawUnit);
+      const uqcVal = isService ? "NA" : rawUnit === "OTH" ? "OTH-OTHERS" : (rawUnit.slice(0, 3) + "-" + rawUnit);
       const key = `${hsnCode}|${it.gst_rate}|${isService ? "NA" : (it.items?.unit || "OTH")}`;
       const cur = map.get(key) ?? {
         hsn_sc: hsnCode,
