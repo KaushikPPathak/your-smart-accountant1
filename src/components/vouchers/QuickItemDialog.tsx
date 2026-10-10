@@ -137,7 +137,7 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
               <Label>Unit{isServiceHsn(hsn) ? " (service)" : ""}</Label>
-              <Select value={unit} onValueChange={setUnit} disabled={isServiceHsn(hsn)}>
+              <Select value={unit} onValueChange={setUnit}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}

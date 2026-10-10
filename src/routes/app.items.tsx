@@ -316,12 +316,12 @@ function ItemsPage() {
 
                   <div className="space-y-1.5">
                     <Label htmlFor="unit">
-                      Unit{isServiceHsn(form.hsn_code) ? " (service — N/A)" : " *"}
+                      Unit{isServiceHsn(form.hsn_code) ? " (service)" : " *"}
                     </Label>
                     <Select
                       value={form.unit}
                       onValueChange={(v) => setForm({ ...form, unit: v })}
-                      disabled={isServiceHsn(form.hsn_code)}
+                     
                     >
                       <SelectTrigger id="unit">
                         <SelectValue />
