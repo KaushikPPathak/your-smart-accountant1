@@ -46,6 +46,7 @@ import { Route as AppReportsGstSalesBookRouteImport } from './routes/app.reports
 import { Route as AppReportsGstr1RouteImport } from './routes/app.reports.gstr1'
 import { Route as AppReportsGstr2bRouteImport } from './routes/app.reports.gstr2b'
 import { Route as AppReportsGstr3bRouteImport } from './routes/app.reports.gstr3b'
+import { Route as AppReportsGstr9RouteImport } from './routes/app.reports.gstr9'
 import { Route as AppReportsHsnSummaryRouteImport } from './routes/app.reports.hsn-summary'
 import { Route as AppReportsItcItemWiseRouteImport } from './routes/app.reports.itc-item-wise'
 import { Route as AppReportsItcPartyWiseRouteImport } from './routes/app.reports.itc-party-wise'
@@ -268,6 +269,11 @@ const AppReportsGstr2bRoute = AppReportsGstr2bRouteImport.update({
 const AppReportsGstr3bRoute = AppReportsGstr3bRouteImport.update({
   id: '/gstr3b',
   path: '/gstr3b',
+  getParentRoute: () => AppReportsRoute,
+} as any)
+const AppReportsGstr9Route = AppReportsGstr9RouteImport.update({
+  id: '/gstr9',
+  path: '/gstr9',
   getParentRoute: () => AppReportsRoute,
 } as any)
 const AppReportsHsnSummaryRoute = AppReportsHsnSummaryRouteImport.update({
@@ -502,6 +508,7 @@ export interface FileRoutesByFullPath {
   '/app/reports/gstr1': typeof AppReportsGstr1Route
   '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
+  '/app/reports/gstr9': typeof AppReportsGstr9Route
   '/app/reports/hsn-summary': typeof AppReportsHsnSummaryRoute
   '/app/reports/itc-item-wise': typeof AppReportsItcItemWiseRoute
   '/app/reports/itc-party-wise': typeof AppReportsItcPartyWiseRoute
@@ -577,6 +584,7 @@ export interface FileRoutesByTo {
   '/app/reports/gstr1': typeof AppReportsGstr1Route
   '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
+  '/app/reports/gstr9': typeof AppReportsGstr9Route
   '/app/reports/hsn-summary': typeof AppReportsHsnSummaryRoute
   '/app/reports/itc-item-wise': typeof AppReportsItcItemWiseRoute
   '/app/reports/itc-party-wise': typeof AppReportsItcPartyWiseRoute
@@ -654,6 +662,7 @@ export interface FileRoutesById {
   '/app/reports/gstr1': typeof AppReportsGstr1Route
   '/app/reports/gstr2b': typeof AppReportsGstr2bRoute
   '/app/reports/gstr3b': typeof AppReportsGstr3bRoute
+  '/app/reports/gstr9': typeof AppReportsGstr9Route
   '/app/reports/hsn-summary': typeof AppReportsHsnSummaryRoute
   '/app/reports/itc-item-wise': typeof AppReportsItcItemWiseRoute
   '/app/reports/itc-party-wise': typeof AppReportsItcPartyWiseRoute
@@ -732,6 +741,7 @@ export interface FileRouteTypes {
     | '/app/reports/gstr1'
     | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
+    | '/app/reports/gstr9'
     | '/app/reports/hsn-summary'
     | '/app/reports/itc-item-wise'
     | '/app/reports/itc-party-wise'
@@ -807,6 +817,7 @@ export interface FileRouteTypes {
     | '/app/reports/gstr1'
     | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
+    | '/app/reports/gstr9'
     | '/app/reports/hsn-summary'
     | '/app/reports/itc-item-wise'
     | '/app/reports/itc-party-wise'
@@ -883,6 +894,7 @@ export interface FileRouteTypes {
     | '/app/reports/gstr1'
     | '/app/reports/gstr2b'
     | '/app/reports/gstr3b'
+    | '/app/reports/gstr9'
     | '/app/reports/hsn-summary'
     | '/app/reports/itc-item-wise'
     | '/app/reports/itc-party-wise'
@@ -1193,6 +1205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsGstr3bRouteImport
       parentRoute: typeof AppReportsRoute
     }
+    '/app/reports/gstr9': {
+      id: '/app/reports/gstr9'
+      path: '/gstr9'
+      fullPath: '/app/reports/gstr9'
+      preLoaderRoute: typeof AppReportsGstr9RouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/app/reports/hsn-summary': {
       id: '/app/reports/hsn-summary'
       path: '/hsn-summary'
@@ -1469,6 +1488,7 @@ interface AppReportsRouteChildren {
   AppReportsGstr1Route: typeof AppReportsGstr1Route
   AppReportsGstr2bRoute: typeof AppReportsGstr2bRoute
   AppReportsGstr3bRoute: typeof AppReportsGstr3bRoute
+  AppReportsGstr9Route: typeof AppReportsGstr9Route
   AppReportsHsnSummaryRoute: typeof AppReportsHsnSummaryRoute
   AppReportsItcItemWiseRoute: typeof AppReportsItcItemWiseRoute
   AppReportsItcPartyWiseRoute: typeof AppReportsItcPartyWiseRoute
@@ -1502,6 +1522,7 @@ const AppReportsRouteChildren: AppReportsRouteChildren = {
   AppReportsGstr1Route: AppReportsGstr1Route,
   AppReportsGstr2bRoute: AppReportsGstr2bRoute,
   AppReportsGstr3bRoute: AppReportsGstr3bRoute,
+  AppReportsGstr9Route: AppReportsGstr9Route,
   AppReportsHsnSummaryRoute: AppReportsHsnSummaryRoute,
   AppReportsItcItemWiseRoute: AppReportsItcItemWiseRoute,
   AppReportsItcPartyWiseRoute: AppReportsItcPartyWiseRoute,
