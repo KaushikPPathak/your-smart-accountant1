@@ -30,6 +30,17 @@ export interface G2BLineRow {
   cgst_paise: number;
   sgst_paise: number;
   cess_paise: number;
+
+  // GSTR-2B source metadata.
+  // Optional for backward compatibility with previously stored rows.
+  section?: "B2B" | "RCM" | "CDNR";
+  itc_eligible?: boolean | null;
+  itc_reason?: string | null;
+  gstr2b_period?: string | null;
+  gstr1_period?: string | null;
+  gstr1_filing_date?: string | null;
+  document_type?: string | null;
+
   match_status: string;
   matched_voucher_id: string | null;
   remarks: string | null;
