@@ -147,6 +147,17 @@ self.onmessage = (event: MessageEvent<ExportRequest>) => {
         .replace(/<Relationship\b[^>]*\bTarget="calcChain\.xml"[^>]*\/>/g, "");
       files[relsPath] = encoder.encode(rels);
     }
+    // Remove sheet/workbook password protection so the file opens fully editable.
+    for (const path of Object.keys(files)) {
+      if (path === wbPath || /^xl\/worksheets\/[^/]+\.xml$/.test(path)) {
+        const xml = decoder.decode(files[path]);
+        const cleaned = xml
+          .replace(/<sheetProtection\b[^>]*\/>/g, "")
+          .replace(/<workbookProtection\b[^>]*\/>/g, "")
+          .replace(/<fileSharing\b[^>]*\/>/g, "");
+        if (cleaned !== xml) files[path] = encoder.encode(cleaned);
+      }
+    }
     const output = zipSync(files, { level: 1 });
     self.postMessage({ ok: true, output }, [output.buffer as ArrayBuffer]);
   } catch (error) {

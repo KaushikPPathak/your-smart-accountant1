@@ -83,6 +83,7 @@ export const UNITS = [
   "TON",
   "UNT",
   "NA",
+  "OTH",
 ] as const;
 
 /** SAC codes (services) all start with "99" — no physical unit applies. */
