@@ -7,6 +7,7 @@
  * portal accepts for upload.
  */
 import * as XLSX from "xlsx";
+import { GSTR1_PORTAL_VERSION, DOC_TYPES, nilSupplyType, portalHsnBlock } from "./gstr1-portal-format";
 
 const HSN_FIX: Record<string, string> = {
   "0910910": "09109100",
@@ -93,7 +94,7 @@ const readRows = (wb: XLSX.WorkBook, sheetName: string): unknown[][] => {
  * (Apr–Jul 2025 advisories). Older values cause the portal to accept only
  * the `hsn` section and silently drop b2b / b2cs / nil / doc_issue.
  */
-export const GSTR1_SCHEMA_VERSION = "GST3.2.6";
+export const GSTR1_SCHEMA_VERSION = GSTR1_PORTAL_VERSION;
 
 export interface ConvertOptions {
   gstin: string;
@@ -218,7 +219,7 @@ export function convertGstr1Xlsx(
         samt: r2(samt),
         csamt: r2(csamt),
       };
-      if (!isBlank(desc)) row.desc = String(desc).trim().slice(0, 30);
+      if (!isBlank(desc)) row.desc = String(desc).trim();
       hsnSections[key].push(row);
     }
     // dedupe/merge on (hsn, uqc, rate)
@@ -235,22 +236,13 @@ export function convertGstr1Xlsx(
     }
     hsnSections[key] = Array.from(merged.values()).map((row, i) => ({ ...row, num: i + 1 }));
   }
-  // Legacy combined `data` array — the GSTN portal's HSN summary UI reads
-  // from `hsn.data`. Without this, `hsn_b2b`/`hsn_b2c` alone upload silently
-  // but the portal shows an empty HSN summary. Emit all three for safety.
-  const hsnData = [...hsnSections.hsn_b2b, ...hsnSections.hsn_b2c].map((row, i) => ({
-    ...row,
-    num: i + 1,
-  }));
-
   // ---- NIL / Exempt / Non-GST ----
   const nilRows: any[] = [];
   for (const r of readRows(wb, "exemp")) {
     const [desc, nil, exp, ngs] = r;
     if (isBlank(desc)) continue;
-    const key = NIL_MAP[String(desc).trim()];
+    const key = NIL_MAP[String(desc).trim()] ?? nilSupplyType(String(desc));
     if (!key) continue;
-    if (isBlank(nil) && isBlank(exp) && isBlank(ngs)) continue;
     nilRows.push({
       sply_ty: key,
       nil_amt: r2(nil),
@@ -294,14 +286,13 @@ export function convertGstr1Xlsx(
   if (b2b.length) out.b2b = b2b;
   if (b2cs.length) out.b2cs = b2cs;
   if (nilRows.length) out.nil = { inv: nilRows };
-  if (hsnSections.hsn_b2b.length || hsnSections.hsn_b2c.length) {
-    out.hsn = { data: hsnData, ...hsnSections };
-  }
+  const hsnBlock = portalHsnBlock(hsnSections.hsn_b2b, hsnSections.hsn_b2c);
+  if (hsnBlock) out.hsn = hsnBlock;
   if (docGroup.size) {
     out.doc_issue = {
       doc_det: Array.from(docGroup.keys())
         .sort((a, b) => a - b)
-        .map((dn) => ({ doc_num: dn, docs: docGroup.get(dn) })),
+        .map((dn) => ({ doc_num: dn, doc_typ: DOC_TYPES[dn], docs: docGroup.get(dn) })),
     };
   }
 
