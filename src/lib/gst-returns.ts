@@ -960,8 +960,8 @@ export function gstr1ToJson(g: BuiltGstr1): Record<string, unknown> {
   const out: Record<string, unknown> = {
     gstin: g.meta.gstin,
     fp: g.meta.fp,
-    gt: 0,
-    cur_gt: 0,
+    version: GSTR1_PORTAL_VERSION,
+    hash: "hash",
   };
   if (g.b2b.length) out.b2b = groupByCtinB2B(g.b2b, "inv");
   if (g.b2ba.length) out.b2ba = groupByCtinB2B(g.b2ba, "inv");
@@ -997,18 +997,14 @@ export function gstr1ToJson(g: BuiltGstr1): Record<string, unknown> {
     out.exp = Array.from(byTyp.entries()).map(([exp_typ, inv]) => ({ exp_typ, inv }));
   }
   if (g.nil.length) out.nil = { inv: g.nil };
-  if (g.hsn_b2b.length || g.hsn_b2c.length) {
-    out.hsn = {
-      hsn_b2b: g.hsn_b2b.map((h, i) => ({ num: i + 1, ...h })),
-      hsn_b2c: g.hsn_b2c.map((h, i) => ({ num: i + 1, ...h })),
-    };
-  }
+  const hsnBlock = portalHsnBlock(g.hsn_b2b, g.hsn_b2c);
+  if (hsnBlock) out.hsn = hsnBlock;
   out.doc_issue = {
     doc_det: [
-      { doc_num: 1, docs: g.docs.filter((d) => d.doc_typ.startsWith("Invoices")).map((d, i) => ({ num: i + 1, from: d.from, to: d.to, totnum: d.totnum, cancel: d.cancel, net_issue: d.net_issue })) },
-      { doc_num: 4, docs: g.docs.filter((d) => d.doc_typ === "Credit Note").map((d, i) => ({ num: i + 1, from: d.from, to: d.to, totnum: d.totnum, cancel: d.cancel, net_issue: d.net_issue })) },
-      { doc_num: 5, docs: g.docs.filter((d) => d.doc_typ === "Debit Note").map((d, i) => ({ num: i + 1, from: d.from, to: d.to, totnum: d.totnum, cancel: d.cancel, net_issue: d.net_issue })) },
-    ].filter((s) => s.docs.length),
+      { doc_num: 1, doc_typ: DOC_TYPES[1], docs: g.docs.filter((d) => d.doc_typ.startsWith("Invoices")).map((d, i) => ({ num: i + 1, from: d.from, to: d.to, totnum: d.totnum, cancel: d.cancel, net_issue: d.net_issue })) },
+      { doc_num: 5, doc_typ: DOC_TYPES[5], docs: g.docs.filter((d) => d.doc_typ === "Credit Note").map((d, i) => ({ num: i + 1, from: d.from, to: d.to, totnum: d.totnum, cancel: d.cancel, net_issue: d.net_issue })) },
+      { doc_num: 4, doc_typ: DOC_TYPES[4], docs: g.docs.filter((d) => d.doc_typ === "Debit Note").map((d, i) => ({ num: i + 1, from: d.from, to: d.to, totnum: d.totnum, cancel: d.cancel, net_issue: d.net_issue })) },
+    ].filter((s) => s.docs.length).sort((a, b) => a.doc_num - b.doc_num),
   };
   return out;
 }
