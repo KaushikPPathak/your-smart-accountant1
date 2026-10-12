@@ -69,19 +69,24 @@ export interface PortalHsnRow {
 
 /** Normalise rows to the exact field set/order the portal accepts. */
 export function toPortalHsnRows(rows: Array<Record<string, any>>): PortalHsnRow[] {
-  return rows.map((r, i) => ({
+  return rows.map((r, i) => {
+    const code = String(r.hsn_sc ?? "");
+    // Services (SAC 99xx): portal requires UQC "NA" and zero quantity.
+    const service = code.startsWith("99");
+    return {
     num: i + 1,
-    hsn_sc: String(r.hsn_sc ?? ""),
-    desc: hsnDescription(String(r.hsn_sc ?? ""), r.desc),
-    uqc: bareUqc(r.uqc),
-    qty: Number(r.qty) || 0,
+    hsn_sc: code,
+    desc: hsnDescription(code, r.desc).replace(/[^\x20-\x7E]/g, "-").replace(/\s+/g, " ").trim(),
+    uqc: service ? "NA" : bareUqc(r.uqc),
+    qty: service ? 0 : Number(r.qty) || 0,
     rt: Number(r.rt) || 0,
     txval: Number(r.txval) || 0,
     iamt: Number(r.iamt) || 0,
     samt: Number(r.samt) || 0,
     camt: Number(r.camt) || 0,
     csamt: Number(r.csamt) || 0,
-  }));
+    };
+  });
 }
 
 /** Build the `hsn` block, omitting empty sections; undefined when both empty. */

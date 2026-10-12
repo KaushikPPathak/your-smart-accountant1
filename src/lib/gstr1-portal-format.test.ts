@@ -36,3 +36,10 @@ describe("GSTR-1 portal JSON shape", () => {
     expect(portalHsnBlock([], [])).toBeUndefined();
   });
 });
+
+describe("service HSN rows", () => {
+  it("force UQC NA and zero quantity for SAC 99xx", () => {
+    const [r] = portalHsnBlock([], [{ hsn_sc: "996813", uqc: "OTH", qty: 3, rt: 5, txval: 10 }])!.hsn_b2c;
+    expect([r.uqc, r.qty]).toEqual(["NA", 0]);
+  });
+});
