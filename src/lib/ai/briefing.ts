@@ -5,7 +5,7 @@
 // local IndexedDB cache; zero LLM tokens, zero credits, runs offline.
 
 import { readVouchers } from "@/lib/offline/cache-read";
-import { scanAllAnomalies, type Anomaly } from "./anomalies";
+import { scanFilingDeadlines, type Anomaly } from "./anomalies";
 
 export interface BriefingKpis {
   todaysVouchers: number;
@@ -48,7 +48,7 @@ export async function buildBriefing(
 
   const [weekVouchers, anomalies] = await Promise.all([
     readVouchers(companyId, { from: weekStart, to: today }),
-    scanAllAnomalies(companyId),
+    scanFilingDeadlines(companyId),
   ]);
 
   let todaysVouchers = 0;
