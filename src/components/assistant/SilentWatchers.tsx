@@ -29,27 +29,6 @@ export function SilentWatchers() {
       onNew(a, actions) {
         const heading = `${catLabel[a.category]} — ${a.title}`;
         
-        toast(heading, {
-          description: a.detail,
-          duration: 10000,
-          action: a.href ? {
-            label: "Open",
-            onClick: () => { window.location.hash = `#${a.href}`; }
-          } : undefined,
-          cancel: {
-            label: "Remind later",
-            onClick: () => { void actions.snooze(); }
-          },
-          // sonner doesn't support multiple action buttons easily in the default toast,
-          // but we can add a secondary button via description or custom toast if needed.
-          // For now, let's use the 'never' as a standard button too.
-          onAutoClose: () => {}, // no-op
-          // We can use the 'Dismiss' button as 'Never' or add another action.
-          // Sonner's toast allows a single action. We'll use a description link for 'Never'.
-        });
-
-        // To support "Never", we'll use a more advanced toast or just provide a second toast if they want to ignore.
-        // Actually, Sonner supports custom components. Let's keep it simple with a specialized toast call.
         toast.custom((t) => (
           <div className="flex w-full flex-col gap-2 rounded-lg border bg-background p-4 shadow-lg animate-in slide-in-from-right">
             <div className="flex items-start justify-between gap-4">
@@ -83,7 +62,7 @@ export function SilentWatchers() {
               </Button>
             </div>
           </div>
-        ), { duration: 15000 });
+        ), { id: a.id, duration: 15000 });
       },
     });
     return () => handle.stop();
