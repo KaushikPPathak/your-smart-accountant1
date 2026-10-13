@@ -219,6 +219,11 @@ export function scanDeadlines(companyId: string, now: Date = new Date()): Anomal
   return []; 
 }
 
+/** Return-filing deadline reminders only (respects the reminders switch). */
+export async function scanFilingDeadlines(companyId: string, now: Date = new Date()): Promise<Anomaly[]> {
+  return getDeadlinesAsync(companyId, now);
+}
+
 async function getDeadlinesAsync(companyId: string, now: Date = new Date()): Promise<Anomaly[]> {
   const { offlineDb } = await import("@/lib/offline/db");
   const settings = await offlineDb.cache_company_settings.where("company_id").equals(companyId).first();

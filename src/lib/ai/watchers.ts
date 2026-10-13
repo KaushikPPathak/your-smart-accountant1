@@ -10,14 +10,14 @@
 // with the same alert every 5 minutes. Only "danger" and "warn" trigger a
 // toast; "info" waits for the next morning briefing.
 
-import { scanAllAnomalies, type Anomaly } from "./anomalies";
+import { scanFilingDeadlines, type Anomaly } from "./anomalies";
 import { offlineDb } from "../offline/db";
 
 const SNOOZE_DURATION = 4 * 60 * 60 * 1000; // 4 hours snooze default
 
 const SEEN_KEY = (companyId: string, date: string) => `ai.watcher.seen:${companyId}:${date}`;
-const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const IDLE_THROTTLE_MS = 30 * 1000;         // don't fire when tab hidden more than this
+const DEFAULT_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes — filing deadlines change daily
+const MIN_GAP_MS = 10 * 60 * 1000;          // never rescan more often than this
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -69,17 +69,18 @@ export function startWatchers(companyId: string, opts: WatcherOptions): WatcherH
     if (stopped || running) return;
     // Skip if the tab is hidden and we already ran recently — no point burning
     // battery re-scanning a paused app.
-    if (typeof document !== "undefined" && document.hidden && Date.now() - lastRun < IDLE_THROTTLE_MS) {
-      return;
-    }
+    if (Date.now() - lastRun < MIN_GAP_MS) return;
     running = true;
     try {
       const settings = await offlineDb.cache_company_settings.where("company_id").equals(companyId).first();
+      // Reminders switched off → no scan, no notifications.
+      if (settings && (settings as any).reminders_enabled === false) { lastRun = Date.now(); return; }
       const dismissed = settings?.dismissed_notifications || [];
       const snoozed = settings?.snoozed_notifications || {};
       const now = Date.now();
 
-      const all = await scanAllAnomalies(companyId);
+      // Notifications are for return-filing deadlines only.
+      const all = await scanFilingDeadlines(companyId);
       lastRun = now;
       if (stopped) return;
       opts.onScan?.(all);
@@ -99,13 +100,13 @@ export function startWatchers(companyId: string, opts: WatcherOptions): WatcherH
         const snooze = async () => {
           const current = await offlineDb.cache_company_settings.where("company_id").equals(companyId).first();
           const nextSnoozed = { ...(current?.snoozed_notifications || {}), [a.id]: Date.now() + SNOOZE_DURATION };
-          await offlineDb.cache_company_settings.update(current.id, { snoozed_notifications: nextSnoozed });
+          if (current?.id) await offlineDb.cache_company_settings.update(current.id, { snoozed_notifications: nextSnoozed });
         };
 
         const never = async () => {
           const current = await offlineDb.cache_company_settings.where("company_id").equals(companyId).first();
           const nextDismissed = Array.from(new Set([...(current?.dismissed_notifications || []), a.id]));
-          await offlineDb.cache_company_settings.update(current.id, { dismissed_notifications: nextDismissed });
+          if (current?.id) await offlineDb.cache_company_settings.update(current.id, { dismissed_notifications: nextDismissed });
         };
 
         try { 

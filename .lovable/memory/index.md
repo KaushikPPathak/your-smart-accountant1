@@ -14,3 +14,4 @@ Auto-snapshot MUST NOT overwrite a non-empty snapshot with an empty one on the s
 - [Local data is permanent](mem://constraints/local-data-permanent) — no auto-delete of user backups/snapshots ever
 - [Frozen Tauri identity](mem://constraints/frozen-tauri-identity) — identifier, upgradeCode, WebView data_directory must never change
 - [Auto-restore is silent](mem://constraints/auto-restore-silent) — silent recovery on launch, no user prompt
+- [Notifications scope](mem://features/notifications) — Pop-ups only for return-filing deadlines; obey reminders switch
