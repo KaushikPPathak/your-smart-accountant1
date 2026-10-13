@@ -94,7 +94,7 @@ export const MOCK_VOUCHER_ENTRIES: MockVoucherEntry[] = [
 export const ROUTER_FIXTURES: Array<{ q: string; intent: string }> = [
   { q: "what is the trial balance as on 31-03-2026", intent: "trial_balance" },
   { q: "profit and loss for this month",             intent: "profit_loss"   },
-  { q: "cash balance today",                         intent: "cash_bank"     },
+  { q: "cash balance today",                         intent: "cash_balance"  },
   { q: "ageing of receivables over 90 days",         intent: "ageing"        },
   { q: "gstr-1 summary for march",                   intent: "gst_query"     },
   { q: "show invoice SI-1023",                       intent: "voucher_lookup"},
