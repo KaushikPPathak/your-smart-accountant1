@@ -264,12 +264,14 @@ function addNatureSheet(
 function addHsnSheet(
   workbook: ExcelJS.Workbook,
   result: Gstr9Result,
+  inward = false,
 ): void {
-  const worksheet = workbook.addWorksheet("HSN SAC Summary");
+  const rowsSrc = inward ? result.hsnInward : result.hsn;
+  const worksheet = workbook.addWorksheet(inward ? "Table 18 Inward HSN" : "Table 17 Outward HSN");
 
   addTitle(
     worksheet,
-    "GSTR-9 — HSN / SAC Summary",
+    inward ? "GSTR-9 Table 18 — HSN-wise Inward Supplies" : "GSTR-9 Table 17 — HSN-wise Outward Supplies",
     `Financial Year ${result.period.financialYear}`,
   );
 
@@ -291,7 +293,7 @@ function addHsnSheet(
 
   styleHeader(header);
 
-  for (const row of result.hsn) {
+  for (const row of rowsSrc) {
     worksheet.addRow([
       row.hsn,
       row.description,
@@ -307,7 +309,7 @@ function addHsnSheet(
     ]);
   }
 
-  const endRow = header.number + result.hsn.length;
+  const endRow = header.number + rowsSrc.length;
 
   for (let row = header.number + 1; row <= endRow; row += 1) {
     worksheet.getCell(row, 4).numFmt = "#,##0.000";
@@ -643,6 +645,7 @@ export async function exportGstr9Excel(
   addOutwardSheet(workbook, result);
   addNatureSheet(workbook, result);
   addHsnSheet(workbook, result);
+  addHsnSheet(workbook, result, true);
   addReconciliationSheet(workbook, result);
   addSourceAndValidationSheet(workbook, result);
 

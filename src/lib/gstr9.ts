@@ -126,6 +126,12 @@ export interface Gstr9Result {
 
   hsn: Gstr9HsnRow[];
 
+  /** Table 18 — HSN-wise inward supplies from purchase vouchers in the books. */
+  hsnInward: Gstr9HsnRow[];
+
+  /** Table 4I / 4J — outward credit and debit notes from the books (positive amounts). */
+  notes: { creditNotes: Gstr9TaxTotals; debitNotes: Gstr9TaxTotals };
+
   reconciliation: Gstr9Reconciliation;
 
   /**
@@ -410,6 +416,7 @@ export interface BuildGstr9Args {
   financialYear: string;
   sales: VoucherRow[];
   creditNotes: VoucherRow[];
+  purchases?: VoucherRow[];
 }
 
 export function buildGstr9(
@@ -420,6 +427,7 @@ export function buildGstr9(
     financialYear,
     sales,
     creditNotes,
+    purchases = [],
   } = args;
 
   const { from, to } =
@@ -710,6 +718,17 @@ export function buildGstr9(
 
     hsn: buildHsn(allVouchers),
 
+    hsnInward: buildHsn(purchases),
+
+    notes: (() => {
+      const cn = zeroTaxTotals();
+      const dn = zeroTaxTotals();
+      for (const v of creditNotes) {
+        addTotals(v.voucher_type === "credit_note" ? cn : dn, voucherTotals(v, 1));
+      }
+      return { creditNotes: cn, debitNotes: dn };
+    })(),
+
     reconciliation,
 
     filedReturnInputs: {
@@ -744,7 +763,7 @@ export async function loadGstr9Books(
       typeof fetchVouchers
     >[3];
 
-  const [sales, creditNotes] =
+  const [sales, creditNotes, purchases] =
     await Promise.all([
       fetchVouchers(
         companyId,
@@ -758,6 +777,12 @@ export async function loadGstr9Books(
         to,
         noteTypes,
       ),
+      fetchVouchers(
+        companyId,
+        from,
+        to,
+        ["purchase"] as Parameters<typeof fetchVouchers>[3],
+      ),
     ]);
 
   return buildGstr9({
@@ -765,6 +790,7 @@ export async function loadGstr9Books(
     financialYear,
     sales,
     creditNotes,
+    purchases,
   });
 }
 
