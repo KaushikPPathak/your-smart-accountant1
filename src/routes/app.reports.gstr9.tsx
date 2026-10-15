@@ -38,6 +38,7 @@ import {
   loadGstr9Books,
   validateGstr9,
   type Gstr9Result,
+  type Gstr9HsnRow,
   type Gstr9SourceStatus,
   type Gstr9TaxTotals,
 } from "@/lib/gstr9";

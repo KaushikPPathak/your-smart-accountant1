@@ -520,3 +520,23 @@ describe("GSTR-9 validation", () => {
     ).toBe(true);
   });
 });
+
+describe("GSTR-9 tables 4I/4J and 18", () => {
+  it("fills credit/debit notes and inward HSN from purchases", () => {
+    const purchase = { ...voucher("P1", "sales", true, [item(40_000, 18, 7_200, "7208")], 47_200), voucher_type: "purchase" } as unknown as VoucherRow;
+    const result = buildGstr9({
+      company, financialYear: "2025-26", sales: [],
+      creditNotes: [
+        voucher("CN1", "credit_note", true, [item(20_000, 18, 1_800, "1001")], 21_800),
+        voucher("DN1", "debit_note", true, [item(10_000, 18, 900, "1001")], 10_900),
+      ],
+      purchases: [purchase],
+    });
+    expect(result.notes.creditNotes.taxableValue).toBe(200);
+    expect(result.notes.debitNotes.taxableValue).toBe(100);
+    expect(result.hsnInward).toHaveLength(1);
+    expect(result.hsnInward[0].hsn).toBe("7208");
+    expect(result.hsnInward[0].taxableValue).toBe(400);
+    expect(result.hsnInward[0].totalTax).toBe(72);
+  });
+});
