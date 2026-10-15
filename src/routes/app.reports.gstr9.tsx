@@ -3897,7 +3897,9 @@ function Gstr9PrintInputWorking({
   financialYear,
   companyId,
   company,
+  result,
 }: {
+  result?: Gstr9Result | null;
   record: Gstr9InputRecord | undefined;
   financialYear: string;
   companyId: string;
@@ -3982,6 +3984,25 @@ function Gstr9PrintInputWorking({
   const otherItc = table6?.allOtherItc ?? periods.reduce((s, p) => s + p.itc.table4A5Other, 0);
   const reversal = table7?.total ?? periods.reduce((s, p) => s + p.itcReversal.total, 0);
 
+  const zero = { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 };
+  const cn = result?.notes.creditNotes ?? zero;
+  const dn = result?.notes.debitNotes ?? zero;
+  const m4 = {
+    taxableValue: dn.taxableValue - cn.taxableValue,
+    igst: dn.igst - cn.igst, cgst: dn.cgst - cn.cgst, sgst: dn.sgst - cn.sgst, cess: dn.cess - cn.cess,
+  };
+  const h4 = table4?.total ?? zero;
+  const n4 = {
+    taxableValue: h4.taxableValue + m4.taxableValue,
+    igst: h4.igst + m4.igst, cgst: h4.cgst + m4.cgst, sgst: h4.sgst + m4.sgst, cess: h4.cess + m4.cess,
+  };
+  const totalsRow = (label: string, t: { taxableValue: number; igst: number; cgst: number; sgst: number; cess: number }) =>
+    [label, money(t.taxableValue), money(t.cgst), money(t.sgst), money(t.igst), money(t.cess)];
+  const hsnCols = ["HSN / SAC", "UQC", "Quantity", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess", "Total Tax"];
+  const hsnRowsOf = (rows: Gstr9HsnRow[]) => rows.length === 0
+          ? [["No HSN lines in books for this year", "", "", "", "", "", "", "", ""]]
+          : rows.map((r) => [r.hsn, r.uqc, r.quantity.toFixed(3), money(r.taxableValue), money(r.cgst), money(r.sgst), money(r.igst), money(r.cess), money(r.totalTax)]);
+
   return (
     <div className="hidden print:block" style={{ breakBefore: "page" }}>
       <div className="mb-5">
@@ -4005,12 +4026,12 @@ function Gstr9PrintInputWorking({
         ["4G — Inward supplies on which tax is to be paid on reverse charge basis", fmt(table4.inwardSuppliesRcm.taxableValue), fmt(table4.inwardSuppliesRcm.cgst), fmt(table4.inwardSuppliesRcm.sgst), fmt(table4.inwardSuppliesRcm.igst), fmt(table4.inwardSuppliesRcm.cess)],
         ["4G1 — Supplies on which e-commerce operator is required to pay tax u/s 9(5)", "—", "—", "—", "—", "—"],
         ["4H — Sub-total (A to G1)", fmt(table4.total.taxableValue), fmt(table4.total.cgst), fmt(table4.total.sgst), fmt(table4.total.igst), fmt(table4.total.cess)],
-        ["4I — Credit Notes (-)", "—", "—", "—", "—", "—"],
-        ["4J — Debit Notes (+)", "—", "—", "—", "—", "—"],
+        totalsRow("4I — Credit Notes (-)", cn),
+        totalsRow("4J — Debit Notes (+)", dn),
         ["4K — Supplies / tax declared through Amendments (+)", "—", "—", "—", "—", "—"],
         ["4L — Supplies / tax reduced through Amendments (-)", "—", "—", "—", "—", "—"],
-        ["4M — Sub-total (I to L)", "—", "—", "—", "—", "—"],
-        ["4N — Supplies and advances on which tax is to be paid (H + M)", "—", "—", "—", "—", "—"],
+        totalsRow("4M — Sub-total (I to L)", m4),
+        totalsRow("4N — Supplies and advances on which tax is to be paid (H + M)", n4),
       ]} />}
 
       {table5 && <OfficialTable title="Table 5 — Details of outward supplies made during the financial year on which tax is not payable" columns={["Row", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess"]} rows={[
@@ -4101,10 +4122,8 @@ function Gstr9PrintInputWorking({
         ["16 — Information on supplies received from composition taxpayers, deemed supply u/s 143 and goods sent on approval basis", "Not captured in current GSTR-9 input model"],
       ]} />
 
-      <OfficialTable title="Tables 17–18 — HSN Summary" columns={["Table", "Source / status", "Taxable Value", "Tax"]} rows={[
-        ["17 — HSN-wise summary of outward supplies", "GSTR-1 HSN detail not retained by current input model", "—", "—"],
-        ["18 — HSN-wise summary of inward supplies", "Purchase Register / Books HSN detail not retained by current input model", "—", "—"],
-      ]} />
+      <OfficialTable title="Table 17 — HSN-wise summary of outward supplies (from books, net of credit notes)" columns={hsnCols} rows={hsnRowsOf(result?.hsn ?? [])} />
+      <OfficialTable title="Table 18 — HSN-wise summary of inward supplies (from purchase vouchers in books)" columns={hsnCols} rows={hsnRowsOf(result?.hsnInward ?? [])} />
     </div>
   );
 }
@@ -4393,6 +4412,7 @@ function GSTR9Page() {
               financialYear={financialYear}
               companyId={activeCompanyId}
               company={company}
+              result={result}
             />
           )}
 
