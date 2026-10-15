@@ -266,7 +266,7 @@ function addHsnSheet(
   result: Gstr9Result,
   inward = false,
 ): void {
-  const rowsSrc = inward ? rowsSrcInward : rowsSrc;
+  const rowsSrc = inward ? result.hsnInward : result.hsn;
   const worksheet = workbook.addWorksheet(inward ? "Table 18 Inward HSN" : "Table 17 Outward HSN");
 
   addTitle(
