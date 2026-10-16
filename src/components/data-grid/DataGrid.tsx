@@ -642,7 +642,15 @@ export function DataGrid<T>({
           print/PDF engine never has to clone the virtualised screen grid. */}
       {printing && (
         <div data-print-only className="hidden">
-          <table className="report-data-table">
+          <table className="report-data-table" style={{ tableLayout: "fixed", width: "100%" }}>
+            <colgroup>
+              {(() => {
+                const total = visibleColumns.reduce((s, c) => s + (c.width ?? 120), 0) || 1;
+                return visibleColumns.map((c) => (
+                  <col key={c.id} style={{ width: `${(((c.width ?? 120) / total) * 100).toFixed(2)}%` }} />
+                ));
+              })()}
+            </colgroup>
             <thead>
               <tr>
                 {visibleColumns.map((c) => (
