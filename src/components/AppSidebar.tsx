@@ -307,6 +307,16 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
+        {/* Mehtaji AI — front and centre */}
+        <div className="px-3 pt-3">
+          <Link
+            to="/app/assistant"
+            className="bg-gradient-ai ai-glow flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02] active:scale-[0.99]"
+          >
+            <Sparkles className="h-4 w-4 shrink-0" />
+            {!collapsed && <span>{t("nav.aiAssistant")}</span>}
+          </Link>
+        </div>
         {visibleSections.map((section) => {
           // When collapsed, render flat icon list (no collapsible groups)
           if (collapsed) {
