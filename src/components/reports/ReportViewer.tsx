@@ -524,8 +524,16 @@ async function openPrintPreviewAsync(
     .preview-content tr, .preview-content td, .preview-content th {
       page-break-inside: avoid; break-inside: avoid;
     }
+    .preview-content table.report-data-table { table-layout: fixed !important; width: 100% !important; font-size: 8pt !important; }
     .preview-content .report-data-table td,
-    .preview-content .report-data-table th { border: 0.5pt solid #000; padding: 3pt 4pt; }
+    .preview-content .report-data-table th {
+      border: 0.5pt solid #000; padding: 2pt 3pt; line-height: 1.25;
+      font-size: 8pt !important; font-family: inherit !important;
+      overflow-wrap: break-word !important; word-break: normal !important;
+      white-space: normal !important; vertical-align: top;
+    }
+    .preview-content .report-data-table .num { white-space: nowrap !important; overflow: hidden; }
+    .preview-content .report-data-table th { text-transform: none !important; }
     @media print {
       [data-print-hide] { display: none !important; }
       [data-print-only] { display: block !important; }
