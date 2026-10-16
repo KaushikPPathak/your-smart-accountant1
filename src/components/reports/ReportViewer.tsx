@@ -468,7 +468,7 @@ async function openPrintPreviewAsync(
     }
     table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
     th, td { border: 0.5pt solid #000; padding: 3pt 4pt; vertical-align: top;
-      text-align: left; overflow-wrap: anywhere; word-break: break-word; }
+      text-align: left; overflow-wrap: break-word; word-break: normal; }
     th { background: #f0f0f0; font-weight: 600;
       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     td.num, th.num, .num { text-align: right; font-variant-numeric: tabular-nums;
