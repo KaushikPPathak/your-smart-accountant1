@@ -247,19 +247,29 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
       },
       {
         id: "number",
-        header: "Number",
+        header: "No.",
         type: "text",
-        width: 130,
+        width: 70,
         accessor: (x) => x.voucher_number,
       },
       {
         id: "party",
         header: "Party",
         type: "text",
-        width: 220,
+        width: 200,
         accessor: (x) => x.ledgers?.name ?? "",
         groupable: true,
         cell: (x) => x.ledgers?.name ?? "—",
+      },
+      {
+        id: "items",
+        header: kind === "purchase" ? "Items Purchased" : "Items Sold",
+        type: "text",
+        width: 260,
+        accessor: (x) =>
+          Array.from(
+            new Set((x.voucher_items || []).map((l) => l.items?.name).filter(Boolean) as string[]),
+          ).join(", "),
       },
       {
         id: "gstin",
