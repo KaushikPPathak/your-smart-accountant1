@@ -36,11 +36,27 @@ const monthsOfYear = (year: number) => {
 function GSTR3BPage() {
   const { activeCompanyId } = useCompany();
   const today = new Date();
-  const fyYear = today.getMonth() < 3 ? today.getFullYear() - 1 : today.getFullYear();
+  const { start: openFyStart } = useFyRange();
+  const fyYear = openFyStart.getFullYear();
+  const fyMonths = useMemo(() => {
+    const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(openFyStart.getFullYear(), openFyStart.getMonth() + i, 1);
+      return { value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: `${names[d.getMonth()]} ${d.getFullYear()}` };
+    });
+  }, [openFyStart]);
   const [cadence, setCadence] = useState<"monthly" | "quarterly">("monthly");
   const [month, setMonth] = useState<string>(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`);
-  const [year, setYear] = useState<number>(today.getFullYear());
-  const [quarter, setQuarter] = useState<1 | 2 | 3 | 4>(((Math.floor(today.getMonth() / 3) + 1) as 1 | 2 | 3 | 4));
+  useEffect(() => {
+    if (!fyMonths.some((m) => m.value === month)) setMonth(fyMonths[0].value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fyMonths]);
+  const [quarter, setQuarter] = useState<1 | 2 | 3 | 4>(() => {
+    const m = today.getMonth();
+    return (m < 3 ? 4 : m < 6 ? 1 : m < 9 ? 2 : 3) as 1 | 2 | 3 | 4;
+  });
+  // Calendar year containing the chosen quarter's months, bound to the open FY.
+  const year = quarter === 4 ? fyYear + 1 : fyYear;
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [built, setBuilt] = useState<BuiltGstr3B | null>(null);
   const [inward, setInward] = useState<InwardSummaryRow[]>([]);
