@@ -20,6 +20,7 @@ import {
   type CompanyMeta, type BuiltGstr3B, type InwardSummaryRow, type ItcReversalRow,
 } from "@/lib/gst-returns";
 import { downloadGstr3bOfficial } from "@/lib/gstr3b-template";
+import { useFyRange } from "@/components/ui/fy-date-picker";
 import { ValidationPanel } from "@/components/reports/ValidationPanel";
 import { PeriodLockCard } from "@/components/reports/PeriodLockCard";
 
@@ -28,10 +29,6 @@ export const Route = createFileRoute("/app/reports/gstr3b")({
   component: GSTR3BPage,
 });
 
-const monthsOfYear = (year: number) => {
-  const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return names.map((n, i) => ({ value: `${year}-${String(i + 1).padStart(2, "0")}`, label: `${n} ${year}` }));
-};
 
 function GSTR3BPage() {
   const { activeCompanyId } = useCompany();
@@ -123,7 +120,7 @@ function GSTR3BPage() {
                 <Select value={month} onValueChange={setMonth}>
                   <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[fyYear, fyYear + 1].flatMap((y) => monthsOfYear(y)).map((m) => (
+                    {fyMonths.map((m) => (
                       <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -132,23 +129,14 @@ function GSTR3BPage() {
             ) : (
               <>
                 <div className="space-y-1">
-                  <Label className="text-xs">Year</Label>
-                  <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-                    <SelectTrigger className="h-9 w-[120px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {[fyYear - 1, fyYear, fyYear + 1].map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
                   <Label className="text-xs">Quarter</Label>
                   <Select value={String(quarter)} onValueChange={(v) => setQuarter(Number(v) as 1 | 2 | 3 | 4)}>
                     <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">Q1 (Apr–Jun)</SelectItem>
-                      <SelectItem value="2">Q2 (Jul–Sep)</SelectItem>
-                      <SelectItem value="3">Q3 (Oct–Dec)</SelectItem>
-                      <SelectItem value="4">Q4 (Jan–Mar)</SelectItem>
+                      <SelectItem value="1">Q1 (Apr–Jun {fyYear})</SelectItem>
+                      <SelectItem value="2">Q2 (Jul–Sep {fyYear})</SelectItem>
+                      <SelectItem value="3">Q3 (Oct–Dec {fyYear})</SelectItem>
+                      <SelectItem value="4">Q4 (Jan–Mar {fyYear + 1})</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
