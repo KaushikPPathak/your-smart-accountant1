@@ -149,3 +149,39 @@ export function RegisterPrintTable({
     </table>
   );
 }
+
+/** Map a voucher row (register / GST book shape) to a printable line. */
+export function toRegisterLine(v: {
+  id: string;
+  voucher_date: string;
+  voucher_number: string;
+  reference_no?: string | null;
+  vendor_invoice_no?: string | null;
+  subtotal_paise: number;
+  cgst_paise: number;
+  sgst_paise: number;
+  igst_paise: number;
+  total_paise: number;
+  ledgers: { name: string; gstin?: string | null; type?: string | null } | null;
+  voucher_items?: { qty: number; items: { name?: string; unit?: string | null } | null }[];
+}): RegisterLine {
+  const cash = isCashParty(v.ledgers?.type, v.ledgers?.name);
+  return {
+    id: v.id,
+    date: v.voucher_date,
+    billNo: v.vendor_invoice_no || v.reference_no || v.voucher_number,
+    mode: cash ? "Cash" : "Credit",
+    party: cash ? "Cash" : v.ledgers?.name || "—",
+    gstin: v.ledgers?.gstin ?? null,
+    items: (v.voucher_items || []).map((l) => ({
+      name: l.items?.name || "Item",
+      qty: Number(l.qty || 0),
+      unit: l.items?.unit ?? null,
+    })),
+    taxable: v.subtotal_paise,
+    cgst: v.cgst_paise,
+    sgst: v.sgst_paise,
+    igst: v.igst_paise,
+    total: v.total_paise,
+  };
+}
