@@ -28,10 +28,6 @@ export const Route = createFileRoute("/app/reports/gstr3b")({
   component: GSTR3BPage,
 });
 
-const monthsOfYear = (year: number) => {
-  const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return names.map((n, i) => ({ value: `${year}-${String(i + 1).padStart(2, "0")}`, label: `${n} ${year}` }));
-};
 
 function GSTR3BPage() {
   const { activeCompanyId } = useCompany();
