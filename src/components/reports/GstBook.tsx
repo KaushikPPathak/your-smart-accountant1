@@ -20,6 +20,8 @@ import { sortVouchersAsc } from "@/lib/voucher-sort";
 import type { Database } from "@/integrations/supabase/types";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
+import { ReportViewer } from "@/components/reports/ReportViewer";
+import { RegisterPrintTable, toRegisterLine } from "@/components/reports/RegisterPrintTable";
 import {
   readVouchers,
   readVoucherItemsForCompany,
@@ -50,8 +52,10 @@ interface Row {
     gstin: string | null;
     state: string | null;
     state_code: string | null;
+    type?: string | null;
   } | null;
-  voucher_items?: { qty: number; items: { unit: string | null } | null }[];
+  reference_no?: string | null;
+  voucher_items?: { qty: number; items: { name?: string; unit: string | null } | null }[];
 }
 
 export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
@@ -73,14 +77,14 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
           : new Set(["expense_direct", "stock_in_hand"]);
       type Row2 = Row & {
         voucher_entries?: { ledgers: { type: string } | null }[];
-        voucher_items?: { id: string; qty: number; items: { unit: string | null } | null }[];
+        voucher_items?: { id: string; qty: number; items: { name?: string; unit: string | null } | null }[];
       };
       const data = await withCacheFallback<Row2[]>(
         async () => {
           const { data } = await supabase
             .from("vouchers")
             .select(
-              "id, voucher_date, voucher_number, vendor_invoice_no, vendor_invoice_date, place_of_supply_code, is_interstate, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, ledgers:party_ledger_id(name, gstin, state, state_code), voucher_entries(ledger_id, ledgers:ledger_id(type)), voucher_items(id, qty, items:item_id(unit))",
+              "id, voucher_date, voucher_number, reference_no, vendor_invoice_no, vendor_invoice_date, place_of_supply_code, is_interstate, subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise, ledgers:party_ledger_id(name, gstin, state, state_code, type), voucher_entries(ledger_id, ledgers:ledger_id(type)), voucher_items(id, qty, items:item_id(name, unit))",
             )
             .eq("company_id", activeCompanyId)
             .in("voucher_type", types)
@@ -120,7 +124,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                 return {
                   id: String(li.id),
                   qty: Number(li.qty || 0),
-                  items: master ? { unit: master.unit ?? null } : null,
+                  items: master ? { name: master.name ?? "", unit: master.unit ?? null } : null,
                 };
               });
               const entries = (entriesByVoucher.get(String(v.id)) || []).map((e) => {
@@ -131,6 +135,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                 id: String(v.id),
                 voucher_date: String(v.voucher_date),
                 voucher_number: String(v.voucher_number ?? ""),
+                reference_no: v.reference_no ?? null,
                 vendor_invoice_no: v.vendor_invoice_no ?? null,
                 vendor_invoice_date: v.vendor_invoice_date ?? null,
                 place_of_supply_code: v.place_of_supply_code ?? null,
@@ -147,6 +152,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
                       gstin: party.gstin ?? null,
                       state: party.state ?? null,
                       state_code: party.state_code ?? null,
+                      type: party.type ?? null,
                     }
                   : null,
                 voucher_entries: entries,
@@ -382,8 +388,9 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
   );
 
   return (
+    <ReportViewer title={title} fromDate={from} toDate={to} onExportPdf={onPdf}>
     <div className="space-y-3">
-      <Card>
+      <Card className="print:hidden">
         <CardContent className="p-3 print:hidden">
           <div className="mb-2 text-base font-semibold">{title}</div>
           <ReportToolbar
@@ -394,7 +401,7 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
             onExportCsv={onCsv}
             onExportXlsx={onXlsx}
             onExportPdf={onPdf}
-            onPrint={() => window.print()}
+            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
           />
           <div className="mt-2">
             <ViewSwitcher view={view} onChange={setView} />
@@ -418,102 +425,16 @@ export function GstBook({ kind }: { kind: "sales" | "purchase" }) {
         </Card>
       ) : (
         <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[90px]">Date</TableHead>
-                    <TableHead className="w-[110px]">{billLabel}</TableHead>
-                    <TableHead>{partyLabel}</TableHead>
-                    {showQtyUnit && <TableHead className="w-[110px]">Qty / Unit</TableHead>}
-                    <TableHead className="w-[110px] text-right">Taxable</TableHead>
-                    <TableHead className="w-[95px] text-right">CGST</TableHead>
-                    <TableHead className="w-[95px] text-right">SGST</TableHead>
-                    <TableHead className="w-[95px] text-right">IGST</TableHead>
-                    <TableHead className="w-[115px] text-right">Invoice Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                        No entries in this period.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((x) => (
-                      <TableRow key={x.id}>
-                        <TableCell className="whitespace-nowrap">
-                          {fmtIndianDate(x.voucher_date)}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {kind === "sales"
-                            ? x.voucher_number
-                            : x.vendor_invoice_no || x.voucher_number}
-                        </TableCell>
-                        <TableCell>
-                          <div className="truncate max-w-[280px]">{x.ledgers?.name || "—"}</div>
-                          {x.ledgers?.gstin && (
-                            <div className="font-mono text-[10px] text-muted-foreground">
-                              {x.ledgers.gstin}
-                              {x.is_interstate ? " · Inter" : " · Intra"}
-                            </div>
-                          )}
-                        </TableCell>
-                        {showQtyUnit && (
-                          <TableCell className="font-mono text-xs whitespace-nowrap">
-                            {qtyUnitText(x)}
-                          </TableCell>
-                        )}
-                        <TableCell className="text-right tabular-nums">
-                          {formatINR(x.subtotal_paise)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatINR(x.cgst_paise)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatINR(x.sgst_paise)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatINR(x.igst_paise)}
-                        </TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">
-                          {formatINR(x.total_paise)}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-                {rows.length > 0 && (
-                  <tfoot>
-                    <TableRow className="font-semibold border-t-2">
-                      <TableCell colSpan={showQtyUnit ? 4 : 3} className="text-right">
-                        Totals
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatINR(totals.taxable)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatINR(totals.cgst)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatINR(totals.sgst)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatINR(totals.igst)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatINR(totals.total)}
-                      </TableCell>
-                    </TableRow>
-                  </tfoot>
-                )}
-              </Table>
-            </div>
+          <CardContent className="p-2">
+            <RegisterPrintTable
+              lines={rows.map(toRegisterLine)}
+              withGst
+              partyLabel={kind === "purchase" ? "Supplier Name" : "Customer Name"}
+            />
           </CardContent>
         </Card>
       )}
     </div>
+    </ReportViewer>
   );
 }

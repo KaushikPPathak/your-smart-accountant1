@@ -23,6 +23,7 @@ import { amountHeader } from "@/lib/export-format";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { ReportViewer } from "@/components/reports/ReportViewer";
+import { RegisterPrintTable, toRegisterLine } from "@/components/reports/RegisterPrintTable";
 import {
   readVouchers,
   readVoucherItemsForCompany,
@@ -72,7 +73,9 @@ interface VRow {
   sgst_paise: number;
   igst_paise: number;
   total_paise: number;
-  ledgers: { name: string; gstin: string | null } | null;
+  reference_no?: string | null;
+  vendor_invoice_no?: string | null;
+  ledgers: { name: string; gstin: string | null; type?: string | null } | null;
   voucher_items: {
     qty: number;
     taxable_paise: number;
@@ -101,7 +104,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
           const { data } = await supabase
             .from("vouchers")
             .select(
-              "id, voucher_date, voucher_number, subtotal_paise, cgst_paise, sgst_paise, igst_paise, total_paise, ledgers:party_ledger_id(name, gstin), voucher_items(qty, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate, items:item_id(hsn_code, name, unit))",
+              "id, voucher_date, voucher_number, reference_no, vendor_invoice_no, subtotal_paise, cgst_paise, sgst_paise, igst_paise, total_paise, ledgers:party_ledger_id(name, gstin, type), voucher_items(qty, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate, items:item_id(hsn_code, name, unit))",
             )
             .eq("company_id", activeCompanyId)
             .eq("voucher_type", kind)
@@ -157,7 +160,9 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
               sgst_paise: Number(v.sgst_paise || 0),
               igst_paise: Number(v.igst_paise || 0),
               total_paise: Number(v.total_paise || 0),
-              ledgers: party ? { name: party.name, gstin: party.gstin ?? null } : null,
+              reference_no: v.reference_no ?? null,
+              vendor_invoice_no: v.vendor_invoice_no ?? null,
+              ledgers: party ? { name: party.name, gstin: party.gstin ?? null, type: party.type ?? null } : null,
               voucher_items: lines,
             } as VRow;
           });
@@ -499,90 +504,18 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
         </Card>
       ) : (
         <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[90px]">Date</TableHead>
-                  <TableHead className="w-[110px]">Number</TableHead>
-                  <TableHead>Party</TableHead>
-                  {showQtyUnit && <TableHead className="w-[110px]">Qty / Unit</TableHead>}
-                  <TableHead className="w-[110px] text-right">Taxable</TableHead>
-                  <TableHead className="w-[95px] text-right">CGST</TableHead>
-                  <TableHead className="w-[95px] text-right">SGST</TableHead>
-                  <TableHead className="w-[95px] text-right">IGST</TableHead>
-                  <TableHead className="w-[115px] text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((x) => (
-                  <TableRow
-                    key={x.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => openVoucherDetail(navigate, x.id)}
-                    title="Click to edit"
-                  >
-                    <TableCell className="whitespace-nowrap">
-                      {fmtIndianDate(x.voucher_date)}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{x.voucher_number}</TableCell>
-                    <TableCell>
-                      <div className="truncate max-w-[280px]">{x.ledgers?.name ?? "—"}</div>
-                      {x.ledgers?.gstin && (
-                        <div className="font-mono text-[10px] text-muted-foreground">
-                          {x.ledgers.gstin}
-                        </div>
-                      )}
-                    </TableCell>
-                    {showQtyUnit && (
-                      <TableCell className="font-mono text-xs whitespace-nowrap">
-                        {qtyUnitText(x)}
-                      </TableCell>
-                    )}
-                    <TableCell className="text-right font-mono">
-                      {formatINR(x.subtotal_paise)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatINR(x.cgst_paise)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatINR(x.sgst_paise)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatINR(x.igst_paise)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-semibold">
-                      {formatINR(x.total_paise)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                <TableRow>
-                  <TableCell colSpan={showQtyUnit ? 4 : 3} className="text-right font-semibold">
-                    TOTAL
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-semibold">
-                    {formatINR(totals.sub)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-semibold">
-                    {formatINR(totals.cgst)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-semibold">
-                    {formatINR(totals.sgst)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-semibold">
-                    {formatINR(totals.igst)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-semibold">
-                    {formatINR(totals.total)}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+          <CardContent className="p-2">
+            <RegisterPrintTable
+              lines={rows.map(toRegisterLine)}
+              withGst={false}
+              partyLabel={kind === "purchase" ? "Supplier Name" : "Customer Name"}
+              onRowClick={(id) => openVoucherDetail(navigate, id)}
+            />
           </CardContent>
         </Card>
       )}
 
-      <Card>
+      <Card className="print:hidden" data-print-hide>
         <CardContent className="p-0">
           <div className="border-b px-4 py-3 font-medium">HSN Summary</div>
           <Table>
