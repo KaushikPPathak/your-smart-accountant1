@@ -4,6 +4,8 @@ import {
   buildGstr9,
   financialYearRange,
   validateGstr9,
+  summariseGstr9Hsn,
+  totalGstr9Hsn,
   type Gstr9Result,
 } from "@/lib/gstr9";
 import type { VoucherRow } from "@/lib/gst-returns";
@@ -434,6 +436,35 @@ describe("GSTR-9 credit and debit notes", () => {
 });
 
 describe("GSTR-9 HSN", () => {
+  it("merges different items and rates under the same HSN in both summaries without losing tax", () => {
+    const first = item(100_000, 5, 5_000, "6914");
+    const second = { ...item(200_000, 18, 36_000, "6914"), qty: 3, items: { ...first.items, name: "Other material" } };
+    const sales = [voucher("S1", "sales", true, [first, second], 341_000)];
+    const purchases = [{ ...sales[0], voucher_type: "purchase" } as VoucherRow];
+    const result = buildGstr9({ company, financialYear: "2025-26", sales, purchases, creditNotes: [] });
+    for (const detail of [result.hsn, result.hsnInward]) {
+      expect(detail).toHaveLength(2); // Mandatory GSTN rates remain distinct.
+      const summary = summariseGstr9Hsn(detail);
+      expect(summary).toHaveLength(1);
+      expect(summary[0]).toMatchObject({ hsn: "6914", quantity: 4, taxableValue: 3000, cgst: 205, sgst: 205, totalTax: 410, totalValue: 3410 });
+      expect(totalGstr9Hsn(summary)).toEqual(totalGstr9Hsn(detail));
+    }
+  });
+
+  it("does not mix quantities in different units or different HSN codes", () => {
+    const line = item(10000, 5, 500, "0713");
+    const result = buildGstr9({ company, financialYear: "2025-26", creditNotes: [], sales: [voucher("S", "sales", true, [line, { ...line, items: { ...line.items, unit: "KGS" } }, item(10000, 5, 500, "071300")], 31500)] });
+    expect(summariseGstr9Hsn(result.hsn)).toHaveLength(3);
+    expect(totalGstr9Hsn(result.hsn).taxableValue).toBe(300);
+  });
+
+  it("nets credit notes once in consolidated HSN totals and handles empty books", () => {
+    const result = buildGstr9({ company, financialYear: "2025-26", sales: [voucher("S", "sales", true, [item(10000, 5, 500, "6914")], 10500)], creditNotes: [voucher("C", "credit_note", true, [item(2000, 5, 100, "6914")], 2100)] });
+    expect(totalGstr9Hsn(summariseGstr9Hsn(result.hsn))).toMatchObject({ taxableValue: 80, cgst: 2, sgst: 2, totalTax: 4, grossValue: 84 });
+    expect(summariseGstr9Hsn([])).toEqual([]);
+    expect(totalGstr9Hsn([]).taxableValue).toBe(0);
+  });
+
   it("creates annual HSN rows", () => {
     const sales = [
       voucher(

@@ -1,6 +1,7 @@
 # Roadmap
 
 ## In progress
+- [x] Compare prescribed GSTR-9 template; consolidate outward/inward HSN summaries, include totals, and validate exports.
 - [x] Accounting Query Engine: tolerate minor ledger-name typos only when exactly one strong match exists (never guess between ledgers).
 - [x] Trial Balance operation in the Accounting Query Engine (engine + tests only; no Mehtaji integration yet).
 - [x] Fix Cash/Bank and Journal grids hanging after rows load (worker accessor serialization failure); add worker-error fallback.

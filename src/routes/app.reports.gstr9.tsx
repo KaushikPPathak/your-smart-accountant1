@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Download,
   CheckCircle2,
   Info,
   Loader2,
@@ -37,6 +38,8 @@ import {
   financialYearRange,
   loadGstr9Books,
   validateGstr9,
+  summariseGstr9Hsn,
+  totalGstr9Hsn,
   type Gstr9Result,
   type Gstr9HsnRow,
   type Gstr9SourceStatus,
@@ -3963,16 +3966,14 @@ function Gstr9PrintInputWorking({
     return () => { cancelled = true; };
   }, [companyId, financialYear, record?.gstr9ItcInclusionByKey]);
 
-  if (!record) return null;
-
-  const table4 = record.gstr1?.table4;
-  const table5 = record.gstr1?.table5;
-  const periods = record.gstr3b?.periods ?? [];
-  const table6 = record.itcTables?.table6;
-  const table7 = record.itcTables?.table7;
-  const table8 = record.itcTables?.table8;
-  const tax = record.taxPayment?.table9.taxPaid;
-  const pr = record.purchaseRegister;
+  const table4 = record?.gstr1?.table4;
+  const table5 = record?.gstr1?.table5;
+  const periods = record?.gstr3b?.periods ?? [];
+  const table6 = record?.itcTables?.table6;
+  const table7 = record?.itcTables?.table7;
+  const table8 = record?.itcTables?.table8;
+  const tax = record?.taxPayment?.table9.taxPaid;
+  const pr = record?.purchaseRegister;
 
   const fmt = (value: number | undefined) => value == null ? "—" : money(value);
   const totalA = periods.reduce((s, p) => s + p.itc.totalItcAvailed, 0);
@@ -4000,9 +4001,14 @@ function Gstr9PrintInputWorking({
   const totalsRow = (label: string, t: { taxableValue: number; igst: number; cgst: number; sgst: number; cess: number }) =>
     [label, money(t.taxableValue), money(t.cgst), money(t.sgst), money(t.igst), money(t.cess)];
   const hsnCols = ["HSN / SAC", "UQC", "Quantity", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess", "Total Tax"];
-  const hsnRowsOf = (rows: Gstr9HsnRow[]) => rows.length === 0
-          ? [["No HSN lines in books for this year", "", "", "", "", "", "", "", ""]]
-          : rows.map((r) => [r.hsn, r.uqc, r.quantity.toFixed(3), money(r.taxableValue), money(r.cgst), money(r.sgst), money(r.igst), money(r.cess), money(r.totalTax)]);
+  const hsnRowsOf = (rows: Gstr9HsnRow[]) => {
+    const summary = summariseGstr9Hsn(rows);
+    const totals = totalGstr9Hsn(summary);
+    return [
+      ...summary.map((r) => [r.hsn, r.uqc, r.quantity.toFixed(3), money(r.taxableValue), money(r.cgst), money(r.sgst), money(r.igst), money(r.cess), money(r.totalTax)]),
+      ["Total", "", "", money(totals.taxableValue), money(totals.cgst), money(totals.sgst), money(totals.igst), money(totals.cess), money(totals.totalTax)],
+    ];
+  };
 
   return (
     <div className="hidden print:block" style={{ breakBefore: "page" }}>
@@ -4135,6 +4141,7 @@ function GSTR9Page() {
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [result, setResult] = useState<Gstr9Result | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inputRecord, setInputRecord] = useState<Gstr9InputRecord | undefined>();
   const [gstr1Open, setGstr1Open] = useState(false);
@@ -4202,6 +4209,23 @@ function GSTR9Page() {
   }, [activeCompanyId, financialYear]);
 
   const issues = result ? validateGstr9(result) : [];
+  const exportBooks = async (gstn: boolean) => {
+    if (!result || result.period.financialYear !== financialYear) return;
+    setExporting(true);
+    try {
+      if (gstn) {
+        const { exportGstr9GstnUtility } = await import("@/lib/gstr9-gstn-export");
+        await exportGstr9GstnUtility(result);
+      } else {
+        const { exportGstr9Excel } = await import("@/lib/gstr9-export");
+        await exportGstr9Excel(result);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to export GSTR-9.");
+    } finally {
+      setExporting(false);
+    }
+  };
   const inputStatus = getGstr9InputStatus(inputRecord);
 
   const outwardRows = result
@@ -4256,7 +4280,13 @@ function GSTR9Page() {
               </Select>
             </div>
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" disabled={!result || exporting || loading || result.period.financialYear !== financialYear} onClick={() => void exportBooks(false)}>
+                <Download className="mr-1 h-4 w-4" /> Excel working paper
+              </Button>
+              <Button variant="outline" size="sm" title="Books figures only; review concessional classification and complete filed-return inputs in the GSTN utility before filing." disabled={!result || exporting || loading || result.period.financialYear !== financialYear} onClick={() => void exportBooks(true)}>
+                <Download className="mr-1 h-4 w-4" /> GSTN template (books only)
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -4407,7 +4437,7 @@ function GSTR9Page() {
             </CardContent>
           </Card>
 
-          {inputRecord && activeCompanyId && (
+          {activeCompanyId && (
             <Gstr9PrintInputWorking
               record={inputRecord}
               financialYear={financialYear}
@@ -4471,7 +4501,7 @@ function GSTR9Page() {
           <Card className="print:hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">
-                HSN / SAC summary ({result.hsn.length})
+                HSN / SAC summary ({summariseGstr9Hsn(result.hsn).length})
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -4497,7 +4527,7 @@ function GSTR9Page() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {result.hsn.map((row) => (
+                      {summariseGstr9Hsn(result.hsn).map((row) => (
                         <TableRow
                           key={`${row.hsn}|${row.uqc}|${row.description}`}
                         >
@@ -4529,12 +4559,28 @@ function GSTR9Page() {
                           </TableCell>
                         </TableRow>
                       ))}
+                      <TableRow className="font-semibold">
+                        <TableCell colSpan={4}>Total</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).taxableValue)}</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).igst)}</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).cgst)}</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).sgst)}</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).totalTax)}</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).grossValue)}</TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </div>
               )}
             </CardContent>
           </Card>
+
+          <div className="print:hidden">
+            <OfficialTable title="Table 18 — HSN-wise inward supplies" columns={["HSN / SAC", "UQC", "Quantity", "Taxable", "CGST", "SGST", "IGST", "Cess", "Total tax"]} rows={[
+              ...summariseGstr9Hsn(result.hsnInward).map((row) => [row.hsn, row.uqc, quantity(row.quantity), money(row.taxableValue), money(row.cgst), money(row.sgst), money(row.igst), money(row.cess), money(row.totalTax)]),
+              ["Total", "", "", money(totalGstr9Hsn(result.hsnInward).taxableValue), money(totalGstr9Hsn(result.hsnInward).cgst), money(totalGstr9Hsn(result.hsnInward).sgst), money(totalGstr9Hsn(result.hsnInward).igst), money(totalGstr9Hsn(result.hsnInward).cess), money(totalGstr9Hsn(result.hsnInward).totalTax)],
+            ]} />
+          </div>
 
           <Card className="print:hidden">
             <CardHeader className="pb-3">

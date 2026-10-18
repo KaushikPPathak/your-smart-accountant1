@@ -68,6 +68,8 @@ export interface Gstr9HsnRow {
   hsn: string;
   description: string;
   uqc: string;
+  /** Original GST rate retained for the mandatory GSTN offline-tool column. */
+  gstRate?: number;
   quantity: number;
   taxableValue: number;
   igst: number;
@@ -317,6 +319,41 @@ function isRegistered(v: VoucherRow): boolean {
 /* HSN aggregation                                                             */
 /* -------------------------------------------------------------------------- */
 
+/** Display one total per HSN and unit, regardless of item name or tax rate.
+ * Different units cannot be added as a single quantity; GSTN detail keeps rates.
+ */
+export function summariseGstr9Hsn(rows: Gstr9HsnRow[]): Gstr9HsnRow[] {
+  const grouped = new Map<string, Gstr9HsnRow>();
+  for (const row of rows) {
+    const hsn = row.hsn.trim();
+    const uqc = row.uqc.trim().toUpperCase() || "OTH";
+    const key = `${hsn}|${uqc}`;
+    const current = grouped.get(key) ?? {
+      hsn, uqc, description: `HSN / SAC ${hsn}`, quantity: 0,
+      taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, totalTax: 0, totalValue: 0,
+    };
+    current.quantity += row.quantity;
+    for (const field of ["taxableValue", "igst", "cgst", "sgst", "cess", "totalTax", "totalValue"] as const) {
+      current[field] = rupees(Math.round(current[field] * 100) + Math.round(row[field] * 100));
+    }
+    grouped.set(key, current);
+  }
+  return [...grouped.values()].map((row) => ({ ...row, quantity: Number(row.quantity.toFixed(3)) }))
+    .sort((a, b) => `${a.hsn}|${a.uqc}`.localeCompare(`${b.hsn}|${b.uqc}`));
+}
+
+/** Monetary grand totals; quantities of different units are intentionally not summed. */
+export function totalGstr9Hsn(rows: Gstr9HsnRow[]): Gstr9TaxTotals {
+  const totals = zeroTaxTotals();
+  for (const row of rows) {
+    for (const field of ["taxableValue", "igst", "cgst", "sgst", "cess", "totalTax"] as const) {
+      totals[field] = rupees(Math.round(totals[field] * 100) + Math.round(row[field] * 100));
+    }
+    totals.grossValue = rupees(Math.round(totals.grossValue * 100) + Math.round(row.totalValue * 100));
+  }
+  return totals;
+}
+
 function buildHsn(
   vouchers: VoucherRow[],
 ): Gstr9HsnRow[] {
@@ -349,6 +386,7 @@ function buildHsn(
           hsn,
           description,
           uqc,
+          gstRate: Number(line.gst_rate),
           quantity: 0,
           taxableValue: 0,
           igst: 0,
