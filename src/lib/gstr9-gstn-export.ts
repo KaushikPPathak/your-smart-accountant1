@@ -441,7 +441,7 @@ function populateHsnTable(
   let output = xml;
 
   const startRow = 6;
-  const maxRows = 20001;
+  const maxRows = 20000;
   if (rows.length > maxRows) {
     throw new Error("The HSN summary exceeds the GSTN template capacity; no rows have been exported.");
   }

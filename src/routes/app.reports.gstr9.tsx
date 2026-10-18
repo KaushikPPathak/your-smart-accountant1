@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Download,
   CheckCircle2,
   Info,
   Loader2,
@@ -4142,6 +4143,7 @@ function GSTR9Page() {
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [result, setResult] = useState<Gstr9Result | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inputRecord, setInputRecord] = useState<Gstr9InputRecord | undefined>();
   const [gstr1Open, setGstr1Open] = useState(false);
@@ -4209,6 +4211,23 @@ function GSTR9Page() {
   }, [activeCompanyId, financialYear]);
 
   const issues = result ? validateGstr9(result) : [];
+  const exportBooks = async (gstn: boolean) => {
+    if (!result || result.period.financialYear !== financialYear) return;
+    setExporting(true);
+    try {
+      if (gstn) {
+        const { exportGstr9GstnUtility } = await import("@/lib/gstr9-gstn-export");
+        await exportGstr9GstnUtility(result);
+      } else {
+        const { exportGstr9Excel } = await import("@/lib/gstr9-export");
+        await exportGstr9Excel(result);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to export GSTR-9.");
+    } finally {
+      setExporting(false);
+    }
+  };
   const inputStatus = getGstr9InputStatus(inputRecord);
 
   const outwardRows = result
@@ -4263,7 +4282,13 @@ function GSTR9Page() {
               </Select>
             </div>
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" disabled={!result || exporting || loading || result.period.financialYear !== financialYear} onClick={() => void exportBooks(false)}>
+                <Download className="mr-1 h-4 w-4" /> Excel working paper
+              </Button>
+              <Button variant="outline" size="sm" title="Books figures only; review concessional classification and complete filed-return inputs in the GSTN utility before filing." disabled={!result || exporting || loading || result.period.financialYear !== financialYear} onClick={() => void exportBooks(true)}>
+                <Download className="mr-1 h-4 w-4" /> GSTN template (books only)
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
