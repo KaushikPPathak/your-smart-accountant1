@@ -4575,6 +4575,13 @@ function GSTR9Page() {
             </CardContent>
           </Card>
 
+          <div className="print:hidden">
+            <OfficialTable title="Table 18 — HSN-wise inward supplies" columns={["HSN / SAC", "UQC", "Quantity", "Taxable", "CGST", "SGST", "IGST", "Cess", "Total tax"]} rows={[
+              ...summariseGstr9Hsn(result.hsnInward).map((row) => [row.hsn, row.uqc, quantity(row.quantity), money(row.taxableValue), money(row.cgst), money(row.sgst), money(row.igst), money(row.cess), money(row.totalTax)]),
+              ["Total", "", "", money(totalGstr9Hsn(result.hsnInward).taxableValue), money(totalGstr9Hsn(result.hsnInward).cgst), money(totalGstr9Hsn(result.hsnInward).sgst), money(totalGstr9Hsn(result.hsnInward).igst), money(totalGstr9Hsn(result.hsnInward).cess), money(totalGstr9Hsn(result.hsnInward).totalTax)],
+            ]} />
+          </div>
+
           <Card className="print:hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Books reconciliation</CardTitle>
