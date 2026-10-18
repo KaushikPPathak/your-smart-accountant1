@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import {
   validateGstr9,
+  summariseGstr9Hsn,
   type Gstr9Result,
   type Gstr9SourceStatus,
   type Gstr9TaxTotals,
@@ -266,7 +267,7 @@ function addHsnSheet(
   result: Gstr9Result,
   inward = false,
 ): void {
-  const rowsSrc = inward ? result.hsnInward : result.hsn;
+  const rowsSrc = summariseGstr9Hsn(inward ? result.hsnInward : result.hsn);
   const worksheet = workbook.addWorksheet(inward ? "Table 18 Inward HSN" : "Table 17 Outward HSN");
 
   addTitle(
@@ -311,6 +312,15 @@ function addHsnSheet(
 
   const endRow = header.number + rowsSrc.length;
 
+  const totalRow = worksheet.addRow(["Total", "", "", ""]);
+  for (let column = 5; column <= 11; column += 1) {
+    const letter = worksheet.getColumn(column).letter;
+    totalRow.getCell(column).value = rowsSrc.length
+      ? { formula: `SUM(${letter}${header.number + 1}:${letter}${endRow})` }
+      : 0;
+  }
+  totalRow.font = { bold: true };
+
   for (let row = header.number + 1; row <= endRow; row += 1) {
     worksheet.getCell(row, 4).numFmt = "#,##0.000";
   }
@@ -318,7 +328,7 @@ function addHsnSheet(
   styleMoneyColumns(
     worksheet,
     header.number + 1,
-    endRow,
+    totalRow.number,
     5,
     11,
   );

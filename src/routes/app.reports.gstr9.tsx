@@ -37,6 +37,8 @@ import {
   financialYearRange,
   loadGstr9Books,
   validateGstr9,
+  summariseGstr9Hsn,
+  totalGstr9Hsn,
   type Gstr9Result,
   type Gstr9HsnRow,
   type Gstr9SourceStatus,
@@ -4000,9 +4002,14 @@ function Gstr9PrintInputWorking({
   const totalsRow = (label: string, t: { taxableValue: number; igst: number; cgst: number; sgst: number; cess: number }) =>
     [label, money(t.taxableValue), money(t.cgst), money(t.sgst), money(t.igst), money(t.cess)];
   const hsnCols = ["HSN / SAC", "UQC", "Quantity", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess", "Total Tax"];
-  const hsnRowsOf = (rows: Gstr9HsnRow[]) => rows.length === 0
-          ? [["No HSN lines in books for this year", "", "", "", "", "", "", "", ""]]
-          : rows.map((r) => [r.hsn, r.uqc, r.quantity.toFixed(3), money(r.taxableValue), money(r.cgst), money(r.sgst), money(r.igst), money(r.cess), money(r.totalTax)]);
+  const hsnRowsOf = (rows: Gstr9HsnRow[]) => {
+    const summary = summariseGstr9Hsn(rows);
+    const totals = totalGstr9Hsn(summary);
+    return [
+      ...summary.map((r) => [r.hsn, r.uqc, r.quantity.toFixed(3), money(r.taxableValue), money(r.cgst), money(r.sgst), money(r.igst), money(r.cess), money(r.totalTax)]),
+      ["Total", "", "", money(totals.taxableValue), money(totals.cgst), money(totals.sgst), money(totals.igst), money(totals.cess), money(totals.totalTax)],
+    ];
+  };
 
   return (
     <div className="hidden print:block" style={{ breakBefore: "page" }}>
@@ -4471,7 +4478,7 @@ function GSTR9Page() {
           <Card className="print:hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">
-                HSN / SAC summary ({result.hsn.length})
+                HSN / SAC summary ({summariseGstr9Hsn(result.hsn).length})
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -4497,7 +4504,7 @@ function GSTR9Page() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {result.hsn.map((row) => (
+                      {summariseGstr9Hsn(result.hsn).map((row) => (
                         <TableRow
                           key={`${row.hsn}|${row.uqc}|${row.description}`}
                         >
@@ -4529,6 +4536,15 @@ function GSTR9Page() {
                           </TableCell>
                         </TableRow>
                       ))}
+                      <TableRow className="font-semibold">
+                        <TableCell colSpan={4}>Total</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).taxableValue)}</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).igst)}</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).cgst)}</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).sgst)}</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).totalTax)}</TableCell>
+                        <TableCell className="text-right">{money(totalGstr9Hsn(result.hsn).grossValue)}</TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </div>
