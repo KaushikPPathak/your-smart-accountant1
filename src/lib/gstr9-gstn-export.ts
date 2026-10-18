@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import type { Gstr9Result, Gstr9TaxTotals } from "./gstr9";
+import type { Gstr9HsnRow, Gstr9Result, Gstr9TaxTotals } from "./gstr9";
 import { saveExport } from "./desktop-save";
 
 const TEMPLATE_URL =
@@ -430,32 +430,30 @@ function populateTable5(
 }
 
 /**
- * Table 17 HSN Outward.
- *
- * The current GSTR-9 engine provides HSN, description, UQC,
- * quantity and tax/value totals.
- *
- * Rate and concessional-rate applicability are deliberately
- * left blank because the current result type does not retain
- * the line GST rate/concessional classification.
+ * Tables 17/18 use the same GSTN layout. Keep rate and unit distinctions
+ * required by GSTN; item names are already aggregated by HSN/unit/rate.
+ * Concessional classification must be reviewed, never inferred from rate.
  */
-function populateTable17(
+function populateHsnTable(
   xml: string,
-  result: Gstr9Result,
+  rows: Gstr9HsnRow[],
 ): string {
   let output = xml;
 
   const startRow = 6;
   const maxRows = 20001;
+  if (rows.length > maxRows) {
+    throw new Error("The HSN summary exceeds the GSTN template capacity; no rows have been exported.");
+  }
 
   for (
     let index = 0;
-    index < result.hsn.length &&
+    index < rows.length &&
     index < maxRows;
     index += 1
   ) {
     const row = startRow + index;
-    const item = result.hsn[index];
+    const item = rows[index];
 
     output = setCells(output, {
       [`B${row}`]: item.hsn,
@@ -468,9 +466,7 @@ function populateTable17(
       // does not retain the concessional-rate classification.
       [`G${row}`]: null,
 
-      // GSTN asks for the rate, but the current Gstr9HsnRow
-      // intentionally does not expose it yet.
-      [`H${row}`]: null,
+      [`H${row}`]: item.gstRate != null && Number.isFinite(item.gstRate) ? item.gstRate : null,
 
       [`I${row}`]: item.igst,
       [`J${row}`]: item.cgst,
@@ -705,16 +701,20 @@ export async function exportGstr9GstnUtility(
       "17 HSN Outward",
     );
 
+  const table18Path = await resolveWorksheetPath(zip, workbookXml, "18 HSN Inward");
+
   const home = zip.file(homePath);
   const table4 = zip.file(table4Path);
   const table5 = zip.file(table5Path);
   const table17 = zip.file(table17Path);
+  const table18 = zip.file(table18Path);
 
   if (
     !home ||
     !table4 ||
     !table5 ||
-    !table17
+    !table17 ||
+    !table18
   ) {
     throw new Error(
       "The GSTN GSTR-9 template does not contain all required worksheets.",
@@ -732,6 +732,7 @@ export async function exportGstr9GstnUtility(
 
   let table17Xml =
     await table17.async("string");
+  let table18Xml = await table18.async("string");
 
   homeXml = setCells(homeXml, {
     B6:
@@ -750,10 +751,11 @@ export async function exportGstr9GstnUtility(
     result,
   );
 
-  table17Xml = populateTable17(
+  table17Xml = populateHsnTable(
     table17Xml,
-    result,
+    result.hsn,
   );
+  table18Xml = populateHsnTable(table18Xml, result.hsnInward);
 
   workbookXml =
     updateCalculationSettings(
@@ -764,6 +766,7 @@ export async function exportGstr9GstnUtility(
   zip.file(table4Path, table4Xml);
   zip.file(table5Path, table5Xml);
   zip.file(table17Path, table17Xml);
+  zip.file(table18Path, table18Xml);
   zip.file(
     "xl/workbook.xml",
     workbookXml,
