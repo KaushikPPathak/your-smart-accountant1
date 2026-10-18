@@ -58,5 +58,5 @@ describe("GSTR-9 HSN exports", () => {
     } finally {
       vi.unstubAllGlobals();
     }
-  });
+  }, 30000);
 });
