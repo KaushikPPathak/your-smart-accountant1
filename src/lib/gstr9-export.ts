@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import {
   validateGstr9,
   summariseGstr9Hsn,
+  totalGstr9Hsn,
   type Gstr9Result,
   type Gstr9SourceStatus,
   type Gstr9TaxTotals,
@@ -313,10 +314,12 @@ function addHsnSheet(
   const endRow = header.number + rowsSrc.length;
 
   const totalRow = worksheet.addRow(["Total", "", "", ""]);
+  const totals = totalGstr9Hsn(rowsSrc);
+  const values = [totals.taxableValue, totals.igst, totals.cgst, totals.sgst, totals.cess, totals.totalTax, totals.grossValue];
   for (let column = 5; column <= 11; column += 1) {
     const letter = worksheet.getColumn(column).letter;
     totalRow.getCell(column).value = rowsSrc.length
-      ? { formula: `SUM(${letter}${header.number + 1}:${letter}${endRow})` }
+      ? { formula: `SUM(${letter}${header.number + 1}:${letter}${endRow})`, result: values[column - 5] }
       : 0;
   }
   totalRow.font = { bold: true };
