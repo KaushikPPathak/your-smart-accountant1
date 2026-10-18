@@ -3966,16 +3966,14 @@ function Gstr9PrintInputWorking({
     return () => { cancelled = true; };
   }, [companyId, financialYear, record?.gstr9ItcInclusionByKey]);
 
-  if (!record) return null;
-
-  const table4 = record.gstr1?.table4;
-  const table5 = record.gstr1?.table5;
-  const periods = record.gstr3b?.periods ?? [];
-  const table6 = record.itcTables?.table6;
-  const table7 = record.itcTables?.table7;
-  const table8 = record.itcTables?.table8;
-  const tax = record.taxPayment?.table9.taxPaid;
-  const pr = record.purchaseRegister;
+  const table4 = record?.gstr1?.table4;
+  const table5 = record?.gstr1?.table5;
+  const periods = record?.gstr3b?.periods ?? [];
+  const table6 = record?.itcTables?.table6;
+  const table7 = record?.itcTables?.table7;
+  const table8 = record?.itcTables?.table8;
+  const tax = record?.taxPayment?.table9.taxPaid;
+  const pr = record?.purchaseRegister;
 
   const fmt = (value: number | undefined) => value == null ? "—" : money(value);
   const totalA = periods.reduce((s, p) => s + p.itc.totalItcAvailed, 0);
@@ -4439,7 +4437,7 @@ function GSTR9Page() {
             </CardContent>
           </Card>
 
-          {inputRecord && activeCompanyId && (
+          {activeCompanyId && (
             <Gstr9PrintInputWorking
               record={inputRecord}
               financialYear={financialYear}

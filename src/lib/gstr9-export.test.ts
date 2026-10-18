@@ -44,7 +44,7 @@ describe("GSTR-9 HSN exports", () => {
       const original = await JSZip.loadAsync(template);
       expect(await zip.file("xl/vbaProject.bin")?.async("uint8array")).toEqual(await original.file("xl/vbaProject.bin")?.async("uint8array"));
       const wb = new ExcelJS.Workbook();
-      await wb.xlsx.load(await zip.generateAsync({ type: "nodebuffer" }));
+      await wb.xlsx.load(await zip.generateAsync({ type: "arraybuffer" }));
       for (const [name, taxable] of [["17 HSN Outward", 100], ["18 HSN Inward", 50]] as const) {
         const sheet = wb.getWorksheet(name);
         expect(sheet?.getCell("B6").value).toBe("06914");
