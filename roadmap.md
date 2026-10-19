@@ -1,6 +1,7 @@
 # Roadmap
 
 ## In progress
+- [ ] Correct linked invoice master refresh/GST state handling and mixed taxable/tax-free sales classification; add regressions.
 - [x] Compare prescribed GSTR-9 template; consolidate outward/inward HSN summaries, include totals, and validate exports.
 - [x] Accounting Query Engine: tolerate minor ledger-name typos only when exactly one strong match exists (never guess between ledgers).
 - [x] Trial Balance operation in the Accounting Query Engine (engine + tests only; no Mehtaji integration yet).
