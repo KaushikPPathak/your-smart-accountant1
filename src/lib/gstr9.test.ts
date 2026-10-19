@@ -133,6 +133,37 @@ describe("GSTR-9 financial year", () => {
 });
 
 describe("GSTR-9 outward aggregation", () => {
+  it("separates the 25000 tax-free line from INV.035 taxable sales", () => {
+    const result = buildGstr9({ company, financialYear: "2025-26", creditNotes: [], sales: [
+      voucher("INV.035", "sales", true, [item(25000_00, 12, 3000_00, "4911"),
+        item(36000_00, 18, 6480_00, "9403"), item(25000_00, 0, 0, "69120040")], 95480_00),
+    ] });
+    expect(result.outward.registeredTaxable.taxableValue).toBe(61000);
+    expect(result.outward.nilRated.taxableValue).toBe(25000);
+    expect(result.outward.totalOutward.grossValue).toBe(95480);
+    expect(result.outward.registeredTaxable.totalTax).toBe(9480);
+  });
+
+  it("reconciles 123200 tax-free HSN with nil-rated supplies, separately from 76000 exempt", () => {
+    const result = buildGstr9({ company, financialYear: "2025-26", creditNotes: [], sales: [
+      voucher("ZERO", "sales", false, [item(123200_00, 0, 0, "69120040")], 123200_00),
+      voucher("EXEMPT", "sales", false, [item(76000_00, 0, 0, "7009")], 76000_00, "exempt"),
+    ] });
+    expect(result.outward.nilRated.taxableValue).toBe(123200);
+    expect(result.outward.exempt.taxableValue).toBe(76000);
+    expect(result.outward.unregisteredTaxable.taxableValue).toBe(0);
+    expect(result.hsn.find((row) => row.hsn === "69120040")?.taxableValue).toBe(123200);
+  });
+
+  it("nets tax-free credit notes without double counting mixed invoices", () => {
+    const result = buildGstr9({ company, financialYear: "2025-26", sales: [
+      voucher("MIX", "sales", true, [item(10000_00, 18, 1800_00, "1001"), item(25000_00, 0, 0, "69120040")], 36800_00),
+    ], creditNotes: [voucher("CN", "credit_note", true, [item(5000_00, 0, 0, "69120040")], 5000_00)] });
+    expect(result.outward.nilRated.taxableValue).toBe(20000);
+    expect(result.outward.registeredTaxable.taxableValue).toBe(10000);
+    expect(result.outward.totalOutward.grossValue).toBe(31800);
+  });
+
   it("aggregates taxable B2B and B2C supplies", () => {
     const sales = [
       voucher(
