@@ -33,6 +33,9 @@ import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { toast } from "sonner";
 import { goBackFromVoucher } from "@/lib/voucher-return";
 import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
+import { resolveEditedGstDirection } from "@/lib/vouchers/edit-gst-direction";
+import { onDataChange } from "@/lib/ai/cache-events";
+import { isTaxFreeGstLine } from "@/lib/gst-supply-classification";
 
 export const Route = createFileRoute("/app/vouchers/$voucherId")({
   head: () => ({ meta: [{ title: "Edit Voucher — Your Mehtaji" }] }),
@@ -98,6 +101,7 @@ function VoucherEditPage() {
   const [ewbOpen, setEwbOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [hasPooledCapital, setHasPooledCapital] = useState(false);
+  const [gstDirectionChanged, setGstDirectionChanged] = useState(false);
 
   const isItemKind = useMemo(
     () => ["sales", "purchase", "credit_note", "debit_note"].includes(voucher?.voucher_type ?? ""),
@@ -130,14 +134,19 @@ function VoucherEditPage() {
       if (!vRowRaw) return false;
       const vRow = vRowRaw as unknown as Voucher;
       const partyId = vRow.party_ledger_id;
-      const [itemRows, entryRows, masterItems, masterLedgers, partyRow] = await Promise.all([
+      const [itemRows, entryRows, masterItems, masterLedgers, partyRow, companies] = await Promise.all([
         cacheRead.readVoucherItems(voucherId),
         cacheRead.readVoucherEntries(voucherId),
         cacheRead.readItems(vRow.company_id),
         cacheRead.readLedgers(vRow.company_id),
         partyId ? offlineDb.cache_ledgers.where("id").equals(partyId).first() : Promise.resolve(null),
+        cacheRead.readCompanies(),
       ]);
-      setVoucher(vRow);
+      const company = companies.find((row) => row.id === vRow.company_id);
+      const direction = resolveEditedGstDirection(vRow, company ?? {}, partyRow ?? null);
+      const directionChanged = direction.is_interstate !== vRow.is_interstate;
+      setGstDirectionChanged(directionChanged);
+      setVoucher({ ...vRow, ...direction });
       setPartyName((partyRow as unknown as { name?: string } | null)?.name ?? "");
       const mappedItems = (itemRows as unknown as { id: string; item_id: string; description: string | null; qty: number; rate_paise: number; discount_paise: number; gst_rate: number; line_no?: number }[])
         .slice()
@@ -206,7 +215,13 @@ function VoucherEditPage() {
           if (typeof v.cgst_paise === "number" && v.cgst_paise !== calc.cgst_paise) o.cgst = (v.cgst_paise / 100).toFixed(2);
           if (typeof v.sgst_paise === "number" && v.sgst_paise !== calc.sgst_paise) o.sgst = (v.sgst_paise / 100).toFixed(2);
         }
-        setGstOverride(o);
+        // Convert a typed bill-tax total to the corrected tax head, not a
+        // stale CGST/SGST override that would undo the new interstate result.
+        if (directionChanged && Object.keys(o).length) {
+          const tax = Number(vRow.cgst_paise || 0) + Number(vRow.sgst_paise || 0) + Number(vRow.igst_paise || 0);
+          setGstOverride(direction.is_interstate ? { igst: (tax / 100).toFixed(2) }
+            : { cgst: (Math.floor(tax / 2) / 100).toFixed(2), sgst: ((tax - Math.floor(tax / 2)) / 100).toFixed(2) });
+        } else setGstOverride(o);
       }
       const ledgerList = (masterLedgers as unknown as LedgerOpt[]).filter((l) => (l as unknown as { is_active?: boolean }).is_active !== false);
       setLedgers(ledgerList);
@@ -239,7 +254,7 @@ function VoucherEditPage() {
 
     const { data: v, error } = await supabase
       .from("vouchers")
-      .select("*, ledgers:party_ledger_id(name)")
+      .select("*, ledgers:party_ledger_id(name, gstin, state_code, state)")
       .eq("id", voucherId)
       .single();
     if (error || !v) {
@@ -251,8 +266,12 @@ function VoucherEditPage() {
       navigate({ to: "/app/vouchers" });
       return;
     }
-    const vRow = v as unknown as Voucher & { ledgers: { name: string } | null };
-    setVoucher(vRow);
+    const vRow = v as unknown as Voucher & { ledgers: { name: string; gstin: string | null; state_code: string | null; state: string | null } | null };
+    const { data: company } = await supabase.from("companies").select("gstin, state_code, state").eq("id", vRow.company_id).single();
+    const direction = resolveEditedGstDirection(vRow, company ?? {}, vRow.ledgers);
+    setGstDirectionChanged(direction.is_interstate !== vRow.is_interstate);
+    setGstOverride({});
+    setVoucher({ ...vRow, ...direction });
     setPartyName(vRow.ledgers?.name ?? "");
 
     const [itemsRes, entriesRes, masterItems, masterLedgers] = await Promise.all([
@@ -316,6 +335,9 @@ function VoucherEditPage() {
 
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => onDataChange((event) => {
+    if (event.kind === "ledger" && event.companyId === activeCompanyId) void load();
+  }), [activeCompanyId, load]);
 
   const computed: GstLineResult[] = useMemo(
     () =>
@@ -417,6 +439,8 @@ function VoucherEditPage() {
       if (isItemKind) {
         headerPatch = {
           ...headerPatch,
+          is_interstate: voucher.is_interstate,
+          place_of_supply_code: voucher.place_of_supply_code,
           subtotal_paise: totals.subtotal_paise,
           cgst_paise: totals.cgst_paise,
           sgst_paise: totals.sgst_paise,
@@ -686,6 +710,11 @@ function VoucherEditPage() {
 
   return (
     <div className="space-y-4">
+      {gstDirectionChanged && isItemKind && (
+        <Alert><AlertTriangle className="h-4 w-4" /><AlertTitle>Party GST details changed</AlertTitle>
+          <AlertDescription>GST has been recalculated using the current party details. Save changes to update this bill and its accounting entries; printing uses the last saved bill.</AlertDescription>
+        </Alert>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => goBackFromVoucher(() => navigate({ to: "/app/vouchers" }))}>
@@ -826,7 +855,10 @@ function VoucherEditPage() {
             </Table>
             <div className="border-t p-3 flex justify-between text-sm">
               <div className="space-y-1 text-sm">
-                <span className="text-muted-foreground">Taxable {formatINR(totals.subtotal_paise)}</span>
+                <span className="text-muted-foreground">Taxable {formatINR(computed.filter((line) => !isTaxFreeGstLine(line)).reduce((sum, line) => sum + line.taxable_paise, 0))}</span>
+                {computed.some((line) => isTaxFreeGstLine(line) && line.taxable_paise > 0) && (
+                  <div className="text-muted-foreground">Tax-free {formatINR(computed.filter(isTaxFreeGstLine).reduce((sum, line) => sum + line.taxable_paise, 0))}</div>
+                )}
                 {(voucher.is_interstate ? (["igst"] as const) : (["cgst", "sgst"] as const)).map((k) => (
                   <GstAmountRow
                     key={k}

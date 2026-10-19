@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import type { XlsxSheet } from "@/lib/exporters";
 import { GSTR1_PORTAL_VERSION, DOC_TYPES, portalHsnBlock } from "./gstr1-portal-format";
+import { isTaxFreeGstLine } from "./gst-supply-classification";
 import {
   readCompanies,
   readItems,
@@ -579,11 +580,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     // a "0%" rate row inside a B2B / B2CS invoice (that misrepresents them as
     // zero-rated taxable supplies). The taxable portion of the same invoice
     // still flows to B2B / B2CL / B2CS below.
-    const isNilLine = (it: VoucherRow["voucher_items"][number]) =>
-      Number(it.gst_rate || 0) === 0
-      && Number(it.igst_paise || 0) === 0
-      && Number(it.cgst_paise || 0) === 0
-      && Number(it.sgst_paise || 0) === 0;
+    const isNilLine = isTaxFreeGstLine;
     const partitionNilLines = sn !== "zero_rated_wp"
       && sn !== "zero_rated_wop"
       && !isExportTreatment(v.ledgers?.gst_treatment);
@@ -735,11 +732,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     // Same nil-line partition as the sales loop: strip 0%-and-zero-tax lines
     // from CDNR / CDNUR and add their taxable value to the NIL sheet (with the
     // sign flipped for credit notes so returns of nil-rated supplies net out).
-    const isNilLine = (it: VoucherRow["voucher_items"][number]) =>
-      Number(it.gst_rate || 0) === 0
-      && Number(it.igst_paise || 0) === 0
-      && Number(it.cgst_paise || 0) === 0
-      && Number(it.sgst_paise || 0) === 0;
+    const isNilLine = isTaxFreeGstLine;
     const partitionNilLines = noteNature !== "zero_rated_wp"
       && noteNature !== "zero_rated_wop"
       && !isExportTreatment(v.ledgers?.gst_treatment);
@@ -1193,7 +1186,12 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
       case "rcm_inward":
         accInto(isup_rev, v, sign); return;
       default:
-        accInto(osup_det, v, sign);
+        {
+          const nilValue = v.voucher_items.filter(isTaxFreeGstLine)
+            .reduce((sum, line) => sum + Number(line.taxable_paise || 0), 0);
+          accInto(osup_det, { ...v, subtotal_paise: v.subtotal_paise - nilValue }, sign);
+          osup_nil_exmp.txval += sign * nilValue;
+        }
     }
   };
 
@@ -1210,7 +1208,8 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
     if (v.is_interstate && !v.ledgers?.gstin) {
       const pos = (v.place_of_supply_code || v.ledgers?.state_code || compState).padStart(2, "0");
       const cur = unregMap.get(pos) ?? { pos, txval: 0, iamt: 0 };
-      cur.txval += v.subtotal_paise;
+      cur.txval += v.subtotal_paise - v.voucher_items.filter(isTaxFreeGstLine)
+        .reduce((sum, line) => sum + Number(line.taxable_paise || 0), 0);
       cur.iamt += v.igst_paise;
       unregMap.set(pos, cur);
     }
