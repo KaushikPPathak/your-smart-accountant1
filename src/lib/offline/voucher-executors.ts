@@ -15,6 +15,7 @@ import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { emitDataChange } from "@/lib/ai/cache-events";
 import { logActivity } from "@/lib/activity-log";
 import { nowIso, getDbInstance as getOfflineDb } from "@/lib/utils/sys-utils";
+import { validateInvoiceNumber } from "@/lib/vouchers/invoice-edit";
 
 
 export type VoucherExecutor = (snap: unknown) => Promise<void>;
@@ -145,7 +146,7 @@ async function nextLocalVoucherNumber(
 async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
   const db = await getOfflineDb();
   const voucherId = crypto.randomUUID();
-  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
+  const voucherNumber = snap.voucherNumber?.trim() || await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
   const stamp = nowIso();
   const lines = snap.lines.map(({ l, c }) => ({ l, c }));
 
@@ -277,6 +278,10 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
         }
       }
 
+      if (snap.voucherNumber?.trim()) {
+        const existing = await db.cache_vouchers.where("company_id").equals(snap.companyId).toArray();
+        validateInvoiceNumber(voucherNumber, snap.voucherDate, snap.voucherType, existing);
+      }
       await db.cache_vouchers.put({
         id: voucherId,
         company_id: snap.companyId,
@@ -536,6 +541,7 @@ export function getVoucherExecutor(key: string): VoucherExecutor | undefined {
 
 export interface ItemVoucherSnap {
   companyId: string;
+  voucherNumber?: string;
   voucherType:
     | "sales"
     | "purchase"
@@ -655,7 +661,7 @@ export async function runItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vou
     _type: snap.voucherType,
   });
   if (numErr) throw numErr;
-  const voucherNumber = numData as string;
+  const voucherNumber = snap.voucherNumber?.trim() || numData as string;
 
   const itemRows = lines.map(({ l, c }, i) => ({
     item_id: l.item_id,

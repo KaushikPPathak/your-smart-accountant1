@@ -157,6 +157,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     return () => clearVoucherContext();
   }, [partyId, voucherType]);
   const [refNo, setRefNo] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [originalVoucherId, setOriginalVoucherId] = useState<string | null>(null);
   const [sourceDocs, setSourceDocs] = useState<LinkedDoc[]>([]);
 
@@ -847,6 +848,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       voucherDate: date,
       partyId,
       refNo,
+      voucherNumber: invoiceNumber.trim() || undefined,
       narration,
       placeOfSupply,
       interstate,
@@ -903,6 +905,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     // Reset form INSTANTLY
     setPartyId("");
     setRefNo("");
+    setInvoiceNumber("");
     setOriginalVoucherId(null);
     setNarration("");
     setLines([blankLine()]);
@@ -961,6 +964,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     voucherType,
     date,
     refNo,
+    invoiceNumber,
     narration,
     interstate,
     totals,
@@ -1111,6 +1115,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         </div>
 
         <PeriodLockBanner lock={lock} />
+        {(voucherType === "sales" || voucherType === "purchase") && (
+          <div className="flex items-center gap-3">
+            <Label htmlFor="invoice-number">Invoice No.</Label>
+            <Input id="invoice-number" aria-label="Invoice number" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="Auto" className="w-48" disabled={!canWrite} />
+          </div>
+        )}
 
         <Card className="border-t-4 border-t-primary border-x-0 border-b-0 bg-theme-pale shadow-sm rounded-none">
           <CardContent className="p-4">
