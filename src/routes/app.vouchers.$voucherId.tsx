@@ -36,6 +36,7 @@ import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { resolveEditedGstDirection } from "@/lib/vouchers/edit-gst-direction";
 import { onDataChange } from "@/lib/ai/cache-events";
 import { isTaxFreeGstLine } from "@/lib/gst-supply-classification";
+import { editedInvoiceTotals, validateInvoiceNumber } from "@/lib/vouchers/invoice-edit";
 
 export const Route = createFileRoute("/app/vouchers/$voucherId")({
   head: () => ({ meta: [{ title: "Edit Voucher — Your Mehtaji" }] }),
@@ -358,8 +359,8 @@ function VoucherEditPage() {
   );
   const [gstOverride, setGstOverride] = useState<GstOverride>({});
   const totals = useMemo(
-    () => applyGstOverride(sumLines(computed), gstOverride, voucher?.is_interstate ?? false),
-    [computed, gstOverride, voucher?.is_interstate],
+    () => editedInvoiceTotals(computed, gstOverride, voucher?.is_interstate ?? false, voucher?.round_off_paise ?? 0),
+    [computed, gstOverride, voucher?.is_interstate, voucher?.round_off_paise],
   );
   const entryTotals = useMemo(() => {
     return entryLines.reduce(
@@ -430,6 +431,7 @@ function VoucherEditPage() {
       let itemRows: Record<string, unknown>[] = [];
       let entryRows: Record<string, unknown>[] = [];
       let headerPatch: Record<string, unknown> = {
+        voucher_number: voucher.voucher_number.trim(),
         voucher_date: voucher.voucher_date,
         reference_no: voucher.reference_no,
         narration: voucher.narration,
@@ -446,6 +448,7 @@ function VoucherEditPage() {
           sgst_paise: totals.sgst_paise,
           igst_paise: totals.igst_paise,
           total_paise: totals.total_paise,
+          round_off_paise: totals.round_off_paise,
         };
 
         itemRows = itemLines
@@ -549,6 +552,10 @@ function VoucherEditPage() {
         offlineDb.cache_voucher_items,
         offlineDb.cache_voucher_entries,
         async () => {
+          if (["sales", "purchase"].includes(voucher.voucher_type)) {
+            const all = await offlineDb.cache_vouchers.where("company_id").equals(voucher.company_id).toArray();
+            validateInvoiceNumber(voucher.voucher_number, voucher.voucher_date, voucher.voucher_type, all, voucher.id);
+          }
           const existing = await offlineDb.cache_vouchers.where("id").equals(voucher.id).first();
           await offlineDb.cache_vouchers.put({ ...(existing ?? {}), ...voucher, ...headerPatch });
           await offlineDb.cache_voucher_items.where("voucher_id").equals(voucher.id).delete();
@@ -787,7 +794,7 @@ function VoucherEditPage() {
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Voucher No.</Label>
-            <Input value={voucher.voucher_number} readOnly className="bg-muted" />
+            <Input aria-label="Invoice number" value={voucher.voucher_number} onChange={(e) => setVoucher({ ...voucher, voucher_number: e.target.value })} disabled={!canWrite || !["sales", "purchase"].includes(voucher.voucher_type)} />
           </div>
           <div className="md:col-span-3 space-y-1">
             <Label className="text-xs">Narration</Label>
@@ -869,7 +876,11 @@ function VoucherEditPage() {
                   />
                 ))}
               </div>
-              <span className="font-semibold font-mono">Total {formatINR(totals.total_paise)}</span>
+              <div className="space-y-2 text-right">
+                <Label htmlFor="invoice-round-off">Round off</Label>
+                <Input id="invoice-round-off" aria-label="Round off" type="number" step="0.01" value={(voucher.round_off_paise ?? 0) / 100} onChange={(e) => setVoucher({ ...voucher, round_off_paise: rupeesToPaise(Number(e.target.value) || 0) })} disabled={!canWrite} className="w-32 text-right" />
+                <span className="font-semibold font-mono">Total {formatINR(totals.total_paise)}</span>
+              </div>
             </div>
             <p className="px-3 pb-3 text-xs italic text-muted-foreground">{amountInWords(totals.total_paise)}</p>
           </CardContent>
