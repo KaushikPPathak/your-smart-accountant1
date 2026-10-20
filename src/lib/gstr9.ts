@@ -4,6 +4,7 @@ import {
   type VoucherRow,
 } from "@/lib/gst-returns";
 import { isTaxFreeGstLine } from "@/lib/gst-supply-classification";
+import { reconcileBillTaxLines } from "@/lib/gst-bill-lines";
 
 /**
  * GSTR-9 Phase 1
@@ -501,7 +502,7 @@ export function buildGstr9(
   const allVouchers = [
     ...sales,
     ...creditNotes,
-  ];
+  ].map((v) => ({ ...v, voucher_items: reconcileBillTaxLines(v.voucher_items, v) }));
 
   const classifiedVouchers = allVouchers.flatMap((voucher): VoucherRow[] => {
     // Only default domestic taxable documents need line-level partitioning.
@@ -524,8 +525,14 @@ export function buildGstr9(
 
     const sign: 1 | -1 = isCreditNote ? -1 : 1;
 
-    const nature =
-      voucher.supply_nature ?? "taxable";
+    const selectedNature = voucher.supply_nature ?? "taxable";
+    const treatment = voucher.ledgers?.gst_treatment;
+    const nature = selectedNature !== "taxable" ? selectedNature
+      : treatment === "deemed_export" ? "deemed_export"
+      : treatment === "sez_without_payment" ? "zero_rated_wop"
+      : treatment === "overseas" || treatment === "sez_with_payment"
+        ? (voucher.cgst_paise + voucher.sgst_paise + voucher.igst_paise > 0 ? "zero_rated_wp" : "zero_rated_wop")
+        : selectedNature;
 
     const totals = voucherTotals(
       voucher,
@@ -772,7 +779,7 @@ export function buildGstr9(
 
     hsn: buildHsn(allVouchers),
 
-    hsnInward: buildHsn(purchases),
+    hsnInward: buildHsn(purchases.map((v) => ({ ...v, voucher_items: reconcileBillTaxLines(v.voucher_items, v) }))),
 
     notes: (() => {
       const cn = zeroTaxTotals();

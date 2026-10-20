@@ -8,6 +8,7 @@ import type { Database } from "@/integrations/supabase/types";
 import type { XlsxSheet } from "@/lib/exporters";
 import { GSTR1_PORTAL_VERSION, DOC_TYPES, portalHsnBlock } from "./gstr1-portal-format";
 import { isTaxFreeGstLine } from "./gst-supply-classification";
+import { reconcileBillTaxLines } from "./gst-bill-lines";
 import {
   readCompanies,
   readItems,
@@ -519,7 +520,10 @@ export interface BuildGstr1Args {
 }
 
 export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
-  const { company, sales, creditNotes, fp, from, to, iffOnly } = args;
+  const { company, fp, from, to, iffOnly } = args;
+  const normalize = (v: VoucherRow): VoucherRow => ({ ...v, voucher_items: reconcileBillTaxLines(v.voucher_items, v) });
+  const sales = args.sales.map(normalize);
+  const creditNotes = args.creditNotes.map(normalize);
   const compState = company.state_code ?? "";
 
   const b2b: B2BInvoice[] = [];

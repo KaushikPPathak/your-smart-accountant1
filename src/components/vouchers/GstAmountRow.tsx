@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 /**
  * Bill-level GST amount that the user may overwrite to match the supplier's
@@ -17,28 +18,32 @@ export function GstAmountRow({
   onCommit: (value: string | undefined) => void;
 }) {
   const ref = useRef<HTMLInputElement | null>(null);
+  const [draft, setDraft] = useState((paise / 100).toFixed(2));
+  const dirty = useRef(false);
   useEffect(() => {
-    if (ref.current && document.activeElement !== ref.current) {
-      ref.current.value = (paise / 100).toFixed(2);
-    }
+    if (!dirty.current) setDraft((paise / 100).toFixed(2));
   }, [paise]);
   const commit = (raw: string) => {
+    if (!dirty.current) return;
+    dirty.current = false;
     const v = raw.replace(/[^0-9.]/g, "");
     onCommit(v === "" ? undefined : v);
+    setDraft(v === "" ? (paise / 100).toFixed(2) : v);
   };
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="text-muted-foreground">
         {label}
         {overridden && (
-          <button
+          <Button
             type="button"
-            className="ml-1 text-xs underline"
+            variant="link"
+            className="ml-1 h-auto p-0 text-xs underline"
             title="Restore calculated amount"
-            onClick={() => onCommit(undefined)}
+            onClick={() => { dirty.current = false; onCommit(undefined); }}
           >
             (auto)
-          </button>
+          </Button>
         )}
       </span>
       <Input
@@ -47,7 +52,8 @@ export function GstAmountRow({
         className="h-7 w-32 text-right font-mono"
         inputMode="decimal"
         autoComplete="off"
-        defaultValue={(paise / 100).toFixed(2)}
+        value={draft}
+        onChange={(e) => { dirty.current = true; setDraft(e.target.value); }}
         onFocus={(e) => e.currentTarget.select()}
         onBlur={(e) => commit(e.target.value)}
         onKeyDown={(e) => {
