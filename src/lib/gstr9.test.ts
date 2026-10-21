@@ -133,6 +133,32 @@ describe("GSTR-9 financial year", () => {
 });
 
 describe("GSTR-9 outward aggregation", () => {
+  it("separates overseas export sales from domestic B2C and nets export notes", () => {
+    const exportSale = voucher("EXP", "sales", false, [item(10000_00, 18, 1800_00, "9403")], 11800_00);
+    const overseas = { ...exportSale.ledgers, name: "Overseas", gstin: null, state_code: null, country: "USA", gst_treatment: "overseas" as const };
+    const result = buildGstr9({ company, financialYear: "2025-26", sales: [{ ...exportSale, ledgers: overseas }],
+      creditNotes: [{ ...voucher("ECN", "credit_note", false, [item(1000_00, 18, 180_00, "9403")], 1180_00), ledgers: overseas }] });
+    expect(result.outward.zeroRatedWithPayment.taxableValue).toBe(9000);
+    expect(result.outward.unregisteredTaxable.taxableValue).toBe(0);
+    expect(result.outward.zeroRatedWithPayment.totalTax).toBe(1620);
+  });
+
+  it("keeps explicit export without payment separate, even for zero-rate items", () => {
+    const result = buildGstr9({ company, financialYear: "2025-26", creditNotes: [], sales: [
+      voucher("EXP-LUT", "sales", false, [item(5000_00, 0, 0, "9403")], 5000_00, "zero_rated_wop") ] });
+    expect(result.outward.zeroRatedWithoutPayment.taxableValue).toBe(5000);
+    expect(result.outward.nilRated.taxableValue).toBe(0);
+    expect(result.outward.unregisteredTaxable.taxableValue).toBe(0);
+  });
+
+  it("uses edited bill tax in outward and HSN, never changes taxable for rounding", () => {
+    const v = { ...voucher("ROUND", "sales", false, [item(446600, 12, 53592, "6912")], 500000), cgst_paise: 26700, sgst_paise: 26700 };
+    const result = buildGstr9({ company, financialYear: "2025-26", sales: [v], creditNotes: [] });
+    expect(result.outward.unregisteredTaxable.taxableValue).toBe(4466);
+    expect(result.outward.unregisteredTaxable.totalTax).toBe(534);
+    expect(result.hsn[0].totalValue).toBe(5000);
+    expect(v.voucher_items[0].cgst_paise).toBe(26796);
+  });
   it("separates the 25000 tax-free line from INV.035 taxable sales", () => {
     const result = buildGstr9({ company, financialYear: "2025-26", creditNotes: [], sales: [
       voucher("INV.035", "sales", true, [item(25000_00, 12, 3000_00, "4911"),
