@@ -57,6 +57,15 @@ const voucher = (
 });
 
 describe("GSTR-1 HSN reconciliation", () => {
+  it("uses the saved editable IGST in B2CS and HSN without changing taxable value", () => {
+    const v = { ...voucher("ROUND", "sales", false, [{ ...item(446600, 12, 0, "6912"), igst_paise: 53592 }], 500000),
+      is_interstate: true, igst_paise: 53400 };
+    const result = buildGstr1({ company: { name: "Test", gstin: "36AAAAA0000A1Z5", state_code: "36" },
+      from: "2026-04-01", to: "2026-04-30", fp: "042026", sales: [v], creditNotes: [] });
+    expect(result.b2cs[0]).toMatchObject({ txval: 4466, iamt: 534 });
+    expect(result.hsn_b2c[0]).toMatchObject({ txval: 4466, iamt: 534, val: 5000 });
+    expect(() => assertGstr1Reconciled(result)).not.toThrow();
+  });
   it("excludes INV.035's 25000 tax-free item from B2B taxable value", () => {
     const mixed = voucher("INV.035", "sales", true, [item(25000_00, 12, 1500_00, "4911"),
       item(36000_00, 18, 3240_00, "9403"), item(25000_00, 0, 0, "69120040")], 95480_00);

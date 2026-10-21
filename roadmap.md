@@ -1,8 +1,8 @@
 # Roadmap
 
 ## In progress
-- [ ] Separate GSTR-9 exports from domestic B2C; reconcile saved GST totals without taxing invoice round-off.
-- [ ] Restore automatic purchase GST while preserving editable tax totals; allow explicit sales/purchase serial-number edits.
+- [x] Separate GSTR-9 exports from domestic B2C; reconcile saved GST totals without taxing invoice round-off. Relevant GST/GSTR-9 regression tests passed, including official workbook export checks.
+- [x] Restore automatic purchase GST while preserving editable tax totals; allow explicit sales/purchase serial-number edits. 38 focused tests passed; purchase create/save/reopen and explicit number, GST and round-off edits verified through the desktop UI.
 - [x] Correct linked invoice master refresh/GST state handling and mixed taxable/tax-free sales classification; 45 focused and 352 full-suite tests passed. Desktop bill save/reopen remains unverified: browser test stayed on company picker.
 - [x] Compare prescribed GSTR-9 template; consolidate outward/inward HSN summaries, include totals, and validate exports.
 - [x] Accounting Query Engine: tolerate minor ledger-name typos only when exactly one strong match exists (never guess between ledgers).

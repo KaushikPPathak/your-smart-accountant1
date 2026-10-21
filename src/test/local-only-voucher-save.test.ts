@@ -86,4 +86,20 @@ describe("local-only voucher saves", () => {
     expect(entries.reduce((s: number, e: any) => s + e.credit_paise, 0)).toBe(10_000);
     expect(await offlineDb.outbox.count()).toBe(0);
   });
+  it.each(["sales", "purchase"] as const)("persists an explicitly entered %s serial without changing its reference", async (voucherType) => {
+    const snap = {
+      companyId: COMPANY_ID, voucherType, voucherDate: "2026-07-07", partyId: PARTY_ID,
+      voucherNumber: "CUSTOM/26-27/007", refNo: "SUPPLIER-REF", narration: "", placeOfSupply: "24", interstate: false,
+      itcClass: "na" as const, itcEligible: true, originalVoucherId: null,
+      totals: { subtotal_paise: 10000, cgst_paise: 0, sgst_paise: 0, igst_paise: 0, round_off_paise: 0, total_paise: 10000 },
+      lines: [{ l: { item_id: ITEM_ID, description: "", qty: "1", rate: "100" },
+        c: { discount_paise: 0, amount_paise: 10000, taxable_paise: 10000, gst_rate: 0, cgst_paise: 0, sgst_paise: 0, igst_paise: 0, total_paise: 10000 } }],
+    };
+    const result = await runItemVoucherCreate(snap);
+    const saved = await offlineDb.cache_vouchers.get(result.voucherId);
+    expect(saved.voucher_number).toBe("CUSTOM/26-27/007");
+    expect(saved.reference_no).toBe("SUPPLIER-REF");
+    await expect(runItemVoucherCreate(snap)).rejects.toThrow("already exists");
+    expect(await offlineDb.cache_vouchers.where("company_id").equals(COMPANY_ID).count()).toBe(1);
+  });
 });
