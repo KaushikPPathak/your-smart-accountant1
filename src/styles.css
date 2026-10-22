@@ -66,29 +66,29 @@
    teal accent for CTAs, and category chip colors on KPI cards. */
 :root {
   --radius: 0.75rem;
-  --background: oklch(0.985 0.015 70);
-  --foreground: oklch(0.25 0.03 70);
-  --card: oklch(0.99 0.005 80);
-  --card-foreground: oklch(0.25 0.03 70);
-  --popover: oklch(0.98 0.01 80);
-  --popover-foreground: oklch(0.25 0.03 70);
-  --primary: oklch(0.72 0.17 50); /* Sunrise orange */
-  --primary-foreground: oklch(0.99 0.01 70);
-  --secondary: oklch(0.95 0.02 80);
-  --secondary-foreground: oklch(0.35 0.04 70);
-  --muted: oklch(0.96 0.02 80);
-  --muted-foreground: oklch(0.5 0.03 70);
-  --accent: oklch(0.9 0.07 60);
-  --accent-foreground: oklch(0.25 0.03 70);
+  --background: #6E5F56; /* Dorado canvas */
+  --foreground: #F7F3EE;
+  --card: #998A80; /* 15% lighter Dorado workspace card */
+  --card-foreground: #2D2622;
+  --popover: #7D6D63; /* 5% lighter Dorado dropdown */
+  --popover-foreground: #F7F3EE;
+  --primary: #A3876A; /* Sandal */
+  --primary-foreground: #F7F3EE;
+  --secondary: #8C7D73;
+  --secondary-foreground: #2D2622;
+  --muted: #8C7D73;
+  --muted-foreground: #423832;
+  --accent: #A3876A;
+  --accent-foreground: #F7F3EE;
   --destructive: oklch(0.6 0.15 25);
   --destructive-foreground: oklch(0.99 0 0);
   --success: oklch(0.65 0.1 160);
   --success-foreground: oklch(0.99 0 0);
   --warning: oklch(0.85 0.1 85);
   --warning-foreground: oklch(0.3 0.05 70);
-  --border: oklch(0.9 0.02 80);
-  --input: oklch(0.93 0.02 80);
-  --ring: oklch(0.72 0.17 50);
+  --border: #8C7862; /* Dorado border */
+  --input: #7D6D63;
+  --ring: #A3876A;
   --chart-1: oklch(0.65 0.08 180);
   --chart-2: oklch(0.75 0.1 160);
   --chart-3: oklch(0.85 0.1 85);
@@ -103,7 +103,7 @@
   --cat-report: oklch(0.65 0.06 200);
   --cat-master: oklch(0.65 0.08 180);
 
-  --gradient-brand: linear-gradient(135deg, oklch(0.72 0.17 50), oklch(0.68 0.19 20));
+  --gradient-brand: linear-gradient(135deg, #A3876A, #8C7862);
   --gradient-ai: linear-gradient(120deg, oklch(0.75 0.16 55), oklch(0.66 0.2 15), oklch(0.6 0.18 330));
   --gradient-accent: linear-gradient(135deg, oklch(0.75 0.1 160), oklch(0.85 0.05 180));
   --gradient-hero: radial-gradient(1200px 600px at 15% 0%, oklch(0.95 0.02 80 / 0.5), transparent 60%),
@@ -111,29 +111,28 @@
   --shadow-card: 0 1px 2px oklch(0.25 0.03 70 / 0.05), 0 4px 12px -6px oklch(0.25 0.03 70 / 0.1);
   --shadow-elevated: 0 10px 30px -14px oklch(0.25 0.03 70 / 0.2);
 
-  /* New Soft Palette (Golden Amber Theme)
-     --theme-base   : Primary golden amber
-     --theme-light  : Header/Ribbon background (very light amber)
-     --theme-pale   : Dropdown backgrounds (near white amber)
-     --theme-dark   : Hovers/Active states (warm amber)
-     --theme-ink    : Professional deep charcoal text
-     --theme-onDark : Dark text for bright surfaces */
-  /* Professional Accounting Theme (Golden Palette) */
-  --theme-base:  oklch(0.88 0.08 60);
-  --theme-light: oklch(0.97 0.025 65);
-  --theme-pale:  oklch(0.99 0.012 65);
-  --theme-dark:  oklch(0.7 0.17 45);
-  --theme-ink:   oklch(0.22 0.02 70);
-  --theme-onDark: oklch(0.99 0.01 70);
+  /* Dorado Workspace Theme (from approved design preview)
+     --theme-base   : Dorado canvas (#6E5F56)
+     --theme-light  : Header/Ribbon background (#5C4F47)
+     --theme-pale   : Dropdown backgrounds (#7D6D63)
+     --theme-dark   : Hovers/Active states (sandal #A3876A)
+     --theme-ink    : Light text on Dorado surfaces (#F7F3EE)
+     --theme-onDark : Dark text for lighter sandal/workspace surfaces (#2D2622) */
+  --theme-base:  #6E5F56;
+  --theme-light: #5C4F47;
+  --theme-pale:  #7D6D63;
+  --theme-dark:  #A3876A;
+  --theme-ink:   #F7F3EE;
+  --theme-onDark: #2D2622;
 
   /* Windows 10 specific palette adjustments
-     Maintains the professional accounting look but ensures standard 
+     Maintains the professional accounting look but ensures standard
      color spacing for clear contrast on Windows 10 displays. */
   @media screen and (min-width: 0px) {
-    --theme-base:  oklch(0.88 0.08 60);
-    --theme-light: oklch(0.97 0.025 65);
-    --theme-pale:  oklch(0.99 0.012 65);
-    --theme-dark:  oklch(0.7 0.17 45);
+    --theme-base:  #6E5F56;
+    --theme-light: #5C4F47;
+    --theme-pale:  #7D6D63;
+    --theme-dark:  #A3876A;
   }
 
   /* Backward compatibility for CSS classes using --amber-* */
@@ -150,14 +149,14 @@
   --restore-badge-highlight: oklch(0.9 0.06 300);
   --utility-badge-ink: oklch(0.99 0 0);
 
-  --sidebar: var(--theme-light);
-  --sidebar-foreground: var(--theme-ink);
-  --sidebar-primary: var(--theme-dark);
-  --sidebar-primary-foreground: var(--theme-onDark);
-  --sidebar-accent: var(--theme-dark);
-  --sidebar-accent-foreground: var(--theme-onDark);
-  --sidebar-border: oklch(0.9 0.04 60);
-  --sidebar-ring: var(--theme-dark);
+  --sidebar: #4E423B; /* Dorado header-top */
+  --sidebar-foreground: #F7F3EE;
+  --sidebar-primary: #A3876A;
+  --sidebar-primary-foreground: #F7F3EE;
+  --sidebar-accent: #5C4F47;
+  --sidebar-accent-foreground: #F7F3EE;
+  --sidebar-border: #8C7862;
+  --sidebar-ring: #A3876A;
 }
 
 .dark {

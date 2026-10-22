@@ -201,24 +201,43 @@ async function runAuthCodeFlow(id: ProviderId): Promise<{ code: string; verifier
   if (!clientId) throw new Error(`${PROVIDERS[id].label} is not configured (missing client ID).`);
   const provider = PROVIDERS[id];
 
-  const verifier = randomString(64);
-  const challenge = await sha256(verifier);
-  const state = randomString(24);
-
-  const params = new URLSearchParams({
-    client_id: clientId,
-    response_type: "code",
-    redirect_uri: getRedirectUri(),
-    scope: provider.scope,
-    state: `${id}:${state}`,
-    code_challenge: challenge,
-    code_challenge_method: "S256",
-    ...(provider.extraAuthParams ?? {}),
-  });
-  const authUrl = `${provider.authUrl}?${params.toString()}`;
-
-  const popup = openPopup(authUrl);
+  // Open the window synchronously, inside the click gesture. Awaiting PKCE
+  // hashing first loses the gesture context and browsers block the popup.
+  const popup = openPopup("about:blank");
   if (!popup) throw new Error("Popup blocked — please allow popups and try again.");
+
+  let authUrl: string;
+  try {
+    const verifier = randomString(64);
+    const challenge = await sha256(verifier);
+    const state = randomString(24);
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      response_type: "code",
+      redirect_uri: getRedirectUri(),
+      scope: provider.scope,
+      state: `${id}:${state}`,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      ...(provider.extraAuthParams ?? {}),
+    });
+    authUrl = `${provider.authUrl}?${params.toString()}`;
+    popup.location.href = authUrl;
+
+    return await waitForCode(id, popup, state, verifier);
+  } catch (err) {
+    try { popup.close(); } catch { /* ignore */ }
+    throw err;
+  }
+}
+
+function waitForCode(
+  id: ProviderId,
+  popup: Window,
+  state: string,
+  verifier: string,
+): Promise<{ code: string; verifier: string }> {
 
   return new Promise<{ code: string; verifier: string }>((resolve, reject) => {
     const cleanup = () => {

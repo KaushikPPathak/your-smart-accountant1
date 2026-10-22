@@ -3987,17 +3987,64 @@ function Gstr9PrintInputWorking({
   const reversal = table7?.total ?? periods.reduce((s, p) => s + p.itcReversal.total, 0);
 
   const zero = { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 };
+  type PrintTaxRow = typeof zero;
   const cn = result?.notes.creditNotes ?? zero;
   const dn = result?.notes.debitNotes ?? zero;
   const m4 = {
     taxableValue: dn.taxableValue - cn.taxableValue,
     igst: dn.igst - cn.igst, cgst: dn.cgst - cn.cgst, sgst: dn.sgst - cn.sgst, cess: dn.cess - cn.cess,
   };
-  const h4 = table4?.total ?? zero;
+  // Tables 4/5 must match the Excel exports: rows the books engine computes
+  // come from result.outward; only rows the engine does not track fall back
+  // to the saved "Filed GSTR-1" input. Subtotals sum the printed rows so the
+  // PDF always reconciles.
+  const pickRow = (
+    books: Gstr9TaxTotals | undefined,
+    input: Gstr9TaxAmount | undefined,
+  ): PrintTaxRow | undefined => {
+    if (books) {
+      return { taxableValue: books.taxableValue, igst: books.igst, cgst: books.cgst, sgst: books.sgst, cess: books.cess };
+    }
+    if (input) {
+      return { taxableValue: input.taxableValue, igst: input.igst, cgst: input.cgst, sgst: input.sgst, cess: input.cess };
+    }
+    return undefined;
+  };
+  const sumRows = (...rows: Array<PrintTaxRow | undefined>): PrintTaxRow =>
+    rows.reduce<PrintTaxRow>(
+      (acc, r) => ({
+        taxableValue: acc.taxableValue + (r?.taxableValue ?? 0),
+        igst: acc.igst + (r?.igst ?? 0),
+        cgst: acc.cgst + (r?.cgst ?? 0),
+        sgst: acc.sgst + (r?.sgst ?? 0),
+        cess: acc.cess + (r?.cess ?? 0),
+      }),
+      { ...zero },
+    );
+  const rowCells = (label: string, r?: PrintTaxRow) =>
+    [label, fmt(r?.taxableValue), fmt(r?.cgst), fmt(r?.sgst), fmt(r?.igst), fmt(r?.cess)];
+
+  const t4A = pickRow(result?.outward.unregisteredTaxable, table4?.b2cOther);
+  const t4B = pickRow(result?.outward.registeredTaxable, table4?.b2b);
+  const t4C = pickRow(result?.outward.zeroRatedWithPayment, table4?.exportsWithPayment);
+  const t4D = pickRow(undefined, table4?.sezWithPayment);
+  const t4E = pickRow(result?.outward.deemedExport, table4?.deemedExports);
+  const t4F = pickRow(undefined, table4?.advancesTaxPaid);
+  const t4G = pickRow(undefined, table4?.inwardSuppliesRcm);
+  const h4 = sumRows(t4A, t4B, t4C, t4D, t4E, t4F, t4G);
   const n4 = {
     taxableValue: h4.taxableValue + m4.taxableValue,
     igst: h4.igst + m4.igst, cgst: h4.cgst + m4.cgst, sgst: h4.sgst + m4.sgst, cess: h4.cess + m4.cess,
   };
+
+  const t5A = pickRow(result?.outward.zeroRatedWithoutPayment, table5?.exportsWithoutPayment);
+  const t5B = pickRow(undefined, table5?.sezWithoutPayment);
+  const t5C = pickRow(undefined, table5?.suppliesOnWhichTaxPayableByRecipient);
+  const t5D = pickRow(result?.outward.exempt, table5?.exemptSupplies);
+  const t5E = pickRow(result?.outward.nilRated, table5?.nilRatedSupplies);
+  const t5F = pickRow(result?.outward.nonGst, table5?.nonGstSupplies);
+  const g5 = sumRows(t5A, t5B, t5C, t5D, t5E, t5F);
+
   const totalsRow = (label: string, t: { taxableValue: number; igst: number; cgst: number; sgst: number; cess: number }) =>
     [label, money(t.taxableValue), money(t.cgst), money(t.sgst), money(t.igst), money(t.cess)];
   const hsnCols = ["HSN / SAC", "UQC", "Quantity", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess", "Total Tax"];
@@ -4023,16 +4070,16 @@ function Gstr9PrintInputWorking({
         <p className="mt-1 text-[9px] text-muted-foreground">Books are the primary Books-side source. {pr ? `Purchase Register fallback imported from ${pr.fileName}; it is a reconciliation source only and does not alter accounting vouchers.` : "If Books are not ready, import the Purchase Register from Excel/JSON on the GSTR-9 screen."}</p>
       </div>
 
-      {table4 && <OfficialTable title="Table 4 — Details of advances, inward and outward supplies made during the financial year on which tax is payable" columns={["Row", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess"]} rows={[
-        ["4A — Supplies made to un-registered persons (B2C)", fmt(table4.b2cOther.taxableValue), fmt(table4.b2cOther.cgst), fmt(table4.b2cOther.sgst), fmt(table4.b2cOther.igst), fmt(table4.b2cOther.cess)],
-        ["4B — Supplies made to registered persons (B2B)", fmt(table4.b2b.taxableValue), fmt(table4.b2b.cgst), fmt(table4.b2b.sgst), fmt(table4.b2b.igst), fmt(table4.b2b.cess)],
-        ["4C — Zero rated supply (Export) on payment of tax", fmt(table4.exportsWithPayment.taxableValue), fmt(table4.exportsWithPayment.cgst), fmt(table4.exportsWithPayment.sgst), fmt(table4.exportsWithPayment.igst), fmt(table4.exportsWithPayment.cess)],
-        ["4D — Supply to SEZs on payment of tax", fmt(table4.sezWithPayment.taxableValue), fmt(table4.sezWithPayment.cgst), fmt(table4.sezWithPayment.sgst), fmt(table4.sezWithPayment.igst), fmt(table4.sezWithPayment.cess)],
-        ["4E — Deemed Exports", fmt(table4.deemedExports.taxableValue), fmt(table4.deemedExports.cgst), fmt(table4.deemedExports.sgst), fmt(table4.deemedExports.igst), fmt(table4.deemedExports.cess)],
-        ["4F — Advances on which tax has been paid but invoice has not been issued", fmt(table4.advancesTaxPaid.taxableValue), fmt(table4.advancesTaxPaid.cgst), fmt(table4.advancesTaxPaid.sgst), fmt(table4.advancesTaxPaid.igst), fmt(table4.advancesTaxPaid.cess)],
-        ["4G — Inward supplies on which tax is to be paid on reverse charge basis", fmt(table4.inwardSuppliesRcm.taxableValue), fmt(table4.inwardSuppliesRcm.cgst), fmt(table4.inwardSuppliesRcm.sgst), fmt(table4.inwardSuppliesRcm.igst), fmt(table4.inwardSuppliesRcm.cess)],
+      {(table4 || result) && <OfficialTable title="Table 4 — Details of advances, inward and outward supplies made during the financial year on which tax is payable" columns={["Row", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess"]} rows={[
+        rowCells("4A — Supplies made to un-registered persons (B2C)", t4A),
+        rowCells("4B — Supplies made to registered persons (B2B)", t4B),
+        rowCells("4C — Zero rated supply (Export) on payment of tax", t4C),
+        rowCells("4D — Supply to SEZs on payment of tax", t4D),
+        rowCells("4E — Deemed Exports", t4E),
+        rowCells("4F — Advances on which tax has been paid but invoice has not been issued", t4F),
+        rowCells("4G — Inward supplies on which tax is to be paid on reverse charge basis", t4G),
         ["4G1 — Supplies on which e-commerce operator is required to pay tax u/s 9(5)", "—", "—", "—", "—", "—"],
-        ["4H — Sub-total (A to G1)", fmt(table4.total.taxableValue), fmt(table4.total.cgst), fmt(table4.total.sgst), fmt(table4.total.igst), fmt(table4.total.cess)],
+        totalsRow("4H — Sub-total (A to G1)", h4),
         totalsRow("4I — Credit Notes (-)", cn),
         totalsRow("4J — Debit Notes (+)", dn),
         ["4K — Supplies / tax declared through Amendments (+)", "—", "—", "—", "—", "—"],
@@ -4041,16 +4088,16 @@ function Gstr9PrintInputWorking({
         totalsRow("4N — Supplies and advances on which tax is to be paid (H + M)", n4),
       ]} />}
 
-      {table5 && <OfficialTable title="Table 5 — Details of outward supplies made during the financial year on which tax is not payable" columns={["Row", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess"]} rows={[
-        ["5A — Zero rated supply (Export) without payment of tax", fmt(table5.exportsWithoutPayment.taxableValue), fmt(table5.exportsWithoutPayment.cgst), fmt(table5.exportsWithoutPayment.sgst), fmt(table5.exportsWithoutPayment.igst), fmt(table5.exportsWithoutPayment.cess)],
-        ["5B — Supply to SEZs without payment of tax", fmt(table5.sezWithoutPayment.taxableValue), fmt(table5.sezWithoutPayment.cgst), fmt(table5.sezWithoutPayment.sgst), fmt(table5.sezWithoutPayment.igst), fmt(table5.sezWithoutPayment.cess)],
-        ["5C — Supplies on which tax is to be paid by recipient", fmt(table5.suppliesOnWhichTaxPayableByRecipient.taxableValue), fmt(table5.suppliesOnWhichTaxPayableByRecipient.cgst), fmt(table5.suppliesOnWhichTaxPayableByRecipient.sgst), fmt(table5.suppliesOnWhichTaxPayableByRecipient.igst), fmt(table5.suppliesOnWhichTaxPayableByRecipient.cess)],
-        ["5D — Exempted", fmt(table5.exemptSupplies.taxableValue), fmt(table5.exemptSupplies.cgst), fmt(table5.exemptSupplies.sgst), fmt(table5.exemptSupplies.igst), fmt(table5.exemptSupplies.cess)],
-        ["5E — Nil Rated", fmt(table5.nilRatedSupplies.taxableValue), fmt(table5.nilRatedSupplies.cgst), fmt(table5.nilRatedSupplies.sgst), fmt(table5.nilRatedSupplies.igst), fmt(table5.nilRatedSupplies.cess)],
-        ["5F — Non-GST supply (includes 'no supply')", fmt(table5.nonGstSupplies.taxableValue), fmt(table5.nonGstSupplies.cgst), fmt(table5.nonGstSupplies.sgst), fmt(table5.nonGstSupplies.igst), fmt(table5.nonGstSupplies.cess)],
-        ["5G — Sub-total (A to F)", fmt(table5.total.taxableValue), fmt(table5.total.cgst), fmt(table5.total.sgst), fmt(table5.total.igst), fmt(table5.total.cess)],
+      {(table5 || result) && <OfficialTable title="Table 5 — Details of outward supplies made during the financial year on which tax is not payable" columns={["Row", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess"]} rows={[
+        rowCells("5A — Zero rated supply (Export) without payment of tax", t5A),
+        rowCells("5B — Supply to SEZs without payment of tax", t5B),
+        rowCells("5C — Supplies on which tax is to be paid by recipient", t5C),
+        rowCells("5D — Exempted", t5D),
+        rowCells("5E — Nil Rated", t5E),
+        rowCells("5F — Non-GST supply (includes 'no supply')", t5F),
+        totalsRow("5G — Sub-total (A to F)", g5),
         ["5H–5L — Notes / amendments", "—", "—", "—", "—", "—"],
-        ["5M — Turnover on which tax is not to be paid", fmt(table5.total.taxableValue), "—", "—", "—", "—"],
+        ["5M — Turnover on which tax is not to be paid", money(g5.taxableValue), "—", "—", "—", "—"],
       ]} />}
 
       <p className="mb-2 text-[8px] text-muted-foreground">Current GSTR-3B input stores one combined RCM bucket, so the official 6C/6D split is intentionally not fabricated. Combined RCM working value: {fmt(rcm)}.</p>
