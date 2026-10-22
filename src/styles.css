@@ -111,29 +111,28 @@
   --shadow-card: 0 1px 2px oklch(0.25 0.03 70 / 0.05), 0 4px 12px -6px oklch(0.25 0.03 70 / 0.1);
   --shadow-elevated: 0 10px 30px -14px oklch(0.25 0.03 70 / 0.2);
 
-  /* New Soft Palette (Golden Amber Theme)
-     --theme-base   : Primary golden amber
-     --theme-light  : Header/Ribbon background (very light amber)
-     --theme-pale   : Dropdown backgrounds (near white amber)
-     --theme-dark   : Hovers/Active states (warm amber)
-     --theme-ink    : Professional deep charcoal text
-     --theme-onDark : Dark text for bright surfaces */
-  /* Professional Accounting Theme (Golden Palette) */
-  --theme-base:  oklch(0.88 0.08 60);
-  --theme-light: oklch(0.97 0.025 65);
-  --theme-pale:  oklch(0.99 0.012 65);
-  --theme-dark:  oklch(0.7 0.17 45);
-  --theme-ink:   oklch(0.22 0.02 70);
-  --theme-onDark: oklch(0.99 0.01 70);
+  /* Dorado Workspace Theme (from approved design preview)
+     --theme-base   : Dorado canvas (#6E5F56)
+     --theme-light  : Header/Ribbon background (#5C4F47)
+     --theme-pale   : Dropdown backgrounds (#7D6D63)
+     --theme-dark   : Hovers/Active states (sandal #A3876A)
+     --theme-ink    : Light text on Dorado surfaces (#F7F3EE)
+     --theme-onDark : Dark text for lighter sandal/workspace surfaces (#2D2622) */
+  --theme-base:  #6E5F56;
+  --theme-light: #5C4F47;
+  --theme-pale:  #7D6D63;
+  --theme-dark:  #A3876A;
+  --theme-ink:   #F7F3EE;
+  --theme-onDark: #2D2622;
 
   /* Windows 10 specific palette adjustments
-     Maintains the professional accounting look but ensures standard 
+     Maintains the professional accounting look but ensures standard
      color spacing for clear contrast on Windows 10 displays. */
   @media screen and (min-width: 0px) {
-    --theme-base:  oklch(0.88 0.08 60);
-    --theme-light: oklch(0.97 0.025 65);
-    --theme-pale:  oklch(0.99 0.012 65);
-    --theme-dark:  oklch(0.7 0.17 45);
+    --theme-base:  #6E5F56;
+    --theme-light: #5C4F47;
+    --theme-pale:  #7D6D63;
+    --theme-dark:  #A3876A;
   }
 
   /* Backward compatibility for CSS classes using --amber-* */
@@ -150,14 +149,14 @@
   --restore-badge-highlight: oklch(0.9 0.06 300);
   --utility-badge-ink: oklch(0.99 0 0);
 
-  --sidebar: var(--theme-light);
-  --sidebar-foreground: var(--theme-ink);
-  --sidebar-primary: var(--theme-dark);
-  --sidebar-primary-foreground: var(--theme-onDark);
-  --sidebar-accent: var(--theme-dark);
-  --sidebar-accent-foreground: var(--theme-onDark);
-  --sidebar-border: oklch(0.9 0.04 60);
-  --sidebar-ring: var(--theme-dark);
+  --sidebar: #4E423B; /* Dorado header-top */
+  --sidebar-foreground: #F7F3EE;
+  --sidebar-primary: #A3876A;
+  --sidebar-primary-foreground: #F7F3EE;
+  --sidebar-accent: #5C4F47;
+  --sidebar-accent-foreground: #F7F3EE;
+  --sidebar-border: #8C7862;
+  --sidebar-ring: #A3876A;
 }
 
 .dark {
