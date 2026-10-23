@@ -29,6 +29,7 @@ import {
   loadToken,
   uploadBackup,
   getClientId,
+  getRedirectUri,
   type ProviderId,
 } from "@/lib/cloud-providers";
 import { CloudProviderSetupDialog } from "./CloudProviderSetupDialog";
@@ -269,7 +270,7 @@ export function CloudBackupCard() {
           </div>
           <div className="rounded border bg-muted/30 p-2 text-[11px] text-muted-foreground">
             OAuth redirect URI to register with each provider:{" "}
-            <code>{typeof window !== "undefined" ? `${window.location.origin}/oauth-callback` : "/oauth-callback"}</code>
+            <code>{getRedirectUri() || "/oauth-callback"}</code>
           </div>
         </div>
       </CardContent>
