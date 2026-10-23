@@ -3,6 +3,7 @@
 ## In progress
 - [x] GSTR-9 PDF Tables 4/5 now use books-derived figures (same source as Excel exports); sub-totals sum printed rows; regression test uses the customer's exact B2C/B2B figures
 - [x] Cloud backup popup: OAuth window now opens synchronously in the click gesture before async PKCE work, so browsers no longer block it
+- [x] Cloud backup on desktop app: sign-in opens in an app window (desktop shell has no popups); redirect http://localhost/oauth-callback intercepted by the shell — needs a new desktop build + users re-register the redirect address
 - [x] Colour theme switched to the Dorado palette from the uploaded design file (canvas #6E5F56, workspace #998A80, sandal #A3876A); verified on the app shell
 - [x] Separate GSTR-9 exports from domestic B2C; reconcile saved GST totals without taxing invoice round-off. Relevant GST/GSTR-9 regression tests passed, including official workbook export checks.
 - [x] Restore automatic purchase GST while preserving editable tax totals; allow explicit sales/purchase serial-number edits. 38 focused tests passed; purchase create/save/reopen and explicit number, GST and round-off edits verified through the desktop UI.

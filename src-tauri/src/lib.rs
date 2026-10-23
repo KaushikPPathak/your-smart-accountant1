@@ -1,8 +1,69 @@
 use std::sync::Mutex;
-use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 const WEBVIEW_SUBDIR: &str = "EBWebView";
 const WA_WINDOW_LABEL: &str = "whatsapp_web";
+const OAUTH_WINDOW_LABEL: &str = "oauth_signin";
+
+/// True when the provider is redirecting back to our cloud-backup callback.
+/// The redirect target never has to exist — we intercept the navigation.
+fn is_oauth_callback(url: &tauri::Url) -> bool {
+    let host_ok = matches!(
+        url.host_str(),
+        Some("localhost") | Some("127.0.0.1") | Some("tauri.localhost")
+    );
+    host_ok && url.path() == "/oauth-callback"
+}
+
+/// Opens the provider sign-in page in its own app window (window.open is
+/// unavailable inside the desktop shell, which caused "Popup blocked").
+/// When the provider redirects to /oauth-callback, the URL is sent to the
+/// main window as an `oauth-callback` event and the window closes.
+#[tauri::command]
+async fn start_oauth_window(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let target: tauri::Url = url.parse().map_err(|e| format!("invalid url: {e}"))?;
+
+    if let Some(existing) = app.get_webview_window(OAUTH_WINDOW_LABEL) {
+        existing
+            .navigate(target)
+            .map_err(|e| format!("navigate failed: {e}"))?;
+        existing.show().ok();
+        existing.set_focus().ok();
+        return Ok(());
+    }
+
+    let local_data = app
+        .path()
+        .local_data_dir()
+        .map_err(|e| format!("local_data_dir failed: {e}"))?;
+    let webview_dir = local_data.join(WEBVIEW_SUBDIR);
+    std::fs::create_dir_all(&webview_dir).map_err(|e| format!("create_dir failed: {e}"))?;
+
+    let handle = app.clone();
+    WebviewWindowBuilder::new(&app, OAUTH_WINDOW_LABEL, WebviewUrl::External(target))
+        .title("Sign in for cloud backup")
+        .inner_size(560.0, 720.0)
+        .resizable(true)
+        .center()
+        .visible(true)
+        .data_directory(webview_dir)
+        .on_navigation(move |nav_url| {
+            if is_oauth_callback(nav_url) {
+                let _ = handle.emit("oauth-callback", nav_url.to_string());
+                let h = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Some(w) = h.get_webview_window(OAUTH_WINDOW_LABEL) {
+                        let _ = w.close();
+                    }
+                });
+                return false;
+            }
+            true
+        })
+        .build()
+        .map_err(|e| format!("window build failed: {e}"))?;
+    Ok(())
+}
 
 pub struct WhatsAppState {
     last_phone: Mutex<Option<String>>,
@@ -115,6 +176,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             copy_files_to_clipboard,
             show_whatsapp_web,
+            start_oauth_window,
             exit_app,
         ])
         .setup(|app| {
@@ -141,6 +203,8 @@ pub fn run() {
         let label = window.label();
         if label == "main" {
             window.app_handle().exit(0);
+        } else if label == OAUTH_WINDOW_LABEL {
+            let _ = window.app_handle().emit("oauth-closed", ());
         } else if label == WA_WINDOW_LABEL {
             let state = window.app_handle().state::<WhatsAppState>();
             let _ = state.last_phone.lock().map(|mut last| {
