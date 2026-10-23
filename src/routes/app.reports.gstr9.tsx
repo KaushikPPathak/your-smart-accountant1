@@ -3987,63 +3987,17 @@ function Gstr9PrintInputWorking({
   const reversal = table7?.total ?? periods.reduce((s, p) => s + p.itcReversal.total, 0);
 
   const zero = { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 };
-  type PrintTaxRow = typeof zero;
   const cn = result?.notes.creditNotes ?? zero;
   const dn = result?.notes.debitNotes ?? zero;
-  const m4 = {
-    taxableValue: dn.taxableValue - cn.taxableValue,
-    igst: dn.igst - cn.igst, cgst: dn.cgst - cn.cgst, sgst: dn.sgst - cn.sgst, cess: dn.cess - cn.cess,
-  };
   // Tables 4/5 must match the Excel exports: rows the books engine computes
   // come from result.outward; only rows the engine does not track fall back
   // to the saved "Filed GSTR-1" input. Subtotals sum the printed rows so the
   // PDF always reconciles.
-  const pickRow = (
-    books: Gstr9TaxTotals | undefined,
-    input: Gstr9TaxAmount | undefined,
-  ): PrintTaxRow | undefined => {
-    if (books) {
-      return { taxableValue: books.taxableValue, igst: books.igst, cgst: books.cgst, sgst: books.sgst, cess: books.cess };
-    }
-    if (input) {
-      return { taxableValue: input.taxableValue, igst: input.igst, cgst: input.cgst, sgst: input.sgst, cess: input.cess };
-    }
-    return undefined;
-  };
-  const sumRows = (...rows: Array<PrintTaxRow | undefined>): PrintTaxRow =>
-    rows.reduce<PrintTaxRow>(
-      (acc, r) => ({
-        taxableValue: acc.taxableValue + (r?.taxableValue ?? 0),
-        igst: acc.igst + (r?.igst ?? 0),
-        cgst: acc.cgst + (r?.cgst ?? 0),
-        sgst: acc.sgst + (r?.sgst ?? 0),
-        cess: acc.cess + (r?.cess ?? 0),
-      }),
-      { ...zero },
-    );
-  const rowCells = (label: string, r?: PrintTaxRow) =>
+  const { t4A, t4B, t4C, t4D, t4E, t4F, t4G, h4, m4, n4, t5A, t5B, t5C, t5D, t5E, t5F, g5 } =
+    resolveGstr9PrintOutward(result, table4, table5);
+  const rowCells = (label: string, r?: Gstr9PrintTaxRow) =>
     [label, fmt(r?.taxableValue), fmt(r?.cgst), fmt(r?.sgst), fmt(r?.igst), fmt(r?.cess)];
 
-  const t4A = pickRow(result?.outward.unregisteredTaxable, table4?.b2cOther);
-  const t4B = pickRow(result?.outward.registeredTaxable, table4?.b2b);
-  const t4C = pickRow(result?.outward.zeroRatedWithPayment, table4?.exportsWithPayment);
-  const t4D = pickRow(undefined, table4?.sezWithPayment);
-  const t4E = pickRow(result?.outward.deemedExport, table4?.deemedExports);
-  const t4F = pickRow(undefined, table4?.advancesTaxPaid);
-  const t4G = pickRow(undefined, table4?.inwardSuppliesRcm);
-  const h4 = sumRows(t4A, t4B, t4C, t4D, t4E, t4F, t4G);
-  const n4 = {
-    taxableValue: h4.taxableValue + m4.taxableValue,
-    igst: h4.igst + m4.igst, cgst: h4.cgst + m4.cgst, sgst: h4.sgst + m4.sgst, cess: h4.cess + m4.cess,
-  };
-
-  const t5A = pickRow(result?.outward.zeroRatedWithoutPayment, table5?.exportsWithoutPayment);
-  const t5B = pickRow(undefined, table5?.sezWithoutPayment);
-  const t5C = pickRow(undefined, table5?.suppliesOnWhichTaxPayableByRecipient);
-  const t5D = pickRow(result?.outward.exempt, table5?.exemptSupplies);
-  const t5E = pickRow(result?.outward.nilRated, table5?.nilRatedSupplies);
-  const t5F = pickRow(result?.outward.nonGst, table5?.nonGstSupplies);
-  const g5 = sumRows(t5A, t5B, t5C, t5D, t5E, t5F);
 
   const totalsRow = (label: string, t: { taxableValue: number; igst: number; cgst: number; sgst: number; cess: number }) =>
     [label, money(t.taxableValue), money(t.cgst), money(t.sgst), money(t.igst), money(t.cess)];
