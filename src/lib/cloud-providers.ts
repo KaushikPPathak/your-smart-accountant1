@@ -128,8 +128,22 @@ export function getClientId(id: ProviderId): string | null {
 }
 
 
+function isTauriShell(): boolean {
+  if (typeof window === "undefined") return false;
+  const w = window as unknown as { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
+  return Boolean(w.__TAURI__ || w.__TAURI_INTERNALS__);
+}
+
+/**
+ * Desktop app: providers only accept plain-http redirects to `localhost`, so
+ * we register http://localhost/oauth-callback. The desktop shell intercepts
+ * that redirect inside its sign-in window — nothing needs to listen there.
+ */
+export const DESKTOP_REDIRECT_URI = "http://localhost/oauth-callback";
+
 export function getRedirectUri(): string {
   if (typeof window === "undefined") return "";
+  if (isTauriShell()) return DESKTOP_REDIRECT_URI;
   return `${window.location.origin}/oauth-callback`;
 }
 
@@ -196,35 +210,88 @@ function openPopup(url: string): Window | null {
   );
 }
 
+function buildAuthUrl(id: ProviderId, clientId: string, state: string, challenge: string): string {
+  const provider = PROVIDERS[id];
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    redirect_uri: getRedirectUri(),
+    scope: provider.scope,
+    state: `${id}:${state}`,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    ...(provider.extraAuthParams ?? {}),
+  });
+  return `${provider.authUrl}?${params.toString()}`;
+}
+
+/**
+ * Desktop app flow: the shell opens its own sign-in window (window.open is
+ * not available there) and sends back the redirect URL as an event.
+ */
+async function runDesktopAuthCodeFlow(id: ProviderId, clientId: string): Promise<{ code: string; verifier: string }> {
+  const { listen } = await import("@tauri-apps/api/event");
+  const { invoke } = await import("@tauri-apps/api/core");
+  const verifier = randomString(64);
+  const challenge = await sha256(verifier);
+  const state = randomString(24);
+  const authUrl = buildAuthUrl(id, clientId, state, challenge);
+
+  const unlisteners: Array<() => void> = [];
+  const cleanup = () => { unlisteners.forEach((u) => { try { u(); } catch { /* ignore */ } }); };
+
+  return new Promise<{ code: string; verifier: string }>((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => { if (settled) return; settled = true; cleanup(); fn(); };
+    (async () => {
+      try {
+        unlisteners.push(await listen<string>("oauth-callback", (ev) => {
+          let url: URL;
+          try { url = new URL(ev.payload); } catch { return; }
+          const gotState = url.searchParams.get("state") ?? "";
+          if (!gotState.startsWith(`${id}:`)) return;
+          if (gotState !== `${id}:${state}`) {
+            finish(() => reject(new Error("OAuth state mismatch — aborted for safety.")));
+            return;
+          }
+          const code = url.searchParams.get("code");
+          const err = url.searchParams.get("error_description") || url.searchParams.get("error");
+          if (err || !code) finish(() => reject(new Error(err || "Sign-in cancelled.")));
+          else finish(() => resolve({ code, verifier }));
+        }));
+        unlisteners.push(await listen("oauth-closed", () => {
+          // Give a just-emitted callback a moment to arrive first.
+          setTimeout(() => finish(() => reject(new Error("Sign-in window closed before completion."))), 300);
+        }));
+        await invoke("start_oauth_window", { url: authUrl });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        finish(() => reject(new Error(
+          /not found|unknown command|not allowed/i.test(msg)
+            ? "This desktop version can't open the sign-in window. Please install the latest Smart Accountant update."
+            : `Could not open sign-in window: ${msg}`,
+        )));
+      }
+    })();
+  });
+}
+
 async function runAuthCodeFlow(id: ProviderId): Promise<{ code: string; verifier: string }> {
   const clientId = getClientId(id);
   if (!clientId) throw new Error(`${PROVIDERS[id].label} is not configured (missing client ID).`);
-  const provider = PROVIDERS[id];
 
-  // Open the window synchronously, inside the click gesture. Awaiting PKCE
-  // hashing first loses the gesture context and browsers block the popup.
+  if (isTauriShell()) return runDesktopAuthCodeFlow(id, clientId);
+
+  // Browser: open the window synchronously, inside the click gesture.
+  // Awaiting PKCE hashing first loses the gesture context and browsers block the popup.
   const popup = openPopup("about:blank");
-  if (!popup) throw new Error("Popup blocked — please allow popups and try again.");
+  if (!popup) throw new Error("Popup blocked — please allow popups for this site and try again.");
 
-  let authUrl: string;
   try {
     const verifier = randomString(64);
     const challenge = await sha256(verifier);
     const state = randomString(24);
-
-    const params = new URLSearchParams({
-      client_id: clientId,
-      response_type: "code",
-      redirect_uri: getRedirectUri(),
-      scope: provider.scope,
-      state: `${id}:${state}`,
-      code_challenge: challenge,
-      code_challenge_method: "S256",
-      ...(provider.extraAuthParams ?? {}),
-    });
-    authUrl = `${provider.authUrl}?${params.toString()}`;
-    popup.location.href = authUrl;
-
+    popup.location.href = buildAuthUrl(id, clientId, state, challenge);
     return await waitForCode(id, popup, state, verifier);
   } catch (err) {
     try { popup.close(); } catch { /* ignore */ }
