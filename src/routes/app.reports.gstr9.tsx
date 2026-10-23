@@ -66,6 +66,10 @@ import {
   loadGstr9InputRecord,
   saveGstr9InputRecord,
 } from "@/lib/gstr9-input-store";
+import {
+  resolveGstr9PrintOutward,
+  type Gstr9PrintTaxRow,
+} from "@/lib/gstr9-print-rows";
 import { analyseGstr1ExcelBuffer } from "@/lib/gstr1-excel-import";
 import { analyseGstr3bExcelBuffer } from "@/lib/gstr3b-excel-import";
 import { parseGstr9PurchaseRegisterExcel, parseGstr9PurchaseRegisterJson, type Gstr9PurchaseRegisterImport } from "@/lib/gstr9-purchase-register";
