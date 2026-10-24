@@ -1083,12 +1083,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   return (
     <div className="grid gap-4 lg:grid-cols-1 lg:has-[[data-recent-open]]:grid-cols-[minmax(0,1fr)_300px]">
       <div ref={enterTab.ref} onKeyDown={enterTab.onKeyDown} className="space-y-4">
-        <div className="flex items-center justify-between border-b border-border/60 bg-white/50 px-4 py-2" style={{ borderTop: `3px solid var(--cat-${voucherType.split('_')[0]})` }}>
+        <div className="flex items-center justify-between border-b border-border/60 bg-card px-4 py-2 text-card-foreground" style={{ borderTop: `3px solid var(--cat-${voucherType.split('_')[0]})` }}>
           <div className="flex flex-col">
             <h2 className="text-xl font-bold tracking-tight text-foreground">{cfg.title}</h2>
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80">
-              <kbd className="rounded border bg-white px-1 shadow-sm">Enter</kbd> next field
-              <kbd className="ml-1 rounded border bg-white px-1 shadow-sm">Ctrl+S</kbd> save
+              <kbd className="rounded border bg-muted px-1 shadow-sm">Enter</kbd> next field
+              <kbd className="ml-1 rounded border bg-muted px-1 shadow-sm">Ctrl+S</kbd> save
               {interstate && (
                 <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 font-bold uppercase tracking-tighter text-primary">
                   Interstate (IGST)
@@ -1122,7 +1122,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           </div>
         )}
 
-        <Card className="border-t-4 border-t-primary border-x-0 border-b-0 bg-theme-pale shadow-sm rounded-none">
+        <Card className="border-t-4 border-t-primary border-x-0 border-b-0 bg-card text-card-foreground shadow-sm rounded-none">
           <CardContent className="p-4">
             <div className="grid gap-6 md:grid-cols-[1fr_2fr_1fr_auto] md:items-start">
               <div className="space-y-1.5">
@@ -1355,7 +1355,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 </>
               )}
               {supplyNature !== "taxable" && (
-                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
+                <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-foreground">
                   Will be reported under GSTR-1 {supplyNature === "nil_rated" || supplyNature === "exempt" || supplyNature === "non_gst" ? "Nil / Exempt / Non-GST" : "Exports"} section
                 </span>
               )}
@@ -1363,7 +1363,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           </CardContent>
         </Card>
 
-        <Card className="border-x-0 border-y shadow-none rounded-none bg-white">
+        <Card className="border-x-0 border-y shadow-none rounded-none bg-card text-card-foreground">
           <CardContent className="p-0">
             <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-1">
               <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">Particulars</span>
