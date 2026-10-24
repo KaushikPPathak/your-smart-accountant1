@@ -81,8 +81,8 @@ export function BackupNudgeBanner() {
 
   const severe = days !== null && days >= 14;
   const tone = severe
-    ? "border-destructive/50 bg-destructive/10 text-destructive"
-    : "border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200";
+    ? "border-destructive/50 bg-card text-card-foreground"
+    : "border-warning/50 bg-card text-card-foreground";
 
   const onSnooze = () => {
     try {

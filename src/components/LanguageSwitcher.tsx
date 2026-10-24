@@ -83,13 +83,7 @@ export function LanguageSwitcher({
 
   const typeLabel = voucherType.replace(/_/g, " ");
   
-  // Dynamic color based on voucher type to match card themes
-  const colorClass = 
-    voucherType === "sales" ? "bg-blue-50/50 text-blue-900 border-blue-100" :
-    voucherType === "purchase" ? "bg-amber-50/50 text-amber-900 border-amber-100" :
-    voucherType === "receipt" ? "bg-green-50/50 text-green-900 border-green-100" :
-    voucherType === "payment" ? "bg-rose-50/50 text-rose-900 border-rose-100" :
-    "bg-muted/50 text-muted-foreground border-muted";
+  const colorClass = "bg-card text-card-foreground border-border";
 
   return (
     <Card className={`border shadow-sm ${colorClass}`}>
@@ -110,7 +104,7 @@ export function LanguageSwitcher({
               <li key={r.id}>
                 <Button
                   variant="ghost"
-                  className="h-auto w-full justify-between px-2 py-1.5 text-left hover:bg-black/5 rounded-md transition-colors"
+                  className="h-auto w-full justify-between px-2 py-1.5 text-left hover:bg-accent rounded-md transition-colors"
                   onClick={() => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } }))}
                 >
                   <div className="flex flex-col items-start overflow-hidden">

@@ -114,13 +114,7 @@ export function RecentVouchersPanel({
   }
 
   return (
-    <Card data-recent-open className={
-      voucherType === "sales" ? "bg-blue-50/50 border-blue-100" :
-      voucherType === "purchase" ? "bg-amber-50/50 border-amber-100" :
-      voucherType === "receipt" ? "bg-green-50/50 border-green-100" :
-      voucherType === "payment" ? "bg-rose-50/50 border-rose-100" :
-      ""
-    }>
+    <Card data-recent-open className="bg-card text-card-foreground border-border">
       <CardContent className="p-3">
         <div className="mb-2 flex items-center justify-between border-b pb-2">
           <div className="flex items-center gap-2">
@@ -145,7 +139,7 @@ export function RecentVouchersPanel({
             <li key={r.id}>
               <Button
                 variant="ghost"
-                className="h-auto w-full justify-between px-2 py-1.5 text-left hover:bg-black/5 rounded-md transition-colors"
+                className="h-auto w-full justify-between px-2 py-1.5 text-left hover:bg-accent rounded-md transition-colors"
                 onClick={() => (markVoucherOrigin(), navigate({ to: "/app/vouchers/$voucherId", params: { voucherId: r.id } }))}
               >
                 <div className="flex flex-col items-start overflow-hidden">
