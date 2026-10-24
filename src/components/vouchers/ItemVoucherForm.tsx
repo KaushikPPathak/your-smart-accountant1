@@ -1135,7 +1135,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   <span className="flex gap-2 normal-case">
                     <button
                       type="button"
-                      className="text-primary hover:underline text-xs inline-flex items-center gap-0.5"
+                      className="text-foreground hover:underline text-xs inline-flex items-center gap-0.5"
                       onClick={() => setLedgerDlg({ open: true, editId: null })}
                       title="New ledger (F3)"
                     >
@@ -1144,7 +1144,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     {partyId && (
                       <button
                         type="button"
-                        className="text-primary hover:underline text-xs inline-flex items-center gap-0.5"
+                        className="text-foreground hover:underline text-xs inline-flex items-center gap-0.5"
                         onClick={() => setLedgerDlg({ open: true, editId: partyId })}
                         title="Edit party (Shift+F3)"
                       >
