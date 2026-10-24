@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -107,7 +108,7 @@ export function Combo({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
+        <Button
           ref={triggerRef}
           type="button"
           role="combobox"
@@ -131,7 +132,7 @@ export function Combo({
             }
           }}
           className={cn(
-            "flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-9 w-full items-center justify-between rounded-md border border-border bg-input px-3 py-1 text-sm font-normal text-foreground shadow-sm ring-offset-background hover:bg-input hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
             className,
           )}
         >
@@ -139,7 +140,7 @@ export function Combo({
             {selected ? selected.label : placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         className="w-(--radix-popover-trigger-width) min-w-[260px] p-0"

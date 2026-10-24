@@ -475,17 +475,7 @@ function StartScreen() {
       .join("") || "?";
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          background:
-            "radial-gradient(1100px 520px at 15% -10%, hsl(245 90% 62% / 0.20), transparent 60%)," +
-            "radial-gradient(900px 480px at 100% 110%, hsl(330 90% 60% / 0.18), transparent 60%)," +
-            "linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background)) 100%)",
-        }}
-      />
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px"
@@ -589,7 +579,7 @@ function StartScreen() {
                 tabIndex={i === Math.min(focusedCompanyIndex, companies.length - 1) ? 0 : -1}
                 onFocus={() => setFocusedCompanyIndex(i)}
                 onClick={() => openCompany(c)}
-                className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border/60 bg-card/80 p-4 text-left backdrop-blur transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-elevated focus:outline-none focus:ring-2 focus:ring-primary/40 animate-in fade-in slide-in-from-bottom-2"
+                className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border/60 bg-card p-4 text-left text-card-foreground backdrop-blur transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-elevated focus:outline-none focus:ring-2 focus:ring-primary/40 animate-in fade-in slide-in-from-bottom-2"
                 style={{ animationDelay: `${i * 40}ms`, animationFillMode: "both" }}
               >
                 <div
