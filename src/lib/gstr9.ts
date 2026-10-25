@@ -104,6 +104,25 @@ export interface Gstr9Reconciliation {
   balanced: boolean;
 }
 
+export interface Gstr9Contribution extends Gstr9TaxTotals {
+  voucherId: string;
+  voucherNumber: string;
+  voucherDate: string;
+  voucherType: string;
+  party: string;
+  gstin: string | null;
+  nature: string;
+  bucket: keyof Gstr9OutwardSummary;
+  items: VoucherRow["voucher_items"];
+}
+
+export interface Gstr9HsnContribution extends Gstr9Contribution {
+  hsn: string;
+  uqc: string;
+  gstRate: number;
+  quantity: number;
+}
+
 export interface Gstr9Result {
   period: Gstr9Period;
 
@@ -150,6 +169,13 @@ export interface Gstr9Result {
   };
 
   warnings: string[];
+  /** Read-only provenance from the exact classified/reconciled reporting rows. */
+  details?: {
+    outward: Gstr9Contribution[];
+    notes: Gstr9Contribution[];
+    hsnOutward: Gstr9HsnContribution[];
+    hsnInward: Gstr9HsnContribution[];
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -459,6 +485,31 @@ export interface BuildGstr9Args {
   purchases?: VoucherRow[];
 }
 
+function contribution(voucher: VoucherRow, totals: Gstr9TaxTotals, nature: string,
+  bucket: keyof Gstr9OutwardSummary): Gstr9Contribution {
+  return { ...totals, voucherId: voucher.id, voucherNumber: voucher.voucher_number,
+    voucherDate: voucher.voucher_date, voucherType: voucher.voucher_type,
+    party: voucher.ledgers?.name ?? "—", gstin: voucher.ledgers?.gstin ?? null,
+    nature, bucket, items: voucher.voucher_items };
+}
+
+function hsnContributions(vouchers: VoucherRow[]): Gstr9HsnContribution[] {
+  return vouchers.flatMap((voucher) => (voucher.voucher_items ?? []).flatMap((line) => {
+    const hsn = String(line.items?.hsn_code ?? "").trim();
+    if (!hsn) return [];
+    const sign = voucher.voucher_type === "credit_note" ? -1 : 1;
+    const taxableValue = rupees(sign * Number(line.taxable_paise || 0));
+    const igst = rupees(sign * Number(line.igst_paise || 0));
+    const cgst = rupees(sign * Number(line.cgst_paise || 0));
+    const sgst = rupees(sign * Number(line.sgst_paise || 0));
+    const totalTax = roundRupees(igst + cgst + sgst);
+    return [{ ...contribution(voucher, { taxableValue, igst, cgst, sgst, cess: 0,
+      totalTax, grossValue: roundRupees(taxableValue + totalTax) }, voucher.supply_nature, "totalOutward"),
+      items: [line], hsn, uqc: String(line.items?.unit ?? "OTH"), gstRate: Number(line.gst_rate),
+      quantity: sign * Number(line.qty || 0) }];
+  }));
+}
+
 export function buildGstr9(
   args: BuildGstr9Args,
 ): Gstr9Result {
@@ -519,6 +570,8 @@ export function buildGstr9(
       subtotal_paise: voucher.subtotal_paise - amount, total_paise: voucher.total_paise - amount }, nilVoucher] : [nilVoucher];
   });
 
+  const outwardDetails: Gstr9Contribution[] = [];
+
   for (const voucher of classifiedVouchers) {
     const isCreditNote =
       voucher.voucher_type === "credit_note";
@@ -538,6 +591,15 @@ export function buildGstr9(
       voucher,
       sign,
     );
+
+    const bucket: keyof Gstr9OutwardSummary = nature === "zero_rated_wp" ? "zeroRatedWithPayment"
+      : nature === "zero_rated_wop" ? "zeroRatedWithoutPayment"
+      : nature === "deemed_export" ? "deemedExport"
+      : nature === "nil_rated" ? "nilRated"
+      : nature === "exempt" ? "exempt"
+      : nature === "non_gst" ? "nonGst"
+      : isRegistered(voucher) ? "registeredTaxable" : "unregisteredTaxable";
+    outwardDetails.push(contribution(voucher, totals, nature, bucket));
 
     switch (nature) {
       case "zero_rated_wp":
@@ -799,6 +861,12 @@ export function buildGstr9(
     },
 
     warnings,
+    details: {
+      outward: outwardDetails,
+      notes: creditNotes.map((v) => contribution(v, voucherTotals(v, 1), v.supply_nature, "totalOutward")),
+      hsnOutward: hsnContributions(allVouchers),
+      hsnInward: hsnContributions(purchases.map((v) => ({ ...v, voucher_items: reconcileBillTaxLines(v.voucher_items, v) }))),
+    },
   };
 }
 
