@@ -1,6 +1,8 @@
 # Roadmap
 
 ## In progress
+- [ ] Make print preview/paper white with readable dark text, independent of the app theme.
+- [ ] Replace split WhatsApp ledger tables with chronological entries, continuous balances and intact page rows; verify multipage PDFs.
 - [x] Darken company picker, company workspace and invoice backgrounds; darker company cards and white customer/item lettering. Verified picker → company → sales invoice → customer/item selection in the running app with local sample records.
 - [x] GSTR-9 PDF Tables 4/5 now use books-derived figures (same source as Excel exports); sub-totals sum printed rows; regression test uses the customer's exact B2C/B2B figures
 - [x] Cloud backup popup: OAuth window now opens synchronously in the click gesture before async PKCE work, so browsers no longer block it
