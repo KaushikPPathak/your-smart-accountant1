@@ -1,5 +1,4 @@
-import type { jsPDF as jsPDFType } from "jspdf";
-import type autoTableType from "jspdf-autotable";
+import { renderLedgerPdf } from "./ledger-pdf-document";
 import { getNativeRuntime } from "./whatsapp-shared";
 import { recordFailure, recordStage } from "./crash-log";
 
@@ -47,7 +46,8 @@ export async function downloadLedgerPdf(
     const v = vMap.get(String(e.voucher_id));
     if (!v) continue;
     const vDate = v.voucher_date || v.date || "";
-    if (vDate && vDate < fromDate) {
+    if (!vDate) continue;
+    if (vDate < fromDate) {
       movementBefore += (e.debit_paise || 0) - (e.credit_paise || 0);
     } else if (vDate <= toDate) {
       totalDr += (e.debit_paise || 0);
@@ -71,159 +71,25 @@ export async function downloadLedgerPdf(
     balanceType: closingPaise >= 0 ? "Dr" : "Cr",
   };
 
-  // ── 2. T-Format PDF Generation (Landscape A4) ──
+  // ── 2. Chronological ledger statement (Landscape A4) ──
   try {
-    const [{ jsPDF }, { default: autoTable }, { prepareReportFont }, { getStoredLang }] = await Promise.all([
-      import("jspdf"),
-      import("jspdf-autotable"),
-      import("./pdf-fonts"),
-      import("./i18n"),
+    const [{ jsPDF }, { prepareReportFont }, { getStoredLang }] = await Promise.all([
+      import("jspdf"), import("./pdf-fonts"), import("./i18n"),
     ]);
     const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
-    const lang = getStoredLang();
-    const reportFont = await prepareReportFont(doc, lang);
-
-    // Centered header block
-    doc.setFont(reportFont, "bold");
-    doc.setFontSize(14);
-    doc.setTextColor(0, 32, 96);
-    const companyLines = doc.splitTextToSize(info.companyName.toUpperCase(), 200); // 200mm width for landscape
-    doc.text(companyLines, 148.5, 12, { align: "center" });
-    doc.setTextColor(0, 0, 0);
-
-    const companyHeight = companyLines.length * 6; // ~6mm per line at 14pt
-    const subTitleY = 12 + companyHeight;
-
-
-    doc.setFontSize(12);
-    doc.setFont(reportFont, "normal");
-    doc.text(`Ledger Account: ${info.partyName}`, 148.5, subTitleY, { align: "center" });
-
-    doc.setFontSize(9);
-    doc.text(`Financial Year 2025-26`, 148.5, subTitleY + 6, { align: "center" });
-    doc.text(`For the period: ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, subTitleY + 11, { align: "center" });
-
-    doc.setFontSize(11);
-    doc.setFont(reportFont, "bold");
-    doc.text(`${info.partyName} Account`, 148.5, subTitleY + 19, { align: "center" });
-    doc.setFont(reportFont, "normal");
-    doc.setFontSize(8);
-    doc.text(`for the period ${formatDate(info.fromDate)} to ${formatDate(info.toDate)}`, 148.5, subTitleY + 24, { align: "center" });
-
-
-    // Filter & sort entries inside the date range
-    const sortedEntries = liveEntries
-      .map(e => ({ e, v: vMap.get(String(e.voucher_id)) }))
-      .filter(x => x.v && (x.v.voucher_date || x.v.date) >= fromDate && (x.v.voucher_date || x.v.date) <= toDate)
-      .sort((a, b) => ((a.v.voucher_date || a.v.date) > (b.v.voucher_date || b.v.date) ? 1 : -1));
-
-    const drEntries = sortedEntries.filter(({ e }) => (e.debit_paise || 0) > 0);
-    const crEntries = sortedEntries.filter(({ e }) => (e.credit_paise || 0) > 0);
-
-    // Opening balance placement
-    const obDr = openingPaise > 0 ? openingPaise : 0;
-    const obCr = openingPaise < 0 ? Math.abs(openingPaise) : 0;
-
-    // T-format balancing: closing balance goes to the shorter side so both totals match
-    const drSideSum = obDr + totalDr;
-    const crSideSum = obCr + totalCr;
-    const grandTotal = Math.max(drSideSum, crSideSum);
-    const cbDr = crSideSum > drSideSum ? crSideSum - drSideSum : 0;
-    const cbCr = drSideSum > crSideSum ? drSideSum - crSideSum : 0;
-
-    const startY = 48;
-    const tableW = 135; // mm per side
-    const leftX = 10;
-    const rightX = 152;
-
-    // ── DR. Table (Left) ──
-    doc.setFontSize(10);
-    doc.setFont(reportFont, "bold");
-    doc.text("DR.", leftX + tableW / 2, startY - 2, { align: "center" });
-
-    const drBody: (string | number)[][] = [];
-    if (obDr > 0) drBody.push(["", "To Opening Balance", "", "", "", formatMoney(obDr)]);
-    for (const { e, v } of drEntries) {
-      drBody.push([
-        formatDate(v.voucher_date || v.date || ""),
-        v.narration || `Voucher #${v.id}`,
-        v.voucher_type || "",
-        v.voucher_number || "",
-        v.reference || "",
-        formatMoney(e.debit_paise),
-      ]);
-    }
-    if (cbDr > 0) drBody.push(["", "To Balance c/d", "", "", "", formatMoney(cbDr)]);
-    drBody.push(["", "Total", "", "", "", formatMoney(grandTotal)]);
-
-    autoTable(doc, {
-      startY,
-      margin: { left: leftX, right: 297 - leftX - tableW },
-      tableWidth: tableW,
-      head: [["DATE", "PARTICULARS", "VCH TYPE", "VCH NO", "CHQ/REF", "AMOUNT"]],
-      body: drBody,
-      theme: "grid",
-      showHead: "everyPage",
-      headStyles: { font: reportFont, fillColor: [255, 248, 220], textColor: 0, fontStyle: "bold", fontSize: 8, lineColor: [0, 0, 0], lineWidth: 0.2 },
-      styles: { font: reportFont, fontSize: 8, cellPadding: 1.5, overflow: "linebreak", lineColor: [80, 80, 80], lineWidth: 0.1 },
-      columnStyles: {
-        0: { cellWidth: 18 },
-        1: { cellWidth: 42 },
-        2: { cellWidth: 20 },
-        3: { cellWidth: 15 },
-        4: { cellWidth: 20 },
-        5: { cellWidth: 20, halign: "right" },
-      },
+    const reportFont = await prepareReportFont(doc, getStoredLang());
+    const transactions = liveEntries.flatMap(e => {
+      const v = vMap.get(String(e.voucher_id));
+      const date = v?.voucher_date || v?.date || "";
+      if (!v || !date || date < fromDate || date > toDate) return [];
+      return [{
+        id: String(e.id || v.id), date,
+        particulars: v.narration || `${v.voucher_type || "Voucher"} ${v.voucher_number || ""}`.trim(),
+        voucherType: v.voucher_type || "", voucherNumber: String(v.voucher_number || ""),
+        reference: v.reference || "", debitPaise: e.debit_paise || 0, creditPaise: e.credit_paise || 0,
+      }];
     });
-    const drFinalY = (doc as any).lastAutoTable.finalY;
-
-    // ── CR. Table (Right) ──
-    doc.setFontSize(10);
-    doc.setFont(reportFont, "bold");
-    doc.text("CR.", rightX + tableW / 2, startY - 2, { align: "center" });
-
-    const crBody: (string | number)[][] = [];
-    if (obCr > 0) crBody.push(["", "By Opening Balance", "", "", "", formatMoney(obCr)]);
-    for (const { e, v } of crEntries) {
-      crBody.push([
-        formatDate(v.voucher_date || v.date || ""),
-        v.narration || `Voucher #${v.id}`,
-        v.voucher_type || "",
-        v.voucher_number || "",
-        v.reference || "",
-        formatMoney(e.credit_paise),
-      ]);
-    }
-    if (cbCr > 0) crBody.push(["", "By Balance c/d", "", "", "", formatMoney(cbCr)]);
-    crBody.push(["", "Total", "", "", "", formatMoney(grandTotal)]);
-
-    autoTable(doc, {
-      startY,
-      margin: { left: rightX, right: 297 - rightX - tableW },
-      tableWidth: tableW,
-      head: [["DATE", "PARTICULARS", "VCH TYPE", "VCH NO", "CHQ/REF", "AMOUNT"]],
-      body: crBody,
-      theme: "grid",
-      showHead: "everyPage",
-      headStyles: { font: reportFont, fillColor: [255, 248, 220], textColor: 0, fontStyle: "bold", fontSize: 8, lineColor: [0, 0, 0], lineWidth: 0.2 },
-      styles: { font: reportFont, fontSize: 8, cellPadding: 1.5, overflow: "linebreak", lineColor: [80, 80, 80], lineWidth: 0.1 },
-      columnStyles: {
-        0: { cellWidth: 18 },
-        1: { cellWidth: 42 },
-        2: { cellWidth: 20 },
-        3: { cellWidth: 15 },
-        4: { cellWidth: 20 },
-        5: { cellWidth: 20, halign: "right" },
-      },
-    });
-    const crFinalY = (doc as any).lastAutoTable.finalY;
-
-    // ── Closing Balance below tables ──
-    const finalY = Math.max(drFinalY, crFinalY) + 6;
-    doc.setFontSize(10);
-    doc.setFont(reportFont, "normal");
-    doc.text("Closing balance", leftX, finalY);
-    doc.text(`${formatMoney(closingPaise)} ${info.balanceType}`, rightX + tableW - 5, finalY, { align: "right" });
+    renderLedgerPdf(doc, reportFont, info, transactions);
 
     // ── 3. Save / Download based on runtime ──
     if (runtime === "tauri") {
@@ -252,7 +118,7 @@ export async function downloadLedgerPdf(
 
     recordStage("whatsapp", "pdf", {
       path: info.path,
-      source: "jspdf-autotable-tformat",
+      source: "jspdf-autotable-chronological",
       runtime,
     });
   } catch (err) {
@@ -263,12 +129,3 @@ export async function downloadLedgerPdf(
   return info;
 }
 
-function formatDate(d: string): string {
-  if (!d) return "";
-  return d.split("-").reverse().join("-");
-}
-
-function formatMoney(paise: number): string {
-  const rupees = Math.abs(paise) / 100;
-  return `₹ ${rupees.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
