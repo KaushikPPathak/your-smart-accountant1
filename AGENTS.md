@@ -6,3 +6,4 @@
 - GST reporting allocates saved bill tax to detail lines in integer paise without altering taxable values or including round-off; all return details share this allocation.
 - Invoice-number changes require explicit create/edit input and same-type, same-company, financial-year duplicate validation; automatic recovery never renumbers records.
 - Workspace surfaces and picker lettering use semantic global theme tokens; the mounted root overrides the legacy splash background so desktop screens cannot retain its startup colour. Print colours remain independent.
+- WhatsApp ledger PDFs use one chronological debit/credit/running-balance table with whole-row pagination and repeated headers so independent side pagination cannot disrupt date order.
