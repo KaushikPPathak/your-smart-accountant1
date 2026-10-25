@@ -414,6 +414,8 @@ async function openPrintPreviewAsync(
     }
     .preview-content * {
       color: inherit !important;
+      background: #fff !important;
+      box-shadow: none !important;
       visibility: inherit !important;
       opacity: inherit !important;
     }
