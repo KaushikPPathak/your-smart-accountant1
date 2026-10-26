@@ -115,6 +115,36 @@ const company = {
   state_code: "24",
 };
 
+describe("GSTR-9 drill-down provenance", () => {
+  it("traces mixed B2B and nil-rated contributions without changing the saved invoice", () => {
+    const source = voucher("MIXED-1", "sales", true, [item(10000, 18, 1800, "1001"), item(5000, 0, 0, "1002")], 16800);
+    const original = structuredClone(source);
+    const result = buildGstr9({ company, financialYear: "2025-26", sales: [source], creditNotes: [] });
+    expect(result.details?.outward.map((row) => [row.voucherId, row.bucket, row.taxableValue, row.totalTax])).toEqual([
+      ["MIXED-1", "registeredTaxable", 100, 18], ["MIXED-1", "nilRated", 50, 0],
+    ]);
+    expect(source).toEqual(original);
+    expect(result.details?.outward.reduce((sum, row) => sum + row.taxableValue, 0)).toBe(result.outward.totalOutward.taxableValue);
+  });
+
+  it("keeps net credit-note contributions negative and official note detail positive", () => {
+    const sale = voucher("SALE-1", "sales", true, [item(10000, 18, 1800, "1001")], 11800);
+    const credit = voucher("CN-1", "credit_note", true, [item(2000, 18, 360, "1001")], 2360);
+    const result = buildGstr9({ company, financialYear: "2025-26", sales: [sale], creditNotes: [credit] });
+    expect(result.details?.outward.find((row) => row.voucherId === "CN-1")?.taxableValue).toBe(-20);
+    expect(result.details?.notes[0].taxableValue).toBe(20);
+    expect(result.details?.notes[0].totalTax).toBe(3.6);
+    expect(result.details?.hsnOutward.reduce((sum, row) => sum + row.taxableValue, 0)).toBe(80);
+  });
+
+  it("traces reconciled purchase HSN lines to the existing voucher ID", () => {
+    const purchase = { ...voucher("PUR-1", "sales", true, [item(10000, 18, 1800, "1001")], 12000), voucher_type: "purchase", cgst_paise: 1000, sgst_paise: 1000 };
+    const result = buildGstr9({ company, financialYear: "2025-26", sales: [], creditNotes: [], purchases: [purchase] });
+    expect(result.details?.hsnInward[0]).toMatchObject({ voucherId: "PUR-1", hsn: "1001", taxableValue: 100, totalTax: 20 });
+    expect(result.details?.hsnInward[0].totalTax).toBe(result.hsnInward[0].totalTax);
+  });
+});
+
 describe("GSTR-9 financial year", () => {
   it("converts FY 2025-26 to 1 April 2025 through 31 March 2026", () => {
     expect(
