@@ -3365,7 +3365,7 @@ function TotalsTable({
         <TableBody>
           {rows.map(([label, value]) => (
             <TableRow key={label}>
-              <TableCell className="font-medium">{onDrill ? <Button variant="link" className="h-auto whitespace-normal p-0 text-left" onClick={() => onDrill(label)}>{label}</Button> : label}</TableCell>
+              <TableCell className="font-medium">{onDrill ? <Button variant="link" className="h-auto whitespace-normal p-0 text-left text-foreground underline" onClick={() => onDrill(label)}>{label}</Button> : label}</TableCell>
               <TableCell className="text-right">{money(value.taxableValue)}</TableCell>
               <TableCell className="text-right">{money(value.igst)}</TableCell>
               <TableCell className="text-right">{money(value.cgst)}</TableCell>
@@ -3811,7 +3811,7 @@ function OfficialTable({
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={`${title}-${index}`}>
-                {row.map((cell, cellIndex) => <TableCell key={`${index}-${cellIndex}`} className={cellIndex > 0 ? "text-right" : "font-medium"}>{cellIndex === 0 && onRowAction ? <><Button variant="link" className="h-auto whitespace-normal p-0 text-left print:hidden" onClick={() => onRowAction(title, String(cell), index)}>{cell}</Button><span className="hidden print:inline">{cell}</span></> : cell}</TableCell>)}
+                {row.map((cell, cellIndex) => <TableCell key={`${index}-${cellIndex}`} className={cellIndex > 0 ? "text-right" : "font-medium"}>{cellIndex === 0 && onRowAction ? <><Button variant="link" className="h-auto whitespace-normal p-0 text-left text-foreground underline print:hidden" onClick={() => onRowAction(title, String(cell), index)}>{cell}</Button><span className="hidden print:inline">{cell}</span></> : cell}</TableCell>)}
               </TableRow>
             ))}
           </TableBody>
@@ -4537,7 +4537,7 @@ function GSTR9Page() {
                   <TableBody>
                     {natureRows.map(([label, value]) => (
                       <TableRow key={label}>
-                        <TableCell className="font-medium"><Button variant="link" className="h-auto p-0 whitespace-normal text-left" onClick={() => drillNature(label)}>{label}</Button></TableCell>
+                        <TableCell className="font-medium"><Button variant="link" className="h-auto p-0 whitespace-normal text-left text-foreground underline" onClick={() => drillNature(label)}>{label}</Button></TableCell>
                         <TableCell className="text-right">
                           {value.voucherCount}
                         </TableCell>
@@ -4591,7 +4591,7 @@ function GSTR9Page() {
                         <TableRow
                           key={`${row.hsn}|${row.uqc}|${row.description}`}
                         >
-                          <TableCell className="font-medium"><Button variant="link" className="h-auto p-0" onClick={() => drillHsn(false, row.hsn)}>{row.hsn}</Button></TableCell>
+                          <TableCell className="font-medium"><Button variant="link" className="h-auto p-0 text-foreground underline" onClick={() => drillHsn(false, row.hsn)}>{row.hsn}</Button></TableCell>
                           <TableCell className="max-w-[260px]">
                             {row.description || "—"}
                           </TableCell>
