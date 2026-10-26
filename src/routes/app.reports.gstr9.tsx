@@ -4129,7 +4129,7 @@ function Gstr9PrintInputWorking({
         ["9H — Other", fmt(tax?.others), "—", "—", fmt(tax?.others)],
       ]} />
 
-      <OfficialTable onRowAction={onRowAction} title="Tables 10–14 — Transactions of the financial year declared in returns of the next financial year" columns={["Table", "Working value"]} rows={[
+      <OfficialTable title="Tables 10–14 — Transactions of the financial year declared in returns of the next financial year" columns={["Table", "Working value"]} rows={[
         ["10 — Supplies / tax declared through invoices, debit notes or amendments (+)", "Not captured in current GSTR-9 input model"],
         ["11 — Supplies / tax declared through amendments or credit notes (-)", "Not captured in current GSTR-9 input model"],
         ["12 — ITC of the financial year reversed in the next financial year", "Not captured in current GSTR-9 input model"],
@@ -4137,7 +4137,7 @@ function Gstr9PrintInputWorking({
         ["14 — Differential tax paid on account of declaration in 10 & 11", "Not captured in current GSTR-9 input model"],
       ]} />
 
-      <OfficialTable onRowAction={onRowAction} title="Tables 15–16 — Other Information" columns={["Table", "Working value"]} rows={[
+      <OfficialTable title="Tables 15–16 — Other Information" columns={["Table", "Working value"]} rows={[
         ["15 — Particulars of Demands and Refunds", "Not captured in current GSTR-9 input model"],
         ["16 — Information on supplies received from composition taxpayers, deemed supply u/s 143 and goods sent on approval basis", "Not captured in current GSTR-9 input model"],
       ]} />

@@ -53,7 +53,7 @@ export function Gstr9Drilldown({ selection, onClose }: {
               const key = `${row.voucherId}:${index}`;
               const hsnRow = row as Partial<Gstr9HsnContribution>;
               return <TableRow key={key}>
-                <TableCell className="align-top"><div className="whitespace-nowrap">{row.voucherDate}</div><Button variant="link" className="h-auto p-0" onClick={() => setExpanded(expanded === key ? null : key)} aria-expanded={expanded === key}>{row.voucherNumber}</Button><div className="text-xs text-muted-foreground">{row.voucherType.replaceAll("_", " ")}</div>
+                <TableCell className="align-top"><div className="whitespace-nowrap">{row.voucherDate}</div><Button variant="link" className="h-auto p-0 text-foreground underline" onClick={() => setExpanded(expanded === key ? null : key)} aria-expanded={expanded === key}>{row.voucherNumber}</Button><div className="text-xs text-muted-foreground">{row.voucherType.replaceAll("_", " ")}</div>
                   {expanded === key && <div className="mt-2 space-y-1 text-xs">{row.items.map((line, i) => <div key={i}>{line.items?.name ?? "Item"} · HSN {line.items?.hsn_code ?? "—"} · {line.qty} {line.items?.unit} · GST {line.gst_rate}% · {money(line.taxable_paise / 100)}</div>)}{!row.items.length && <div>Voucher-level amounts</div>}</div>}
                 </TableCell>
                 <TableCell className="align-top"><div>{row.party}</div><div className="text-xs text-muted-foreground">{row.gstin ?? "Unregistered"}</div></TableCell>
