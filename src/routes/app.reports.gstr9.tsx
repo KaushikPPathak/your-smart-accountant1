@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Download,
@@ -12,6 +12,8 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { Gstr9Drilldown, type Gstr9DrillSelection } from "@/components/reports/Gstr9Drilldown";
+import { onDataChange } from "@/lib/ai/cache-events";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -3341,7 +3343,9 @@ function Gstr9TaxPaymentInputPanel({
 
 function TotalsTable({
   rows,
+  onDrill,
 }: {
+  onDrill?: (label: string) => void;
   rows: Array<[string, Gstr9TaxTotals]>;
 }) {
   return (
@@ -3361,7 +3365,7 @@ function TotalsTable({
         <TableBody>
           {rows.map(([label, value]) => (
             <TableRow key={label}>
-              <TableCell className="font-medium">{label}</TableCell>
+              <TableCell className="font-medium">{onDrill ? <Button variant="link" className="h-auto whitespace-normal p-0 text-left" onClick={() => onDrill(label)}>{label}</Button> : label}</TableCell>
               <TableCell className="text-right">{money(value.taxableValue)}</TableCell>
               <TableCell className="text-right">{money(value.igst)}</TableCell>
               <TableCell className="text-right">{money(value.cgst)}</TableCell>
@@ -3791,7 +3795,9 @@ function OfficialTable({
   title,
   columns,
   rows,
+  onRowAction,
 }: {
+  onRowAction?: (title: string, row: string, index: number) => void;
   title: string;
   columns: string[];
   rows: Array<Array<string | number>>;
@@ -3805,7 +3811,7 @@ function OfficialTable({
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={`${title}-${index}`}>
-                {row.map((cell, cellIndex) => <TableCell key={`${index}-${cellIndex}`} className={cellIndex > 0 ? "text-right" : "font-medium"}>{cell}</TableCell>)}
+                {row.map((cell, cellIndex) => <TableCell key={`${index}-${cellIndex}`} className={cellIndex > 0 ? "text-right" : "font-medium"}>{cellIndex === 0 && onRowAction ? <><Button variant="link" className="h-auto whitespace-normal p-0 text-left print:hidden" onClick={() => onRowAction(title, String(cell), index)}>{cell}</Button><span className="hidden print:inline">{cell}</span></> : cell}</TableCell>)}
               </TableRow>
             ))}
           </TableBody>
@@ -3906,7 +3912,9 @@ function Gstr9PrintInputWorking({
   companyId,
   company,
   result,
+  onRowAction,
 }: {
+  onRowAction?: (title: string, row: string, index: number) => void;
   result?: Gstr9Result | null;
   record: Gstr9InputRecord | undefined;
   financialYear: string;
@@ -4016,7 +4024,7 @@ function Gstr9PrintInputWorking({
   };
 
   return (
-    <div className="hidden print:block" style={{ breakBefore: "page" }}>
+    <div className="border-t pt-5" style={{ breakBefore: "page" }}>
       <div className="mb-5">
         <h2 className="text-lg font-bold">GSTR-9 — Annual Return Summary</h2>
         <div className="mt-2 grid gap-2 sm:grid-cols-3 text-xs">
@@ -4028,7 +4036,7 @@ function Gstr9PrintInputWorking({
         <p className="mt-1 text-[9px] text-muted-foreground">Books are the primary Books-side source. {pr ? `Purchase Register fallback imported from ${pr.fileName}; it is a reconciliation source only and does not alter accounting vouchers.` : "If Books are not ready, import the Purchase Register from Excel/JSON on the GSTR-9 screen."}</p>
       </div>
 
-      {(table4 || result) && <OfficialTable title="Table 4 — Details of advances, inward and outward supplies made during the financial year on which tax is payable" columns={["Row", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess"]} rows={[
+      {(table4 || result) && <OfficialTable onRowAction={onRowAction} title="Table 4 — Details of advances, inward and outward supplies made during the financial year on which tax is payable" columns={["Row", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess"]} rows={[
         rowCells("4A — Supplies made to un-registered persons (B2C)", t4A),
         rowCells("4B — Supplies made to registered persons (B2B)", t4B),
         rowCells("4C — Zero rated supply (Export) on payment of tax", t4C),
@@ -4046,7 +4054,7 @@ function Gstr9PrintInputWorking({
         totalsRow("4N — Supplies and advances on which tax is to be paid (H + M)", n4),
       ]} />}
 
-      {(table5 || result) && <OfficialTable title="Table 5 — Details of outward supplies made during the financial year on which tax is not payable" columns={["Row", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess"]} rows={[
+      {(table5 || result) && <OfficialTable onRowAction={onRowAction} title="Table 5 — Details of outward supplies made during the financial year on which tax is not payable" columns={["Row", "Taxable Value", "Central Tax", "State / UT Tax", "Integrated Tax", "Cess"]} rows={[
         rowCells("5A — Zero rated supply (Export) without payment of tax", t5A),
         rowCells("5B — Supply to SEZs without payment of tax", t5B),
         rowCells("5C — Supplies on which tax is to be paid by recipient", t5C),
@@ -4059,7 +4067,7 @@ function Gstr9PrintInputWorking({
       ]} />}
 
       <p className="mb-2 text-[8px] text-muted-foreground">Current GSTR-3B input stores one combined RCM bucket, so the official 6C/6D split is intentionally not fabricated. Combined RCM working value: {fmt(rcm)}.</p>
-      <OfficialTable title="Table 6 — Details of ITC availed during the financial year" columns={["Row", "ITC / Amount"]} rows={[
+      <OfficialTable onRowAction={onRowAction} title="Table 6 — Details of ITC availed during the financial year" columns={["Row", "ITC / Amount"]} rows={[
         ["6A — Total amount of input tax credit availed through FORM GSTR-3B", fmt(totalA)],
         ["6A1 — ITC of any preceding financial year availed in the financial year", fmt(a1)],
         ["6A2 — Net ITC of the financial year (A-A1)", fmt(a2)],
@@ -4079,7 +4087,7 @@ function Gstr9PrintInputWorking({
         ["6O — Total ITC availed (I + N)", fmt(totalA)],
       ]} />
 
-      <OfficialTable title="Table 7 — Details of ITC Reversed and Ineligible ITC for the financial year" columns={["Row", "Amount"]} rows={[
+      <OfficialTable onRowAction={onRowAction} title="Table 7 — Details of ITC Reversed and Ineligible ITC for the financial year" columns={["Row", "Amount"]} rows={[
         ["7A — As per Rule 37", fmt(table7?.reversalUnderRule37)],
         ["7A1 — As per Rule 37A", fmt(table7?.reversalUnderRule37A)],
         ["7A2 — As per Rule 38", fmt(table7?.rule38)],
@@ -4094,7 +4102,7 @@ function Gstr9PrintInputWorking({
         ["7J — Net ITC Available for Utilization (6O - 7I)", fmt(totalA - reversal)],
       ]} />
 
-      <OfficialTable title="Table 8 — Other ITC related information" columns={["Row", "Amount"]} rows={[
+      <OfficialTable onRowAction={onRowAction} title="Table 8 — Other ITC related information" columns={["Row", "Amount"]} rows={[
         ["8A — ITC as per GSTR-2B [Table 3(I) thereof]", fmt(gstr2bSummary.selected)],
         ["8B — ITC as per sum total of 6(B) above", fmt(otherItc)],
         ["8C — ITC on inward supplies received during FY but availed in next FY", "—"],
@@ -4110,7 +4118,7 @@ function Gstr9PrintInputWorking({
       ]} />
       <p className="mb-5 text-[8px] text-muted-foreground">Table 8A shown here is the saved GSTR-2B reconciliation working value. RCM and CDNR remain separate, and “Not in Books” is not treated as “Excluded”. Invoice-level details remain only in the Reconcile ITC screen.</p>
 
-      <OfficialTable title="Table 9 — Details of tax paid as declared in returns filed during the financial year" columns={["Description", "Tax Payable", "Paid through Cash", "Paid through ITC", "Total Tax Paid"]} rows={[
+      <OfficialTable onRowAction={onRowAction} title="Table 9 — Details of tax paid as declared in returns filed during the financial year" columns={["Description", "Tax Payable", "Paid through Cash", "Paid through ITC", "Total Tax Paid"]} rows={[
         ["9A — Integrated Tax", fmt(tax?.igst?.taxPayable), fmt(tax?.igst?.paidThroughCash), fmt(tax?.igst?.paidThroughItc), fmt((tax?.igst?.paidThroughCash ?? 0) + (tax?.igst?.paidThroughItc ?? 0))],
         ["9B — Central Tax", fmt(tax?.cgst?.taxPayable), fmt(tax?.cgst?.paidThroughCash), fmt(tax?.cgst?.paidThroughItc), fmt((tax?.cgst?.paidThroughCash ?? 0) + (tax?.cgst?.paidThroughItc ?? 0))],
         ["9C — State/UT Tax", fmt(tax?.sgst?.taxPayable), fmt(tax?.sgst?.paidThroughCash), fmt(tax?.sgst?.paidThroughItc), fmt((tax?.sgst?.paidThroughCash ?? 0) + (tax?.sgst?.paidThroughItc ?? 0))],
@@ -4121,7 +4129,7 @@ function Gstr9PrintInputWorking({
         ["9H — Other", fmt(tax?.others), "—", "—", fmt(tax?.others)],
       ]} />
 
-      <OfficialTable title="Tables 10–14 — Transactions of the financial year declared in returns of the next financial year" columns={["Table", "Working value"]} rows={[
+      <OfficialTable onRowAction={onRowAction} title="Tables 10–14 — Transactions of the financial year declared in returns of the next financial year" columns={["Table", "Working value"]} rows={[
         ["10 — Supplies / tax declared through invoices, debit notes or amendments (+)", "Not captured in current GSTR-9 input model"],
         ["11 — Supplies / tax declared through amendments or credit notes (-)", "Not captured in current GSTR-9 input model"],
         ["12 — ITC of the financial year reversed in the next financial year", "Not captured in current GSTR-9 input model"],
@@ -4129,20 +4137,24 @@ function Gstr9PrintInputWorking({
         ["14 — Differential tax paid on account of declaration in 10 & 11", "Not captured in current GSTR-9 input model"],
       ]} />
 
-      <OfficialTable title="Tables 15–16 — Other Information" columns={["Table", "Working value"]} rows={[
+      <OfficialTable onRowAction={onRowAction} title="Tables 15–16 — Other Information" columns={["Table", "Working value"]} rows={[
         ["15 — Particulars of Demands and Refunds", "Not captured in current GSTR-9 input model"],
         ["16 — Information on supplies received from composition taxpayers, deemed supply u/s 143 and goods sent on approval basis", "Not captured in current GSTR-9 input model"],
       ]} />
 
-      <OfficialTable title="Table 17 — HSN-wise summary of outward supplies (from books, net of credit notes)" columns={hsnCols} rows={hsnRowsOf(result?.hsn ?? [])} />
-      <OfficialTable title="Table 18 — HSN-wise summary of inward supplies (from purchase vouchers in books)" columns={hsnCols} rows={hsnRowsOf(result?.hsnInward ?? [])} />
+      <OfficialTable onRowAction={onRowAction} title="Table 17 — HSN-wise summary of outward supplies (from books, net of credit notes)" columns={hsnCols} rows={hsnRowsOf(result?.hsn ?? [])} />
+      <OfficialTable onRowAction={onRowAction} title="Table 18 — HSN-wise summary of inward supplies (from purchase vouchers in books)" columns={hsnCols} rows={hsnRowsOf(result?.hsnInward ?? [])} />
     </div>
   );
 }
 
 function GSTR9Page() {
   const { activeCompanyId } = useCompany();
-  const [financialYear, setFinancialYear] = useState(currentFinancialYear);
+  const [financialYear, setFinancialYear] = useState(() => {
+    const saved = sessionStorage.getItem("gstr9FinancialYear");
+    return saved && financialYearOptions().includes(saved) ? saved : currentFinancialYear();
+  });
+  const [drill, setDrill] = useState<Gstr9DrillSelection | null>(null);
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [result, setResult] = useState<Gstr9Result | null>(null);
   const [loading, setLoading] = useState(false);
@@ -4158,7 +4170,7 @@ function GSTR9Page() {
 
   const years = useMemo(() => financialYearOptions(), []);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!activeCompanyId) {
       setCompany(null);
       setResult(null);
@@ -4193,7 +4205,14 @@ function GSTR9Page() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeCompanyId, financialYear]);
+
+  useEffect(() => {
+    sessionStorage.setItem("gstr9FinancialYear", financialYear);
+    setDrill(null);
+    void load();
+    return onDataChange((event) => { if (event.companyId === activeCompanyId) void load(); });
+  }, [load, activeCompanyId, financialYear]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4263,6 +4282,41 @@ function GSTR9Page() {
         ]
       >
     : [];
+
+  const bucketLabels: Record<string, keyof Gstr9Result["outward"]> = {
+    "Registered taxable supplies": "registeredTaxable", "Unregistered taxable supplies": "unregisteredTaxable",
+    "Zero-rated with payment": "zeroRatedWithPayment", "Zero-rated without payment": "zeroRatedWithoutPayment",
+    "Deemed exports": "deemedExport", "Nil-rated": "nilRated", "Exempt": "exempt", "Non-GST": "nonGst", "Total outward supplies": "totalOutward",
+  };
+  const drillBucket = (title: string, bucket: keyof Gstr9Result["outward"]) => {
+    if (!result) return;
+    setDrill({ title, rows: (result.details?.outward ?? []).filter((row) => bucket === "totalOutward" || row.bucket === bucket), expected: result.outward[bucket].taxableValue });
+  };
+  const drillOutward = (label: string) => drillBucket(label, bucketLabels[label] ?? "totalOutward");
+  const drillNature = (label: string) => {
+    if (label !== "Taxable") { drillOutward(label); return; }
+    setDrill({ title: label, rows: (result?.details?.outward ?? []).filter((row) => row.nature === "taxable"), expected: result?.natureSummary.taxable.taxableValue });
+  };
+  const drillHsn = (inward: boolean, hsn: string) => {
+    if (!result) return;
+    const source = inward ? result.details?.hsnInward : result.details?.hsnOutward;
+    const summary = summariseGstr9Hsn(inward ? result.hsnInward : result.hsn);
+    setDrill({ title: `${inward ? "Inward" : "Outward"} HSN ${hsn}`, rows: (source ?? []).filter((row) => hsn === "Total" || row.hsn === hsn), expected: hsn === "Total" ? totalGstr9Hsn(summary).taxableValue : summary.filter((row) => row.hsn === hsn).reduce((sum, row) => sum + row.taxableValue, 0) });
+  };
+  const annualRowAction = (title: string, row: string) => {
+    const code = row.split(" — ")[0];
+    const map: Record<string, keyof Gstr9Result["outward"]> = { "4A": "unregisteredTaxable", "4B": "registeredTaxable", "4C": "zeroRatedWithPayment", "4E": "deemedExport", "5A": "zeroRatedWithoutPayment", "5D": "exempt", "5E": "nilRated", "5F": "nonGst" };
+    if (map[code]) { drillBucket(row, map[code]); return; }
+    if (code === "4I" || code === "4J") {
+      setDrill({ title: row, rows: (result?.details?.notes ?? []).filter((v) => v.voucherType === (code === "4I" ? "credit_note" : "debit_note")), expected: code === "4I" ? result?.notes.creditNotes.taxableValue : result?.notes.debitNotes.taxableValue }); return;
+    }
+    if (title.startsWith("Table 17") || title.startsWith("Table 18")) { drillHsn(title.startsWith("Table 18"), row); return; }
+    if (code.startsWith("4") || code.startsWith("5")) { setGstr1Open(true); return; }
+    if (code === "6A") { setGstr3bOpen(true); return; }
+    if (code === "8A") { setGstr9ItcReconciliationOpen(true); return; }
+    if (code.startsWith("6") || code.startsWith("7") || code.startsWith("8")) { setGstr9ItcOpen(true); return; }
+    if (code.startsWith("9")) setGstr9TaxPaymentOpen(true);
+  };
 
   return (
     <div className="space-y-3">
@@ -4449,6 +4503,7 @@ function GSTR9Page() {
               companyId={activeCompanyId}
               company={company}
               result={result}
+              onRowAction={annualRowAction}
             />
           )}
 
@@ -4459,7 +4514,7 @@ function GSTR9Page() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <TotalsTable rows={outwardRows} />
+              <TotalsTable rows={outwardRows} onDrill={drillOutward} />
             </CardContent>
           </Card>
 
@@ -4482,7 +4537,7 @@ function GSTR9Page() {
                   <TableBody>
                     {natureRows.map(([label, value]) => (
                       <TableRow key={label}>
-                        <TableCell className="font-medium">{label}</TableCell>
+                        <TableCell className="font-medium"><Button variant="link" className="h-auto p-0 whitespace-normal text-left" onClick={() => drillNature(label)}>{label}</Button></TableCell>
                         <TableCell className="text-right">
                           {value.voucherCount}
                         </TableCell>
@@ -4536,7 +4591,7 @@ function GSTR9Page() {
                         <TableRow
                           key={`${row.hsn}|${row.uqc}|${row.description}`}
                         >
-                          <TableCell className="font-medium">{row.hsn}</TableCell>
+                          <TableCell className="font-medium"><Button variant="link" className="h-auto p-0" onClick={() => drillHsn(false, row.hsn)}>{row.hsn}</Button></TableCell>
                           <TableCell className="max-w-[260px]">
                             {row.description || "—"}
                           </TableCell>
@@ -4581,7 +4636,7 @@ function GSTR9Page() {
           </Card>
 
           <div className="print:hidden">
-            <OfficialTable title="Table 18 — HSN-wise inward supplies" columns={["HSN / SAC", "UQC", "Quantity", "Taxable", "CGST", "SGST", "IGST", "Cess", "Total tax"]} rows={[
+            <OfficialTable onRowAction={(_title, row) => drillHsn(true, row)} title="Table 18 — HSN-wise inward supplies" columns={["HSN / SAC", "UQC", "Quantity", "Taxable", "CGST", "SGST", "IGST", "Cess", "Total tax"]} rows={[
               ...summariseGstr9Hsn(result.hsnInward).map((row) => [row.hsn, row.uqc, quantity(row.quantity), money(row.taxableValue), money(row.cgst), money(row.sgst), money(row.igst), money(row.cess), money(row.totalTax)]),
               ["Total", "", "", money(totalGstr9Hsn(result.hsnInward).taxableValue), money(totalGstr9Hsn(result.hsnInward).cgst), money(totalGstr9Hsn(result.hsnInward).sgst), money(totalGstr9Hsn(result.hsnInward).igst), money(totalGstr9Hsn(result.hsnInward).cess), money(totalGstr9Hsn(result.hsnInward).totalTax)],
             ]} />
@@ -4729,6 +4784,7 @@ function GSTR9Page() {
               </CardContent>
             </Card>
           )}
+          {drill && <Gstr9Drilldown selection={drill} onClose={() => setDrill(null)} />}
           {gstr1Open && activeCompanyId && (
             <Gstr1InputPanel
               financialYear={financialYear}
