@@ -1,7 +1,7 @@
 # Roadmap
 
 ## In progress
-- [ ] GSTR-9: trace outward, nature and HSN figures to dated source vouchers; open explicit voucher editing, refresh after saves, and connect annual table figures to saved entry/import forms.
+- [x] GSTR-9: dated outward/nature/HSN voucher drill-downs with search, filters and item detail; existing voucher editor and return-entry forms linked. Verified sample invoice edit/save/back changes taxable ₹100 → ₹200 and tax ₹18 → ₹36; Table 9 import saved/read back ₹25. 46 focused tests and official Excel export tests passed. Packaged Windows execution remains untested; Tables 10–16 remain outside the existing input model.
 - [x] Make print preview/paper white with readable dark text, independent of the app theme. Isolated browser preview and host print both checked; packaged desktop remains untested.
 - [x] Replace split WhatsApp ledger tables with chronological entries, continuous balances and intact page rows; 20 tests passed and all four generated sample PDF pages visually inspected without clipping, overlaps or broken rows. Desktop WhatsApp attachment remains untested.
 - [x] Darken company picker, company workspace and invoice backgrounds; darker company cards and white customer/item lettering. Verified picker → company → sales invoice → customer/item selection in the running app with local sample records.
