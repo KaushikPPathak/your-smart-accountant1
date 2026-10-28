@@ -33,6 +33,8 @@ export interface CompanyMembership {
     date_format: DateFormatCode | null;
     reminders_enabled: boolean;
     audit_case_reminders: boolean;
+    presumptive_scheme?: "none" | "44ad" | "44ada" | null;
+    presumptive_mode?: "digital" | "cash" | "professional" | null;
   };
 }
 
