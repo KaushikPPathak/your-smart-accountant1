@@ -18,6 +18,13 @@ export interface EntryRowData {
 
 interface LedgerOpt { id: string; name: string; type: string }
 
+/** Keep digits and one decimal point, so "100.10" can be typed directly (no spinner arrows). */
+const cleanDecimal = (value: string) => {
+  const cleaned = value.replace(/[^0-9.]/g, "");
+  const [first, ...rest] = cleaned.split(".");
+  return rest.length ? `${first}.${rest.join("")}` : first;
+};
+
 interface BalanceInfo { paise: number }
 
 interface CommonProps {
@@ -105,10 +112,13 @@ function EntryRowImpl(props: Props) {
           <Input
             ref={aRef}
             className="h-9 text-right font-mono"
-            type="number"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            maxLength={14}
+            onFocus={(e) => e.currentTarget.select()}
             defaultValue={row.amount ?? ""}
-            onBlur={(e) => onCommit(idx, { amount: e.target.value })}
+            onBlur={(e) => onCommit(idx, { amount: cleanDecimal(e.target.value) })}
           />
         </TableCell>
       ) : (
@@ -117,11 +127,14 @@ function EntryRowImpl(props: Props) {
             <Input
               ref={dRef}
               className="h-9 text-right font-mono"
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              maxLength={14}
+              onFocus={(e) => e.currentTarget.select()}
               defaultValue={row.debit ?? ""}
               onBlur={(e) => {
-                const v = e.target.value;
+                const v = cleanDecimal(e.target.value);
                 onCommit(idx, { debit: v, ...(v ? { credit: "" } : {}) });
               }}
             />
@@ -130,11 +143,14 @@ function EntryRowImpl(props: Props) {
             <Input
               ref={cRef}
               className="h-9 text-right font-mono"
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              maxLength={14}
+              onFocus={(e) => e.currentTarget.select()}
               defaultValue={row.credit ?? ""}
               onBlur={(e) => {
-                const v = e.target.value;
+                const v = cleanDecimal(e.target.value);
                 onCommit(idx, { credit: v, ...(v ? { debit: "" } : {}) });
               }}
             />

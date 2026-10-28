@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { toast } from "sonner";
 import { Building2, Lock, Plus, Unlock, LogOut as ExitIcon, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,6 @@ import {
   isCompanyUnlocked,
   markCompanyUnlocked,
 } from "@/lib/tech-user";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { CurrencySwitcher } from "@/components/CurrencySwitcher";
 import { DateFormatSwitcher } from "@/components/DateFormatSwitcher";
 import { setCompanyLang, getCompanyLang, useI18n } from "@/lib/i18n";
@@ -457,6 +456,18 @@ function StartScreen() {
     navigate({ to: "/app/companies", search: { new: 1 } as never });
   };
 
+  const greeting = (() => {
+    const h = new Date().getHours();
+    return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  })();
+
+  // Moves a soft light spot under the cursor across each company tile.
+  const spotlight = (e: ReactMouseEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
+    e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
+  };
+
   const tileGradient = (name: string) => {
     let h = 0;
     for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
@@ -476,6 +487,12 @@ function StartScreen() {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
+      <style>{`@keyframes ym-aurora{0%,100%{transform:translate3d(-4%,-2%,0) scale(1)}50%{transform:translate3d(4%,3%,0) scale(1.1)}}@media (prefers-reduced-motion: reduce){.ym-aurora{animation:none!important}}`}</style>
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="ym-aurora absolute -left-[10%] -top-[25%] h-[60vh] w-[60vh] rounded-full bg-primary/25 blur-3xl" style={{ animation: "ym-aurora 14s ease-in-out infinite" }} />
+        <div className="ym-aurora absolute -right-[12%] top-[5%] h-[52vh] w-[52vh] rounded-full blur-3xl" style={{ background: "hsl(330 85% 58% / .18)", animation: "ym-aurora 18s ease-in-out infinite reverse" }} />
+        <div className="ym-aurora absolute bottom-[-25%] left-[25%] h-[48vh] w-[48vh] rounded-full blur-3xl" style={{ background: "hsl(190 90% 55% / .15)", animation: "ym-aurora 22s ease-in-out infinite" }} />
+      </div>
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px"
@@ -535,6 +552,9 @@ function StartScreen() {
               <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
               {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
             </div>
+            <p className="bg-gradient-to-r from-primary via-fuchsia-500 to-pink-500 bg-clip-text text-sm font-semibold text-transparent">
+              {greeting}, welcome back
+            </p>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
               {t("company.select")}
             </h1>
@@ -578,10 +598,16 @@ function StartScreen() {
                 data-company-index={i}
                 tabIndex={i === Math.min(focusedCompanyIndex, companies.length - 1) ? 0 : -1}
                 onFocus={() => setFocusedCompanyIndex(i)}
+                onMouseMove={spotlight}
                 onClick={() => openCompany(c)}
                 className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border/60 bg-card p-4 text-left text-card-foreground backdrop-blur transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-elevated focus:outline-none focus:ring-2 focus:ring-primary/40 animate-in fade-in slide-in-from-bottom-2"
                 style={{ animationDelay: `${i * 40}ms`, animationFillMode: "both" }}
               >
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                  style={{ background: "radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%), hsl(var(--primary) / .16), transparent 70%)" }}
+                />
                 <div
                   aria-hidden
                   className="pointer-events-none absolute inset-x-0 -top-px h-px opacity-0 transition-opacity group-hover:opacity-100"
@@ -700,13 +726,6 @@ function StartScreen() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 max-w-7xl mx-auto mb-8">
-        <LanguageSwitcher voucherType="sales" />
-        <LanguageSwitcher voucherType="purchase" />
-        <LanguageSwitcher voucherType="receipt" />
-        <LanguageSwitcher voucherType="payment" />
-      </div>
 
       <footer className="border-t border-border/60 py-4 text-center text-xs text-muted-foreground">
         © {new Date().getFullYear()} Your Mehtaji

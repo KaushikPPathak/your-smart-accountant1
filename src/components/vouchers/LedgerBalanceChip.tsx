@@ -70,7 +70,7 @@ export function LedgerBalanceChip({ ledgerId, prefix, className, compact }: Prop
       ? "text-muted-foreground"
       : balance.paise > 0
         ? "text-emerald-700 dark:text-emerald-400"
-        : "text-rose-700 dark:text-rose-400";
+        : "text-amber-700/90 dark:text-amber-300";
 
   const chipClasses = cn(
     "inline-flex items-center gap-1 rounded border bg-muted/40 font-mono",
