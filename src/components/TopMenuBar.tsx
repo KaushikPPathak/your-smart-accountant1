@@ -53,6 +53,7 @@ import {
   MenubarTrigger,
 } from "@/components/ui/menubar";
 import { useCompany } from "@/lib/company-context";
+import { companyFeatures, isUrlEnabled } from "@/lib/company-features";
 import { useI18n, LANGUAGES, type LangCode } from "@/lib/i18n";
 import { useCurrency, CURRENCIES } from "@/lib/currency";
 import { useDateFormat, DATE_FORMATS, type DateFormatCode } from "@/lib/date-format";
@@ -249,22 +250,6 @@ const MENUS: TopMenu[] = [
   },
 ];
 
-const GST_URLS = new Set([
-  "/app/reports/gstr1",
-  "/app/einvoice",
-  "/app/reports/gst-sales-book",
-  "/app/reports/gst-purchase-book",
-  "/app/reports/tax-audit",
-  "/app/reports/itc-item-wise",
-  "/app/reports/itc-party-wise",
-]);
-const INVENTORY_URLS = new Set([
-  "/app/items",
-  "/app/reports/stock-summary",
-  "/app/reports/hsn-summary",
-  "/app/vouchers/new/manufacturing",
-  "/app/reports/trading",
-]);
 
 export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backupLabel, quickPanel }: { rightExtras?: ReactNode; onLock?: () => void; onBackupNow?: () => void; backupBusy?: boolean; backupLabel?: string; quickPanel?: ReactNode }) {
   const location = useLocation();
@@ -305,8 +290,8 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   }, [activeMembership?.company_id]);
 
 
-  const gstEnabled = Boolean(activeMembership?.companies?.gst_registered) || Boolean(activeMembership?.companies?.gstin);
-  const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
+  const features = companyFeatures(activeMembership?.companies as never);
+  const featureKey = `${features.gst}|${features.inventory}|${features.presumptive}`;
 
   const tt = (item: { title: string; i18nKey?: string }) => (item.i18nKey ? t(item.i18nKey) : item.title);
 
@@ -318,12 +303,13 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           .map((g) => ({
             ...g,
             items: g.items.filter(
-              (i) => (gstEnabled || !GST_URLS.has(i.url)) && (inventoryEnabled || !INVENTORY_URLS.has(i.url)),
+              (i) => isUrlEnabled(i.url, features),
             ),
           }))
           .filter((g) => g.items.length > 0),
       })).filter((m) => m.groups.length > 0),
-    [gstEnabled, inventoryEnabled],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [featureKey],
   );
 
   const isMenuActive = (m: TopMenu) =>

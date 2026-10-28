@@ -13,6 +13,9 @@ export interface Gstr9DrillSelection {
   title: string;
   rows: Gstr9Contribution[];
   expected?: number;
+  /** Opens the matching filed-return entry form so missing figures can be fed. */
+  feedLabel?: string;
+  onFeed?: () => void;
 }
 
 const money = (value: number) => formatINR(Math.round(value * 100));
@@ -40,6 +43,10 @@ export function Gstr9Drilldown({ selection, onClose }: {
         <DialogDescription>Books · {new Set(rows.map((row) => row.voucherId)).size} vouchers · Taxable {money(total("taxableValue"))} · Tax {money(total("totalTax"))}</DialogDescription>
       </DialogHeader>
       {difference !== 0 && <p role="alert" className="text-sm text-destructive">Source difference: {money(difference)}</p>}
+      {selection.onFeed && <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2 text-sm">
+        <span className="text-muted-foreground">Figure not in your books, or filed differently? Enter it here — your vouchers are not changed.</span>
+        <Button size="sm" variant="outline" onClick={() => { const feed = selection.onFeed; onClose(); feed?.(); }}>{selection.feedLabel ?? "Enter filed figures"}</Button>
+      </div>}
       <div className="flex flex-wrap items-end gap-3">
         <label className="min-w-0 flex-1 space-y-1"><span className="text-xs text-muted-foreground">Search voucher / party / GSTIN / item</span><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" aria-label="Search source vouchers" /></div></label>
         <label className="space-y-1"><span className="text-xs text-muted-foreground">From</span><Input type="date" aria-label="Source from date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>

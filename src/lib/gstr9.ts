@@ -173,6 +173,8 @@ export interface Gstr9Result {
   details?: {
     outward: Gstr9Contribution[];
     notes: Gstr9Contribution[];
+    /** Purchase bills (books) behind the ITC tables. */
+    inward?: Gstr9Contribution[];
     hsnOutward: Gstr9HsnContribution[];
     hsnInward: Gstr9HsnContribution[];
   };
@@ -864,6 +866,7 @@ export function buildGstr9(
     details: {
       outward: outwardDetails,
       notes: creditNotes.map((v) => contribution(v, voucherTotals(v, 1), v.supply_nature, "totalOutward")),
+      inward: purchases.map((v) => contribution(v, voucherTotals(v, 1), v.supply_nature, "totalOutward")),
       hsnOutward: hsnContributions(allVouchers),
       hsnInward: hsnContributions(purchases.map((v) => ({ ...v, voucher_items: reconcileBillTaxLines(v.voucher_items, v) }))),
     },
