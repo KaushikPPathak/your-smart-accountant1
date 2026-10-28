@@ -12,6 +12,34 @@ import {
   CommandList,
 } from "@/components/ui/command";
 
+const MAX_VISIBLE = 300;
+
+/**
+ * Deterministic typeahead match (review 2026-10-27). Every typed word must appear
+ * in the label or hint; names that start with the typed text rank first, then
+ * word-starts, then plain substrings. Replaces cmdk's fuzzy scorer, which could
+ * show unrelated items above the exact match.
+ */
+export function rankOptions<T extends { label: string; hint?: string | null }>(options: T[], query: string): T[] {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return options;
+  const full = tokens.join(" ");
+  const scored: { o: T; score: number }[] = [];
+  for (const o of options) {
+    const label = o.label.toLowerCase();
+    const hay = `${label} ${(o.hint ?? "").toLowerCase()}`;
+    if (!tokens.every((t) => hay.includes(t))) continue;
+    let score = 1;
+    if (label.startsWith(full)) score = 4;
+    else if (label.split(/[\s./&()-]+/).some((w) => w.startsWith(tokens[0]))) score = 3;
+    else if (label.includes(full)) score = 2;
+    scored.push({ o, score });
+  }
+  // Array.prototype.sort is stable, so ties keep the original (alphabetical) order.
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map((x) => x.o);
+}
+
 export interface ComboOption {
   value: string;
   label: string;
@@ -62,6 +90,12 @@ export function Combo({
   }, [query, onQueryChange]);
 
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+
+  const ranked = React.useMemo(
+    () => (externalFiltering ? options : rankOptions(options, query)),
+    [options, query, externalFiltering],
+  );
+  const visible = React.useMemo(() => ranked.slice(0, MAX_VISIBLE), [ranked]);
 
   const selected = React.useMemo(
     () => options.find((o) => o.value === value),
@@ -151,7 +185,7 @@ export function Combo({
         }}
       >
         <Command
-          shouldFilter={!externalFiltering}
+          shouldFilter={false}
 
           onKeyDown={(e) => {
             if (e.altKey && e.key.toLowerCase() === "c" && onCreate) {
@@ -194,10 +228,15 @@ export function Combo({
               </div>
             </CommandEmpty>
             <CommandGroup>
-              {options.map((o) => (
+              {ranked.length > MAX_VISIBLE && (
+                <div className="px-2 py-1 text-[11px] text-muted-foreground">
+                  Showing {MAX_VISIBLE} of {ranked.length} matches. Keep typing to narrow down.
+                </div>
+              )}
+              {visible.map((o) => (
                 <CommandItem
                   key={o.value}
-                  value={`${o.label} ${o.hint ?? ""}`}
+                  value={o.value}
                   onSelect={() => handleSelect(o.value)}
                 >
                   <Check
@@ -212,7 +251,7 @@ export function Combo({
                   )}
                 </CommandItem>
               ))}
-              {onCreate && options.length > 0 && (
+              {onCreate && visible.length > 0 && (
                 <CommandItem
                   value="__create__"
                   onSelect={() => {

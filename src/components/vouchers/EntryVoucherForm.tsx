@@ -659,12 +659,12 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         onKeyDown={enterTab.onKeyDown}
         className="space-y-4"
       >
-        <div className="flex items-center justify-between border-b border-border/60 bg-white/50 px-4 py-2" style={{ borderTop: `3px solid ${cfg.color}` }}>
+        <div className="flex items-center justify-between border-b border-border/60 bg-card text-card-foreground px-4 py-2" style={{ borderTop: `3px solid ${cfg.color}` }}>
           <div className="flex flex-col">
             <h2 className="text-xl font-bold tracking-tight text-foreground">{cfg.title}</h2>
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80">
-              <kbd className="rounded border bg-white px-1 shadow-sm">Enter</kbd> next field
-              <kbd className="ml-1 rounded border bg-white px-1 shadow-sm">Ctrl+S</kbd> save
+              <kbd className="rounded border bg-muted px-1 shadow-sm">Enter</kbd> next field
+              <kbd className="ml-1 rounded border bg-muted px-1 shadow-sm">Ctrl+S</kbd> save
               {voucherType === "journal" && taxResolution.status !== "hidden" && (
                 <div className="ml-2 inline-flex items-center">
                   <AutoTaxChip
@@ -723,7 +723,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
 
       <PeriodLockBanner lock={lock} />
 
-        <Card className="border-x-0 border-y shadow-none rounded-none bg-theme-pale">
+        <Card className="border-x-0 border-y shadow-none rounded-none bg-card text-card-foreground">
           <CardContent className="p-4">
             <div className="grid gap-6 md:grid-cols-[1fr_2fr_1fr_auto] md:items-start">
               <div className="space-y-1.5">
@@ -754,7 +754,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
               )}
               <div className={`space-y-1.5 ${isSimple ? "" : "md:col-span-2"}`}>
                 <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">Reference No.</Label>
-                <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="Cheque/UTR/Reference" className="bg-white" />
+                <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} placeholder="Cheque/UTR/Reference" />
               </div>
 
               <div className="md:pt-5">
@@ -764,9 +764,9 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           </CardContent>
         </Card>
 
-        <Card className="border-x-0 border-y shadow-none rounded-none bg-white">
+        <Card className="border-x-0 border-y shadow-none rounded-none bg-card text-card-foreground">
           <CardContent className="p-0">
-            <div className="flex items-center justify-between border-b bg-muted/20 px-3 py-1">
+            <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-1">
               <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">Particulars</span>
             </div>
             <Table>
