@@ -194,23 +194,16 @@ export function AppSidebar() {
   const location = useLocation();
   const { activeMembership } = useCompany();
   const { t } = useI18n();
-  // Treat the company as GST-enabled if either the explicit flag is set OR a
-  // GSTIN has been captured. This is a safety net for older cached rows
-  // (pre-migration) where `gst_registered` wasn't persisted but a GSTIN is
-  // present, so the GST Reports section still appears in the sidebar.
-  const gstEnabled =
-    Boolean(activeMembership?.companies?.gst_registered) ||
-    Boolean(activeMembership?.companies?.gstin);
-  const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
+  // Each company's own settings decide which menus appear.
+  const features = companyFeatures(activeMembership?.companies as never);
+  const featureKey = `${features.gst}|${features.inventory}|${features.presumptive}`;
 
   const tt = (item: { title: string; i18nKey?: string }) =>
     item.i18nKey ? t(item.i18nKey) : item.title;
 
   const filterItems = (items: NavItem[]) =>
     items.filter(
-      (i) =>
-        (gstEnabled || !GST_URLS.has(i.url)) &&
-        (inventoryEnabled || !INVENTORY_URLS.has(i.url)),
+      (i) => isUrlEnabled(i.url, features),
     );
 
   const visibleSections = useMemo(
@@ -223,7 +216,7 @@ export function AppSidebar() {
         return { ...s, items, subGroups };
       }).filter((s) => s.items.length > 0 || (s.subGroups && s.subGroups.length > 0)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gstEnabled, inventoryEnabled],
+    [featureKey],
   );
 
   const isActive = (url: string) =>

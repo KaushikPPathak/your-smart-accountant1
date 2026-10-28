@@ -290,8 +290,8 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
   }, [activeMembership?.company_id]);
 
 
-  const gstEnabled = Boolean(activeMembership?.companies?.gst_registered) || Boolean(activeMembership?.companies?.gstin);
-  const inventoryEnabled = activeMembership?.companies?.inventory_enabled ?? true;
+  const features = companyFeatures(activeMembership?.companies as never);
+  const featureKey = `${features.gst}|${features.inventory}|${features.presumptive}`;
 
   const tt = (item: { title: string; i18nKey?: string }) => (item.i18nKey ? t(item.i18nKey) : item.title);
 
@@ -303,12 +303,13 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
           .map((g) => ({
             ...g,
             items: g.items.filter(
-              (i) => (gstEnabled || !GST_URLS.has(i.url)) && (inventoryEnabled || !INVENTORY_URLS.has(i.url)),
+              (i) => isUrlEnabled(i.url, features),
             ),
           }))
           .filter((g) => g.items.length > 0),
       })).filter((m) => m.groups.length > 0),
-    [gstEnabled, inventoryEnabled],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [featureKey],
   );
 
   const isMenuActive = (m: TopMenu) =>
