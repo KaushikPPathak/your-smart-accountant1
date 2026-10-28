@@ -43,7 +43,14 @@ export function parseToPaise(rupeeString: any): number {
     return Math.round(rupeeString * 100);
   }
   if (!rupeeString) return 0;
-  
+
+  // Exponent notation ("1.5e3") must not be stripped char-by-char (1.5e3 -> "1.53").
+  const raw = rupeeString.toString().trim();
+  if (/[eE]/.test(raw)) {
+    const n = Number(raw.replace(/,/g, ""));
+    return Number.isFinite(n) ? Math.round(n * 100) : 0;
+  }
+
   const cleanStr = rupeeString.toString().replace(/[^0-9.-]/g, "");
   if (!cleanStr || cleanStr === "." || cleanStr === "-") return 0;
   
@@ -67,24 +74,29 @@ export const rupeesToPaise = parseToPaise;
  * Calculate GST component from a taxable amount and rate.
  * Returns integer paise.
  */
+export function roundHalfAwayFromZero(value: number): number {
+  return value < 0 ? -Math.round(-value) : Math.round(value);
+}
+
 export function calculateGST(taxablePaise: number, rate: number): number {
   // rate is percentage (e.g., 18 for 18%)
-  // Calculation: (taxable * rate) / 100
-  // To keep it in integer paise: round((taxablePaise * rate) / 100)
-  return Math.round((taxablePaise * rate) / 100);
+  // To keep it in integer paise: round-half-away-from-zero((taxablePaise * rate) / 100).
+  // Math.round alone rounds negative halves toward +infinity (credit notes would be off by 1 paisa).
+  return roundHalfAwayFromZero((taxablePaise * rate) / 100);
 }
 
 /**
  * Round a value to the nearest rupee (100 paise).
  */
 export function roundToNearestRupee(paise: number): number {
-  return Math.round(paise / 100) * 100;
+  return roundHalfAwayFromZero(paise / 100) * 100;
 }
 
 /**
  * Indian Rupees in Words (e.g. "Rupees One Lakh Twenty Three Thousand Only")
  */
 export function amountInWords(paise: number): string {
+  if (paise < 0) return "Minus " + amountInWords(-paise);
   const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
   const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
 
