@@ -34,7 +34,7 @@ export type ValidationResult<T> =
   | { ok: true; data: T }
   | { ok: false; message: string; fieldErrors: Record<string, string> };
 
-export function toResult<T>(parsed: z.SafeParseReturnType<unknown, T>): ValidationResult<T> {
+export function toResult<T>(parsed: z.ZodSafeParseResult<T>): ValidationResult<T> {
   if (parsed.success) return { ok: true, data: parsed.data };
   const issue = parsed.error.issues[0];
   const fieldErrors: Record<string, string> = {};

@@ -86,7 +86,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.575.0",
     "papaparse": "^5.5.3",
-    "pdfjs-dist": "^5.6.205",
+    "pdfjs-dist": "^6.4.299",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-day-picker": "^9.14.0",
@@ -104,7 +104,7 @@
     "vite-tsconfig-paths": "^6.0.2",
     "xlsx": "^0.18.5",
     "xlsx-js-style": "^1.2.0",
-    "zod": "^3.24.2"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
@@ -135,5 +135,9 @@
   },
   "version": "1.0.0",
   "description": "Smart Accountant (Your Mehtaji) — GST-ready offline accounting for Indian businesses.",
-  "author": "Your Mehtaji"
+  "author": "Your Mehtaji",
+  "overrides": {
+    "dompurify": "^3.4.17",
+    "zod": "^4.6.7"
+  }
 }
