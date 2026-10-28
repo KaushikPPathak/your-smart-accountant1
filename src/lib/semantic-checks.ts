@@ -59,7 +59,7 @@ export async function runSemanticChecks(companyId: string): Promise<SemanticRepo
         supabase
           .from("voucher_entries")
           .select("voucher_id, vouchers!inner(company_id)")
-          .eq("vouchers.company_id", companyId),
+          .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null),
       ]);
       if (vRes.error) throw vRes.error;
       if (eRes.error) throw eRes.error;

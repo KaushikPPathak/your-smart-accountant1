@@ -59,7 +59,7 @@ function HsnSummary() {
     supabase
       .from("voucher_items")
       .select("qty, rate_paise, taxable_paise, cgst_paise, sgst_paise, igst_paise, item_id, vouchers!inner(voucher_type, voucher_date, company_id)")
-      .eq("vouchers.company_id", activeCompanyId)
+      .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
       .lte("vouchers.voucher_date", to)
       .then(({ data }: any) => setMoves((data || []) as unknown as Move[]));
   }, [activeCompanyId, to]);

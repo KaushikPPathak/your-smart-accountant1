@@ -84,7 +84,7 @@ function BrsPage() {
         const { data } = await supabase.from("voucher_entries")
           .select("id, debit_paise, credit_paise, cleared_date, vouchers!inner(voucher_date, voucher_number, voucher_type, reference_no, company_id)")
           .eq("ledger_id", ledgerId)
-          .eq("vouchers.company_id", activeCompanyId)
+          .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
           .lte("vouchers.voucher_date", asOf);
         return (data || []) as unknown as Entry[];
       },

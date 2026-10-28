@@ -88,7 +88,10 @@ export async function assertDateInOpenFy(companyId: string, date: string): Promi
       (await offlineDb.companies.get(companyId).catch(() => undefined));
     fyStart = row?.financial_year_start;
   } catch { /* fall through */ }
-  if (!fyStart || !/^\d{4}-\d{2}-\d{2}/.test(fyStart)) return;
+  // Fail closed: an entry cannot be checked against a financial year we do not know.
+  if (!fyStart || !/^\d{4}-\d{2}-\d{2}/.test(fyStart)) {
+    throw new Error("This company has no financial year start set. Set it in Company settings before entering vouchers.");
+  }
   const y = Number(fyStart.slice(0, 4));
   const start = `${y}-${fyStart.slice(5, 10)}`;
   const end = `${y + 1}-${fyStart.slice(5, 7)}-${fyStart.slice(8, 10)}`;
@@ -97,6 +100,11 @@ export async function assertDateInOpenFy(companyId: string, date: string): Promi
     const fmt = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
     const endIncl = new Date(Date.UTC(y + 1, Number(fyStart.slice(5, 7)) - 1, Number(fyStart.slice(8, 10)) - 1)).toISOString().slice(0, 10);
     throw new Error(`Date ${fmt(d)} is outside the open financial year (${fmt(start)} – ${fmt(endIncl)}). Switch to that year to enter it.`);
+  }
+  // Locked periods (e.g. a closed year or a GST return lock) must refuse changes.
+  const { isDateInLockedPeriod } = await import("./frozen-guard");
+  if (await isDateInLockedPeriod(companyId, d)) {
+    throw new Error(`Date ${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)} falls in a locked period. Unlock the period before changing vouchers in it.`);
   }
 }
 
@@ -146,7 +154,8 @@ async function nextLocalVoucherNumber(
 async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
   const db = await getOfflineDb();
   const voucherId = crypto.randomUUID();
-  const voucherNumber = snap.voucherNumber?.trim() || await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
+  const presetNumber = snap.voucherNumber?.trim() || "";
+  let voucherNumber = presetNumber;
   const stamp = nowIso();
   const lines = snap.lines.map(({ l, c }) => ({ l, c }));
 
@@ -265,6 +274,11 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
     db.cache_voucher_entries,
     db.cache_bill_sundries,
     async () => {
+      // Read the counter inside the transaction: Dexie serialises rw transactions,
+      // so two overlapping saves can no longer receive the same auto number.
+      if (!presetNumber) {
+        voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
+      }
       // Security/Business Logic: Enforce party locking for carry-forward documents.
       if (snap.originalVoucherId) {
         const orig = await db.cache_vouchers.get(snap.originalVoucherId);
@@ -321,7 +335,7 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
 async function runLocalEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void> {
   const db = await getOfflineDb();
   const voucherId = crypto.randomUUID();
-  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
+  let voucherNumber = "";
   const stamp = nowIso();
 
   // Security/Business Logic: Enforce party locking for carry-forward documents.
@@ -364,6 +378,8 @@ async function runLocalEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void>
     db.cache_voucher_entries,
     db.cache_bill_allocations,
     async () => {
+      // Counter read inside the transaction (see runLocalItemVoucherCreate).
+      voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
       await db.cache_vouchers.put({
         id: voucherId,
         company_id: snap.companyId,

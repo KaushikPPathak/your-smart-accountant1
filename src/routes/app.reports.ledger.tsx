@@ -248,7 +248,7 @@ function LedgerStatement() {
               .from("voucher_entries")
               .select("id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
               .eq("ledger_id", ledgerId)
-              .eq("vouchers.company_id", activeCompanyId)
+              .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
               .gte("vouchers.voucher_date", f)
               .lte("vouchers.voucher_date", t)
               .order("voucher_date", { referencedTable: "vouchers", ascending: true })
@@ -287,7 +287,7 @@ function LedgerStatement() {
             .from("voucher_entries")
             .select("debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
             .eq("ledger_id", ledgerId)
-            .eq("vouchers.company_id", activeCompanyId)
+            .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
             .lt("vouchers.voucher_date", effFrom);
           if (error) throw error;
           return (data || []) as { debit_paise: number; credit_paise: number }[];
@@ -840,7 +840,7 @@ function LedgerStatement() {
         const { data, error } = await supabase
           .from("voucher_entries")
           .select("id, ledger_id, debit_paise, credit_paise, narration, vouchers!inner(id, voucher_date, voucher_number, voucher_type, narration, reference_no, company_id)")
-          .eq("vouchers.company_id", activeCompanyId)
+          .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
           .gte("vouchers.voucher_date", from)
           .lte("vouchers.voucher_date", to);
         if (error) throw error;
@@ -854,7 +854,7 @@ function LedgerStatement() {
         const { data, error } = await supabase
           .from("voucher_entries")
           .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-          .eq("vouchers.company_id", activeCompanyId)
+          .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
           .lt("vouchers.voucher_date", from);
         if (error) throw error;
         return (data || []) as { ledger_id: string; debit_paise: number; credit_paise: number }[];

@@ -215,17 +215,11 @@ function VouchersHub() {
         return;
       }
 
-      // Children can go hard — the parent tombstone will cause other devices
-      // to drop this voucher (and any leftover children) from their cache.
-      const { error: e1 } = await supabase.from("voucher_entries").delete().eq("voucher_id", r.id);
-      if (e1) { toast.error(e1.message); return; }
-      const { error: e2 } = await supabase.from("voucher_items").delete().eq("voucher_id", r.id);
-      if (e2) { toast.error(e2.message); return; }
-      // Soft delete the parent so multi-device delta sync can propagate it.
-      const { error: e3 } = await supabase.from("vouchers")
-        .update({ deleted_at: new Date().toISOString() } as never)
-        .eq("id", r.id);
-      if (e3) { toast.error(e3.message); return; }
+      // One server transaction: children hard-deleted, parent soft-deleted so
+      // other devices drop it. A partial failure can no longer leave a live
+      // voucher with no entries.
+      const { error: delErr } = await supabase.rpc("delete_voucher_atomic", { _voucher_id: r.id });
+      if (delErr) { toast.error(delErr.message); return; }
       toast.success("Voucher deleted");
       load();
     } catch (err) {

@@ -160,7 +160,7 @@ export function PhysicalStockForm() {
           supabase
             .from("voucher_items")
             .select("item_id, qty, voucher_id, vouchers(voucher_type, voucher_date, company_id)")
-            .eq("vouchers.company_id", activeCompanyId),
+            .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null),
         ]);
         if (cancelled) return;
         setItems((itemData ?? []) as unknown as ItemOpt[]);

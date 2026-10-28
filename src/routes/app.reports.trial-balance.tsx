@@ -31,7 +31,7 @@ async function readEntriesUpToDateFast(companyId: string, to: string): Promise<E
     .where("[company_id+voucher_date]")
     .between([companyId, ""], [companyId, to], true, true)
     .toArray();
-  const live = (vouchers as any[]).filter((v) => v?.is_deleted !== true);
+  const live = (vouchers as any[]).filter((v) => v?.is_deleted !== true && !v?.deleted_at);
   const ids = live.map((v) => String(v.id));
   const voucherById = new Map(live.map((v) => [String(v.id), v]));
   const out: Entry[] = [];
@@ -113,7 +113,7 @@ function TrialBalance() {
         const { data, error } = await supabase
           .from("voucher_entries")
           .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-          .eq("vouchers.company_id", activeCompanyId)
+          .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
           .lte("vouchers.voucher_date", to);
         if (error) throw error;
         return (data || []) as unknown as Entry[];

@@ -96,7 +96,7 @@ function StockSummary() {
           const { data } = await supabase
             .from("voucher_items")
             .select("qty, rate_paise, taxable_paise, item_id, voucher_id, vouchers!inner(voucher_type, voucher_date, company_id)")
-            .eq("vouchers.company_id", activeCompanyId)
+            .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
             .lte("vouchers.voucher_date", to);
           return (data || []) as unknown as ItemMove[];
         },

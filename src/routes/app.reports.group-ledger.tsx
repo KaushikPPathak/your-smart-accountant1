@@ -125,7 +125,7 @@ function GroupLedgerReport() {
             .order("name"),
           supabase.from("voucher_entries")
             .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-            .eq("vouchers.company_id", activeCompanyId)
+            .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
             .lte("vouchers.voucher_date", to),
         ]);
         if (l.error) throw l.error;

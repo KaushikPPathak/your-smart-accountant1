@@ -88,7 +88,7 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
     supabase
       .from("voucher_entries")
       .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-      .eq("vouchers.company_id", activeCompanyId)
+      .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
       .lte("vouchers.voucher_date", to)
       .then(({ data }: any) => setEntries((data || []) as unknown as Entry[]));
   }, [activeCompanyId, to]);

@@ -195,15 +195,10 @@ async function setCursor(companyId: string, table: string, last_updated_at: stri
   await db.sync_cursors.put(row);
 }
 
-// Cap the initial voucher pull to the last 12 months so first-run hydration
-// stays quick on companies with years of history. Older vouchers still stream
-// in incrementally via the cursor-based `pullTable` path.
-const VOUCHER_INITIAL_MONTHS = 12;
-function voucherInitialCutoffISO(): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() - VOUCHER_INITIAL_MONTHS);
-  return d.toISOString().slice(0, 10);
-}
+// Review 2026-10-27: the first-run pull used to keep only the last 12 months of
+// vouchers. The incremental path only fetches rows changed since the last sync,
+// so older vouchers never reached a new device and reports silently excluded
+// them. Every voucher is now pulled.
 
 async function fetchExactTableRows(table: SnapshotTable, companyId: string): Promise<CacheRow[]> {
   const rows: CacheRow[] = [];
@@ -215,7 +210,6 @@ async function fetchExactTableRows(table: SnapshotTable, companyId: string): Pro
       .range(from, from + PAGE_SIZE - 1)
       .order(tableOrderColumn(table), { ascending: true });
     q = isCompaniesTable ? q.eq("id", companyId) : q.eq("company_id", companyId);
-    if (table === "vouchers") q = q.gte("voucher_date", voucherInitialCutoffISO());
     // Exact snapshot is a full replace — soft-deleted rows must not come
     // back into the local cache. The incremental delta path below still
     // pulls them (as tombstones) so cross-device deletes propagate.

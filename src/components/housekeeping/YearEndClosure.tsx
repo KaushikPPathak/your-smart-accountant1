@@ -274,7 +274,7 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
           const { data: entriesRaw, error: eErr } = await supabase
             .from("voucher_entries")
             .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-            .eq("vouchers.company_id", companyId)
+            .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null)
             .gte("vouchers.voucher_date", fyStart)
             .lte("vouchers.voucher_date", fyEnd);
           if (eErr) throw eErr;

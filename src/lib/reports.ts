@@ -87,7 +87,7 @@ export async function fetchLedgerBalancesWithMeta(
       let queryBuilder = supabase
         .from("voucher_entries")
         .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id, voucher_type, narration)")
-        .eq("vouchers.company_id", companyId);
+        .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null);
       if (fromOpt) {
         queryBuilder = queryBuilder.filter("vouchers.voucher_date", "gte", fromOpt);
       }
@@ -165,7 +165,7 @@ export async function fetchLedgerModeSplits(
       const { data: ves } = await supabase
         .from("voucher_entries")
         .select("voucher_id, ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id, voucher_type, narration)")
-        .eq("vouchers.company_id", companyId)
+        .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null)
         .filter("vouchers.voucher_date", "gte", from)
         .filter("vouchers.voucher_date", "lte", to);
       return {

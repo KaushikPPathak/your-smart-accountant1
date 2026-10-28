@@ -162,11 +162,11 @@ export async function buildCompanyBackup(companyId: string): Promise<CompanyBack
     supabase
       .from("voucher_items")
       .select("*, vouchers!inner(company_id)")
-      .eq("vouchers.company_id", companyId),
+      .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null),
     supabase
       .from("voucher_entries")
       .select("*, vouchers!inner(company_id)")
-      .eq("vouchers.company_id", companyId),
+      .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null),
     supabase.from("bill_allocations").select("*").eq("company_id", companyId),
     supabase.from("recurring_invoices").select("*").eq("company_id", companyId),
   ]);

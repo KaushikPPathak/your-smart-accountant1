@@ -56,11 +56,11 @@ function TradingAccount() {
           async () => readItems(activeCompanyId)
         ),
         withCacheFallback(
-          async () => (await supabase.from("vouchers").select("*").eq("company_id", activeCompanyId).lte("voucher_date", to)).data || [],
+          async () => (await supabase.from("vouchers").select("*").eq("company_id", activeCompanyId).is("deleted_at", null).lte("voucher_date", to)).data || [],
           async () => readVouchers(activeCompanyId, { to })
         ),
         withCacheFallback(
-          async () => (await supabase.from("voucher_items").select("*, vouchers!inner(voucher_date, company_id)").eq("vouchers.company_id", activeCompanyId).lte("vouchers.voucher_date", to)).data || [],
+          async () => (await supabase.from("voucher_items").select("*, vouchers!inner(voucher_date, company_id)").eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null).lte("vouchers.voucher_date", to)).data || [],
           async () => readVoucherItemsForCompany(activeCompanyId)
         )
       ]);
@@ -74,7 +74,7 @@ function TradingAccount() {
           .filter(vi => String(vi.item_id) === String(it.id))
           .map(vi => {
             const v = voucherMap.get(String(vi.voucher_id));
-            if (!v || v.is_deleted) return null;
+            if (!v || v.is_deleted || v.deleted_at) return null;
             if (v.voucher_date > to) return null;
             return {
               date: v.voucher_date,

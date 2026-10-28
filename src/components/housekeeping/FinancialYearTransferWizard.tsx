@@ -137,7 +137,7 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
         supabase
           .from("voucher_entries")
           .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-          .eq("vouchers.company_id", companyId)
+          .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null)
           .lte("vouchers.voucher_date", fy.end),
         supabase
           .from("items")
@@ -146,7 +146,7 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
         supabase
           .from("voucher_items")
           .select("qty, item_id, vouchers!inner(voucher_type, voucher_date, company_id)")
-          .eq("vouchers.company_id", companyId)
+          .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null)
           .lte("vouchers.voucher_date", fy.end),
       ]);
       setUnreconciled(unrecon ?? 0);
@@ -209,7 +209,7 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
       supabase
         .from("voucher_entries")
         .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-        .eq("vouchers.company_id", companyId)
+        .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null)
         .lte("vouchers.voucher_date", fy.end),
       supabase
         .from("items")
@@ -218,7 +218,7 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
       supabase
         .from("voucher_items")
         .select("qty, rate_paise, item_id, vouchers!inner(voucher_type, voucher_date, company_id)")
-        .eq("vouchers.company_id", companyId)
+        .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null)
         .lte("vouchers.voucher_date", fy.end),
     ]);
     if (ledgersRes.error) throw ledgersRes.error;

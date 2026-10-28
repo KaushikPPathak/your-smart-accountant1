@@ -2599,6 +2599,10 @@ export type Database = {
         Returns: undefined
       }
       delete_import_batch: { Args: { _batch_id: string }; Returns: Json }
+      delete_voucher_atomic: {
+        Args: { _voucher_id: string }
+        Returns: undefined
+      }
       delete_vouchers_bulk: {
         Args: {
           _company_id: string

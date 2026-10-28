@@ -168,13 +168,13 @@ export async function runAccountingAudit(companyId: string): Promise<AuditReport
         supabase
           .from("voucher_entries")
           .select("voucher_id, ledger_id, debit_paise, credit_paise, vouchers!inner(company_id)")
-          .eq("vouchers.company_id", companyId),
+          .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null),
         supabase
           .from("voucher_items")
           .select(
             "voucher_id, item_id, taxable_paise, cgst_paise, sgst_paise, igst_paise, gst_rate, vouchers!inner(company_id)",
           )
-          .eq("vouchers.company_id", companyId),
+          .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null),
         supabase
           .from("ledgers")
           .select(

@@ -60,7 +60,7 @@ function ItcItemWise() {
       .select(
         "item_id, qty, taxable_paise, cgst_paise, sgst_paise, igst_paise, vouchers!inner(voucher_type, voucher_date, company_id)",
       )
-      .eq("vouchers.company_id", activeCompanyId)
+      .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
       .gte("vouchers.voucher_date", from)
       .lte("vouchers.voucher_date", to)
       .then(({ data }: any) => setLines((data || []) as unknown as Line[]));

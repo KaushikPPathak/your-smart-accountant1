@@ -614,6 +614,10 @@ function VoucherEditPage() {
         return;
       }
 
+      // Locked periods must refuse deletes too (the desktop used to skip this check).
+      const { assertDateInOpenFy } = await import("@/lib/offline/voucher-executors");
+      await assertDateInOpenFy(voucher.company_id, voucher.voucher_date);
+
       const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
       const { isOnlineNow } = await import("@/lib/offline/online-status");
       const stamp = new Date().toISOString();
@@ -640,11 +644,9 @@ function VoucherEditPage() {
 
       if (!isLocalOnlyMode() && isOnlineNow()) {
         try {
-          await supabase.from("voucher_entries").delete().eq("voucher_id", voucher.id);
-          await supabase.from("voucher_items").delete().eq("voucher_id", voucher.id);
-          await supabase.from("vouchers")
-            .update({ deleted_at: stamp } as never)
-            .eq("id", voucher.id);
+          // One transaction on the server: children, then the soft-delete marker.
+          const { error: rpcErr } = await supabase.rpc("delete_voucher_atomic", { _voucher_id: voucher.id });
+          if (rpcErr) throw rpcErr;
         } catch (cloudErr) {
           console.warn("Cloud delete failed (kept locally):", cloudErr);
         }
