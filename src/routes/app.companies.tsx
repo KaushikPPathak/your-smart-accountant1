@@ -974,11 +974,6 @@ function CompaniesPage() {
                       <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                         <EntityIcon className="h-3 w-3" /> {meta.short}
                       </span>
-                      {!m.companies.gst_registered && (
-                        <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                          UNREG.
-                        </span>
-                      )}
                       {/* All companies are local-only by default — no TRIAL badge needed. */}
 
                     </div>
@@ -1033,10 +1028,10 @@ function CompaniesPage() {
                           </span>
                         ) : (
                           <span
-                            className="ml-1 inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
-                            title="Provisional — year is open for edits"
+                            className="ml-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+                            title="Books open — this year accepts new entries"
                           >
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Provisional
+                            <Pencil className="h-2.5 w-2.5" /> Books open
                           </span>
                         )}
                       </div>
@@ -1093,11 +1088,6 @@ function CompaniesPage() {
                         <span className="inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                           <EntityIcon className="h-3 w-3" /> {meta.short}
                         </span>
-                        {!m.companies.gst_registered && (
-                          <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                            UNREG.
-                          </span>
-                        )}
                       </div>
                     </div>
 
@@ -1145,10 +1135,10 @@ function CompaniesPage() {
                           </span>
                         ) : (
                           <span
-                            className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
-                            title="Provisional"
+                            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+                            title="Books open — this year accepts new entries"
                           >
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Provisional
+                            <Pencil className="h-2.5 w-2.5" /> Books open
                           </span>
                         )}
                       </div>
