@@ -142,8 +142,8 @@ export const BS_LIAB = new Set([
 /**
  * Receipt-mode split for P&L / Trading ledgers.
  * For every voucher touching an income/expense ledger, look at the contra
- * cash/bank entries in the same voucher and attribute the ledger movement
- * pro-rata across Cash vs Bank/Cheque. Journal entries with no cash/bank
+ * cash/bank entries in the same voucher. A voucher settled only through cash
+ * counts as Cash, only through bank as Bank/Cheque; mixed vouchers go to Other. Journal entries with no cash/bank
  * contra fall into `otherPaise` (e.g. accrual, contra of debtor/creditor).
  * Values are signed (debit − credit) so callers can apply the same
  * display-sign transform used for the parent ledger.
@@ -211,23 +211,20 @@ export async function fetchLedgerModeSplits(
       if (t === "cash") cashNet += m;
       else if (t === "bank") bankNet += m;
     }
-    const cashAbs = Math.abs(cashNet);
-    const bankAbs = Math.abs(bankNet);
-    const totalAbs = cashAbs + bankAbs;
+    // Only attribute a mode when the voucher settles through ONE channel.
+    // Vouchers touching both cash and bank (or neither) cannot be split
+    // honestly, so they stay under "Other" instead of a pro-rata guess.
+    const onlyCash = cashNet !== 0 && bankNet === 0;
+    const onlyBank = bankNet !== 0 && cashNet === 0;
 
     for (const e of es) {
       const t = typeOf.get(e.ledger_id);
       if (t === "cash" || t === "bank") continue;
       const m = (e.debit_paise || 0) - (e.credit_paise || 0);
       if (!m) continue;
-      if (totalAbs === 0) {
-        bump(e.ledger_id, "otherPaise", m);
-      } else {
-        const cashShare = Math.round((m * cashAbs) / totalAbs);
-        const bankShare = m - cashShare;
-        bump(e.ledger_id, "cashPaise", cashShare);
-        bump(e.ledger_id, "bankPaise", bankShare);
-      }
+      if (onlyCash) bump(e.ledger_id, "cashPaise", m);
+      else if (onlyBank) bump(e.ledger_id, "bankPaise", m);
+      else bump(e.ledger_id, "otherPaise", m);
     }
   }
   return out;

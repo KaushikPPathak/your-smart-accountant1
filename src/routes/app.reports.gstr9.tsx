@@ -46,6 +46,7 @@ import {
   type Gstr9HsnRow,
   type Gstr9SourceStatus,
   type Gstr9TaxTotals,
+  type Gstr9Contribution,
 } from "@/lib/gstr9";
 import {
   emptyTaxAmount,
