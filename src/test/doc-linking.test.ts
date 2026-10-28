@@ -24,6 +24,7 @@ async function reset() {
     { id: PARTY, company_id: CO, name: "Customer A", type: "sundry_debtor", updated_at: STAMP, is_deleted: false, is_active: true },
   ]);
   await offlineDb.cache_items.put({ id: ITEM, company_id: CO, name: "Item A", unit: "NOS", gst_rate: 0, updated_at: STAMP, is_deleted: false, is_active: true });
+  await offlineDb.cache_companies.put({ id: CO, company_id: CO, name: "Doc Co", financial_year_start: "2026-04-01", updated_at: STAMP });
 }
 
 function voucher(id: string, type: string, number: string, total: number, extra: Record<string, unknown> = {}) {

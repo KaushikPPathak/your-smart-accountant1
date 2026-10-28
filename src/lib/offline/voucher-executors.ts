@@ -151,11 +151,20 @@ async function nextLocalVoucherNumber(
   return String(max + 1);
 }
 
+/** Refuse a voucher number that another save took between number allocation and commit. */
+async function assertVoucherNumberFree(db: any, companyId: string, voucherType: string, voucherNumber: string): Promise<void> {
+  const rows: any[] = await db.cache_vouchers.where("company_id").equals(companyId).toArray();
+  const clash = rows.some((v) =>
+    v.voucher_type === voucherType && String(v.voucher_number) === voucherNumber && v.is_deleted !== true && !v.deleted_at,
+  );
+  if (clash) throw new Error(`Voucher number ${voucherNumber} was just taken by another save. Please save again.`);
+}
+
 async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ voucherId: string; voucherNumber: string }> {
   const db = await getOfflineDb();
   const voucherId = crypto.randomUUID();
   const presetNumber = snap.voucherNumber?.trim() || "";
-  let voucherNumber = presetNumber;
+  const voucherNumber = presetNumber || await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
   const stamp = nowIso();
   const lines = snap.lines.map(({ l, c }) => ({ l, c }));
 
@@ -274,11 +283,8 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
     db.cache_voucher_entries,
     db.cache_bill_sundries,
     async () => {
-      // Read the counter inside the transaction: Dexie serialises rw transactions,
-      // so two overlapping saves can no longer receive the same auto number.
-      if (!presetNumber) {
-        voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
-      }
+      // Auto numbers are re-checked inside the transaction (see assertVoucherNumberFree).
+      if (!presetNumber) await assertVoucherNumberFree(db, snap.companyId, snap.voucherType, voucherNumber);
       // Security/Business Logic: Enforce party locking for carry-forward documents.
       if (snap.originalVoucherId) {
         const orig = await db.cache_vouchers.get(snap.originalVoucherId);
@@ -335,7 +341,7 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
 async function runLocalEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void> {
   const db = await getOfflineDb();
   const voucherId = crypto.randomUUID();
-  let voucherNumber = "";
+  const voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
   const stamp = nowIso();
 
   // Security/Business Logic: Enforce party locking for carry-forward documents.
@@ -378,8 +384,7 @@ async function runLocalEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void>
     db.cache_voucher_entries,
     db.cache_bill_allocations,
     async () => {
-      // Counter read inside the transaction (see runLocalItemVoucherCreate).
-      voucherNumber = await nextLocalVoucherNumber(snap.companyId, snap.voucherType, snap.voucherDate);
+      await assertVoucherNumberFree(db, snap.companyId, snap.voucherType, voucherNumber);
       await db.cache_vouchers.put({
         id: voucherId,
         company_id: snap.companyId,

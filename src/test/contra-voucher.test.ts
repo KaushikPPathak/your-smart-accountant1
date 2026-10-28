@@ -15,7 +15,7 @@ async function resetDb() {
     offlineDb.outbox.clear(),
     offlineDb.meta.clear(),
   ]);
-  await offlineDb.cache_companies.put({ id: COMPANY_ID, company_id: COMPANY_ID, name: "Contra Co", updated_at: "2026-07-07T00:00:00.000Z" });
+  await offlineDb.cache_companies.put({ id: COMPANY_ID, company_id: COMPANY_ID, name: "Contra Co", financial_year_start: "2026-04-01", updated_at: "2026-07-07T00:00:00.000Z" });
   await offlineDb.cache_ledgers.bulkPut([
     { id: CASH_ID, company_id: COMPANY_ID, name: "Cash", type: "cash", updated_at: "2026-07-07T00:00:00.000Z", is_deleted: false, is_active: true },
     { id: BANK_ID, company_id: COMPANY_ID, name: "HDFC Bank", type: "bank", updated_at: "2026-07-07T00:00:00.000Z", is_deleted: false, is_active: true },
