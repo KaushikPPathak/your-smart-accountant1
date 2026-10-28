@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useCompany } from "@/lib/company-context";
+import { companyFeatures, isUrlEnabled } from "@/lib/company-features";
 import { CompanyFlyout } from "@/components/CompanyFlyout";
 import { useI18n } from "@/lib/i18n";
 
@@ -185,23 +186,7 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
-const GST_URLS = new Set([
-  "/app/reports/gstr1",
-  "/app/einvoice",
-  "/app/reports/gst-sales-book",
-  "/app/reports/gst-purchase-book",
-  "/app/reports/tax-audit",
-  "/app/reports/itc-item-wise",
-  "/app/reports/itc-party-wise",
-]);
 
-const INVENTORY_URLS = new Set([
-  "/app/items",
-  "/app/reports/stock-summary",
-  "/app/reports/hsn-summary",
-  "/app/vouchers/new/manufacturing",
-  "/app/reports/trading",
-]);
 
 export function AppSidebar() {
   const { state } = useSidebar();

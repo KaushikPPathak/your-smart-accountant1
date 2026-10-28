@@ -44,6 +44,7 @@ export const GST_ONLY_URLS = new Set([
   "/app/reports/gst-purchase-book",
   "/app/reports/itc-item-wise",
   "/app/reports/itc-party-wise",
+  "/app/reports/tax-audit",
 ]);
 
 /** Pages that only make sense when the company maintains inventory. */
@@ -52,6 +53,7 @@ export const INVENTORY_ONLY_URLS = new Set([
   "/app/reports/stock-summary",
   "/app/reports/hsn-summary",
   "/app/vouchers/new/manufacturing",
+  "/app/reports/trading",
 ]);
 
 /** Pages that only make sense when the company opted for 44AD / 44ADA. */

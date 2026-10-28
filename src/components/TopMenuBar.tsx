@@ -53,6 +53,7 @@ import {
   MenubarTrigger,
 } from "@/components/ui/menubar";
 import { useCompany } from "@/lib/company-context";
+import { companyFeatures, isUrlEnabled } from "@/lib/company-features";
 import { useI18n, LANGUAGES, type LangCode } from "@/lib/i18n";
 import { useCurrency, CURRENCIES } from "@/lib/currency";
 import { useDateFormat, DATE_FORMATS, type DateFormatCode } from "@/lib/date-format";
@@ -249,22 +250,6 @@ const MENUS: TopMenu[] = [
   },
 ];
 
-const GST_URLS = new Set([
-  "/app/reports/gstr1",
-  "/app/einvoice",
-  "/app/reports/gst-sales-book",
-  "/app/reports/gst-purchase-book",
-  "/app/reports/tax-audit",
-  "/app/reports/itc-item-wise",
-  "/app/reports/itc-party-wise",
-]);
-const INVENTORY_URLS = new Set([
-  "/app/items",
-  "/app/reports/stock-summary",
-  "/app/reports/hsn-summary",
-  "/app/vouchers/new/manufacturing",
-  "/app/reports/trading",
-]);
 
 export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backupLabel, quickPanel }: { rightExtras?: ReactNode; onLock?: () => void; onBackupNow?: () => void; backupBusy?: boolean; backupLabel?: string; quickPanel?: ReactNode }) {
   const location = useLocation();
