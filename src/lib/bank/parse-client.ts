@@ -17,29 +17,43 @@ function getWorker(): Worker | null {
   }
 }
 
-export function parseStatementFile(file: File): Promise<ParseResponse> {
-  return new Promise(async (resolve) => {
-    const isXlsx = /\.(xlsx|xls)$/i.test(file.name);
-    const req: ParseRequest = isXlsx
-      ? { kind: "xlsx", buffer: await file.arrayBuffer() }
-      : { kind: "csv", text: await file.text() };
-    const w = getWorker();
-    if (!w) {
-      // Main-thread fallback (dev / SSR / unsupported browsers).
-      const mod = await import("./parse-worker");
-      // The worker module's onmessage is bound to `self` — parse inline instead.
-      // Minimal duplicate: recompute matrix and dispatch through the exported helper is not possible;
-      // so post a synthetic response with an error asking user to reload.
-      void mod;
-      resolve({ ok: false, rows: [], error: "Web Worker unavailable in this browser — please reload.", detected: { dateCol: null, descCol: null, drCol: null, crCol: null }, rejectedCount: 0 });
-      return;
-    }
-    const onMsg = (ev: MessageEvent<ParseResponse>) => {
+const EMPTY_DETECTED = { dateCol: null, descCol: null, drCol: null, crCol: null } as ParseResponse["detected"];
+
+async function readRequest(file: File): Promise<ParseRequest> {
+  const isXlsx = /\.(xlsx|xls)$/i.test(file.name);
+  return isXlsx
+    ? { kind: "xlsx", buffer: await file.arrayBuffer() }
+    : { kind: "csv", text: await file.text() };
+}
+
+function sendToWorker(w: Worker, req: ParseRequest): Promise<ParseResponse> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
       w.removeEventListener("message", onMsg);
-      resolve(ev.data);
+      w.removeEventListener("error", onErr);
     };
+    const onMsg = (ev: MessageEvent<ParseResponse>) => { cleanup(); resolve(ev.data); };
+    const onErr = (ev: ErrorEvent) => { cleanup(); reject(new Error(ev.message || "parser worker failed")); };
     w.addEventListener("message", onMsg);
+    w.addEventListener("error", onErr);
     if (req.kind === "xlsx") w.postMessage(req, [req.buffer]);
     else w.postMessage(req);
   });
+}
+
+/**
+ * Parse a bank statement. Always settles: read errors, a missing worker and
+ * worker crashes all come back as `{ ok: false, error }` instead of hanging.
+ */
+export function parseStatementFile(file: File): Promise<ParseResponse> {
+  const fail = (error: string): ParseResponse => ({
+    ok: false, rows: [], error, detected: EMPTY_DETECTED, rejectedCount: 0,
+  });
+  return readRequest(file)
+    .then((req) => {
+      const w = getWorker();
+      if (!w) return fail("Web Worker unavailable in this browser — please reload.");
+      return sendToWorker(w, req);
+    })
+    .catch((e: unknown) => fail(`Could not read file: ${e instanceof Error ? e.message : String(e)}`));
 }

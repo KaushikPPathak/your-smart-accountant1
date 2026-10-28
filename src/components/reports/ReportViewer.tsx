@@ -228,7 +228,7 @@ export function ReportViewer({
 
   return (
     <div className={cn("report-print-root-wrap space-y-3", className)}>
-      {(toolbar || true) && (
+      {(
         <div className="flex items-start justify-between gap-2 print:hidden">
           <div className="min-w-0 flex-1">{toolbar}</div>
           <Button

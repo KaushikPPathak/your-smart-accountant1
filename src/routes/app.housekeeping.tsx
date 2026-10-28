@@ -632,7 +632,7 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
       let vchs: { id: string; voucher_number: string; voucher_date: string; voucher_type: string }[] = [];
       let entries: { voucher_id: string; debit_paise: number; credit_paise: number }[] = [];
 
-      const useCache = async () => {
+      const loadCachedEntries = async () => {
         const { readVouchers, readVoucherEntries } = await import("@/lib/offline/cache-read");
         const cachedV = await readVouchers(companyId);
         vchs = cachedV.map((v: any) => ({
@@ -649,7 +649,7 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
       };
 
       if (!isOnlineNow()) {
-        await useCache();
+        await loadCachedEntries();
       } else {
         try {
           const { data: vData, error: vErr } = await supabase
@@ -660,12 +660,12 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
           const { data: eData, error: eErr } = await supabase
             .from("voucher_entries")
             .select("voucher_id, debit_paise, credit_paise, vouchers!inner(company_id)")
-            .eq("vouchers.company_id", companyId);
+            .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null);
           if (eErr) throw eErr;
           vchs = (vData || []) as any;
           entries = (eData || []) as any;
         } catch {
-          await useCache();
+          await loadCachedEntries();
         }
       }
 
@@ -791,8 +791,8 @@ function CleanupTool({ companyId, disabled }: { companyId: string | null; disabl
           const [ledgerRes, itemRes, entryRes, vItemRes] = await Promise.all([
             supabase.from("ledgers").select("id, name").eq("company_id", companyId).eq("is_active", true),
             supabase.from("items").select("id, name").eq("company_id", companyId).eq("is_active", true),
-            supabase.from("voucher_entries").select("ledger_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId),
-            supabase.from("voucher_items").select("item_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId),
+            supabase.from("voucher_entries").select("ledger_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null),
+            supabase.from("voucher_items").select("item_id, vouchers!inner(company_id)").eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null),
           ]);
           const failed = [ledgerRes, itemRes, entryRes, vItemRes].find((r) => r.error);
           if (failed?.error) throw failed.error;

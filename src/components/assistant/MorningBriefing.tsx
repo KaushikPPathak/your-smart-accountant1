@@ -93,7 +93,8 @@ export function MorningBriefing({ companyId, companyName, userName }: Props) {
             title="Copy this digest (paste into WhatsApp or email)"
             onClick={async () => {
               const ok = await copyDigest(renderDigestText(bundle, companyName));
-              ok ? toast.success("Digest copied") : toast.error("Could not copy — use download instead");
+              if (ok) toast.success("Digest copied");
+              else toast.error("Could not copy — use download instead");
             }}
           >
             <Copy className="h-4 w-4" />

@@ -58,10 +58,8 @@ function extractEntity(fragment: string): string | null {
 function toolForIntent(intent: IntentType): string | null {
   switch (intent) {
     case "party_balance":     return "get_party_balance";
-    case "party_balance":     return "get_party_balance";
     case "cash_balance":         return "get_cash_balance";
     case "bank_balance":         return "get_cash_balance";
-    case "voucher_lookup":    return "get_voucher";
     case "voucher_lookup":    return "get_voucher";
     case "trial_balance":     return "get_trial_balance";
     case "explanation":       return "get_trial_balance"; // retriever composes P&L on top
