@@ -4312,9 +4312,16 @@ function GSTR9Page() {
     }
     if (title.startsWith("Table 17") || title.startsWith("Table 18")) { drillHsn(title.startsWith("Table 18"), row); return; }
     if (code.startsWith("4") || code.startsWith("5")) { setGstr1Open(true); return; }
-    if (code === "6A") { setGstr3bOpen(true); return; }
-    if (code === "8A") { setGstr9ItcReconciliationOpen(true); return; }
-    if (code.startsWith("6") || code.startsWith("7") || code.startsWith("8")) { setGstr9ItcOpen(true); return; }
+    const inward = result?.details?.inward ?? [];
+    const purchaseDrill = (onFeed: () => void, feedLabel: string, filter: (row: Gstr9Contribution) => boolean = () => true) => {
+      const rows = inward.filter(filter);
+      setDrill({ title: row, rows, feedLabel, onFeed });
+    };
+    if (code === "6A" || code === "6A2" || code === "6O" || code === "6I") { purchaseDrill(() => setGstr3bOpen(true), "Enter GSTR-3B figures"); return; }
+    if (code === "6B") { purchaseDrill(() => setGstr9ItcOpen(true), "Enter ITC figures", (r) => r.nature !== "rcm_inward"); return; }
+    if (code === "6C" || code === "6D") { purchaseDrill(() => setGstr9ItcOpen(true), "Enter ITC figures", (r) => r.nature === "rcm_inward"); return; }
+    if (code === "8A" || code === "8B" || code === "8C" || code === "8D") { purchaseDrill(() => setGstr9ItcReconciliationOpen(true), "Reconcile ITC"); return; }
+    if (code.startsWith("6") || code.startsWith("7") || code.startsWith("8")) { purchaseDrill(() => setGstr9ItcOpen(true), "Enter ITC figures"); return; }
     if (code.startsWith("9")) setGstr9TaxPaymentOpen(true);
   };
 
