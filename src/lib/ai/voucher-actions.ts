@@ -188,7 +188,10 @@ export function parseDate(text: string, today = new Date()): { date: string; mat
 // ═════════════════════════════════════════════════════════════════════════════
 
 export function parseAmount(text: string): number | null {
-  const cleaned = text.replace(/[₹,]/g, " ");
+  // Dates (15/08/2026) must not supply the amount, and Indian grouping
+  // ("50,0000", "1,50,000") must read as one number.
+  const noDates = text.replace(/\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}\b/g, " ");
+  const cleaned = noDates.replace(/₹/g, " ").replace(/(\d),(?=\d)/g, "$1").replace(/,/g, " ");
 
   // Spoken lakh/crore: "1.5 lakh", "2 crore", "50k"
   const lakh = cleaned.match(/\b(\d+(?:\.\d+)?)\s*(lakh|lac)s?\b/i);
@@ -475,21 +478,17 @@ export async function detectVoucherAction(
     : ((bankPhrase ? pickBest(ledgers, bankPhrase, bankType) : null)
         ?? findLedgerNamedInText(ledgers, raw, bankType));
 
-  // Party.
+  // Party: an exact ledger name in the sentence first (never a fuzzy match over an
+  // exact one), then the phrase after from/to, then a fuzzy match as last resort.
   const partyTypes = intent === "receipt" || intent === "sales"
     ? (t: string) => t === "sundry_debtor" || t === "income_direct" || t === "income_indirect"
     : (t: string) => t === "sundry_creditor" || t === "expense_direct" || t === "expense_indirect";
+  const partyExclude = cashBank ? [cashBank.id] : [];
   const partyPhrase = extractPartyPhrase(raw, intent);
-  let party: CachedLedger | null = null;
-  if (partyPhrase) {
+  let party: CachedLedger | null = findLedgerNamedInText(ledgers, raw, partyTypes, partyExclude)
+    ?? findLedgerNamedInText(ledgers, raw, undefined, partyExclude);
+  if (!party && partyPhrase) {
     party = pickBest(ledgers, partyPhrase, partyTypes) ?? pickBest(ledgers, partyPhrase);
-  }
-  // No "from"/"to" phrase, e.g. "RENT INCOME 9500 IN BANK OF BARODA": use a ledger
-  // whose full name appears in the sentence (never a partial or fuzzy match).
-  if (!party) {
-    const exclude = cashBank ? [cashBank.id] : [];
-    party = findLedgerNamedInText(ledgers, raw, partyTypes, exclude)
-      ?? findLedgerNamedInText(ledgers, raw, undefined, exclude);
   }
 
   const confidence = 0.4 + (party ? 0.3 : 0) + (cashBank ? 0.2 : 0) + (dateRes ? 0.1 : 0);

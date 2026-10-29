@@ -9,11 +9,12 @@ vi.mock("@/lib/offline/cache-read", () => ({
     { id: "bank", name: "BANK OF BARODA", type: "bank" },
     { id: "rent", name: "Rent Income", type: "income_indirect" },
     { id: "jainam", name: "Jainam Shares", type: "sundry_creditor" },
+    { id: "sd", name: "Share Dividend", type: "income_indirect" },
   ]),
   readVouchers: vi.fn(async () => []),
 }));
 
-import { executeVoucherAction, detectVoucherAction } from "../voucher-actions";
+import { executeVoucherAction, detectVoucherAction, parseAmount } from "../voucher-actions";
 
 const base = {
   confidence: 0.9,
@@ -84,5 +85,18 @@ describe("bank and party are found in the sentence", () => {
     expect(a?.draft.intent).toBe("receipt");
     expect(a?.draft.cashBankLedgerId).toBe("bank");
     expect(a?.draft.partyLedgerId).toBe("jainam");
+  });
+});
+
+describe("amount and party read correctly", () => {
+  it("reads Indian comma grouping, not the year in the date", () => {
+    expect(parseAmount("Rs. 50,0000 received from Jainam Shares on 15/08/2026")).toBe(500000);
+    expect(parseAmount("Rs 1,50,000 paid on 01/10/2026")).toBe(150000);
+    expect(parseAmount("Rs.500000 paid to jainam shares on 25/08/2026 cheque no 0001")).toBe(500000);
+  });
+  it("prefers the exact party name over a similar income ledger", async () => {
+    const a = await detectVoucherAction("bank of baroda Rs. 50,0000 received from Jainam Shares on 15/08/2026 via neft", "co1");
+    expect(a?.draft.partyLedgerId).toBe("jainam");
+    expect(a?.draft.amountPaise).toBe(50000000);
   });
 });

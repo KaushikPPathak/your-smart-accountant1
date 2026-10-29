@@ -27,6 +27,7 @@ import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
 import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/masters-cache";
 import { enqueueSave } from "@/lib/save-queue";
+import { consumeAssistantReturn } from "@/lib/assistant-return";
 import {
   ENTRY_VOUCHER_KEY,
   runEntryVoucherCreate,
@@ -199,6 +200,12 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Opened from the Mehtaji assistant? Cancel returns there, not to the list.
+  // Read once when the form opens, then cleared, so a stale flag cannot redirect a later Cancel.
+  const [returnTo] = useState(() => consumeAssistantReturn());
+  const cameFromAssistant = returnTo !== null;
+  const leaveForm = () => navigate({ to: (returnTo ?? "/app/vouchers") as never });
 
   // Re-render when masters change so the ledger list stays fresh.
   const mastersVersion = useMastersVersion();
@@ -628,7 +635,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       if (!ok) return;
       clearVoucherDraft(draftKey);
     }
-    navigate({ to: "/app/vouchers" });
+    leaveForm();
   }, { scope: "voucher", allowInField: true, description: "Cancel and return" });
 
 
@@ -687,10 +694,10 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                   if (!ok) return;
                   clearVoucherDraft(draftKey);
                 }
-                navigate({ to: "/app/vouchers" });
+                leaveForm();
               }}
             >
-              <X className="mr-1 h-3 w-3" /> Cancel
+              <X className="mr-1 h-3 w-3" /> {cameFromAssistant ? "Back to Mehtaji" : "Cancel"}
             </Button>
             <Button
               size="sm"

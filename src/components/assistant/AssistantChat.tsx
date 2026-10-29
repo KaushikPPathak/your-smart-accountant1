@@ -47,6 +47,8 @@ import { isWebGpuAvailable } from "@/lib/ai/webllm";
 import { clearSpeculation } from "@/lib/ai/prefetch";
 import { VoucherPreviewCard, OcrPreviewCard } from "./VoucherPreviewCards";
 import { cn } from "@/lib/utils";
+import { writeAssistantPrefill } from "@/lib/voucher-intent";
+import { markAssistantReturn } from "@/lib/assistant-return";
 
 const WELCOME: ChatMessage = {
   id: "welcome",
@@ -321,11 +323,19 @@ export function AssistantChat() {
                       disabled={!!msg.voucherResult}
                       onConfirm={() => confirmVoucher(msg.id)}
                       onEdit={() => {
-                        const route = msg.voucherPreview?.intent ? `/app/vouchers/new/${msg.voucherPreview.intent.toLowerCase()}` : '/app/vouchers/new/journal';
-                        navigate({ 
-                          to: route as any,
-                          // @ts-ignore - prefill is handled by consumeAssistantPrefill via writeAssistantPrefill which was called in assistantChat
+                        const d = msg.voucherPreview;
+                        if (!d) return;
+                        writeAssistantPrefill({
+                          voucherType: d.intent,
+                          date: d.date,
+                          partyLedgerId: d.partyLedgerId,
+                          cashBankLedgerId: d.cashBankLedgerId,
+                          amount: d.amount,
+                          narration: d.narration,
+                          refNo: d.refNo,
                         });
+                        markAssistantReturn();
+                        navigate({ to: `/app/vouchers/new/${d.intent}` as never });
                       }}
                       onCancel={() => setMessages(m => m.filter(x => x.id !== msg.id))}
                     />
