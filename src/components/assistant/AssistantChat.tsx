@@ -63,6 +63,22 @@ const SUGGESTIONS = [
   "purchase 8000 from Suppliers Ltd",
 ];
 
+const CHAT_STORE_KEY = "ym_assistant_chat";
+const CHAT_STORE_LIMIT = 100;
+
+function loadSavedChat(): ChatMessage[] {
+  try {
+    const raw = sessionStorage.getItem(CHAT_STORE_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw) as ChatMessage[];
+      if (Array.isArray(saved) && saved.length > 0) return saved.slice(-CHAT_STORE_LIMIT);
+    }
+  } catch {
+    /* unreadable saved chat: start fresh */
+  }
+  return [WELCOME];
+}
+
 export type AiActionKind = "chat" | "voucher" | "report" | "command" | "voucher_executed";
 
 interface ChatMessage {
@@ -83,7 +99,16 @@ interface ChatMessage {
 }
 
 export function AssistantChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
+  // The chat survives leaving this page (e.g. Edit in Form and back): it is kept
+  // for this session and restored on mount.
+  const [messages, setMessages] = useState<ChatMessage[]>(loadSavedChat);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(CHAT_STORE_KEY, JSON.stringify(messages.slice(-CHAT_STORE_LIMIT)));
+    } catch {
+      /* storage unavailable: chat simply is not kept */
+    }
+  }, [messages]);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [activeCat, setActiveCat] = useState<KbEntry["category"] | "All">("All");
   const navigate = useNavigate();
