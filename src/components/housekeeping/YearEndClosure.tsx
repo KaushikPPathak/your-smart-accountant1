@@ -28,6 +28,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { formatINR, rupeesToPaise } from "@/lib/money";
 import type { LedgerTypeValue } from "@/lib/constants";
+import { findExistingClosureVoucherIds, pickCapitalLedger, narrationLooksLikeClosure } from "@/lib/year-end-state";
 import {
   readLedgers,
   readVouchers,
@@ -146,54 +147,6 @@ async function ensureLedger(
     .single();
   if (error) throw error;
   return created as { id: string; name: string };
-}
-
-// Narration prefixes we generate when posting year-end closure journals.
-// Kept in sync with the `narration` strings in buildPreview / postClosure.
-const CLOSURE_NARRATION_MARKERS = [
-  "Closing stock as on",
-  "Direct incomes & expenses for FY",
-  "Indirect incomes/expenses & Gross Profit transferred",
-  "Net Profit for FY",
-  "Net Loss for FY",
-];
-
-function narrationLooksLikeClosure(narration: string | null | undefined): boolean {
-  const n = String(narration ?? "").trim();
-  if (!n) return false;
-  return CLOSURE_NARRATION_MARKERS.some((m) => n.startsWith(m));
-}
-
-async function findExistingClosureVoucherIds(
-  companyId: string,
-  fyStart: string,
-  fyEnd: string,
-): Promise<string[]> {
-  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
-  if (isLocalOnlyMode()) {
-    const { offlineDb } = await import("@/lib/offline/db");
-    const rows = await offlineDb.cache_vouchers.where("company_id").equals(companyId).toArray();
-    return (rows as any[])
-      .filter(
-        (v) =>
-          v?.is_deleted !== true &&
-          v?.voucher_type === "journal" &&
-          String(v?.voucher_date ?? "") >= fyStart &&
-          String(v?.voucher_date ?? "") <= fyEnd &&
-          narrationLooksLikeClosure(v?.narration),
-      )
-      .map((v) => String(v.id));
-  }
-  const { data } = await supabase
-    .from("vouchers")
-    .select("id, narration")
-    .eq("company_id", companyId)
-    .eq("voucher_type", "journal")
-    .gte("voucher_date", fyStart)
-    .lte("voucher_date", fyEnd);
-  return (data ?? [])
-    .filter((v: any) => narrationLooksLikeClosure(v.narration))
-    .map((v: any) => String(v.id));
 }
 
 async function deleteVouchersEverywhere(companyId: string, voucherIds: string[]): Promise<void> {
@@ -462,9 +415,7 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
       const capitalCandidates = ledgers.filter(
         (l) => l.type === "capital" && l.name.trim().toLowerCase() !== "profit & loss a/c",
       );
-      const capitalLedger =
-        capitalCandidates.find((l) => isCapitalName(l.name) && !isReserveName(l.name)) ??
-        capitalCandidates.find((l) => !isReserveName(l.name));
+      const capitalLedger = pickCapitalLedger(capitalCandidates);
       const capitalDisplayName = capitalLedger?.name ?? "Capital A/c";
       if (npPaise !== 0) {
         const capLines: JournalLine[] = [];
@@ -556,11 +507,8 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
             String(l.name ?? "").trim().toLowerCase() !== "profit & loss a/c" &&
             !l.is_deleted,
         );
-        const pick =
-          candidates.find((l) => isCapitalName(String(l.name)) && !isReserveName(String(l.name))) ??
-          candidates.find((l) => !isReserveName(String(l.name))) ??
-          candidates[0];
-        if (pick) capitalLg = { id: String(pick.id), name: String(pick.name) };
+        const pick = pickCapitalLedger(candidates.map((l) => ({ id: String(l.id), name: String(l.name) })));
+        if (pick) capitalLg = pick;
       } else {
         const { data: rows } = await supabase
           .from("ledgers")
@@ -570,10 +518,7 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
           .neq("id", plLg.id)
           .neq("name", "Profit & Loss A/c");
         const candidates = (rows ?? []) as { id: string; name: string }[];
-        const pick =
-          candidates.find((l) => isCapitalName(l.name) && !isReserveName(l.name)) ??
-          candidates.find((l) => !isReserveName(l.name)) ??
-          candidates[0];
+        const pick = pickCapitalLedger(candidates);
         if (pick) capitalLg = { id: String(pick.id), name: String(pick.name) };
       }
       if (capitalLg && isReserveName(capitalLg.name)) capitalLg = null;
