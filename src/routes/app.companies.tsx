@@ -1071,7 +1071,7 @@ function CompaniesPage() {
 </button>
                         {fyLocks[m.company_id] ? (
                           <span
-                            className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
+                            className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white"
                             title="Audited & Locked — no edits allowed"
                           >
                             <CheckCircle2 className="h-3 w-3" /> Books closed
@@ -1185,7 +1185,7 @@ function CompaniesPage() {
 </button>
                         {fyLocks[m.company_id] ? (
                           <span
-                            className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white"
                             title="Audited & Locked"
                           >
                             <CheckCircle2 className="h-3 w-3" /> Books closed

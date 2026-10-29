@@ -678,14 +678,21 @@
     border: 0.5pt solid #000 !important;
     padding: 3pt 4pt !important;
     vertical-align: top;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow-wrap: break-word;
   }
+  /* Headings wrap only between words, never inside one ("PARTICULARS" must
+     not become "PARTICULA RS"). Same rule the Word export uses. */
   .report-print-root th {
     background: #f0f0f0 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     font-weight: 600;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  /* Totals stay on one line (no "₹" on one line and the amount on the next). */
+  .report-print-root tfoot td {
+    white-space: nowrap;
   }
   .report-print-root .num,
   .report-print-root td.num,
