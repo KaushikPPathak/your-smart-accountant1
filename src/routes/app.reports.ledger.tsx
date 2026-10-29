@@ -13,6 +13,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { QuickRangeChips } from "@/components/reports/QuickRangeChips";
 import { ReportViewer } from "@/components/reports/ReportViewer";
+import { PrintLayoutToggle } from "@/components/reports/PrintLayoutToggle";
+import { usePrintLayout } from "@/lib/print-layout";
 import { TAccountColumnar, type TColRow } from "@/components/reports/TAccountColumnar";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -831,6 +833,8 @@ function LedgerStatement() {
   type AllSection = { ledger: LedgerOpt; opening: number; rows: AllRow[]; dr: number; cr: number; closing: number };
   const [allMode, setAllMode] = useState(false);
   const [allSections, setAllSections] = useState<AllSection[] | null>(null);
+  const [ledgerPrintLayout, setLedgerPrintLayout] = usePrintLayout("all-ledgers", "paged");
+  const ledgerPageBreak = ledgerPrintLayout === "paged";
   const [allLoading, setAllLoading] = useState(false);
 
   const buildAllLedgersData = async (): Promise<AllSection[]> => {
@@ -1067,6 +1071,7 @@ function LedgerStatement() {
       companySubLine: pdfHeader.companySubLine,
       fileName: `all-ledgers-${view}-${from}_to_${to}.pdf`,
       orientation: "l",
+      continuous: !ledgerPageBreak,
       sections,
     });
   };
@@ -1104,7 +1109,7 @@ function LedgerStatement() {
             <td colspan="5">Total</td><td class="num">${r(total).toFixed(2)}</td>
             <td colspan="5">Total</td><td class="num">${r(total).toFixed(2)}</td>
           </tr>`;
-        return `<div class="${idx > 0 ? "page-break" : ""}">
+        return `<div class="${idx > 0 && ledgerPageBreak ? "page-break" : ""}" style="${idx > 0 && !ledgerPageBreak ? "margin-top:14pt" : ""}">
             <h2 class="ledger-heading">Ledger A/c — ${esc(s.ledger.name)}</h2>
             <table>${head}<tbody>${body}</tbody><tfoot>${foot}</tfoot></table>
           </div>`;
@@ -1132,7 +1137,7 @@ function LedgerStatement() {
           <td class="num">${r(s.cr).toFixed(2)}</td><td></td></tr>
         <tr class="row-bold"><td colspan="${showNarr ? 7 : 6}">Closing Balance</td>
           <td class="num">${esc(fmtBal(s.closing))}</td></tr>`;
-      return `<div class="${idx > 0 ? "page-break" : ""}">
+      return `<div class="${idx > 0 && ledgerPageBreak ? "page-break" : ""}" style="${idx > 0 && !ledgerPageBreak ? "margin-top:14pt" : ""}">
           <h2 class="ledger-heading">Ledger A/c — ${esc(s.ledger.name)}</h2>
           <table>${head}<tbody>${opening}${body}</tbody><tfoot>${foot}</tfoot></table>
         </div>`;
@@ -1264,6 +1269,7 @@ function LedgerStatement() {
                   )}
                 </div>
               </div>
+              <PrintLayoutToggle value={ledgerPrintLayout} onChange={setLedgerPrintLayout} pagedLabel="Each ledger on new page" label="All Ledgers printing" />
             </div>
           }
         />
@@ -1313,7 +1319,8 @@ function LedgerStatement() {
           {(allSections ?? []).length === 0 ? (
             <Card><CardContent className="p-6 text-sm text-muted-foreground">{allLoading ? "Loading all ledgers…" : "No ledgers with activity in this period."}</CardContent></Card>
           ) : (
-            (allSections ?? []).map((s) => {
+            (allSections ?? []).map((s, sIdx) => {
+              const pageStyle = ledgerPageBreak && sIdx > 0 ? { breakBefore: "page" as const, pageBreakBefore: "always" as const } : undefined;
               if (view === "horizontal") {
                 const { dr, cr, total } = buildTSides(s);
                 const leftRows: TColRow[] = dr.map((x) => ({
@@ -1335,8 +1342,8 @@ function LedgerStatement() {
                   emphasis: x.particulars.includes("Balance") ? "bold" : "normal",
                 }));
                 return (
+                  <div key={s.ledger.id} style={pageStyle}>
                   <TAccountColumnar
-                    key={s.ledger.id}
                     title={`${s.ledger.name} Account`}
                     subtitle={`for the period ${fmtIndianDate(from)} to ${fmtIndianDate(to)}`}
                     leftRows={leftRows}
@@ -1345,10 +1352,11 @@ function LedgerStatement() {
                     rightTotal={formatINR(total, { symbol: false })}
                     closingLine={`Closing balance: ${fmtBal(s.closing)}`}
                   />
+                  </div>
                 );
               }
               return (
-              <Card key={s.ledger.id} className="overflow-hidden">
+              <Card key={s.ledger.id} className="overflow-hidden" style={pageStyle}>
                 <CardContent className="p-0">
                   <div className="bg-muted/40 px-3 py-2 text-sm font-semibold">Ledger A/c — {s.ledger.name}</div>
                   <table className="w-full text-sm">

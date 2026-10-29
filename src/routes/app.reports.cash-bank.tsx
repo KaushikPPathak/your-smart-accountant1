@@ -9,6 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { ReportViewer } from "@/components/reports/ReportViewer";
+import { PrintLayoutToggle } from "@/components/reports/PrintLayoutToggle";
+import { DateBoundPrintBook } from "@/components/reports/DateBoundPrintBook";
+import { usePrintLayout } from "@/lib/print-layout";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { EmptyState } from "@/components/EmptyState";
@@ -128,6 +131,7 @@ function CashBankBook() {
   const [siblings, setSiblings] = useState<Map<string, SiblingRow[]>>(new Map());
   const [opening, setOpening] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [printLayout, setPrintLayout] = usePrintLayout("cash-bank");
 
   const isCashPurchasesView = ledgerId === CASH_PURCHASES_ID;
   const ledger = isCashPurchasesView ? undefined : getLedger(ledgerId);
@@ -451,6 +455,7 @@ function CashBankBook() {
                 <Label className="text-xs">View</Label>
                 <ViewSwitcher view={view} onChange={setView} />
               </div>
+              <PrintLayoutToggle value={printLayout} onChange={setPrintLayout} pagedLabel="Date-wise pages" />
             </div>
           }
         />
@@ -492,15 +497,22 @@ function CashBankBook() {
       orientation="landscape"
       onExportPdf={onExportPdf}
       exportFileBase={fileBase}
-      onExportWord={() => {
-        // Fallback to standard Word export in ReportViewer
-      }}
     >
       {loading ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
       ) : !selectedLedgerName ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a Cash or Bank ledger.</CardContent></Card>
-      ) : view === "grid" ? (
+      ) : printLayout === "paged" ? (
+        <>
+          <div data-print-hide>{renderBook()}</div>
+          <DateBoundPrintBook rows={rows} opening={opening} withBalance />
+        </>
+      ) : renderBook()}
+    </ReportViewer>
+  );
+
+  function renderBook() {
+    return view === "grid" ? (
         <Card className="overflow-hidden">
           <CardContent className="p-3">
             <DataGrid<typeof rows[number]>
@@ -586,7 +598,6 @@ function CashBankBook() {
             </table>
           </CardContent>
         </Card>
-      )}
-    </ReportViewer>
-  );
+      );
+  }
 }
