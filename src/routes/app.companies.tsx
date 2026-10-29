@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { findExistingClosureVoucherIds } from "@/lib/year-end-state";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
 import { INDIAN_STATES } from "@/lib/constants";
@@ -44,6 +45,14 @@ import { DATE_FORMATS } from "@/lib/date-format";
 import { isCompanyUnlocked, markCompanyUnlocked } from "@/lib/tech-user";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { isOnlineNow } from "@/lib/offline/online-status";
+
+/** Last day of the financial year that starts on fyStart (YYYY-MM-DD). */
+function fyEndOf(fyStart: string): string {
+  const d = new Date(`${fyStart}T00:00:00Z`);
+  d.setUTCFullYear(d.getUTCFullYear() + 1);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
 
 export const Route = createFileRoute("/app/companies")({
   head: () => ({ meta: [{ title: "Companies — Your Mehtaji" }] }),
@@ -127,10 +136,39 @@ function CompaniesPage() {
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [fyLocks, setFyLocks] = useState<Record<string, boolean>>({});
+  // Years with year-end closing journals posted (shown as "Year closed").
+  const [fyClosed, setFyClosed] = useState<Record<string, boolean>>({});
   const [userMgmtOpen, setUserMgmtOpen] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoreFileOpen, setRestoreFileOpen] = useState(false);
   const [nceWizard, setNceWizard] = useState<{ id: string; entity: EntityStatus } | null>(null);
+
+  useEffect(() => {
+    if (memberships.length === 0) {
+      setFyClosed({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { findExistingClosureVoucherIds } = await import("@/lib/year-end-state");
+      const out: Record<string, boolean> = {};
+      for (const m of memberships) {
+        const fyStart = m.companies.financial_year_start;
+        if (!fyStart) continue;
+        const y = new Date(fyStart).getFullYear();
+        try {
+          const ids = await findExistingClosureVoucherIds(m.company_id, fyStart, `${y + 1}-03-31`);
+          if (ids.length > 0) out[m.company_id] = true;
+        } catch {
+          /* unknown: shown as open */
+        }
+      }
+      if (!cancelled) setFyClosed(out);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [memberships]);
 
   // Pull FY lock status (return_type = 'fy_close') for every company the user
   // is a member of, in a single query, so each card can render a
@@ -171,6 +209,18 @@ function CompaniesPage() {
         );
         if (match) map[m.company_id] = true;
       }
+      // A year is also closed once its year-end closing journals are posted,
+      // which works in local-only mode as well (no period lock is written there).
+      const closed = await Promise.all(
+        memberships.map(async (m) => {
+          const fs = m.companies.financial_year_start;
+          if (!fs) return null;
+          const ids = await findExistingClosureVoucherIds(m.company_id, fs, fyEndOf(fs)).catch(() => [] as string[]);
+          return ids.length > 0 ? m.company_id : null;
+        }),
+      );
+      if (cancelled) return;
+      for (const id of closed) if (id) map[id] = true;
       setFyLocks(map);
     })();
     return () => {
@@ -1024,7 +1074,14 @@ function CompaniesPage() {
                             className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
                             title="Audited & Locked — no edits allowed"
                           >
-                            <CheckCircle2 className="h-3 w-3" /> Locked
+                            <CheckCircle2 className="h-3 w-3" /> Books closed
+                          </span>
+                        ) : fyClosed[m.company_id] ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300"
+                            title="Year-end closing entries posted"
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Year closed
                           </span>
                         ) : (
                           <span
@@ -1131,7 +1188,14 @@ function CompaniesPage() {
                             className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400"
                             title="Audited & Locked"
                           >
-                            <CheckCircle2 className="h-3 w-3" /> Locked
+                            <CheckCircle2 className="h-3 w-3" /> Books closed
+                          </span>
+                        ) : fyClosed[m.company_id] ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300"
+                            title="Year-end closing entries posted"
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Year closed
                           </span>
                         ) : (
                           <span
