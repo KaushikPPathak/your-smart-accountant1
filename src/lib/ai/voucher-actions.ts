@@ -284,7 +284,37 @@ function pickBest(
 }
 
 const CASH_RE = /\b(cash)\b/i;
-const BANK_RE = /\b(?:in|via|through|to|from|into)\s+([A-Za-z][A-Za-z0-9 &.\-]{1,40}?)\b(?=\s*(?:on|dated|today|yesterday|tomorrow|for|against|by|,|\.|$))/i;
+const BANK_RE = /\b(?:in|via|through|to|from|into)\s+([A-Za-z][A-Za-z0-9 &.\-]{1,40}?)\b(?=\s*(?:on|dated|today|yesterday|tomorrow|for|against|by|,|\.|\d|$))/i;
+
+function normalizeLedgerText(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/**
+ * Finds the ledger whose complete name appears as whole words in the text.
+ * The longest matching name wins. Exact word matches only, so no guessing.
+ */
+export function findLedgerNamedInText(
+  ledgers: CachedLedger[],
+  text: string,
+  typeFilter?: (t: string) => boolean,
+  exclude: string[] = [],
+): CachedLedger | null {
+  const hay = ` ${normalizeLedgerText(text)} `;
+  let best: CachedLedger | null = null;
+  let bestLen = 0;
+  for (const l of ledgers) {
+    if (typeFilter && !typeFilter(l.type)) continue;
+    if (exclude.includes(l.id)) continue;
+    const n = normalizeLedgerText(l.name);
+    if (n.length < 3 || n.length <= bestLen) continue;
+    if (hay.includes(` ${n} `)) {
+      best = l;
+      bestLen = n.length;
+    }
+  }
+  return best;
+}
 
 function extractPartyPhrase(text: string, intent: VoucherIntentType): string | null {
   const primary = intent === "receipt" || intent === "purchase" ? /\bfrom\s+/i : /\bto\s+/i;
@@ -444,13 +474,20 @@ export async function detectVoucherAction(
       : null;
 
   // Party.
+  const partyTypes = intent === "receipt" || intent === "sales"
+    ? (t: string) => t === "sundry_debtor" || t === "income_direct" || t === "income_indirect"
+    : (t: string) => t === "sundry_creditor" || t === "expense_direct" || t === "expense_indirect";
   const partyPhrase = extractPartyPhrase(raw, intent);
   let party: CachedLedger | null = null;
   if (partyPhrase) {
-    const partyTypes = intent === "receipt" || intent === "sales"
-      ? (t: string) => t === "sundry_debtor" || t === "income_direct" || t === "income_indirect"
-      : (t: string) => t === "sundry_creditor" || t === "expense_direct" || t === "expense_indirect";
     party = pickBest(ledgers, partyPhrase, partyTypes) ?? pickBest(ledgers, partyPhrase);
+  }
+  // No "from"/"to" phrase, e.g. "RENT INCOME 9500 IN BANK OF BARODA": use a ledger
+  // whose full name appears in the sentence (never a partial or fuzzy match).
+  if (!party) {
+    const exclude = cashBank ? [cashBank.id] : [];
+    party = findLedgerNamedInText(ledgers, raw, partyTypes, exclude)
+      ?? findLedgerNamedInText(ledgers, raw, undefined, exclude);
   }
 
   const confidence = 0.4 + (party ? 0.3 : 0) + (cashBank ? 0.2 : 0) + (dateRes ? 0.1 : 0);
