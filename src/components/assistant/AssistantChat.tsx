@@ -34,7 +34,6 @@ import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
 import {
   executeVoucherAction,
-  undoLastVoucher,
   type VoucherAction,
   type VoucherExecutionResult,
 } from "@/lib/ai/voucher-actions";
@@ -218,28 +217,16 @@ export function AssistantChat() {
     
     try {
       const res = await executeVoucherAction(msg.voucherAction, activeCompanyId);
-      setMessages(prev => prev.map(m => 
+      if (!res.success) {
+        toast.error(res.error ?? "Could not save this entry");
+        return;
+      }
+      setMessages(prev => prev.map(m =>
         m.id === msgId ? { ...m, voucherResult: res, voucherPreview: undefined } : m
       ));
-      toast.success("Voucher posted successfully");
+      toast.success("Entry saved to your books");
     } catch (err) {
       toast.error(String(err));
-    }
-  };
-
-  const undoVoucher = async (msgId: string) => {
-    const msg = messages.find(m => m.id === msgId);
-    if (!msg?.voucherResult?.voucher?.id || !activeCompanyId) return;
-    
-    try {
-      const { undoLastVoucher } = await import("@/lib/ai/voucher-actions");
-      await undoLastVoucher();
-      setMessages(prev => prev.map(m => 
-        m.id === msgId ? { ...m, voucherResult: undefined, text: msg.text + "\n\n*(Transaction Undone)*" } : m
-      ));
-      toast.success("Transaction undone");
-    } catch (err) {
-      toast.error("Failed to undo");
     }
   };
 
@@ -349,11 +336,8 @@ export function AssistantChat() {
                       <CardContent className="flex items-center justify-between p-3 text-xs">
                         <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
                           <Check className="h-4 w-4" />
-                          <span>Voucher #{msg.voucherResult.voucher?.voucher_number} posted</span>
+                          <span>Saved to your books</span>
                         </div>
-                        <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={() => undoVoucher(msg.id)}>
-                          <RotateCcw className="mr-1 h-3 w-3" /> Undo
-                        </Button>
                       </CardContent>
                     </Card>
                   )}

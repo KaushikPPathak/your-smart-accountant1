@@ -727,20 +727,42 @@ function getVoucherDB(): Promise<IDBPDatabase<VoucherDB>> {
 
 let _lastVoucherId: string | null = null;
 
-export async function saveVoucher(voucher: Voucher): Promise<{ success: boolean; error?: string }> {
-  try {
-    const db = await getVoucherDB();
-    await db.put("vouchers", voucher);
-    await db.put("undo_stack", { id: voucher.id, voucher, ts: Date.now() });
-    _lastVoucherId = voucher.id;
+export interface BookEntry { ledger_id: string; debit_paise: number; credit_paise: number }
 
-    // Invalidate tool caches so balance queries reflect the new voucher
+/**
+ * Posts through the same executor the Receipt, Payment and Journal screens use,
+ * so the entry lands in the company books (not a private store) and follows the
+ * same date, period-lock and numbering rules.
+ */
+export async function postToBooks(input: {
+  companyId: string;
+  voucherType: "receipt" | "payment" | "journal";
+  date: string;
+  partyLedgerId: string | null;
+  refNo: string;
+  narration: string;
+  entries: BookEntry[];
+}): Promise<VoucherExecutionResult> {
+  const dr = input.entries.reduce((sum, e) => sum + e.debit_paise, 0);
+  const cr = input.entries.reduce((sum, e) => sum + e.credit_paise, 0);
+  if (dr <= 0 || dr !== cr) return { success: false, error: "Debit and credit totals must match." };
+  try {
+    const { runEntryVoucherCreate } = await import("@/lib/offline/voucher-executors");
+    await runEntryVoucherCreate({
+      companyId: input.companyId,
+      voucherType: input.voucherType,
+      voucherDate: input.date,
+      partyLedgerId: input.partyLedgerId,
+      refNo: input.refNo,
+      narration: input.narration,
+      total: dr,
+      entries: input.entries.map((e, i) => ({ ...e, narration: null, line_no: i + 1 })),
+    });
     invalidateToolCache("balance");
     invalidateLedgerCache();
-
     return { success: true };
   } catch (e) {
-    return { success: false, error: String(e) };
+    return { success: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -770,91 +792,40 @@ export async function undoLastVoucher(): Promise<boolean> {
 export async function executeVoucherAction(
   action: VoucherAction,
   companyId: string,
-  options: { skipConfirmation?: boolean; autoNumber?: boolean } = {},
 ): Promise<VoucherExecutionResult> {
-  const start = performance.now();
-
-  // 1. Resolve ledgers
+  const draft = action.draft;
+  if (action.kind === "reverse") {
+    return { success: false, error: "Reversals are not posted from chat yet. Please use the voucher screen." };
+  }
+  if (draft.intent !== "receipt" && draft.intent !== "payment") {
+    return { success: false, error: "Sales and purchase entries need item lines. Please enter them on the Sales or Purchase screen." };
+  }
+  const intent = draft.intent;
+  const bank = draft.cashBankLedgerId;
+  const party = draft.partyLedgerId;
+  if (!bank || !party) {
+    return { success: false, error: "Ledger not selected. Please repeat the entry with the exact ledger names." };
+  }
   const ledgers = await getCachedLedgers(companyId);
-
-  // 2. Build entries
-  const entries = buildVoucherEntries(action, ledgers);
-
-  // 3. Validate
-  const validation = validateDoubleEntry(entries);
-  if (!validation.valid) {
-    return { success: false, error: validation.error };
+  if (!ledgers.some((l) => l.id === bank) || !ledgers.some((l) => l.id === party)) {
+    return { success: false, error: "Ledger not found in this company." };
   }
-
-  // 4. Check for missing ledgers
-  const missingLedgers = entries
-    .filter((e) => !ledgers.some((l) => l.id === e.ledger_id) && !e.ledger_id.match(/^(sales|purchase|output_|input_)/))
-    .map((e) => e.ledger_name);
-
-  if (missingLedgers.length > 0) {
-    return {
-      success: false,
-      error: `Ledgers not found: ${missingLedgers.join(", ")}`,
-      confirmationRequired: true,
-      confirmationMessage: `Create missing ledgers: ${missingLedgers.join(", ")}?`,
-    };
-  }
-
-  // 5. Generate voucher number
-  const allVouchers = (await readVouchers(companyId)) as any[];
-  const voucherNumber = options.autoNumber
-    ? generateVoucherNumber(action.draft.intent, allVouchers)
-    : action.draft.refNo || generateVoucherNumber(action.draft.intent, allVouchers);
-
-  // 6. Build voucher object
-  const voucher: Voucher = {
-    id: `vch-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-    voucher_number: voucherNumber,
-    voucher_date: action.draft.date,
-    voucher_type: action.draft.intent,
-    narration: action.draft.narration || `${action.draft.intent} entry`,
-    party_ledger_id: action.draft.partyLedgerId,
-    total_amount_paise: action.draft.amountPaise,
+  const amt = draft.amountPaise;
+  const isReceipt = intent === "receipt";
+  // Receipt: Dr Bank, Cr Party. Payment: Cr Bank, Dr Party (same as the screens).
+  const entries: BookEntry[] = [
+    { ledger_id: bank, debit_paise: isReceipt ? amt : 0, credit_paise: isReceipt ? 0 : amt },
+    { ledger_id: party, debit_paise: isReceipt ? 0 : amt, credit_paise: isReceipt ? amt : 0 },
+  ];
+  return postToBooks({
+    companyId,
+    voucherType: intent,
+    date: draft.date,
+    partyLedgerId: party,
+    refNo: draft.refNo ?? "",
+    narration: draft.narration || `${intent} entry`,
     entries,
-    is_reversal: action.kind === "reverse",
-    source_voucher_id: action.source?.id,
-    ref_no: action.draft.refNo,
-    created_at: Date.now(),
-  };
-
-  // 7. High-value confirmation
-  const needsConfirmation = action.draft.amountPaise > CONFIRMATION_THRESHOLD_PAise && !options.skipConfirmation;
-  if (needsConfirmation) {
-    return {
-      success: true,
-      voucher,
-      confirmationRequired: true,
-      confirmationMessage: `Confirm ${action.kind} voucher #${voucherNumber} for ₹${(action.draft.amountPaise / 100).toLocaleString("en-IN")}?`,
-    };
-  }
-
-  // 8. Save
-  const saveResult = await saveVoucher(voucher);
-  if (!saveResult.success) {
-    return { success: false, error: saveResult.error };
-  }
-
-  // 9. Write prefill for form bridge (optional)
-  const prefill: AssistantPrefill = {
-    voucherType: action.draft.intent,
-    date: action.draft.date,
-    partyLedgerId: action.draft.partyLedgerId,
-    cashBankLedgerId: action.draft.cashBankLedgerId,
-    amount: action.draft.amount,
-    narration: action.draft.narration,
-    refNo: action.draft.refNo,
-  };
-  writeAssistantPrefill(prefill);
-
-  const latency = Math.round(performance.now() - start);
-  console.log(`[voucher-actions] Saved ${action.kind} voucher in ${latency}ms`);
-
-  return { success: true, voucher, prefill };
+  });
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -922,22 +893,13 @@ export async function createJournalVoucher(
     return { success: false, error: validation.error };
   }
 
-  const allVouchers = (await readVouchers(companyId)) as any[];
-  const voucher: Voucher = {
-    id: `vch-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-    voucher_number: generateVoucherNumber("journal", allVouchers),
-    voucher_date: date,
-    voucher_type: "journal",
+  return postToBooks({
+    companyId,
+    voucherType: "journal",
+    date,
+    partyLedgerId: null,
+    refNo: "",
     narration,
-    total_amount_paise: totalDebit,
-    entries,
-    created_at: Date.now(),
-  };
-
-  const saveResult = await saveVoucher(voucher);
-  if (!saveResult.success) {
-    return { success: false, error: saveResult.error };
-  }
-
-  return { success: true, voucher };
+    entries: entries.map((e) => ({ ledger_id: e.ledger_id, debit_paise: e.debit_paise, credit_paise: e.credit_paise })),
+  });
 }
