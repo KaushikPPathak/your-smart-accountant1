@@ -8,11 +8,12 @@ vi.mock("@/lib/offline/cache-read", () => ({
   readLedgers: vi.fn(async () => [
     { id: "bank", name: "BANK OF BARODA", type: "bank" },
     { id: "rent", name: "Rent Income", type: "income_indirect" },
+    { id: "jainam", name: "Jainam Shares", type: "sundry_creditor" },
   ]),
   readVouchers: vi.fn(async () => []),
 }));
 
-import { executeVoucherAction } from "../voucher-actions";
+import { executeVoucherAction, detectVoucherAction } from "../voucher-actions";
 
 const base = {
   confidence: 0.9,
@@ -68,5 +69,20 @@ describe("assistant posting uses the company books path", () => {
     const res = await executeVoucherAction(base as any, "co1");
     expect(res.success).toBe(false);
     expect(res.error).toContain("locked period");
+  });
+});
+
+describe("bank and party are found in the sentence", () => {
+  it("payment: bank named after 'from', party after 'paid to'", async () => {
+    const a = await detectVoucherAction("Rs 500000 paid to jainam shares on 25/08/2026 cheque no 0001 from bank of baroda", "co1");
+    expect(a?.draft.intent).toBe("payment");
+    expect(a?.draft.cashBankLedgerId).toBe("bank");
+    expect(a?.draft.partyLedgerId).toBe("jainam");
+  });
+  it("receipt: bank followed by 'via neft' and party after 'from'", async () => {
+    const a = await detectVoucherAction("Rs. 44000 received in bank of baroda via neft from Jainam Shares", "co1");
+    expect(a?.draft.intent).toBe("receipt");
+    expect(a?.draft.cashBankLedgerId).toBe("bank");
+    expect(a?.draft.partyLedgerId).toBe("jainam");
   });
 });

@@ -467,11 +467,13 @@ export async function detectVoucherAction(
   // Cash or bank?
   const usesCash = CASH_RE.test(raw);
   const bankPhrase = usesCash ? null : extractBankPhrase(raw);
+  const bankType = (t: string) => t === "bank" || t === "cash";
+  // The phrase after "in/from/to" is not always the bank (e.g. "paid to X from bank of baroda"),
+  // so fall back to an exact bank or cash ledger name anywhere in the sentence.
   const cashBank = usesCash
     ? pickBest(ledgers, "cash", (t) => t === "cash", 0.9)
-    : bankPhrase
-      ? pickBest(ledgers, bankPhrase, (t) => t === "bank" || t === "cash")
-      : null;
+    : ((bankPhrase ? pickBest(ledgers, bankPhrase, bankType) : null)
+        ?? findLedgerNamedInText(ledgers, raw, bankType));
 
   // Party.
   const partyTypes = intent === "receipt" || intent === "sales"
