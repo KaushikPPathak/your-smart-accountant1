@@ -19,8 +19,8 @@ import { executeTool, parseToolCall, stripToolCall } from "./ai/tools";
 import { localFirstAnswer } from "./ai/local-first";
 import { routeQuery } from "./ai/query-router";
 import { searchKb } from "./assistant-engine";
-import { detectVoucherIntent, fetchContextLedgers, type VoucherIntentType, intentToRoute } from "./voucher-intent";
-import { detectVoucherAction, executeVoucherAction, type VoucherAction, type VoucherExecutionResult } from "./ai/voucher-actions";
+import { detectVoucherIntent, fetchContextLedgers, isReadOnlyQuery, type VoucherIntentType, intentToRoute } from "./voucher-intent";
+import { detectVoucherAction, type VoucherAction, type VoucherExecutionResult } from "./ai/voucher-actions";
 import { INDIAN_STATES } from "./constants";
 import type { KbEntry } from "./assistant-knowledge";
 import { writeAssistantPrefill } from "./voucher-intent";
@@ -81,7 +81,6 @@ interface AssistantArgs {
 }
 
 const RETRIEVAL_RE = /retrieveOriginal\(["']([a-zA-Z0-9_:.-]+)["']\)/g;
-const DIRECT_EXECUTE_CONFIDENCE = 0.85;
 
 type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -355,6 +354,17 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
   return undefined;
 }
 
+const QUESTION_START = /^(how|what|where|why|when|who|which|can|could|is|are|do|does|tell|show|help|explain|list|open)\b/i;
+
+const ENTRY_HELP =
+  "I record entries for this company. Tell me what to record, for example:\n" +
+  "• receipt 5000 from Ram in HDFC today\n" +
+  "• payment 1200 to landlord cash\n" +
+  "• sales 25000 to Ram Traders on 15/03\n" +
+  "I show a preview first and save only when you confirm. Include the type, the amount and the party name.";
+
+const NO_COMPANY_HELP = "Open a company first. Then I can record entries for it.";
+
 export async function assistantChat(args?: AssistantArgs): Promise<AssistantChatResult> {
   const start = performance.now();
   const history = args?.data?.messages ?? [];
@@ -365,6 +375,29 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
   if (!question) return { ok: false, text: "", error: "Empty question." };
 
   try {
+    const entryCompanyId = companyId || (typeof window !== "undefined" ? window.localStorage?.getItem("ym_active_company_id") ?? "" : "");
+    const looksLikeQuestion = /\?\s*$/.test(question) || QUESTION_START.test(question);
+    if (entryCompanyId && !looksLikeQuestion && !isReadOnlyQuery(question)) {
+      const action = await detectVoucherAction(question, entryCompanyId);
+      if (action) {
+        // Never save straight from chat: every entry is shown as a preview and
+        // saved only when the user confirms it.
+        const draft: ParsedVoucher = {
+          intent: action.draft.intent,
+          date: action.draft.date,
+          amount: action.draft.amount,
+          amountPaise: action.draft.amountPaise,
+          narration: action.draft.narration,
+          refNo: action.draft.refNo,
+          partyLedgerId: action.draft.partyLedgerId,
+          cashBankLedgerId: action.draft.cashBankLedgerId,
+          counterLedgerId: action.draft.counterLedgerId,
+          displayDetails: action.draft.displayDetails,
+        };
+        return { ok: true, text: "Drafted voucher. Confirm to save.", pendingVoucher: draft, voucherAction: action, latencyMs: Math.round(performance.now() - start) };
+      }
+    }
+
     const route = routeQuery(question);
 
     // 1. Instant greeting / deterministic
@@ -419,81 +452,11 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       return { ok: true, text: "I can help you create a company. Tell me the name, GSTIN, and state.", latencyMs: Math.round(performance.now() - start) };
     }
 
-    // 5. Voucher drafting (Local First) — skipped for read-only book questions
-    if (companyId && !isDeterministic) {
-      const action = await detectVoucherAction(question, companyId);
-      if (action) {
-        if (action.confidence >= DIRECT_EXECUTE_CONFIDENCE && action.kind === "new") {
-          const res = await executeVoucherAction(action, companyId, { skipConfirmation: true });
-          return { ok: true, text: "Voucher saved.", voucherResult: res, latencyMs: Math.round(performance.now() - start) };
-        }
-        const draft: ParsedVoucher = {
-          intent: action.draft.intent,
-          date: action.draft.date,
-          amount: action.draft.amount,
-          amountPaise: action.draft.amountPaise,
-          narration: action.draft.narration,
-          refNo: action.draft.refNo,
-          partyLedgerId: action.draft.partyLedgerId,
-          cashBankLedgerId: action.draft.cashBankLedgerId,
-          counterLedgerId: action.draft.counterLedgerId,
-          displayDetails: action.draft.displayDetails,
-        };
-        return { ok: true, text: "Drafted voucher. Confirm to save.", pendingVoucher: draft, voucherAction: action, latencyMs: Math.round(performance.now() - start) };
-      }
-    }
-
-    // 6. LLM Path
-    const ctx = await buildCompressedContext(question, companyId, args?.data?.prior);
-    const cacheCompanyId = companyId ?? (typeof window !== "undefined" ? window.localStorage?.getItem("ym_active_company_id") ?? "" : "");
-
-    const localAnswer = localFirstAnswer(ctx.card);
-    if (localAnswer) {
-      if (cacheCompanyId) storeAnswer(cacheCompanyId, ctx.intent, ctx.scope, question, localAnswer);
-      return { ok: true, text: localAnswer, card: ctx.card, memory: ctx.memory, latencyMs: Math.round(performance.now() - start) };
-    }
-
-    if (cacheCompanyId && !isLiveBalanceIntent) {
-      const cached = lookupAnswer(cacheCompanyId, ctx.intent, ctx.scope, question);
-      if (cached) return { ok: true, text: cached, card: ctx.card, memory: ctx.memory, latencyMs: Math.round(performance.now() - start) };
-    }
-
-    const baseMessages: ChatMsg[] = [
-      ctx.systemMessage as ChatMsg,
-      ...history.slice(-6).filter((m) => m.role !== "system").map((m) => ({ role: m.role as any, content: m.content })),
-      ctx.userMessage as ChatMsg,
-    ];
-
-    const errs = questionMentionsError(question) ? recentErrors(15) : [];
-    const extra = { recentErrors: errs };
-    let answer = await smartChat(baseMessages, 0.2, extra);
-
-    const toolTrail: { name: string; input: string }[] = [];
-    const toolConvo: ChatMsg[] = [...baseMessages];
-    for (let round = 0; round < 3; round++) {
-      const call = parseToolCall(answer);
-      if (!call) break;
-      let res: any;
-      try { res = await executeTool(call.name, call.args); }
-      catch (e) { res = { error: String(e) }; }
-      toolTrail.push({ name: call.name, input: JSON.stringify(call.args) });
-      toolConvo.push({ role: "assistant", content: answer });
-      toolConvo.push({ role: "user", content: `[[TOOL_RESULT name="${call.name}"]]\n${JSON.stringify(res)}\nUse this to answer.` });
-      answer = await smartChat(toolConvo, 0.2, extra);
-    }
-
-    const cleanAnswer = stripToolCall(answer);
-    const finalText = verifyAnswer(unredactAnswer(cleanAnswer, ctx), ctx.card);
-    if (cacheCompanyId && !isLiveBalanceIntent) {
-      storeAnswer(cacheCompanyId, ctx.intent, ctx.scope, question, finalText);
-    }
-    
+    // 6. Data-entry assistant: no free-form LLM answers. Say plainly what
+    // can be entered instead of guessing.
     return {
       ok: true,
-      text: finalText,
-      card: ctx.card,
-      memory: ctx.memory,
-      toolCalls: toolTrail.length ? toolTrail : undefined,
+      text: companyId || earlyCompanyId ? ENTRY_HELP : NO_COMPANY_HELP,
       latencyMs: Math.round(performance.now() - start),
     };
   } catch (err) {

@@ -52,16 +52,14 @@ import { cn } from "@/lib/utils";
 const WELCOME: ChatMessage = {
   id: "welcome",
   role: "assistant",
-  text: "Hello! I am **Mehtaji**, your AI accounting assistant. How can I help you today?",
+  text: "Hello, I am Mehtaji, your data entry assistant. Tell me a receipt, payment, sale or purchase and I will prepare it for you to confirm.",
 };
 
 const SUGGESTIONS = [
-  "How do I create a sales invoice?",
-  "Import from Tally / Busy",
-  "Switch to dark mode",
-  "Where is GSTR-3B?",
-  "Backup my company",
-  "Invite a team member",
+  "receipt 5000 from Ram in HDFC today",
+  "payment 1200 to landlord cash",
+  "sales 25000 to Ram Traders on 15/03",
+  "purchase 8000 from Suppliers Ltd",
 ];
 
 export type AiActionKind = "chat" | "voucher" | "report" | "command" | "voucher_executed";

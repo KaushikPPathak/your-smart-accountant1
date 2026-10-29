@@ -21,9 +21,9 @@ function AssistantPage() {
       <div>
         <h1 className="text-xl font-semibold">AI Assistant</h1>
         <p className="text-sm text-muted-foreground">
-          Mate runs entirely inside the app — no internet required. Ask about any
-          screen, setting or option, and Mate can also navigate or apply changes
-          for you.
+          Mehtaji is your data entry assistant. Describe a receipt, payment, sale
+          or purchase in one line. It prepares a preview, and nothing is saved
+          until you confirm.
         </p>
       </div>
       <AssistantChat />
