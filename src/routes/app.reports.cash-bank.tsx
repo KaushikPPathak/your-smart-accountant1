@@ -497,9 +497,6 @@ function CashBankBook() {
       orientation="landscape"
       onExportPdf={onExportPdf}
       exportFileBase={fileBase}
-      onExportWord={() => {
-        // Fallback to standard Word export in ReportViewer
-      }}
     >
       {loading ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>
