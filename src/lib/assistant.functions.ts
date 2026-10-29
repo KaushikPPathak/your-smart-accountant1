@@ -382,6 +382,21 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
       if (action) {
         // Never save straight from chat: every entry is shown as a preview and
         // saved only when the user confirms it.
+        // Never draft an entry whose ledgers are unknown: posting would fall back
+        // to placeholder ids. Ask for the missing ledger instead.
+        const needsBank = action.draft.intent === "receipt" || action.draft.intent === "payment";
+        const missing = !action.draft.partyLedgerId
+          ? "other ledger (the party, or the income or expense head)"
+          : needsBank && !action.draft.cashBankLedgerId
+            ? "bank or cash ledger"
+            : null;
+        if (missing) {
+          return {
+            ok: true,
+            text: `Nothing is saved yet. Which ${missing} should this entry use? Please repeat the entry with the exact ledger name, for example "rent received in bank of baroda 9500 from Rent Income on 15/05/2026".`,
+            latencyMs: Math.round(performance.now() - start),
+          };
+        }
         const draft: ParsedVoucher = {
           intent: action.draft.intent,
           date: action.draft.date,

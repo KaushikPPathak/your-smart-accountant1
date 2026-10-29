@@ -27,8 +27,8 @@ export function VoucherPreviewCard({
     ["Voucher Type", isReverse ? `REVERSAL of ${action?.source?.type}` : isDuplicate ? `COPY of ${action?.source?.type}` : draft.intent.toUpperCase()],
     ["Date", draft.date],
     ["Amount", formattedAmount],
-    ["Party / Debit", draft.displayDetails?.partyName || "Auto-resolve"],
-    ["Account / Credit", draft.displayDetails?.accountName || "Auto-resolve"],
+    ["Other ledger", draft.displayDetails?.partyName || "Not selected"],
+    ["Bank / Cash", draft.displayDetails?.accountName || "Not selected"],
     ["Narration", draft.narration],
     ["Ref / Invoice No", draft.refNo],
   ];
@@ -54,9 +54,9 @@ export function VoucherPreviewCard({
           </div>
         ))}
       </dl>
-      {!disabled ? (
+      {disabled ? (
         <div className="mt-3 text-[11px] text-muted-foreground">
-          {isReverse ? "Compensating entry has been prepared." : isDuplicate ? "Copy prepared with today's date." : "This draft has been actioned."}
+          Posted. Use Undo in the chat if this was a mistake.
         </div>
       ) : (
         <div className="mt-3 flex flex-wrap gap-1.5">

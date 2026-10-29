@@ -267,17 +267,9 @@ function LedgerStatement() {
       };
       let list = await fetchEntries(effFrom, effTo);
       if (cancelled) return;
-      // Auto-expand: if no entries in selected FY, probe all dates and switch if data exists outside the period.
+      // Show only the selected period. Entries from other years never replace it.
       if (list.length === 0) {
-        const allDates = await fetchEntries("1900-01-01", "2999-12-31");
-        if (cancelled) return;
-        if (allDates.length > 0) {
-          effFrom = "1900-01-01";
-          effTo = "2999-12-31";
-          list = allDates;
-          if (cancelled) return;
-          setAutoExpandedNote(`No entries in ${from} – ${to}; auto-expanded to All Dates (${allDates.length} entry/entries found).`);
-        }
+        setAutoExpandedNote(`No entries for this ledger between ${from} and ${to}.`);
       }
       setEntries(list);
 
