@@ -66,9 +66,14 @@ const SUGGESTIONS = [
 const CHAT_STORE_KEY = "ym_assistant_chat";
 const CHAT_STORE_LIMIT = 100;
 
-function loadSavedChat(): ChatMessage[] {
+/** Each company keeps its own assistant chat; the company-less chat has its own too. */
+function chatStoreKey(companyId: string | null | undefined): string {
+  return `${CHAT_STORE_KEY}:${companyId || "none"}`;
+}
+
+function loadSavedChat(storeKey: string): ChatMessage[] {
   try {
-    const raw = sessionStorage.getItem(CHAT_STORE_KEY);
+    const raw = sessionStorage.getItem(storeKey);
     if (raw) {
       const saved = JSON.parse(raw) as ChatMessage[];
       if (Array.isArray(saved) && saved.length > 0) return saved.slice(-CHAT_STORE_LIMIT);
@@ -99,16 +104,18 @@ interface ChatMessage {
 }
 
 export function AssistantChat() {
+  const { activeCompanyId: chatCompanyId } = useCompany();
+  const storeKey = chatStoreKey(chatCompanyId);
   // The chat survives leaving this page (e.g. Edit in Form and back): it is kept
-  // for this session and restored on mount.
-  const [messages, setMessages] = useState<ChatMessage[]>(loadSavedChat);
+  // for this session per company, and restored on mount.
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadSavedChat(storeKey));
   useEffect(() => {
     try {
-      sessionStorage.setItem(CHAT_STORE_KEY, JSON.stringify(messages.slice(-CHAT_STORE_LIMIT)));
+      sessionStorage.setItem(storeKey, JSON.stringify(messages.slice(-CHAT_STORE_LIMIT)));
     } catch {
       /* storage unavailable: chat simply is not kept */
     }
-  }, [messages]);
+  }, [messages, storeKey]);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [activeCat, setActiveCat] = useState<KbEntry["category"] | "All">("All");
   const navigate = useNavigate();

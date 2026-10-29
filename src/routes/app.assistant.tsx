@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AssistantChat } from "@/components/assistant/AssistantChat";
+import { useCompany } from "@/lib/company-context";
 
 export const Route = createFileRoute("/app/assistant")({
   head: () => ({
@@ -16,6 +17,8 @@ export const Route = createFileRoute("/app/assistant")({
 });
 
 function AssistantPage() {
+  // Remount per company so each company shows only its own conversation.
+  const { activeCompanyId } = useCompany();
   return (
     <div className="space-y-4">
       <div>
@@ -26,7 +29,7 @@ function AssistantPage() {
           until you confirm.
         </p>
       </div>
-      <AssistantChat />
+      <AssistantChat key={activeCompanyId ?? "none"} />
     </div>
   );
 }
