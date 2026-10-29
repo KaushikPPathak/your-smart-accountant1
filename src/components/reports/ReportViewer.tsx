@@ -536,6 +536,12 @@ async function openPrintPreviewAsync(
     }
     .preview-content .report-data-table .num { white-space: nowrap !important; overflow: hidden; }
     .preview-content .report-data-table th { text-transform: none !important; }
+    /* Accounting totals: a single rule above the total row, a double rule
+       below the closing row; closing and total rows read as bold. */
+    .preview-content tfoot tr:first-child td,
+    .preview-content tfoot tr:first-child th { border-top: 1pt solid #000 !important; }
+    .preview-content tfoot tr:last-child td,
+    .preview-content tfoot tr:last-child th { border-bottom: 2.5pt double #000 !important; font-weight: 700 !important; }
     @media print {
       [data-print-hide] { display: none !important; }
       [data-print-only] { display: block !important; }

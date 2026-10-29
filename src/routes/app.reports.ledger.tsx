@@ -606,7 +606,7 @@ function LedgerStatement() {
         fileName: `${fileBase}-horizontal.pdf`,
         orientation: "l",
         rightAlignCols: [5, 11],
-        columnWidths: { 0:55, 1:130, 2:55, 3:45, 4:55, 5:53, 6:55, 7:130, 8:55, 9:45, 10:55, 11:53 },
+        columnWidths: { 0:52, 1:120, 2:50, 3:38, 4:50, 5:71, 6:52, 7:120, 8:50, 9:38, 10:50, 11:71 },
         dividerBeforeCol: 6,
       });
     }
@@ -1016,7 +1016,7 @@ function LedgerStatement() {
               ["Total", "", "", "", "", r(total).toFixed(2), "Total", "", "", "", "", r(total).toFixed(2)],
             ],
             rightAlignCols: [5, 11],
-            columnWidths: { 0:55, 1:130, 2:55, 3:45, 4:55, 5:53, 6:55, 7:130, 8:55, 9:45, 10:55, 11:53 },
+            columnWidths: { 0:52, 1:120, 2:50, 3:38, 4:50, 5:71, 6:52, 7:120, 8:50, 9:38, 10:50, 11:71 },
             dividerBeforeCol: 6,
           } as PdfSection;
         })

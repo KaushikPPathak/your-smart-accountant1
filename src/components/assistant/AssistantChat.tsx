@@ -73,7 +73,7 @@ function chatStoreKey(companyId: string | null | undefined): string {
 
 function loadSavedChat(storeKey: string): ChatMessage[] {
   try {
-    const raw = sessionStorage.getItem(storeKey);
+    const raw = localStorage.getItem(storeKey);
     if (raw) {
       const saved = JSON.parse(raw) as ChatMessage[];
       if (Array.isArray(saved) && saved.length > 0) return saved.slice(-CHAT_STORE_LIMIT);
@@ -106,12 +106,12 @@ interface ChatMessage {
 export function AssistantChat() {
   const { activeCompanyId: chatCompanyId } = useCompany();
   const storeKey = chatStoreKey(chatCompanyId);
-  // The chat survives leaving this page (e.g. Edit in Form and back): it is kept
-  // for this session per company, and restored on mount.
+  // The chat is kept per company until the user clears it, so it survives
+  // leaving this page (e.g. Edit in Form and back) and restarting the app.
   const [messages, setMessages] = useState<ChatMessage[]>(() => loadSavedChat(storeKey));
   useEffect(() => {
     try {
-      sessionStorage.setItem(storeKey, JSON.stringify(messages.slice(-CHAT_STORE_LIMIT)));
+      localStorage.setItem(storeKey, JSON.stringify(messages.slice(-CHAT_STORE_LIMIT)));
     } catch {
       /* storage unavailable: chat simply is not kept */
     }
