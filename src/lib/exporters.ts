@@ -404,10 +404,12 @@ export interface PdfMultiTableOptions {
   /** Folder under the company export root. Defaults to "Reports". */
   subFolder?: string;
   sections: PdfSection[];
+  /** When true, sections flow continuously instead of each starting a new page. */
+  continuous?: boolean;
 }
 
 /** Renders multiple report sections (e.g. one per ledger) into a single PDF.
- *  Every section starts on a fresh page and reuses the same company header. */
+ *  Each section starts on a fresh page unless `continuous` is set. */
 export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
   void (async () => {
     const lang = getStoredLang();
@@ -461,16 +463,26 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
 
     // Reserve page 1 as the Index (TOC). We'll fill in the entries after
     // sections render so the page numbers listed are accurate.
-    drawPageHeader();
+    let headerBottom = drawPageHeader();
+    let lastSectionY = 0;
     const startPages: number[] = [];
 
     for (let idx = 0; idx < opts.sections.length; idx++) {
       if (aborted) return;
       const section = opts.sections[idx];
-      // Every section starts on a fresh page (first section moves off TOC page).
-      doc.addPage();
+      // Paged mode: every section starts on a fresh page (first section moves
+      // off the TOC page). Continuous mode: sections follow one another and
+      // only move to a new page when the current one is nearly full.
+      let y: number;
+      const pageH = doc.internal.pageSize.getHeight();
+      if (!opts.continuous || idx === 0 || lastSectionY > pageH - 120) {
+        doc.addPage();
+        y = drawPageHeader();
+        headerBottom = y;
+      } else {
+        y = lastSectionY + 22;
+      }
       startPages.push(doc.getNumberOfPages());
-      let y = drawPageHeader();
       doc.setFont(FONT, "bold");
       doc.setFontSize(11);
       doc.text(localizeExportText(section.sectionTitle, lang), pageW / 2, y, { align: "center" });
@@ -511,7 +523,7 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
           headStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
           footStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
           columnStyles,
-          margin: { top: y + 4 },
+          margin: { top: headerBottom + 4 },
           didParseCell: (data) => {
             data.cell.styles.font = FONT;
           },
@@ -543,6 +555,7 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
         progress.update(rowsDone, `section ${idx + 1}/${opts.sections.length}`);
         await yieldToUi();
       }
+      lastSectionY = nextY;
     }
 
     // ---- Fill the reserved Index (TOC) page ----
