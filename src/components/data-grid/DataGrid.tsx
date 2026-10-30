@@ -645,9 +645,15 @@ export function DataGrid<T>({
           <table className="report-data-table" style={{ tableLayout: "fixed", width: "100%" }}>
             <colgroup>
               {(() => {
-                const total = visibleColumns.reduce((s, c) => s + (c.width ?? 120), 0) || 1;
+                // Long text columns (particulars, narration) get extra paper width so
+                // names do not wrap into two lines; dates and amounts keep their size.
+                const printWeight = (c: DGColumn<any>) => {
+                  const w = c.width ?? 120;
+                  return c.type === "text" && w >= 200 ? w * 1.8 : w;
+                };
+                const total = visibleColumns.reduce((s, c) => s + printWeight(c), 0) || 1;
                 return visibleColumns.map((c) => (
-                  <col key={c.id} style={{ width: `${(((c.width ?? 120) / total) * 100).toFixed(2)}%` }} />
+                  <col key={c.id} style={{ width: `${((printWeight(c) / total) * 100).toFixed(2)}%` }} />
                 ));
               })()}
             </colgroup>

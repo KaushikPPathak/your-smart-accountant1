@@ -53,7 +53,6 @@ export const INVENTORY_ONLY_URLS = new Set([
   "/app/reports/stock-summary",
   "/app/reports/hsn-summary",
   "/app/vouchers/new/manufacturing",
-  "/app/reports/trading",
 ]);
 
 /** Pages that only make sense when the company opted for 44AD / 44ADA. */
