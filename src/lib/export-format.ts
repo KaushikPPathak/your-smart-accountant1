@@ -110,3 +110,8 @@ export function promoteCell(cell: unknown): unknown {
 export function promoteRows<T>(rows: T[][]): unknown[][] {
   return rows.map((row) => row.map((c) => promoteCell(c as unknown)));
 }
+
+/** Plain amount with Indian digit grouping and two decimals, e.g. 40,00,000.00 (no currency symbol). */
+export function indianAmount(rupees: number): string {
+  return new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rupees);
+}

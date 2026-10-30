@@ -13,6 +13,10 @@ function loc(node: React.ReactNode, lang: string): React.ReactNode {
  *   Dr (left)  ‖  Cr (right)
  * with a thick vertical separator and a horizontal rule between every entry,
  * matching a manual ledger book / Excel sheet feel.
+ *
+ * Printing uses a separate table (data-print-only) with one row per Dr/Cr
+ * pair, so the rules on both sides always line up and nothing runs past the
+ * page edge. The screen layout is hidden while printing.
  */
 export interface TRow {
   /** Particulars text (e.g. "To Sales A/c", "By Cash A/c", or just a name) */
@@ -79,6 +83,30 @@ function RowCell({ row }: { row: TRow }) {
   );
 }
 
+/** Three print cells for one side of a Dr/Cr row: particulars, amount, outer amount. */
+function PrintSide({ row }: { row: TRow | null }) {
+  if (!row) {
+    return (
+      <>
+        <td />
+        <td />
+        <td />
+      </>
+    );
+  }
+  const bold = row.emphasis === "bold" || row.emphasis === "total";
+  return (
+    <>
+      <td className={bold ? "font-bold" : undefined}>
+        {row.label}
+        {row.hint && <div className="text-[7.5pt] text-[#444]">{row.hint}</div>}
+      </td>
+      <td className={cn("num", bold && "font-bold")}>{row.amount}</td>
+      <td className={cn("num", bold && "font-bold")}>{row.outerAmount}</td>
+    </>
+  );
+}
+
 export function TAccount({
   title,
   subtitle,
@@ -101,77 +129,124 @@ export function TAccount({
   while (rpad.length < max) rpad.push(null);
 
   return (
-    <div
-      className={cn(
-        "w-full max-w-full overflow-hidden rounded-md border-2 border-foreground bg-card text-card-foreground print:border-black",
-        className,
-      )}
-    >
-      {(title || subtitle) && (
-        <div className="border-b-2 border-foreground px-4 py-2 text-center print:border-black print:py-1">
-          {title && <div className="text-base font-semibold">{loc(title, lang)}</div>}
-          {subtitle && (
-            <div className="text-xs text-muted-foreground">{loc(subtitle, lang)}</div>
-          )}
+    <>
+      <div
+        data-print-hide
+        className={cn(
+          "w-full max-w-full overflow-hidden rounded-md border-2 border-foreground bg-card text-card-foreground print:border-black",
+          className,
+        )}
+      >
+        {(title || subtitle) && (
+          <div className="border-b-2 border-foreground px-4 py-2 text-center print:border-black print:py-1">
+            {title && <div className="text-base font-semibold">{loc(title, lang)}</div>}
+            {subtitle && (
+              <div className="text-xs text-muted-foreground">{loc(subtitle, lang)}</div>
+            )}
+          </div>
+        )}
+        {/* Column headers */}
+        <div className="grid grid-cols-2 border-b-2 border-foreground bg-muted/40 text-[11px] font-semibold uppercase tracking-wide print:border-black print:text-[10px]">
+          <div className="flex min-w-0 items-center gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black">
+            <span className="min-w-0 flex-1 truncate">{loc(leftHeader, lang)}</span>
+            <span className="w-[13rem] shrink-0 whitespace-nowrap text-right print:w-[10rem]">{loc(amountHeader, lang)}</span>
+          </div>
+          <div className="flex min-w-0 items-center gap-2 px-2 py-1.5">
+            <span className="min-w-0 flex-1 truncate">{loc(rightHeader, lang)}</span>
+            <span className="w-[13rem] shrink-0 whitespace-nowrap text-right print:w-[10rem]">{loc(amountHeader, lang)}</span>
+          </div>
         </div>
-      )}
-      {/* Column headers */}
-      <div className="grid grid-cols-2 border-b-2 border-foreground bg-muted/40 text-[11px] font-semibold uppercase tracking-wide print:border-black print:text-[10px]">
-        <div className="flex min-w-0 items-center gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black">
-          <span className="min-w-0 flex-1 truncate">{loc(leftHeader, lang)}</span>
-          <span className="w-[13rem] shrink-0 whitespace-nowrap text-right print:w-[10rem]">{loc(amountHeader, lang)}</span>
+        {/* Body */}
+        <div className="grid grid-cols-2">
+          {/* Left column (Dr) */}
+          <div className="min-w-0 border-r-2 border-foreground print:border-black">
+            {lpad.length === 0 ? (
+              <div className="px-3 py-6 text-center text-sm text-muted-foreground">—</div>
+            ) : (
+              lpad.map((row, i) => (
+                <div
+                  key={`l-${i}`}
+                  className={cn(i !== 0 && "border-t border-foreground/60 print:border-black")}
+                >
+                  {row ? <RowCell row={row} /> : <div className="px-2 py-1.5 text-[12px]">&nbsp;</div>}
+                </div>
+              ))
+            )}
+          </div>
+          {/* Right column (Cr) */}
+          <div className="min-w-0">
+            {rpad.length === 0 ? (
+              <div className="px-3 py-6 text-center text-sm text-muted-foreground">—</div>
+            ) : (
+              rpad.map((row, i) => (
+                <div
+                  key={`r-${i}`}
+                  className={cn(i !== 0 && "border-t border-foreground/60 print:border-black")}
+                >
+                  {row ? <RowCell row={row} /> : <div className="px-2 py-1.5 text-[12px]">&nbsp;</div>}
+                </div>
+              ))
+            )}
+          </div>
         </div>
-        <div className="flex min-w-0 items-center gap-2 px-2 py-1.5">
-          <span className="min-w-0 flex-1 truncate">{loc(rightHeader, lang)}</span>
-          <span className="w-[13rem] shrink-0 whitespace-nowrap text-right print:w-[10rem]">{loc(amountHeader, lang)}</span>
+        {/* Totals strip */}
+        <div className="grid grid-cols-2 border-t-2 border-foreground bg-muted/50 text-[12px] font-semibold print:border-black print:text-[9pt]">
+          <div className="flex min-w-0 items-center gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black print:py-1">
+            <span className="min-w-0 flex-1 truncate">{totalLabel}</span>
+            <span className="w-[6.5rem] shrink-0 print:w-[5rem]" />
+            <span className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums print:w-[5rem]">{leftTotal}</span>
+          </div>
+          <div className="flex min-w-0 items-center gap-2 px-2 py-1.5 print:py-1">
+            <span className="min-w-0 flex-1 truncate">{totalLabel}</span>
+            <span className="w-[6.5rem] shrink-0 print:w-[5rem]" />
+            <span className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums print:w-[5rem]">{rightTotal}</span>
+          </div>
         </div>
       </div>
-      {/* Body */}
-      <div className="grid grid-cols-2">
-        {/* Left column (Dr) */}
-        <div className="min-w-0 border-r-2 border-foreground print:border-black">
-          {lpad.length === 0 ? (
-            <div className="px-3 py-6 text-center text-sm text-muted-foreground">—</div>
-          ) : (
-            lpad.map((row, i) => (
-              <div
-                key={`l-${i}`}
-                className={cn(i !== 0 && "border-t border-foreground/60 print:border-black")}
-              >
-                {row ? <RowCell row={row} /> : <div className="px-2 py-1.5 text-[12px]">&nbsp;</div>}
-              </div>
-            ))
-          )}
-        </div>
-        {/* Right column (Cr) */}
-        <div className="min-w-0">
-          {rpad.length === 0 ? (
-            <div className="px-3 py-6 text-center text-sm text-muted-foreground">—</div>
-          ) : (
-            rpad.map((row, i) => (
-              <div
-                key={`r-${i}`}
-                className={cn(i !== 0 && "border-t border-foreground/60 print:border-black")}
-              >
-                {row ? <RowCell row={row} /> : <div className="px-2 py-1.5 text-[12px]">&nbsp;</div>}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-      {/* Totals strip */}
-      <div className="grid grid-cols-2 border-t-2 border-foreground bg-muted/50 text-[12px] font-semibold print:border-black print:text-[9pt]">
-        <div className="flex min-w-0 items-center gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black print:py-1">
-          <span className="min-w-0 flex-1 truncate">{totalLabel}</span>
-          <span className="w-[6.5rem] shrink-0 print:w-[5rem]" />
-          <span className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums print:w-[5rem]">{leftTotal}</span>
-        </div>
-        <div className="flex min-w-0 items-center gap-2 px-2 py-1.5 print:py-1">
-          <span className="min-w-0 flex-1 truncate">{totalLabel}</span>
-          <span className="w-[6.5rem] shrink-0 print:w-[5rem]" />
-          <span className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums print:w-[5rem]">{rightTotal}</span>
-        </div>
-      </div>
-    </div>
+
+      {/* Print version: one row per Dr/Cr pair, Word-style grid. */}
+      <table data-print-only className="report-data-table hidden w-full">
+        <colgroup>
+          <col style={{ width: "27%" }} />
+          <col style={{ width: "11.5%" }} />
+          <col style={{ width: "11.5%" }} />
+          <col style={{ width: "27%" }} />
+          <col style={{ width: "11.5%" }} />
+          <col style={{ width: "11.5%" }} />
+        </colgroup>
+        {(title || subtitle) && (
+          <caption className="report-print-caption">
+            {title && <div className="font-bold">{loc(title, lang)}</div>}
+            {subtitle && <div>{loc(subtitle, lang)}</div>}
+          </caption>
+        )}
+        <thead>
+          <tr>
+            <th>{loc(leftHeader, lang)}</th>
+            <th colSpan={2} className="num">{loc(amountHeader, lang)}</th>
+            <th>{loc(rightHeader, lang)}</th>
+            <th colSpan={2} className="num">{loc(amountHeader, lang)}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lpad.map((_, i) => (
+            <tr key={i}>
+              <PrintSide row={lpad[i]} />
+              <PrintSide row={rpad[i]} />
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>{totalLabel}</td>
+            <td className="num" />
+            <td className="num">{leftTotal}</td>
+            <td>{totalLabel}</td>
+            <td className="num" />
+            <td className="num">{rightTotal}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </>
   );
 }

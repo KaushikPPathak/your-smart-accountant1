@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { amountHeader } from "@/lib/export-format";
+import { amountHeader, indianAmount } from "@/lib/export-format";
 import { openLedgerReport } from "@/lib/voucher-return";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -199,11 +199,11 @@ function TrialBalance() {
       head: [["Dr. Ledger", amountHeader(), "Cr. Ledger", amountHeader()]],
       body: Array.from({ length: max }).map((_, i) => [
         drList[i]?.name ?? "",
-        drList[i] ? r(drList[i].debit).toFixed(2) : "",
+        drList[i] ? indianAmount(r(drList[i].debit)) : "",
         crList[i]?.name ?? "",
-        crList[i] ? r(crList[i].credit).toFixed(2) : "",
+        crList[i] ? indianAmount(r(crList[i].credit)) : "",
       ]),
-      foot: [["Total", r(totals.dr).toFixed(2), "Total", r(totals.cr).toFixed(2)]],
+      foot: [["Total", indianAmount(r(totals.dr)), "Total", indianAmount(r(totals.cr))]],
       fileName: `trial-balance-${to}.pdf`,
       orientation: "l",
       rightAlignCols: [1, 3],
