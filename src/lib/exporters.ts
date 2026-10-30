@@ -202,7 +202,7 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
       headStyles: { font: FONT, fillColor: [255, 248, 220], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.2, fontSize: 8 },
       footStyles: { font: FONT, fillColor: [255, 248, 220], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.2, fontSize: 8 },
         columnStyles,
-        margin: { top: tableStartY },
+        margin: { top: tableStartY, left: 72, right: 36, bottom: 36 },
         didParseCell: (data) => {
           data.cell.styles.font = FONT;
           // Numeric columns stay right-aligned in header and total rows too,
@@ -521,7 +521,7 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
           headStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
           footStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
           columnStyles,
-          margin: { top: headerBottom + 4 },
+          margin: { top: headerBottom + 4, left: 72, right: 36, bottom: 36 },
           didParseCell: (data) => {
             data.cell.styles.font = FONT;
           },

@@ -2,7 +2,8 @@
 // the print harness, so the printed layout is tested exactly as it is shipped.
 export function printPreviewCss(orient: "portrait" | "landscape"): string {
   return `
-    @page { size: A4 ${orient}; margin: 10mm; }
+    /* A4 margins: top 1in (header band), right 0.5in, bottom 0.5in (footer band), left 1in. */
+    @page { size: A4 ${orient}; margin: 1in 0.5in 0.5in 1in; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #fff; color: #000;
       font: 9pt/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -91,7 +92,7 @@ export function printPreviewCss(orient: "portrait" | "landscape"): string {
     @media print {
       .preview-bar { display: none !important; }
       body { padding: 0; }
-      .preview-content { margin-top: 0; }
+      .preview-content { margin-top: 0; padding-top: 0.35in; }
       /* Chromium/WebView2 ignore @page margin boxes, but repeat
          position:fixed elements on every printed page. */
       .run-head, .run-foot {
@@ -99,9 +100,10 @@ export function printPreviewCss(orient: "portrait" | "landscape"): string {
         gap: 8pt; justify-content: space-between; align-items: baseline;
         font-size: 8pt; color: #000;
       }
-      .run-head { top: 0; font-weight: 700; border-bottom: 0.5pt solid #000; padding-bottom: 2pt; }
-      .run-foot { bottom: 0; color: #444; border-top: 0.5pt solid #999; padding-top: 2pt; }
-      .preview-content { padding: 8mm 0 6mm; }
+      .run-head { top: 0; left: 0; right: 0; z-index: 5; background: #fff; font-weight: 700; border-bottom: 0.5pt solid #000; padding-bottom: 2pt; }
+      .run-foot { bottom: 0; left: 0; right: 0; z-index: 5; background: #fff; color: #444; border-top: 0.5pt solid #999; padding-top: 2pt; }
+      .preview-content { padding: 0; }
+    .preview-content.report-print-root { padding: 0.35in 0 0 !important; }
     }
 
     /* ----------------------------------------------------------------
