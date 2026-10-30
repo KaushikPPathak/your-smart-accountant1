@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import * as XLSX from "xlsx";
+import { writeSpreadsheet, type SheetCell, type WriteSheet } from "./spreadsheet";
 import { analyseGstr3bExcelBuffer } from "./gstr3b-excel-import";
 
-function workbookBuffer(options?: {
+async function workbookBuffer(options?: {
   year?: string;
   month?: string;
   gstin?: string;
-}): ArrayBuffer {
-  const workbook = XLSX.utils.book_new();
+}): Promise<ArrayBuffer> {
+  const workbook: WriteSheet[] = [];
 
-  const rows: unknown[][] = Array.from(
+  const rows: SheetCell[][] = Array.from(
     { length: 125 },
     () => Array.from({ length: 13 }, () => ""),
   );
@@ -44,7 +44,7 @@ function workbookBuffer(options?: {
    */
   const set = (
     row: number,
-    values: unknown[],
+    values: SheetCell[],
   ) => {
     for (let i = 0; i < values.length; i += 1) {
       rows[row - 1][i + 2] = values[i];
@@ -89,19 +89,16 @@ function workbookBuffer(options?: {
   // 3.2 total row 125.
   set(125, [9000, 900, 0, 0, 0]);
 
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
-  XLSX.utils.book_append_sheet(workbook, sheet, "GSTR-3B");
+  const sheet = (rows);
+  workbook.push({ name: "GSTR-3B", rows: sheet });
 
-  return XLSX.write(workbook, {
-    bookType: "xlsx",
-    type: "array",
-  }) as ArrayBuffer;
+  return await writeSpreadsheet(workbook);
 }
 
 describe("GSTR-3B Excel importer", () => {
-  it("maps the GSTN GSTR-3B structure into the existing GSTR-9 period model", () => {
-    const result = analyseGstr3bExcelBuffer(
-      workbookBuffer(),
+  it("maps the GSTN GSTR-3B structure into the existing GSTR-9 period model", async () => {
+    const result = await analyseGstr3bExcelBuffer(
+      await workbookBuffer(),
       {
         fileName: "GSTR3B_Excel_Utility_V5.8.xlsm",
         expectedFinancialYear: "2025-26",
@@ -156,9 +153,9 @@ describe("GSTR-3B Excel importer", () => {
     expect(result.warnings.some((w) => w.includes("3.2"))).toBe(true);
   });
 
-  it("normalises a four-digit financial year to the existing GSTR-9 FY format", () => {
-    const result = analyseGstr3bExcelBuffer(
-      workbookBuffer({
+  it("normalises a four-digit financial year to the existing GSTR-9 FY format", async () => {
+    const result = await analyseGstr3bExcelBuffer(
+      await workbookBuffer({
         year: "2025-26",
         month: "April",
       }),
@@ -169,9 +166,9 @@ describe("GSTR-3B Excel importer", () => {
     expect(result.period.period).toBe("April 2025");
   });
 
-  it("warns on a selected FY mismatch", () => {
-    const result = analyseGstr3bExcelBuffer(
-      workbookBuffer({ year: "2024-2025" }),
+  it("warns on a selected FY mismatch", async () => {
+    const result = await analyseGstr3bExcelBuffer(
+      await workbookBuffer({ year: "2024-2025" }),
       { expectedFinancialYear: "2025-26" },
     );
 
@@ -180,22 +177,13 @@ describe("GSTR-3B Excel importer", () => {
     );
   });
 
-  it("throws when the GSTN GSTR-3B worksheet is missing", () => {
-    const workbook = XLSX.utils.book_new();
+  it("throws when the GSTN GSTR-3B worksheet is missing", async () => {
+    const workbook: WriteSheet[] = [];
 
-    XLSX.utils.book_append_sheet(
-      workbook,
-      XLSX.utils.aoa_to_sheet([["Not GSTR-3B"]]),
-      "Sheet1",
-    );
+    workbook.push({ name: "Sheet1", rows: ([["Not GSTR-3B"]]) });
 
-    expect(() =>
-      analyseGstr3bExcelBuffer(
-        XLSX.write(workbook, {
-          bookType: "xlsx",
-          type: "array",
-        }) as ArrayBuffer,
-      ),
-    ).toThrow('GSTR-3B worksheet "GSTR-3B" was not found in the workbook.');
+    await expect(
+      analyseGstr3bExcelBuffer(await writeSpreadsheet(workbook)),
+    ).rejects.toThrow('GSTR-3B worksheet "GSTR-3B" was not found in the workbook.');
   });
 });

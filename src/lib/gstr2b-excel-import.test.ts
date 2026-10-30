@@ -1,16 +1,12 @@
 import { describe, expect, it } from "vitest";
-import * as XLSX from "xlsx";
+import { writeSpreadsheet, type SheetCell, type WriteSheet } from "./spreadsheet";
 import { analyseGstr2bExcelBuffer } from "./gstr2b-excel-import";
 
-function workbookBuffer(): ArrayBuffer {
-  const workbook = XLSX.utils.book_new();
+async function workbookBuffer(): Promise<ArrayBuffer> {
+  const workbook: WriteSheet[] = [];
 
-  const addRows = (rows: unknown[][]) => {
-    XLSX.utils.book_append_sheet(
-      workbook,
-      XLSX.utils.aoa_to_sheet(rows),
-      "GSTR2B",
-    );
+  const addRows = (rows: SheetCell[][]) => {
+    workbook.push({ name: "GSTR2B", rows: (rows) });
   };
 
   addRows([
@@ -76,15 +72,12 @@ function workbookBuffer(): ArrayBuffer {
     ["docs", "document number list"],
   ]);
 
-  return XLSX.write(workbook, {
-    bookType: "xlsx",
-    type: "array",
-  }) as ArrayBuffer;
+  return await writeSpreadsheet(workbook);
 }
 
 describe("GSTR-2B yearly Excel analyser", () => {
   it("maps B2B, RCM and CDNR sections separately", async () => {
-    const result = await analyseGstr2bExcelBuffer(workbookBuffer(), {
+    const result = await analyseGstr2bExcelBuffer(await workbookBuffer(), {
       fileName: "ZAVERI_Yearly_Summary_GSTR2B_2025-2026.xlsx",
       expectedFinancialYear: "2025-26",
       expectedGstin: "24AACHP4798Q1ZB",
@@ -123,7 +116,7 @@ describe("GSTR-2B yearly Excel analyser", () => {
   });
 
   it("does not import TOTAL rows as invoices", async () => {
-    const result = await analyseGstr2bExcelBuffer(workbookBuffer());
+    const result = await analyseGstr2bExcelBuffer(await workbookBuffer());
 
     expect(result.lines.every((line) => line.invoice_no !== "Total")).toBe(true);
     expect(result.regularB2B).toHaveLength(2);
@@ -132,7 +125,7 @@ describe("GSTR-2B yearly Excel analyser", () => {
   });
 
   it("warns on financial-year mismatch without changing the parsed data", async () => {
-    const result = await analyseGstr2bExcelBuffer(workbookBuffer(), {
+    const result = await analyseGstr2bExcelBuffer(await workbookBuffer(), {
       expectedFinancialYear: "2024-25",
     });
 
@@ -143,7 +136,7 @@ describe("GSTR-2B yearly Excel analyser", () => {
   });
 
   it("warns on GSTIN mismatch", async () => {
-    const result = await analyseGstr2bExcelBuffer(workbookBuffer(), {
+    const result = await analyseGstr2bExcelBuffer(await workbookBuffer(), {
       expectedGstin: "24ZZZZZ9999Z1Z9",
     });
 
@@ -153,17 +146,11 @@ describe("GSTR-2B yearly Excel analyser", () => {
   });
 
   it("rejects a workbook without the GSTR2B sheet", async () => {
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
-      workbook,
-      XLSX.utils.aoa_to_sheet([["B2B"]]),
-      "Other",
-    );
+    const workbook: WriteSheet[] = [];
+    workbook.push({ name: "Other", rows: ([["B2B"]]) });
 
     await expect(
-      analyseGstr2bExcelBuffer(
-        XLSX.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer,
-      ),
+      analyseGstr2bExcelBuffer(await writeSpreadsheet(workbook)),
     ).rejects.toThrow("GSTR2B sheet was not found in the workbook.");
   });
 });

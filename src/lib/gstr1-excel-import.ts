@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import { readSpreadsheet, sheetRows, type SpreadsheetBook } from "./spreadsheet";
 import type {
   Gstr9Table4,
   Gstr9Table5,
@@ -352,7 +352,7 @@ function addAdjustment(
 }
 
 function readSheetRows(
-  workbook: XLSX.WorkBook,
+  workbook: SpreadsheetBook,
   sheetName: string,
 ): RawRow[] | null {
   const actualName = workbook.SheetNames.find(
@@ -361,15 +361,11 @@ function readSheetRows(
 
   if (!actualName) return null;
 
-  return XLSX.utils.sheet_to_json<RawRow>(workbook.Sheets[actualName], {
-    header: 1,
-    defval: null,
-    raw: true,
-  });
+  return sheetRows(workbook.Sheets[actualName], { defval: null }) as RawRow[];
 }
 
 function getMetadata(
-  workbook: XLSX.WorkBook,
+  workbook: SpreadsheetBook,
 ): {
   companyName?: string;
   gstin?: string;
@@ -378,11 +374,7 @@ function getMetadata(
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
   if (!firstSheet) return {};
 
-  const rows = XLSX.utils.sheet_to_json<RawRow>(firstSheet, {
-    header: 1,
-    defval: null,
-    raw: true,
-  });
+  const rows = sheetRows(firstSheet, { defval: null }) as RawRow[];
 
   let companyName: string | undefined;
   let gstin: string | undefined;
@@ -433,7 +425,7 @@ function normaliseFinancialYear(value?: string): string | undefined {
 
 function addSheetSummary(
   summaries: Gstr1ExcelSheetSummary[],
-  workbook: XLSX.WorkBook,
+  workbook: SpreadsheetBook,
   sheet: string,
   dataRows: number,
   recognisedRows: number,
@@ -643,7 +635,7 @@ function analyseAdvanceSheet(
 }
 
 function analyseAdjustments(
-  workbook: XLSX.WorkBook,
+  workbook: SpreadsheetBook,
 ): Gstr1ExcelAdjustmentSummary[] {
   const configs: Array<{
     sheet: string;
@@ -723,7 +715,7 @@ function analyseAdjustments(
 }
 
 function analyseHsn(
-  workbook: XLSX.WorkBook,
+  workbook: SpreadsheetBook,
 ): Gstr1ExcelAnalysis["hsn"] {
   const rows = readSheetRows(workbook, "hsn");
   if (!rows) return { ...ZERO(), rowCount: 0 };
@@ -753,18 +745,14 @@ function analyseHsn(
   };
 }
 
-export function analyseGstr1ExcelBuffer(
+export async function analyseGstr1ExcelBuffer(
   data: ArrayBuffer | Uint8Array,
   options?: {
     fileName?: string;
     expectedFinancialYear?: string;
   },
-): Gstr1ExcelAnalysis {
-  const workbook = XLSX.read(data, {
-    type: "array",
-    cellDates: false,
-    raw: true,
-  });
+): Promise<Gstr1ExcelAnalysis> {
+  const workbook = await readSpreadsheet(data, { cellDates: false });
 
   const metadata = getMetadata(workbook);
   const table4 = emptyTable4();
@@ -947,7 +935,7 @@ export async function analyseGstr1ExcelFile(
 ): Promise<Gstr1ExcelAnalysis> {
   const buffer = await file.arrayBuffer();
 
-  return analyseGstr1ExcelBuffer(buffer, {
+  return await analyseGstr1ExcelBuffer(buffer, {
     fileName: file.name,
     expectedFinancialYear,
   });

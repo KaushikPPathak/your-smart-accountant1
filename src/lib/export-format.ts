@@ -1,7 +1,6 @@
 // Shared export formatting helpers — keeps PDF/XLSX templates aligned with the
 // company's global currency symbol and date format. Excel cells are emitted
 // as real numbers/dates (with numFmt) so SUM/pivot work in the exported file.
-import type * as XLSX from "xlsx";
 import { getCurrentCurrencySymbol, getCurrentCurrencyCode } from "./currency";
 import { getCurrentDateFormat, type DateFormatCode } from "./date-format";
 import { parseAppDate } from "./format-date";
@@ -16,7 +15,7 @@ export function amountHeader(label = "Amount"): string {
   return `${label} (${exportCurrencySymbol()})`;
 }
 
-/** SheetJS numFmt for currency cells. Uses Indian lakh grouping for INR. */
+/** Excel numFmt for currency cells. Uses Indian lakh grouping for INR. */
 export function excelCurrencyFmt(): string {
   const sym = exportCurrencySymbol();
   // Escape characters that have special meaning in numFmt strings
@@ -25,7 +24,7 @@ export function excelCurrencyFmt(): string {
   return `"${s}" ${grouping};[Red]-"${s}" ${grouping}`;
 }
 
-/** SheetJS numFmt for date cells, derived from the global date format. */
+/** Excel numFmt for date cells, derived from the global date format. */
 export function excelDateFmt(code: DateFormatCode = getCurrentDateFormat()): string {
   switch (code) {
     case "dd/mm/yyyy": return "dd/mm/yyyy";

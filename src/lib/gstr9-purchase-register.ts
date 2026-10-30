@@ -4,7 +4,8 @@
  * This is a reconciliation/working-paper source only. It never creates,
  * updates, or deletes accounting vouchers.
  */
-import * as XLSX from "xlsx";
+import { excelSerialParts } from "./excel-serial";
+import { readSpreadsheet, sheetRows } from "./spreadsheet";
 
 export interface Gstr9PurchaseRegisterLine {
   id: string;
@@ -59,7 +60,7 @@ function numberValue(value: unknown): number {
 function dateValue(value: unknown): string | null {
   if (value == null || value === "") return null;
   if (typeof value === "number") {
-    const parsed = XLSX.SSF.parse_date_code(value);
+    const parsed = excelSerialParts(value);
     if (parsed) {
       return `${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
     }
@@ -181,11 +182,11 @@ export function parseGstr9PurchaseRegisterJson(textValue: string, fileName = "pu
   return makeImport("JSON", fileName, parseRows(rows as unknown[][]));
 }
 
-export function parseGstr9PurchaseRegisterExcel(buffer: ArrayBuffer, fileName = "purchase-register.xlsx"): Gstr9PurchaseRegisterImport {
-  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+export async function parseGstr9PurchaseRegisterExcel(buffer: ArrayBuffer, fileName = "purchase-register.xlsx"): Promise<Gstr9PurchaseRegisterImport> {
+  const workbook = await readSpreadsheet(buffer, { cellDates: true });
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true });
+    const rows = sheetRows(sheet, { defval: "" });
     try {
       const lines = parseRows(rows);
       if (lines.length) return makeImport("EXCEL", fileName, lines);

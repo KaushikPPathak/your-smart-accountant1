@@ -61,7 +61,7 @@ function Gstr1JsonConverter() {
     setFileName(file.name);
     try {
       const buf = await file.arrayBuffer();
-      const res = convertGstr1Xlsx(buf, { gstin: gstinClean, fp: computeFp() });
+      const res = await convertGstr1Xlsx(buf, { gstin: gstinClean, fp: computeFp() });
       setResult(res);
       if (res.warnings.length) {
         res.warnings.forEach((w) => toast.warning(w));

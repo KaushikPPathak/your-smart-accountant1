@@ -226,7 +226,7 @@ export function SelfTestPanel({ companyId }: { companyId: string | null }) {
     await mark("export_libs", async () => {
       const [pdf, xlsx] = await Promise.allSettled([
         import("jspdf"),
-        import("xlsx"),
+        import("exceljs"),
       ]);
       const broken: string[] = [];
       if (pdf.status === "rejected") broken.push("jsPDF");

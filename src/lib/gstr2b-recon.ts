@@ -219,9 +219,9 @@ export function parseCsv(text: string): ParsedRow[] {
 }
 
 export async function parseXlsx(file: File): Promise<ParsedRow[]> {
-  const XLSX = await import("xlsx");
+  const { readSpreadsheet, sheetRows } = await import("./spreadsheet");
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: "array", cellDates: false });
+  const wb = await readSpreadsheet(buf, { cellDates: false });
   const out: ParsedRow[] = [];
   for (const name of wb.SheetNames) {
     // GSTR-2B excel from GST portal has sheet named "B2B" (and B2BA, CDNR, etc.)
@@ -229,13 +229,13 @@ export async function parseXlsx(file: File): Promise<ParsedRow[]> {
     const upper = name.toUpperCase();
     if (upper !== "B2B" && upper !== "B2BA" && !/B2B/.test(upper)) continue;
     const sh = wb.Sheets[name];
-    const matrix = XLSX.utils.sheet_to_json<unknown[]>(sh, { header: 1, defval: "", raw: true }) as unknown[][];
+    const matrix = sheetRows(sh, { defval: "" });
     out.push(...rowsFromMatrix(matrix));
   }
   if (out.length === 0) {
     // fallback: first sheet
     const sh = wb.Sheets[wb.SheetNames[0]];
-    const matrix = XLSX.utils.sheet_to_json<unknown[]>(sh, { header: 1, defval: "", raw: true }) as unknown[][];
+    const matrix = sheetRows(sh, { defval: "" });
     out.push(...rowsFromMatrix(matrix));
   }
   return out;

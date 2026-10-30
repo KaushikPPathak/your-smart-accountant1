@@ -1877,7 +1877,7 @@ function Gstr3bInputPanel({
     for (const file of fileArray) {
       try {
         const analysis =
-          analyseGstr3bExcelBuffer(
+          await analyseGstr3bExcelBuffer(
             await file.arrayBuffer(),
             {
               fileName: file.name,
@@ -2825,7 +2825,7 @@ function Gstr1InputPanel({
       setExcelWarnings([]);
       setExcelSummary(null);
 
-      const analysis = analyseGstr1ExcelBuffer(await file.arrayBuffer(), {
+      const analysis = await analyseGstr1ExcelBuffer(await file.arrayBuffer(), {
         fileName: file.name,
         expectedFinancialYear: financialYear,
       });
@@ -3860,7 +3860,7 @@ function Gstr9PurchaseRegisterSource({
       const lower = file.name.toLowerCase();
       const parsed = lower.endsWith(".json")
         ? parseGstr9PurchaseRegisterJson(await file.text(), file.name)
-        : parseGstr9PurchaseRegisterExcel(await file.arrayBuffer(), file.name);
+        : await parseGstr9PurchaseRegisterExcel(await file.arrayBuffer(), file.name);
       if (!parsed.lines.length) throw new Error("No purchase-register rows were found in the selected file.");
       await saveImport(parsed);
     } catch (err) {
