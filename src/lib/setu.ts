@@ -1,5 +1,6 @@
 // GST verification client — API Setu (apisetu.gov.in) GSTN Tax Payer API V2.
 // All API Setu credentials stay server-side in Lovable Cloud Secrets.
+import { CLOUD_AUTH_ENABLED } from "./app-mode";
 
 export interface SetuCreds {
   clientId: string;
@@ -82,20 +83,24 @@ function compactAddress(value: unknown): string | undefined {
 // builds the Supabase client is a no-op stub, so we call the verification
 // endpoint directly over HTTPS with the publishable key. No business data
 // leaves the device — only the GSTIN being checked.
-const FALLBACK_PROJECT_REF = "yzymutqvqwjeqnbygpgp";
-const FALLBACK_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6eW11dHF2cXdqZXFuYnlncGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MTY2ODEsImV4cCI6MjA5NzA5MjY4MX0.-mtpRUvTSaxu_YPkqw8by6voYetpy5E2Y2mcWBnxd54";
 
 function endpointBase(): { url: string; key: string } {
   const env = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
-  const url = env.VITE_SUPABASE_URL || `https://${FALLBACK_PROJECT_REF}.supabase.co`;
-  const key = env.VITE_SUPABASE_PUBLISHABLE_KEY || FALLBACK_ANON_KEY;
+  const url = env.VITE_SUPABASE_URL ?? "";
+  const key = env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
   return { url: url.replace(/\/+$/, ""), key };
 }
 
+const GSTIN_OFFLINE_MESSAGE =
+  "Online GSTIN check is turned off in this offline build. Enter the GSTIN details yourself.";
+
 /** Direct HTTPS call to the GSTIN verification endpoint (no Supabase client needed). */
 async function invokeDirect(gstin: string): Promise<{ data: unknown; error?: string }> {
+  // Offline build: no call leaves the device. The check runs only when the
+  // user asks for it, and it is off unless cloud is enabled in app-mode.ts.
+  if (!CLOUD_AUTH_ENABLED) return { data: null, error: GSTIN_OFFLINE_MESSAGE };
   const { url, key } = endpointBase();
+  if (!url || !key) return { data: null, error: GSTIN_OFFLINE_MESSAGE };
   try {
     const res = await fetch(`${url}/functions/v1/setu-gstin-proxy`, {
       method: "POST",
