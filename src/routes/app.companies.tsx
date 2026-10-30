@@ -321,19 +321,21 @@ function CompaniesPage() {
   };
 
   const onUploadLogo = async (file: File) => {
-    if (!user) return;
+    // Offline build: the logo is kept on this device, embedded in the company record.
+    if (file.size > 300 * 1024) {
+      toast.error("Logo must be under 300 KB");
+      return;
+    }
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() || "png";
-      const path = `${user.id}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("company-logos").upload(path, file, {
-        upsert: true,
-        contentType: file.type,
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error ?? new Error("Could not read the file"));
+        reader.readAsDataURL(file);
       });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("company-logos").getPublicUrl(path);
-      setForm((f) => ({ ...f, logo_url: pub.publicUrl }));
-      toast.success("Logo uploaded");
+      setForm((f) => ({ ...f, logo_url: dataUrl }));
+      toast.success("Logo added");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {

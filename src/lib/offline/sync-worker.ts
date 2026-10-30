@@ -3,12 +3,10 @@
 // local cache stays warm for offline use.
 
 import { drainOutbox, materializeLocalOnlyOutbox, queueSize } from "./outbox";
-import { refreshAllCachedCreds } from "./creds-cache";
 import { pullSnapshot } from "./snapshot";
 import { rememberNetworkBlocked } from "./cache-read";
 import { requestPersistentStorage, startStorageWatcher } from "./storage-quota";
 import { drainEinvoiceQueue } from "./einvoice-queue";
-import { refreshSessionIfDue, warnIfSessionStale } from "./session-refresh";
 
 let started = false;
 
@@ -45,22 +43,12 @@ async function tick(): Promise<void> {
     rememberWorkMode("offline");
     return;
   }
-  // 0) Keep the Supabase refresh-token clock reset. Rate-limited to once
-  //    every 6h internally so this is cheap to call every tick. Without
-  //    this, a user who's online only briefly won't hit the built-in
-  //    autoRefresh (which only fires near access-token expiry) and could
-  //    silently burn down the 30-day refresh-token window.
-  try { await refreshSessionIfDue(); } catch { /* ignore */ }
-  // If we've gone dangerously long without a successful refresh, tell them.
-  try { await warnIfSessionStale(); } catch { /* ignore */ }
   // 1) push local changes first so subsequent pull sees authoritative data.
   //    This handles the "worked offline last time → sync back to cloud" case.
   try {
     const pushed = await drainOutbox();
     if (pushed.failed > 0 || await queueSize() > 0) return;
   } catch { return; }
-  // 2) refresh login cache for offline auth
-  try { await refreshAllCachedCreds(); } catch { /* ignore */ }
   // 3) Keep the essential company/settings cache fresh. Full voucher/report
   //    snapshots are intentionally not run every 30s because they can be very
   //    large; the active company performs a throttled full hydrate separately.

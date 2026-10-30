@@ -205,11 +205,23 @@ export function parseAmount(text: string): number | null {
   const compound = parseCompoundAmount(cleaned);
   if (compound) return compound;
 
+  // An amount written with a currency mark wins outright: "rs 50000", "₹ 9500", "inr 1200".
+  const marked = cleaned.match(/(?:\brs\.?|\binr\b|\brupees?\b|\brupaye\b|\brupay\b|₹)\s*(\d+(?:\.\d+)?)/i);
+  if (marked) return parseFloat(marked[1]);
+
+  // Reference numbers (cheque, UTR, NEFT, UPI, invoice or account numbers) are
+  // not amounts. Remove them before picking the largest remaining number.
+  const withoutRefs = cleaned.replace(REFERENCE_NUMBER_RE, " ");
+
   // Plain number — pick the largest to avoid "#142" competing with "50000".
-  const nums = Array.from(cleaned.matchAll(/\b(\d{2,}(?:\.\d+)?)\b/g)).map((x) => parseFloat(x[1]));
+  const nums = Array.from(withoutRefs.matchAll(/\b(\d{2,}(?:\.\d+)?)\b/g)).map((x) => parseFloat(x[1]));
   if (!nums.length) return null;
   return Math.max(...nums);
 }
+
+/** A reference label followed by its number, e.g. "cheque no 123456", "utr 4455667788", "#4421". */
+const REFERENCE_NUMBER_RE =
+  /(?:\b(?:cheque|chq|chk|cq|ref|reference|utr|txn|transaction|neft|rtgs|imps|upi|invoice\s+no|inv\s+no|bill\s+no|no|number|a\/c|ac|acct|account)\b\.?\s*[:\-#]?\s*\d[\d\/\-]*|#\s*\d[\d\/\-]*)/gi;
 
 function parseCompoundAmount(text: string): number | null {
   const t = text.toLowerCase();

@@ -1,9 +1,6 @@
-// Manual architectural override: Making Supabase client optional for local-first desktop.
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from './types';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// Offline build: this module never opens a network connection. Every call
+// resolves locally with an empty result, so the app needs no sign-in and no
+// internet connection. Cloud features stay off (see lib/app-mode.ts).
 
 // Define a permanent offline session to bypass login locks
 const offlineSession = {
@@ -125,12 +122,4 @@ const noopHandler: ProxyHandler<any> = {
  * The Supabase client. 
  * If VITE_SUPABASE_URL is missing, returns a no-op Proxy to prevent startup crashes.
  */
-export const supabase = (SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY)
-  ? createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-      auth: {
-        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-        persistSession: true,
-        autoRefreshToken: true,
-      }
-    })
-  : (new Proxy({}, noopHandler) as any);
+export const supabase = new Proxy({}, noopHandler) as any;

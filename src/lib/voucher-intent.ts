@@ -12,6 +12,8 @@ import type { Database } from "@/integrations/supabase/types";
 //  TYPES
 // ═════════════════════════════════════════════════════════════════════════════
 
+import { VOCABULARY } from "./voucher-vocabulary";
+
 export type VoucherIntentType = "payment" | "receipt" | "sales" | "purchase";
 
 export interface ParsedVoucherIntent {
@@ -96,21 +98,36 @@ const RULES: Rule[] = [
 const READ_ONLY_QUESTION =
   /^\s*(what|which|who|whom|whose|when|where|why|how|is|are|was|were|do|does|did|show|list|tell|give|display|find|fetch|get|report|view|see|check|explain|summar[iy]se?)\b/i;
 const READ_ONLY_TERMS =
-  /\b(closing balance|opening balance|trial balance|balance sheet|balance as on|balance of|outstanding|receivable|payable|ageing|aging|statement of|ledger of|p&l|profit and loss|gross profit|net profit|how much|report|summary|total sales|total purchase|list of)\b/i;
+  /\b(closing balance|opening balance|trial balance|balance sheet|balance as on|balance of|outstanding|receivable|payable|ageing|aging|statement of|ledger of|p&l|profit and loss|gross profit|net profit|how much|report|summary|total sales|total purchase|list of|sales register|purchase register|day ?book)\b/i;
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  INTENT DETECTION
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Each vocabulary word is one pattern, so the same scoring applies to the
+// built-in rules and to the word directory.
+const VOCABULARY_PATTERNS: Rule[] = (Object.keys(VOCABULARY) as VoucherIntentType[]).map((intent) => ({
+  intent,
+  patterns: VOCABULARY[intent].map(
+    (w) => new RegExp(`(?<![\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}(?![\\p{L}\\p{N}])`, "iu"),
+  ),
+}));
+
 export function detectVoucherIntent(text: string): VoucherIntentType | null {
   if (!text) return null;
   if (READ_ONLY_QUESTION.test(text) || READ_ONLY_TERMS.test(text)) return null;
 
-  let best: { intent: VoucherIntentType; score: number } | null = null;
-  for (const r of RULES) {
+  // Sum the matches per voucher type across the rules and the word directory,
+  // then pick the type with the most matches. Ties go to the first type listed.
+  const scores = new Map<VoucherIntentType, number>();
+  for (const r of [...RULES, ...VOCABULARY_PATTERNS]) {
     let s = 0;
     for (const p of r.patterns) if (p.test(text)) s++;
-    if (s > 0 && (!best || s > best.score)) best = { intent: r.intent, score: s };
+    if (s > 0) scores.set(r.intent, (scores.get(r.intent) ?? 0) + s);
+  }
+  let best: { intent: VoucherIntentType; score: number } | null = null;
+  for (const [intent, score] of scores) {
+    if (!best || score > best.score) best = { intent, score };
   }
   return best?.intent ?? null;
 }

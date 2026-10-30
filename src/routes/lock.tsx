@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, LogIn, ShieldCheck, UserPlus, EyeOff, AlertCircle, RefreshCw, Bot } from "lucide-react";
+import { Loader2, LogIn, ShieldCheck, UserPlus, EyeOff, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,13 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
 import { markUnlocked, getLastUsername, type StaffRole } from "@/lib/staff-session";
-import { ensureTechSession } from "@/lib/tech-user";
-import { cacheAccountCredsFromCloud, verifyOfflineLogin, listCachedAccounts } from "@/lib/offline/creds-cache";
-import { isOnlineNow, pingOnline } from "@/lib/offline/online-status";
+import { createLocalAccount, verifyOfflineLogin, listCachedAccounts } from "@/lib/offline/creds-cache";
 import { consumeReturnTo } from "@/lib/return-to";
-import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 export const Route = createFileRoute("/lock")({
   head: () => ({ meta: [{ title: "Sign in — Smart Accountant" }] }),
@@ -32,16 +28,16 @@ interface LoginUserOption {
 
 const TYPE_MANUALLY = "__type_manually__";
 
-const withTimeout = <T,>(promise: PromiseLike<T>, ms: number, fallback: T): Promise<T> =>
-  Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
-
+/**
+ * Offline lock screen. Accounts live on this device only: they are created
+ * here and checked against a local bcrypt hash. No sign-in call is made to
+ * any server.
+ */
 function LockScreen() {
   const navigate = useNavigate();
   const [bootLoading, setBootLoading] = useState(true);
   const [accountsExist, setAccountsExist] = useState(false);
   const [tab, setTab] = useState<"login" | "signup">("login");
-  const [sessionError, setSessionError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
 
   // Login fields
   const [loginUser, setLoginUser] = useState("");
@@ -58,93 +54,34 @@ function LockScreen() {
 
   const [busy, setBusy] = useState(false);
 
-  const boot = async (force = false) => {
+  const boot = async () => {
     setBootLoading(true);
-    setSessionError(null);
     try {
-      // 1. Load local accounts immediately (parallel, instant)
       const cached = await listCachedAccounts();
-      const cachedOpts = cached.map(c => ({ id: c.user_id, name: c.name, username: c.username, role: c.role }));
-      if (cachedOpts.length > 0) {
-        setUserOptions(cachedOpts);
-        setAccountsExist(true);
-        setTab("login");
-        // Preselect last-signed-in user so they only need to type the password.
-        const last = getLastUsername();
-        if (last && cachedOpts.some((o) => o.username === last)) {
-          setLoginUser(last);
-        }
-        setBootLoading(false);
-      }
-
-      if (!isOnlineNow()) {
-        if (cachedOpts.length === 0) setTypingManually(true);
-        setBootLoading(false);
-        return;
-      }
-
-      // 2. Try network with realistic timeout (real cellular / slow-Wi-Fi
-      //    round-trips to Supabase regularly take 3-6 s; anything less
-      //    false-fires "Network timeout" on a perfectly good connection).
-      const sess = await withTimeout(ensureTechSession(force), 8000, { ok: false, reason: "Network timeout" } as any);
-      
-      if (!sess.ok) {
-        // Fall back to local only
-        if (cachedOpts.length === 0) {
-          setSessionError(sess.reason);
-          setAccountsExist(true);
-          setTab("login");
-          setTypingManually(true);
-        }
-        return;
-      }
-
-      const { data, error } = await withTimeout<{ data: boolean | null; error: { message?: string } | null }>(
-        supabase.rpc("accounts_exist") as PromiseLike<{ data: boolean | null; error: { message?: string } | null }>,
-        8000,
-        { data: cachedOpts.length > 0, error: null }
-      );
-      if (error) throw error;
-      
-      // Never let a cloud "no accounts" response disable the login tab when
-      // we already have cached accounts locally — offline-first must win.
-      const exists = Boolean(data) || cachedOpts.length > 0;
+      const cachedOpts = cached
+        .filter((c) => !c.hidden)
+        .map((c) => ({ id: c.user_id, name: c.name, username: c.username, role: c.role }));
+      const exists = cached.length > 0;
       setAccountsExist(exists);
       setTab(exists ? "login" : "signup");
-
-      if (exists) {
-        const { data: list } = await withTimeout<{ data: LoginUserOption[] | null }>(
-          (supabase as unknown as { rpc: (fn: string) => PromiseLike<{ data: LoginUserOption[] | null }> }).rpc("list_login_users"),
-          8000,
-          { data: null }
-        );
-        if (list && list.length > 0) {
-          setUserOptions(list);
-        } else if (cachedOpts.length === 0) {
-          setTypingManually(true);
-        }
+      setUserOptions(cachedOpts);
+      if (cachedOpts.length === 0) {
+        setTypingManually(true);
+      } else {
+        // Preselect the last account used on this device so only the password is needed.
+        const last = getLastUsername();
+        if (last && cachedOpts.some((o) => o.username === last)) setLoginUser(last);
       }
     } catch (e) {
-      console.warn("Boot network check failed, falling back to cache:", e);
-      setAccountsExist(true);
-      setTab("login");
+      console.warn("Could not read local accounts:", e);
+      setAccountsExist(false);
+      setTab("signup");
     } finally {
       setBootLoading(false);
     }
   };
 
-
   useEffect(() => { void boot(); }, []);
-
-  const onSignInAgain = async () => {
-    setRefreshing(true);
-    try {
-      await boot(true);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
 
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,94 +91,20 @@ function LockScreen() {
     }
     setBusy(true);
     try {
-      const tryCloud = isOnlineNow();
-      if (tryCloud) {
-        try {
-          let { data, error } = await withTimeout<any>(
-            supabase.rpc("verify_account_login", {
-              _username: loginUser.trim(),
-              _password: loginPass,
-            }) as PromiseLike<any>,
-            10000,
-            { data: null, error: { message: "Network timeout" } } as any,
-          );
-          if (error && /jwt|token/i.test(error.message ?? "")) {
-            const r = await withTimeout(ensureTechSession(true), 8000, { ok: false, reason: "Network timeout" } as any);
-            if (r.ok) {
-              ({ data, error } = await withTimeout<any>(
-                supabase.rpc("verify_account_login", {
-                  _username: loginUser.trim(),
-                  _password: loginPass,
-                }) as PromiseLike<any>,
-                10000,
-                { data: null, error: { message: "Network timeout" } } as any,
-              ));
-            }
-          }
-          if (error) throw error;
-          const row = Array.isArray(data) ? data[0] : data;
-          if (!row?.id) {
-            toast.error("Invalid username or password");
-            return;
-          }
-          console.log("✅ Online login success for user:", row.name, `(${loginUser.trim()})`);
-          void cacheAccountCredsFromCloud(loginUser.trim(), loginPass);
-
-          try {
-            if (isLocalOnlyMode()) throw new Error("Local-only mode: skip cloud company cache");
-            const { data: cloudCompanies } = await supabase
-              .from("companies_picker")
-              .select("id, name, has_password");
-            if (cloudCompanies && cloudCompanies.length > 0) {
-              const { offlineDb } = await import("@/lib/offline/db");
-              const rows = cloudCompanies.map((c: any) => ({
-                id: c.id as string,
-                name: c.name as string,
-                has_password: Boolean(c.has_password),
-                account_id: row.id as string,
-              }));
-              await offlineDb.companies.bulkPut(rows);
-            }
-          } catch (syncErr) {
-            console.error("Company cache sync skipped:", syncErr);
-          }
-
-          markUnlocked({ id: row.id, name: row.name, role: row.role as StaffRole, username: loginUser.trim() });
-          try {
-            const { runPostLoginMigration } = await import("@/lib/post-login-migration");
-            await runPostLoginMigration(row.id, row.name);
-          } catch { /* ignore */ }
-          navigate({ to: (consumeReturnTo() ?? "/app") as never });
-          return;
-        } catch (cloudErr) {
-          const msg = cloudErr instanceof Error ? cloudErr.message : String(cloudErr ?? "");
-          if (!/network timeout|failed to fetch|networkerror|offline/i.test(msg)) {
-            const reachable = await pingOnline();
-            if (reachable) throw cloudErr;
-          }
-        }
-      }
-
       const local = await verifyOfflineLogin(loginUser.trim(), loginPass);
-      if (local) {
-        markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole, username: loginUser.trim() });
-        try {
-          const { runPostLoginMigration } = await import("@/lib/post-login-migration");
-          await runPostLoginMigration(local.id, local.name);
-        } catch { /* ignore */ }
-        navigate({ to: (consumeReturnTo() ?? "/app") as never });
+      if (!local) {
+        toast.error("Invalid username or password");
         return;
       }
-
-      toast.error("Invalid username or password");
-    } catch (e) {
-      console.error("Login failed:", e);
-      const msg =
-        (e as { message?: string; details?: string })?.message ||
-        (e as { details?: string })?.details ||
-        (typeof e === "string" ? e : null) ||
-        "Login failed";
-      toast.error(msg);
+      markUnlocked({ id: local.id, name: local.name, role: local.role as StaffRole, username: loginUser.trim() });
+      try {
+        const { runPostLoginMigration } = await import("@/lib/post-login-migration");
+        await runPostLoginMigration(local.id, local.name);
+      } catch { /* ignore */ }
+      navigate({ to: (consumeReturnTo() ?? "/app") as never });
+    } catch (err) {
+      // Lockout after repeated wrong passwords arrives here with its message.
+      toast.error(err instanceof Error ? err.message : "Login failed");
     } finally {
       setBusy(false);
     }
@@ -251,44 +114,29 @@ function LockScreen() {
     e.preventDefault();
     if (!suName.trim()) return toast.error("Name is required");
     if (!/^[a-zA-Z0-9_.-]{3,40}$/.test(suUser.trim()))
-      return toast.error("Username must be 3–40 chars");
+      return toast.error("User ID must be 3–40 chars");
     if (suPass.length < 6) return toast.error("Password must be at least 6 characters");
     if (suPass !== suPass2) return toast.error("Passwords do not match");
 
     setBusy(true);
     try {
-      const reachable = await pingOnline();
-      if (!reachable) {
-        toast.error("Sign-up needs an internet connection the first time.");
-        return;
-      }
-
-      const rpc = accountsExist ? "signup_account" : "setup_first_account";
-      const { data: newId, error } = await (supabase as unknown as {
-        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: string | null; error: { message: string } | null }>;
-      }).rpc(rpc, {
-        _name: suName.trim(),
-        _username: suUser.trim(),
-        _password: suPass,
-        _hide_from_picker: suHide,
+      // The first account on a device is the admin; later ones are staff.
+      const created = await createLocalAccount({
+        name: suName,
+        username: suUser,
+        password: suPass,
+        role: accountsExist ? "staff" : "admin",
+        hidden: suHide,
       });
-
-      if (error) throw error;
-
-      markUnlocked({ id: newId as string, name: suName.trim(), role: "admin", username: suUser.trim() });
+      markUnlocked({ id: created.id, name: created.name, role: created.role as StaffRole, username: suUser.trim() });
       try {
         const { runPostLoginMigration } = await import("@/lib/post-login-migration");
-        await runPostLoginMigration(newId as string, suName.trim());
+        await runPostLoginMigration(created.id, created.name);
       } catch { /* ignore */ }
       navigate({ to: (consumeReturnTo() ?? "/app") as never });
-    } catch (e) {
-      console.error("Signup failed:", e);
-      const msg =
-        (e as { message?: string; details?: string; hint?: string })?.message ||
-        (e as { details?: string })?.details ||
-        (typeof e === "string" ? e : null) ||
-        "Signup failed.";
-      toast.error(msg);
+    } catch (err) {
+      console.error("Sign-up failed:", err);
+      toast.error(err instanceof Error ? err.message : "Sign-up failed.");
     } finally {
       setBusy(false);
     }
@@ -329,33 +177,6 @@ function LockScreen() {
             <p className="text-xs" style={{ color: "color-mix(in oklab, var(--amber-ink) 65%, transparent)" }}>Sign in to manage your books</p>
           </div>
         </div>
-
-        {sessionError && (
-          <div className="mb-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div className="flex-1 space-y-2">
-              <div>
-                <div className="font-medium">Session expired</div>
-                <div className="text-destructive/80">{sessionError}</div>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={onSignInAgain}
-                disabled={refreshing}
-                className="h-7 border-destructive/40 text-destructive hover:bg-destructive/10"
-              >
-                {refreshing ? (
-                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-1.5 h-3 w-3" />
-                )}
-                Sign in again
-              </Button>
-            </div>
-          </div>
-        )}
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as "login" | "signup")}>
 

@@ -20,7 +20,7 @@ import { localFirstAnswer } from "./ai/local-first";
 import { routeQuery } from "./ai/query-router";
 import { searchKb } from "./assistant-engine";
 import { detectVoucherIntent, fetchContextLedgers, isReadOnlyQuery, type VoucherIntentType, intentToRoute } from "./voucher-intent";
-import { detectVoucherAction, type VoucherAction, type VoucherExecutionResult } from "./ai/voucher-actions";
+import { detectVoucherAction, parseAmount, type VoucherAction, type VoucherExecutionResult } from "./ai/voucher-actions";
 import { INDIAN_STATES } from "./constants";
 import type { KbEntry } from "./assistant-knowledge";
 import { writeAssistantPrefill } from "./voucher-intent";
@@ -365,6 +365,21 @@ const ENTRY_HELP =
 
 const NO_COMPANY_HELP = "Open a company first. Then I can record entries for it.";
 
+const CLARIFY_DIRECTION =
+  "Nothing is saved yet. Did this money come in or go out? Reply with \"received\" for money in, or \"paid\" for money out, and I will prepare the entry. " +
+  "For example: \"received 5000 from Ram in HDFC\" or \"paid 1200 to landlord cash\".";
+
+// Words that make a sentence a question or a report, never an entry.
+const CLARIFY_BLOCKERS =
+  /\b(balance|bal|kitna|kitne|kitni|how much|how many|due|dues|outstanding|overdue|total|report|register|day ?book|ledger|statement|summary|list|show|tell|kab|kaun|kahan)\b/i;
+
+/** True for "1200 to landlord cash" style text: an amount plus a party, bank or cash phrase. */
+function looksLikeBareEntry(text: string): boolean {
+  if (CLARIFY_BLOCKERS.test(text)) return false;
+  if (parseAmount(text) === null) return false;
+  return /\b(from|to|in|by|cash|bank|on|via)\b/i.test(text);
+}
+
 export async function assistantChat(args?: AssistantArgs): Promise<AssistantChatResult> {
   const start = performance.now();
   const history = args?.data?.messages ?? [];
@@ -410,6 +425,11 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
           displayDetails: action.draft.displayDetails,
         };
         return { ok: true, text: "Drafted voucher. Confirm to save.", pendingVoucher: draft, voucherAction: action, latencyMs: Math.round(performance.now() - start) };
+      }
+      // An amount with a party or bank phrase, but no word saying the money came
+      // in or went out. Ask, rather than answering it as a balance question.
+      if (!detectVoucherIntent(question) && looksLikeBareEntry(question)) {
+        return { ok: true, text: CLARIFY_DIRECTION, latencyMs: Math.round(performance.now() - start) };
       }
     }
 

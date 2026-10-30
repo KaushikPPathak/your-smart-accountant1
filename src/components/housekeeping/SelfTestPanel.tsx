@@ -94,15 +94,10 @@ export function SelfTestPanel({ companyId }: { companyId: string | null }) {
     };
 
     // 1. Auth
-    await mark("auth", async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) return { status: "error", message: error.message };
-      if (!data.session) return { status: "error", message: "No active session" };
-      return {
-        status: "ok",
-        message: `Signed in as ${data.session.user.email ?? data.session.user.id.slice(0, 8)}`,
-      };
-    });
+    await mark("auth", async () => ({
+      status: "ok",
+      message: "Offline build: local accounts only, no cloud sign-in needed",
+    }));
 
     // 2. Company
     await mark("company", async () =>
