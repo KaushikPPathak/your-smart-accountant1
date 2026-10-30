@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { TAccount, type TRow } from "@/components/reports/TAccount";
 import { useCompany } from "@/lib/company-context";
+import { companyFeatures } from "@/lib/company-features";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
@@ -27,7 +28,8 @@ export const Route = createFileRoute("/app/reports/trading")({
 });
 
 function TradingAccount() {
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeMembership } = useCompany();
+  const showModeSplit = companyFeatures(activeMembership?.companies as never).presumptive;
   const pdfHeader = useReportPdfHeader();
   const navigate = useNavigate();
   const { from, to, setFrom, setTo } = useFyRangeState();
@@ -42,10 +44,13 @@ function TradingAccount() {
     fetchLedgerBalances(activeCompanyId, to, from, {
       excludeProfitLossClosingTransfers: true,
     }).then(setBalances);
+    // Cash / Bank receipt-mode breakup is only needed for 44AD / 44ADA
+    // companies (digital vs cash turnover); other companies never see it.
+    if (!showModeSplit) { setModeSplits(new Map()); return; }
     fetchLedgerModeSplits(activeCompanyId, from, to, {
       excludeProfitLossClosingTransfers: true,
     }).then(setModeSplits).catch(() => setModeSplits(new Map()));
-  }, [activeCompanyId, from, to]);
+  }, [activeCompanyId, from, to, showModeSplit]);
 
   useEffect(() => {
     if (!activeCompanyId) return;

@@ -16,6 +16,9 @@ import { BookOpen } from "lucide-react";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { QuickRangeChips } from "@/components/reports/QuickRangeChips";
 import { ReportViewer } from "@/components/reports/ReportViewer";
+import { PrintLayoutToggle } from "@/components/reports/PrintLayoutToggle";
+import { DateBoundPrintBook } from "@/components/reports/DateBoundPrintBook";
+import { usePrintLayout } from "@/lib/print-layout";
 import { readLocalBookDataset } from "@/lib/offline/cache-read";
 import { voucherTypeLabel } from "@/lib/voucher-type-label";
 
@@ -54,6 +57,17 @@ function JournalBook() {
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
+  const [printLayout, setPrintLayout] = usePrintLayout("journal-book");
+  const printRows = useMemo(() => rows.map((row) => ({
+    key: row.id,
+    date: row.voucher_date,
+    vchNo: row.voucher_number,
+    vchType: voucherTypeLabel(row.voucher_type || "journal", "en"),
+    particulars: row.particulars,
+    narration: row.narration,
+    debit: row.debit_paise,
+    credit: row.credit_paise,
+  })), [rows]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -182,6 +196,7 @@ function JournalBook() {
           />
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <QuickRangeChips from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
+            <PrintLayoutToggle value={printLayout} onChange={setPrintLayout} pagedLabel="Date-wise pages" />
           </div>
         </CardContent>
       </Card>
@@ -190,7 +205,8 @@ function JournalBook() {
       ) : rows.length === 0 ? (
         <Card><CardContent className="p-6"><EmptyState icon={BookOpen} title="No journals in range" description="Adjust the date filter or post some journal vouchers." /></CardContent></Card>
       ) : (
-        <Card>
+        <>
+        <Card {...(printLayout === "paged" ? { "data-print-hide": true } : {})}>
           <CardContent className="p-3">
             <DataGrid
               reportId="journal-book"
@@ -205,6 +221,8 @@ function JournalBook() {
             />
           </CardContent>
         </Card>
+        {printLayout === "paged" && <DateBoundPrintBook rows={printRows} withBalance={false} />}
+        </>
       )}
     </ReportViewer>
   );
