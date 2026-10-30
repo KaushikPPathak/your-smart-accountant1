@@ -207,12 +207,12 @@ export function TAccount({
       {/* Print version: one row per Dr/Cr pair, Word-style grid. */}
       <table data-print-only className="report-data-table hidden w-full">
         <colgroup>
-          <col style={{ width: "27%" }} />
-          <col style={{ width: "11.5%" }} />
-          <col style={{ width: "11.5%" }} />
-          <col style={{ width: "27%" }} />
-          <col style={{ width: "11.5%" }} />
-          <col style={{ width: "11.5%" }} />
+          <col style={{ width: "25%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "13%" }} />
+          <col style={{ width: "25%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "13%" }} />
         </colgroup>
         {(title || subtitle) && (
           <caption className="report-print-caption">

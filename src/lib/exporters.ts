@@ -15,7 +15,7 @@ import { getStoredLang } from "@/lib/i18n";
 import { prepareReportFont } from "@/lib/pdf-fonts";
 import { tReportLabel } from "@/lib/report-i18n";
 import { tReportText } from "@/lib/report-i18n-rules";
-import { promoteRows } from "@/lib/export-format";
+import { indianAmount, promoteRows } from "@/lib/export-format";
 
 async function loadJsPdf(): Promise<{ jsPDF: typeof jsPDFType; autoTable: typeof autoTableType }> {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
@@ -34,9 +34,25 @@ function localizeExportText(text: string, lang = getStoredLang()): string {
   return tReportText(text, lang);
 }
 
+// Two-decimal money text (e.g. "11500435.50" or "11,50,435.50") is shown with
+// Indian grouping in every PDF. Plain text and whole numbers are left alone.
+const PDF_AMOUNT_RE = /^-?(\d{1,3}(,\d{2,3})*|\d+)\.\d{2}$/;
+
+export function groupPdfAmount(text: string): string {
+  if (!PDF_AMOUNT_RE.test(text)) return text;
+  const n = Number(text.replace(/,/g, ""));
+  return Number.isFinite(n) ? indianAmount(n) : text;
+}
+
 function localizeExportRows<T>(rows: T[][], lang = getStoredLang()): T[][] {
   return rows.map((row) =>
-    row.map((cell) => (typeof cell === "string" ? (localizeExportText(cell, lang) as T) : cell)),
+    row.map((cell) =>
+      typeof cell === "string"
+        ? ((PDF_AMOUNT_RE.test(cell)
+            ? groupPdfAmount(cell)
+            : localizeExportText(cell, lang)) as T)
+        : cell,
+    ),
   );
 }
 
@@ -186,7 +202,7 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
       headStyles: { font: FONT, fillColor: [255, 248, 220], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.2, fontSize: 8 },
       footStyles: { font: FONT, fillColor: [255, 248, 220], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.2, fontSize: 8 },
         columnStyles,
-        margin: { top: tableStartY },
+        margin: { top: tableStartY, left: 72, right: 36, bottom: 36 },
         didParseCell: (data) => {
           data.cell.styles.font = FONT;
           // Numeric columns stay right-aligned in header and total rows too,
@@ -505,7 +521,7 @@ export function downloadPdfMultiTable(opts: PdfMultiTableOptions): void {
           headStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
           footStyles: { font: FONT, fillColor: false as unknown as [number, number, number], textColor: 0, fontStyle: "bold", lineColor: [0, 0, 0], lineWidth: 0.4 },
           columnStyles,
-          margin: { top: headerBottom + 4 },
+          margin: { top: headerBottom + 4, left: 72, right: 36, bottom: 36 },
           didParseCell: (data) => {
             data.cell.styles.font = FONT;
           },
