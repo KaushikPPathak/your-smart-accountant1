@@ -189,6 +189,11 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
         margin: { top: tableStartY },
         didParseCell: (data) => {
           data.cell.styles.font = FONT;
+          // Numeric columns stay right-aligned in header and total rows too,
+          // not only in body rows (columnStyles alone leaves head/foot left).
+          if (opts.rightAlignCols?.includes(data.column.index)) {
+            data.cell.styles.halign = "right";
+          }
         },
         didDrawCell: (data) => {
           if (opts.dividerBeforeCol != null && data.column.index === opts.dividerBeforeCol) {
