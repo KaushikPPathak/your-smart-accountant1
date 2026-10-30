@@ -351,8 +351,9 @@ export async function analyseGstr2bExcelBuffer(
     expectedGstin?: string;
   } = {},
 ): Promise<Gstr2bExcelAnalysis> {
-  const XLSX = await import("xlsx");
-  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  // Lazy import keeps ExcelJS out of the main bundle, as the old SheetJS import was.
+  const { readSpreadsheet, sheetRows } = await import("./spreadsheet");
+  const workbook = await readSpreadsheet(buffer, { cellDates: true });
 
   const sheetName =
     workbook.SheetNames.find((name) => name.trim().toUpperCase() === "GSTR2B") ??
@@ -363,11 +364,7 @@ export async function analyseGstr2bExcelBuffer(
   }
 
   const sheet = workbook.Sheets[sheetName];
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    defval: "",
-    raw: true,
-  }) as unknown[][];
+  const matrix = sheetRows(sheet, { defval: "" });
 
   const metadata = extractMetadata(matrix);
   const sections = findSectionIndexes(matrix);

@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import { readSpreadsheet, type SpreadsheetSheet } from "./spreadsheet";
 import type { Gstr9Gstr3bPeriod, Gstr9TaxAmount, Gstr9TaxPaid } from "./gstr9-inputs";
 
 export interface Gstr3bExcelMetadata {
@@ -136,17 +136,15 @@ function expectedPeriodForMonth(
 }
 
 function cellValue(
-  sheet: XLSX.WorkSheet,
+  sheet: SpreadsheetSheet,
   row: number,
   column: number,
 ): unknown {
-  return sheet[
-    XLSX.utils.encode_cell({ r: row - 1, c: column - 1 })
-  ]?.v;
+  return sheet.rows[row - 1]?.[column - 1];
 }
 
 function mergedLabelValue(
-  sheet: XLSX.WorkSheet,
+  sheet: SpreadsheetSheet,
   row: number,
   column: number,
 ): unknown {
@@ -155,14 +153,14 @@ function mergedLabelValue(
     return direct;
   }
 
-  for (const range of sheet["!merges"] ?? []) {
+  for (const range of sheet.merges) {
     if (
       range.s.r <= row - 1 &&
       range.e.r >= row - 1 &&
       range.s.c <= column - 1 &&
       range.e.c >= column - 1
     ) {
-      return sheet[XLSX.utils.encode_cell(range.s)]?.v;
+      return sheet.rows[range.s.r]?.[range.s.c];
     }
   }
 
@@ -170,7 +168,7 @@ function mergedLabelValue(
 }
 
 function taxAmountFromRow(
-  sheet: XLSX.WorkSheet,
+  sheet: SpreadsheetSheet,
   row: number,
 ): Gstr9TaxAmount {
   return {
@@ -208,7 +206,7 @@ function taxTotal(row: Gstr9TaxAmount): number {
 }
 
 function taxPaidRow(
-  sheet: XLSX.WorkSheet,
+  sheet: SpreadsheetSheet,
   row: number,
   itcColumn: number,
 ): Gstr9TaxPaid["igst"] {
@@ -286,7 +284,7 @@ function makePeriod(
 }
 
 function findMetadata(
-  sheet: XLSX.WorkSheet,
+  sheet: SpreadsheetSheet,
 ): Gstr3bExcelMetadata {
   return {
     companyName: text(mergedLabelValue(sheet, 6, 3)) || null,
@@ -337,19 +335,15 @@ function validateExpectedGstin(
   }
 }
 
-export function analyseGstr3bExcelBuffer(
+export async function analyseGstr3bExcelBuffer(
   data: ArrayBuffer | Uint8Array,
   options: {
     fileName?: string;
     expectedFinancialYear?: string;
     expectedGstin?: string;
   } = {},
-): Gstr3bExcelAnalysis {
-  const workbook = XLSX.read(data, {
-    type: "array",
-    cellDates: false,
-    raw: true,
-  });
+): Promise<Gstr3bExcelAnalysis> {
+  const workbook = await readSpreadsheet(data, { cellDates: false });
 
   const sheetName =
     workbook.SheetNames.find(

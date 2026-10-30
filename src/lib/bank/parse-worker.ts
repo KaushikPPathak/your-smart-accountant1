@@ -4,7 +4,7 @@
 /// <reference lib="webworker" />
 
 import Papa from "papaparse";
-import type * as XLSXType from "xlsx";
+import { excelSerialParts } from "../excel-serial";
 
 export interface ParsedBankLine {
   txn_date: string;
@@ -31,8 +31,7 @@ function toIsoDate(v: unknown): string | null {
   if (v == null) return null;
   // Excel numeric date
   if (typeof v === "number" && isFinite(v)) {
-    const XLSX = (self as any).XLSX;
-    const d = XLSX.SSF.parse_date_code(v);
+    const d = excelSerialParts(v);
     if (d) return `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
   }
   const s = String(v).trim();
@@ -137,12 +136,11 @@ self.onmessage = async (ev: MessageEvent<ParseRequest>) => {
       const res = Papa.parse<string[]>(req.text, { skipEmptyLines: true });
       matrix = (res.data || []) as string[][];
     } else {
-      const XLSX = await import("xlsx");
-      (self as any).XLSX = XLSX;
-      const wb = XLSX.read(req.buffer, { type: "array", cellDates: false });
+      const { readSpreadsheet, sheetRows } = await import("../spreadsheet");
+      const wb = await readSpreadsheet(req.buffer, { cellDates: false });
       const first = wb.SheetNames[0];
       if (!first) throw new Error("Workbook has no sheets.");
-      matrix = XLSX.utils.sheet_to_json<string[]>(wb.Sheets[first], { header: 1, blankrows: false, raw: true }) as unknown as string[][];
+      matrix = sheetRows(wb.Sheets[first], { blankrows: false }) as unknown as string[][];
     }
     const out = rowsFromMatrix(matrix);
     (self as unknown as Worker).postMessage(out);

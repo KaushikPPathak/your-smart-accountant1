@@ -1,25 +1,21 @@
-// Shared exporters: PDF (jsPDF + autotable) and Excel (SheetJS).
+// Shared exporters: PDF (jsPDF + autotable) and Excel (ExcelJS).
 // Files are routed through the desktop saver — in the .exe they land in
 // Documents/YourMehtaji/Exports/<Company>/<subFolder>/ and auto-open;
 // in the browser they fall back to a normal download.
 //
-// IMPORTANT: jspdf / jspdf-autotable / xlsx are HEAVY (~600 KB combined).
+// IMPORTANT: jspdf / jspdf-autotable / exceljs are HEAVY (~600 KB combined).
 // They are loaded dynamically inside the export functions so the initial
 // app bundle stays small. This file is statically imported by many report
 // routes; keep the top-level imports type-only.
 import type jsPDFType from "jspdf";
 import type autoTableType from "jspdf-autotable";
-import type * as XLSXType from "xlsx";
+import type { SheetCell } from "./spreadsheet";
 import { saveExport } from "./desktop-save";
 import { getStoredLang } from "@/lib/i18n";
 import { prepareReportFont } from "@/lib/pdf-fonts";
 import { tReportLabel } from "@/lib/report-i18n";
 import { tReportText } from "@/lib/report-i18n-rules";
 import { promoteRows } from "@/lib/export-format";
-
-// Re-export the XLSX namespace as a type alias usable both as type and namespace.
-// eslint-disable-next-line @typescript-eslint/no-namespace
-type XLSX = typeof XLSXType;
 
 async function loadJsPdf(): Promise<{ jsPDF: typeof jsPDFType; autoTable: typeof autoTableType }> {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
@@ -29,9 +25,6 @@ async function loadJsPdf(): Promise<{ jsPDF: typeof jsPDFType; autoTable: typeof
   return { jsPDF, autoTable };
 }
 
-async function loadXlsx(): Promise<typeof XLSXType> {
-  return await import("xlsx");
-}
 
 
 
@@ -256,7 +249,7 @@ export function downloadPdfTable(opts: PdfTableOptions): void {
   })();
 }
 
-export type XlsxCell = string | number | XLSXType.CellObject;
+export type XlsxCell = SheetCell;
 export interface XlsxSheet {
   name: string;
   rows: XlsxCell[][]; // first row may be header
@@ -269,24 +262,13 @@ export interface XlsxSheet {
   styling?: "gstn";
 }
 
-// Try to load xlsx-js-style (a drop-in fork of xlsx that preserves cell styles
-// on write). Falls back to the plain xlsx package if unavailable.
-async function loadXlsxWithStyles(): Promise<typeof XLSXType> {
-  try {
-    const mod = (await import("xlsx-js-style")) as unknown as { default?: typeof XLSXType } & typeof XLSXType;
-    return (mod.default ?? mod) as typeof XLSXType;
-  } catch {
-    return await loadXlsx();
-  }
-}
-
 export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = "Reports"): void {
   void (async () => {
     const lang = getStoredLang();
     const anyStyled = sheets.some((s) => s.styling);
 
     // Pre-process cells (i18n + money/date promotion) on the main thread —
-    // this is cheap. Heavy SheetJS work runs in a worker so large ledger
+    // this is cheap. Heavy ExcelJS work runs in a worker so large ledger
     // exports don't freeze the UI.
     const prepared: XlsxSheet[] = sheets.map((s) => {
       const localized: XlsxCell[][] = s.rows.map((row) =>
@@ -352,13 +334,8 @@ export function downloadXlsx(fileName: string, sheets: XlsxSheet[], subFolder = 
       // Fallback: run on main thread. Keeps exports working if workers are
       // blocked (rare — some corporate setups strip module workers).
       console.warn("[exporters] worker fallback:", err);
-      const XLSX = anyStyled ? await loadXlsxWithStyles() : await loadXlsx();
-      const wb = XLSX.utils.book_new();
-      for (const s of prepared) {
-        const ws = XLSX.utils.aoa_to_sheet(s.rows as unknown[][]);
-        XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
-      }
-      buf = XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: anyStyled, compression: true }) as ArrayBuffer;
+      const { writeSpreadsheet } = await import("./spreadsheet");
+      buf = await writeSpreadsheet(prepared, { styled: anyStyled });
     }
 
     if (progress.cancelled()) return;

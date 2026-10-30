@@ -1,16 +1,12 @@
 import { describe, expect, it } from "vitest";
-import * as XLSX from "xlsx";
+import { writeSpreadsheet, type SheetCell, type WriteSheet } from "./spreadsheet";
 import { analyseGstr1ExcelBuffer } from "./gstr1-excel-import";
 
-function workbookBuffer(): ArrayBuffer {
-  const workbook = XLSX.utils.book_new();
+async function workbookBuffer(): Promise<ArrayBuffer> {
+  const workbook: WriteSheet[] = [];
 
-  const addSheet = (name: string, rows: unknown[][]) => {
-    XLSX.utils.book_append_sheet(
-      workbook,
-      XLSX.utils.aoa_to_sheet(rows),
-      name,
-    );
+  const addSheet = (name: string, rows: SheetCell[][]) => {
+    workbook.push({ name: name, rows: (rows) });
   };
 
   addSheet("b2b", [
@@ -55,17 +51,14 @@ function workbookBuffer(): ArrayBuffer {
     ["GROSS ADVANCE ADJUSTED", "IGST", "CGST", "SGST", "CESS"],
   ]);
 
-  const output = XLSX.write(workbook, {
-    bookType: "xlsx",
-    type: "array",
-  });
+  const output = await writeSpreadsheet(workbook);
 
   return output as ArrayBuffer;
 }
 
 describe("GSTR-1 Excel analyser", () => {
-  it("maps the client-style workbook into the GSTR-9 input model", () => {
-    const result = analyseGstr1ExcelBuffer(workbookBuffer(), {
+  it("maps the client-style workbook into the GSTR-9 input model", async () => {
+    const result = await analyseGstr1ExcelBuffer(await workbookBuffer(), {
       fileName: "test.xlsx",
       expectedFinancialYear: "2025-26",
     });
@@ -100,12 +93,10 @@ describe("GSTR-1 Excel analyser", () => {
   });
 
 
-  it("does not double-count the EXEMP summary rows after TOTAL", () => {
-    const workbook = XLSX.utils.book_new();
+  it("does not double-count the EXEMP summary rows after TOTAL", async () => {
+    const workbook: WriteSheet[] = [];
 
-    XLSX.utils.book_append_sheet(
-      workbook,
-      XLSX.utils.aoa_to_sheet([
+    workbook.push({ name: "exemp", rows: ([
         ["NAME  :", "ZAVERI AND CO"],
         ["YEAR  :", "2025-2026"],
         ["GSTIN :", "24AACHP4798Q1ZB"],
@@ -165,12 +156,10 @@ describe("GSTR-1 Excel analyser", () => {
         ["Intra-State supplies to registered persons", 0, 25000, 0],
         ["Inter-State supplies to unregistered persons", 0, 0, 0],
         ["Intra-State supplies to unregistered persons", 0, 98200, 0],
-      ]),
-      "exemp",
-    );
+      ]) });
 
-    const result = analyseGstr1ExcelBuffer(
-      XLSX.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer,
+    const result = await analyseGstr1ExcelBuffer(
+      await writeSpreadsheet(workbook),
       {
         fileName: "ZAVERI_Yearly_GSTR1_2025-2026.xlsx",
         expectedFinancialYear: "2025-26",
@@ -182,19 +171,15 @@ describe("GSTR-1 Excel analyser", () => {
     expect(result.table5.nonGstSupplies.taxableValue).toBe(0);
   });
 
-  it("does not silently treat an unknown export type as a known category", () => {
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
-      workbook,
-      XLSX.utils.aoa_to_sheet([
+  it("does not silently treat an unknown export type as a known category", async () => {
+    const workbook: WriteSheet[] = [];
+    workbook.push({ name: "exp", rows: ([
         ["EXPORT TYPE", "TAXABLE VALUE", "IGST"],
         ["UNKNOWN", 10000, 0],
-      ]),
-      "exp",
-    );
+      ]) });
 
-    const result = analyseGstr1ExcelBuffer(
-      XLSX.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer,
+    const result = await analyseGstr1ExcelBuffer(
+      await writeSpreadsheet(workbook),
     );
 
     expect(result.table4.exportsWithPayment.taxableValue).toBe(0);

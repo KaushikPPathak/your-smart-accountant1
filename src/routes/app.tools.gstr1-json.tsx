@@ -61,7 +61,7 @@ function Gstr1JsonConverter() {
     setFileName(file.name);
     try {
       const buf = await file.arrayBuffer();
-      const res = convertGstr1Xlsx(buf, { gstin: gstinClean, fp: computeFp() });
+      const res = await convertGstr1Xlsx(buf, { gstin: gstinClean, fp: computeFp() });
       setResult(res);
       if (res.warnings.length) {
         res.warnings.forEach((w) => toast.warning(w));
@@ -188,7 +188,7 @@ function Gstr1JsonConverter() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];

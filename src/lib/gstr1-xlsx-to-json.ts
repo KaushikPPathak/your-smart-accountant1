@@ -6,7 +6,7 @@
  * b2cs | hsn(b2b) | hsn(b2c) | exemp | docs) and emits the JSON payload the
  * portal accepts for upload.
  */
-import * as XLSX from "xlsx";
+import { readSpreadsheet, sheetRows, type SpreadsheetBook } from "./spreadsheet";
 import { GSTR1_PORTAL_VERSION, DOC_TYPES, nilSupplyType, portalHsnBlock } from "./gstr1-portal-format";
 
 const HSN_FIX: Record<string, string> = {
@@ -75,13 +75,11 @@ const dtFmt = (v: unknown): string => {
 const isBlank = (v: unknown) =>
   v === null || v === undefined || (typeof v === "string" && !v.trim());
 
-const readRows = (wb: XLSX.WorkBook, sheetName: string): unknown[][] => {
+const readRows = (wb: SpreadsheetBook, sheetName: string): unknown[][] => {
   const ws = wb.Sheets[sheetName];
   if (!ws) return [];
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, {
-    header: 1,
+  const rows = sheetRows(ws, {
     range: 4, // skip 4 header rows
-    raw: true,
     defval: null,
     blankrows: false,
   });
@@ -118,11 +116,11 @@ export interface ConvertResult {
   warnings: string[];
 }
 
-export function convertGstr1Xlsx(
+export async function convertGstr1Xlsx(
   buffer: ArrayBuffer,
   opts: ConvertOptions,
-): ConvertResult {
-  const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+): Promise<ConvertResult> {
+  const wb = await readSpreadsheet(buffer, { cellDates: true });
   const warnings: string[] = [];
   const suppState = opts.gstin.slice(0, 2);
 

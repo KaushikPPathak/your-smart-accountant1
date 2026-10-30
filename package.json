@@ -76,7 +76,7 @@
     "date-fns": "^4.1.0",
     "dexie": "^4.4.2",
     "embla-carousel-react": "^8.6.0",
-    "exceljs": "^4.4.0",
+    "exceljs": "4.4.0",
     "fast-xml-parser": "^5.7.2",
     "fflate": "^0.8.2",
     "headroom-ai": "^0.22.4",
@@ -102,8 +102,6 @@
     "tw-animate-css": "^1.3.4",
     "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.0.2",
-    "xlsx": "^0.18.5",
-    "xlsx-js-style": "^1.2.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {

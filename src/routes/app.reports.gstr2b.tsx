@@ -391,7 +391,7 @@ function Gstr2BPage() {
           </div>
           <div className="space-y-1 md:col-span-2">
             <Label>Upload GSTR-2B (JSON · Excel · CSV)</Label>
-            <Input type="file" accept=".csv,.json,.xlsx,.xls" disabled={busy} onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
+            <Input type="file" accept=".csv,.json,.xlsx" disabled={busy} onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
           </div>
           <div className="text-xs flex items-end gap-2 flex-wrap">
             <Badge variant="default">{stats.matched} matched</Badge>

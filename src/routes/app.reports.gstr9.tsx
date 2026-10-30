@@ -1877,7 +1877,7 @@ function Gstr3bInputPanel({
     for (const file of fileArray) {
       try {
         const analysis =
-          analyseGstr3bExcelBuffer(
+          await analyseGstr3bExcelBuffer(
             await file.arrayBuffer(),
             {
               fileName: file.name,
@@ -2151,7 +2151,7 @@ function Gstr3bInputPanel({
               <input
                 type="file"
                 multiple
-                accept=".xls,.xlsx,.xlsm,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12"
+                accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12"
                 className="mt-3 block text-sm"
                 onChange={(event) => {
                   const files =
@@ -2825,7 +2825,7 @@ function Gstr1InputPanel({
       setExcelWarnings([]);
       setExcelSummary(null);
 
-      const analysis = analyseGstr1ExcelBuffer(await file.arrayBuffer(), {
+      const analysis = await analyseGstr1ExcelBuffer(await file.arrayBuffer(), {
         fileName: file.name,
         expectedFinancialYear: financialYear,
       });
@@ -2931,7 +2931,7 @@ function Gstr1InputPanel({
               </p>
               <input
                 type="file"
-                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="mt-3 block text-sm"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
@@ -3860,7 +3860,7 @@ function Gstr9PurchaseRegisterSource({
       const lower = file.name.toLowerCase();
       const parsed = lower.endsWith(".json")
         ? parseGstr9PurchaseRegisterJson(await file.text(), file.name)
-        : parseGstr9PurchaseRegisterExcel(await file.arrayBuffer(), file.name);
+        : await parseGstr9PurchaseRegisterExcel(await file.arrayBuffer(), file.name);
       if (!parsed.lines.length) throw new Error("No purchase-register rows were found in the selected file.");
       await saveImport(parsed);
     } catch (err) {
@@ -3883,7 +3883,7 @@ function Gstr9PurchaseRegisterSource({
           <label className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted/40">
             <Upload className="mr-2 h-4 w-4" />
             {busy ? "Importing…" : "Import Purchase Register Excel / JSON"}
-            <input type="file" accept=".xlsx,.xls,.xlsm,.json" className="hidden" disabled={busy} onChange={(event) => {
+            <input type="file" accept=".xlsx,.xlsm,.json" className="hidden" disabled={busy} onChange={(event) => {
               const file = event.target.files?.[0];
               event.currentTarget.value = "";
               if (file) void onFile(file);
