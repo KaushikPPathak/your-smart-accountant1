@@ -139,7 +139,7 @@ function useFilePicker(onAccept: (f: File) => void, disabled: boolean) {
     <Input
       ref={inputRef}
       type="file"
-      accept=".xml,.csv,.txt,.xlsx,.xls,.zip"
+      accept=".xml,.csv,.txt,.xlsx,.zip"
       disabled={disabled}
       onChange={(e) => pick(e.target.files?.[0] || null)}
     />

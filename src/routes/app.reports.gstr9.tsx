@@ -2151,7 +2151,7 @@ function Gstr3bInputPanel({
               <input
                 type="file"
                 multiple
-                accept=".xls,.xlsx,.xlsm,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12"
+                accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12"
                 className="mt-3 block text-sm"
                 onChange={(event) => {
                   const files =
@@ -2931,7 +2931,7 @@ function Gstr1InputPanel({
               </p>
               <input
                 type="file"
-                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="mt-3 block text-sm"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
@@ -3883,7 +3883,7 @@ function Gstr9PurchaseRegisterSource({
           <label className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted/40">
             <Upload className="mr-2 h-4 w-4" />
             {busy ? "Importing…" : "Import Purchase Register Excel / JSON"}
-            <input type="file" accept=".xlsx,.xls,.xlsm,.json" className="hidden" disabled={busy} onChange={(event) => {
+            <input type="file" accept=".xlsx,.xlsm,.json" className="hidden" disabled={busy} onChange={(event) => {
               const file = event.target.files?.[0];
               event.currentTarget.value = "";
               if (file) void onFile(file);

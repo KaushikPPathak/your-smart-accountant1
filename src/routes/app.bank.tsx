@@ -182,7 +182,7 @@ function BankRecPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Upload statement (CSV / XLSX)</Label>
-              <input ref={fileRef} type="file" accept=".csv,.xls,.xlsx,text/csv" disabled={!bankLedgerId}
+              <input ref={fileRef} type="file" accept=".csv,.xlsx,text/csv" disabled={!bankLedgerId}
                 onChange={(e) => e.target.files?.[0] && onFilePicked(e.target.files[0])}
                 className="block text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground" />
             </div>

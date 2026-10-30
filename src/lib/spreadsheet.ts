@@ -93,8 +93,17 @@ export async function readSpreadsheet(
   opts: ReadOptions = {},
 ): Promise<SpreadsheetBook> {
   const cellDates = opts.cellDates ?? false;
+  const buffer = toArrayBuffer(data);
+  // Legacy Excel 97-2003 files (.xls) start with the OLE2 signature D0 CF 11 E0.
+  // ExcelJS reads only .xlsx, so say what to do instead of failing obscurely.
+  const head = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
+  if (head.length === 4 && head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) {
+    throw new Error(
+      "This is an old Excel (.xls) file. In Excel, use File > Save As and choose Excel Workbook (.xlsx), then upload it again.",
+    );
+  }
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(toArrayBuffer(data) as Parameters<typeof wb.xlsx.load>[0]);
+  await wb.xlsx.load(buffer as Parameters<typeof wb.xlsx.load>[0]);
 
   const SheetNames: string[] = [];
   const Sheets: Record<string, SpreadsheetSheet> = {};
