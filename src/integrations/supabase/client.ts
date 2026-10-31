@@ -16,9 +16,21 @@ const offlineSession = {
   }
 };
 
+// Returned for any write or RPC in the offline build. A write that needs the
+// cloud must fail visibly; it must never look saved when nothing was stored.
+const OFFLINE_CLOUD_ERROR = {
+  message: "This feature needs the cloud and is not available offline.",
+  code: "OFFLINE_NO_CLOUD",
+  details: null,
+  hint: null,
+};
+
 // No-op proxy handler for when Supabase is not configured
 const noopHandler: ProxyHandler<any> = {
   get: (target, prop) => {
+    if (prop === 'rpc') {
+      return async () => ({ data: null, error: OFFLINE_CLOUD_ERROR });
+    }
     if (prop === 'auth') {
       return {
         // 1. Force the app to always see an active session on load
@@ -58,7 +70,11 @@ const noopHandler: ProxyHandler<any> = {
     }
     if (prop === 'from') {
       // Create a chainable query mock so .update().eq() works
-      const createQuery = () => {
+      // Reads resolve empty (local screens read Dexie). Writes resolve with an error.
+      const createQuery = (isWrite = false) => {
+        const empty = () => (isWrite
+          ? { data: null, error: OFFLINE_CLOUD_ERROR }
+          : { data: null, error: null });
         const query: any = {
           select: () => query,
           match: () => query,
@@ -86,30 +102,30 @@ const noopHandler: ProxyHandler<any> = {
           textSearch: () => query,
           filter: () => query,
           or: () => query,
-          single: () => Promise.resolve({ data: null, error: null }),
-          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          single: () => Promise.resolve(empty()),
+          maybeSingle: () => Promise.resolve(empty()),
           csv: () => query,
-          then: (resolve: any) => Promise.resolve({ data: null, error: null }).then(resolve),
+          then: (resolve: any, reject?: any) => Promise.resolve(empty()).then(resolve, reject),
         };
         return query;
       };
       return () => ({
-        select: createQuery,
-        insert: createQuery,
-        update: createQuery,
-        upsert: createQuery,
-        delete: createQuery,
+        select: () => createQuery(false),
+        insert: () => createQuery(true),
+        update: () => createQuery(true),
+        upsert: () => createQuery(true),
+        delete: () => createQuery(true),
       });
     }
     // Return a dummy function for everything else to avoid "not a function" crashes
     return () => ({
       from: () => ({
         select: () => ({ match: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }) }),
-        insert: () => Promise.resolve({ data: null, error: null }),
-        update: () => Promise.resolve({ data: null, error: null }),
-        delete: () => Promise.resolve({ data: null, error: null }),
+        insert: () => Promise.resolve({ data: null, error: OFFLINE_CLOUD_ERROR }),
+        update: () => Promise.resolve({ data: null, error: OFFLINE_CLOUD_ERROR }),
+        delete: () => Promise.resolve({ data: null, error: OFFLINE_CLOUD_ERROR }),
       }),
-      rpc: () => Promise.resolve({ data: null, error: null }),
+      rpc: () => Promise.resolve({ data: null, error: OFFLINE_CLOUD_ERROR }),
       channel: () => ({
         on: function() { return this; },
         subscribe: function() { return this; },
