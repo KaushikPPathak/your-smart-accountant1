@@ -283,3 +283,87 @@ describe("Tally stock items and import history", () => {
     expect((await listImportBatches(company))[0].status).toBe("running");
   });
 });
+
+describe("Tally vouchers fill the sales and purchase registers", () => {
+  beforeEach(async () => {
+    const db = await getDbInstance();
+    for (const t of ["cache_ledgers", "cache_items", "cache_vouchers", "cache_voucher_items", "cache_voucher_entries", "cache_import_batches"]) {
+      await (db as any)[t].clear();
+    }
+  });
+
+  it("writes party, item rows and the tax split for a sale", async () => {
+    const company = "co-reg";
+    const rows = await parseFileOrZip(new File([SAMPLE_SALE], "daybook.xml"));
+    const out = await classifyAndMap(rows);
+    await postLedgers(company, out.ledgers);
+    await postItems(company, out.items);
+    const res = await postVouchers(company, out.vouchers as VoucherRecord[]);
+    expect(res.failed).toEqual([]);
+
+    const db = await getDbInstance();
+    const sale = (await db.cache_vouchers.where("company_id").equals(company).toArray())
+      .find((v: any) => v.voucher_type === "sales");
+    const party = (await db.cache_ledgers.where("company_id").equals(company).toArray())
+      .find((l: any) => l.name === "NEELA SILK");
+    expect(sale).toMatchObject({
+      voucher_date: "2026-04-01",
+      party_ledger_id: party.id,
+      is_interstate: false,
+      subtotal_paise: 5677920,
+      cgst_paise: 511013,
+      sgst_paise: 511013,
+      igst_paise: 0,
+      round_off_paise: 54,
+      total_paise: 6700000,
+    });
+    const lines = await db.cache_voucher_items.where("voucher_id").equals(sale.id).toArray();
+    expect(lines).toHaveLength(1);
+    const item = (await db.cache_items.where("company_id").equals(company).toArray())[0];
+    expect(lines[0]).toMatchObject({ item_id: item.id, qty: 180, rate_paise: 31544, taxable_paise: 5677920, gst_rate: 18, cgst_paise: 511013, sgst_paise: 511013, igst_paise: 0 });
+  });
+
+  it("upgrades a voucher first written from a ledger statement, without duplicating it", async () => {
+    const company = "co-upgrade";
+    const rows = await parseFileOrZip(new File([SAMPLE_SALE], "daybook.xml"));
+    const out = await classifyAndMap(rows);
+    await postLedgers(company, out.ledgers);
+    await postItems(company, out.items);
+
+    // The earlier statement-style record: same number and date, total 67000, no items.
+    const statementStyle: VoucherRecord = {
+      vtype: "sales",
+      date: "2026-04-01",
+      voucher_no: "1/26-27",
+      party: "NEELA SILK",
+      total: 67000,
+      entries: [
+        { ledger: "NEELA SILK", debit: 67000, credit: 0 },
+        { ledger: "SALES GST", debit: 0, credit: 67000 },
+      ],
+    };
+    await postVouchers(company, [statementStyle]);
+    const db = await getDbInstance();
+    expect(await db.cache_vouchers.count()).toBe(1);
+    const before = (await db.cache_vouchers.toArray())[0];
+
+    const res = await postVouchers(company, out.vouchers as VoucherRecord[]);
+    expect(res.updated).toBe(1);   // the sale is upgraded in place
+    expect(res.created).toBe(1);   // the receipt is new
+    expect(res.failed).toEqual([]);
+
+    const sales = await db.cache_vouchers.where("company_id").equals(company).filter((v: any) => v.voucher_type === "sales").toArray();
+    expect(sales).toHaveLength(1);
+    expect(sales[0].id).toBe(before.id);
+    expect(sales[0]).toMatchObject({ cgst_paise: 511013, round_off_paise: 54, total_paise: 6700000 });
+    expect(sales[0].party_ledger_id).not.toBeNull();
+    expect(await db.cache_voucher_items.where("voucher_id").equals(before.id).count()).toBe(1);
+    expect(await db.cache_voucher_entries.where("voucher_id").equals(before.id).count()).toBe(5);
+
+    // A second run of the same file changes nothing.
+    const again = await postVouchers(company, out.vouchers as VoucherRecord[]);
+    expect(again.updated).toBe(0);
+    expect(again.created).toBe(0);
+    expect(again.skipped).toBe(2);
+  });
+});

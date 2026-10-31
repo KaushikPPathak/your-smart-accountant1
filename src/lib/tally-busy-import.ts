@@ -68,6 +68,20 @@ export interface VoucherRecord {
   original_voucher_id?: string;
   /** Two-sided postings, debit total equal to credit total. */
   entries?: VoucherEntry[];
+  /** Header tax figures in rupees (sales/purchase family). round_off is signed. */
+  header?: { subtotal: number; cgst: number; sgst: number; igst: number; round_off: number };
+  /** Stock lines in rupees, written as item rows of the voucher. */
+  items?: VoucherItemLine[];
+}
+
+export interface VoucherItemLine {
+  name: string;
+  qty: number;
+  rate: number;
+  /** Value before GST (rupees, positive). */
+  taxable: number;
+  gst_rate: number;
+  hsn?: string;
 }
 
 export interface ParsedRow { [key: string]: any }
@@ -199,6 +213,19 @@ export async function parseFileOrZip(file: File, _options?: unknown): Promise<Pa
 }
 
 export const UNMATCHED_LEDGER = "TALLY UNMATCHED ENTRIES";
+
+const ITEM_VOUCHER_TYPES = new Set<VoucherType>(["sales", "purchase", "credit_note", "debit_note"]);
+const round2 = (x: number) => Math.round(x * 100) / 100;
+
+/** Which tax head a ledger name belongs to, from its name. Null for other ledgers. */
+function taxKindOf(name: string): "cgst" | "sgst" | "igst" | "round" | null {
+  const n = name.toUpperCase();
+  if (/ROUND/.test(n)) return "round";
+  if (/IGST/.test(n)) return "igst";
+  if (/CGST/.test(n)) return "cgst";
+  if (/SGST|UTGST/.test(n)) return "sgst";
+  return null;
+}
 
 interface StatementEntry {
   owner: string;   // ledger whose statement lists this line
@@ -338,6 +365,28 @@ export async function classifyAndMap(
     }
     const total = Math.round(entries.reduce((sum, e) => sum + e.debit, 0) * 100) / 100;
     const vtype = mapTallyVoucherType(sv.vch_type);
+
+    // Tax and round-off ledgers, by name (CGST / SGST / UTGST / IGST / ROUND OFF).
+    const tax = { cgst: 0, sgst: 0, igst: 0, round: 0 };
+    for (const l of sv.lines) {
+      const kind = taxKindOf(l.ledger);
+      if (kind) tax[kind] += Math.abs(l.amount);
+    }
+    const stockLines = sv.items.filter((it) => cleanName(it.name));
+    const taxable = stockLines.reduce((sum, it) => sum + Math.abs(it.amount), 0);
+    const taxTotal = tax.cgst + tax.sgst + tax.igst;
+    let header: VoucherRecord["header"];
+    if (ITEM_VOUCHER_TYPES.has(vtype)) {
+      const subtotal = round2(stockLines.length > 0 ? taxable : total - taxTotal - tax.round);
+      header = {
+        subtotal,
+        cgst: round2(tax.cgst),
+        sgst: round2(tax.sgst),
+        igst: round2(tax.igst),
+        round_off: round2(total - subtotal - taxTotal),
+      };
+    }
+
     vouchers.push({
       vtype,
       date: sv.date,
@@ -346,6 +395,15 @@ export async function classifyAndMap(
       total,
       narration: sv.narration || undefined,
       entries,
+      header,
+      items: stockLines.map((it) => ({
+        name: cleanName(it.name),
+        qty: it.qty ?? 0,
+        rate: it.rate ?? 0,
+        taxable: Math.abs(it.amount),
+        gst_rate: it.gst_rate ?? 0,
+        hsn: it.hsn,
+      })),
     });
     for (const it of sv.items) {
       const name = cleanName(it.name);
@@ -503,9 +561,75 @@ export async function postItems(
 
 const VOUCHER_BATCH = 300;
 
+/** Rupees to paise, keeping the sign (used for the signed round-off). */
+const signedPaise = (rupees: number | undefined) => Math.round((rupees ?? 0) * 100);
+
+interface StoredVoucherMatch { id: string; total: number; hasItems: boolean; used: boolean }
+
+/** Header fields of a voucher, from the import (or the plain total when there is no tax breakdown). */
+function headerFieldsOf(v: VoucherRecord, debitPaise: number, partyId: string | null, stamp: string) {
+  const h = v.header;
+  if (!h) {
+    return {
+      party_ledger_id: partyId,
+      is_interstate: false,
+      subtotal_paise: debitPaise,
+      cgst_paise: 0, sgst_paise: 0, igst_paise: 0, round_off_paise: 0,
+      total_paise: debitPaise,
+      narration: v.narration ?? null,
+      updated_at: stamp,
+    };
+  }
+  return {
+    party_ledger_id: partyId,
+    is_interstate: h.igst > 0,
+    subtotal_paise: signedPaise(h.subtotal),
+    cgst_paise: signedPaise(h.cgst),
+    sgst_paise: signedPaise(h.sgst),
+    igst_paise: signedPaise(h.igst),
+    round_off_paise: signedPaise(h.round_off),
+    total_paise: debitPaise,
+    narration: v.narration ?? null,
+    updated_at: stamp,
+  };
+}
+
+/** Item rows of a voucher. GST is split on each line as the app does (half CGST + half SGST, or IGST). */
+function itemRowsOf(voucherId: string, companyId: string, v: VoucherRecord, itemIds: Map<string, string>, interstate: boolean, stamp: string) {
+  return (v.items ?? []).map((it, idx) => {
+    const taxable = Math.abs(signedPaise(it.taxable));
+    const rate = it.gst_rate || 0;
+    const half = Math.round((taxable * rate) / 200);
+    const full = Math.round((taxable * rate) / 100);
+    return {
+      id: newId(),
+      voucher_id: voucherId,
+      company_id: companyId,
+      item_id: itemIds.get(lc(it.name)) ?? null,
+      line_no: idx + 1,
+      description: it.name,
+      qty: it.qty || 0,
+      rate_paise: Math.abs(signedPaise(it.rate)),
+      discount_paise: 0,
+      amount_paise: taxable,
+      taxable_paise: taxable,
+      gst_rate: rate,
+      cgst_paise: interstate ? 0 : half,
+      sgst_paise: interstate ? 0 : half,
+      igst_paise: interstate ? full : 0,
+      updated_at: stamp,
+    };
+  });
+}
+
 /**
- * Write vouchers and their entries into the local cache. Vouchers whose type
- * and number already exist for the date are skipped. Vouchers whose ledgers
+ * Write vouchers and their entries into the local cache.
+ *
+ * A voucher is matched to a stored one by type, number and date. An exact total
+ * match is preferred. A stored voucher with no item rows (one written from a
+ * ledger-statement export) is upgraded in place when the incoming voucher has
+ * stock lines: its party, tax split, item rows and entries are replaced, and its
+ * id and import tag are kept. Any other match is skipped. Vouchers whose ledgers
  * are missing, or whose debits and credits differ, are reported as failed.
  */
 export async function postVouchers(
@@ -520,31 +644,41 @@ export async function postVouchers(
   const ledgerId = new Map<string, string>();
   for (const l of ledgerRows) if (!l.is_deleted) ledgerId.set(lc(l.name), l.id);
 
-  // Numbers repeat in Tally exports (several receipts can share a number on one
-  // day), so a voucher is only treated as already imported when type, number,
-  // date and amount all match a stored voucher. Matches are counted, so two
-  // identical stored vouchers allow two identical incoming vouchers.
-  const existingVouchers: Array<{ voucher_type: string; voucher_number: string; voucher_date: string; total_paise?: number; is_deleted?: boolean }> =
-    await db.cache_vouchers.where("company_id").equals(companyId).toArray();
-  const storedCount = new Map<string, number>();
+  const itemRows: Array<{ id: string; name: string; is_deleted?: boolean }> = await db.cache_items
+    .where("company_id").equals(companyId).toArray();
+  const itemIds = new Map<string, string>();
+  for (const it of itemRows) if (!it.is_deleted) itemIds.set(lc(it.name), it.id);
+
+  // Stored vouchers by type|number|date. Numbers repeat in Tally exports, so
+  // several can share a key; each incoming voucher takes one candidate.
+  const existingVouchers: any[] = await db.cache_vouchers.where("company_id").equals(companyId).toArray();
+  const itemsPerVoucher = new Map<string, number>();
+  for (const it of await db.cache_voucher_items.where("company_id").equals(companyId).toArray()) {
+    itemsPerVoucher.set(it.voucher_id, (itemsPerVoucher.get(it.voucher_id) ?? 0) + 1);
+  }
+  const stored = new Map<string, StoredVoucherMatch[]>();
   for (const v of existingVouchers) {
     if (v.is_deleted || !v.voucher_number) continue;
-    const k = `${v.voucher_type}|${v.voucher_number}|${v.voucher_date}|${v.total_paise ?? 0}`;
-    storedCount.set(k, (storedCount.get(k) ?? 0) + 1);
+    const k = `${v.voucher_type}|${v.voucher_number}|${v.voucher_date}`;
+    const list = stored.get(k) ?? [];
+    list.push({ id: v.id, total: v.total_paise ?? 0, hasItems: (itemsPerVoucher.get(v.id) ?? 0) > 0, used: false });
+    stored.set(k, list);
   }
 
   const result: PostResultEx = { created: 0, updated: 0, skipped: 0, failed: [] };
   const now = new Date().toISOString();
-  let pending: { vouchers: Record<string, unknown>[]; entries: Record<string, unknown>[] } = { vouchers: [], entries: [] };
+  let pending: { vouchers: Record<string, unknown>[]; entries: Record<string, unknown>[]; items: Record<string, unknown>[] } =
+    { vouchers: [], entries: [], items: [] };
 
   const flush = async () => {
     if (pending.vouchers.length === 0) return;
-    await db.transaction("rw", db.cache_vouchers, db.cache_voucher_entries, async () => {
+    await db.transaction("rw", db.cache_vouchers, db.cache_voucher_items, db.cache_voucher_entries, async () => {
       await db.cache_vouchers.bulkPut(pending.vouchers);
       await db.cache_voucher_entries.bulkPut(pending.entries);
+      if (pending.items.length > 0) await db.cache_voucher_items.bulkPut(pending.items);
     });
     result.created += pending.vouchers.length;
-    pending = { vouchers: [], entries: [] };
+    pending = { vouchers: [], entries: [], items: [] };
   };
 
   for (let i = 0; i < rows.length; i++) {
@@ -562,38 +696,64 @@ export async function postVouchers(
       result.failed.push({ name: label, reason: "Debits and credits differ" });
       continue;
     }
+    const partyId = v.party ? (ledgerId.get(lc(v.party)) ?? null) : null;
+    const hasItems = (v.items ?? []).length > 0;
+
     if (v.voucher_no) {
-      const k = `${v.vtype}|${v.voucher_no}|${v.date}|${debitPaise}`;
-      const left = storedCount.get(k) ?? 0;
-      if (left > 0) {
-        storedCount.set(k, left - 1);
-        result.skipped++;
+      const cands = (stored.get(`${v.vtype}|${v.voucher_no}|${v.date}`) ?? []).filter((c) => !c.used);
+      const pick = cands.find((c) => c.total === debitPaise)
+        ?? (hasItems ? cands.find((c) => !c.hasItems) : undefined);
+      if (pick) {
+        pick.used = true;
+        if (hasItems && !pick.hasItems) {
+          const interstate = (v.header?.igst ?? 0) > 0;
+          const entries = lines.map((l, idx) => ({
+            id: newId(),
+            voucher_id: pick.id,
+            company_id: companyId,
+            ledger_id: ledgerId.get(lc(l.ledger)),
+            debit_paise: paise(l.debit),
+            credit_paise: paise(l.credit),
+            narration: null,
+            line_no: idx + 1,
+            updated_at: now,
+          }));
+          const items = itemRowsOf(pick.id, companyId, v, itemIds, interstate, now);
+          await flush();
+          await db.transaction("rw", db.cache_vouchers, db.cache_voucher_items, db.cache_voucher_entries, async () => {
+            await db.cache_vouchers.update(pick.id, headerFieldsOf(v, debitPaise, partyId, now));
+            await db.cache_voucher_entries.where("voucher_id").equals(pick.id).delete();
+            await db.cache_voucher_items.where("voucher_id").equals(pick.id).delete();
+            await db.cache_voucher_entries.bulkPut(entries);
+            if (items.length > 0) await db.cache_voucher_items.bulkPut(items);
+          });
+          pick.hasItems = true;
+          result.updated++;
+        } else {
+          result.skipped++;
+        }
         continue;
       }
     }
 
     const voucherId = newId();
+    const interstate = (v.header?.igst ?? 0) > 0;
     pending.vouchers.push({
       id: voucherId,
       company_id: companyId,
       voucher_type: v.vtype,
       voucher_number: v.voucher_no || "",
       voucher_date: v.date,
-      party_ledger_id: null,
       reference_no: null,
-      narration: v.narration ?? null,
-      is_interstate: false,
-      subtotal_paise: debitPaise,
-      cgst_paise: 0,
-      sgst_paise: 0,
-      igst_paise: 0,
-      round_off_paise: 0,
-      total_paise: debitPaise,
+      place_of_supply_code: null,
+      itc_class: null,
+      itc_eligible: true,
+      supply_nature: "taxable",
+      ...headerFieldsOf(v, debitPaise, partyId, now),
       import_batch_id: batchId ?? null,
       is_deleted: false,
       is_synced: true,
       created_at: now,
-      updated_at: now,
     });
     lines.forEach((l, idx) => {
       pending.entries.push({
@@ -608,13 +768,14 @@ export async function postVouchers(
         updated_at: now,
       });
     });
+    pending.items.push(...itemRowsOf(voucherId, companyId, v, itemIds, interstate, now));
 
     if (pending.vouchers.length >= VOUCHER_BATCH) await flush();
   }
   await flush();
 
   if (onProgress) onProgress(rows.length, rows.length, "Vouchers saved");
-  if (result.created > 0) emitDataChange(companyId, "voucher");
+  if (result.created > 0 || result.updated > 0) emitDataChange(companyId, "voucher");
   return result;
 }
 
@@ -745,17 +906,19 @@ export async function deleteImportBatch(id: string): Promise<UndoResult> {
     .filter((i: any) => i.import_batch_id === id);
   const removableItems: string[] = [];
   for (const it of itemRows) {
-    const used = await db.cache_voucher_items.filter((x: any) => x.item_id === it.id).count();
+    const used = await db.cache_voucher_items
+      .filter((x: any) => x.item_id === it.id && !voucherSet.has(x.voucher_id)).count();
     if (used === 0) removableItems.push(it.id);
   }
 
   await db.transaction(
     "rw",
-    [db.cache_vouchers, db.cache_voucher_entries, db.cache_ledgers, db.cache_items, db.cache_import_batches],
+    [db.cache_vouchers, db.cache_voucher_entries, db.cache_voucher_items, db.cache_ledgers, db.cache_items, db.cache_import_batches],
     async () => {
       for (let i = 0; i < voucherIds.length; i += VOUCHER_BATCH) {
         const slice = voucherIds.slice(i, i + VOUCHER_BATCH);
         await db.cache_voucher_entries.where("voucher_id").anyOf(slice).delete();
+        await db.cache_voucher_items.where("voucher_id").anyOf(slice).delete();
       }
       await db.cache_vouchers.bulkDelete(voucherIds);
       await db.cache_ledgers.bulkDelete(removableLedgers);
