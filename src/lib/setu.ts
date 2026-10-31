@@ -115,8 +115,8 @@ async function invokeDirect(gstin: string): Promise<{ data: unknown; error?: str
       data: null,
       error:
         err instanceof Error && /fetch|network/i.test(err.message)
-          ? "No internet connection — GST verification needs to be online."
-          : "GST verification service unavailable.",
+          ? "Could not reach the GST verification service. Check the internet connection and try again. You can still open the GST portal manually."
+          : "GST verification service unavailable. You can still open the GST portal manually.",
     };
   }
 }

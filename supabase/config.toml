@@ -1,1 +1,5 @@
 project_id = "yzymutqvqwjeqnbygpgp"
+[functions.setu-gstin-proxy]
+# Called by the desktop app without a login. The function itself accepts only a
+# valid GSTIN and reads API Setu credentials from server secrets only.
+verify_jwt = false
