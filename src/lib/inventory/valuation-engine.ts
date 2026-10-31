@@ -1,7 +1,7 @@
 /**
  * Shared inventory processing and validation for vouchers.
  */
-import { supabase } from "@/integrations/supabase/client";
+import { getManualValuation } from "@/lib/offline/manual-valuation";
 
 
 export interface ItemMove {
@@ -142,15 +142,9 @@ export async function resolveInventoryValuation(
   voucherItems: any[]
 ): Promise<number> {
   // 1. Check for manual valuation override
-  const { data: manual, error } = await supabase
-    .from("inventory_manual_valuations")
-    .select("valuation_paise")
-    .eq("company_id", companyId)
-    .eq("as_of_date", asOfDate)
-    .maybeSingle();
-
-  if (!error && manual) {
-    return Number(manual.valuation_paise);
+  const manual = await getManualValuation(companyId, asOfDate);
+  if (manual !== null) {
+    return manual;
   }
 
   // 2. Fallback to WAC engine

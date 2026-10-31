@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatINR } from "@/lib/money";
-import { supabase } from "@/integrations/supabase/client";
+import { getManualValuation, setManualValuation, clearManualValuation } from "@/lib/offline/manual-valuation";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { InfoIcon, Calculator, Trash2 } from "lucide-react";
@@ -40,16 +40,9 @@ export function ManualValuationDialog({
 
   async function fetchExisting() {
     try {
-      const { data, error } = await supabase
-        .from("inventory_manual_valuations")
-        .select("valuation_paise")
-        .eq("company_id", companyId)
-        .eq("as_of_date", asOfDate)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (data) {
-        setValue((data.valuation_paise / 100).toString());
+      const existing = await getManualValuation(companyId, asOfDate);
+      if (existing !== null) {
+        setValue((existing / 100).toString());
         setExistingOverride(true);
       } else {
         setValue("");
@@ -70,19 +63,7 @@ export function ManualValuationDialog({
     setLoading(true);
     try {
       const valuation_paise = Math.round(amount * 100);
-      
-      const { error } = await supabase
-        .from("inventory_manual_valuations")
-        .upsert({
-          company_id: companyId,
-          as_of_date: asOfDate,
-          valuation_paise,
-          // Removed non-existent financial_year column
-        }, {
-          onConflict: "company_id,as_of_date"
-        });
-
-      if (error) throw error;
+      await setManualValuation(companyId, asOfDate, valuation_paise);
 
       toast.success("Manual valuation saved successfully");
       onSuccess();
@@ -98,13 +79,7 @@ export function ManualValuationDialog({
   async function handleClear() {
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from("inventory_manual_valuations")
-        .delete()
-        .eq("company_id", companyId)
-        .eq("as_of_date", asOfDate);
-
-      if (error) throw error;
+      await clearManualValuation(companyId, asOfDate);
 
       toast.success("Manual valuation cleared");
       setValue("");

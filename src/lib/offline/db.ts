@@ -79,6 +79,7 @@ class OfflineDatabase extends Dexie {
   cache_voucher_items!: Table<any, any>;
   cache_bill_allocations!: Table<any, any>;
   cache_import_batches!: Table<any, any>;
+  cache_manual_valuations!: Table<any, any>;
   cache_voucher_export_details!: Table<any, any>;
   cache_einvoice_details!: Table<any, any>;
   cache_period_locks!: Table<any, any>;
@@ -235,6 +236,12 @@ class OfflineDatabase extends Dexie {
         "[company_id+voucher_type+voucher_date], " +
         "[company_id+party_id+voucher_date], " +
         "import_batch_id",
+    });
+
+    // Manual closing/opening stock value per company and date. Kept local so the
+    // Trading, P&L, Balance Sheet and Stock Summary reports can read it.
+    this.version(15).stores({
+      cache_manual_valuations: "id, company_id, as_of_date, [company_id+as_of_date]",
     });
   }
 }

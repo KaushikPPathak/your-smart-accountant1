@@ -26,6 +26,7 @@ import { TaxAuditPanel } from "@/components/reports/TaxAuditPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { readLedgers, readItems, readVoucherItemsForCompany, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 import { calculateWac, type ItemMove } from "@/lib/inventory/valuation-engine";
+import { getManualValuation } from "@/lib/offline/manual-valuation";
 
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
@@ -131,13 +132,13 @@ function ProfitLoss() {
           totalClosingPaise += valClosing.closingValuePaise;
         }
 
-        const [{ data: manualOpening }, { data: manualClosing }] = await Promise.all([
-          supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", from).maybeSingle(),
-          supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", to).maybeSingle()
+        const [manualOpening, manualClosing] = await Promise.all([
+          getManualValuation(activeCompanyId, from),
+          getManualValuation(activeCompanyId, to),
         ]);
 
-        setOpeningStock(manualOpening ? Number(manualOpening.valuation_paise) : totalOpeningPaise);
-        setClosingStock(manualClosing ? Number(manualClosing.valuation_paise) : totalClosingPaise);
+        setOpeningStock(manualOpening !== null ? manualOpening : totalOpeningPaise);
+        setClosingStock(manualClosing !== null ? manualClosing : totalClosingPaise);
       } catch {
         setOpeningStock(0);
         setClosingStock(0);

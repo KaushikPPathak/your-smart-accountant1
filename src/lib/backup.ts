@@ -1,6 +1,7 @@
 // Backup & Restore utilities — JSON snapshot per-company or all-companies.
 // In Electron desktop builds, files are also written to C:\YourMehtaji\<Company>\backups\.
 import { supabase } from "@/integrations/supabase/client";
+import { listManualValuations, setManualValuation } from "@/lib/offline/manual-valuation";
 import { wrapBackup, isBackupEnvelope, verifyEnvelope } from "@/lib/backup-policy";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
@@ -117,15 +118,11 @@ async function buildCompanyBackupFromLocal(companyId: string): Promise<CompanyBa
     byCompany<Record<string, unknown>>(db.cache_cost_categories),
   ]);
 
-  // Manual stock valuations live in the cloud table only (approved
-  // company_id + as_of_date design). Best-effort: never fail a backup.
+  // Manual stock valuations are kept in the local database (company_id +
+  // as_of_date). Best-effort: never fail a backup.
   let inventory_manual_valuations: Record<string, unknown>[] = [];
   try {
-    const { data } = await supabase
-      .from("inventory_manual_valuations")
-      .select("*")
-      .eq("company_id", companyId);
-    inventory_manual_valuations = (data ?? []) as Record<string, unknown>[];
+    inventory_manual_valuations = await listManualValuations(companyId);
   } catch {
     inventory_manual_valuations = [];
   }
@@ -695,20 +692,16 @@ async function restoreCompanyBackupImpl(
     console.error("[restore] local cache mirror failed:", err);
   }
 
-  // Manual stock valuations (cloud-only table). Best-effort, non-fatal;
-  // re-keyed to the target company, keeping the approved
-  // (company_id, as_of_date) uniqueness.
+  // Manual stock valuations (local database). Best-effort, non-fatal;
+  // re-keyed to the target company, one value per (company_id, as_of_date).
   try {
     const rows = (backup.inventory_manual_valuations ?? []) as Record<string, unknown>[];
-    if (rows.length) {
-      const payload = rows.map((r) => {
-        const { id: _id, created_at: _c, updated_at: _u, company_id: _cid, ...rest } = r;
-        return { ...rest, company_id: targetCompanyId };
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await supabase.from("inventory_manual_valuations").upsert(payload as any, {
-        onConflict: "company_id,as_of_date",
-      });
+    for (const r of rows) {
+      const asOf = String(r.as_of_date ?? "");
+      const paise = Number(r.valuation_paise);
+      if (asOf && Number.isFinite(paise)) {
+        await setManualValuation(targetCompanyId, asOf, paise);
+      }
     }
   } catch (err) {
     console.warn("[restore] manual valuations restore skipped:", err);

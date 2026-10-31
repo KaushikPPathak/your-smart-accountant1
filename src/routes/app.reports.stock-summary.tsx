@@ -22,6 +22,7 @@ import {
   withCacheFallback,
 } from "@/lib/offline/cache-read";
 import { calculateWac, type ItemMove as WacMove } from "@/lib/inventory/valuation-engine";
+import { getManualValuation } from "@/lib/offline/manual-valuation";
 import { Button } from "@/components/ui/button";
 
 
@@ -179,9 +180,7 @@ function StockSummary() {
 
   const fetchManualValuation = useEffect(() => {
     if (!activeCompanyId) return;
-    supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", to).maybeSingle().then(({ data }: { data: any }) => {
-      setManualTotalValue(data ? Number(data.valuation_paise) : null);
-    });
+    getManualValuation(activeCompanyId, to).then((v) => setManualTotalValue(v));
   }, [activeCompanyId, to]);
 
   const financialYear = useMemo(() => {
@@ -340,9 +339,7 @@ function StockSummary() {
         onSuccess={() => {
           // Force refresh manual value state
           if (activeCompanyId) {
-            supabase.from("inventory_manual_valuations").select("valuation_paise").eq("company_id", activeCompanyId).eq("as_of_date", to).maybeSingle().then(({ data }: { data: any }) => {
-              setManualTotalValue(data ? Number(data.valuation_paise) : null);
-            });
+            getManualValuation(activeCompanyId, to).then((v) => setManualTotalValue(v));
           }
         }}
       />

@@ -1,6 +1,7 @@
 import { BS_ASSET, BS_LIAB, fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 import { readItems, readVoucherItemsForCompany, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 import { calculateWac, type ItemMove } from "@/lib/inventory/valuation-engine";
+import { getManualValuation } from "@/lib/offline/manual-valuation";
 import { supabase } from "@/integrations/supabase/client";
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -116,15 +117,10 @@ function BalanceSheet() {
         }
 
         // 2. Check for manual override which applies to the WHOLE company valuation
-        const { data: manual } = await supabase
-          .from("inventory_manual_valuations")
-          .select("valuation_paise")
-          .eq("company_id", activeCompanyId)
-          .eq("as_of_date", to)
-          .maybeSingle();
+        const manual = await getManualValuation(activeCompanyId, to);
 
-        if (manual) {
-          setInventoryValuation(Number(manual.valuation_paise));
+        if (manual !== null) {
+          setInventoryValuation(manual);
         } else {
           setInventoryValuation(wacValuationPaise);
         }
