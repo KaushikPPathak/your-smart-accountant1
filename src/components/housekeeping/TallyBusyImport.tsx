@@ -217,7 +217,7 @@ function CombinedImporter({ companyId, disabled }: Props) {
       setUnknownCount(out.unknown);
       toast.success(
         `Found ${lRows.length} ledgers, ${iRows.length} items, ${vRows.length} vouchers`
-        + (out.unknown ? ` (${out.unknown} unrecognized)` : ""),
+        + (out.unknown ? ` (${out.unknown} vouchers appear on one side only; the other side is in TALLY UNMATCHED ENTRIES)` : ""),
       );
     } catch (err) {
       const e = err as { message?: string };
