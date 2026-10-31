@@ -1,21 +1,28 @@
 // Tally / Busy import for the offline (local-only) build.
 //
-// Reads a Tally ledger-statement XML export (LVACCTITLE / DSPVCHDATE format,
-// 100 MB+ supported by streaming), turns it into ledgers and two-sided
-// vouchers, and writes them straight into the local Dexie cache, so they show
-// in every report. Nothing is sent to a server.
+// Reads Tally XML exports in two formats:
+//   - ledger-statement XML (LVACCTITLE / DSPVCHDATE), one block per account;
+//   - standard voucher XML (TALLYMESSAGE / VOUCHER), e.g. Day Book exports.
+// Both are streamed, so 100 MB+ files are read piece by piece. The result is
+// turned into ledgers, stock items and two-sided vouchers and written to the
+// local Dexie cache, so they show in every report. Nothing is sent to a server.
 //
-// Not covered yet: Busy files, CSV/Excel/ZIP inputs, the standard
-// <TALLYMESSAGE> voucher XML, stock items, and undo of an import.
+// Not covered yet: Busy files, CSV/Excel/ZIP inputs, stock-item master records
+// (STOCKITEM), and undo of an import.
 import { type Database } from "@/integrations/supabase/types";
 import { newId, getDbInstance } from "@/lib/utils/sys-utils";
 import { emitDataChange } from "@/lib/ai/cache-events";
+import { isDateInLockedPeriod } from "@/lib/offline/frozen-guard";
 import {
   guessGroupCode, defaultLedgerTypeForGroup, type AccountSide,
 } from "@/lib/account-groups";
 import {
-  parseDspStream, parseDspText, looksLikeDspExport, type DspBlock,
+  parseDspChunks, parseDspText, looksLikeDspExport, type DspBlock,
 } from "@/lib/tally/dsp-ledger-xml";
+import {
+  parseStandardVouchers, looksLikeStandardVoucherXml, type StdVoucher,
+} from "@/lib/tally/standard-voucher-xml";
+import { readHeadText, readTextChunks } from "@/lib/tally/xml-text";
 
 export type LedgerType = Database["public"]["Enums"]["ledger_type"];
 export type VoucherType = Database["public"]["Enums"]["voucher_type"];
@@ -138,8 +145,18 @@ const VOUCHER_TYPE_BY_TALLY: Record<string, VoucherType> = {
   "d/note": "debit_note", "debit note": "debit_note",
 };
 
+/** Tally voucher type text to a local voucher type. Handles "SALES GST", "Purchase", "Rcpt" and similar. */
 export function mapTallyVoucherType(text: string): VoucherType {
-  return VOUCHER_TYPE_BY_TALLY[lc(text)] ?? "journal";
+  const t = lc(text);
+  if (VOUCHER_TYPE_BY_TALLY[t]) return VOUCHER_TYPE_BY_TALLY[t];
+  if (/credit\s*note|c\/note/.test(t)) return "credit_note";
+  if (/debit\s*note|d\/note/.test(t)) return "debit_note";
+  if (/^sales?\b/.test(t)) return "sales";
+  if (/^purc/.test(t)) return "purchase";
+  if (/^rec/.test(t)) return "receipt";
+  if (/^pay|^pymt/.test(t)) return "payment";
+  if (/^contra/.test(t)) return "contra";
+  return "journal";
 }
 
 export function estimateBand(sizeBytes: number) {
@@ -149,28 +166,36 @@ export function estimateBand(sizeBytes: number) {
 }
 
 /**
- * Read the file. Tally ledger-statement XML is streamed block by block; each
- * account statement becomes one row. Other formats are not supported yet.
+ * Read a Tally XML file. Ledger statements are streamed block by block;
+ * standard voucher XML is streamed voucher by voucher. Both keep only one
+ * record in memory at a time while reading. Other formats are not supported yet.
  */
 export async function parseFileOrZip(file: File, _options?: unknown): Promise<ParsedRow[]> {
   const name = (file.name || "").toLowerCase();
   if (!name.endsWith(".xml")) {
     throw new Error(
-      "Only Tally XML is supported right now. Export the ledger / day book as XML (Tally: Display → Ledger Vouchers → Alt+E → XML).",
+      "Only Tally XML is supported right now. Export the ledger statement or the day book as XML (Tally: Display, then Alt+E, then XML).",
     );
   }
-  const head = await file.slice(0, 4096).text();
-  if (!looksLikeDspExport(head)) {
-    throw new Error(
-      "This XML is not a Tally ledger statement export (no <LVACCTITLE> blocks). Re-export it from Tally as XML (Ledger Vouchers).",
-    );
-  }
+  const head = await readHeadText(file);
   const rows: ParsedRow[] = [];
-  await parseDspStream(file.stream(), (block) => {
-    rows.push({ kind: "tally_block", block });
-  });
-  if (rows.length === 0) throw new Error("No ledger statements were found in this file.");
-  return rows;
+  if (looksLikeDspExport(head)) {
+    await parseDspChunks(readTextChunks(file), (block) => {
+      rows.push({ kind: "tally_block", block });
+    });
+    if (rows.length === 0) throw new Error("No ledger statements were found in this file.");
+    return rows;
+  }
+  if (looksLikeStandardVoucherXml(head)) {
+    await parseStandardVouchers(readTextChunks(file), (voucher: StdVoucher) => {
+      rows.push({ kind: "tally_voucher", voucher });
+    });
+    if (rows.length === 0) throw new Error("No vouchers were found in this file.");
+    return rows;
+  }
+  throw new Error(
+    "This XML is not a Tally export. Export a ledger statement or a day book / voucher register as XML from Tally.",
+  );
 }
 
 export const UNMATCHED_LEDGER = "TALLY UNMATCHED ENTRIES";
@@ -203,8 +228,9 @@ export async function classifyAndMap(
   rows: ParsedRow[],
   onProgress?: ProgressCb,
   _settings?: unknown,
-): Promise<{ ledgers: LedgerRecord[]; items: ItemRecord[]; vouchers: VoucherRecord[]; unknown: number }> {
-  const blocks: DspBlock[] = rows.map((r) => r.block as DspBlock);
+): Promise<{ ledgers: LedgerRecord[]; items: ItemRecord[]; vouchers: VoucherRecord[]; unknown: number; cancelled: number }> {
+  const blocks: DspBlock[] = rows.filter((r) => r.kind === "tally_block").map((r) => r.block as DspBlock);
+  const standard: StdVoucher[] = rows.filter((r) => r.kind === "tally_voucher").map((r) => r.voucher as StdVoucher);
   const ledgerNames = new Map<string, string>(); // key -> display name
   const openingRaw = new Map<string, number>();  // key -> opening, Tally sign (negative = debit)
   const statementKeys = new Set<string>();        // ledgers that have their own statement
@@ -294,6 +320,49 @@ export async function classifyAndMap(
     vouchers.push(toVoucher({ ledger: ownerName, side: line.side }, { ledger: UNMATCHED_LEDGER, side: opposite(line.side) }, line.magnitude, line));
   });
 
+  // 2b. Standard voucher XML. Each voucher already lists both sides (stock
+  // lines carry their sales/purchase ledger in ACCOUNTINGALLOCATIONS), so these
+  // need no pairing. Stock lines also give the item masters.
+  const itemMap = new Map<string, ItemRecord>();
+  let cancelled = 0;
+  for (const sv of standard) {
+    if (!sv.active) { cancelled++; continue; }
+    const entries: VoucherEntry[] = [];
+    for (const l of sv.lines) {
+      if (l.amount === 0 || !cleanName(l.ledger)) continue;
+      const key = remember(l.ledger);
+      entries.push({
+        ledger: ledgerNames.get(key) ?? cleanName(l.ledger),
+        ...debitCredit(l.amount < 0 ? "Dr" : "Cr", Math.abs(l.amount)),
+      });
+    }
+    const total = Math.round(entries.reduce((sum, e) => sum + e.debit, 0) * 100) / 100;
+    const vtype = mapTallyVoucherType(sv.vch_type);
+    vouchers.push({
+      vtype,
+      date: sv.date,
+      voucher_no: sv.number,
+      party: sv.party ? (ledgerNames.get(remember(sv.party)) ?? cleanName(sv.party)) : undefined,
+      total,
+      narration: sv.narration || undefined,
+      entries,
+    });
+    for (const it of sv.items) {
+      const name = cleanName(it.name);
+      if (!name) continue;
+      const key = lc(name);
+      let rec = itemMap.get(key);
+      if (!rec) { rec = { name }; itemMap.set(key, rec); }
+      if (!rec.unit && it.unit) rec.unit = it.unit;
+      if (!rec.hsn && it.hsn) rec.hsn = it.hsn;
+      if (rec.gst_rate === undefined && it.gst_rate !== undefined) rec.gst_rate = it.gst_rate;
+      if (it.rate !== undefined) {
+        if (vtype === "sales") rec.sale_price = it.rate;
+        else if (vtype === "purchase") rec.rate = it.rate;
+      }
+    }
+  }
+
   // 3. Movement per ledger across the vouchers.
   const netDebit = new Map<string, number>();
   for (const [key, raw] of openingRaw) netDebit.set(key, -raw);
@@ -330,7 +399,7 @@ export async function classifyAndMap(
     });
   }
 
-  return { ledgers, items: [], vouchers, unknown: unmatched };
+  return { ledgers, items: Array.from(itemMap.values()), vouchers, unknown: unmatched, cancelled };
 }
 
 /** Write ledgers into the local cache. Ledgers already present by name are skipped. */
@@ -338,7 +407,7 @@ export async function postLedgers(
   companyId: string,
   rows: LedgerRecord[],
   onProgress?: ProgressCb,
-  _batchId?: string,
+  batchId?: string | null,
 ): Promise<PostResultEx> {
   const db = await getDbInstance();
   const existing: Array<{ name: string; is_deleted?: boolean }> = await db.cache_ledgers
@@ -364,6 +433,7 @@ export async function postLedgers(
       subgroup_id: null,
       opening_balance_paise: paise(opening),
       opening_balance_is_debit: opening >= 0,
+      import_batch_id: batchId ?? null,
       is_deleted: false,
       is_synced: true,
       created_at: now,
@@ -378,14 +448,57 @@ export async function postLedgers(
   return result;
 }
 
+/**
+ * Write stock items into the local cache. Items already present by name are
+ * skipped (their stored values are not changed). Rate fields come from the
+ * vouchers: sale rate from sales lines, purchase rate from purchase lines.
+ * Opening stock is not in voucher exports, so it is written as zero.
+ */
 export async function postItems(
-  _companyId: string,
-  _rows: ItemRecord[],
-  _onProgress?: ProgressCb,
-  _batchId?: string,
+  companyId: string,
+  rows: ItemRecord[],
+  onProgress?: ProgressCb,
+  batchId?: string | null,
 ): Promise<PostResultEx> {
-  // Stock items are not imported from Ledger Vouchers exports yet.
-  return { created: 0, updated: 0, skipped: 0, failed: [] };
+  const db = await getDbInstance();
+  const existing: Array<{ name: string; is_deleted?: boolean }> = await db.cache_items
+    .where("company_id").equals(companyId).toArray();
+  const have = new Set(existing.filter((r) => !r.is_deleted).map((r) => lc(r.name)));
+  const result: PostResultEx = { created: 0, updated: 0, skipped: 0, failed: [] };
+  const now = new Date().toISOString();
+  const fresh: Record<string, unknown>[] = [];
+
+  rows.forEach((row, i) => {
+    if (onProgress && i % 200 === 0) onProgress(i, rows.length, "Saving items");
+    const name = cleanName(row.name);
+    if (!name) { result.failed.push({ name: "(blank)", reason: "Item name is empty" }); return; }
+    if (have.has(lc(name))) { result.skipped++; return; }
+    have.add(lc(name));
+    fresh.push({
+      id: newId(),
+      company_id: companyId,
+      name,
+      unit: cleanName(row.unit ?? "") || "NOS",
+      hsn_code: row.hsn ? cleanName(row.hsn) : null,
+      gst_rate: typeof row.gst_rate === "number" && Number.isFinite(row.gst_rate) ? row.gst_rate : 0,
+      is_active: true,
+      is_deleted: false,
+      opening_stock_qty: 0,
+      opening_stock_rate_paise: 0,
+      purchase_price_paise: paise(row.rate ?? 0),
+      sale_price_paise: paise(row.sale_price ?? 0),
+      reorder_level: 0,
+      import_batch_id: batchId ?? null,
+      created_at: now,
+      updated_at: now,
+    });
+  });
+
+  if (fresh.length > 0) await db.cache_items.bulkPut(fresh);
+  result.created = fresh.length;
+  if (onProgress) onProgress(rows.length, rows.length, "Items saved");
+  if (fresh.length > 0) emitDataChange(companyId, "item");
+  return result;
 }
 
 const VOUCHER_BATCH = 300;
@@ -399,7 +512,7 @@ export async function postVouchers(
   companyId: string,
   rows: VoucherRecord[],
   onProgress?: ProgressCb,
-  _batchId?: string,
+  batchId?: string | null,
 ): Promise<PostResultEx> {
   const db = await getDbInstance();
   const ledgerRows: Array<{ id: string; name: string; is_deleted?: boolean }> = await db.cache_ledgers
@@ -476,6 +589,7 @@ export async function postVouchers(
       igst_paise: 0,
       round_off_paise: 0,
       total_paise: debitPaise,
+      import_batch_id: batchId ?? null,
       is_deleted: false,
       is_synced: true,
       created_at: now,
@@ -504,12 +618,48 @@ export async function postVouchers(
   return result;
 }
 
-export async function createImportBatch(_companyId: string, _info: unknown): Promise<string> {
-  return newId();
+export interface ImportBatchInfo {
+  source?: string;
+  label?: string;
+  fileName?: string;
 }
 
-export async function finalizeImportBatch(_id: string, _summary: unknown): Promise<any> {
-  return {};
+/** Record that an import has started. Returns the batch id to tag its rows with. */
+export async function createImportBatch(companyId: string, info: ImportBatchInfo = {}): Promise<string> {
+  const db = await getDbInstance();
+  const id = newId();
+  await db.cache_import_batches.put({
+    id,
+    company_id: companyId,
+    created_at: new Date().toISOString(),
+    kind: "tally_xml",
+    source: info.source ?? "tally",
+    label: info.label ?? null,
+    file_name: info.fileName ?? null,
+    status: "running",
+    ledgers_created: 0,
+    items_created: 0,
+    vouchers_created: 0,
+    summary: null,
+  });
+  return id;
+}
+
+/** Store the counts for a finished import. A batch left "running" did not finish. */
+export async function finalizeImportBatch(
+  id: string | null,
+  summary: { ledgers?: number; items?: number; vouchers?: number },
+): Promise<void> {
+  if (!id) return;
+  const db = await getDbInstance();
+  const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : 0);
+  await db.cache_import_batches.update(id, {
+    status: "done",
+    ledgers_created: n(summary.ledgers),
+    items_created: n(summary.items),
+    vouchers_created: n(summary.vouchers),
+    summary,
+  });
 }
 
 export async function fetchLedgerMappings(_companyId: string): Promise<Map<string, LedgerMappingRow>> {
@@ -524,17 +674,140 @@ export function applyMappingsToLedgers(ledgers: LedgerRecord[], _mappings: Map<s
   return ledgers;
 }
 
-export async function listImportBatches(_companyId: string): Promise<ImportBatchRow[]> {
-  return [];
+/** Import history for a company, newest first. */
+export async function listImportBatches(companyId: string): Promise<ImportBatchRow[]> {
+  const db = await getDbInstance();
+  const rows: any[] = await db.cache_import_batches.where("company_id").equals(companyId).toArray();
+  rows.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  return rows.map((r) => ({
+    id: r.id,
+    company_id: r.company_id,
+    created_at: r.created_at,
+    kind: r.kind,
+    status: r.status,
+    summary: r.summary,
+    source: r.source,
+    label: r.label ?? undefined,
+    file_name: r.file_name ?? undefined,
+    ledgers_created: r.ledgers_created,
+    items_created: r.items_created,
+    vouchers_created: r.vouchers_created,
+  }));
 }
 
-export async function deleteImportBatch(_id: string): Promise<any> {
-  return {};
+export interface UndoResult {
+  vouchers: number;
+  ledgers: number;
+  items: number;
+  /** Ledgers from this import kept because other records still use them. */
+  ledgers_kept: number;
 }
 
-export async function bulkDeleteVouchers(_companyId: string, _type: VoucherType, _range?: unknown): Promise<any> {
-  // Undo of an import is not implemented yet.
-  return 0;
+/**
+ * Undo one import. Removes the vouchers (with their entries), and the ledgers
+ * and items the import created, unless other records still use them. All or
+ * nothing: if any voucher is in a locked period, nothing is removed.
+ */
+export async function deleteImportBatch(id: string): Promise<UndoResult> {
+  const db = await getDbInstance();
+  const batch = await db.cache_import_batches.get(id);
+  if (!batch) throw new Error("This import is no longer in the history.");
+  if (batch.status === "undone") throw new Error("This import has already been undone.");
+  const companyId: string = batch.company_id;
+
+  const vouchers: any[] = await db.cache_vouchers.where("import_batch_id").equals(id).toArray();
+  const lockedDates: string[] = [];
+  for (const v of vouchers) {
+    if (await isDateInLockedPeriod(companyId, v.voucher_date)) lockedDates.push(String(v.voucher_date).slice(0, 10));
+  }
+  if (lockedDates.length > 0) {
+    throw new Error(
+      `${lockedDates.length} voucher(s) fall in a locked period (first: ${lockedDates[0]}). Unlock the period before undoing this import. Nothing was removed.`,
+    );
+  }
+
+  const voucherIds = vouchers.map((v) => v.id as string);
+  const voucherSet = new Set(voucherIds);
+
+  // A ledger created by this import stays if an entry outside the import uses it.
+  const ledgerRows: any[] = (await db.cache_ledgers.where("company_id").equals(companyId).toArray())
+    .filter((l: any) => l.import_batch_id === id);
+  const removableLedgers: string[] = [];
+  let ledgersKept = 0;
+  for (const l of ledgerRows) {
+    const outside = await db.cache_voucher_entries.where("ledger_id").equals(l.id)
+      .filter((e: any) => !voucherSet.has(e.voucher_id)).count();
+    if (outside > 0) ledgersKept++; else removableLedgers.push(l.id);
+  }
+
+  // An item stays if a voucher line still refers to it.
+  const itemRows: any[] = (await db.cache_items.where("company_id").equals(companyId).toArray())
+    .filter((i: any) => i.import_batch_id === id);
+  const removableItems: string[] = [];
+  for (const it of itemRows) {
+    const used = await db.cache_voucher_items.filter((x: any) => x.item_id === it.id).count();
+    if (used === 0) removableItems.push(it.id);
+  }
+
+  await db.transaction(
+    "rw",
+    [db.cache_vouchers, db.cache_voucher_entries, db.cache_ledgers, db.cache_items, db.cache_import_batches],
+    async () => {
+      for (let i = 0; i < voucherIds.length; i += VOUCHER_BATCH) {
+        const slice = voucherIds.slice(i, i + VOUCHER_BATCH);
+        await db.cache_voucher_entries.where("voucher_id").anyOf(slice).delete();
+      }
+      await db.cache_vouchers.bulkDelete(voucherIds);
+      await db.cache_ledgers.bulkDelete(removableLedgers);
+      await db.cache_items.bulkDelete(removableItems);
+      await db.cache_import_batches.update(id, { status: "undone", undone_at: new Date().toISOString() });
+    },
+  );
+
+  if (voucherIds.length > 0) emitDataChange(companyId, "voucher");
+  if (removableLedgers.length > 0) emitDataChange(companyId, "ledger");
+  if (removableItems.length > 0) emitDataChange(companyId, "item");
+  return { vouchers: voucherIds.length, ledgers: removableLedgers.length, items: removableItems.length, ledgers_kept: ledgersKept };
+}
+
+/**
+ * Delete vouchers of one type within a date range (both ends optional).
+ * All or nothing: if any matching voucher is in a locked period, nothing is
+ * removed. Returns the number of vouchers deleted.
+ */
+export async function bulkDeleteVouchers(
+  companyId: string,
+  type: VoucherType,
+  range?: { from?: string; to?: string },
+): Promise<number> {
+  const db = await getDbInstance();
+  const from = range?.from ? range.from.slice(0, 10) : "";
+  const to = range?.to ? range.to.slice(0, 10) : "";
+  const vouchers: any[] = (await db.cache_vouchers.where("company_id").equals(companyId).toArray())
+    .filter((v: any) => {
+      if (v.voucher_type !== type) return false;
+      const d = String(v.voucher_date ?? "").slice(0, 10);
+      return (!from || d >= from) && (!to || d <= to);
+    });
+  const locked: string[] = [];
+  for (const v of vouchers) {
+    if (await isDateInLockedPeriod(companyId, v.voucher_date)) locked.push(String(v.voucher_date).slice(0, 10));
+  }
+  if (locked.length > 0) {
+    throw new Error(
+      `${locked.length} voucher(s) fall in a locked period (first: ${locked[0]}). Unlock the period before deleting. Nothing was deleted.`,
+    );
+  }
+  const ids = vouchers.map((v) => v.id as string);
+  if (ids.length === 0) return 0;
+  await db.transaction("rw", [db.cache_vouchers, db.cache_voucher_entries], async () => {
+    for (let i = 0; i < ids.length; i += VOUCHER_BATCH) {
+      await db.cache_voucher_entries.where("voucher_id").anyOf(ids.slice(i, i + VOUCHER_BATCH)).delete();
+    }
+    await db.cache_vouchers.bulkDelete(ids);
+  });
+  emitDataChange(companyId, "voucher");
+  return ids.length;
 }
 
 export function buildFuzzySuggestions(_ledgers: LedgerRecord[], _mappings: Map<string, LedgerMappingRow>, _threshold: number): FuzzySuggestion[] {

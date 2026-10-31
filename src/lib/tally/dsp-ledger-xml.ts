@@ -7,8 +7,10 @@
 // balance and every entry. The DR column is always <= 0 and the CR column is
 // always >= 0 in these exports.
 //
-// Pure module: no database, no DOM. Reads a stream in pieces so files well
-// over 100 MB never need to be held as one string.
+// Pure module: no database, no DOM. Reads text in pieces so files well over
+// 100 MB never need to be held as one string.
+
+import { decodeXmlText } from "@/lib/tally/xml-text";
 
 export interface DspEntry {
   /** Other side of the voucher as printed by Tally (DSPVCHLEDACCOUNT). */
@@ -52,15 +54,7 @@ export function parseVoucherNumber(text: string): string {
   return (m ? m[1] : text).trim();
 }
 
-function decodeEntities(s: string): string {
-  return s
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&amp;/g, "&");
-}
+const decodeEntities = decodeXmlText;
 
 const TAG_RE = /<(LVACCTITLE|DSPVCHDATE|DSPVCHLEDACCOUNT|DSPVCHTYPE|DSPVCHDRAMT|DSPVCHCRAMT|DSPEXPLVCHNUMBER)>([^<]*)<\/\1>/g;
 
@@ -120,13 +114,12 @@ const BLOCK_MARK = "<LVACCTITLE>";
 /**
  * Stream a Tally ledger-statement XML file block by block. Only one account
  * statement is held in memory at a time. Returns the number of blocks read.
+ * `chunks` is text (already decoded), so UTF-16 files work the same way.
  */
-export async function parseDspStream(
-  stream: ReadableStream<Uint8Array>,
+export async function parseDspChunks(
+  chunks: AsyncIterable<string>,
   onBlock: (block: DspBlock) => void,
 ): Promise<number> {
-  const decoder = new TextDecoder("utf-8");
-  const reader = stream.getReader();
   let buf = "";
   let count = 0;
 
@@ -138,10 +131,8 @@ export async function parseDspStream(
     }
   };
 
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
+  for await (const text of chunks) {
+    buf += text;
     // Everything before the last block marker is complete.
     const cut = buf.lastIndexOf(BLOCK_MARK);
     if (cut > 0) {
@@ -149,9 +140,26 @@ export async function parseDspStream(
       buf = buf.slice(cut);
     }
   }
-  buf += decoder.decode();
   emitComplete(buf);
   return count;
+}
+
+/** Same as parseDspChunks for a UTF-8 byte stream. */
+export async function parseDspStream(
+  stream: ReadableStream<Uint8Array>,
+  onBlock: (block: DspBlock) => void,
+): Promise<number> {
+  const decoder = new TextDecoder("utf-8");
+  async function* texts() {
+    const reader = stream.getReader();
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      yield decoder.decode(value, { stream: true });
+    }
+    yield decoder.decode();
+  }
+  return parseDspChunks(texts(), onBlock);
 }
 
 /** Parse a whole XML string (tests and small files). */

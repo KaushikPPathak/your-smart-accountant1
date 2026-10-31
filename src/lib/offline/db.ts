@@ -78,6 +78,7 @@ class OfflineDatabase extends Dexie {
   cache_voucher_entries!: Table<any, any>;
   cache_voucher_items!: Table<any, any>;
   cache_bill_allocations!: Table<any, any>;
+  cache_import_batches!: Table<any, any>;
   cache_voucher_export_details!: Table<any, any>;
   cache_einvoice_details!: Table<any, any>;
   cache_period_locks!: Table<any, any>;
@@ -222,6 +223,18 @@ class OfflineDatabase extends Dexie {
     this.version(13).stores({
       cache_gstr9_inputs:
         "id, company_id, financial_year, updated_at, [company_id+financial_year]",
+    });
+    // v14 — Import batches. Each XML import is recorded here and tags the
+    // ledgers, items and vouchers it creates (import_batch_id), so the import
+    // can be listed and undone as one unit.
+    this.version(14).stores({
+      cache_import_batches: "id, company_id, created_at, [company_id+created_at]",
+      cache_vouchers:
+        "id, company_id, updated_at, voucher_date, party_id, voucher_type, original_voucher_id, " +
+        "[company_id+voucher_date], " +
+        "[company_id+voucher_type+voucher_date], " +
+        "[company_id+party_id+voucher_date], " +
+        "import_batch_id",
     });
   }
 }

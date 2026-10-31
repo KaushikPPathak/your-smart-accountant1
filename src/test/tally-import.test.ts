@@ -75,7 +75,7 @@ describe("Tally import into local cache", () => {
   });
 
   it("rejects non-Tally XML and non-XML files", async () => {
-    await expect(parseFileOrZip(new File(["<a/>"], "x.xml"))).rejects.toThrow(/not a Tally ledger statement/);
+    await expect(parseFileOrZip(new File(["<a/>"], "x.xml"))).rejects.toThrow(/not a Tally export/);
     await expect(parseFileOrZip(new File(["a,b"], "x.csv"))).rejects.toThrow(/Only Tally XML/);
   });
 

@@ -54,6 +54,9 @@ async function loadOutboxIds(): Promise<Set<string>> {
 /** Invalidate the outbox cache — call after outbox writes if you need fresh reads. */
 export function invalidateFrozenCache(): void { outboxCache = null; }
 
+/** Forget cached period locks, so the next check reads them again. */
+export function invalidatePeriodLockCache(): void { lockCache = null; }
+
 let lockCache: { at: number; byCompany: Map<string, Array<{ start: string; end: string }>> } | null = null;
 const LOCK_TTL_MS = 15_000;
 
