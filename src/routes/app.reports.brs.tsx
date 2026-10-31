@@ -129,9 +129,18 @@ function BrsPage() {
 
   async function toggleClear(entry: Entry) {
     const newDate = entry.cleared_date ? null : asOf;
-    const { error } = await supabase.from("voucher_entries").update({ cleared_date: newDate }).eq("id", entry.id);
-    if (error) toast.error(error.message);
-    else { toast.success(newDate ? "Marked cleared" : "Marked uncleared"); load(); }
+    try {
+      // Local-only: the clearing date is stored on the entry in this PC's books.
+      const { offlineDb } = await import("@/lib/offline/db");
+      const updated = await offlineDb.cache_voucher_entries.update(entry.id, { cleared_date: newDate });
+      if (!updated) throw new Error("Entry not found on this PC");
+      const { emitDataChange } = await import("@/lib/ai/cache-events");
+      if (activeCompanyId) emitDataChange(activeCompanyId, "voucher");
+      toast.success(newDate ? "Marked cleared" : "Marked uncleared");
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update the entry");
+    }
   }
 
   return (
