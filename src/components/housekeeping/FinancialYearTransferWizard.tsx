@@ -27,7 +27,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { supabase } from "@/integrations/supabase/client";
+import { offlineDb as db } from "@/lib/offline/db";
+import {
+  computeCarryData,
+  buildTransferPreview,
+  applyTransferPreview,
+  extendFinancialYearLocal,
+  type TransferPreview,
+} from "@/lib/offline/fy-transfer";
 import { formatINR } from "@/lib/money";
 import { useCompany } from "@/lib/company-context";
 import { describeError } from "@/lib/error-message";
@@ -67,7 +74,6 @@ interface ItemRow {
   reorder_level: number;
 }
 
-const PL_TYPES = new Set(["expense_direct", "expense_indirect", "income_direct", "income_indirect"]);
 
 function fyFromHint(hint?: string | null) {
   const today = new Date();
@@ -109,6 +115,7 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
   const [newCompanyId, setNewCompanyId] = useState<string | null>(null);
   const [netProfitPaise, setNetProfitPaise] = useState<number>(0);
   const [newCompanyName, setNewCompanyName] = useState<string>("");
+  const [preview, setPreview] = useState<TransferPreview | null>(null);
 
   const primaryBtnRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => { primaryBtnRef.current?.focus(); }, [step]);
@@ -118,74 +125,34 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
     setNewCompanyName(`${baseName} — FY ${fy.nextLabel}`);
   }, [baseName, fy.nextLabel]);
 
+  // Live preview of what a split would add, change or remove (writes nothing).
+  useEffect(() => {
+    if (step !== 3 || mode !== "split" || !companyId) { setPreview(null); return; }
+    let cancelled = false;
+    buildTransferPreview({
+      sourceId: companyId,
+      fyEnd: fy.end,
+      nextFyStart: fy.nextStart,
+      nextName: newCompanyName.trim() || `${baseName} — FY ${fy.nextLabel}`,
+    })
+      .then((p) => { if (!cancelled) setPreview(p); })
+      .catch((e) => { if (!cancelled) toast.error(describeError(e) || "Preview failed"); });
+    return () => { cancelled = true; };
+  }, [step, mode, companyId, fy.end, fy.nextStart, fy.nextLabel, newCompanyName, baseName]);
+
   // ----- Pre-checks ----------------------------------------------------------
   const runChecks = async () => {
     if (!companyId) return;
     setChecking(true);
     try {
-      const [{ count: unrecon }, ledgersRes, entriesRes, itemsRes, movesRes] = await Promise.all([
-        supabase
-          .from("bank_statement_lines")
-          .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId)
-          .neq("match_status", "matched"),
-        supabase
-          .from("ledgers")
-          .select("id, name, type, opening_balance_paise, opening_balance_is_debit")
-          .eq("company_id", companyId)
-          .in("type", ["cash", "bank"]),
-        supabase
-          .from("voucher_entries")
-          .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-          .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null)
-          .lte("vouchers.voucher_date", fy.end),
-        supabase
-          .from("items")
-          .select("id, name, opening_stock_qty")
-          .eq("company_id", companyId),
-        supabase
-          .from("voucher_items")
-          .select("qty, item_id, vouchers!inner(voucher_type, voucher_date, company_id)")
-          .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null)
-          .lte("vouchers.voucher_date", fy.end),
-      ]);
-      setUnreconciled(unrecon ?? 0);
-
-      const cashLedgers = (ledgersRes.data ?? []) as LedgerRow[];
-      const ents = (entriesRes.data ?? []) as unknown as {
-        ledger_id: string; debit_paise: number; credit_paise: number;
-      }[];
-      const move = new Map<string, number>();
-      for (const e of ents) move.set(e.ledger_id, (move.get(e.ledger_id) ?? 0) + e.debit_paise - e.credit_paise);
-      const negCash: { name: string; paise: number }[] = [];
-      for (const l of cashLedgers) {
-        const op = (l.opening_balance_is_debit ? 1 : -1) * l.opening_balance_paise;
-        const closing = op + (move.get(l.id) ?? 0);
-        if (closing < 0) negCash.push({ name: l.name, paise: closing });
-      }
-      setNegativeCash(negCash);
-
-      const items = (itemsRes.data ?? []) as { id: string; name: string; opening_stock_qty: number }[];
-      const moves = (movesRes.data ?? []) as unknown as {
-        qty: number; item_id: string; vouchers: { voucher_type: string };
-      }[];
-      const isIn = (t: string) => t === "purchase" || t === "credit_note";
-      const isOut = (t: string) => t === "sales" || t === "debit_note";
-      const isMfg = (t: string) => t === "manufacturing";
-      const negStock: { name: string; qty: number }[] = [];
-      for (const it of items) {
-        let q = Number(it.opening_stock_qty) || 0;
-        for (const m of moves) {
-          if (m.item_id !== it.id) continue;
-          const t = m.vouchers.voucher_type;
-          const v = Number(m.qty);
-          if (isMfg(t)) q += v;
-          else if (isIn(t)) q += Math.abs(v);
-          else if (isOut(t)) q -= Math.abs(v);
-        }
-        if (q < 0) negStock.push({ name: it.name, qty: q });
-      }
-      setNegativeStock(negStock);
+      const unrecon = await db.cache_bank_statement_lines
+        .where("company_id").equals(companyId)
+        .filter((l: { match_status?: string }) => l.match_status !== "matched")
+        .count();
+      setUnreconciled(unrecon);
+      const d = await computeCarryData(companyId, fy.end);
+      setNegativeCash(d.cashNegatives);
+      setNegativeStock(d.negativeStock);
     } catch (e) {
       toast.error(describeError(e) || "Pre-check failed");
     } finally {
@@ -201,182 +168,25 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
   // ----- Execution -----------------------------------------------------------
   async function computeCarryForward() {
     if (!companyId) throw new Error("No company");
-    const [ledgersRes, entriesRes, itemsRes, movesRes] = await Promise.all([
-      supabase
-        .from("ledgers")
-        .select("id, name, type, opening_balance_paise, opening_balance_is_debit, group_code, state, state_code, gstin, gst_treatment")
-        .eq("company_id", companyId),
-      supabase
-        .from("voucher_entries")
-        .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")
-        .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null)
-        .lte("vouchers.voucher_date", fy.end),
-      supabase
-        .from("items")
-        .select("id, name, unit, hsn_code, gst_rate, opening_stock_qty, opening_stock_rate_paise, purchase_price_paise, sale_price_paise, reorder_level")
-        .eq("company_id", companyId),
-      supabase
-        .from("voucher_items")
-        .select("qty, rate_paise, item_id, vouchers!inner(voucher_type, voucher_date, company_id)")
-        .eq("vouchers.company_id", companyId).is("vouchers.deleted_at", null)
-        .lte("vouchers.voucher_date", fy.end),
-    ]);
-    if (ledgersRes.error) throw ledgersRes.error;
-    if (entriesRes.error) throw entriesRes.error;
-    if (itemsRes.error) throw itemsRes.error;
-    if (movesRes.error) throw movesRes.error;
-
-    const ledgers = (ledgersRes.data ?? []) as LedgerRow[];
-    const ents = (entriesRes.data ?? []) as unknown as { ledger_id: string; debit_paise: number; credit_paise: number }[];
-    const items = (itemsRes.data ?? []) as ItemRow[];
-    const moves = (movesRes.data ?? []) as unknown as {
-      qty: number; rate_paise: number; item_id: string; vouchers: { voucher_type: string };
-    }[];
-
-    const movement = new Map<string, number>();
-    for (const e of ents) movement.set(e.ledger_id, (movement.get(e.ledger_id) ?? 0) + e.debit_paise - e.credit_paise);
-
-    let np = 0; // Income - Expense
-    const carriedLedgers: { src: LedgerRow; opening: number }[] = [];
-    for (const l of ledgers) {
-      const op = (l.opening_balance_is_debit ? 1 : -1) * l.opening_balance_paise;
-      const closing = op + (movement.get(l.id) ?? 0);
-      if (PL_TYPES.has(l.type)) {
-        // income natural Cr (negative signed) reduces NP if Dr, raises NP if Cr
-        if (l.type.startsWith("income")) np += -closing; // closing negative means income → +
-        else np += -closing; // expense closing positive means expense → -, so subtract
-      } else {
-        carriedLedgers.push({ src: l, opening: closing });
-      }
-    }
-    setNetProfitPaise(np);
-
-    const isIn = (t: string) => t === "purchase" || t === "credit_note";
-    const isOut = (t: string) => t === "sales" || t === "debit_note";
-    const isMfg = (t: string) => t === "manufacturing";
-    const carriedItems: { src: ItemRow; qty: number; rate: number }[] = items.map((it) => {
-      let q = Number(it.opening_stock_qty) || 0;
-      let lastInRate = it.opening_stock_rate_paise;
-      for (const m of moves) {
-        if (m.item_id !== it.id) continue;
-        const t = m.vouchers.voucher_type;
-        const v = Number(m.qty);
-        if (isMfg(t)) { q += v; if (v > 0 && m.rate_paise) lastInRate = m.rate_paise; }
-        else if (isIn(t)) { q += Math.abs(v); if (m.rate_paise) lastInRate = m.rate_paise; }
-        else if (isOut(t)) { q -= Math.abs(v); }
-      }
-      return { src: it, qty: q, rate: lastInRate || it.purchase_price_paise };
-    });
-
-    return { carriedLedgers, carriedItems, netProfitPaise: np };
+    const d = await computeCarryData(companyId, fy.end);
+    return { netProfitPaise: d.netProfitPaise };
   }
 
   async function executeExtend() {
     if (!companyId) return;
-    // Just advance the FY pointer; history remains intact.
-    const { error } = await supabase
-      .from("companies")
-      .update({ financial_year_start: fy.nextStart })
-      .eq("id", companyId);
-    if (error) throw error;
+    await extendFinancialYearLocal(companyId, fy.nextStart);
   }
 
   async function executeSplit() {
     if (!companyId) throw new Error("No company");
-    const { carriedLedgers, carriedItems, netProfitPaise: np } = await computeCarryForward();
-
-    // 1. Clone company (admin membership auto-created by trigger handle_new_company)
-    const src = activeMembership?.companies;
-    if (!src) throw new Error("Active company not loaded");
-    const { data: sess } = await supabase.auth.getSession();
-    const uid = sess.session?.user?.id;
-    if (!uid) throw new Error("Not signed in");
-
-    const { data: newCo, error: ce } = await supabase
-      .from("companies")
-      .insert({
-        name: newCompanyName.trim() || `${baseName} — FY ${fy.nextLabel}`,
-        entity_status: src.entity_status,
-        cin: src.cin,
-        share_capital_paise: src.share_capital_paise,
-        corpus_fund_paise: src.corpus_fund_paise,
-        gstin: src.gstin,
-        state: src.state,
-        state_code: src.state_code,
-        financial_year_start: fy.nextStart,
-        gst_registered: src.gst_registered,
-        gst_filing_frequency: src.gst_filing_frequency,
-        inventory_enabled: src.inventory_enabled,
-        annual_turnover_paise: src.annual_turnover_paise,
-        mode: src.mode,
-        currency_code: src.currency_code ?? "INR",
-        date_format: src.date_format ?? "dd-mm-yyyy",
-        created_by: uid,
-      })
-      .select("id")
-      .single();
-    if (ce || !newCo) throw ce ?? new Error("Failed to create new company");
-    const nid = newCo.id;
+    const preview = await buildTransferPreview({
+      sourceId: companyId,
+      fyEnd: fy.end,
+      nextFyStart: fy.nextStart,
+      nextName: newCompanyName.trim() || `${baseName} — FY ${fy.nextLabel}`,
+    });
+    const nid = await applyTransferPreview(preview);
     setNewCompanyId(nid);
-
-    // 2. Insert carried ledgers (BS only). P&L ledgers seeded with 0 opening.
-    const ledgerRows = carriedLedgers.map(({ src: l, opening }) => ({
-      company_id: nid,
-      name: l.name,
-      type: l.type as LedgerRow["type"],
-      group_code: l.group_code,
-      state: l.state,
-      state_code: l.state_code,
-      gstin: l.gstin,
-      gst_treatment: l.gst_treatment as "regular",
-      opening_balance_paise: Math.abs(opening),
-      opening_balance_is_debit: opening >= 0,
-    }));
-
-    // Inject Retained Earnings / Profit & Loss A/c with NP as opening capital
-    if (np !== 0) {
-      ledgerRows.push({
-        company_id: nid,
-        name: "Profit & Loss A/c",
-        type: "capital",
-        group_code: "RESERVES_AND_SURPLUS",
-        state: null,
-        state_code: null,
-        gstin: null,
-        gst_treatment: "regular",
-        opening_balance_paise: Math.abs(np),
-        opening_balance_is_debit: np < 0, // profit (np>0) is Cr → is_debit=false
-      });
-    }
-
-    if (ledgerRows.length) {
-      // chunk insert to avoid payload limits
-      for (let i = 0; i < ledgerRows.length; i += 200) {
-        const { error } = await supabase.from("ledgers").insert(ledgerRows.slice(i, i + 200) as never);
-        if (error) throw error;
-      }
-    }
-
-    // 3. Insert carried items
-    const itemRows = carriedItems.map(({ src: it, qty, rate }) => ({
-      company_id: nid,
-      name: it.name,
-      unit: it.unit,
-      hsn_code: it.hsn_code,
-      gst_rate: it.gst_rate,
-      opening_stock_qty: qty,
-      opening_stock_rate_paise: rate,
-      purchase_price_paise: it.purchase_price_paise,
-      sale_price_paise: it.sale_price_paise,
-      reorder_level: it.reorder_level,
-    }));
-    if (itemRows.length) {
-      for (let i = 0; i < itemRows.length; i += 200) {
-        const { error } = await supabase.from("items").insert(itemRows.slice(i, i + 200));
-        if (error) throw error;
-      }
-    }
-
     return nid;
   }
 
@@ -513,6 +323,37 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
                   <li>• Inventory → closing qty &amp; valuation become opening stock</li>
                 </ul>
               </div>
+              {mode === "split" && preview && (
+                <div className="rounded-lg border p-4 text-sm space-y-2">
+                  <div className="font-medium">
+                    {preview.targetId ? "Refresh the next-year company (already created)" : "Create the next-year company"}
+                  </div>
+                  <p className="text-muted-foreground">
+                    Carried opening balances are replaced. Ledgers and items you added in the new year are kept.
+                  </p>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li>• Ledgers: {preview.ledgers.add.length} to add, {preview.ledgers.change.length} to update, {preview.ledgers.remove.length} to remove{preview.ledgers.keptInUse.length ? `, ${preview.ledgers.keptInUse.length} kept (used in new-year vouchers)` : ""}</li>
+                    <li>• Items: {preview.items.add.length} to add, {preview.items.change.length} to update, {preview.items.remove.length} to remove{preview.items.keptInUse.length ? `, ${preview.items.keptInUse.length} kept (used in new-year vouchers)` : ""}</li>
+                    <li>• Net {preview.netProfitPaise >= 0 ? "profit" : "loss"} to Profit &amp; Loss A/c: <strong>{formatINR(Math.abs(preview.netProfitPaise))}</strong></li>
+                  </ul>
+                  {[...preview.ledgers.handEdited, ...preview.items.handEdited].length > 0 && (
+                    <div className="text-amber-700">
+                      Changed by hand in the new year, will be replaced with the past-year figure: {[...preview.ledgers.handEdited, ...preview.items.handEdited].slice(0, 25).join(", ")}
+                    </div>
+                  )}
+                  {[...preview.ledgers.clashes, ...preview.items.clashes].length > 0 && (
+                    <div className="text-amber-700">
+                      Same name already exists as a new-year row, so not carried: {[...preview.ledgers.clashes, ...preview.items.clashes].slice(0, 25).join(", ")}
+                    </div>
+                  )}
+                  {preview.cashNegatives.length > 0 && (
+                    <div className="text-amber-700">Negative cash/bank at year end: {preview.cashNegatives.map((c) => c.name).slice(0, 10).join(", ")}</div>
+                  )}
+                  {preview.negativeStock.length > 0 && (
+                    <div className="text-amber-700">Negative stock at year end: {preview.negativeStock.map((s) => s.name).slice(0, 10).join(", ")}</div>
+                  )}
+                </div>
+              )}
               {mode === "split" && (
                 <div className="space-y-1.5">
                   <Label htmlFor="newco">New company name</Label>
