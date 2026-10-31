@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, RefreshCw } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { offlineDb } from "@/lib/offline/db";
 import { useCompany } from "@/lib/company-context";
 import { toast } from "sonner";
 
@@ -28,16 +28,25 @@ function RecurringPage() {
   async function load() {
     if (!activeCompanyId) return;
     setLoading(true);
-    const { data } = await supabase.from("recurring_invoices")
-      .select("id, name, voucher_type, frequency, next_run_date, end_date, is_active, last_generated_at")
-      .eq("company_id", activeCompanyId).order("next_run_date");
-    setRows((data || []) as RecurRow[]);
+    // Local-only: templates live in this PC's books.
+    const all: any[] = await offlineDb.cache_recurring_invoices.where("company_id").equals(activeCompanyId).toArray();
+    const list = all
+      .filter((r) => !r.deleted_at)
+      .map((r) => ({
+        id: String(r.id), name: String(r.name ?? ""), voucher_type: String(r.voucher_type ?? ""),
+        frequency: String(r.frequency ?? ""), next_run_date: String(r.next_run_date ?? ""),
+        end_date: r.end_date ?? null, is_active: Boolean(r.is_active),
+        last_generated_at: r.last_generated_at ?? null,
+      }))
+      .sort((a, b) => a.next_run_date.localeCompare(b.next_run_date));
+    setRows(list as RecurRow[]);
     setLoading(false);
   }
   useEffect(() => { load(); }, [activeCompanyId]);
 
   async function toggleActive(id: string, current: boolean) {
-    await supabase.from("recurring_invoices").update({ is_active: !current }).eq("id", id);
+    const n = await offlineDb.cache_recurring_invoices.update(id, { is_active: !current, updated_at: new Date().toISOString() });
+    if (!n) { toast.error("Template not found on this PC"); return; }
     toast.success(current ? "Paused" : "Resumed");
     load();
   }
