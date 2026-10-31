@@ -1,6 +1,7 @@
 // GST verification client — API Setu (apisetu.gov.in) GSTN Tax Payer API V2.
-// All API Setu credentials stay server-side in Lovable Cloud Secrets.
-import { CLOUD_AUTH_ENABLED } from "./app-mode";
+// API Setu credentials never reach the app. They live only in the server-side
+// proxy (supabase/functions/setu-gstin-proxy) as environment secrets. The app
+// sends only the GSTIN to that proxy. Books, vouchers and backups stay on this PC.
 
 export interface SetuCreds {
   clientId: string;
@@ -78,37 +79,30 @@ function compactAddress(value: unknown): string | undefined {
   );
 }
 
-// The GSTIN lookup is one of the few features that legitimately needs the
-// internet (the government register lives online). In local-only / desktop
-// builds the Supabase client is a no-op stub, so we call the verification
-// endpoint directly over HTTPS with the publishable key. No business data
-// leaves the device — only the GSTIN being checked.
+// The GSTIN lookup is the only feature that needs the internet (the government
+// register lives online). It runs only when VITE_GSTIN_PROXY_URL is set at build
+// time, pointing at the hosted setu-gstin-proxy function. If it is not set, the
+// lookup is off and the user enters GSTIN details by hand. Only the GSTIN is sent.
 
-function endpointBase(): { url: string; key: string } {
-  const env = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
-  const url = env.VITE_SUPABASE_URL ?? "";
-  const key = env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
-  return { url: url.replace(/\/+$/, ""), key };
-}
+export const GSTIN_LOOKUP_NOTICE =
+  "Only the GSTIN is sent to the GST verification service. Your books stay on this PC.";
 
 const GSTIN_OFFLINE_MESSAGE =
-  "Online GSTIN check is turned off in this offline build. Enter the GSTIN details yourself.";
+  "Online GSTIN check is not set up in this build. Enter the GSTIN details yourself.";
 
-/** Direct HTTPS call to the GSTIN verification endpoint (no Supabase client needed). */
+function proxyUrl(): string {
+  const env = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
+  return (env.VITE_GSTIN_PROXY_URL ?? "").trim().replace(/\/+$/, "");
+}
+
+/** Sends only { gstin } to the hosted proxy. */
 async function invokeDirect(gstin: string): Promise<{ data: unknown; error?: string }> {
-  // Offline build: no call leaves the device. The check runs only when the
-  // user asks for it, and it is off unless cloud is enabled in app-mode.ts.
-  if (!CLOUD_AUTH_ENABLED) return { data: null, error: GSTIN_OFFLINE_MESSAGE };
-  const { url, key } = endpointBase();
-  if (!url || !key) return { data: null, error: GSTIN_OFFLINE_MESSAGE };
+  const url = proxyUrl();
+  if (!url) return { data: null, error: GSTIN_OFFLINE_MESSAGE };
   try {
-    const res = await fetch(`${url}/functions/v1/setu-gstin-proxy`, {
+    const res = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ gstin }),
     });
     const json = await res.json().catch(() => null);
@@ -128,8 +122,8 @@ async function invokeDirect(gstin: string): Promise<{ data: unknown; error?: str
 }
 
 /**
- * Verify a GSTIN via the Lovable Cloud API Setu proxy.
- * The desktop/browser client never receives API Setu credentials.
+ * Verify a GSTIN via the hosted API Setu proxy. Only the GSTIN is sent.
+ * This app never receives API Setu credentials.
  */
 export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult> {
   const cleanGstin = (gstin || "").trim().toUpperCase();
@@ -145,28 +139,9 @@ export async function lookupGstinViaSetu(gstin: string): Promise<SetuGstinResult
   if (!cleanGstin) return { ...empty, error: "GSTIN is required" };
 
   try {
-    const { supabase } = await import("@/integrations/supabase/client");
-
-    let data: any = null;
-    let errMessage: string | null = null;
-
-    try {
-      const res = await supabase.functions.invoke("setu-gstin-proxy", {
-        body: { gstin: cleanGstin },
-      });
-      data = res.data;
-      errMessage = res.error?.message ?? null;
-    } catch (e) {
-      errMessage = e instanceof Error ? e.message : "invoke failed";
-    }
-
-    // Local-only / desktop builds stub out the cloud client — go direct.
-    if (!data || errMessage) {
-      const direct = await invokeDirect(cleanGstin);
-      if (direct.error && !direct.data) return { ...empty, error: direct.error };
-      data = direct.data;
-      errMessage = null;
-    }
+    const direct = await invokeDirect(cleanGstin);
+    if (direct.error && !direct.data) return { ...empty, error: direct.error };
+    const data: any = direct.data;
 
     const payload = data?.json ?? data;
 
