@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, FileScan, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { commitStatement, listLines, loadVoucherCandidates } from "@/lib/bank/local-store";
+import type { ParsedBankLine } from "@/lib/bank/parse-client";
 import { extractTextFromFile, type OcrProgress } from "@/lib/ocr";
 import { parseStatementText, extractTradeRefs, type ExtractedTxn } from "@/lib/statement-parse";
 
@@ -74,14 +75,9 @@ export function BankOcrImportDialog({
       const maxD = dates[dates.length - 1];
       const dupKeys = new Set<string>();
       if (minD && maxD) {
-        const { data } = await supabase
-          .from("bank_statement_lines")
-          .select("txn_date, debit_paise, credit_paise, reference, bank_statements!inner(bank_ledger_id)")
-          .eq("company_id", companyId)
-          .eq("bank_statements.bank_ledger_id", bankLedgerId)
-          .gte("txn_date", minD)
-          .lte("txn_date", maxD);
-        for (const r of (data || []) as { txn_date: string; debit_paise: number; credit_paise: number; reference: string | null }[]) {
+        const existing = await listLines(companyId, bankLedgerId);
+        for (const r of existing) {
+          if (r.txn_date < minD || r.txn_date > maxD) continue;
           dupKeys.add(`${r.txn_date}|${r.debit_paise}|${r.credit_paise}|${(r.reference || "").trim()}`);
         }
       }
@@ -122,35 +118,16 @@ export function BankOcrImportDialog({
     if (!selected.length) { toast.error("No rows selected"); return; }
     setPosting(true);
     try {
-      const dates = selected.map((r) => r.txn_date).sort();
-      const { data: stmt, error: e1 } = await supabase
-        .from("bank_statements")
-        .insert({
-          company_id: companyId,
-          bank_ledger_id: bankLedgerId,
-          file_name: file?.name || "ocr-import.pdf",
-          from_date: dates[0],
-          to_date: dates[dates.length - 1],
-          total_lines: selected.length,
-          imported_by: userId,
-        })
-        .select("id")
-        .single();
-      if (e1 || !stmt) throw e1 || new Error("Failed to create statement");
-
-      const lineRows = selected.map((r) => ({
-        statement_id: stmt.id,
-        company_id: companyId,
+      const parsed: ParsedBankLine[] = selected.map((r) => ({
         txn_date: r.txn_date,
         description: r.description.slice(0, 500),
-        reference: r.reference || null,
+        reference: r.reference || "",
         debit_paise: Math.round(r.debit * 100),
         credit_paise: Math.round(r.credit * 100),
         balance_paise: r.balance != null ? Math.round(r.balance * 100) : null,
-        match_status: "unmatched",
       }));
-      const { error: e2 } = await supabase.from("bank_statement_lines").insert(lineRows);
-      if (e2) throw e2;
+      const candidates = await loadVoucherCandidates(companyId, bankLedgerId);
+      await commitStatement(companyId, bankLedgerId, file?.name || "ocr-import.pdf", parsed, candidates);
       toast.success(`Posted ${selected.length} bank lines`);
       onPosted();
       onOpenChange(false);
