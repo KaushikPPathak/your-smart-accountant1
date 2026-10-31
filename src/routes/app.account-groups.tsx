@@ -11,7 +11,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { ACCOUNT_GROUPS, GROUP_BY_CODE, type AccountSection } from "@/lib/account-groups";
 import { useAccountGroups, resolveGroupLabel, subgroupsFor, type Subgroup } from "@/lib/account-groups-runtime";
 import { useCompany } from "@/lib/company-context";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  addSubgroupLocal, renameSubgroupLocal, deleteSubgroupLocal, setOverrideLocal, removeOverrideLocal,
+} from "@/lib/offline/account-groups-local";
 
 export const Route = createFileRoute("/app/account-groups")({
   head: () => ({ meta: [{ title: "Group Manager — Your Mehtaji" }] }),
@@ -45,15 +47,13 @@ function GroupManagerPage() {
     const builtin = GROUP_BY_CODE[renameOpen]?.label;
     const label = renameValue.trim();
     if (!label) { toast.error("Label is required"); return; }
-    if (label === builtin) {
-      // remove override
-      await supabase.from("account_group_overrides").delete()
-        .eq("company_id", activeCompanyId).eq("group_code", renameOpen);
-    } else {
-      const { error } = await supabase.from("account_group_overrides")
-        .upsert({ company_id: activeCompanyId, group_code: renameOpen, label }, { onConflict: "company_id,group_code" });
-      if (error) { toast.error(error.message); return; }
-    }
+    try {
+      if (label === builtin) {
+        await removeOverrideLocal(activeCompanyId, renameOpen);
+      } else {
+        await setOverrideLocal(activeCompanyId, renameOpen, label);
+      }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Could not save"); return; }
     toast.success("Label updated");
     setRenameOpen(null);
     reload();
@@ -61,8 +61,7 @@ function GroupManagerPage() {
 
   const resetLabel = async (code: string) => {
     if (!activeCompanyId) return;
-    await supabase.from("account_group_overrides").delete()
-      .eq("company_id", activeCompanyId).eq("group_code", code);
+    await removeOverrideLocal(activeCompanyId, code);
     toast.success("Reset to default");
     reload();
   };
@@ -74,16 +73,13 @@ function GroupManagerPage() {
     if (!activeCompanyId || !subOpen) return;
     const name = subName.trim();
     if (!name) { toast.error("Name required"); return; }
-    if (subOpen.edit) {
-      const { error } = await supabase.from("account_subgroups")
-        .update({ name }).eq("id", subOpen.edit.id);
-      if (error) { toast.error(error.message); return; }
-    } else {
-      const { error } = await supabase.from("account_subgroups").insert({
-        company_id: activeCompanyId, parent_group_code: subOpen.parent, name,
-      });
-      if (error) { toast.error(error.message); return; }
-    }
+    try {
+      if (subOpen.edit) {
+        await renameSubgroupLocal(subOpen.edit.id, name);
+      } else {
+        await addSubgroupLocal(activeCompanyId, subOpen.parent, name);
+      }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Could not save"); return; }
     toast.success("Saved");
     setSubOpen(null);
     reload();
@@ -91,10 +87,9 @@ function GroupManagerPage() {
 
   const deleteSub = async (sg: Subgroup) => {
     if (!confirm(`Delete sub-group "${sg.name}"? Ledgers tagged to it will revert to the parent group.`)) return;
-    const { error } = await supabase.from("account_subgroups")
-      .update({ deleted_at: new Date().toISOString() } as never)
-      .eq("id", sg.id);
-    if (error) { toast.error(error.message); return; }
+    try {
+      await deleteSubgroupLocal(sg.id);
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Could not delete"); return; }
     toast.success("Deleted");
     reload();
   };

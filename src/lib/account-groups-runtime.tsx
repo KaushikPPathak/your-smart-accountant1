@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { listSubgroupsLocal, listOverridesLocal } from "@/lib/offline/account-groups-local";
 import { useCompany } from "@/lib/company-context";
 import { GROUP_BY_CODE, groupLabel as builtinLabel } from "@/lib/account-groups";
 
@@ -34,13 +34,10 @@ export function AccountGroupsProvider({ children }: { children: ReactNode }) {
       setSubgroups([]); setOverrides({}); return;
     }
     setLoading(true);
-    Promise.all([
-      supabase.from("account_subgroups").select("id, parent_group_code, name").eq("company_id", activeCompanyId).order("name"),
-      supabase.from("account_group_overrides").select("group_code, label").eq("company_id", activeCompanyId),
-    ]).then(([sg, ov]) => {
-      setSubgroups((sg.data || []) as Subgroup[]);
+    Promise.all([listSubgroupsLocal(activeCompanyId), listOverridesLocal(activeCompanyId)]).then(([sg, ov]) => {
+      setSubgroups(sg as Subgroup[]);
       const map: Record<string, string> = {};
-      for (const r of (ov.data || []) as GroupOverride[]) map[r.group_code] = r.label;
+      for (const r of ov as GroupOverride[]) map[r.group_code] = r.label;
       setOverrides(map);
       setLoading(false);
     });

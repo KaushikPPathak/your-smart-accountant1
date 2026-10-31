@@ -243,6 +243,12 @@ class OfflineDatabase extends Dexie {
     this.version(15).stores({
       cache_manual_valuations: "id, company_id, as_of_date, [company_id+as_of_date]",
     });
+
+    // Group Manager: custom sub-groups and renamed group labels, per company.
+    this.version(16).stores({
+      cache_account_subgroups: "id, company_id, parent_group_code, [company_id+parent_group_code]",
+      cache_account_group_overrides: "id, company_id, group_code, [company_id+group_code]",
+    });
   }
 }
 
