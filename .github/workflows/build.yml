@@ -44,6 +44,8 @@ jobs:
           echo "version=$v" >> $env:GITHUB_OUTPUT
 
       - name: Build Tauri (NSIS .exe + WiX .msi)
+        env:
+          VITE_GSTIN_PROXY_URL: ${{ vars.VITE_GSTIN_PROXY_URL }}
         run: bunx tauri build --bundles nsis msi
 
       - name: Sign installers (self-signed)
