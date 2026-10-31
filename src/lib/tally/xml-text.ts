@@ -73,3 +73,48 @@ export async function readHeadText(file: Blob, bytes = 8192): Promise<string> {
   const raw = new Uint8Array(await file.slice(0, bytes).arrayBuffer());
   return stripInvalidXmlChars(new TextDecoder(encoding).decode(raw));
 }
+
+/**
+ * Stream whole Tally records of the given element types (for example VOUCHER,
+ * LEDGER, STOCKITEM, GROUP) from text chunks. onElement gets the element's
+ * type and its full XML text. Self-closing elements are handed over on their own.
+ * Returns the number of elements read.
+ */
+export async function streamTallyElements(
+  chunks: AsyncIterable<string>,
+  types: string[],
+  onElement: (type: string, xml: string) => void,
+): Promise<number> {
+  const start = new RegExp(`<(${types.join("|")})[\\s>/]`, "g");
+  let buf = "";
+  let count = 0;
+  for await (const chunk of chunks) {
+    buf += chunk;
+    let pos = 0;
+    for (;;) {
+      start.lastIndex = pos;
+      const m = start.exec(buf);
+      if (!m) break;
+      const type = m[1];
+      const gt = buf.indexOf(">", m.index);
+      if (gt < 0) break;
+      if (buf[gt - 1] === "/") {
+        onElement(type, buf.slice(m.index, gt + 1));
+        count++;
+        pos = gt + 1;
+        continue;
+      }
+      const endTag = `</${type}>`;
+      const end = buf.indexOf(endTag, gt);
+      if (end < 0) break;
+      const stop = end + endTag.length;
+      onElement(type, buf.slice(m.index, stop));
+      count++;
+      pos = stop;
+    }
+    start.lastIndex = pos;
+    const next = start.exec(buf);
+    buf = next ? buf.slice(next.index) : buf.slice(Math.max(pos, buf.length - 24));
+  }
+  return count;
+}

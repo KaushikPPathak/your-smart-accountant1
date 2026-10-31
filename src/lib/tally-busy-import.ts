@@ -20,14 +20,20 @@ import {
   parseDspChunks, parseDspText, looksLikeDspExport, type DspBlock,
 } from "@/lib/tally/dsp-ledger-xml";
 import {
-  parseStandardVouchers, looksLikeStandardVoucherXml, type StdVoucher,
+  parseStandardVoucher, looksLikeStandardVoucherXml, type StdVoucher,
 } from "@/lib/tally/standard-voucher-xml";
-import { readHeadText, readTextChunks } from "@/lib/tally/xml-text";
+import { readHeadText, readTextChunks, streamTallyElements } from "@/lib/tally/xml-text";
+import {
+  parseMasterLedger, parseMasterItem, parseMasterGroup, type MasterLedger, type MasterItem, type MasterGroup,
+} from "@/lib/tally/master-xml";
+import { ACCOUNT_GROUPS } from "@/lib/account-groups";
 
 export type LedgerType = Database["public"]["Enums"]["ledger_type"];
 export type VoucherType = Database["public"]["Enums"]["voucher_type"];
 
 export interface LedgerRecord {
+  /** "master": taken from a Tally master export. Its group, GSTIN and opening are authoritative. */
+  source?: "master";
   name: string;
   type: LedgerType;
   group?: string;
@@ -40,6 +46,8 @@ export interface LedgerRecord {
 }
 
 export interface ItemRecord {
+  /** "master": taken from a Tally master export. Its unit, HSN, GST rate and opening are authoritative. */
+  source?: "master";
   name: string;
   unit?: string;
   hsn?: string;
@@ -142,6 +150,7 @@ export interface FuzzySuggestion {
 }
 
 const lc = (s: string) => (s || "").toLowerCase().trim();
+const decodeNameText = (s: string) => s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">");
 const cleanName = (s: string) => (s || "").replace(/\s+/g, " ").trim();
 const paise = (rupees: number) => Math.round(Math.abs(rupees) * 100);
 
@@ -200,11 +209,23 @@ export async function parseFileOrZip(file: File, _options?: unknown): Promise<Pa
     if (rows.length === 0) throw new Error("No ledger statements were found in this file.");
     return rows;
   }
-  if (looksLikeStandardVoucherXml(head)) {
-    await parseStandardVouchers(readTextChunks(file), (voucher: StdVoucher) => {
-      rows.push({ kind: "tally_voucher", voucher });
+  if (looksLikeStandardVoucherXml(head) || /<(LEDGER|STOCKITEM|GROUP)[\s>]/.test(head)) {
+    await streamTallyElements(readTextChunks(file), ["VOUCHER", "LEDGER", "STOCKITEM", "GROUP"], (type, xml) => {
+      if (type === "VOUCHER") {
+        const voucher = parseStandardVoucher(xml);
+        if (voucher) rows.push({ kind: "tally_voucher", voucher });
+      } else if (type === "LEDGER") {
+        const ledger = parseMasterLedger(xml);
+        if (ledger) rows.push({ kind: "tally_master_ledger", ledger });
+      } else if (type === "STOCKITEM") {
+        const item = parseMasterItem(xml);
+        if (item) rows.push({ kind: "tally_master_item", item });
+      } else if (type === "GROUP") {
+        const group = parseMasterGroup(xml);
+        if (group) rows.push({ kind: "tally_master_group", group });
+      }
     });
-    if (rows.length === 0) throw new Error("No vouchers were found in this file.");
+    if (rows.length === 0) throw new Error("No vouchers, ledgers, stock items or groups were found in this file.");
     return rows;
   }
   throw new Error(
@@ -258,6 +279,31 @@ export async function classifyAndMap(
 ): Promise<{ ledgers: LedgerRecord[]; items: ItemRecord[]; vouchers: VoucherRecord[]; unknown: number; cancelled: number }> {
   const blocks: DspBlock[] = rows.filter((r) => r.kind === "tally_block").map((r) => r.block as DspBlock);
   const standard: StdVoucher[] = rows.filter((r) => r.kind === "tally_voucher").map((r) => r.voucher as StdVoucher);
+  const masterLedgers: MasterLedger[] = rows.filter((r) => r.kind === "tally_master_ledger").map((r) => r.ledger as MasterLedger);
+  const masterItems: MasterItem[] = rows.filter((r) => r.kind === "tally_master_item").map((r) => r.item as MasterItem);
+  const masterGroups: MasterGroup[] = rows.filter((r) => r.kind === "tally_master_group").map((r) => r.group as MasterGroup);
+
+  // Tally group name -> app group code. A custom group (a Tally group made by the user) is
+  // followed up through its parents until a standard group name is found.
+  const groupParent = new Map<string, string>();
+  for (const g of masterGroups) groupParent.set(lc(cleanName(g.name)), cleanName(g.parent));
+  const normName = (t: string) => decodeNameText(t).toLowerCase().replace(/[\s&]+/g, "");
+  const groupCodeByName = new Map<string, string>();
+  for (const g of ACCOUNT_GROUPS) {
+    groupCodeByName.set(normName(g.label), g.code);
+    groupCodeByName.set(normName(g.code), g.code);
+  }
+  const baseGroupCode = (parent: string): string | null => {
+    let p = cleanName(parent);
+    for (let i = 0; i < 12 && p; i++) {
+      const code = groupCodeByName.get(normName(p));
+      if (code) return code;
+      p = groupParent.get(lc(p)) ?? "";
+    }
+    return null;
+  };
+  const masterByKey = new Map<string, MasterLedger>();
+  for (const m of masterLedgers) masterByKey.set(lc(cleanName(m.name)), m);
   const ledgerNames = new Map<string, string>(); // key -> display name
   const openingRaw = new Map<string, number>();  // key -> opening, Tally sign (negative = debit)
   const statementKeys = new Set<string>();        // ledgers that have their own statement
@@ -268,6 +314,9 @@ export async function classifyAndMap(
     if (clean && !ledgerNames.has(key)) ledgerNames.set(key, clean);
     return key;
   };
+
+  // Ledgers named in the master export exist even when no voucher uses them yet.
+  for (const m of masterLedgers) remember(m.name);
 
   // 1. Collect statement lines and openings.
   const lines: StatementEntry[] = [];
@@ -421,6 +470,21 @@ export async function classifyAndMap(
     }
   }
 
+  // Stock item masters: their unit, HSN, GST rate and opening stock are authoritative.
+  for (const m of masterItems) {
+    const name = cleanName(m.name);
+    if (!name) continue;
+    const key = lc(name);
+    let rec = itemMap.get(key);
+    if (!rec) { rec = { name }; itemMap.set(key, rec); }
+    rec.source = "master";
+    if (m.unit) rec.unit = m.unit;
+    if (m.hsn) rec.hsn = m.hsn;
+    if (m.gst_rate !== undefined) rec.gst_rate = m.gst_rate;
+    if (m.opening_qty) rec.opening_qty = m.opening_qty;
+    if (m.opening_rate) rec.opening_rate = m.opening_rate;
+  }
+
   // 3. Movement per ledger across the vouchers.
   const netDebit = new Map<string, number>();
   for (const [key, raw] of openingRaw) netDebit.set(key, -raw);
@@ -436,13 +500,19 @@ export async function classifyAndMap(
   for (const [key, name] of ledgerNames) {
     const net = netDebit.get(key) ?? 0;
     const side: AccountSide = net >= 0 ? "Dr" : "Cr";
-    const groupCode = guessGroupCode(name, side);
+    const m = masterByKey.get(key);
+    // Master group and opening are used when the master export has them; otherwise the
+    // guess from the statement or voucher movement stands.
+    const groupCode = (m && baseGroupCode(m.parent)) || guessGroupCode(name, side);
+    const openingTally = m && m.opening !== 0 ? m.opening : (openingRaw.get(key) ?? 0);
     ledgers.push({
       name,
+      source: m ? "master" : undefined,
+      gstin: m?.gstin || undefined,
       group_code: groupCode,
       group: groupCode,
       type: defaultLedgerTypeForGroup(groupCode) as LedgerType,
-      opening: -(openingRaw.get(key) ?? 0),
+      opening: -openingTally,
     });
   }
   if (unmatched > 0) {
@@ -460,7 +530,11 @@ export async function classifyAndMap(
   return { ledgers, items: Array.from(itemMap.values()), vouchers, unknown: unmatched, cancelled };
 }
 
-/** Write ledgers into the local cache. Ledgers already present by name are skipped. */
+/**
+ * Write ledgers into the local cache. A ledger already present by name is skipped,
+ * except a master ledger: its group, GSTIN and type are set from the master, and
+ * its opening balance is set only where the stored one is zero.
+ */
 export async function postLedgers(
   companyId: string,
   rows: LedgerRecord[],
@@ -468,49 +542,69 @@ export async function postLedgers(
   batchId?: string | null,
 ): Promise<PostResultEx> {
   const db = await getDbInstance();
-  const existing: Array<{ name: string; is_deleted?: boolean }> = await db.cache_ledgers
+  const existing: Array<{ id: string; name: string; is_deleted?: boolean; opening_balance_paise?: number }> = await db.cache_ledgers
     .where("company_id").equals(companyId).toArray();
-  const have = new Set(existing.filter((r) => !r.is_deleted).map((r) => lc(r.name)));
+  const byName = new Map<string, { id: string; opening_balance_paise?: number }>();
+  for (const r of existing) if (!r.is_deleted) byName.set(lc(r.name), r);
   const result: PostResultEx = { created: 0, updated: 0, skipped: 0, failed: [] };
   const now = new Date().toISOString();
   const fresh: Record<string, unknown>[] = [];
 
-  rows.forEach((row, i) => {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
     if (onProgress && i % 200 === 0) onProgress(i, rows.length, "Saving ledgers");
     const name = cleanName(row.name);
-    if (!name) { result.failed.push({ name: "(blank)", reason: "Ledger name is empty" }); return; }
-    if (have.has(lc(name))) { result.skipped++; return; }
-    have.add(lc(name));
+    if (!name) { result.failed.push({ name: "(blank)", reason: "Ledger name is empty" }); continue; }
+    const have = byName.get(lc(name));
     const opening = row.opening ?? 0;
+    if (have) {
+      if (row.source !== "master") { result.skipped++; continue; }
+      const changes: Record<string, unknown> = {
+        group_code: row.group_code ?? row.group ?? null,
+        type: row.type,
+        updated_at: now,
+      };
+      if (row.gstin) changes.gstin = row.gstin;
+      if (!have.opening_balance_paise && opening !== 0) {
+        changes.opening_balance_paise = paise(opening);
+        changes.opening_balance_is_debit = opening >= 0;
+      }
+      await db.cache_ledgers.update(have.id, changes);
+      result.updated++;
+      continue;
+    }
+    const id = newId();
+    byName.set(lc(name), { id });
     fresh.push({
-      id: newId(),
+      id,
       company_id: companyId,
       name,
       type: row.type,
       group_code: row.group_code ?? row.group ?? null,
       subgroup_id: null,
+      gstin: row.gstin || null,
       opening_balance_paise: paise(opening),
       opening_balance_is_debit: opening >= 0,
-      import_batch_id: batchId ?? null,
       is_deleted: false,
       is_synced: true,
+      import_batch_id: batchId ?? null,
       created_at: now,
       updated_at: now,
     });
-  });
+  }
 
   if (fresh.length > 0) await db.cache_ledgers.bulkPut(fresh);
   result.created = fresh.length;
   if (onProgress) onProgress(rows.length, rows.length, "Ledgers saved");
-  if (fresh.length > 0) emitDataChange(companyId, "ledger");
+  if (fresh.length > 0 || result.updated > 0) emitDataChange(companyId, "ledger");
   return result;
 }
 
 /**
- * Write stock items into the local cache. Items already present by name are
- * skipped (their stored values are not changed). Rate fields come from the
- * vouchers: sale rate from sales lines, purchase rate from purchase lines.
- * Opening stock is not in voucher exports, so it is written as zero.
+ * Write stock items into the local cache. An item already present by name is skipped,
+ * except a master item: its unit, HSN and GST rate are set from the master, and its
+ * opening stock is set only where the stored one is zero.
+ * Rate fields come from vouchers: sale rate from sales lines, purchase rate from purchase lines.
  */
 export async function postItems(
   companyId: string,
@@ -519,21 +613,40 @@ export async function postItems(
   batchId?: string | null,
 ): Promise<PostResultEx> {
   const db = await getDbInstance();
-  const existing: Array<{ name: string; is_deleted?: boolean }> = await db.cache_items
-    .where("company_id").equals(companyId).toArray();
-  const have = new Set(existing.filter((r) => !r.is_deleted).map((r) => lc(r.name)));
+  const existing: Array<{ id: string; name: string; is_deleted?: boolean; opening_stock_qty?: number; opening_stock_rate_paise?: number }> =
+    await db.cache_items.where("company_id").equals(companyId).toArray();
+  const byName = new Map<string, { id: string; opening_stock_qty?: number; opening_stock_rate_paise?: number }>();
+  for (const r of existing) if (!r.is_deleted) byName.set(lc(r.name), r);
   const result: PostResultEx = { created: 0, updated: 0, skipped: 0, failed: [] };
   const now = new Date().toISOString();
   const fresh: Record<string, unknown>[] = [];
 
-  rows.forEach((row, i) => {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
     if (onProgress && i % 200 === 0) onProgress(i, rows.length, "Saving items");
     const name = cleanName(row.name);
-    if (!name) { result.failed.push({ name: "(blank)", reason: "Item name is empty" }); return; }
-    if (have.has(lc(name))) { result.skipped++; return; }
-    have.add(lc(name));
+    if (!name) { result.failed.push({ name: "(blank)", reason: "Item name is empty" }); continue; }
+    const have = byName.get(lc(name));
+    const openingQty = row.opening_qty ?? 0;
+    const openingRatePaise = paise(row.opening_rate ?? 0);
+    if (have) {
+      if (row.source !== "master") { result.skipped++; continue; }
+      const changes: Record<string, unknown> = { updated_at: now };
+      if (row.unit) changes.unit = cleanName(row.unit);
+      if (row.hsn) changes.hsn_code = cleanName(row.hsn);
+      if (typeof row.gst_rate === "number") changes.gst_rate = row.gst_rate;
+      if (!have.opening_stock_qty && openingQty) {
+        changes.opening_stock_qty = openingQty;
+        changes.opening_stock_rate_paise = openingRatePaise;
+      }
+      await db.cache_items.update(have.id, changes);
+      result.updated++;
+      continue;
+    }
+    const id = newId();
+    byName.set(lc(name), { id });
     fresh.push({
-      id: newId(),
+      id,
       company_id: companyId,
       name,
       unit: cleanName(row.unit ?? "") || "NOS",
@@ -541,8 +654,8 @@ export async function postItems(
       gst_rate: typeof row.gst_rate === "number" && Number.isFinite(row.gst_rate) ? row.gst_rate : 0,
       is_active: true,
       is_deleted: false,
-      opening_stock_qty: 0,
-      opening_stock_rate_paise: 0,
+      opening_stock_qty: openingQty,
+      opening_stock_rate_paise: openingRatePaise,
       purchase_price_paise: paise(row.rate ?? 0),
       sale_price_paise: paise(row.sale_price ?? 0),
       reorder_level: 0,
@@ -550,12 +663,12 @@ export async function postItems(
       created_at: now,
       updated_at: now,
     });
-  });
+  }
 
   if (fresh.length > 0) await db.cache_items.bulkPut(fresh);
   result.created = fresh.length;
   if (onProgress) onProgress(rows.length, rows.length, "Items saved");
-  if (fresh.length > 0) emitDataChange(companyId, "item");
+  if (fresh.length > 0 || result.updated > 0) emitDataChange(companyId, "item");
   return result;
 }
 
