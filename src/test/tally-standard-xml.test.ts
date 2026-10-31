@@ -367,3 +367,22 @@ describe("Tally vouchers fill the sales and purchase registers", () => {
     expect(again.skipped).toBe(2);
   });
 });
+
+describe("Tally voucher party GSTIN", () => {
+  beforeEach(async () => {
+    const db = await getDbInstance();
+    for (const t of ["cache_ledgers", "cache_items", "cache_vouchers", "cache_voucher_items", "cache_voucher_entries"]) {
+      await (db as any)[t].clear();
+    }
+  });
+
+  it("fills the party ledger's GSTIN from the voucher, so the sale counts as B2B", async () => {
+    const xml = SAMPLE_SALE.replace("<PARTYLEDGERNAME>NEELA SILK</PARTYLEDGERNAME>", "<PARTYLEDGERNAME>NEELA SILK</PARTYLEDGERNAME>\n <PARTYGSTIN>24AAEFN6089N1ZP</PARTYGSTIN>");
+    const out = await classifyAndMap(await parseFileOrZip(new File([xml], "daybook.xml")));
+    await postLedgers("co-gstin", out.ledgers);
+    await postVouchers("co-gstin", out.vouchers as VoucherRecord[]);
+    const db = await getDbInstance();
+    const party = (await db.cache_ledgers.where("company_id").equals("co-gstin").toArray()).find((l: any) => l.name === "NEELA SILK");
+    expect(party.gstin).toBe("24AAEFN6089N1ZP");
+  });
+});

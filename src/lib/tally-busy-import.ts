@@ -67,6 +67,8 @@ export interface VoucherEntry {
 }
 
 export interface VoucherRecord {
+  /** GSTIN of the party as printed on the voucher. Used to fill the party ledger's GSTIN when it has none. */
+  party_gstin?: string;
   vtype: VoucherType;
   date: string;
   voucher_no: string;
@@ -441,6 +443,7 @@ export async function classifyAndMap(
       date: sv.date,
       voucher_no: sv.number,
       party: sv.party ? (ledgerNames.get(remember(sv.party)) ?? cleanName(sv.party)) : undefined,
+      party_gstin: sv.party_gstin || undefined,
       total,
       narration: sv.narration || undefined,
       entries,
@@ -752,10 +755,18 @@ export async function postVouchers(
   batchId?: string | null,
 ): Promise<PostResultEx> {
   const db = await getDbInstance();
-  const ledgerRows: Array<{ id: string; name: string; is_deleted?: boolean }> = await db.cache_ledgers
+  const ledgerRows: Array<{ id: string; name: string; is_deleted?: boolean; gstin?: string | null }> = await db.cache_ledgers
     .where("company_id").equals(companyId).toArray();
   const ledgerId = new Map<string, string>();
-  for (const l of ledgerRows) if (!l.is_deleted) ledgerId.set(lc(l.name), l.id);
+  const ledgerWithoutGstin = new Set<string>();
+  for (const l of ledgerRows) {
+    if (l.is_deleted) continue;
+    ledgerId.set(lc(l.name), l.id);
+    if (!l.gstin) ledgerWithoutGstin.add(l.id);
+  }
+  // Party GSTIN printed on the vouchers. A party ledger with no GSTIN gets it, so its sales
+  // and purchases are classified as registered (B2B) rather than unregistered.
+  const gstinFill = new Map<string, string>();
 
   const itemRows: Array<{ id: string; name: string; is_deleted?: boolean }> = await db.cache_items
     .where("company_id").equals(companyId).toArray();
@@ -810,6 +821,9 @@ export async function postVouchers(
       continue;
     }
     const partyId = v.party ? (ledgerId.get(lc(v.party)) ?? null) : null;
+    if (partyId && v.party_gstin && ledgerWithoutGstin.has(partyId) && !gstinFill.has(partyId)) {
+      gstinFill.set(partyId, v.party_gstin);
+    }
     const hasItems = (v.items ?? []).length > 0;
 
     if (v.voucher_no) {
@@ -886,6 +900,10 @@ export async function postVouchers(
     if (pending.vouchers.length >= VOUCHER_BATCH) await flush();
   }
   await flush();
+  for (const [ledgerKey, gstin] of gstinFill) {
+    await db.cache_ledgers.update(ledgerKey, { gstin, updated_at: now });
+  }
+  if (gstinFill.size > 0) emitDataChange(companyId, "ledger");
 
   if (onProgress) onProgress(rows.length, rows.length, "Vouchers saved");
   if (result.created > 0 || result.updated > 0) emitDataChange(companyId, "voucher");

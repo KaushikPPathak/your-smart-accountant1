@@ -47,6 +47,8 @@ export interface StdVoucher {
   date: string;
   number: string;
   party: string;
+  /** GSTIN of the party as printed on the voucher (may be empty). */
+  party_gstin: string;
   narration: string;
   /** False for cancelled, optional or deleted vouchers. They are not imported. */
   active: boolean;
@@ -194,6 +196,7 @@ export function parseStandardVoucher(xml: string): StdVoucher | null {
     date: parseCompactDate(valueOf(v, "DATE")),
     number: valueOf(v, "VOUCHERNUMBER"),
     party: valueOf(v, "PARTYLEDGERNAME") || valueOf(v, "PARTYNAME"),
+    party_gstin: valueOf(v, "PARTYGSTIN"),
     narration: valueOf(v, "NARRATION"),
     active: !cancelled,
     lines,
