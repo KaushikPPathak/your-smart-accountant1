@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { saveGstr3bManualLocal } from "@/lib/offline/gstr3b-local";
 import { toast } from "sonner";
 import { FileSpreadsheet, FileJson, Printer, Plus, Trash2, BookOpen } from "lucide-react";
 import { Calculator } from "lucide-react";
@@ -582,12 +582,13 @@ function ManualEntryCard({ companyId, period, inward, reversal, onChanged }: {
         { company_id: companyId, period, ty: "RUL", iamt_paise: toPaise(rRulI), camt_paise: toPaise(rRulC), samt_paise: toPaise(rRulS), csamt_paise: 0 },
         { company_id: companyId, period, ty: "OTH", iamt_paise: toPaise(rOthI), camt_paise: toPaise(rOthC), samt_paise: toPaise(rOthS), csamt_paise: 0 },
       ];
-      const [r1, r2] = await Promise.all([
-        supabase.from("gstr3b_inward_summary").upsert(inwardRows, { onConflict: "company_id,period,ty" }),
-        supabase.from("gstr3b_itc_reversal").upsert(revRows, { onConflict: "company_id,period,ty" }),
-      ]);
-      if (r1.error) throw r1.error;
-      if (r2.error) throw r2.error;
+      // Local-only: saved in this PC's books for this period.
+      await saveGstr3bManualLocal(
+        companyId,
+        period,
+        inwardRows.map(({ ty, inter_paise, intra_paise }) => ({ ty: ty as "GST" | "NONGST", inter_paise, intra_paise })),
+        revRows.map(({ ty, iamt_paise, camt_paise, samt_paise, csamt_paise }) => ({ ty: ty as "RUL" | "OTH", iamt_paise, camt_paise, samt_paise, csamt_paise })),
+      );
       toast.success("Saved manual entries");
       await onChanged();
     } catch (e) {

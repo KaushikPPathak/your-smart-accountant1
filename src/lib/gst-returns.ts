@@ -9,6 +9,7 @@ import type { XlsxSheet } from "@/lib/exporters";
 import { GSTR1_PORTAL_VERSION, DOC_TYPES, portalHsnBlock } from "./gstr1-portal-format";
 import { isTaxFreeGstLine } from "./gst-supply-classification";
 import { reconcileBillTaxLines } from "./gst-bill-lines";
+import { fetchInwardSummaryLocal, fetchItcReversalLocal } from "@/lib/offline/gstr3b-local";
 import {
   readCompanies,
   readItems,
@@ -386,12 +387,7 @@ export interface InwardSummaryRow {
   intra_paise: number;
 }
 export async function fetchInwardSummary(companyId: string, period: string): Promise<InwardSummaryRow[]> {
-  const { data } = await supabase
-    .from("gstr3b_inward_summary")
-    .select("ty, inter_paise, intra_paise")
-    .eq("company_id", companyId)
-    .eq("period", period);
-  return (data || []) as InwardSummaryRow[];
+  return fetchInwardSummaryLocal(companyId, period);
 }
 
 export interface ItcReversalRow {
@@ -402,12 +398,7 @@ export interface ItcReversalRow {
   csamt_paise: number;
 }
 export async function fetchItcReversal(companyId: string, period: string): Promise<ItcReversalRow[]> {
-  const { data } = await supabase
-    .from("gstr3b_itc_reversal")
-    .select("ty, iamt_paise, camt_paise, samt_paise, csamt_paise")
-    .eq("company_id", companyId)
-    .eq("period", period);
-  return (data || []) as ItcReversalRow[];
+  return fetchItcReversalLocal(companyId, period);
 }
 
 // ───────────────────── GSTR-1 builder ─────────────────────

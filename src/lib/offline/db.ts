@@ -80,6 +80,8 @@ class OfflineDatabase extends Dexie {
   cache_bill_allocations!: Table<any, any>;
   cache_import_batches!: Table<any, any>;
   cache_manual_valuations!: Table<any, any>;
+  cache_gstr3b_inward_summary!: Table<any, any>;
+  cache_gstr3b_itc_reversal!: Table<any, any>;
   cache_voucher_export_details!: Table<any, any>;
   cache_einvoice_details!: Table<any, any>;
   cache_period_locks!: Table<any, any>;
@@ -248,6 +250,12 @@ class OfflineDatabase extends Dexie {
     this.version(16).stores({
       cache_account_subgroups: "id, company_id, parent_group_code, [company_id+parent_group_code]",
       cache_account_group_overrides: "id, company_id, group_code, [company_id+group_code]",
+    });
+
+    // GSTR-3B manual entries (inward supplies and ITC reversal), per company and period.
+    this.version(17).stores({
+      cache_gstr3b_inward_summary: "id, company_id, period, [company_id+period]",
+      cache_gstr3b_itc_reversal: "id, company_id, period, [company_id+period]",
     });
   }
 }
