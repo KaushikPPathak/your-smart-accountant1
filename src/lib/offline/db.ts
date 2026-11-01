@@ -83,6 +83,7 @@ class OfflineDatabase extends Dexie {
   cache_gstr3b_inward_summary!: Table<any, any>;
   cache_gstr3b_itc_reversal!: Table<any, any>;
   cache_payment_reminders!: Table<any, any>;
+  cache_entity_members!: Table<any, any>;
   cache_voucher_export_details!: Table<any, any>;
   cache_einvoice_details!: Table<any, any>;
   cache_period_locks!: Table<any, any>;
@@ -262,6 +263,11 @@ class OfflineDatabase extends Dexie {
     // Payment reminder log (WhatsApp / email sent to parties), per company.
     this.version(18).stores({
       cache_payment_reminders: "id, company_id, ledger_id, created_at, [company_id+created_at]",
+    });
+
+    // Partners / directors / members of a company (share, PSR, capital), per company.
+    this.version(19).stores({
+      cache_entity_members: "id, company_id, created_at",
     });
   }
 }

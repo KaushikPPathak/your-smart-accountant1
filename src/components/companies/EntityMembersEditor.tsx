@@ -5,7 +5,9 @@ import { Plus, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  listEntityMembersLocal, addEntityMemberLocal, updateEntityMemberLocal, deleteEntityMemberLocal,
+} from "@/lib/offline/entity-members-local";
 import { formatINR } from "@/lib/money";
 import type { EntityFeatureFlags } from "@/lib/entity-status";
 
@@ -54,38 +56,34 @@ export function EntityMembersEditor({
 
   const load = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("entity_members")
-      .select("id, member_role, full_name, designation, pan, din, email, phone, share_percent, profit_sharing_ratio, capital_contribution_paise, appointed_on, is_active")
-      .eq("company_id", companyId)
-      .order("created_at", { ascending: true });
-    setLoading(false);
-    if (error) { toast.error(error.message); return; }
-    setRows((data ?? []) as Member[]);
+    try {
+      setRows((await listEntityMembersLocal(companyId)) as Member[]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not load members");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, [companyId]);
 
   const addRow = async () => {
-    const { data, error } = await supabase
-      .from("entity_members")
-      .insert({ company_id: companyId, ...blank(role) })
-      .select("*")
-      .single();
-    if (error || !data) { toast.error(error?.message ?? "Failed"); return; }
-    setRows((r) => [...r, data as Member]);
+    try {
+      const data = await addEntityMemberLocal(companyId, blank(role));
+      setRows((r) => [...r, data as Member]);
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
   };
 
   const update = async (id: string, patch: Partial<Member>) => {
     setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-    const { error } = await supabase.from("entity_members").update(patch).eq("id", id);
-    if (error) toast.error(error.message);
+    try { await updateEntityMemberLocal(id, patch as Record<string, unknown>); }
+    catch (err) { toast.error(err instanceof Error ? err.message : "Could not save"); }
   };
 
   const remove = async (id: string) => {
     if (!confirm("Remove this entry?")) return;
-    const { error } = await supabase.from("entity_members").delete().eq("id", id);
-    if (error) { toast.error(error.message); return; }
+    try { await deleteEntityMemberLocal(id); }
+    catch (err) { toast.error(err instanceof Error ? err.message : "Could not remove"); return; }
     setRows((r) => r.filter((x) => x.id !== id));
   };
 
