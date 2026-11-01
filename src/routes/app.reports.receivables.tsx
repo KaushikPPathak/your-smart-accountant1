@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { MessageCircle, Mail } from "lucide-react";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { supabase } from "@/integrations/supabase/client";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { readLedgers, readVouchers, readVoucherEntriesForCompany } from "@/lib/offline/cache-read";
 import { useCompany } from "@/lib/company-context";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { useAuth } from "@/lib/auth-context";
@@ -65,6 +67,28 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
 
   useEffect(() => {
     if (!activeCompanyId) return;
+    if (isLocalOnlyMode()) {
+      readLedgers(activeCompanyId).then((rows) => {
+        setLedgers(
+          (rows as any[])
+            .filter((l) => l.type === partyType)
+            .map((l) => ({
+              id: String(l.id),
+              name: String(l.name ?? ""),
+              type: String(l.type),
+              credit_days: Number(l.credit_days) || 0,
+              opening_balance_paise: Number(l.opening_balance_paise) || 0,
+              opening_balance_is_debit: l.opening_balance_is_debit !== false,
+              email: l.email ?? null,
+              phone: l.phone ?? null,
+              whatsapp_number: l.whatsapp_number ?? null,
+              reminders_enabled: !!l.reminders_enabled,
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        );
+      });
+      return;
+    }
     supabase
       .from("ledgers")
       .select("id, name, type, credit_days, opening_balance_paise, opening_balance_is_debit, email, phone, whatsapp_number, reminders_enabled")
@@ -85,6 +109,25 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
 
   useEffect(() => {
     if (!activeCompanyId) return;
+    if (isLocalOnlyMode()) {
+      Promise.all([
+        readVouchers(activeCompanyId, { to }),
+        readVoucherEntriesForCompany(activeCompanyId),
+      ]).then(([vouchers, rows]) => {
+        const dateById = new Map((vouchers as any[]).map((v) => [String(v.id), String(v.voucher_date ?? "")]));
+        setEntries(
+          (rows as any[])
+            .filter((e) => dateById.has(String(e.voucher_id)))
+            .map((e) => ({
+              ledger_id: String(e.ledger_id),
+              debit_paise: Number(e.debit_paise) || 0,
+              credit_paise: Number(e.credit_paise) || 0,
+              vouchers: { voucher_date: dateById.get(String(e.voucher_id)) || "" },
+            })),
+        );
+      });
+      return;
+    }
     supabase
       .from("voucher_entries")
       .select("ledger_id, debit_paise, credit_paise, vouchers!inner(voucher_date, company_id)")

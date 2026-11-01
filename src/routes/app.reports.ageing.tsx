@@ -19,6 +19,8 @@ import {
   readBillAllocations,
   withCacheFallback,
 } from "@/lib/offline/cache-read";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { ageBills, partyBalancesLocal, type AgedResult } from "@/lib/offline/party-aging";
 
 export const Route = createFileRoute("/app/reports/ageing")({
   head: () => ({ meta: [{ title: "Ageing Analysis — Reports" }] }),
@@ -49,6 +51,7 @@ function AgeingPage() {
   const { asOf, setAsOf } = useFyAsOfState();
   const [invs, setInvs] = useState<InvRow[]>([]);
   const [allocs, setAllocs] = useState<AllocRow[]>([]);
+  const [localAged, setLocalAged] = useState<AgedResult | null>(null);
   const { view, setView } = useReportView("ageing");
 
   useEffect(() => {
@@ -98,13 +101,51 @@ function AgeingPage() {
           })),
         };
       },
-    ).then(({ invs, allocs }) => {
+    ).then(async ({ invs, allocs }) => {
       setInvs(invs);
       setAllocs(allocs);
+      if (!isLocalOnlyMode()) {
+        setLocalAged(null);
+        return;
+      }
+      const cid = activeCompanyId;
+      const balances = await partyBalancesLocal(cid, asOf, mode === "receivables" ? "sundry_debtor" : "sundry_creditor");
+      const paidMap = new Map<string, number>();
+      for (const a of allocs) paidMap.set(a.invoice_voucher_id, (paidMap.get(a.invoice_voucher_id) || 0) + a.amount_paise);
+      const bills = invs.map((inv) => ({
+        id: inv.id,
+        partyId: inv.party_ledger_id || "_",
+        date: inv.voucher_date,
+        dueDate: inv.due_date,
+        totalPaise: inv.total_paise,
+        allocatedPaise: paidMap.get(inv.id) || 0,
+      }));
+      setLocalAged(ageBills(bills, balances, asOf));
     });
   }, [activeCompanyId, mode, asOf]);
 
   const partyRows = useMemo(() => {
+    if (localAged) {
+      const rows = new Map<string, { name: string; msme: boolean; b0: number; b1: number; b2: number; b3: number; msme45: number; total: number }>();
+      for (const bal of localAged.balances.values()) {
+        rows.set(bal.partyId, { name: bal.name, msme: bal.msme, b0: 0, b1: 0, b2: 0, b3: 0, msme45: 0, total: 0 });
+      }
+      for (const a of localAged.aged) {
+        const cur = rows.get(a.partyId);
+        if (!cur) continue;
+        const key = (["b0", "b1", "b2", "b3"] as const)[a.bucket];
+        cur[key] += a.pendingPaise;
+        cur.total += a.pendingPaise;
+        if (cur.msme && a.days > 45) cur.msme45 += a.pendingPaise;
+      }
+      for (const [partyId, amt] of localAged.unbilled) {
+        const cur = rows.get(partyId);
+        if (!cur) continue;
+        cur.b3 += amt;
+        cur.total += amt;
+      }
+      return Array.from(rows.values()).sort((a, b) => b.total - a.total);
+    }
     const paidByInv = new Map<string, number>();
     for (const a of allocs) paidByInv.set(a.invoice_voucher_id, (paidByInv.get(a.invoice_voucher_id) || 0) + a.amount_paise);
     const today = new Date(asOf).getTime();

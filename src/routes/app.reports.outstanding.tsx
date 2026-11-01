@@ -25,6 +25,8 @@ import {
   DEFAULT_RBI_BANK_RATE_PCT,
 } from "@/lib/msme-interest";
 import { ReportViewer } from "@/components/reports/ReportViewer";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { ageBills, partyBalancesLocal, type AgedResult } from "@/lib/offline/party-aging";
 
 export const Route = createFileRoute("/app/reports/outstanding")({
   head: () => ({ meta: [{ title: "Bill-by-Bill Outstanding — Reports" }] }),
@@ -53,6 +55,7 @@ function OutstandingPage() {
   const { asOf, setAsOf } = useFyAsOfState();
   const [invs, setInvs] = useState<InvRow[]>([]);
   const [allocs, setAllocs] = useState<AllocRow[]>([]);
+  const [localAged, setLocalAged] = useState<AgedResult | null>(null);
   const [loading, setLoading] = useState(true);
   const rateKey = `msme:bankRate:${activeCompanyId ?? "_"}`;
   const [bankRate, setBankRate] = useState<number>(() => {
@@ -115,14 +118,46 @@ function OutstandingPage() {
           })),
         };
       },
-    ).then(({ invs, allocs }) => {
+    ).then(async ({ invs, allocs }) => {
       setInvs(sortVouchersAsc(invs));
       setAllocs(allocs);
+      if (isLocalOnlyMode()) {
+        const balances = await partyBalancesLocal(activeCompanyId, asOf, mode === "receivables" ? "sundry_debtor" : "sundry_creditor");
+        const paidMap = new Map<string, number>();
+        for (const a of allocs) paidMap.set(a.invoice_voucher_id, (paidMap.get(a.invoice_voucher_id) || 0) + a.amount_paise);
+        setLocalAged(
+          ageBills(
+            invs.map((inv) => ({
+              id: inv.id,
+              partyId: inv.party_ledger_id || "_",
+              date: inv.voucher_date,
+              dueDate: inv.due_date,
+              totalPaise: inv.total_paise,
+              allocatedPaise: paidMap.get(inv.id) || 0,
+            })),
+            balances,
+            asOf,
+          ),
+        );
+      } else {
+        setLocalAged(null);
+      }
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [activeCompanyId, mode, asOf]);
 
   const rows = useMemo(() => {
+    if (localAged) {
+      const invById = new Map(invs.map((i) => [i.id, i]));
+      return localAged.aged
+        .map((a) => {
+          const inv = invById.get(a.id);
+          if (!inv) return null;
+          return { ...inv, paid_paise: inv.total_paise - a.pendingPaise, pending_paise: a.pendingPaise, days: a.days };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null)
+        .sort((a, b) => b.days - a.days);
+    }
     const paidByInv = new Map<string, number>();
     for (const a of allocs) paidByInv.set(a.invoice_voucher_id, (paidByInv.get(a.invoice_voucher_id) || 0) + a.amount_paise);
     const today = new Date(asOf).getTime();
