@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { useOnlineStatus } from "@/lib/offline/online-status";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 export function OfflineBanner() {
   const online = useOnlineStatus();
@@ -26,7 +27,9 @@ export function OfflineBanner() {
       wasOffline.current = false;
       try {
         toast.success("Back online", {
-          description: "Sign-in and cloud features are available again.",
+          description: isLocalOnlyMode()
+            ? "Your books stay on this PC. Nothing was sent to the cloud."
+            : "Sign-in and cloud features are available again.",
         });
       } catch {
         /* toast host not mounted yet — safe to ignore */

@@ -54,6 +54,12 @@ export function ExportInvoiceDialog({ open, onOpenChange, voucherId, companyId }
   const set = (k: string, v: unknown) => setRow((p) => ({ ...p, [k]: v }));
 
   const save = async (thenPrint: boolean) => {
+    const ccyCode = String(row.currency_code ?? "").trim().toUpperCase();
+    const rate = Number(row.fx_rate);
+    if (ccyCode && ccyCode !== "INR" && (!rate || rate <= 1)) {
+      toast.error("Enter the rupee rate for 1 unit of the currency in the FX Rate field (for example 96 for USD). The rate source note is only a reference.");
+      return;
+    }
     setSaving(true);
     try {
       const payload: Row = {
@@ -136,8 +142,8 @@ export function ExportInvoiceDialog({ open, onOpenChange, voucherId, companyId }
             {f("lut_date", "LUT Date", "date")}
             <div />
             {f("currency_code", "Invoice Currency (e.g. USD, EUR, AED)")}
-            {f("fx_rate", "FX Rate — 1 unit = INR", "number")}
-            {f("fx_rate_source", "FX Rate Source (e.g. RBI ref 22-Jun-2026)")}
+            {f("fx_rate", "FX Rate: rupees for 1 unit of the currency (USD: e.g. 96)", "number")}
+            {f("fx_rate_source", "Rate source note (optional, e.g. RBI ref 22-Jun-2026)")}
             {f("incoterms", "INCOTERMS (FOB / CIF / CFR …)")}
             {f("payment_terms", "Payment Terms (e.g. 100% TT, LC at sight)")}
           </TabsContent>

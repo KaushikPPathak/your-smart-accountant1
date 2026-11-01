@@ -394,7 +394,7 @@ function LedgersPage() {
                         });
                       }}
                     >
-                      <SelectTrigger id="type" className="bg-white">
+                      <SelectTrigger id="type" className="bg-popover text-popover-foreground">
                         <SelectValue placeholder="Select ledger type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -422,7 +422,7 @@ function LedgersPage() {
                         });
                       }}
                     >
-                      <SelectTrigger id="group_code" className="bg-white">
+                      <SelectTrigger id="group_code" className="bg-popover text-popover-foreground">
                         <SelectValue placeholder="Select group" />
                       </SelectTrigger>
                       <SelectContent>
@@ -452,7 +452,7 @@ function LedgersPage() {
                         value={form.subgroup_id || "__none__"}
                         onValueChange={(v) => setForm({ ...form, subgroup_id: v === "__none__" ? "" : v })}
                       >
-                        <SelectTrigger id="subgroup_id" className="bg-white">
+                        <SelectTrigger id="subgroup_id" className="bg-popover text-popover-foreground">
                           <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent>
@@ -505,7 +505,7 @@ function LedgersPage() {
                       <div className="space-y-1 flex flex-col justify-end">
                         <Label htmlFor="state_code">State</Label>
                         <Select value={form.state_code} onValueChange={onStateCodeChange}>
-                          <SelectTrigger id="state_code" className="bg-white">
+                          <SelectTrigger id="state_code" className="bg-popover text-popover-foreground">
                             <SelectValue placeholder="Select state" />
                           </SelectTrigger>
                           <SelectContent>
@@ -597,7 +597,7 @@ function LedgersPage() {
                         value={form.opening_balance_is_debit ? "dr" : "cr"}
                         onValueChange={(v) => setForm({ ...form, opening_balance_is_debit: v === "dr" })}
                       >
-                        <SelectTrigger id="ob_type" className="bg-white">
+                        <SelectTrigger id="ob_type" className="bg-popover text-popover-foreground">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -639,7 +639,7 @@ function LedgersPage() {
                           value={form.gst_registration_type || "regular"}
                           onValueChange={(v) => setForm({ ...form, gst_registration_type: v })}
                         >
-                          <SelectTrigger id="gst_registration_type" className="bg-white">
+                          <SelectTrigger id="gst_registration_type" className="bg-popover text-popover-foreground">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -684,7 +684,7 @@ function LedgersPage() {
                               value={form.msme_classification || ""}
                               onValueChange={(v) => setForm({ ...form, msme_classification: v })}
                             >
-                              <SelectTrigger id="msme_classification" className="bg-white">
+                              <SelectTrigger id="msme_classification" className="bg-popover text-popover-foreground">
                                 <SelectValue placeholder="Select" />
                               </SelectTrigger>
                               <SelectContent>
