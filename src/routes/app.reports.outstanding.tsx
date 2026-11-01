@@ -182,7 +182,7 @@ function OutstandingPage() {
       })
       .filter((r) => r.pending_paise > 0)
       .sort((a, b) => b.days - a.days);
-  }, [invs, allocs, asOf]);
+  }, [invs, allocs, asOf, localAged]);
 
   const totalPending = rows.reduce((s, r) => s + r.pending_paise, 0);
   // MSMED §15/§16 — flag payables past appointed day, compute compound interest.

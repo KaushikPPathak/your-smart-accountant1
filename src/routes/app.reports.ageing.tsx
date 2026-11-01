@@ -172,7 +172,7 @@ function AgeingPage() {
       byParty.set(key, cur);
     }
     return Array.from(byParty.values()).sort((a, b) => b.total - a.total);
-  }, [invs, allocs, asOf]);
+  }, [invs, allocs, asOf, localAged]);
 
   const totals = useMemo(() => {
     return partyRows.reduce((acc, r) => ({
