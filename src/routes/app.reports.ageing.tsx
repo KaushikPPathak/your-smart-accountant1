@@ -19,6 +19,8 @@ import {
   readBillAllocations,
   withCacheFallback,
 } from "@/lib/offline/cache-read";
+import { toast } from "sonner";
+import { describeError } from "@/lib/error-message";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { ageBills, partyBalancesLocal, type AgedResult } from "@/lib/offline/party-aging";
 
@@ -109,18 +111,24 @@ function AgeingPage() {
         return;
       }
       const cid = activeCompanyId;
-      const balances = await partyBalancesLocal(cid, asOf, mode === "receivables" ? "sundry_debtor" : "sundry_creditor");
-      const paidMap = new Map<string, number>();
-      for (const a of allocs) paidMap.set(a.invoice_voucher_id, (paidMap.get(a.invoice_voucher_id) || 0) + a.amount_paise);
-      const bills = invs.map((inv) => ({
-        id: inv.id,
-        partyId: inv.party_ledger_id || "_",
-        date: inv.voucher_date,
-        dueDate: inv.due_date,
-        totalPaise: inv.total_paise,
-        allocatedPaise: paidMap.get(inv.id) || 0,
-      }));
-      setLocalAged(ageBills(bills, balances, asOf));
+      try {
+        const balances = await partyBalancesLocal(cid, asOf, mode === "receivables" ? "sundry_debtor" : "sundry_creditor");
+        const paidMap = new Map<string, number>();
+        for (const a of allocs) paidMap.set(a.invoice_voucher_id, (paidMap.get(a.invoice_voucher_id) || 0) + a.amount_paise);
+        const bills = invs.map((inv) => ({
+          id: inv.id,
+          partyId: inv.party_ledger_id || "_",
+          date: inv.voucher_date,
+          dueDate: inv.due_date,
+          totalPaise: inv.total_paise,
+          allocatedPaise: paidMap.get(inv.id) || 0,
+        }));
+        setLocalAged(ageBills(bills, balances, asOf));
+      } catch (err) {
+        console.error("Local ageing failed:", err);
+        setLocalAged(null);
+        toast.error(`Ageing could not use the ledger balance: ${describeError(err)}`);
+      }
     });
   }, [activeCompanyId, mode, asOf]);
 

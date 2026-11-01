@@ -25,6 +25,8 @@ import {
   DEFAULT_RBI_BANK_RATE_PCT,
 } from "@/lib/msme-interest";
 import { ReportViewer } from "@/components/reports/ReportViewer";
+import { toast } from "sonner";
+import { describeError } from "@/lib/error-message";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { ageBills, partyBalancesLocal, type AgedResult } from "@/lib/offline/party-aging";
 
@@ -122,28 +124,37 @@ function OutstandingPage() {
       setInvs(sortVouchersAsc(invs));
       setAllocs(allocs);
       if (isLocalOnlyMode()) {
-        const balances = await partyBalancesLocal(activeCompanyId, asOf, mode === "receivables" ? "sundry_debtor" : "sundry_creditor");
-        const paidMap = new Map<string, number>();
-        for (const a of allocs) paidMap.set(a.invoice_voucher_id, (paidMap.get(a.invoice_voucher_id) || 0) + a.amount_paise);
-        setLocalAged(
-          ageBills(
-            invs.map((inv) => ({
-              id: inv.id,
-              partyId: inv.party_ledger_id || "_",
-              date: inv.voucher_date,
-              dueDate: inv.due_date,
-              totalPaise: inv.total_paise,
-              allocatedPaise: paidMap.get(inv.id) || 0,
-            })),
-            balances,
-            asOf,
-          ),
-        );
+        try {
+          const balances = await partyBalancesLocal(activeCompanyId, asOf, mode === "receivables" ? "sundry_debtor" : "sundry_creditor");
+          const paidMap = new Map<string, number>();
+          for (const a of allocs) paidMap.set(a.invoice_voucher_id, (paidMap.get(a.invoice_voucher_id) || 0) + a.amount_paise);
+          setLocalAged(
+            ageBills(
+              invs.map((inv) => ({
+                id: inv.id,
+                partyId: inv.party_ledger_id || "_",
+                date: inv.voucher_date,
+                dueDate: inv.due_date,
+                totalPaise: inv.total_paise,
+                allocatedPaise: paidMap.get(inv.id) || 0,
+              })),
+              balances,
+              asOf,
+            ),
+          );
+        } catch (err) {
+          console.error("Local bill-wise outstanding failed:", err);
+          setLocalAged(null);
+          toast.error(`Bill-wise outstanding could not use the ledger balance: ${describeError(err)}`);
+        }
       } else {
         setLocalAged(null);
       }
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err) => {
+      setLoading(false);
+      toast.error(`Outstanding could not load: ${describeError(err)}`);
+    });
   }, [activeCompanyId, mode, asOf]);
 
   const rows = useMemo(() => {
