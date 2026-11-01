@@ -665,12 +665,23 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
   const [running, setRunning] = useState(false);
   const [unbalanced, setUnbalanced] = useState<VoucherCheck[]>([]);
   const [orphans, setOrphans] = useState<number>(0);
+  const [extra, setExtra] = useState<{ deleted: number; empty: number; checked: number }>({ deleted: 0, empty: 0, checked: 0 });
   const [hasRun, setHasRun] = useState(false);
 
   async function runChecks() {
     if (!companyId) return;
     setRunning(true);
     try {
+      if (isLocalOnlyMode() || !isOnlineNow()) {
+        const { verifyBooksLocal } = await import("@/lib/offline/verify-books-local");
+        const r = await verifyBooksLocal(companyId);
+        setUnbalanced(r.unbalanced.map((u) => ({ ...u })));
+        setOrphans(r.orphanEntries);
+        setExtra({ deleted: r.linesOnDeletedVouchers, empty: r.emptyVouchers, checked: r.checkedVouchers });
+        setHasRun(true);
+        toast.success(`Checked ${r.checkedVouchers} voucher(s) on this PC`);
+        return;
+      }
       let vchs: { id: string; voucher_number: string; voucher_date: string; voucher_type: string }[] = [];
       let entries: { voucher_id: string; debit_paise: number; credit_paise: number }[] = [];
 
@@ -769,6 +780,15 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
                 <div className="text-2xl font-bold">{orphans}</div>
               </CardContent>
             </Card>
+            {extra.checked > 0 && (
+              <Card className={extra.deleted === 0 && extra.empty === 0 ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/40 bg-amber-500/5"}>
+                <CardContent className="p-3 text-sm">
+                  <div className="text-xs uppercase text-muted-foreground">Other findings</div>
+                  <div>Lines on deleted vouchers: <b>{extra.deleted}</b></div>
+                  <div>Vouchers with no lines: <b>{extra.empty}</b></div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 
