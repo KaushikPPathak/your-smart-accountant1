@@ -66,6 +66,7 @@ import { describeError } from "@/lib/error-message";
 import { deactivateLedger as deactivateLedgerOff, deactivateItem as deactivateItemOff } from "@/lib/offline/masters";
 import { isOnlineNow } from "@/lib/offline/online-status";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { mergeLedgersLocal, renumberVouchersLocal } from "@/lib/offline/housekeeping-local";
 import {
   readItems,
   readLedgers,
@@ -290,15 +291,35 @@ function MergeLedgersTool({ companyId, disabled }: { companyId: string | null; d
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  useEffect(() => {
-    if (!companyId) return;
-    supabase
+  async function loadLedgers(cid: string) {
+    if (isLocalOnlyMode()) {
+      const rows = (await readLedgers(cid)) as any[];
+      setLedgers(
+        rows
+          .filter((l) => l.is_active !== false)
+          .map((l) => ({
+            id: String(l.id),
+            name: String(l.name ?? ""),
+            type: String(l.type ?? ""),
+            opening_balance_paise: Number(l.opening_balance_paise) || 0,
+            opening_balance_is_debit: l.opening_balance_is_debit !== false,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      return;
+    }
+    const { data } = await supabase
       .from("ledgers")
       .select("id, name, type, opening_balance_paise, opening_balance_is_debit")
-      .eq("company_id", companyId)
+      .eq("company_id", cid)
       .eq("is_active", true)
-      .order("name")
-      .then(({ data }: any) => setLedgers((data || []) as LedgerOpt[]));
+      .order("name");
+    setLedgers((data || []) as LedgerOpt[]);
+  }
+
+  useEffect(() => {
+    if (!companyId) return;
+    loadLedgers(companyId).catch(() => setLedgers([]));
   }, [companyId]);
 
   const source = ledgers.find((l) => l.id === sourceId);
@@ -309,60 +330,57 @@ function MergeLedgersTool({ companyId, disabled }: { companyId: string | null; d
     if (!companyId || !source || !target || source.id === target.id) return;
     setBusy(true);
     try {
-      // 1. Re-point voucher_entries
-      const { error: e1 } = await supabase
-        .from("voucher_entries")
-        .update({ ledger_id: target.id })
-        .eq("ledger_id", source.id);
-      if (e1) throw e1;
+      if (isLocalOnlyMode()) {
+        await mergeLedgersLocal(companyId, source.id, target.id);
+      } else {
+        // 1. Re-point voucher_entries
+        const { error: e1 } = await supabase
+          .from("voucher_entries")
+          .update({ ledger_id: target.id })
+          .eq("ledger_id", source.id);
+        if (e1) throw e1;
 
-      // 2. Re-point vouchers.party_ledger_id
-      const { error: e2 } = await supabase
-        .from("vouchers")
-        .update({ party_ledger_id: target.id })
-        .eq("party_ledger_id", source.id)
-        .eq("company_id", companyId);
-      if (e2) throw e2;
+        // 2. Re-point vouchers.party_ledger_id
+        const { error: e2 } = await supabase
+          .from("vouchers")
+          .update({ party_ledger_id: target.id })
+          .eq("party_ledger_id", source.id)
+          .eq("company_id", companyId);
+        if (e2) throw e2;
 
-      // 3. Re-point bill_allocations
-      const { error: e3 } = await supabase
-        .from("bill_allocations")
-        .update({ ledger_id: target.id })
-        .eq("ledger_id", source.id);
-      if (e3) throw e3;
+        // 3. Re-point bill_allocations
+        const { error: e3 } = await supabase
+          .from("bill_allocations")
+          .update({ ledger_id: target.id })
+          .eq("ledger_id", source.id);
+        if (e3) throw e3;
 
-      // 4. Combine opening balances (signed sum)
-      const sSign = source.opening_balance_is_debit ? 1 : -1;
-      const tSign = target.opening_balance_is_debit ? 1 : -1;
-      const combined =
-        sSign * source.opening_balance_paise + tSign * target.opening_balance_paise;
-      const { error: e4 } = await supabase
-        .from("ledgers")
-        .update({
-          opening_balance_paise: Math.abs(combined),
-          opening_balance_is_debit: combined >= 0,
-        })
-        .eq("id", target.id);
-      if (e4) throw e4;
+        // 4. Combine opening balances (signed sum)
+        const sSign = source.opening_balance_is_debit ? 1 : -1;
+        const tSign = target.opening_balance_is_debit ? 1 : -1;
+        const combined =
+          sSign * source.opening_balance_paise + tSign * target.opening_balance_paise;
+        const { error: e4 } = await supabase
+          .from("ledgers")
+          .update({
+            opening_balance_paise: Math.abs(combined),
+            opening_balance_is_debit: combined >= 0,
+          })
+          .eq("id", target.id);
+        if (e4) throw e4;
 
-      // 5. Soft-delete source (mark inactive)
-      const { error: e5 } = await supabase
-        .from("ledgers")
-        .update({ is_active: false })
-        .eq("id", source.id);
-      if (e5) throw e5;
+        // 5. Soft-delete source (mark inactive)
+        const { error: e5 } = await supabase
+          .from("ledgers")
+          .update({ is_active: false })
+          .eq("id", source.id);
+        if (e5) throw e5;
+      }
 
       toast.success(`Merged "${source.name}" into "${target.name}"`);
       setSourceId("");
       setTargetId("");
-      // refresh
-      const { data } = await supabase
-        .from("ledgers")
-        .select("id, name, type, opening_balance_paise, opening_balance_is_debit")
-        .eq("company_id", companyId)
-        .eq("is_active", true)
-        .order("name");
-      setLedgers((data || []) as LedgerOpt[]);
+      await loadLedgers(companyId);
     } catch (err) {
       toast.error(`Merge failed: ${describeError(err)}`);
     } finally {
@@ -465,14 +483,31 @@ function RenumberVouchersTool({ companyId, disabled }: { companyId: string | nul
 
   async function loadPreview() {
     if (!companyId) return;
-    const { data } = await supabase
-      .from("vouchers")
-      .select("id, voucher_number, voucher_date")
-      .eq("company_id", companyId)
-      .eq("voucher_type", type)
-      .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true })
-      .order("created_at", { ascending: true });
-    const rows = (data || []) as { id: string; voucher_number: string; voucher_date: string }[];
+    let rows: { id: string; voucher_number: string; voucher_date: string }[];
+    if (isLocalOnlyMode()) {
+      const local = (await readVouchers(companyId, { voucher_type: type })) as any[];
+      rows = local
+        .map((v) => ({
+          id: String(v.id),
+          voucher_number: String(v.voucher_number ?? ""),
+          voucher_date: String(v.voucher_date ?? ""),
+          created_at: String(v.created_at ?? ""),
+        }))
+        .sort((a, b) =>
+          a.voucher_date.localeCompare(b.voucher_date) ||
+          a.voucher_number.localeCompare(b.voucher_number) ||
+          a.created_at.localeCompare(b.created_at),
+        );
+    } else {
+      const { data } = await supabase
+        .from("vouchers")
+        .select("id, voucher_number, voucher_date")
+        .eq("company_id", companyId)
+        .eq("voucher_type", type)
+        .order("voucher_date", { ascending: true }).order("voucher_number", { ascending: true })
+        .order("created_at", { ascending: true });
+      rows = (data || []) as { id: string; voucher_number: string; voucher_date: string }[];
+    }
     setPreview(
       rows.map((v, i) => ({
         id: v.id,
@@ -486,6 +521,13 @@ function RenumberVouchersTool({ companyId, disabled }: { companyId: string | nul
   async function applyRenumber() {
     setBusy(true);
     try {
+      if (isLocalOnlyMode()) {
+        if (!companyId) throw new Error("Choose a company first.");
+        await renumberVouchersLocal(companyId, preview.map((p) => ({ id: p.id, voucher_number: p.new })));
+        toast.success(`Renumbered ${preview.length} ${type} vouchers`);
+        setPreview([]);
+        return;
+      }
       // Two-pass to avoid unique-constraint clashes: temp prefix then final
       const tmpUpdates = preview.map((p) =>
         supabase.from("vouchers").update({ voucher_number: `__TMP__${p.id.slice(0, 8)}` }).eq("id", p.id),
@@ -648,7 +690,7 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
         entries = all;
       };
 
-      if (!isOnlineNow()) {
+      if (isLocalOnlyMode() || !isOnlineNow()) {
         await loadCachedEntries();
       } else {
         try {
@@ -925,6 +967,10 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
     if (!companyId) return;
     setBusy(true);
     try {
+      if (isLocalOnlyMode()) {
+        toast.success("Next voucher numbers on this PC are worked out from the books, so there is nothing to reset.");
+        return;
+      }
       // For each voucher type, find max trailing number and reset next_number
       const loaded = await withCacheFallback<{
         source: "cloud" | "cache";
@@ -984,6 +1030,10 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
     if (!companyId) return;
     setSnapBusy(true);
     try {
+      if (isLocalOnlyMode()) {
+        toast.success("Reports in this build are worked out from this PC's books. No snapshot to rebuild.");
+        return;
+      }
       if (shouldPreferOfflineCache()) {
         toast.success("Offline reports use cached vouchers directly — monthly snapshot rebuild skipped until online");
         return;
