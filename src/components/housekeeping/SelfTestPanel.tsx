@@ -80,6 +80,20 @@ export function SelfTestPanel({ companyId }: { companyId: string | null }) {
     setChecks(blank());
     setFinishedAt(null);
 
+    // Local-only build: one shared maintenance run covers this panel, Verify
+    // Books and Recompute. Cloud builds keep the checks below.
+    const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+    if (isLocalOnlyMode()) {
+      const { runMaintenanceLocal } = await import("@/lib/offline/maintenance-local");
+      const report = await runMaintenanceLocal(companyId);
+      setChecks(
+        report.checks.map((c) => ({ key: c.key, label: c.label, status: c.status, message: c.message })),
+      );
+      setRunning(false);
+      setFinishedAt(new Date());
+      return;
+    }
+
     const mark = async (
       key: string,
       fn: () => Promise<Pick<Check, "status" | "message"> & { ms?: number }>,

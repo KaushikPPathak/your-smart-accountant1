@@ -673,8 +673,8 @@ function VerifyBooksTool({ companyId }: { companyId: string | null }) {
     setRunning(true);
     try {
       if (isLocalOnlyMode() || !isOnlineNow()) {
-        const { verifyBooksLocal } = await import("@/lib/offline/verify-books-local");
-        const r = await verifyBooksLocal(companyId);
+        const { runMaintenanceLocal } = await import("@/lib/offline/maintenance-local");
+        const { integrity: r } = await runMaintenanceLocal(companyId);
         setUnbalanced(r.unbalanced.map((u) => ({ ...u })));
         setOrphans(r.orphanEntries);
         setExtra({ deleted: r.linesOnDeletedVouchers, empty: r.emptyVouchers, checked: r.checkedVouchers });
@@ -988,7 +988,16 @@ function RecomputeTool({ companyId, disabled }: { companyId: string | null; disa
     setBusy(true);
     try {
       if (isLocalOnlyMode()) {
-        toast.success("Next voucher numbers on this PC are worked out from the books, so there is nothing to reset.");
+        // Numbers on this PC are worked out from the books, so nothing is stored
+        // to reset. The useful check is for duplicate numbers.
+        const { runMaintenanceLocal } = await import("@/lib/offline/maintenance-local");
+        const report = await runMaintenanceLocal(companyId);
+        const dups = report.numbering.reduce((a, n) => a + n.duplicates.length, 0);
+        if (dups) {
+          toast.error(`${dups} duplicate voucher number(s) found — see Verify Books / Self-test`);
+        } else {
+          toast.success(`Checked ${report.numbering.length} voucher type(s): no duplicate numbers`);
+        }
         return;
       }
       // For each voucher type, find max trailing number and reset next_number
