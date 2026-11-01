@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { getOfflineCacheCounts, pullSnapshot, type SnapshotResult } from "@/lib/offline/snapshot";
 import { getStorageQuota, requestPersistentStorage, formatBytes, type StorageQuota } from "@/lib/offline/storage-quota";
 import { supabase as supabaseTyped } from "@/integrations/supabase/client";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import {
   drainOutbox,
   queueSize,
@@ -37,6 +38,23 @@ export const Route = createFileRoute("/app/data-sync")({
 type Counts = Record<string, number>;
 const RESTORE_TABLES = ["companies", "ledgers", "vouchers", "company_members"] as const;
 const supabase: any = supabaseTyped;
+
+/** Writes backup rows into this PC's books. Company members are not stored (local-only). */
+async function writeRowsLocally(table: (typeof RESTORE_TABLES)[number], rows: Record<string, unknown>[]): Promise<number> {
+  const { offlineDb: db } = await import("@/lib/offline/db");
+  const good = rows.filter((r) => typeof r?.id === "string" && r.id.length > 0);
+  if (table === "company_members") return 0;
+  if (table === "companies") {
+    await db.cache_companies.bulkPut(good.map((r) => ({ ...r, company_id: r.id, is_synced: true })));
+    await db.companies.bulkPut(
+      good.map((r) => ({ id: String(r.id), name: String(r.name ?? ""), has_password: false, account_id: "local-user" })),
+    );
+    return good.length;
+  }
+  if (table === "ledgers") await db.cache_ledgers.bulkPut(good);
+  if (table === "vouchers") await db.cache_vouchers.bulkPut(good);
+  return good.length;
+}
 
 function DataSyncPage() {
   const router = useRouter();
@@ -91,6 +109,10 @@ function DataSyncPage() {
 
 
   async function handleCloudSync() {
+    if (isLocalOnlyMode()) {
+      toast.info("Cloud sync is off in this build. Your books stay on this PC.");
+      return;
+    }
     setCloudBusy(true);
     setCloudDone(false);
     setCloudCounts({});
@@ -151,7 +173,14 @@ function DataSyncPage() {
           continue;
         }
         try {
-            const { error } = await supabase.from(table).insert(rows as any);
+          if (isLocalOnlyMode()) {
+            const written = await writeRowsLocally(table, rows as any[]);
+            counts[table] = written;
+            setRestoreCounts({ ...counts });
+            toast.success(`Restored ${written} ${table}`);
+            continue;
+          }
+          const { error } = await supabase.from(table).insert(rows as any);
           if (error) {
             toast.error(`Restore failed for ${table}: ${error.message ?? "unknown"}`);
             continue;
@@ -300,7 +329,12 @@ function DataSyncPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button onClick={handleCloudSync} disabled={cloudBusy}>
+          {isLocalOnlyMode() && (
+            <p className="text-sm text-muted-foreground">
+              Not used in this build: your books stay on this PC. Use Backup &amp; Restore in Housekeeping for copies.
+            </p>
+          )}
+          <Button onClick={handleCloudSync} disabled={cloudBusy || isLocalOnlyMode()}>
             {cloudBusy ? (
               <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Syncing…</>
             ) : (

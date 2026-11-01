@@ -47,6 +47,32 @@ const FLAG_LABEL: Record<string, string> = {
   empty_line: "Zero-value line",
 };
 
+/** The voucher with the same joins the cloud select makes, read from this PC's books. */
+async function loadAuditVoucherLocal(voucherId: string): Promise<VoucherRow | null> {
+  const { offlineDb: db } = await import("@/lib/offline/db");
+  const v: any = await db.cache_vouchers.get(voucherId);
+  if (!v || v.is_deleted) return null;
+  const party: any = v.party_ledger_id ? await db.cache_ledgers.get(v.party_ledger_id) : null;
+  const lines: any[] = await db.cache_voucher_items.where("voucher_id").equals(voucherId).toArray();
+  const voucher_items = await Promise.all(
+    lines.map(async (l) => {
+      const item: any = l.item_id ? await db.cache_items.get(l.item_id) : null;
+      return {
+        qty: l.qty, rate_paise: l.rate_paise, taxable_paise: l.taxable_paise,
+        cgst_paise: l.cgst_paise, sgst_paise: l.sgst_paise, igst_paise: l.igst_paise, gst_rate: l.gst_rate,
+        items: item ? { name: item.name, hsn_code: item.hsn_code ?? null, unit: item.unit ?? null } : null,
+      };
+    }),
+  );
+  return {
+    ...v,
+    ledgers: party
+      ? { name: party.name, gstin: party.gstin ?? null, state_code: party.state_code ?? null, gst_treatment: party.gst_treatment ?? null, country: party.country ?? null }
+      : null,
+    voucher_items,
+  } as unknown as VoucherRow;
+}
+
 export function Gstr1PostingAudit({ voucherId, companyId }: Props) {
   const [voucher, setVoucher] = useState<VoucherRow | null>(null);
   const [company, setCompany] = useState<CompanyMeta | null>(null);
@@ -56,13 +82,18 @@ export function Gstr1PostingAudit({ voucherId, companyId }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const [{ data, error }, meta] = await Promise.all([
-          supabase.from("vouchers").select(SELECT).eq("id", voucherId).maybeSingle(),
+        const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+        const [voucherRow, meta] = await Promise.all([
+          isLocalOnlyMode()
+            ? loadAuditVoucherLocal(voucherId)
+            : supabase.from("vouchers").select(SELECT).eq("id", voucherId).maybeSingle().then(({ data, error }: { data: unknown; error: Error | null }) => {
+                if (error) throw error;
+                return data as unknown as VoucherRow | null;
+              }),
           fetchCompanyMeta(companyId),
         ]);
         if (cancelled) return;
-        if (error) throw error;
-        setVoucher(data as unknown as VoucherRow);
+        setVoucher(voucherRow);
         setCompany(meta);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));

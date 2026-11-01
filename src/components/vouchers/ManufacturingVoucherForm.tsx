@@ -383,6 +383,12 @@ export function ManufacturingVoucherForm() {
     setSaving(false);
 
     enqueueSave(`Manufacturing Journal ${snap.date}`, async () => {
+      const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+      if (isLocalOnlyMode()) {
+        const { saveManufacturingLocal } = await import("@/lib/offline/manufacturing-local");
+        await saveManufacturingLocal(snap);
+        return;
+      }
       const { data: numData, error: numErr } = await supabase.rpc(
         "next_voucher_number",
         { _company_id: snap.companyId, _type: "manufacturing" },

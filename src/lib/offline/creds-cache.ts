@@ -146,6 +146,31 @@ export async function verifyOfflineLogin(
   return null;
 }
 
+/**
+ * Change this device's password for an account. The current password must
+ * match. Local-only build: replaces the offline bcrypt hash.
+ */
+export async function changeOfflinePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  if (newPassword.length < 6) throw new Error("New password must be at least 6 characters");
+  const offlineDb = await getOfflineDb();
+  const row = (await offlineDb.account_creds.filter((r: any) => r.user_id === userId).first()) as
+    | AccountCredCacheRow
+    | undefined;
+  if (!row) throw new Error("This account is not on this PC.");
+  const ok = await bcrypt.compare(currentPassword, row.password_hash);
+  if (!ok) throw new Error("Current password is wrong");
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await offlineDb.account_creds.put({ ...row, password_hash: passwordHash, cached_at: Date.now() });
+  await persistLocalUserNative(
+    { id: row.user_id, username: row.username, name: row.name, role: row.role, isActive: row.is_active },
+    passwordHash,
+  );
+}
+
 async function tryNativeOfflineLogin(
   username: string,
   password: string,

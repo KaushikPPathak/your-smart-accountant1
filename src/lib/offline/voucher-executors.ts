@@ -110,7 +110,7 @@ export async function assertDateInOpenFy(companyId: string, date: string): Promi
 
 
 
-async function nextLocalVoucherNumber(
+export async function nextLocalVoucherNumber(
   companyId: string,
   voucherType: string,
   voucherDate?: string,

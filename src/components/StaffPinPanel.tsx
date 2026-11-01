@@ -24,12 +24,18 @@ export function StaffPinPanel() {
     if (next !== next2) return toast.error("New passwords do not match");
     setBusy(true);
     try {
-      const { error } = await supabase.rpc("change_account_password", {
-        _user_id: me.id,
-        _old_password: cur,
-        _new_password: next,
-      });
-      if (error) throw error;
+      const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+      if (isLocalOnlyMode()) {
+        const { changeOfflinePassword } = await import("@/lib/offline/creds-cache");
+        await changeOfflinePassword(me.id, cur, next);
+      } else {
+        const { error } = await supabase.rpc("change_account_password", {
+          _user_id: me.id,
+          _old_password: cur,
+          _new_password: next,
+        });
+        if (error) throw error;
+      }
       toast.success("Password updated");
       setCur(""); setNext(""); setNext2("");
     } catch (e2) {

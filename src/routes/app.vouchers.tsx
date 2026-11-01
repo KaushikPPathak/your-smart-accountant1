@@ -218,6 +218,14 @@ function VouchersHub() {
       // One server transaction: children hard-deleted, parent soft-deleted so
       // other devices drop it. A partial failure can no longer leave a live
       // voucher with no entries.
+      const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+      if (isLocalOnlyMode()) {
+        const { deleteVoucherLocal } = await import("@/lib/offline/voucher-delete-local");
+        await deleteVoucherLocal(activeCompanyId ?? "", r.id);
+        toast.success("Voucher deleted");
+        load();
+        return;
+      }
       const { error: delErr } = await supabase.rpc("delete_voucher_atomic", { _voucher_id: r.id });
       if (delErr) { toast.error(delErr.message); return; }
       toast.success("Voucher deleted");
