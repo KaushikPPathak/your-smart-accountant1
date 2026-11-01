@@ -31,7 +31,7 @@ import { Gstr1PostingAudit } from "@/components/vouchers/Gstr1PostingAudit";
 import { UpiPaymentQr } from "@/components/vouchers/UpiPaymentQr";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { toast } from "sonner";
-import { goBackFromVoucher } from "@/lib/voucher-return";
+import { clearVoucherOrigin, goBackFromVoucher } from "@/lib/voucher-return";
 import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { resolveEditedGstDirection } from "@/lib/vouchers/edit-gst-direction";
 import { onDataChange } from "@/lib/ai/cache-events";
@@ -653,7 +653,10 @@ function VoucherEditPage() {
       }
 
       toast.success("Deleted");
-      goBackFromVoucher(() => navigate({ to: "/app/vouchers" }));
+      // Go to the vouchers list. Browser "back" could return to a voucher form
+      // whose unsaved draft would then be offered again.
+      clearVoucherOrigin();
+      navigate({ to: "/app/vouchers" });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete");
     }
