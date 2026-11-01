@@ -85,6 +85,10 @@ class OfflineDatabase extends Dexie {
   cache_payment_reminders!: Table<any, any>;
   cache_entity_members!: Table<any, any>;
   cache_closing_runs!: Table<any, any>;
+  cache_it_fixed_assets!: Table<any, any>;
+  cache_it_asset_movements!: Table<any, any>;
+  cache_it_disallowances!: Table<any, any>;
+  cache_it_43b_clearances!: Table<any, any>;
   cache_voucher_export_details!: Table<any, any>;
   cache_einvoice_details!: Table<any, any>;
   cache_period_locks!: Table<any, any>;
@@ -274,6 +278,13 @@ class OfflineDatabase extends Dexie {
     // Year-end closing runs (audit trail of closure postings), per company.
     this.version(20).stores({
       cache_closing_runs: "id, company_id, performed_at, [company_id+performed_at]",
+    });
+    // Income-tax audit data (fixed-asset blocks, movements, disallowances, 43B clearances).
+    this.version(21).stores({
+      cache_it_fixed_assets: "id, company_id, fy_start, [company_id+fy_start]",
+      cache_it_asset_movements: "id, company_id, asset_id, fy_start, [company_id+fy_start]",
+      cache_it_disallowances: "id, company_id, fy_end, [company_id+fy_end]",
+      cache_it_43b_clearances: "id, company_id, fy_end, [company_id+fy_end]",
     });
   }
 }

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { fetchLedgerBalances } from "@/lib/reports";
 import {
   DEFAULT_IT_BLOCKS,
   scan40A3,
   fetch43BSnapshot,
+  loadItData,
   summariseBlocks,
   bookDepreciationPaise,
   netProfitBooks,
@@ -45,15 +45,12 @@ export function TaxAuditPanel({ mode, fyStart, fyEnd }: Props) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [bals, hits, customBlocksRes, assetsRes, movementsRes, disallowRes] = await Promise.all([
+      const [bals, hits, itData] = await Promise.all([
         fetchLedgerBalances(activeCompanyId, fyEnd, fyStart, {
           excludeProfitLossClosingTransfers: true,
         }),
         scan40A3(activeCompanyId, fyStart, fyEnd),
-        supabase.from("it_asset_blocks").select("code, name, rate_pct").eq("company_id", activeCompanyId),
-        supabase.from("it_fixed_assets").select("*").eq("company_id", activeCompanyId).eq("fy_start", fyStart),
-        supabase.from("it_asset_movements").select("*").eq("company_id", activeCompanyId).eq("fy_start", fyStart),
-        supabase.from("it_disallowances").select("section, amount_paise").eq("company_id", activeCompanyId).eq("fy_end", fyEnd),
+        loadItData(activeCompanyId, fyStart, fyEnd),
       ]);
       // 43B unpaid → also disallowance
       const dues = await fetch43BSnapshot(activeCompanyId, fyEnd);
@@ -62,16 +59,16 @@ export function TaxAuditPanel({ mode, fyStart, fyEnd }: Props) {
         0,
       );
 
-      const customBlocks = (customBlocksRes.data ?? []) as { code: string; name: string; rate_pct: number }[];
+      const customBlocks = itData.customBlocks;
       const blocksDef = customBlocks.length > 0
         ? customBlocks
         : DEFAULT_IT_BLOCKS.map((b) => ({ code: b.code, name: b.name, rate_pct: b.rate_pct }));
-      const assets = (assetsRes.data ?? []) as ItAsset[];
-      const movements = (movementsRes.data ?? []) as ItMovement[];
+      const assets = itData.assets;
+      const movements = itData.movements;
       const blockSummaries = summariseBlocks(blocksDef, assets, movements, fyStart);
 
       const disallowMap = new Map<string, number>();
-      for (const d of (disallowRes.data ?? []) as { section: string; amount_paise: number }[]) {
+      for (const d of itData.disallowances) {
         disallowMap.set(d.section, (disallowMap.get(d.section) ?? 0) + d.amount_paise);
       }
 

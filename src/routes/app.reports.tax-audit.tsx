@@ -16,11 +16,21 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR, rupeesToPaise } from "@/lib/money";
 import { downloadXlsx, r } from "@/lib/exporters";
 import { fetchLedgerBalances } from "@/lib/reports";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import {
+  addDisallowanceLocal,
+  addFixedAssetLocal,
+  addMovementLocal,
+  removeDisallowanceLocal,
+  removeFixedAssetLocal,
+  upsertClearanceLocal,
+} from "@/lib/offline/tax-audit-local";
 import { useFyRangeState } from "@/components/reports/ReportToolbar";
 import {
   DEFAULT_IT_BLOCKS,
   scan40A3,
   fetch43BSnapshot,
+  loadItData,
   summariseBlocks,
   bookDepreciationPaise,
   netProfitBooks,
@@ -68,30 +78,16 @@ function TaxAuditPage() {
     if (!activeCompanyId) return;
     setLoading(true);
     try {
-      const [hits, dues, assetsRes, movesRes, disallowRes] = await Promise.all([
+      const [hits, dues, itData] = await Promise.all([
         scan40A3(activeCompanyId, fyStart, fyEnd),
         fetch43BSnapshot(activeCompanyId, fyEnd),
-        sb
-          .from("it_fixed_assets")
-          .select("id, company_id, block_code, ledger_id, name, fy_start, opening_wdv_paise")
-          .eq("company_id", activeCompanyId)
-          .eq("fy_start", fyStart),
-        sb
-          .from("it_asset_movements")
-          .select("id, asset_id, fy_start, kind, movement_date, amount_paise, notes")
-          .eq("company_id", activeCompanyId)
-          .eq("fy_start", fyStart),
-        sb
-          .from("it_disallowances")
-          .select("id, section, description, amount_paise")
-          .eq("company_id", activeCompanyId)
-          .eq("fy_end", fyEnd),
+        loadItData(activeCompanyId, fyStart, fyEnd),
       ]);
       setCashHits(hits);
       setStat43b(dues);
-      setAssets((assetsRes.data ?? []) as ItAsset[]);
-      setMovements((movesRes.data ?? []) as ItMovement[]);
-      setManualRows((disallowRes.data ?? []) as ManualRow[]);
+      setAssets(itData.assets);
+      setMovements(itData.movements);
+      setManualRows(itData.disallowances);
     } finally {
       setLoading(false);
     }
@@ -147,6 +143,19 @@ function TaxAuditPage() {
   const upsert43B = async (row: Statutory43BRow, patch: Partial<Statutory43BRow>) => {
     if (!activeCompanyId || !canWrite) return;
     const merged = { ...row, ...patch };
+    if (isLocalOnlyMode()) {
+      try {
+        await upsertClearanceLocal(activeCompanyId, row.ledger_id, fyEnd, {
+          cleared_on: merged.cleared_on || null,
+          cleared_paise: merged.cleared_paise ?? 0,
+          reference: merged.reference || null,
+        });
+        setStat43b((cur) => cur.map((r) => (r.ledger_id === row.ledger_id ? merged : r)));
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
     const { error } = await sb.from("it_43b_clearances").upsert(
       {
         company_id: activeCompanyId,
@@ -166,6 +175,15 @@ function TaxAuditPage() {
 
   const addAsset = async (a: { block_code: string; name: string; opening_wdv_paise: number }) => {
     if (!activeCompanyId || !canWrite) return;
+    if (isLocalOnlyMode()) {
+      try {
+        const row = await addFixedAssetLocal(activeCompanyId, fyStart, a);
+        setAssets((cur) => [...cur, row]);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
     const { data, error } = await sb
       .from("it_fixed_assets")
       .insert({
@@ -186,6 +204,16 @@ function TaxAuditPage() {
 
   const removeAsset = async (id: string) => {
     if (!canWrite) return;
+    if (isLocalOnlyMode() && activeCompanyId) {
+      try {
+        await removeFixedAssetLocal(activeCompanyId, id);
+        setAssets((cur) => cur.filter((a) => a.id !== id));
+        setMovements((cur) => cur.filter((m) => m.asset_id !== id));
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
     const { error } = await sb.from("it_fixed_assets").delete().eq("id", id);
     if (error) toast.error(error.message);
     else {
@@ -199,6 +227,15 @@ function TaxAuditPage() {
     m: { kind: "addition" | "deletion"; movement_date: string; amount_paise: number; notes?: string },
   ) => {
     if (!activeCompanyId || !canWrite) return;
+    if (isLocalOnlyMode()) {
+      try {
+        const row = await addMovementLocal(activeCompanyId, fyStart, asset.id, m);
+        setMovements((cur) => [...cur, row]);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
     const { data, error } = await sb
       .from("it_asset_movements")
       .insert({
@@ -221,6 +258,15 @@ function TaxAuditPage() {
 
   const addManual = async (row: { section: string; description: string; amount_paise: number }) => {
     if (!activeCompanyId || !canWrite) return;
+    if (isLocalOnlyMode()) {
+      try {
+        const added = await addDisallowanceLocal(activeCompanyId, fyEnd, row);
+        setManualRows((cur) => [...cur, added]);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
     const { data, error } = await sb
       .from("it_disallowances")
       .insert({
@@ -240,6 +286,15 @@ function TaxAuditPage() {
   };
 
   const removeManual = async (id: string) => {
+    if (isLocalOnlyMode()) {
+      try {
+        await removeDisallowanceLocal(id);
+        setManualRows((cur) => cur.filter((r) => r.id !== id));
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
     const { error } = await sb.from("it_disallowances").delete().eq("id", id);
     if (error) toast.error(error.message);
     else setManualRows((cur) => cur.filter((r) => r.id !== id));

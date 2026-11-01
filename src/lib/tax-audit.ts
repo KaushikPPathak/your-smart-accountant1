@@ -2,6 +2,19 @@
 // All money in paise (bigint-safe integers).
 import { supabase } from "@/integrations/supabase/client";
 import { fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import {
+  cashLedgerIdsLocal,
+  paymentJournalVouchersLocal,
+  entriesForVouchersLocal,
+  ledgerNamesLocal,
+  listClearancesLocal,
+  listFixedAssetsLocal,
+  listMovementsLocal,
+  listDisallowancesLocal,
+  type Clearance,
+  type ManualDisallowance,
+} from "@/lib/offline/tax-audit-local";
 
 /** Section 40A(3) threshold: cash payment to a single party in a single day. */
 export const CASH_LIMIT_PAISE = 10_000_00;
@@ -40,31 +53,40 @@ export async function scan40A3(
   toDate: string,
 ): Promise<CashHit[]> {
   // 1. Get all CASH ledgers for this company
-  const { data: cashLedgers } = await supabase
-    .from("ledgers")
-    .select("id")
-    .eq("company_id", companyId)
-    .eq("type", "cash");
-  const cashIds = new Set((cashLedgers ?? []).map((l: any) => l.id));
+  const cashIds = new Set<string>(
+    isLocalOnlyMode()
+      ? await cashLedgerIdsLocal(companyId)
+      : ((await supabase.from("ledgers").select("id").eq("company_id", companyId).eq("type", "cash")).data ?? []).map(
+          (l: any) => l.id as string,
+        ),
+  );
   if (cashIds.size === 0) return [];
 
   // 2. Get all payment/journal voucher entries in window
-  const { data: vouchers } = await supabase
-    .from("vouchers")
-    .select("id, voucher_number, voucher_date")
-    .eq("company_id", companyId)
-    .gte("voucher_date", fromDate)
-    .lte("voucher_date", toDate)
-    .in("voucher_type", ["payment", "journal"]);
+  const vouchers = isLocalOnlyMode()
+    ? await paymentJournalVouchersLocal(companyId, fromDate, toDate)
+    : (
+        await supabase
+          .from("vouchers")
+          .select("id, voucher_number, voucher_date")
+          .eq("company_id", companyId)
+          .gte("voucher_date", fromDate)
+          .lte("voucher_date", toDate)
+          .in("voucher_type", ["payment", "journal"])
+      ).data;
   const vMap = new Map(
     (vouchers ?? []).map((v: any) => [v.id, v]),
   );
   if (vMap.size === 0) return [];
 
-  const { data: entries } = await supabase
-    .from("voucher_entries")
-    .select("voucher_id, ledger_id, debit_paise, credit_paise")
-    .in("voucher_id", Array.from(vMap.keys()));
+  const entries = isLocalOnlyMode()
+    ? await entriesForVouchersLocal(Array.from(vMap.keys()).map(String))
+    : (
+        await supabase
+          .from("voucher_entries")
+          .select("voucher_id, ledger_id, debit_paise, credit_paise")
+          .in("voucher_id", Array.from(vMap.keys()))
+      ).data;
 
   // 3. Per voucher: find cash-credit (cash going out) and party-debit pairs
   const perVoucher = new Map<string, { cashCr: number; partyDebits: Map<string, number> }>();
@@ -107,10 +129,9 @@ export async function scan40A3(
 
   // 5. Resolve ledger names; keep only > limit
   const partyIds = Array.from(new Set(Array.from(agg.values()).map((a) => a.ledger_id)));
-  const { data: ledgerNames } = await supabase
-    .from("ledgers")
-    .select("id, name")
-    .in("id", partyIds);
+  const ledgerNames = isLocalOnlyMode()
+    ? await ledgerNamesLocal(partyIds)
+    : (await supabase.from("ledgers").select("id, name").in("id", partyIds)).data;
   const nameMap = new Map((ledgerNames ?? []).map((l: any) => [l.id, l.name]));
 
   const hits: CashHit[] = [];
@@ -152,6 +173,19 @@ export function is43BLedger(name: string, group_code: string | null): boolean {
   );
 }
 
+async function loadCloudClearances(companyId: string, fyEnd: string): Promise<Map<string, Clearance>> {
+  const { data: cleared } = await supabase
+    .from("it_43b_clearances" as never)
+    .select("ledger_id, cleared_on, cleared_paise, reference")
+    .eq("company_id", companyId)
+    .eq("fy_end", fyEnd);
+  return new Map(
+    (cleared as Array<{ ledger_id: string; cleared_on: string | null; cleared_paise: number; reference: string | null }> | null ?? []).map(
+      (c) => [c.ledger_id, { cleared_on: c.cleared_on, cleared_paise: c.cleared_paise, reference: c.reference }],
+    ),
+  );
+}
+
 export async function fetch43BSnapshot(
   companyId: string,
   fyEnd: string,
@@ -168,16 +202,9 @@ export async function fetch43BSnapshot(
     }));
 
   // Merge stored clearances
-  const { data: cleared } = await supabase
-    .from("it_43b_clearances" as never)
-    .select("ledger_id, cleared_on, cleared_paise, reference")
-    .eq("company_id", companyId)
-    .eq("fy_end", fyEnd);
-  const cMap = new Map(
-    (cleared as Array<{ ledger_id: string; cleared_on: string | null; cleared_paise: number; reference: string | null }> | null ?? []).map(
-      (c) => [c.ledger_id, c],
-    ),
-  );
+  const cMap = isLocalOnlyMode()
+    ? await listClearancesLocal(companyId, fyEnd)
+    : await loadCloudClearances(companyId, fyEnd);
   for (const row of outstanding) {
     const c = cMap.get(row.ledger_id);
     if (c) {
@@ -341,4 +368,37 @@ export function buildComputation(opts: {
     opts.itDepreciationPaise;
   rows.push({ label: "Taxable Income from Business/Profession", paise: taxable, kind: "equals" });
   return { rows, taxablePaise: taxable };
+}
+
+export interface ItData {
+  customBlocks: { code: string; name: string; rate_pct: number }[];
+  assets: ItAsset[];
+  movements: ItMovement[];
+  disallowances: ManualDisallowance[];
+}
+
+/** Fixed-asset blocks, assets, movements and manual disallowances for a year. Local in the local-only build. */
+export async function loadItData(companyId: string, fyStart: string, fyEnd: string): Promise<ItData> {
+  if (isLocalOnlyMode()) {
+    const [assets, movements, disallowances] = await Promise.all([
+      listFixedAssetsLocal(companyId, fyStart),
+      listMovementsLocal(companyId, fyStart),
+      listDisallowancesLocal(companyId, fyEnd),
+    ]);
+    // No custom block list is kept locally; the standard blocks apply.
+    return { customBlocks: [], assets, movements, disallowances };
+  }
+  const sbAny = supabase as any;
+  const [blocksRes, assetsRes, movesRes, disRes] = await Promise.all([
+    sbAny.from("it_asset_blocks").select("code, name, rate_pct").eq("company_id", companyId),
+    sbAny.from("it_fixed_assets").select("id, company_id, block_code, ledger_id, name, fy_start, opening_wdv_paise").eq("company_id", companyId).eq("fy_start", fyStart),
+    sbAny.from("it_asset_movements").select("id, asset_id, fy_start, kind, movement_date, amount_paise, notes").eq("company_id", companyId).eq("fy_start", fyStart),
+    sbAny.from("it_disallowances").select("id, section, description, amount_paise").eq("company_id", companyId).eq("fy_end", fyEnd),
+  ]);
+  return {
+    customBlocks: (blocksRes.data ?? []) as ItData["customBlocks"],
+    assets: (assetsRes.data ?? []) as ItAsset[],
+    movements: (movesRes.data ?? []) as ItMovement[],
+    disallowances: (disRes.data ?? []) as ManualDisallowance[],
+  };
 }
