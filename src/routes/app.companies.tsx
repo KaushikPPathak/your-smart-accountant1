@@ -434,17 +434,34 @@ function CompaniesPage() {
         const newId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const { error } = await supabase
-          .from("companies")
-          .insert({ id: newId, ...payload, created_by: currentUserId, owner_app_user_id: activeStaffId });
-        if (error) { setSubmitting(false); toast.error(error.message); return; }
-        // Also create a membership row so the company appears in the offline list.
-        // A DB trigger (on_company_created_add_admin) may have already inserted this row;
-        // use upsert with ignoreDuplicates so we don't fail on the unique (company_id, user_id) constraint.
-        await supabase.from("company_members").upsert(
-          { company_id: newId, user_id: currentUserId, role: "admin" },
-          { onConflict: "company_id,user_id", ignoreDuplicates: true },
-        );
+        if (isLocalOnlyMode()) {
+          // Local-only: the company lives in this PC's books and picker only.
+          const { offlineDb } = await import("@/lib/offline/db");
+          const now = new Date().toISOString();
+          await offlineDb.cache_companies.put({
+            ...payload,
+            id: newId,
+            company_id: newId,
+            created_by: "local-user",
+            owner_app_user_id: activeStaffId,
+            created_at: now,
+            updated_at: now,
+            is_synced: true,
+          });
+          await offlineDb.companies.put({ id: newId, name: payload.name, has_password: false, account_id: "local-user" });
+        } else {
+          const { error } = await supabase
+            .from("companies")
+            .insert({ id: newId, ...payload, created_by: currentUserId, owner_app_user_id: activeStaffId });
+          if (error) { setSubmitting(false); toast.error(error.message); return; }
+          // Also create a membership row so the company appears in the offline list.
+          // A DB trigger (on_company_created_add_admin) may have already inserted this row;
+          // use upsert with ignoreDuplicates so we don't fail on the unique (company_id, user_id) constraint.
+          await supabase.from("company_members").upsert(
+            { company_id: newId, user_id: currentUserId, role: "admin" },
+            { onConflict: "company_id,user_id", ignoreDuplicates: true },
+          );
+        }
 
         savedId = newId;
         setActiveCompanyId(newId);
