@@ -54,6 +54,12 @@
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
-    "sql:allow-select"
+    "sql:allow-select",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://evheurqijriyxubswsry.supabase.co/functions/v1/setu-gstin-proxy" }
+      ]
+    }
   ]
 }

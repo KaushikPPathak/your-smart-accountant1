@@ -100,7 +100,13 @@ async function invokeDirect(gstin: string): Promise<{ data: unknown; error?: str
   const url = proxyUrl();
   if (!url) return { data: null, error: GSTIN_OFFLINE_MESSAGE };
   try {
-    const res = await fetch(url, {
+    // In the desktop app the request goes through the native HTTP plugin, so
+    // it is not subject to the webview's CORS rules. Browsers use plain fetch.
+    const w = typeof window !== "undefined" ? (window as unknown as { __TAURI_INTERNALS__?: unknown }) : undefined;
+    const doFetch: typeof fetch = w?.__TAURI_INTERNALS__
+      ? ((await import("@tauri-apps/plugin-http")).fetch as unknown as typeof fetch)
+      : fetch;
+    const res = await doFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ gstin }),
