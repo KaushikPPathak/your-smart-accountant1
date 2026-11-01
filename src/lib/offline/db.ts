@@ -84,6 +84,7 @@ class OfflineDatabase extends Dexie {
   cache_gstr3b_itc_reversal!: Table<any, any>;
   cache_payment_reminders!: Table<any, any>;
   cache_entity_members!: Table<any, any>;
+  cache_closing_runs!: Table<any, any>;
   cache_voucher_export_details!: Table<any, any>;
   cache_einvoice_details!: Table<any, any>;
   cache_period_locks!: Table<any, any>;
@@ -268,6 +269,11 @@ class OfflineDatabase extends Dexie {
     // Partners / directors / members of a company (share, PSR, capital), per company.
     this.version(19).stores({
       cache_entity_members: "id, company_id, created_at",
+    });
+
+    // Year-end closing runs (audit trail of closure postings), per company.
+    this.version(20).stores({
+      cache_closing_runs: "id, company_id, performed_at, [company_id+performed_at]",
     });
   }
 }

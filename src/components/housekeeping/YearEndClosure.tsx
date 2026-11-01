@@ -193,6 +193,17 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
 
   const loadHistory = async () => {
     if (!companyId) return;
+    const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+    if (isLocalOnlyMode()) {
+      const { offlineDb } = await import("@/lib/offline/db");
+      const runs: any[] = await offlineDb.cache_closing_runs.where("company_id").equals(companyId).toArray();
+      setHistory(
+        runs
+          .sort((a, b) => String(b.performed_at).localeCompare(String(a.performed_at)))
+          .slice(0, 10) as ClosingRunRow[],
+      );
+      return;
+    }
     const { data } = await supabase
       .from("closing_runs")
       .select(
@@ -573,20 +584,26 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
         });
       }
 
-      // closing_runs is a cloud-only audit table; skip in local-only mode.
-      if (!localOnly && user) {
-        const { error: rErr } = await supabase.from("closing_runs").insert({
-          company_id: companyId,
-          fy_start: fyStart,
-          fy_end: fyEnd,
-          closing_stock_paise: closingStockPaise,
-          trading_voucher_id: createdIds.trading,
-          pl_voucher_id: createdIds.pl,
-          capital_voucher_id: createdIds.capital,
-          closing_stock_voucher_id: createdIds.closing_stock,
-          status: "completed",
-          performed_by: user.id,
+      // The closing run is kept as an audit record: in the local books when local-only, else in the cloud.
+      const runFields = {
+        company_id: companyId,
+        fy_start: fyStart,
+        fy_end: fyEnd,
+        closing_stock_paise: closingStockPaise,
+        trading_voucher_id: createdIds.trading,
+        pl_voucher_id: createdIds.pl,
+        capital_voucher_id: createdIds.capital,
+        closing_stock_voucher_id: createdIds.closing_stock,
+        status: "completed",
+      };
+      if (localOnly) {
+        const { offlineDb } = await import("@/lib/offline/db");
+        const { newId } = await import("@/lib/utils/sys-utils");
+        await offlineDb.cache_closing_runs.put({
+          id: newId(), ...runFields, performed_by: "local-user", performed_at: new Date().toISOString(),
         });
+      } else if (user) {
+        const { error: rErr } = await supabase.from("closing_runs").insert({ ...runFields, performed_by: user.id });
         if (rErr) throw rErr;
       }
 
@@ -614,6 +631,15 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
       ].filter(Boolean) as string[];
       if (ids.length === 0) {
         toast.info("Nothing to reverse — no vouchers attached to this run.");
+        return;
+      }
+      const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+      if (isLocalOnlyMode()) {
+        await deleteVouchersEverywhere(companyId, ids);
+        const { offlineDb } = await import("@/lib/offline/db");
+        await offlineDb.cache_closing_runs.update(run.id, { status: "reversed" });
+        toast.success("Closure reversed — journal vouchers deleted.");
+        await loadHistory();
         return;
       }
       const { error } = await supabase.from("vouchers").delete().in("id", ids);
