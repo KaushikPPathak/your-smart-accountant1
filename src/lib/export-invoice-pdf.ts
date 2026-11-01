@@ -4,6 +4,7 @@
 // (foreign currency + INR equivalent) invoice with all standard export header
 // fields, agri-specific block and the LUT / IGST declaration.
 import type jsPDFType from "jspdf";
+import { getExportDetailsLocal } from "@/lib/offline/export-details-local";
 import type autoTableType from "jspdf-autotable";
 import { supabase } from "@/integrations/supabase/client";
 import { saveExport } from "@/lib/desktop-save";
@@ -122,7 +123,7 @@ export async function downloadExportInvoicePdf(voucherId: string, companyId: str
         v: { ...voucherRaw, ledgers: party },
         items,
         company,
-        ed: {}, // voucher_export_details is not cached locally; fall back to defaults offline
+        ed: (await getExportDetailsLocal(voucherId)) ?? {},
         settings: (settings as any) || defaultSettings,
       };
     },

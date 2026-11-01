@@ -27,8 +27,67 @@ import {
 } from "@/components/ui/table";
 import { useCompany } from "@/lib/company-context";
 import { supabase } from "@/integrations/supabase/client";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { readItems, readLedgers, readVouchers } from "@/lib/offline/cache-read";
 import { formatINR } from "@/lib/money";
 import { fetchLedgerBalances, BS_ASSET, BS_LIAB, PL_INCOME, PL_EXPENSE } from "@/lib/reports";
+
+/** Dashboard inputs read from this PC's books (local-only build). Same shapes as the cloud queries. */
+export async function localDashboardInputs(
+  companyId: string,
+  monthStart: string,
+  monthEnd: string,
+  fromSix: string,
+) {
+  const [vouchersRaw, ledgers] = await Promise.all([readVouchers(companyId), readLedgers(companyId)]);
+  const live = (vouchersRaw as any[]).filter((v) => v.is_deleted !== true && !v.deleted_at);
+  const nameOf = new Map<string, string>(
+    (ledgers as any[]).map((l) => [String(l.id), String(l.name ?? "")]),
+  );
+  const partyName = (v: any) => {
+    const n = v.party_ledger_id ? nameOf.get(String(v.party_ledger_id)) : undefined;
+    return n ? { name: n } : null;
+  };
+  const inRange = (v: any, from: string, to: string) =>
+    String(v.voucher_date) >= from && String(v.voucher_date) <= to;
+
+  const salesMonth = live
+    .filter((v) => v.voucher_type === "sales" && inRange(v, monthStart, monthEnd))
+    .map((v) => ({ total_paise: Number(v.total_paise) || 0, party_ledger_id: v.party_ledger_id ?? null, ledgers: partyName(v) }));
+
+  const recent = [...live]
+    .sort((a, b) =>
+      String(b.voucher_date).localeCompare(String(a.voucher_date)) ||
+      String(b.voucher_number ?? "").localeCompare(String(a.voucher_number ?? "")) ||
+      String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")),
+    )
+    .slice(0, 10)
+    .map((v) => ({
+      id: v.id, voucher_date: v.voucher_date, voucher_number: v.voucher_number, voucher_type: v.voucher_type,
+      total_paise: Number(v.total_paise) || 0, ledgers: partyName(v),
+    }));
+
+  const sixMonths = live
+    .filter((v) => (v.voucher_type === "sales" || v.voucher_type === "purchase") && inRange(v, fromSix, monthEnd))
+    .map((v) => ({ voucher_date: v.voucher_date, voucher_type: v.voucher_type, total_paise: Number(v.total_paise) || 0 }));
+
+  const gstMonth = live
+    .filter((v) => inRange(v, monthStart, monthEnd))
+    .map((v) => ({
+      voucher_type: v.voucher_type,
+      cgst_paise: Number(v.cgst_paise) || 0,
+      sgst_paise: Number(v.sgst_paise) || 0,
+      igst_paise: Number(v.igst_paise) || 0,
+    }));
+
+  return [
+    { data: salesMonth, error: null },
+    { data: recent, error: null },
+    { data: sixMonths, error: null },
+    { data: gstMonth, error: null },
+    await fetchLedgerBalances(companyId, monthEnd).catch(() => []),
+  ] as const;
+}
 
 export const Route = createFileRoute("/app/")({
   head: () => ({ meta: [{ title: "Dashboard — Your Mehtaji" }] }),
@@ -91,15 +150,20 @@ function Dashboard() {
         setIsLoading(true);
         setErrorState(null);
 
-        // Check active session health before calling data sets to handle the 401 response loop
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          setErrorState("Authentication required. Please sign in.");
-          setIsLoading(false);
-          return;
+        const local = isLocalOnlyMode();
+        // Cloud builds: check the session before the data calls (401 loop guard).
+        if (!local) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            setErrorState("Authentication required. Please sign in.");
+            setIsLoading(false);
+            return;
+          }
         }
 
-        const [salesQ, recentQ, sixQ, gstQ, balances] = await Promise.all([
+        const [salesQ, recentQ, sixQ, gstQ, balances] = local
+          ? await localDashboardInputs(activeCompanyId, monthStart, monthEnd, fromSix)
+          : await Promise.all([
           supabase
             .from("vouchers")
             .select("total_paise, party_ledger_id, ledgers:party_ledger_id(name)")
@@ -192,10 +256,12 @@ function Dashboard() {
         setPayables(pay);
 
         // 3. Fixes schema difference: safely fallback if "items" versus "stock_items" is mismatched
-        const { data: items, error: itemsError } = await supabase
-          .from("items")
-          .select("opening_stock_qty, opening_stock_rate_paise")
-          .eq("company_id", activeCompanyId);
+        const { data: items, error: itemsError } = local
+          ? { data: (await readItems(activeCompanyId)) as any[], error: null }
+          : await supabase
+              .from("items")
+              .select("opening_stock_qty, opening_stock_rate_paise")
+              .eq("company_id", activeCompanyId);
           
         if (!itemsError && items) {
           const sv = items.reduce((s: number, i: any) => s + i.opening_stock_qty * i.opening_stock_rate_paise, 0);

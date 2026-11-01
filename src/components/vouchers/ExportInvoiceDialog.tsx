@@ -39,11 +39,14 @@ export function ExportInvoiceDialog({ open, onOpenChange, voucherId, companyId }
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const { data } = await supabase
-        .from("voucher_export_details")
-        .select("*")
-        .eq("voucher_id", voucherId)
-        .maybeSingle();
+      const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+      let data: Record<string, any> | null;
+      if (isLocalOnlyMode()) {
+        const { getExportDetailsLocal } = await import("@/lib/offline/export-details-local");
+        data = await getExportDetailsLocal(voucherId);
+      } else {
+        data = (await supabase.from("voucher_export_details").select("*").eq("voucher_id", voucherId).maybeSingle()).data;
+      }
       setRow(data ? { ...EMPTY, ...data } : { ...EMPTY });
     })();
   }, [open, voucherId]);
@@ -63,11 +66,17 @@ export function ExportInvoiceDialog({ open, onOpenChange, voucherId, companyId }
         moisture_pct: row.moisture_pct === "" || row.moisture_pct == null ? null : Number(row.moisture_pct),
         lut_date: row.lut_date || null,
       };
-      const { error } = await supabase
-        .from("voucher_export_details")
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .upsert(payload as any, { onConflict: "voucher_id" });
-      if (error) throw error;
+      const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+      if (isLocalOnlyMode()) {
+        const { upsertExportDetailsLocal } = await import("@/lib/offline/export-details-local");
+        await upsertExportDetailsLocal(voucherId, payload);
+      } else {
+        const { error } = await supabase
+          .from("voucher_export_details")
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .upsert(payload as any, { onConflict: "voucher_id" });
+        if (error) throw error;
+      }
       toast.success("Export details saved");
       if (thenPrint) await downloadExportInvoicePdf(voucherId, companyId);
       onOpenChange(false);

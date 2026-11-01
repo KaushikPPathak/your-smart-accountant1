@@ -82,6 +82,11 @@ export async function extractInvoiceOcr(
   companyId: string,
   intent: "purchase" | "sales" = "purchase",
 ): Promise<OcrDraft> {
+  // Local-only build: the invoice file never leaves this PC.
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) {
+    throw new Error("Invoice reading uses the cloud and is off in this build, so the file stays on this PC. Enter the invoice details by hand.");
+  }
   const { base64, mime } = await readFileAsBase64(file);
   const { data, error } = await supabase.functions.invoke("ai-ocr-invoice", {
     body: { fileBase64: base64, mimeType: mime, filename: file.name, hint: intent },

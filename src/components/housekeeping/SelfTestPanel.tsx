@@ -109,6 +109,10 @@ export function SelfTestPanel({ companyId }: { companyId: string | null }) {
     // 3. Cloud reachability (auth-only; business data is local so latency
     // here does NOT affect books. We only flag hard failures.)
     await mark("db_ping", async () => {
+      const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+      if (isLocalOnlyMode()) {
+        return { status: "ok", message: "Cloud not used in this build — books are on this PC" };
+      }
       const { ms, value } = await timed(
         supabase.from("companies").select("id", { count: "exact", head: true }),
       );
@@ -132,6 +136,10 @@ export function SelfTestPanel({ companyId }: { companyId: string | null }) {
       // 4. Tables readable (RLS allows the user to query → counts will be
       // company-scoped automatically; we just verify the SELECT itself works)
       await mark("tables", async () => {
+        const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+        if (isLocalOnlyMode()) {
+          return { status: "ok", message: "Local books are read directly in this build" };
+        }
         const scoped = ["ledgers", "items", "vouchers"] as const;
         const child = ["voucher_entries", "voucher_items"] as const;
         const results = await Promise.all([

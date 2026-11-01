@@ -148,6 +148,11 @@ async function smartChat(
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     throw new Error("Offline: cloud AI is not reachable and WebGPU local AI is unavailable.");
   }
+  // Local-only build: book data never goes to the cloud model.
+  const { isLocalOnlyMode } = await import("@/lib/local-only-mode");
+  if (isLocalOnlyMode()) {
+    throw new Error("The cloud AI is off in this build, so your books are not sent anywhere. On-device AI (needs WebGPU) is the only assistant here.");
+  }
   return cloudChat(messages, temperature, extra);
 }
 
