@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Copy, Download, Truck, FileCode2, Zap } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { getEwbContextLocal, getEinvoiceDetailLocal } from "@/lib/offline/einvoice-local";
 import { upsertEinvoice, ddmmyyyy } from "@/lib/einvoice";
 import { formatINR } from "@/lib/money";
 import { INDIAN_STATES } from "@/lib/constants";
@@ -110,24 +110,17 @@ export function EwayBillPrepDialog({
   useEffect(() => {
     if (!open || !voucher) return;
     (async () => {
-      const [co, v] = await Promise.all([
-        supabase.from("companies").select("name, gstin, address, state_code").eq("id", voucher.company_id).single(),
-        supabase.from("vouchers").select("party_ledger_id, ledgers:party_ledger_id(name, gstin, address, state_code)").eq("id", voucher.id).single(),
-      ]);
-      const c = co.data as { name: string; gstin: string | null; address: string | null; state_code: string | null } | null;
+      const ctx = await getEwbContextLocal(voucher.company_id, voucher.id);
+      const c = ctx.company;
       setCompany(c);
-      const p = (v.data as { ledgers: { name: string; gstin: string | null; address: string | null; state_code: string | null } | null } | null)?.ledgers ?? null;
+      const p = ctx.party;
       setParty(p);
       setFromState(c?.state_code ?? "");
       setFromPlace(c?.address?.split(",").slice(-2)[0]?.trim() ?? "");
       setToState(voucher.place_of_supply_code ?? p?.state_code ?? "");
       setToPlace(p?.address?.split(",").slice(-2)[0]?.trim() ?? "");
       // Existing record
-      const { data: ex } = await supabase
-        .from("einvoice_details")
-        .select("irn, ack_no, ewb_no, ewb_valid_until, vehicle_no, transporter_name, transporter_id, distance_km")
-        .eq("voucher_id", voucher.id)
-        .maybeSingle();
+      const ex = await getEinvoiceDetailLocal(voucher.id);
       if (ex) {
         setIrn(ex.irn ?? "");
         setAckNo(ex.ack_no ?? "");

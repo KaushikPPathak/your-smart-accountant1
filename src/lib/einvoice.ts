@@ -2,7 +2,7 @@
 // NOTE: actual IRP integration requires GSP API credentials. This module produces
 // the canonical IRP JSON shape so it can be sent to a GSP later, and stores the
 // generated IRN/QR locally once received.
-import { supabase } from "@/integrations/supabase/client";
+import { upsertEinvoiceLocal } from "@/lib/offline/einvoice-local";
 
 export interface IrpInvoiceLine {
   SlNo: string;
@@ -62,22 +62,6 @@ export interface SaveEinvoiceArgs {
 }
 
 export async function upsertEinvoice(a: SaveEinvoiceArgs): Promise<void> {
-  await supabase.from("einvoice_details").upsert(
-    {
-      voucher_id: a.voucherId,
-      company_id: a.companyId,
-      irn: a.irn ?? null,
-      ack_no: a.ackNo ?? null,
-      ack_date: a.ackDate ?? null,
-      signed_qr: a.signedQr ?? null,
-      status: a.status ?? "generated",
-      ewb_no: a.ewbNo ?? null,
-      ewb_valid_until: a.ewbValidUntil ?? null,
-      vehicle_no: a.vehicleNo ?? null,
-      transporter_name: a.transporterName ?? null,
-      transporter_id: a.transporterId ?? null,
-      distance_km: a.distanceKm ?? null,
-    },
-    { onConflict: "voucher_id" },
-  );
+  // Local-only: stored per voucher in this PC's books.
+  await upsertEinvoiceLocal(a);
 }

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Truck, Clock, RefreshCw, X } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { listSalesVouchersLocal } from "@/lib/offline/einvoice-local";
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import { EwayBillPrepDialog } from "@/components/vouchers/EwayBillPrepDialog";
@@ -48,11 +48,8 @@ function EinvoicePage() {
   async function load() {
     if (!activeCompanyId) return;
     setLoading(true);
-    const { data } = await supabase.from("vouchers")
-      .select("id, voucher_number, voucher_date, total_paise, subtotal_paise, cgst_paise, sgst_paise, igst_paise, is_interstate, place_of_supply_code, company_id, ledgers:party_ledger_id(name, gstin), einvoice_details(irn, status, ewb_no, ewb_valid_until)")
-      .eq("company_id", activeCompanyId).eq("voucher_type", "sales")
-      .order("voucher_date", { ascending: false }).order("voucher_number", { ascending: false }).limit(200);
-    setRows((data || []) as unknown as Row[]);
+    const data = await listSalesVouchersLocal(activeCompanyId, 200);
+    setRows(data as unknown as Row[]);
     setLoading(false);
   }
   useEffect(() => { load(); }, [activeCompanyId]);

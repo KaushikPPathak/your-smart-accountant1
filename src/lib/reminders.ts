@@ -1,5 +1,6 @@
 // Helpers to compose payment-reminder messages and open WhatsApp / mailto links.
-import { supabase } from "@/integrations/supabase/client";
+import { offlineDb as db } from "@/lib/offline/db";
+import { newId } from "@/lib/utils/sys-utils";
 import { formatINR } from "@/lib/money";
 
 export interface ReminderContext {
@@ -39,7 +40,9 @@ export async function logReminder(opts: {
   message: string;
   sentBy: string;
 }): Promise<void> {
-  await supabase.from("payment_reminders").insert({
+  // Local-only: the reminder log stays in this PC's books.
+  await db.cache_payment_reminders.put({
+    id: newId(),
     company_id: opts.companyId,
     ledger_id: opts.ledgerId,
     voucher_id: opts.voucherId || null,
@@ -47,5 +50,6 @@ export async function logReminder(opts: {
     message: opts.message,
     sent_by: opts.sentBy,
     status: "sent",
+    created_at: new Date().toISOString(),
   });
 }
