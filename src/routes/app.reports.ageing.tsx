@@ -4,7 +4,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
-import { useFyAsOfState } from "@/components/reports/ReportToolbar";
+import { ReportToolbar, useFyAsOfState } from "@/components/reports/ReportToolbar";
+import { downloadCsv } from "@/lib/csv";
+import { downloadPdfTable, downloadXlsx } from "@/lib/exporters";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +26,8 @@ import { toast } from "sonner";
 import { describeError } from "@/lib/error-message";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { ageBills, partyBalancesLocal, type AgedResult } from "@/lib/offline/party-aging";
+
+const money = (paise: number) => (paise / 100).toFixed(2);
 
 export const Route = createFileRoute("/app/reports/ageing")({
   head: () => ({ meta: [{ title: "Ageing Analysis — Reports" }] }),
@@ -54,6 +59,7 @@ function AgeingPage() {
   const [invs, setInvs] = useState<InvRow[]>([]);
   const [allocs, setAllocs] = useState<AllocRow[]>([]);
   const [localAged, setLocalAged] = useState<AgedResult | null>(null);
+  const pdfHeader = useReportPdfHeader();
   const { view, setView } = useReportView("ageing");
 
   useEffect(() => {
@@ -216,6 +222,12 @@ function AgeingPage() {
     return cols;
   }, [mode]);
 
+  const agingTitle = `Ageing Analysis — ${mode === "receivables" ? "Receivables" : "Payables"}`;
+  const agingSlug = `ageing-${mode}-${asOf}`;
+  const agingHead = [["Party", "0-30 days", "31-60 days", "61-90 days", "90+ days", "Total"]];
+  const agingBody = partyRows.map((x) => [x.name, money(x.b0), money(x.b1), money(x.b2), money(x.b3), money(x.total)]);
+  const agingFoot = [["TOTAL", money(totals.b0), money(totals.b1), money(totals.b2), money(totals.b3), money(totals.total)]];
+
   return (
     <ReportViewer
       title="Ageing Analysis"
@@ -240,6 +252,30 @@ function AgeingPage() {
           <div className="space-y-1 md:col-span-3">
             <ViewSwitcher view={view} onChange={setView} />
           </div>
+        </CardContent>
+      </Card>
+      <Card className="print:hidden">
+        <CardContent className="p-3">
+          <ReportToolbar
+            from={asOf} to={asOf} onFrom={setAsOf} onTo={setAsOf} hideDates
+            onExportCsv={() => downloadCsv(`${agingSlug}.csv`, [...agingHead, ...agingBody, ...agingFoot])}
+            onExportXlsx={() => downloadXlsx(`${agingSlug}.xlsx`, [{ name: "Ageing", rows: [...agingHead, ...agingBody, ...agingFoot] }])}
+            onExportPdf={() =>
+              downloadPdfTable({
+                title: agingTitle,
+                companyName: pdfHeader.companyName,
+                companySubLine: pdfHeader.companySubLine,
+                subtitle: `As on ${asOf}`,
+                head: agingHead,
+                body: agingBody,
+                foot: agingFoot,
+                fileName: `${agingSlug}.pdf`,
+                orientation: "p",
+                rightAlignCols: [1, 2, 3, 4, 5],
+              })
+            }
+            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
+          />
         </CardContent>
       </Card>
 

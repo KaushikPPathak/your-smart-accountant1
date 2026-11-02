@@ -7,7 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { FyDatePicker } from "@/components/ui/fy-date-picker";
-import { useFyAsOfState } from "@/components/reports/ReportToolbar";
+import { ReportToolbar, useFyAsOfState } from "@/components/reports/ReportToolbar";
+import { downloadCsv } from "@/lib/csv";
+import { downloadPdfTable, downloadXlsx } from "@/lib/exporters";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
@@ -29,6 +32,8 @@ import { toast } from "sonner";
 import { describeError } from "@/lib/error-message";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { ageBills, partyBalancesLocal, type AgedResult } from "@/lib/offline/party-aging";
+
+const money = (paise: number) => (paise / 100).toFixed(2);
 
 export const Route = createFileRoute("/app/reports/outstanding")({
   head: () => ({ meta: [{ title: "Bill-by-Bill Outstanding — Reports" }] }),
@@ -58,6 +63,7 @@ function OutstandingPage() {
   const [invs, setInvs] = useState<InvRow[]>([]);
   const [allocs, setAllocs] = useState<AllocRow[]>([]);
   const [localAged, setLocalAged] = useState<AgedResult | null>(null);
+  const pdfHeader = useReportPdfHeader();
   const [loading, setLoading] = useState(true);
   const rateKey = `msme:bankRate:${activeCompanyId ?? "_"}`;
   const [bankRate, setBankRate] = useState<number>(() => {
@@ -203,6 +209,15 @@ function OutstandingPage() {
   const msmeInterestTotal = msmeRows.reduce((s, r) => s + r.interest_paise, 0);
 
 
+  const billTitle = `Bill-by-Bill Outstanding — ${mode === "receivables" ? "Receivables" : "Payables"}`;
+  const billSlug = `bill-outstanding-${mode}-${asOf}`;
+  const billHead = [["Date", "Bill #", "Party", "Due date", "Bill amount", "Received", "Pending", "Days"]];
+  const billBody = rows.map((x) => [
+    x.voucher_date, x.voucher_number, x.ledgers?.name ?? "", x.due_date ?? "",
+    money(x.total_paise), money(x.paid_paise), money(x.pending_paise), String(x.days),
+  ]);
+  const billFoot = [["TOTAL", "", "", "", "", "", money(totalPending), ""]];
+
   return (
     <ReportViewer
       title="Bill-by-Bill Outstanding"
@@ -230,6 +245,30 @@ function OutstandingPage() {
               <div className="text-xl font-semibold font-mono">{formatINR(totalPending)}</div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+      <Card className="print:hidden">
+        <CardContent className="p-3">
+          <ReportToolbar
+            from={asOf} to={asOf} onFrom={setAsOf} onTo={setAsOf} hideDates
+            onExportCsv={() => downloadCsv(`${billSlug}.csv`, [...billHead, ...billBody, ...billFoot])}
+            onExportXlsx={() => downloadXlsx(`${billSlug}.xlsx`, [{ name: "Bill-wise", rows: [...billHead, ...billBody, ...billFoot] }])}
+            onExportPdf={() =>
+              downloadPdfTable({
+                title: billTitle,
+                companyName: pdfHeader.companyName,
+                companySubLine: pdfHeader.companySubLine,
+                subtitle: `As on ${asOf}`,
+                head: billHead,
+                body: billBody,
+                foot: billFoot,
+                fileName: `${billSlug}.pdf`,
+                orientation: "l",
+                rightAlignCols: [4, 5, 6, 7],
+              })
+            }
+            onPrint={() => window.dispatchEvent(new CustomEvent("report:preview"))}
+          />
         </CardContent>
       </Card>
 

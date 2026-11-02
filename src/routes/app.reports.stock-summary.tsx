@@ -168,7 +168,8 @@ function StockSummary() {
         outWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isOutward(m.vouchers.voucher_type) || (m.vouchers.voucher_type === "physical_stock" && Number(m.qty) < 0))).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
 
         closing: val.closingQty,
-        stockValue: val.closingValuePaise,
+        // Negative stock has no value on hand; it is not counted until the missing purchases or opening stock are entered.
+        stockValue: val.closingQty < 0 ? 0 : val.closingValuePaise,
         lowStock: it.reorder_level > 0 && val.closingQty <= it.reorder_level,
         isNegative: val.closingQty < 0
       };
@@ -266,7 +267,7 @@ function StockSummary() {
           <p className="mt-2 text-xs text-muted-foreground">Stock value is calculated using Weighted Average Cost (WAC).</p>
           {rows.some(r => r.closing < 0) && (
             <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-              <strong>Negative Stock Detected:</strong> Some items have sales/outwards recorded before matching purchases. Valuation for these items is mathematically calculated at the last known WAC.
+              <strong>Negative Stock Detected:</strong> Some items have sales/outwards recorded before matching purchases. Their quantity is shown as is, but their value is not counted in stock value until the missing purchases or opening stock are entered.
             </div>
           )}
           <div className="mt-2"><ViewSwitcher view={view} onChange={setView} /></div>
