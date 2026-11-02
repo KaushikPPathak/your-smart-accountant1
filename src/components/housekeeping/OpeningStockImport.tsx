@@ -17,7 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { readItems } from "@/lib/offline/cache-read";
+import { createItem, updateItem } from "@/lib/offline/masters";
 import { extractTextFromFile, type OcrProgress } from "@/lib/ocr";
 import { parseStockOpeningText, type ExtractedStockItem } from "@/lib/statement-parse";
 import { GST_RATES, UNITS } from "@/lib/constants";
@@ -66,15 +67,29 @@ export function OpeningStockImport({ companyId, disabled, annualTurnoverPaise }:
   const [posting, setPosting] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // Items come from the local books only, so this works offline and in local-only mode.
+  const loadItems = async (cid: string) => {
+    const rows = await readItems(cid);
+    setItems(
+      rows
+        .filter((i: any) => i.is_active !== false)
+        .map((i: any) => ({
+          id: String(i.id),
+          name: String(i.name ?? ""),
+          hsn_code: i.hsn_code ?? null,
+          unit: String(i.unit ?? "NOS"),
+          gst_rate: Number(i.gst_rate) || 0,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
+  };
+
   useEffect(() => {
     if (!companyId) return;
-    supabase
-      .from("items")
-      .select("id, name, hsn_code, unit, gst_rate")
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .order("name")
-      .then(({ data }: any) => setItems((data || []) as ItemOpt[]));
+    loadItems(companyId).catch((e) => {
+      console.error("Could not read items", e);
+      toast.error("Could not read items from the local books.");
+    });
   }, [companyId]);
 
   useEffect(() => {
@@ -162,45 +177,30 @@ export function OpeningStockImport({ companyId, disabled, annualTurnoverPaise }:
           ? rupeesToPaise(r.rate)
           : (r.qty > 0 ? rupeesToPaise(r.value / r.qty) : 0);
         if (!r.item_id) {
-          const { data, error } = await supabase
-            .from("items")
-            .insert({
-              company_id: companyId,
-              name: r.name.trim(),
-              hsn_code: r.hsn_code || null,
-              unit: r.unit,
-              gst_rate: r.gst_rate,
-              opening_stock_qty: r.qty,
-              opening_stock_rate_paise: ratePaise,
-            })
-            .select("id")
-            .single();
-          if (error) throw error;
-          if (data) created++;
+          await createItem({
+            company_id: companyId,
+            name: r.name.trim(),
+            hsn_code: r.hsn_code || null,
+            unit: r.unit,
+            gst_rate: r.gst_rate,
+            opening_stock_qty: r.qty,
+            opening_stock_rate_paise: ratePaise,
+          });
+          created++;
         } else {
-          const { error } = await supabase
-            .from("items")
-            .update({
-              hsn_code: r.hsn_code || null,
-              unit: r.unit,
-              gst_rate: r.gst_rate,
-              opening_stock_qty: r.qty,
-              opening_stock_rate_paise: ratePaise,
-            })
-            .eq("id", r.item_id);
-          if (error) throw error;
+          await updateItem(r.item_id, companyId, {
+            hsn_code: r.hsn_code || null,
+            unit: r.unit,
+            gst_rate: r.gst_rate,
+            opening_stock_qty: r.qty,
+            opening_stock_rate_paise: ratePaise,
+          });
           updated++;
         }
       }
       toast.success(`Opening stock posted — ${created} created, ${updated} updated`);
       setRows([]); setFile(null);
-      const { data } = await supabase
-        .from("items")
-        .select("id, name, hsn_code, unit, gst_rate")
-        .eq("company_id", companyId)
-        .eq("is_active", true)
-        .order("name");
-      setItems((data || []) as ItemOpt[]);
+      await loadItems(companyId);
     } catch (e) {
       const err = e as Error;
       toast.error(err.message || "Posting failed");

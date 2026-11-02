@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { readLedgers } from "@/lib/offline/cache-read";
+import { createLedger, updateLedger } from "@/lib/offline/masters";
 import { extractTextFromFile, type OcrProgress } from "@/lib/ocr";
 import {
   extractOpeningBalanceTotals,
@@ -96,15 +97,27 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
   const [posting, setPosting] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // Ledgers come from the local books only, so this works offline and in local-only mode.
+  const loadLedgers = async (cid: string) => {
+    const rows = await readLedgers(cid);
+    setLedgers(
+      rows
+        .filter((l: any) => l.is_active !== false)
+        .map((l: any) => ({
+          id: String(l.id),
+          name: String(l.name ?? ""),
+          type: l.type as LedgerType,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
+  };
+
   useEffect(() => {
     if (!companyId) return;
-    supabase
-      .from("ledgers")
-      .select("id, name, type")
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .order("name")
-      .then(({ data }: any) => setLedgers((data || []) as LedgerOpt[]));
+    loadLedgers(companyId).catch((e) => {
+      console.error("Could not read ledgers", e);
+      toast.error("Could not read ledgers from the local books.");
+    });
   }, [companyId]);
 
   useEffect(() => {
@@ -234,45 +247,29 @@ export function OpeningBalanceImport({ companyId, disabled }: Props) {
         }
         let ledgerId = r.ledger_id;
         if (!ledgerId) {
-          const { data, error } = await supabase
-            .from("ledgers")
-            .insert({
-              company_id: companyId,
-              name: r.account_name.trim(),
-              type: ledgerType,
-              group_code: groupCode || null,
-              opening_balance_paise: Math.round(r.amount * 100),
-              opening_balance_is_debit: r.side === "Dr",
-            })
-            .select("id")
-            .single();
-          if (error) throw error;
-          ledgerId = data!.id;
+          const created_row = await createLedger({
+            company_id: companyId,
+            name: r.account_name.trim(),
+            type: ledgerType,
+            group_code: groupCode || null,
+            opening_balance_paise: Math.round(r.amount * 100),
+            opening_balance_is_debit: r.side === "Dr",
+          });
+          ledgerId = created_row.id;
           created++;
         } else {
-          const { error } = await supabase
-            .from("ledgers")
-            .update({
-              type: ledgerType,
-              group_code: groupCode || null,
-              opening_balance_paise: Math.round(r.amount * 100),
-              opening_balance_is_debit: r.side === "Dr",
-            })
-            .eq("id", ledgerId);
-          if (error) throw error;
+          await updateLedger(ledgerId, companyId, {
+            type: ledgerType,
+            group_code: groupCode || null,
+            opening_balance_paise: Math.round(r.amount * 100),
+            opening_balance_is_debit: r.side === "Dr",
+          });
           updated++;
         }
       }
       toast.success(`Opening balances posted as of ${openingDate} — ${created} created, ${updated} updated`);
       setRows([]); setFile(null);
-      // refresh ledger list
-      const { data } = await supabase
-        .from("ledgers")
-        .select("id, name, type")
-        .eq("company_id", companyId)
-        .eq("is_active", true)
-        .order("name");
-      setLedgers((data || []) as LedgerOpt[]);
+      await loadLedgers(companyId);
     } catch (e) {
       const err = e as Error;
       toast.error(err.message || "Posting failed");
