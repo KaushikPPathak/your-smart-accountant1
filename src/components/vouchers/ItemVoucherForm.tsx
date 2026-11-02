@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
+import { isLocalOnlyMode } from "@/lib/local-only-mode";
+import { readVouchers } from "@/lib/offline/cache-read";
 import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/utils/currency-utils";
@@ -416,6 +418,30 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     }
     const originalType = voucherType === "credit_note" ? "sales" : "purchase";
     let cancelled = false;
+    if (isLocalOnlyMode()) {
+      // Local-only build: the party's invoices come from this PC's books.
+      readVouchers(activeCompanyId, { voucher_type: originalType })
+        .then((rows) => {
+          if (cancelled) return;
+          setOriginalInvoices(
+            (rows as any[])
+              .filter((v) => String(v.party_ledger_id ?? "") === partyId)
+              .slice(0, 200)
+              .map((v) => ({
+                id: String(v.id),
+                voucher_number: String(v.voucher_number ?? ""),
+                voucher_date: String(v.voucher_date ?? ""),
+                total_paise: Number(v.total_paise) || 0,
+              })),
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setOriginalInvoices([]);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     supabase
       .from("vouchers")
       .select("id, voucher_number, voucher_date, total_paise")
