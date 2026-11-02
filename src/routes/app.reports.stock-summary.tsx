@@ -23,6 +23,7 @@ import {
 } from "@/lib/offline/cache-read";
 import { calculateWac, VALUATION_METHODS, type ItemMove as WacMove, type ValuationMethod } from "@/lib/inventory/valuation-engine";
 import { getValuationMethod, setValuationMethod } from "@/lib/inventory/valuation-method";
+import { groupStockByHsn, hsnDigitsForTurnover } from "@/lib/inventory/stock-by-hsn";
 import { getManualValuation } from "@/lib/offline/manual-valuation";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -54,7 +55,7 @@ interface ItemMove {
 }
 
 function StockSummary() {
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeMembership } = useCompany();
   const pdfHeader = useReportPdfHeader();
   const r = (p: number) => p / 100;
   const { from, to, setFrom, setTo } = useFyRangeState();
@@ -62,6 +63,9 @@ function StockSummary() {
   const [moves, setMoves] = useState<ItemMove[]>([]);
   const { view, setView } = useReportView("stock-summary");
   const [method, setMethod] = useState<ValuationMethod>("average");
+  const [groupBy, setGroupBy] = useState<"item" | "hsn">("item");
+  // Turnover decides the HSN length: up to ₹5 crore 4 digits, above it 6 digits.
+  const hsnDigits = hsnDigitsForTurnover(activeMembership?.companies?.annual_turnover_paise ?? 0);
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -184,8 +188,8 @@ function StockSummary() {
         outWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isOutward(m.vouchers.voucher_type) || (m.vouchers.voucher_type === "physical_stock" && Number(m.qty) < 0))).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
 
         closing: val.closingQty,
-        // Negative stock has no value on hand; it is not counted until the missing purchases or opening stock are entered.
-        stockValue: val.closingQty < 0 ? 0 : val.closingValuePaise,
+        // Negative stock keeps its negative value, so the total shows the real position.
+        stockValue: val.closingValuePaise,
         lowStock: it.reorder_level > 0 && val.closingQty <= it.reorder_level,
         isNegative: val.closingQty < 0,
         needsReview: val.needsReview,
@@ -193,6 +197,22 @@ function StockSummary() {
     });
   }, [items, moves, from, to, method]);
   
+  // The rows shown in the report: one line per item, or one per HSN heading.
+  const displayRows = useMemo(
+    () => (groupBy === "hsn"
+      ? groupStockByHsn(rows, hsnDigits).map((g) => ({
+          ...g,
+          opening_stock_qty: g.opening,
+          opening_stock_rate_paise: 0,
+          reorder_level: 0,
+          lowStock: false,
+          isNegative: g.closing < 0,
+          needsReview: false,
+        }))
+      : rows),
+    [rows, groupBy, hsnDigits],
+  );
+
   const [manualValOpen, setManualValOpen] = useState(false);
   const [manualTotalValue, setManualTotalValue] = useState<number | null>(null);
 
@@ -217,14 +237,14 @@ function StockSummary() {
   // convention matches inventory ledgers ("goods leaving stock").
   const csv = (): (string | number)[][] => [
     [`Stock Summary as on ${to}`],
-    ["Item", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", "Value"],
-    ...rows.map((x) => [x.name, x.hsn_code ?? "", x.unit, x.opening, x.inWindow, -x.outWindow, x.closing, (x.stockValue/100).toFixed(2)]),
+    ["Item / HSN", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", "Value"],
+    ...displayRows.map((x) => [x.name, x.hsn_code ?? "", x.unit, x.opening, x.inWindow, -x.outWindow, x.closing, (x.stockValue/100).toFixed(2)]),
     ["TOTAL", "", "", "", "", "", "", (totalValue/100).toFixed(2)],
   ];
 
   type RowVm = (typeof rows)[number];
   const gridColumns: DGColumn<RowVm>[] = useMemo(() => [
-    { id: "name", header: "Item", type: "text", width: 240, accessor: (x) => x.name, cell: (x) => (
+    { id: "name", header: "Item / HSN", type: "text", width: 240, accessor: (x) => x.name, cell: (x) => (
       <span>{x.name}{x.lowStock && <span className="ml-2 rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive">LOW</span>}</span>
     ) },
     { id: "hsn", header: "HSN", type: "text", width: 110, accessor: (x) => x.hsn_code ?? "", groupable: true },
@@ -242,8 +262,8 @@ function StockSummary() {
       companyName: pdfHeader.companyName,
       companySubLine: pdfHeader.companySubLine,
       subtitle: `As on ${to} (movement window: ${from} to ${to})`,
-      head: [["Item", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", amountHeader("Value")]],
-      body: rows.map((x) => [x.name, x.hsn_code ?? "", x.unit, String(x.opening), String(x.inWindow), x.outWindow ? `-${x.outWindow}` : "0", String(x.closing), r(x.stockValue).toFixed(2)]),
+      head: [["Item / HSN", "HSN", "Unit", "Opening", "Inward", "Outward", "Closing", amountHeader("Value")]],
+      body: displayRows.map((x) => [x.name, x.hsn_code ?? "", x.unit, String(x.opening), String(x.inWindow), x.outWindow ? `-${x.outWindow}` : "0", String(x.closing), r(x.stockValue).toFixed(2)]),
       foot: [["TOTAL", "", "", "", "", "", "", r(totalValue).toFixed(2)]],
       fileName: `stock-summary-${to}.pdf`,
       orientation: "l",
@@ -297,6 +317,23 @@ function StockSummary() {
               {VALUATION_METHODS.find((m) => m.value === method)?.hint}
             </span>
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <span className="text-xs text-muted-foreground">Show</span>
+            <Select value={groupBy} onValueChange={(v) => setGroupBy(v as "item" | "hsn")}>
+              <SelectTrigger className="h-8 w-[260px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="item" className="text-xs">Item-wise</SelectItem>
+                <SelectItem value="hsn" className="text-xs">HSN-wise (compact, {hsnDigits}-digit)</SelectItem>
+              </SelectContent>
+            </Select>
+            {groupBy === "hsn" && (
+              <span className="text-xs text-muted-foreground">
+                Items with the same HSN heading are added together. Opening, inward, outward, closing and value are shown for each heading.
+              </span>
+            )}
+          </div>
           {rows.some(r => r.needsReview) && (
             <div className="mt-2 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               <strong>Check purchase rates:</strong> Some items have stock on hand but their purchase values add up to less than nothing. Their value is shown as zero until the purchase rates are corrected.
@@ -304,7 +341,7 @@ function StockSummary() {
           )}
           {rows.some(r => r.closing < 0) && (
             <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-              <strong>Negative Stock Detected:</strong> Some items have sales/outwards recorded before matching purchases. Their quantity is shown as is, but their value is not counted in stock value until the missing purchases or opening stock are entered.
+              <strong>Negative Stock Detected:</strong> Some items have sales/outwards recorded before matching purchases. Their quantity and value are shown as negative until the missing purchases or opening stock are entered.
             </div>
           )}
           <div className="mt-2"><ViewSwitcher view={view} onChange={setView} /></div>
@@ -316,7 +353,7 @@ function StockSummary() {
           <CardContent className="p-3">
             <DataGrid
               reportId="stock-summary"
-              rows={rows}
+              rows={displayRows}
               columns={gridColumns}
               globalSearch={(x) => `${x.name} ${x.hsn_code ?? ""} ${x.unit}`}
               height={520}
@@ -329,7 +366,7 @@ function StockSummary() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Item</TableHead>
+                  <TableHead>Item / HSN</TableHead>
                   <TableHead>HSN</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead className="text-right">Opening</TableHead>
@@ -340,7 +377,7 @@ function StockSummary() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((x) => (
+                {displayRows.map((x) => (
                   <TableRow key={x.id} className={x.lowStock ? "bg-destructive/5" : ""}>
                     <TableCell>
                       {x.name}
