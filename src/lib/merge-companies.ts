@@ -93,6 +93,14 @@ function norm(s: unknown): string {
   return String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+/** Letters and digits only, lowercase: "Shri Montu 9to Deleted )" -> "shrimontu9todeleted". */
+function alnum(s: unknown): string {
+  return String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/** What may follow a company name for it to count as the same company. */
+const MARKER_REMAINDER = /^(\d*to|\d+|deleted|copy|old|dup|duplicate|backup|test)+$/;
+
 function safeName(s: string | null | undefined): string {
   return (s ?? "company").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 60) || "company";
 }
@@ -142,13 +150,24 @@ export async function findDuplicateCompanyGroups(): Promise<DuplicateGroup[]> {
   for (const c of picker as any[]) if (c?.id) byId.set(String(c.id), { id: String(c.id), name: String(c.name ?? "") });
   for (const c of snap as any[]) if (c?.id) byId.set(String(c.id), { id: String(c.id), name: String(c.name ?? byId.get(String(c.id))?.name ?? "") });
 
+  // Group by name. A name that is a shorter name plus a marker (e.g.
+  // "Shri Montu Ramanath Das 9to Deleted )" vs "Shri Montu Ramanath Das") is
+  // treated as the same company. Other differences stay separate.
+  const all = [...byId.values()].map((c) => ({ c, n: norm(c.name), key: alnum(c.name) })).filter((x) => x.n && x.key);
   const groups = new Map<string, { id: string; name: string }[]>();
-  for (const c of byId.values()) {
-    const n = norm(c.name);
-    if (!n) continue;
-    const arr = groups.get(n) ?? [];
-    arr.push(c);
-    groups.set(n, arr);
+  for (const x of all) {
+    let groupKey = x.key;
+    let base: string | null = null;
+    for (const y of all) {
+      if (y.key.length < 6 || y.key.length >= x.key.length) continue;
+      if (!x.key.startsWith(y.key)) continue;
+      if (!MARKER_REMAINDER.test(x.key.slice(y.key.length))) continue;
+      if (base === null || y.key.length < base.length) base = y.key;
+    }
+    if (base !== null) groupKey = base;
+    const arr = groups.get(groupKey) ?? [];
+    arr.push(x.c);
+    groups.set(groupKey, arr);
   }
 
   const out: DuplicateGroup[] = [];
