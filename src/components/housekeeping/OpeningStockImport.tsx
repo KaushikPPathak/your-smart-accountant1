@@ -22,6 +22,7 @@ import { createItem, updateItem } from "@/lib/offline/masters";
 import { extractTextFromFile, type OcrProgress } from "@/lib/ocr";
 import { parseStockOpeningText, type ExtractedStockItem } from "@/lib/statement-parse";
 import { GST_RATES, UNITS } from "@/lib/constants";
+import { itemHsnError } from "@/lib/inventory/item-hsn";
 import { formatINR, rupeesToPaise } from "@/lib/money";
 
 interface ItemOpt {
@@ -158,9 +159,9 @@ export function OpeningStockImport({ companyId, disabled, annualTurnoverPaise }:
   const stats = useMemo(() => {
     const sel = rows.filter((r) => r._selected);
     const totalValue = sel.reduce((a, r) => a + r.value, 0);
-    const badHsn = sel.filter((r) => !r.hsn_code || r.hsn_code.length < requiredHsn).length;
+    const badHsn = sel.filter((r) => itemHsnError(r.hsn_code, annualTurnoverPaise) !== null).length;
     return { count: sel.length, totalValue, badHsn };
-  }, [rows, requiredHsn]);
+  }, [rows, annualTurnoverPaise]);
 
   async function postOpenings() {
     const sel = rows.filter((r) => r._selected && r.name.trim() && r.qty > 0);

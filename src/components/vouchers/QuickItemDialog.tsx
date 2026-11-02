@@ -14,6 +14,8 @@ import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { offlineDb } from "@/lib/offline/db";
 import { HsnCodeAutocomplete } from "@/components/HsnCodeAutocomplete";
 import { toTitleCaseOnType } from "@/lib/text-case";
+import { useCompany } from "@/lib/company-context";
+import { itemHsnError } from "@/lib/inventory/item-hsn";
 
 export interface QuickItem {
   id: string;
@@ -32,6 +34,8 @@ interface Props {
 }
 
 export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved }: Props) {
+  const { activeMembership } = useCompany();
+  const turnoverPaise = activeMembership?.companies?.annual_turnover_paise ?? 0;
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("NOS");
   const [gstRate, setGstRate] = useState("18");
@@ -76,6 +80,11 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
   const submit = async () => {
     if (!name.trim()) {
       toast.error("Name required");
+      return;
+    }
+    const hsnProblem = itemHsnError(hsn, turnoverPaise);
+    if (hsnProblem) {
+      toast.error(hsnProblem);
       return;
     }
     setSaving(true);
@@ -154,7 +163,7 @@ export function QuickItemDialog({ open, onOpenChange, companyId, editId, onSaved
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>HSN/SAC</Label>
+              <Label>HSN/SAC *</Label>
               <HsnCodeAutocomplete
                 nameHint={name}
                 value={hsn}

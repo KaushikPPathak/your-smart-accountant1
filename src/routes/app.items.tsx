@@ -37,6 +37,7 @@ import { formatINR, paiseToRupees, rupeesToPaise } from "@/lib/money";
 import { GST_RATES, UNITS, isServiceHsn } from "@/lib/constants";
 import { EmptyState } from "@/components/EmptyState";
 import { itemFormSchema as schema } from "@/lib/schemas/item";
+import { itemHsnError } from "@/lib/inventory/item-hsn";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { DataGrid, type DGColumn } from "@/components/data-grid/DataGrid";
 import { createItem, updateItem, deleteItem } from "@/lib/offline/masters";
@@ -140,6 +141,13 @@ function ItemsPage() {
 
   const lowCount = useMemo(() => items.filter(isLow).length, [items]);
 
+  // Items whose HSN is missing or does not fit the turnover rule. They must be fixed before the item can be saved again.
+  const turnoverPaise = activeMembership?.companies?.annual_turnover_paise ?? 0;
+  const hsnFixCount = useMemo(
+    () => items.filter((i) => itemHsnError(i.hsn_code, turnoverPaise) !== null).length,
+    [items, turnoverPaise],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((i) => {
@@ -189,6 +197,11 @@ function ItemsPage() {
     const parsed = schema.safeParse(form);
     if (!parsed.success) {
       toast.error(parsed.error.issues[0].message);
+      return;
+    }
+    const hsnProblem = itemHsnError(parsed.data.hsn_code, turnoverPaise);
+    if (hsnProblem) {
+      toast.error(hsnProblem);
       return;
     }
     setSubmitting(true);
@@ -289,7 +302,7 @@ function ItemsPage() {
                   </div>
                   
                   <div className="space-y-1.5">
-                    <Label htmlFor="hsn_code">HSN / SAC code</Label>
+                    <Label htmlFor="hsn_code">HSN / SAC code *</Label>
                     <HsnCodeAutocomplete
                       nameHint={form.name}
                       id="hsn_code"
@@ -428,6 +441,12 @@ function ItemsPage() {
         )}
       </div>
 
+      {hsnFixCount > 0 && (
+        <div className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+          <strong>{hsnFixCount} item(s) need a valid HSN code.</strong> Open each one and enter its HSN
+          ({turnoverPaise > 5_00_00_000 * 100 ? "6 or 8 digits, turnover is above ₹5 crore" : "4, 6 or 8 digits"}).
+        </div>
+      )}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
           <div>
