@@ -87,7 +87,7 @@ export function MergeCompaniesTool({ disabled }: Props) {
 
   return (
     <div className="space-y-4">
-      <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+      <Card className="border-amber-500/40 bg-amber-500/10">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <AlertTriangle className="h-4 w-4 text-amber-600" />

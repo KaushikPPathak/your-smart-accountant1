@@ -143,6 +143,9 @@ export function ImportHistoryPanel({ companyId, disabled }: Props) {
                       <TableCell className="text-right">{b.items_created}</TableCell>
                       <TableCell className="text-right">{b.vouchers_created}</TableCell>
                       <TableCell className="text-right">
+                        {b.status === "undone" ? (
+                          <Badge variant="outline">Undone</Badge>
+                        ) : (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
@@ -172,6 +175,7 @@ export function ImportHistoryPanel({ companyId, disabled }: Props) {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

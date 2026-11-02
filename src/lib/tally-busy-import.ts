@@ -971,20 +971,24 @@ export async function listImportBatches(companyId: string): Promise<ImportBatchR
   const db = await getDbInstance();
   const rows: any[] = await db.cache_import_batches.where("company_id").equals(companyId).toArray();
   rows.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-  return rows.map((r) => ({
-    id: r.id,
-    company_id: r.company_id,
-    created_at: r.created_at,
-    kind: r.kind,
-    status: r.status,
-    summary: r.summary,
-    source: r.source,
-    label: r.label ?? undefined,
-    file_name: r.file_name ?? undefined,
-    ledgers_created: r.ledgers_created,
-    items_created: r.items_created,
-    vouchers_created: r.vouchers_created,
-  }));
+  return rows.map((r) => {
+    // An undone import no longer holds anything, so its counts show as zero.
+    const undone = r.status === "undone";
+    return {
+      id: r.id,
+      company_id: r.company_id,
+      created_at: r.created_at,
+      kind: r.kind,
+      status: r.status,
+      summary: r.summary,
+      source: r.source,
+      label: r.label ?? undefined,
+      file_name: r.file_name ?? undefined,
+      ledgers_created: undone ? 0 : r.ledgers_created,
+      items_created: undone ? 0 : r.items_created,
+      vouchers_created: undone ? 0 : r.vouchers_created,
+    };
+  });
 }
 
 export interface UndoResult {

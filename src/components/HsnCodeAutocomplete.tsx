@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { suggestHsn, type HsnRecord } from "@/services/hsnService";
+import { closestHeadingFor, suggestHsn, type HsnRecord } from "@/services/hsnService";
 
 interface Props {
   value: string;
@@ -108,11 +108,23 @@ export function HsnCodeAutocomplete({
           })}
         </div>
       )}
-      {notFound && !open && (
-        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-          HSN code not found in master database.
-        </p>
-      )}
+      {notFound && !open && (() => {
+        const typed = (value || "").trim();
+        const heading = closestHeadingFor(typed);
+        const rate = heading ? (heading.is_exempt ? 0 : (heading.igst_rate || heading.cgst_rate + heading.sgst_rate)) : 0;
+        return (
+          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+            {heading ? (
+              <>
+                {typed} is not in the built-in list. Closest heading: <b>{heading.hsn_code}</b> — {heading.description}
+                {heading.is_exempt ? " (NIL / exempt)" : ` (GST ${rate}%)`}. You can keep this code.
+              </>
+            ) : (
+              <>HSN code {typed} is not in the built-in list. You can keep this code.</>
+            )}
+          </p>
+        );
+      })()}
     </div>
   );
 }

@@ -177,6 +177,22 @@ export async function lookupHsn(code: string): Promise<HsnLookup> {
   return { found: !!mem, record: mem };
 }
 
+/**
+ * The built-in list holds headings (e.g. "2710"), not every 8-digit code. For a
+ * code that is not listed, return the closest heading it falls under so the
+ * user can see the chapter. The typed code itself is not changed.
+ */
+export function closestHeadingFor(code: string): HsnRecord | null {
+  const digits = (code || "").replace(/\D/g, "");
+  if (digits.length < 3) return null;
+  const idx = getIndex();
+  for (let len = digits.length - 1; len >= 2; len--) {
+    const seed = idx.byCode.get(digits.slice(0, len));
+    if (seed) return seedToRecord(seed);
+  }
+  return null;
+}
+
 export async function suggestHsn(prefix: string, limit = 10): Promise<HsnRecord[]> {
   const p = (prefix || "").trim();
   if (!p) return [];
