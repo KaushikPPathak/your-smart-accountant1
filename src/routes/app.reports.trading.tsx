@@ -20,6 +20,7 @@ import { BucketedGrid } from "@/components/reports/BucketedGrid";
 import { Label } from "@/components/ui/label";
 import { readItems, readVouchers, readVoucherItemsForCompany, withCacheFallback } from "@/lib/offline/cache-read";
 import { calculateWac, type ItemMove } from "@/lib/inventory/valuation-engine";
+import { getValuationMethod } from "@/lib/inventory/valuation-method";
 import { getManualValuation } from "@/lib/offline/manual-valuation";
 
 
@@ -72,6 +73,7 @@ function TradingAccount() {
       ]);
 
       const voucherMap = new Map((vouchers as any[]).map(v => [String(v.id), v]));
+      const method = await getValuationMethod(activeCompanyId);
       let totalOpeningPaise = 0;
       let totalClosingPaise = 0;
 
@@ -95,14 +97,16 @@ function TradingAccount() {
         const valOpening = calculateWac(
           Number(it.opening_stock_qty || 0),
           Number(it.opening_stock_rate_paise || 0),
-          itemMoves.filter(m => m.date < from)
+          itemMoves.filter(m => m.date < from),
+          method,
         );
         totalOpeningPaise += valOpening.closingValuePaise;
 
         const valClosing = calculateWac(
           Number(it.opening_stock_qty || 0),
           Number(it.opening_stock_rate_paise || 0),
-          itemMoves
+          itemMoves,
+          method,
         );
         totalClosingPaise += valClosing.closingValuePaise;
       }

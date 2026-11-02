@@ -1,6 +1,7 @@
 import { BS_ASSET, BS_LIAB, fetchLedgerBalances, type LedgerBalance } from "@/lib/reports";
 import { readItems, readVoucherItemsForCompany, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 import { calculateWac, type ItemMove } from "@/lib/inventory/valuation-engine";
+import { getValuationMethod } from "@/lib/inventory/valuation-method";
 import { getManualValuation } from "@/lib/offline/manual-valuation";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -86,6 +87,7 @@ function BalanceSheet() {
         ]);
 
         const voucherMap = new Map((vouchers as any[]).map(v => [String(v.id), v]));
+        const method = await getValuationMethod(activeCompanyId);
         let wacValuationPaise = 0;
         let negativeFound = false;
 
@@ -110,7 +112,8 @@ function BalanceSheet() {
           const val = calculateWac(
             Number(it.opening_stock_qty || 0),
             Number(it.opening_stock_rate_paise || 0),
-            itemMoves
+            itemMoves,
+            method,
           );
           wacValuationPaise += val.closingValuePaise;
           if (val.closingQty < 0) negativeFound = true;

@@ -3,6 +3,13 @@
  */
 import { getManualValuation } from "@/lib/offline/manual-valuation";
 
+export type ValuationMethod = "average" | "fifo" | "lifo";
+
+export const VALUATION_METHODS: { value: ValuationMethod; label: string; hint: string }[] = [
+  { value: "average", label: "Average cost (weighted)", hint: "Every sale is costed at the running average of all stock on hand. Default." },
+  { value: "fifo", label: "FIFO (first in, first out)", hint: "Oldest purchases are sold first; closing stock is valued at the newest purchases." },
+  { value: "lifo", label: "LIFO (last in, first out)", hint: "Newest purchases are sold first; closing stock is valued at the oldest purchases." },
+];
 
 export interface ItemMove {
   date: string;
@@ -15,78 +22,198 @@ export interface ItemMove {
 export interface ValuationResult {
   closingQty: number;
   closingValuePaise: number;
+  /** Average cost per unit on hand (for FIFO/LIFO, the value divided by the quantity). */
   wacPaise: number;
   isNegative: boolean;
+  /** Set when stock on hand is positive but its value came out negative; the value is then shown as zero and the item needs a check. */
+  needsReview: boolean;
+}
+
+// Quantities are kept to six decimals so float dust (e.g. 2e-13) never shows as stock.
+const EPS = 1e-6;
+const q6 = (n: number) => Math.round(n * 1e6) / 1e6;
+
+type MoveKind = "in" | "out" | "physical" | "none";
+
+function kindOf(move: ItemMove): MoveKind {
+  if (move.type === "physical_stock") return "physical";
+  if (
+    move.type === "purchase" ||
+    move.type === "credit_note" ||
+    (move.type === "manufacturing" && move.qty > 0)
+  ) return "in";
+  if (
+    move.type === "sales" ||
+    move.type === "debit_note" ||
+    (move.type === "manufacturing" && move.qty < 0)
+  ) return "out";
+  return "none";
 }
 
 /**
- * Weighted Average Cost (WAC) Engine.
- * 
- * Rules:
- * - Opening: Qty * Rate.
- * - Inward (Purchase/Sales Return/Mfg In): Value += (Qty * Rate), WAC = Value / Qty.
- * - Outward (Sales/Purchase Return/Mfg Out): Value -= (Qty * WAC), WAC remains same.
- * - Negative Stock: Preserve last valid WAC, Value = Qty * WAC (negative value).
+ * Cost of stock on hand under the chosen method.
+ *
+ * Shared rules for all methods:
+ * - Opening stock is the first layer of stock at its rate.
+ * - A sale larger than the stock on hand leaves the excess as negative stock.
+ * - When a later purchase brings a negative stock back above zero, the negative
+ *   cost is dropped and the stock on hand is valued at the purchase rate. The
+ *   sales that ran ahead of purchases are never carried as a negative value.
+ * - Physical stock lines carry a signed quantity difference and no value of their own.
+ */
+export function calculateCost(
+  method: ValuationMethod,
+  openingQty: number,
+  openingRatePaise: number,
+  moves: ItemMove[],
+): ValuationResult {
+  return method === "average"
+    ? averageCost(openingQty, openingRatePaise, moves)
+    : layerCost(method, openingQty, openingRatePaise, moves);
+}
+
+/**
+ * Weighted Average Cost (WAC) engine. Kept under its original name because
+ * the reports call it directly; the optional method selects another costing.
+ *
+ * Average rules:
+ * - Inward: value += qty * rate, WAC = value / qty.
+ * - Outward: value -= qty * WAC, WAC unchanged.
+ * - Negative stock: value = qty * WAC (negative), until purchases bring it back above zero.
  */
 export function calculateWac(
   openingQty: number,
   openingRatePaise: number,
-  moves: ItemMove[]
+  moves: ItemMove[],
+  method: ValuationMethod = "average",
 ): ValuationResult {
-  let currentQty = openingQty;
-  let currentValuePaise = Math.round(openingQty * openingRatePaise);
-  let currentWacPaise = openingRatePaise;
+  return calculateCost(method, openingQty, openingRatePaise, moves);
+}
 
-  // Sort moves chronologically
-  const sortedMoves = [...moves].sort((a, b) => a.date.localeCompare(b.date));
+function finish(qty: number, value: number, wac: number): ValuationResult {
+  const closingQty = q6(qty);
+  if (Math.abs(closingQty) < EPS) {
+    return { closingQty: 0, closingValuePaise: 0, wacPaise: wac, isNegative: false, needsReview: false };
+  }
+  if (closingQty > 0 && value < 0) {
+    return { closingQty, closingValuePaise: 0, wacPaise: 0, isNegative: false, needsReview: true };
+  }
+  return {
+    closingQty,
+    closingValuePaise: Math.round(value),
+    wacPaise: wac,
+    isNegative: closingQty < 0,
+    needsReview: false,
+  };
+}
 
-  for (const move of sortedMoves) {
-    const qty = Math.abs(move.qty);
-    const moveRate = qty > 0 ? move.taxablePaise / qty : 0;
+function averageCost(openingQty: number, openingRatePaise: number, moves: ItemMove[]): ValuationResult {
+  let qty = q6(openingQty);
+  let value = Math.round(openingQty * openingRatePaise);
+  let wac = openingRatePaise;
 
-    // Physical stock (stock-take) lines carry a SIGNED difference quantity and
-    // no value of their own — they are always valued at the running WAC so the
-    // count correction never distorts the average cost.
-    if (move.type === "physical_stock") {
-      currentQty += move.qty;
-      currentValuePaise += Math.round(move.qty * currentWacPaise);
-      if (currentQty > 0) currentWacPaise = currentValuePaise / currentQty;
+  const sorted = [...moves].sort((a, b) => a.date.localeCompare(b.date));
+
+  for (const move of sorted) {
+    const kind = kindOf(move);
+    if (kind === "none") continue;
+    const oldQty = qty;
+
+    if (kind === "physical") {
+      const next = q6(oldQty + move.qty);
+      value = oldQty < -EPS && next > EPS ? Math.round(next * wac) : value + Math.round(move.qty * wac);
+      qty = next;
+      if (qty > EPS) wac = value / qty;
       continue;
     }
 
-    const isInward = 
-      move.type === "purchase" || 
-      move.type === "credit_note" || 
-      (move.type === "manufacturing" && move.qty > 0);
-    
-    const isOutward = 
-      move.type === "sales" || 
-      move.type === "debit_note" || 
-      (move.type === "manufacturing" && move.qty < 0);
+    const amount = Math.abs(move.qty);
+    const moveRate = amount > 0 ? move.taxablePaise / amount : 0;
 
-
-    if (isInward) {
-      const addedValue = Math.round(qty * moveRate);
-      currentValuePaise += addedValue;
-      currentQty += qty;
-      if (currentQty > 0) {
-        currentWacPaise = currentValuePaise / currentQty;
-      }
-    } else if (isOutward) {
-      // Use current WAC for outflows
-      const outflowValue = Math.round(qty * currentWacPaise);
-      currentValuePaise -= outflowValue;
-      currentQty -= qty;
-      // WAC remains unchanged on outflows
+    if (kind === "in") {
+      const next = q6(oldQty + amount);
+      value = oldQty < -EPS && next > EPS ? Math.round(next * moveRate) : value + Math.round(amount * moveRate);
+      qty = next;
+      if (qty > EPS) wac = value / qty;
+    } else {
+      // Outflow is costed at the current average; the average itself does not change.
+      value -= Math.round(amount * wac);
+      qty = q6(oldQty - amount);
     }
   }
 
-  return {
-    closingQty: currentQty,
-    closingValuePaise: Math.round(currentValuePaise),
-    wacPaise: currentWacPaise,
-    isNegative: currentQty < 0
+  return finish(qty, value, wac);
+}
+
+function layerCost(
+  method: "fifo" | "lifo",
+  openingQty: number,
+  openingRatePaise: number,
+  moves: ItemMove[],
+): ValuationResult {
+  type Layer = { qty: number; rate: number };
+  const layers: Layer[] = [];
+  let uncovered = 0; // quantity sold beyond stock on hand (negative stock)
+  let lastRate = openingRatePaise;
+
+  if (openingQty > EPS) layers.push({ qty: openingQty, rate: openingRatePaise });
+  else if (openingQty < -EPS) uncovered = -openingQty;
+
+  const addStock = (qtyIn: number, rate: number) => {
+    let remaining = qtyIn;
+    if (uncovered > EPS) {
+      const cover = Math.min(uncovered, remaining);
+      uncovered = q6(uncovered - cover);
+      remaining = q6(remaining - cover);
+    }
+    if (remaining > EPS) layers.push({ qty: remaining, rate });
   };
+
+  const takeStock = (qtyOut: number) => {
+    let remaining = qtyOut;
+    while (remaining > EPS && layers.length) {
+      const layer = method === "fifo" ? layers[0] : layers[layers.length - 1];
+      const used = Math.min(layer.qty, remaining);
+      layer.qty = q6(layer.qty - used);
+      remaining = q6(remaining - used);
+      if (layer.qty <= EPS) {
+        if (method === "fifo") layers.shift();
+        else layers.pop();
+      }
+    }
+    if (remaining > EPS) uncovered = q6(uncovered + remaining);
+  };
+
+  const sorted = [...moves].sort((a, b) => a.date.localeCompare(b.date));
+  for (const move of sorted) {
+    const kind = kindOf(move);
+    if (kind === "none") continue;
+    const amount = Math.abs(move.qty);
+
+    if (kind === "physical") {
+      if (move.qty > 0) addStock(move.qty, lastRate);
+      else if (move.qty < 0) takeStock(-move.qty);
+      continue;
+    }
+
+    const moveRate = amount > 0 ? move.taxablePaise / amount : 0;
+    if (kind === "in") {
+      addStock(amount, moveRate);
+      if (moveRate > 0) lastRate = moveRate;
+    } else {
+      takeStock(amount);
+    }
+  }
+
+  let qty = 0;
+  let value = 0;
+  for (const l of layers) {
+    qty += l.qty;
+    value += Math.round(l.qty * l.rate);
+  }
+  const closing = q6(qty - uncovered);
+  const wac = closing > EPS ? value / closing : lastRate;
+  return finish(closing, value, wac);
 }
 
 /**
@@ -97,10 +224,11 @@ export async function getCompanyInventoryValuation(
   asOfDate: string,
   items: any[],
   vouchers: any[],
-  voucherItems: any[]
+  voucherItems: any[],
+  method: ValuationMethod = "average",
 ): Promise<Map<string, ValuationResult>> {
   const valuationMap = new Map<string, ValuationResult>();
-  
+
   const voucherMap = new Map(vouchers.map(v => [v.id, v]));
 
   for (const item of items) {
@@ -119,12 +247,13 @@ export async function getCompanyInventoryValuation(
       })
       .filter((m): m is ItemMove => m !== null);
 
-    const result = calculateWac(
+    const result = calculateCost(
+      method,
       Number(item.opening_stock_qty || 0),
       Number(item.opening_stock_rate_paise || 0),
       itemMoves
     );
-    
+
     valuationMap.set(item.id, result);
   }
 
@@ -139,7 +268,8 @@ export async function resolveInventoryValuation(
   asOfDate: string,
   items: any[],
   vouchers: any[],
-  voucherItems: any[]
+  voucherItems: any[],
+  method: ValuationMethod = "average",
 ): Promise<number> {
   // 1. Check for manual valuation override
   const manual = await getManualValuation(companyId, asOfDate);
@@ -147,13 +277,14 @@ export async function resolveInventoryValuation(
     return manual;
   }
 
-  // 2. Fallback to WAC engine
+  // 2. Fallback to the costing engine
   const valuationMap = await getCompanyInventoryValuation(
     companyId,
     asOfDate,
     items,
     vouchers,
-    voucherItems
+    voucherItems,
+    method,
   );
 
   let totalPaise = 0;
@@ -164,9 +295,9 @@ export async function resolveInventoryValuation(
 }
 
 /**
- * Calculates the delta between the physical stock (WAC valuation) 
+ * Calculates the delta between the physical stock (valuation)
  * and the accounting book stock (ledger balances).
- * 
+ *
  * This adjustment is injected into the P&L and Balance Sheet to ensure they tally.
  */
 export function calculateProvisionalStockAdjustment(
@@ -176,5 +307,3 @@ export function calculateProvisionalStockAdjustment(
   const totalLedgerBalance = stockLedgerBalances.reduce((s, b) => s + b.closing_paise, 0);
   return calculatedValuationPaise - totalLedgerBalance;
 }
-
-

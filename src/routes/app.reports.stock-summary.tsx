@@ -21,9 +21,11 @@ import {
   readVoucherItemsForCompany,
   withCacheFallback,
 } from "@/lib/offline/cache-read";
-import { calculateWac, type ItemMove as WacMove } from "@/lib/inventory/valuation-engine";
+import { calculateWac, VALUATION_METHODS, type ItemMove as WacMove, type ValuationMethod } from "@/lib/inventory/valuation-engine";
+import { getValuationMethod, setValuationMethod } from "@/lib/inventory/valuation-method";
 import { getManualValuation } from "@/lib/offline/manual-valuation";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
 
@@ -59,6 +61,19 @@ function StockSummary() {
   const [items, setItems] = useState<Item[]>([]);
   const [moves, setMoves] = useState<ItemMove[]>([]);
   const { view, setView } = useReportView("stock-summary");
+  const [method, setMethod] = useState<ValuationMethod>("average");
+
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    getValuationMethod(activeCompanyId).then(setMethod).catch(() => setMethod("average"));
+  }, [activeCompanyId]);
+
+  const chooseMethod = (next: ValuationMethod) => {
+    setMethod(next);
+    if (activeCompanyId) {
+      setValuationMethod(activeCompanyId, next).catch((e) => console.error("Could not save valuation method", e));
+    }
+  };
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -158,7 +173,8 @@ function StockSummary() {
       const val = calculateWac(
         Number(it.opening_stock_qty),
         Number(it.opening_stock_rate_paise),
-        wacMoves.filter(m => m.date <= to)
+        wacMoves.filter(m => m.date <= to),
+        method,
       );
 
       return {
@@ -171,10 +187,11 @@ function StockSummary() {
         // Negative stock has no value on hand; it is not counted until the missing purchases or opening stock are entered.
         stockValue: val.closingQty < 0 ? 0 : val.closingValuePaise,
         lowStock: it.reorder_level > 0 && val.closingQty <= it.reorder_level,
-        isNegative: val.closingQty < 0
+        isNegative: val.closingQty < 0,
+        needsReview: val.needsReview,
       };
     });
-  }, [items, moves, from, to]);
+  }, [items, moves, from, to, method]);
   
   const [manualValOpen, setManualValOpen] = useState(false);
   const [manualTotalValue, setManualTotalValue] = useState<number | null>(null);
@@ -264,7 +281,27 @@ function StockSummary() {
             }
           />
 
-          <p className="mt-2 text-xs text-muted-foreground">Stock value is calculated using Weighted Average Cost (WAC).</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <span className="text-xs text-muted-foreground">Stock valuation method</span>
+            <Select value={method} onValueChange={(v) => chooseMethod(v as ValuationMethod)}>
+              <SelectTrigger className="h-8 w-[260px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {VALUATION_METHODS.map((m) => (
+                  <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground">
+              {VALUATION_METHODS.find((m) => m.value === method)?.hint}
+            </span>
+          </div>
+          {rows.some(r => r.needsReview) && (
+            <div className="mt-2 rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <strong>Check purchase rates:</strong> Some items have stock on hand but their purchase values add up to less than nothing. Their value is shown as zero until the purchase rates are corrected.
+            </div>
+          )}
           {rows.some(r => r.closing < 0) && (
             <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
               <strong>Negative Stock Detected:</strong> Some items have sales/outwards recorded before matching purchases. Their quantity is shown as is, but their value is not counted in stock value until the missing purchases or opening stock are entered.
