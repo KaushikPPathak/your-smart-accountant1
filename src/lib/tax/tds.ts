@@ -7,7 +7,7 @@
  */
 
 export interface TdsSection {
-  code: "194C" | "194J" | "194Q";
+  code: "194C" | "194J" | "194Q" | "194A" | "194" | "194I";
   label: string;
   /** Default rate in percent. The user can change it on the voucher. */
   defaultRatePercent: number;
@@ -21,8 +21,15 @@ export const TDS_SECTIONS: TdsSection[] = [
   { code: "194Q", label: "194Q — Purchase of goods", defaultRatePercent: 0.1, note: "On purchases above ₹50 lakh in a year" },
 ];
 
+/** TDS deducted by a payer when the company receives income (receipt voucher). */
+export const RECEIPT_TDS_SECTIONS: TdsSection[] = [
+  { code: "194A", label: "194A — Interest (other than securities)", defaultRatePercent: 10, note: "Bank and company interest" },
+  { code: "194", label: "194 — Dividend", defaultRatePercent: 10, note: "Dividend income" },
+  { code: "194I", label: "194I — Rent", defaultRatePercent: 10, note: "10% land/building, 2% plant/machinery" },
+];
+
 export function tdsSection(code: string): TdsSection | undefined {
-  return TDS_SECTIONS.find((s) => s.code === code);
+  return TDS_SECTIONS.find((s) => s.code === code) ?? RECEIPT_TDS_SECTIONS.find((s) => s.code === code);
 }
 
 /** TDS in paise, rounded to the nearest paisa. Returns 0 for a zero or invalid rate. */
@@ -39,7 +46,7 @@ export interface TdsSplit {
   tdsPaise: number;
 }
 
-/** Splits a payment's gross amount into the bank credit and the TDS credit. */
+/** Splits a gross amount into the bank amount and the TDS amount (bank credit for a payment, bank debit for a receipt). */
 export function splitTds(grossPaise: number, ratePercent: number): TdsSplit {
   const tdsPaise = Math.min(tdsAmountPaise(grossPaise, ratePercent), grossPaise);
   return { bankCreditPaise: grossPaise - tdsPaise, tdsPaise };

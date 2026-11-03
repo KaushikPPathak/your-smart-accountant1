@@ -116,6 +116,7 @@ function SettingsPage() {
   const [setuClientSecret, setSetuClientSecret] = useState("");
   const [gstnUsername, setGstnUsername] = useState("");
   const [eiEnabled, setEiEnabled] = useState(false);
+  const [incomeOnly, setIncomeOnly] = useState(false);
   const [ewbEnabled, setEwbEnabled] = useState(false);
   const [setuStatus, setSetuStatus] = useState<{ configured: boolean } | null>(null);
   const [savingSetu, setSavingSetu] = useState(false);
@@ -172,11 +173,31 @@ function SettingsPage() {
           for (const k of Object.keys(cur)) if (local[k] !== undefined && local[k] !== null) merged[k] = local[k];
           return merged;
         });
+        setIncomeOnly(local.income_only === true);
         if (typeof local.einvoice_enabled === "boolean") setEiEnabled(local.einvoice_enabled);
         if (typeof local.ewaybill_enabled === "boolean") setEwbEnabled(local.ewaybill_enabled);
       }
     })();
   }, [activeCompanyId]);
+
+  const saveIncomeOnly = async (v: boolean) => {
+    if (!activeCompanyId) return;
+    setIncomeOnly(v);
+    try {
+      const { offlineDb } = await import("@/lib/offline/db");
+      const now = new Date().toISOString();
+      const existing = await offlineDb.cache_company_settings.where("company_id").equals(activeCompanyId).first();
+      if (existing) {
+        await offlineDb.cache_company_settings.update(existing.id, { income_only: v, updated_at: now });
+      } else {
+        await offlineDb.cache_company_settings.put({ id: activeCompanyId, company_id: activeCompanyId, income_only: v, updated_at: now });
+      }
+      window.dispatchEvent(new Event("income-only-changed"));
+      toast.success(v ? "Business menus hidden for this company" : "Business menus shown for this company");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save the company type");
+    }
+  };
 
   const addLocalUser = async () => {
     if (!activeCompanyId) return;
@@ -497,6 +518,22 @@ function SettingsPage() {
         </CardContent>
       </Card>
 
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Company type</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between gap-3 rounded border p-3">
+            <div className="space-y-0.5">
+              <Label>Income from other sources only</Label>
+              <p className="text-xs text-muted-foreground">
+                Hides sales, purchase, stock, GST and presumptive menus and transactions for this company.
+                Receipts, payments, journals, ledgers and reports stay.
+              </p>
+            </div>
+            <Switch checked={incomeOnly} onCheckedChange={(v) => void saveIncomeOnly(v)} />
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader><CardTitle className="text-base">Tax templates</CardTitle></CardHeader>

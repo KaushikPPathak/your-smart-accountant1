@@ -25,7 +25,7 @@ import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
-import { TDS_SECTIONS, tdsSection, splitTds, tdsNarration, tdsRateError } from "@/lib/tax/tds";
+import { TDS_SECTIONS, RECEIPT_TDS_SECTIONS, tdsSection, splitTds, tdsNarration, tdsRateError } from "@/lib/tax/tds";
 import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/masters-cache";
 import { enqueueSave } from "@/lib/save-queue";
 import { consumeAssistantReturn } from "@/lib/assistant-return";
@@ -326,7 +326,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     [ledgers],
   );
   const tdsPreview = useMemo(
-    () => (voucherType === "payment" && tdsCode ? splitTds(simpleTotal, parseFloat(tdsRate) || 0) : null),
+    () => ((voucherType === "payment" || voucherType === "receipt") && tdsCode ? splitTds(simpleTotal, parseFloat(tdsRate) || 0) : null),
     [voucherType, tdsCode, tdsRate, simpleTotal],
   );
 
@@ -449,7 +449,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       totalForVoucher = filled.reduce((s, l) => s + rupeesToPaise(parseFloat(l.amount) || 0), 0);
       // TDS (payment only): the bank is credited the gross less TDS, and the TDS payable is credited with the TDS.
       let tdsSplit: ReturnType<typeof splitTds> | null = null;
-      if (voucherType === "payment" && tdsCode) {
+      if ((voucherType === "payment" || voucherType === "receipt") && tdsCode) {
         const rate = parseFloat(tdsRate);
         const rateErr = tdsRateError(rate);
         if (rateErr) { toast.error(rateErr); return; }
@@ -462,7 +462,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       entriesToInsert = [
         {
           ledger_id: cashBankId,
-          debit_paise: isReceipt ? totalForVoucher : 0,
+          debit_paise: isReceipt ? (tdsSplit ? tdsSplit.bankCreditPaise : totalForVoucher) : 0,
           credit_paise: isReceipt ? 0 : (tdsSplit ? tdsSplit.bankCreditPaise : totalForVoucher),
           narration: null,
           line_no: 1,
@@ -478,8 +478,8 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       if (tdsSplit && tdsSplit.tdsPaise > 0) {
         entriesToInsert.push({
           ledger_id: tdsLedgerId,
-          debit_paise: 0,
-          credit_paise: tdsSplit.tdsPaise,
+          debit_paise: isReceipt ? tdsSplit.tdsPaise : 0,
+          credit_paise: isReceipt ? 0 : tdsSplit.tdsPaise,
           narration: tdsNarration(tdsCode, parseFloat(tdsRate)),
           line_no: entriesToInsert.length + 1,
         });
@@ -794,9 +794,11 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                   )}
                 </div>
               )}
-              {isSimple && voucherType === "payment" && (
+              {isSimple && (voucherType === "payment" || voucherType === "receipt") && (
                 <div className="space-y-1.5">
-                  <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">TDS deduction (optional)</Label>
+                  <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                    {voucherType === "receipt" ? "TDS deducted by payer (optional)" : "TDS deduction (optional)"}
+                  </Label>
                   <div className="grid grid-cols-[1fr_88px] gap-2">
                     <select
                       aria-label="TDS section"
@@ -810,7 +812,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                       className="h-10 rounded-md border border-input bg-card px-2 text-sm text-foreground"
                     >
                       <option value="">No TDS</option>
-                      {TDS_SECTIONS.map((sec) => (
+                      {(voucherType === "receipt" ? RECEIPT_TDS_SECTIONS : TDS_SECTIONS).map((sec) => (
                         <option key={sec.code} value={sec.code}>{sec.label}</option>
                       ))}
                     </select>
@@ -829,12 +831,12 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                         value={tdsLedgerId}
                         onChange={setTdsLedgerId}
                         options={tdsLedgerOptions}
-                        placeholder="TDS Payable ledger"
+                        placeholder={voucherType === "receipt" ? "TDS Receivable ledger" : "TDS Payable ledger"}
                         emptyText="No ledger with TDS in its name. Create one such as TDS Payable."
                       />
                       {tdsPreview && (
                         <p className="text-[11px] text-muted-foreground">
-                          TDS {formatINR(tdsPreview.tdsPaise)} · bank pays {formatINR(tdsPreview.bankCreditPaise)} · party debited {formatINR(simpleTotal)}
+                          TDS {formatINR(tdsPreview.tdsPaise)} · {voucherType === "receipt" ? "bank receives" : "bank pays"} {formatINR(tdsPreview.bankCreditPaise)} · party {voucherType === "receipt" ? "credited" : "debited"} {formatINR(simpleTotal)}
                         </p>
                       )}
                     </>

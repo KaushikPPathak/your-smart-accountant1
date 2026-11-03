@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./auth-context";
 import { rememberActiveCompanyName } from "./desktop-save";
@@ -241,7 +241,44 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined") localStorage.setItem(ACTIVE_KEY, id);
   };
 
-  const activeMembership = memberships.find((m) => m.company_id === activeCompanyId) ?? null;
+  const storedMembership = memberships.find((m) => m.company_id === activeCompanyId) ?? null;
+
+  // "Income from other sources only" is a per-company setting kept in this PC's books.
+  const [incomeOnlyById, setIncomeOnlyById] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const { offlineDb } = await import("./offline/db");
+        const row = await offlineDb.cache_company_settings.where("company_id").equals(activeCompanyId).first();
+        if (!cancelled) setIncomeOnlyById((prev) => ({ ...prev, [activeCompanyId]: row?.income_only === true }));
+      } catch {
+        // Settings unreadable: keep the full menus.
+      }
+    };
+    void load();
+    const onChange = () => { void load(); };
+    window.addEventListener("income-only-changed", onChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("income-only-changed", onChange);
+    };
+  }, [activeCompanyId]);
+
+  const activeMembership = useMemo(
+    () =>
+      storedMembership
+        ? {
+            ...storedMembership,
+            companies: {
+              ...storedMembership.companies,
+              income_only: activeCompanyId ? incomeOnlyById[activeCompanyId] === true : false,
+            } as CompanyMembership["companies"],
+          }
+        : null,
+    [storedMembership, activeCompanyId, incomeOnlyById],
+  );
 
   useEffect(() => {
     rememberActiveCompanyName(activeMembership?.companies?.name ?? null);
