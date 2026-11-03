@@ -250,9 +250,9 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const load = async () => {
       try {
-        const { offlineDb } = await import("./offline/db");
-        const row = await offlineDb.cache_company_settings.where("company_id").equals(activeCompanyId).first();
-        if (!cancelled) setIncomeOnlyById((prev) => ({ ...prev, [activeCompanyId]: row?.income_only === true }));
+        const { readIncomeOnly } = await import("./company-type");
+        const value = await readIncomeOnly(activeCompanyId);
+        if (!cancelled) setIncomeOnlyById((prev) => ({ ...prev, [activeCompanyId]: value }));
       } catch {
         // Settings unreadable: keep the full menus.
       }

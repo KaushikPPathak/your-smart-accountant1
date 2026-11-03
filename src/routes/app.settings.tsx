@@ -173,10 +173,12 @@ function SettingsPage() {
           for (const k of Object.keys(cur)) if (local[k] !== undefined && local[k] !== null) merged[k] = local[k];
           return merged;
         });
-        setIncomeOnly(local.income_only === true);
         if (typeof local.einvoice_enabled === "boolean") setEiEnabled(local.einvoice_enabled);
         if (typeof local.ewaybill_enabled === "boolean") setEwbEnabled(local.ewaybill_enabled);
       }
+      // Read even when this year has no settings row yet: it inherits from the earlier year.
+      const { readIncomeOnly } = await import("@/lib/company-type");
+      setIncomeOnly(await readIncomeOnly(activeCompanyId));
     })();
   }, [activeCompanyId]);
 
@@ -184,14 +186,8 @@ function SettingsPage() {
     if (!activeCompanyId) return;
     setIncomeOnly(v);
     try {
-      const { offlineDb } = await import("@/lib/offline/db");
-      const now = new Date().toISOString();
-      const existing = await offlineDb.cache_company_settings.where("company_id").equals(activeCompanyId).first();
-      if (existing) {
-        await offlineDb.cache_company_settings.update(existing.id, { income_only: v, updated_at: now });
-      } else {
-        await offlineDb.cache_company_settings.put({ id: activeCompanyId, company_id: activeCompanyId, income_only: v, updated_at: now });
-      }
+      const { writeIncomeOnly } = await import("@/lib/company-type");
+      await writeIncomeOnly(activeCompanyId, v);
       window.dispatchEvent(new Event("income-only-changed"));
       toast.success(v ? "Business menus hidden for this company" : "Business menus shown for this company");
     } catch (err) {
