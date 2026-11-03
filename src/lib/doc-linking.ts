@@ -73,9 +73,11 @@ export async function listSourceDocs(
   companyId: string,
   targetType: string,
   partyId: string,
+  /** Stages the company has ticked in Settings → sales cycle. Omitted = all stages of the type. */
+  allowedStages?: readonly string[],
 ): Promise<LinkedDoc[]> {
-  const sources = SOURCE_STAGES[targetType];
-  if (!sources || !companyId || !partyId) return [];
+  const sources = (SOURCE_STAGES[targetType] ?? []).filter((s) => !allowedStages || allowedStages.includes(s));
+  if (sources.length === 0 || !companyId || !partyId) return [];
 
   let all: LinkedDoc[] = [];
   let consumed = new Set<string>();

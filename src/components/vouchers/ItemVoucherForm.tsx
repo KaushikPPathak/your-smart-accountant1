@@ -67,6 +67,7 @@ import { AutoTaxChip } from "./AutoTaxChip";
 import { SundryStrip } from "./SundryStrip";
 import { netSundryPaise, resolveSundryPaise, splitSundriesByStage, type Sundry } from "@/lib/sundries";
 import { SOURCE_STAGES, STAGE_LABEL, listSourceDocs, loadDocLinesWithPending, type LinkedDoc } from "@/lib/doc-linking";
+import { useVoucherPrefs } from "@/hooks/useVoucherPrefs";
 
 
 type VoucherType =
@@ -162,6 +163,13 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [originalVoucherId, setOriginalVoucherId] = useState<string | null>(null);
   const [sourceDocs, setSourceDocs] = useState<LinkedDoc[]>([]);
+  // Carry forward only offers the earlier stages the company has ticked in Settings → Voucher numbering & sales cycle.
+  const { prefs: salesPrefs } = useVoucherPrefs(activeCompanyId ?? null);
+  const enabledSourceStages = useMemo(
+    () => (SOURCE_STAGES[voucherType] ?? []).filter((s) => !!salesPrefs.stages[s as keyof typeof salesPrefs.stages]),
+    [voucherType, salesPrefs],
+  );
+  const enabledSourceKey = enabledSourceStages.join(",");
 
   const [originalInvoices, setOriginalInvoices] = useState<
     { id: string; voucher_number: string; voucher_date: string; total_paise: number }[]
@@ -467,7 +475,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       return;
     }
     let cancelled = false;
-    listSourceDocs(activeCompanyId, voucherType, partyId)
+    listSourceDocs(activeCompanyId, voucherType, partyId, enabledSourceKey ? enabledSourceKey.split(",") : [])
       .then((rows) => {
         if (cancelled) return;
         setSourceDocs(rows);
@@ -480,7 +488,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       })
       .catch(() => { if (!cancelled) setSourceDocs([]); });
     return () => { cancelled = true; };
-  }, [isNote, voucherType, activeCompanyId, partyId, savedTick]);
+  }, [isNote, voucherType, activeCompanyId, partyId, savedTick, enabledSourceKey]);
 
 
   /** Pull the picked source document's lines into this voucher. */
@@ -1283,7 +1291,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     placeholder="PO / Bill no."
                   />
                 )}
-                {!isNote && SOURCE_STAGES[voucherType] && (
+                {!isNote && enabledSourceStages.length > 0 && (
                   <div className="space-y-1 pt-2">
                     <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       Carry forward from
