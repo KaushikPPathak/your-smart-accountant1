@@ -25,6 +25,7 @@ import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
+import { TDS_SECTIONS, tdsSection, splitTds, tdsNarration, tdsRateError } from "@/lib/tax/tds";
 import { getAllLedgers, upsertCachedLedger, useMastersVersion } from "@/lib/masters-cache";
 import { enqueueSave } from "@/lib/save-queue";
 import { consumeAssistantReturn } from "@/lib/assistant-return";
@@ -127,6 +128,10 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     return lns;
   });
   const [cashBankId, setCashBankId] = useState<string>("");
+  // Optional TDS on a payment: section, rate in percent, and the TDS payable ledger.
+  const [tdsCode, setTdsCode] = useState<string>("");
+  const [tdsRate, setTdsRate] = useState<string>("");
+  const [tdsLedgerId, setTdsLedgerId] = useState<string>("");
   const [simpleLines, setSimpleLines] = useState<SimpleLine[]>(() =>
     Array.from({ length: 2 }, blankSimple),
   );
@@ -315,6 +320,15 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     () => ledgers.filter((l) => l.type === "cash" || l.type === "bank"),
     [ledgers],
   );
+  // TDS payable ledgers are found by name, so any "TDS Payable" style ledger qualifies.
+  const tdsLedgerOptions = useMemo(
+    () => ledgers.filter((l) => /tds/i.test(l.name)).map((lg) => ({ value: lg.id, label: lg.name, hint: lg.type })),
+    [ledgers],
+  );
+  const tdsPreview = useMemo(
+    () => (voucherType === "payment" && tdsCode ? splitTds(simpleTotal, parseFloat(tdsRate) || 0) : null),
+    [voucherType, tdsCode, tdsRate, simpleTotal],
+  );
 
   // ------------------------------------------------------------------
   // Journal GST rectype — progressive disclosure.
@@ -433,6 +447,15 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         }
       }
       totalForVoucher = filled.reduce((s, l) => s + rupeesToPaise(parseFloat(l.amount) || 0), 0);
+      // TDS (payment only): the bank is credited the gross less TDS, and the TDS payable is credited with the TDS.
+      let tdsSplit: ReturnType<typeof splitTds> | null = null;
+      if (voucherType === "payment" && tdsCode) {
+        const rate = parseFloat(tdsRate);
+        const rateErr = tdsRateError(rate);
+        if (rateErr) { toast.error(rateErr); return; }
+        if (!tdsLedgerId) { toast.error("Choose the TDS Payable ledger for this deduction"); return; }
+        tdsSplit = splitTds(totalForVoucher, rate);
+      }
       // Receipt: Dr Cash/Bank, Cr Party. Payment: Cr Cash/Bank, Dr Party.
       // Contra: Cr "Withdraw From" account, Dr "Deposit To" account(s).
       const isReceipt = voucherType === "receipt";
@@ -440,7 +463,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         {
           ledger_id: cashBankId,
           debit_paise: isReceipt ? totalForVoucher : 0,
-          credit_paise: isReceipt ? 0 : totalForVoucher,
+          credit_paise: isReceipt ? 0 : (tdsSplit ? tdsSplit.bankCreditPaise : totalForVoucher),
           narration: null,
           line_no: 1,
         },
@@ -452,6 +475,15 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
           line_no: i + 2,
         })),
       ];
+      if (tdsSplit && tdsSplit.tdsPaise > 0) {
+        entriesToInsert.push({
+          ledger_id: tdsLedgerId,
+          debit_paise: 0,
+          credit_paise: tdsSplit.tdsPaise,
+          narration: tdsNarration(tdsCode, parseFloat(tdsRate)),
+          line_no: entriesToInsert.length + 1,
+        });
+      }
       const partyLine = isContra
         ? undefined
         : filled.find((l) => {
@@ -560,6 +592,9 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     setLines(Array.from({ length: cfg.defaultLines }, blank));
     setSimpleLines(Array.from({ length: 2 }, blankSimple));
     setAllocs({});
+    setTdsCode("");
+    setTdsRate("");
+    setTdsLedgerId("");
 
     // Keep cashBankId as-is — user often enters multiple vouchers into the same book.
     setFocusedLine(0);
@@ -577,7 +612,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
       },
       { executor: ENTRY_VOUCHER_KEY, snap, companyId: snap.companyId },
     );
-  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg, draftKey, allocs]);
+  }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg, draftKey, allocs, tdsCode, tdsRate, tdsLedgerId]);
 
   const save = useCallback(() => { void performSave(); }, [performSave]);
 
@@ -756,6 +791,53 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
                     <div className="pt-0.5">
                       <LedgerBalanceChip ledgerId={cashBankId} prefix="Bal" compact />
                     </div>
+                  )}
+                </div>
+              )}
+              {isSimple && voucherType === "payment" && (
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">TDS deduction (optional)</Label>
+                  <div className="grid grid-cols-[1fr_88px] gap-2">
+                    <select
+                      aria-label="TDS section"
+                      value={tdsCode}
+                      onChange={(e) => {
+                        const code = e.target.value;
+                        setTdsCode(code);
+                        const sec = tdsSection(code);
+                        setTdsRate(sec ? String(sec.defaultRatePercent) : "");
+                      }}
+                      className="h-10 rounded-md border border-input bg-card px-2 text-sm text-foreground"
+                    >
+                      <option value="">No TDS</option>
+                      {TDS_SECTIONS.map((sec) => (
+                        <option key={sec.code} value={sec.code}>{sec.label}</option>
+                      ))}
+                    </select>
+                    <Input
+                      aria-label="TDS rate percent"
+                      inputMode="decimal"
+                      disabled={!tdsCode}
+                      value={tdsRate}
+                      onChange={(e) => setTdsRate(e.target.value)}
+                      placeholder="Rate %"
+                    />
+                  </div>
+                  {tdsCode && (
+                    <>
+                      <Combo
+                        value={tdsLedgerId}
+                        onChange={setTdsLedgerId}
+                        options={tdsLedgerOptions}
+                        placeholder="TDS Payable ledger"
+                        emptyText="No ledger with TDS in its name. Create one such as TDS Payable."
+                      />
+                      {tdsPreview && (
+                        <p className="text-[11px] text-muted-foreground">
+                          TDS {formatINR(tdsPreview.tdsPaise)} · bank pays {formatINR(tdsPreview.bankCreditPaise)} · party debited {formatINR(simpleTotal)}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               )}

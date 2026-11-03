@@ -39,9 +39,10 @@ Open, local-only build (the app must never fail or show empty because the cloud 
 - [x] Voucher assistant ledger lookup reads this PC's ledgers (the AI reply itself still uses the cloud, by design)
 
 Open, competitive features:
-- [ ] TDS deduction on payment vouchers (194C, 194J, 194Q) and TCS: not present in voucher code (TDS appears only in the tax-audit report)
-- [ ] Keyboard speed on voucher entry: searchable pickers (Combo) are used in Sales/Purchase, Entry, Manufacturing and Physical Stock; a full keyboard-only entry flow is not verified
-- [ ] Barcode label printing: not present
+- [x] TDS deduction on payment vouchers (194C 2%, 194J 10%, 194Q 0.1%, rates editable): bank is credited gross less TDS, TDS payable ledger (a ledger with TDS in its name) is credited (tests in tds.test.ts)
+- [ ] TCS on sales (206C): not started; needs a decision on where the TCS is added to the invoice
+- [ ] Keyboard speed on voucher entry: searchable pickers (Combo) are used in Sales/Purchase, Entry, Manufacturing and Physical Stock; a full keyboard-only entry flow is not verified (needs a manual walk-through on the built app)
+- [ ] Barcode labels: Code 128 encoder done and checked against a reference (code128.test.ts). Label printing waits for a per-item barcode field (needs a database column in the cloud and a local-cache field)
 - [ ] Payroll: not started
 - [ ] Approval workflow: not started. Company roles (admin, accountant, viewer) exist, but nothing is approved before posting.
 
