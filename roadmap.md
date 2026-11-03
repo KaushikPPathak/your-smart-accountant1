@@ -24,6 +24,27 @@
 
 
 
+## Status 2026-11-03 — local-only and competitive gaps
+Done:
+- [x] Opening Stock and Opening Balance imports read and save through the local books (11e38c4)
+- [x] Stock valuation: Average (default), FIFO or LIFO per company; Stock Summary, Trading, P&L and Balance Sheet follow the chosen method (6e1994c)
+- [x] Negative stock keeps its negative value; Stock Summary has an HSN-wise compact view, 4 digits up to ₹5 crore turnover and 6 digits above it (e7e524f)
+- [x] HSN / SAC code is mandatory for every item, checked against the turnover rule (d64ae55)
+- [x] Manual valuation button is visible; green when a manual value is saved; items-needing-HSN notice is clickable (49cb868)
+- [x] Credit and debit note original-invoice list reads from the local books (7ce9791)
+
+Open, local-only build (the app must never fail or show empty because the cloud is missing):
+- [ ] HSN Summary, ITC Item-wise, ITC Party-wise and Receipts & Payments reports still read the cloud only
+- [ ] Period lock and unlock (src/lib/period-locks.ts) and FY lock (src/lib/fy-lock.ts) still call the cloud
+- [ ] Voucher assistant ledger lookup (src/lib/voucher-intent.ts) still calls the cloud
+
+Open, competitive features:
+- [ ] TDS deduction on payment vouchers (194C, 194J, 194Q) and TCS: not present in voucher code (TDS appears only in the tax-audit report)
+- [ ] Keyboard speed on voucher entry: searchable pickers (Combo) are used in Sales/Purchase, Entry, Manufacturing and Physical Stock; a full keyboard-only entry flow is not verified
+- [ ] Barcode label printing: not present
+- [ ] Payroll: not started
+- [ ] Approval workflow: not started. Company roles (admin, accountant, viewer) exist, but nothing is approved before posting.
+
 ## Completed
 - Cash Book, Bank Book and Journal Book use one bounded local-data read; shared grid processing now restores stripped accessors and falls back safely if its worker fails.
 - Balance Sheet sign-switched ledgers are retained in valid opposite-side groups; regression covers the exact ₹1,04,672.09 omitted debit balances.
