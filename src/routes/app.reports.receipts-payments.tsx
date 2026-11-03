@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
 import { useCompany } from "@/lib/company-context";
-import { supabase } from "@/integrations/supabase/client";
+import { readLedgers, readVoucherEntriesForCompany, readVouchers } from "@/lib/offline/cache-read";
 import { formatINR } from "@/lib/money";
 import { amountHeader } from "@/lib/export-format";
 import { downloadCsv } from "@/lib/csv";
@@ -53,12 +53,16 @@ function ReceiptsPayments() {
     if (!activeCompanyId) return;
     (async () => {
       // 1) All ledgers with opening balances (needed for opening/closing cash)
-      const { data: leds } = await supabase
-        .from("ledgers")
-        .select("id, name, type, opening_balance_paise, opening_balance_is_debit")
-        .eq("company_id", activeCompanyId)
-        .eq("is_active", true);
-      const ledgers = (leds ?? []) as OpeningRow[];
+      // Read from this PC's books, so the report works offline.
+      const ledgers = ((await readLedgers(activeCompanyId)) as any[])
+        .filter((l) => l.is_active !== false)
+        .map((l) => ({
+          id: String(l.id),
+          name: String(l.name ?? ""),
+          type: l.type,
+          opening_balance_paise: Number(l.opening_balance_paise) || 0,
+          opening_balance_is_debit: l.opening_balance_is_debit !== false,
+        })) as OpeningRow[];
       const cashLedgerIds = new Set(ledgers.filter(l => l.type === "cash" || l.type === "bank").map(l => l.id));
 
       const openCash = ledgers
@@ -69,23 +73,22 @@ function ReceiptsPayments() {
       // 2) Fetch voucher_entries touching cash/bank in the period, then pair
       //    with contra entries on the same voucher to attribute the receipt /
       //    payment head.
-      const { data: vs } = await supabase
-        .from("vouchers")
-        .select("id")
-        .eq("company_id", activeCompanyId)
-        .gte("voucher_date", from)
-        .lte("voucher_date", to);
-      const voucherIds = (vs ?? []).map((v: { id: string }) => v.id);
-      if (voucherIds.length === 0) {
+      const periodVouchers = await readVouchers(activeCompanyId, { from, to });
+      const voucherIds = new Set((periodVouchers as any[]).map((v) => String(v.id)));
+      if (voucherIds.size === 0) {
         setRows([]);
         setClosingCash(openCash);
         return;
       }
-      const { data: ves } = await supabase
-        .from("voucher_entries")
-        .select("voucher_id, ledger_id, debit_paise, credit_paise")
-        .in("voucher_id", voucherIds);
-      const entries = (ves ?? []) as { voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[];
+      const allEntries = (await readVoucherEntriesForCompany(activeCompanyId)) as any[];
+      const entries = allEntries
+        .filter((e) => voucherIds.has(String(e.voucher_id)))
+        .map((e) => ({
+          voucher_id: String(e.voucher_id),
+          ledger_id: String(e.ledger_id),
+          debit_paise: Number(e.debit_paise) || 0,
+          credit_paise: Number(e.credit_paise) || 0,
+        })) as { voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[];
 
       const byVoucher = new Map<string, typeof entries>();
       for (const e of entries) {

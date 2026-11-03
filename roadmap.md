@@ -34,9 +34,9 @@ Done:
 - [x] Credit and debit note original-invoice list reads from the local books (7ce9791)
 
 Open, local-only build (the app must never fail or show empty because the cloud is missing):
-- [ ] HSN Summary, ITC Item-wise, ITC Party-wise and Receipts & Payments reports still read the cloud only
-- [ ] Period lock and unlock (src/lib/period-locks.ts) and FY lock (src/lib/fy-lock.ts) still call the cloud
-- [ ] Voucher assistant ledger lookup (src/lib/voucher-intent.ts) still calls the cloud
+- [x] HSN Summary, ITC Item-wise, ITC Party-wise and Receipts & Payments reports read this PC's books
+- [x] Period lock, unlock and FY lock are kept in this PC's books (locks stay on this PC; cloud sync of locks is not included)
+- [x] Voucher assistant ledger lookup reads this PC's ledgers (the AI reply itself still uses the cloud, by design)
 
 Open, competitive features:
 - [ ] TDS deduction on payment vouchers (194C, 194J, 194Q) and TCS: not present in voucher code (TDS appears only in the tax-audit report)

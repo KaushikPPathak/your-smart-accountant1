@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
-import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
+import { readItemRowsLocal, readItemMovesLocal } from "@/lib/offline/stock-moves-local";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadPdfTable, downloadXlsx, r } from "@/lib/exporters";
@@ -43,27 +43,19 @@ function ItcItemWise() {
   const [items, setItems] = useState<Item[]>([]);
   const [lines, setLines] = useState<Line[]>([]);
 
+  // Items and movements come from this PC's books, so the report works offline.
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("items")
-      .select("id, name, unit, hsn_code, gst_rate")
-      .eq("company_id", activeCompanyId)
-      .order("name")
-      .then(({ data }: any) => setItems((data || []) as Item[]));
+    readItemRowsLocal(activeCompanyId)
+      .then((rows) => setItems(rows.sort((a, b) => a.name.localeCompare(b.name)) as Item[]))
+      .catch((e) => { console.error("ITC item-wise: items", e); setItems([]); });
   }, [activeCompanyId]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("voucher_items")
-      .select(
-        "item_id, qty, taxable_paise, cgst_paise, sgst_paise, igst_paise, vouchers!inner(voucher_type, voucher_date, company_id)",
-      )
-      .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
-      .gte("vouchers.voucher_date", from)
-      .lte("vouchers.voucher_date", to)
-      .then(({ data }: any) => setLines((data || []) as unknown as Line[]));
+    readItemMovesLocal(activeCompanyId, { from, to })
+      .then((rows) => setLines(rows as unknown as Line[]))
+      .catch((e) => { console.error("ITC item-wise: movements", e); setLines([]); });
   }, [activeCompanyId, from, to]);
 
   const rows = useMemo(() => {

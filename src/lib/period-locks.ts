@@ -1,4 +1,14 @@
-import { supabase } from "@/integrations/supabase/client";
+// Period locks (GSTR-1 / GSTR-3B filed months). Locks live in this PC's books, so
+// they work offline and in local-only mode. The frozen-row guard reads the same
+// records, which blocks edits to vouchers inside a locked period.
+import {
+  listLocksLocal,
+  findActiveLockLocal,
+  isDateLockedLocal,
+  lockPeriodLocal,
+  unlockPeriodLocal,
+} from "@/lib/offline/period-locks-local";
+import { listActivity } from "@/lib/activity-log";
 
 export type ReturnType = "GSTR1" | "GSTR3B";
 
@@ -29,13 +39,7 @@ export interface PeriodLockAudit {
 }
 
 export async function fetchLocks(companyId: string): Promise<PeriodLock[]> {
-  const { data, error } = await (supabase as any)
-    .from("period_locks")
-    .select("*")
-    .eq("company_id", companyId)
-    .order("period_start", { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as PeriodLock[];
+  return listLocksLocal(companyId);
 }
 
 export async function fetchLockFor(
@@ -43,33 +47,15 @@ export async function fetchLockFor(
   returnType: ReturnType,
   period: string,
 ): Promise<PeriodLock | null> {
-  const { data, error } = await (supabase as any)
-    .from("period_locks")
-    .select("*")
-    .eq("company_id", companyId)
-    .eq("return_type", returnType)
-    .eq("period", period)
-    .maybeSingle();
-  if (error) throw error;
-  return (data ?? null) as PeriodLock | null;
+  return findActiveLockLocal(companyId, returnType, period);
 }
 
 /**
  * Check whether a given calendar date is inside any active lock for this company.
- * Used by voucher forms to disable Save / show a banner before the DB trigger fires.
+ * Used by voucher forms to disable Save / show a banner.
  */
 export async function isDateLocked(companyId: string, isoDate: string): Promise<PeriodLock | null> {
-  const { data, error } = await (supabase as any)
-    .from("period_locks")
-    .select("*")
-    .eq("company_id", companyId)
-    .eq("is_active", true)
-    .lte("period_start", isoDate)
-    .gte("period_end", isoDate)
-    .limit(1)
-    .maybeSingle();
-  if (error) return null;
-  return (data ?? null) as PeriodLock | null;
+  return isDateLockedLocal(companyId, isoDate);
 }
 
 export async function lockPeriod(args: {
@@ -80,29 +66,8 @@ export async function lockPeriod(args: {
   periodEnd: string;
   filedReference?: string;
   notes?: string;
-}) {
-  const { data, error } = await (supabase as any).rpc("lock_period", {
-    _company_id: args.companyId,
-    _return_type: args.returnType,
-    _period: args.period,
-    _period_start: args.periodStart,
-    _period_end: args.periodEnd,
-    _filed_reference: args.filedReference ?? null,
-    _notes: args.notes ?? null,
-  });
-  if (error) throw error;
-  try {
-    const { logActivity } = await import("./activity-log");
-    void logActivity({
-      company_id: args.companyId,
-      entity_type: "settings",
-      entity_id: null,
-      entity_label: `Period lock: ${args.returnType} ${args.period}`,
-      action: "create",
-      note: args.filedReference ? `Filed ref: ${args.filedReference}` : null,
-    });
-  } catch { /* non-fatal */ }
-  return data as string;
+}): Promise<string> {
+  return lockPeriodLocal(args);
 }
 
 export async function unlockPeriod(args: {
@@ -110,43 +75,37 @@ export async function unlockPeriod(args: {
   returnType: ReturnType;
   period: string;
   reason: string;
-}) {
-  const reason = args.reason.trim();
-  if (reason.length < 10) {
-    throw new Error("Please type a reason of at least 10 characters to unlock a filed period.");
-  }
-  const { error } = await (supabase as any).rpc("unlock_period", {
-    _company_id: args.companyId,
-    _return_type: args.returnType,
-    _period: args.period,
-    _reason: reason,
-  });
-  if (error) throw error;
-  try {
-    const { logActivity } = await import("./activity-log");
-    void logActivity({
-      company_id: args.companyId,
-      entity_type: "settings",
-      entity_id: null,
-      entity_label: `Period unlock: ${args.returnType} ${args.period}`,
-      action: "delete",
-      note: reason,
-    });
-  } catch { /* non-fatal */ }
+}): Promise<void> {
+  return unlockPeriodLocal(args);
 }
 
+/**
+ * History of locks and unlocks, read from this PC's activity log.
+ */
 export async function fetchAudit(companyId: string, limit = 50): Promise<PeriodLockAudit[]> {
-  const { data, error } = await (supabase as any)
-    .from("period_lock_audit")
-    .select("*")
-    .eq("company_id", companyId)
-    .order("performed_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return (data ?? []) as PeriodLockAudit[];
+  const rows = await listActivity(companyId, { limit: limit * 4 });
+  return rows
+    .filter((r) => r.entity_type === "settings" && /^Period (lock|unlock):/.test(r.entity_label ?? ""))
+    .slice(0, limit)
+    .map((r, i) => {
+      const label = String(r.entity_label ?? "");
+      const isUnlock = label.startsWith("Period unlock:");
+      const rest = label.replace(/^Period (lock|unlock): /, "").split(" ");
+      return {
+        id: String(r.id ?? `${r.ts}-${i}`),
+        company_id: r.company_id,
+        period_lock_id: r.entity_id ?? null,
+        return_type: rest[0] ?? "",
+        period: rest.slice(1).join(" "),
+        action: isUnlock ? "unlock" : "lock",
+        reason: String(r.note ?? ""),
+        performed_by: r.actor ?? "This PC",
+        performed_at: new Date(r.ts).toISOString(),
+      };
+    });
 }
 
-/** Friendly message for DB trigger errors so toasts read well. */
+/** Friendly message for lock errors so toasts read well. */
 export function isPeriodLockError(err: unknown): boolean {
   const m = (err as { message?: string } | null)?.message ?? "";
   return m.toLowerCase().includes("period is locked");

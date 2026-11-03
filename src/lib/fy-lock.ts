@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { isLocalOnlyMode } from "./local-only-mode";
+import { findActiveLockLocal, lockPeriodLocal, unlockPeriodLocal } from "./offline/period-locks-local";
 
 /**
  * Helpers for the "Provisional Balance Sync & Year-End Lock" utility.
@@ -206,37 +207,17 @@ export interface FyLockStatus {
   notes: string | null;
 }
 
+// Financial-year locks are kept in this PC's books, so they work offline.
 export async function getFyLockStatus(
   companyId: string,
   fyStart: string,
 ): Promise<FyLockStatus> {
-  const { data } = await (supabase as unknown as {
-    from: (t: string) => {
-      select: (s: string) => {
-        eq: (col: string, val: unknown) => {
-          eq: (col: string, val: unknown) => {
-            eq: (col: string, val: unknown) => {
-              eq: (col: string, val: unknown) => {
-                maybeSingle: () => Promise<{ data: { locked_at: string; locked_by: string; notes: string | null } | null }>;
-              };
-            };
-          };
-        };
-      };
-    };
-  })
-    .from("period_locks")
-    .select("locked_at, locked_by, notes")
-    .eq("company_id", companyId)
-    .eq("return_type", FY_LOCK_RETURN_TYPE)
-    .eq("period", fyLabelFromStart(fyStart))
-    .eq("is_active", true)
-    .maybeSingle();
+  const lock = await findActiveLockLocal(companyId, FY_LOCK_RETURN_TYPE, fyLabelFromStart(fyStart));
   return {
-    locked: !!data,
-    lockedAt: data?.locked_at ?? null,
-    lockedBy: data?.locked_by ?? null,
-    notes: data?.notes ?? null,
+    locked: !!lock,
+    lockedAt: lock?.locked_at ?? null,
+    lockedBy: lock?.locked_by ?? null,
+    notes: lock?.notes ?? null,
   };
 }
 
@@ -246,22 +227,15 @@ export async function lockFinancialYear(args: {
   notes?: string;
 }): Promise<string> {
   const range = fyRangeFromStart(args.fyStart);
-  const { data, error } = await (supabase as unknown as {
-    rpc: (
-      name: string,
-      args: Record<string, unknown>,
-    ) => Promise<{ data: string | null; error: { message: string } | null }>;
-  }).rpc("lock_period", {
-    _company_id: args.companyId,
-    _return_type: FY_LOCK_RETURN_TYPE,
-    _period: fyLabelFromStart(args.fyStart),
-    _period_start: range.start,
-    _period_end: range.end,
-    _filed_reference: null,
-    _notes: args.notes ?? "Financial year frozen after audit",
+  return lockPeriodLocal({
+    companyId: args.companyId,
+    returnType: FY_LOCK_RETURN_TYPE,
+    period: fyLabelFromStart(args.fyStart),
+    periodStart: range.start,
+    periodEnd: range.end,
+    filedReference: null,
+    notes: args.notes ?? "Financial year frozen after audit",
   });
-  if (error) throw new Error(error.message);
-  return data ?? "";
 }
 
 export async function unlockFinancialYear(args: {
@@ -273,16 +247,10 @@ export async function unlockFinancialYear(args: {
   if (reason.length < 10) {
     throw new Error("Please type a reason of at least 10 characters to unlock a frozen financial year.");
   }
-  const { error } = await (supabase as unknown as {
-    rpc: (
-      name: string,
-      args: Record<string, unknown>,
-    ) => Promise<{ data: unknown; error: { message: string } | null }>;
-  }).rpc("unlock_period", {
-    _company_id: args.companyId,
-    _return_type: FY_LOCK_RETURN_TYPE,
-    _period: fyLabelFromStart(args.fyStart),
-    _reason: reason,
+  await unlockPeriodLocal({
+    companyId: args.companyId,
+    returnType: FY_LOCK_RETURN_TYPE,
+    period: fyLabelFromStart(args.fyStart),
+    reason,
   });
-  if (error) throw new Error(error.message);
 }

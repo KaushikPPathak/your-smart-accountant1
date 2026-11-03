@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
-import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
+import { readItemRowsLocal, readItemMovesLocal } from "@/lib/offline/stock-moves-local";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
 import { downloadCsv } from "@/lib/csv";
@@ -44,24 +44,19 @@ function HsnSummary() {
   const [items, setItems] = useState<Item[]>([]);
   const [moves, setMoves] = useState<Move[]>([]);
 
+  // Items and movements come from this PC's books, so the report works offline.
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("items")
-      .select("id, name, unit, hsn_code, gst_rate, opening_stock_qty, opening_stock_rate_paise")
-      .eq("company_id", activeCompanyId)
-      .order("hsn_code")
-      .then(({ data }: any) => setItems((data || []) as Item[]));
+    readItemRowsLocal(activeCompanyId)
+      .then((rows) => setItems(rows.sort((a, b) => (a.hsn_code ?? "").localeCompare(b.hsn_code ?? ""))))
+      .catch((e) => { console.error("HSN summary: items", e); setItems([]); });
   }, [activeCompanyId]);
 
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("voucher_items")
-      .select("qty, rate_paise, taxable_paise, cgst_paise, sgst_paise, igst_paise, item_id, vouchers!inner(voucher_type, voucher_date, company_id)")
-      .eq("vouchers.company_id", activeCompanyId).is("vouchers.deleted_at", null)
-      .lte("vouchers.voucher_date", to)
-      .then(({ data }: any) => setMoves((data || []) as unknown as Move[]));
+    readItemMovesLocal(activeCompanyId, { to })
+      .then((rows) => setMoves(rows as unknown as Move[]))
+      .catch((e) => { console.error("HSN summary: movements", e); setMoves([]); });
   }, [activeCompanyId, to]);
 
   const isPurchase = (t: string) => t === "purchase" || t === "credit_note";

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReportToolbar, useFyRangeState } from "@/components/reports/ReportToolbar";
-import { supabase } from "@/integrations/supabase/client";
+import { readLedgers, readVouchers } from "@/lib/offline/cache-read";
 import { useCompany } from "@/lib/company-context";
 import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { formatINR } from "@/lib/money";
@@ -34,18 +34,32 @@ function ItcPartyWise() {
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [vouchers, setVouchers] = useState<VRow[]>([]);
 
+  // Vouchers and party names come from this PC's books, so the report works offline.
   useEffect(() => {
     if (!activeCompanyId) return;
-    supabase
-      .from("vouchers")
-      .select(
-        "voucher_type, party_ledger_id, subtotal_paise, cgst_paise, sgst_paise, igst_paise, ledgers:party_ledger_id(name, gstin, state_code, type)",
-      )
-      .eq("company_id", activeCompanyId)
-      .in("voucher_type", ["purchase", "debit_note", "sales", "credit_note"])
-      .gte("voucher_date", from)
-      .lte("voucher_date", to)
-      .then(({ data }: any) => setVouchers((data || []) as unknown as VRow[]));
+    const types = new Set(["purchase", "debit_note", "sales", "credit_note"]);
+    Promise.all([readVouchers(activeCompanyId, { from, to }), readLedgers(activeCompanyId)])
+      .then(([vs, leds]) => {
+        const ledgerById = new Map((leds as any[]).map((l) => [String(l.id), l]));
+        const rows: VRow[] = (vs as any[])
+          .filter((v) => types.has(String(v.voucher_type)))
+          .map((v) => {
+            const l = ledgerById.get(String(v.party_ledger_id ?? ""));
+            return {
+              voucher_type: String(v.voucher_type),
+              party_ledger_id: v.party_ledger_id ?? null,
+              subtotal_paise: Number(v.subtotal_paise) || 0,
+              cgst_paise: Number(v.cgst_paise) || 0,
+              sgst_paise: Number(v.sgst_paise) || 0,
+              igst_paise: Number(v.igst_paise) || 0,
+              ledgers: l
+                ? { name: String(l.name ?? ""), gstin: l.gstin ?? null, state_code: l.state_code ?? null, type: String(l.type ?? "") }
+                : null,
+            };
+          });
+        setVouchers(rows);
+      })
+      .catch((e) => { console.error("ITC party-wise", e); setVouchers([]); });
   }, [activeCompanyId, from, to]);
 
   const rows = useMemo(() => {

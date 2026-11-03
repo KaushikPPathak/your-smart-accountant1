@@ -5,8 +5,7 @@
 // and (b) ship only a tiny, context-isolated subset of ledgers/items to the
 // model — drastically reducing tokens, latency and cost.
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
+import { readLedgers } from "@/lib/offline/cache-read";
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  TYPES
@@ -154,23 +153,23 @@ export function ledgerTypesForIntent(intent: VoucherIntentType): string[] {
   }
 }
 
+// Ledgers come from this PC's books, so the lookup works offline.
 export async function fetchContextLedgers(
-  supabase: SupabaseClient<Database>,
   companyId: string,
   intent: VoucherIntentType,
   cap = 60,
 ): Promise<ContextLedger[]> {
-  const types = ledgerTypesForIntent(intent);
-  const { data, error } = await supabase
-    .from("ledgers")
-    .select("id, name, type, is_active")
-    .eq("company_id", companyId)
-    .in("type", types as Database["public"]["Enums"]["ledger_type"][])
-    .eq("is_active", true)
-    .order("name", { ascending: true })
-    .limit(cap);
-  if (error || !data) return [];
-  return data.map((l) => ({ id: l.id, name: l.name, type: l.type }));
+  const types = new Set<string>(ledgerTypesForIntent(intent));
+  try {
+    const rows = (await readLedgers(companyId)) as any[];
+    return rows
+      .filter((l) => l.is_active !== false && types.has(String(l.type)))
+      .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")))
+      .slice(0, cap)
+      .map((l) => ({ id: String(l.id), name: String(l.name ?? ""), type: String(l.type) }));
+  } catch {
+    return [];
+  }
 }
 
 export function intentToRoute(intent: VoucherIntentType): string {
