@@ -95,6 +95,7 @@ function ItemsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showLowOnly, setShowLowOnly] = useState(false);
+  const [hsnFixOnly, setHsnFixOnly] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -152,13 +153,14 @@ function ItemsPage() {
     const q = search.trim().toLowerCase();
     return items.filter((i) => {
       if (showLowOnly && !isLow(i)) return false;
+      if (hsnFixOnly && itemHsnError(i.hsn_code, turnoverPaise) === null) return false;
       if (!q) return true;
       return (
         i.name.toLowerCase().includes(q) ||
         (i.hsn_code ?? "").toLowerCase().includes(q)
       );
     });
-  }, [items, search, showLowOnly]);
+  }, [items, search, showLowOnly, hsnFixOnly, turnoverPaise]);
 
   const openNew = () => {
     setEditing(null);
@@ -442,10 +444,17 @@ function ItemsPage() {
       </div>
 
       {hsnFixCount > 0 && (
-        <div className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-          <strong>{hsnFixCount} item(s) need a valid HSN code.</strong> Open each one and enter its HSN
-          ({turnoverPaise > 5_00_00_000 * 100 ? "6 or 8 digits, turnover is above ₹5 crore" : "4, 6 or 8 digits"}).
-        </div>
+        <button
+          type="button"
+          onClick={() => setHsnFixOnly((v) => !v)}
+          className="w-full rounded border border-white/60 bg-white/10 px-3 py-2 text-left text-sm text-white hover:bg-white/20"
+        >
+          <strong>{hsnFixCount} item(s) need a valid HSN code.</strong>{" "}
+          {hsnFixOnly
+            ? "Showing only these items. Click to show all items."
+            : "Click to show these items and edit each one"}
+          {" "}({turnoverPaise > 5_00_00_000 * 100 ? "6 or 8 digits, turnover is above ₹5 crore" : "4, 6 or 8 digits"}).
+        </button>
       )}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">

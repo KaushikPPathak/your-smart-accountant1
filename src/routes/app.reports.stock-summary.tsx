@@ -292,10 +292,14 @@ function StockSummary() {
                 variant="outline" 
                 size="sm" 
                 onClick={() => setManualValOpen(true)}
-                className={manualTotalValue !== null ? "border-primary text-primary hover:text-primary" : ""}
+                className={
+                  manualTotalValue !== null
+                    ? "border-emerald-500 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300"
+                    : "border-white/60 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                }
               >
                 <Scale className="mr-2 h-4 w-4" />
-                {manualTotalValue !== null ? "Manual Override" : "Manual Valuation"}
+                {manualTotalValue !== null ? "Manually Updated" : "Manual Valuation"}
               </Button>
 
             }
