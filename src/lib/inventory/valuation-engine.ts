@@ -132,7 +132,14 @@ function averageCost(openingQty: number, openingRatePaise: number, moves: ItemMo
 
     if (kind === "in") {
       const next = q6(oldQty + amount);
-      value = oldQty < -EPS && next > EPS ? Math.round(next * moveRate) : value + Math.round(amount * moveRate);
+      if (next > EPS) {
+        // Back above zero: the stock on hand is valued at this purchase's rate when it was short.
+        value = oldQty < -EPS ? Math.round(next * moveRate) : value + Math.round(amount * moveRate);
+      } else {
+        // Still short: the purchase only reduces the shortfall, so it carries no new cost.
+        // The quantity stays negative and its value stays quantity times the average.
+        value = Math.round(next * wac);
+      }
       qty = next;
       if (qty > EPS) wac = value / qty;
     } else {
@@ -159,7 +166,8 @@ function layerCost(
   if (openingQty > EPS) layers.push({ qty: openingQty, rate: openingRatePaise });
   else if (openingQty < -EPS) uncovered = -openingQty;
 
-  const addStock = (qtyIn: number, rate: number) => {
+  // Returns the quantity that became stock on hand (not used to cover a shortfall).
+  const addStock = (qtyIn: number, rate: number): number => {
     let remaining = qtyIn;
     if (uncovered > EPS) {
       const cover = Math.min(uncovered, remaining);
@@ -167,6 +175,7 @@ function layerCost(
       remaining = q6(remaining - cover);
     }
     if (remaining > EPS) layers.push({ qty: remaining, rate });
+    return remaining > EPS ? remaining : 0;
   };
 
   const takeStock = (qtyOut: number) => {
@@ -198,8 +207,9 @@ function layerCost(
 
     const moveRate = amount > 0 ? move.taxablePaise / amount : 0;
     if (kind === "in") {
-      addStock(amount, moveRate);
-      if (moveRate > 0) lastRate = moveRate;
+      // lastRate is the rate new shortfalls are costed at: it changes only when
+      // a purchase adds stock on hand, not when it just covers a shortfall.
+      if (addStock(amount, moveRate) > 0 && moveRate > 0) lastRate = moveRate;
     } else {
       takeStock(amount);
     }
@@ -212,6 +222,10 @@ function layerCost(
     value += Math.round(l.qty * l.rate);
   }
   const closing = q6(qty - uncovered);
+  if (closing < -EPS) {
+    // Negative stock is valued at the rate its shortfall is costed at.
+    return finish(closing, Math.round(closing * lastRate), lastRate);
+  }
   const wac = closing > EPS ? value / closing : lastRate;
   return finish(closing, value, wac);
 }

@@ -53,3 +53,25 @@ export async function listManualValuations(companyId: string): Promise<Record<st
   const db = await getDbInstance();
   return (await db.cache_manual_valuations.where("company_id").equals(companyId).toArray()) as Record<string, unknown>[];
 }
+
+/**
+ * The closing date of the year before a period that starts on `fromIso`
+ * (YYYY-MM-DD). A manual valuation saved on that day is the opening stock of
+ * the new period, so the opening of FY 2026-27 is read at 31 March 2026.
+ */
+export function dayBefore(fromIso: string): string {
+  const d = new Date(`${fromIso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Opening stock of a period starting on `fromIso`: the manual valuation saved
+ * on the day before (last year's closing), else one saved on `fromIso` itself,
+ * else null (the caller then uses the costing engine).
+ */
+export async function getOpeningManualValuation(companyId: string, fromIso: string): Promise<number | null> {
+  const prior = await getManualValuation(companyId, dayBefore(fromIso));
+  if (prior !== null) return prior;
+  return getManualValuation(companyId, fromIso);
+}

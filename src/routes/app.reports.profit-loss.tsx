@@ -27,7 +27,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { readLedgers, readItems, readVoucherItemsForCompany, readVouchers, withCacheFallback } from "@/lib/offline/cache-read";
 import { calculateWac, type ItemMove } from "@/lib/inventory/valuation-engine";
 import { getValuationMethod } from "@/lib/inventory/valuation-method";
-import { getManualValuation } from "@/lib/offline/manual-valuation";
+import { getManualValuation, getOpeningManualValuation } from "@/lib/offline/manual-valuation";
 
 
 export const Route = createFileRoute("/app/reports/profit-loss")({
@@ -136,10 +136,11 @@ function ProfitLoss() {
           totalClosingPaise += valClosing.closingValuePaise;
         }
 
-        const [manualOpening, manualClosing] = await Promise.all([
-          getManualValuation(activeCompanyId, from),
-          getManualValuation(activeCompanyId, to),
-        ]);
+        // Opening stock is last year's closing: the manual valuation saved on the day before `from`.
+      const [manualOpening, manualClosing] = await Promise.all([
+        getOpeningManualValuation(activeCompanyId, from),
+        getManualValuation(activeCompanyId, to),
+      ]);
 
         setOpeningStock(manualOpening !== null ? manualOpening : totalOpeningPaise);
         setClosingStock(manualClosing !== null ? manualClosing : totalClosingPaise);

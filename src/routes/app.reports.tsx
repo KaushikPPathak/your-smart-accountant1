@@ -2,7 +2,7 @@ import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tansta
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCompany } from "@/lib/company-context";
-import { companyFeatures } from "@/lib/company-features";
+import { companyFeatures, isUrlEnabled } from "@/lib/company-features";
 
 export const Route = createFileRoute("/app/reports")({
   head: () => ({ meta: [{ title: "Reports — Your Mehtaji" }] }),
@@ -34,6 +34,10 @@ const ALL_TABS: readonly Tab[] = [
   { to: "/app/reports/gstr2b", label: "GSTR-2B Recon", requires: "gst" },
   { to: "/app/reports/brs", label: "Bank Recon (BRS)" },
   { to: "/app/reports/stock-summary", label: "Stock Summary", requires: "inventory" },
+  { to: "/app/reports/hsn-summary", label: "HSN Summary", requires: "inventory" },
+  { to: "/app/reports/itc-item-wise", label: "ITC Item-wise", requires: "gst" },
+  { to: "/app/reports/itc-party-wise", label: "ITC Party-wise", requires: "gst" },
+  { to: "/app/reports/receipts-payments", label: "Receipts & Payments" },
   { to: "/app/reports/presumptive", label: "Presumptive Tax", requires: "presumptive" },
   { to: "/app/reports/activity-log", label: "Activity Log" },
 ] as const;
@@ -49,12 +53,8 @@ function ReportsLayout() {
 
   const TABS = useMemo(
     () =>
-      ALL_TABS.filter((t) => {
-        if (t.requires === "gst") return gstRegistered;
-        if (t.requires === "inventory") return inventoryEnabled;
-        if (t.requires === "presumptive") return presumptiveEnabled;
-        return true;
-      }),
+      ALL_TABS.filter((t) => isUrlEnabled(t.to, features)),
+    // features is rebuilt each render; the three flags are its only inputs.
     [gstRegistered, inventoryEnabled, presumptiveEnabled],
   );
 

@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { readItems, readVouchers, readVoucherItemsForCompany, withCacheFallback } from "@/lib/offline/cache-read";
 import { calculateWac, type ItemMove } from "@/lib/inventory/valuation-engine";
 import { getValuationMethod } from "@/lib/inventory/valuation-method";
-import { getManualValuation } from "@/lib/offline/manual-valuation";
+import { getManualValuation, getOpeningManualValuation } from "@/lib/offline/manual-valuation";
 
 
 export const Route = createFileRoute("/app/reports/trading")({
@@ -112,8 +112,9 @@ function TradingAccount() {
       }
 
       // Check for manual overrides for both opening and closing dates if they fall in the same company
+      // Opening stock is last year's closing: the manual valuation saved on the day before `from`.
       const [manualOpening, manualClosing] = await Promise.all([
-        getManualValuation(activeCompanyId, from),
+        getOpeningManualValuation(activeCompanyId, from),
         getManualValuation(activeCompanyId, to),
       ]);
 
