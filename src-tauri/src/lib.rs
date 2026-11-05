@@ -40,11 +40,13 @@ async fn start_oauth_window(app: tauri::AppHandle, url: String) -> Result<(), St
     std::fs::create_dir_all(&webview_dir).map_err(|e| format!("create_dir failed: {e}"))?;
 
     let handle = app.clone();
-    WebviewWindowBuilder::new(&app, OAUTH_WINDOW_LABEL, WebviewUrl::External(target))
-        .title("Sign in for cloud backup")
-        .inner_size(560.0, 720.0)
-        .resizable(true)
-        .center()
+    let builder = centered(
+        WebviewWindowBuilder::new(&app, OAUTH_WINDOW_LABEL, WebviewUrl::External(target))
+            .title("Sign in for cloud backup")
+            .inner_size(560.0, 720.0)
+            .resizable(true),
+    );
+    builder
         .visible(true)
         .data_directory(webview_dir)
         .on_navigation(move |nav_url| {
@@ -146,12 +148,14 @@ async fn show_whatsapp_web(
             .parse()
             .map_err(|e| format!("invalid url: {e}"))?;
 
-        WebviewWindowBuilder::new(&app, WA_WINDOW_LABEL, WebviewUrl::External(wa_url))
-            .title("WhatsApp Web")
-            .inner_size(1024.0, 768.0)
-            .min_inner_size(800.0, 600.0)
-            .resizable(true)
-            .center()
+        let builder = centered(
+            WebviewWindowBuilder::new(&app, WA_WINDOW_LABEL, WebviewUrl::External(wa_url))
+                .title("WhatsApp Web")
+                .inner_size(1024.0, 768.0)
+                .min_inner_size(800.0, 600.0)
+                .resizable(true),
+        );
+        builder
             .visible(true)
             .data_directory(webview_dir)
             .build()
@@ -216,4 +220,20 @@ pub fn run() {
 })
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");
+}
+
+/// Centres a new window on desktop. Android has no positioning for extra windows,
+/// and the builder method is not compiled there, so it is skipped on Android.
+#[cfg(not(target_os = "android"))]
+fn centered<'a>(
+    b: WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle>,
+) -> WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle> {
+    b.center()
+}
+
+#[cfg(target_os = "android")]
+fn centered<'a>(
+    b: WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle>,
+) -> WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle> {
+    b
 }
