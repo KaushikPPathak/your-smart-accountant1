@@ -77,6 +77,15 @@ jobs:
           VITE_GSTIN_PROXY_URL: ${{ vars.VITE_GSTIN_PROXY_URL }}
         run: bunx tauri android build --apk --target aarch64
 
+      - name: Inspect APK (minimum Android, CPU types, signature)
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          BT=$(ls -d "$SDK"/build-tools/* | sort -V | tail -1)
+          APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -1)
+          echo "APK: $APK"
+          "$BT/aapt" dump badging "$APK" | grep -E "package:|sdkVersion|targetSdkVersion|native-code|launchable" || true
+          "$BT/apksigner" verify --print-certs "$APK" || echo "NOT SIGNED OR SIGNATURE INVALID"
+
       - name: Read app version
         id: ver
         run: |
