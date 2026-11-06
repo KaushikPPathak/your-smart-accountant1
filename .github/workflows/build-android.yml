@@ -72,6 +72,46 @@ jobs:
           storeFile=release.jks
           PROPS
 
+      - name: Enable release signing in Gradle (only when the secrets are set)
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          python3 - <<'PY'
+          import re, pathlib, sys
+          p = pathlib.Path("src-tauri/gen/android/app/build.gradle.kts")
+          lines = p.read_text().split("\n")
+          if any("signingConfigs" in l for l in lines):
+              print("signingConfigs already present")
+              sys.exit(0)
+          idx = next((i for i, l in enumerate(lines) if re.match(r"\s*buildTypes\s*\{", l)), None)
+          if idx is None:
+              sys.exit("buildTypes block not found")
+          block = [
+              "    signingConfigs {",
+              "        create(\"release\") {",
+              "            val props = java.util.Properties()",
+              "            val f = rootProject.file(\"keystore.properties\")",
+              "            if (f.exists()) {",
+              "                props.load(f.inputStream())",
+              "                storeFile = rootProject.file(props.getProperty(\"storeFile\"))",
+              "                storePassword = props.getProperty(\"storePassword\")",
+              "                keyAlias = props.getProperty(\"keyAlias\")",
+              "                keyPassword = props.getProperty(\"keyPassword\")",
+              "            }",
+              "        }",
+              "    }",
+          ]
+          lines[idx:idx] = block
+          rel = next((i for i in range(idx + len(block), len(lines)) if re.search(r"release\s*\{|getByName\(\"release\"\)\s*\{", lines[i])), None)
+          if rel is None:
+              sys.exit("release build type not found")
+          lines.insert(rel + 1, "            signingConfig = signingConfigs.getByName(\"release\")")
+          p.write_text("\n".join(lines))
+          print("release signing enabled")
+          PY
+          grep -n -B2 -A3 'signingConfig' src-tauri/gen/android/app/build.gradle.kts
+
       - name: Build APK (arm64 phones)
         env:
           VITE_GSTIN_PROXY_URL: ${{ vars.VITE_GSTIN_PROXY_URL }}
