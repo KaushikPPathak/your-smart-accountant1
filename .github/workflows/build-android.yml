@@ -103,7 +103,8 @@ jobs:
               "    }",
           ]
           lines[idx:idx] = block
-          lines.insert(0, "import java.util.Properties")
+          if not any(l.strip() == "import java.util.Properties" for l in lines):
+              lines.insert(0, "import java.util.Properties")
           rel = next((i for i in range(idx + len(block), len(lines)) if re.search(r"release\s*\{|getByName\(\"release\"\)\s*\{", lines[i])), None)
           if rel is None:
               sys.exit("release build type not found")
