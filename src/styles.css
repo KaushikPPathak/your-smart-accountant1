@@ -870,3 +870,52 @@ html[lang="gu"] body {
 }
 @keyframes ai-shift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
 @media (prefers-reduced-motion: reduce) { .bg-gradient-ai { animation: none; } }
+
+/* Phone layout (Android and narrow windows): the top bar wraps into two rows,
+   the menus scroll on their own row, and the Backup/Restore buttons show icons only. */
+@media (max-width: 640px) {
+  .busy-topbar {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .busy-brand {
+    flex: 0 0 auto;
+    min-width: 0;
+    margin: 0.35rem 0.25rem 0.35rem 0.4rem;
+    padding: 0.3rem 0.45rem;
+  }
+  .busy-brand-name { font-size: 0.82rem; }
+  .busy-company {
+    order: 2;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
+    margin: 0.35rem 0.4rem 0.35rem 0;
+    padding: 0.3rem 0.4rem;
+    font-size: 0.85rem;
+  }
+  .busy-company-switcher {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+  .busy-action-label { display: none; }
+  .busy-menus {
+    order: 3;
+    flex: 1 0 100%;
+    width: 100%;
+    border-top: 1px solid var(--sidebar-border);
+  }
+  .busy-menu {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  /* Let grid and flex children shrink to the phone width. Wide tables then scroll
+     inside their own box instead of stretching the whole page. */
+  .grid > *,
+  .flex > * {
+    min-width: 0;
+  }
+}

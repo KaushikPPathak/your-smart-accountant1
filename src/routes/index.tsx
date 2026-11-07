@@ -500,7 +500,7 @@ function StartScreen() {
       />
 
       <header className="border-b border-border/60 bg-background/60 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+        <div className="mx-auto flex min-h-[4rem] max-w-6xl flex-wrap items-center justify-between gap-2 px-3 py-2 sm:h-16 sm:flex-nowrap sm:px-6 sm:py-0">
           <div className="flex items-center gap-3">
             <div
               className="flex h-11 w-11 items-center justify-center rounded-xl text-primary-foreground text-lg font-bold shadow-elevated"
@@ -515,7 +515,7 @@ function StartScreen() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             <CurrencySwitcher compact />
             <DateFormatSwitcher compact />
             <Button

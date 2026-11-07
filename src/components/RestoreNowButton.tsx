@@ -166,7 +166,7 @@ export function RestoreNowButton() {
           </TooltipTrigger>
           <TooltipContent side="bottom">Restore {companyName}</TooltipContent>
         </Tooltip>
-        <span className="text-[10px] font-black text-black uppercase tracking-normal leading-none">
+        <span className="busy-action-label text-[10px] font-black text-black uppercase tracking-normal leading-none">
           Restore
         </span>
 

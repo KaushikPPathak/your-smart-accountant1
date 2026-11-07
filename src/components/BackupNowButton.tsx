@@ -71,7 +71,7 @@ export function BackupNowButton() {
         </TooltipTrigger>
         <TooltipContent side="bottom">Backup {companyName} now</TooltipContent>
       </Tooltip>
-      <span className="text-[10px] font-black text-black uppercase tracking-normal leading-none">
+      <span className="busy-action-label text-[10px] font-black text-black uppercase tracking-normal leading-none">
         Backup
       </span>
 

@@ -37,7 +37,6 @@ const ALL_TABS: readonly Tab[] = [
   { to: "/app/reports/hsn-summary", label: "HSN Summary", requires: "inventory" },
   { to: "/app/reports/itc-item-wise", label: "ITC Item-wise", requires: "gst" },
   { to: "/app/reports/itc-party-wise", label: "ITC Party-wise", requires: "gst" },
-  { to: "/app/reports/receipts-payments", label: "Receipts & Payments" },
   { to: "/app/reports/presumptive", label: "Presumptive Tax", requires: "presumptive" },
   { to: "/app/reports/activity-log", label: "Activity Log" },
 ] as const;
