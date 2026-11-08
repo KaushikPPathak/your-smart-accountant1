@@ -919,3 +919,41 @@ html[lang="gu"] body {
     min-width: 0;
   }
 }
+
+/* Sales/purchase item lines: on phones each line becomes a stacked block so Amount stays visible */
+@media (max-width: 640px) {
+  .item-table thead { display: none; }
+  .item-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px 10px;
+  }
+  .item-table td {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+  .item-table td[data-label]::before {
+    content: attr(data-label);
+    font-size: 10px;
+    line-height: 1.2;
+    color: var(--muted-foreground);
+  }
+  .item-table td.m-hide { display: none; }
+  .item-table td.m-item { grid-column: 1 / -1; grid-row: 1; }
+  .item-table td.m-qty { grid-column: 1; grid-row: 2; }
+  .item-table td.m-rate { grid-column: 2; grid-row: 2; }
+  .item-table td.m-disc { grid-column: 3; grid-row: 2; }
+  .item-table td.m-gst { grid-column: 4; grid-row: 2; }
+  .item-table td.m-amt { grid-column: 1 / span 3; grid-row: 3; }
+  .item-table td.m-del { grid-column: 4; grid-row: 3; justify-content: center; }
+  .item-table td input,
+  .item-table td [role="combobox"] { width: 100% !important; min-width: 0; }
+  .item-table td .flex { min-width: 0; }
+  .item-table td.m-qty .flex > input { flex: 1; }
+}

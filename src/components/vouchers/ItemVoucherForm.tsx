@@ -1412,7 +1412,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 {showHsnColumn ? "Hide HSN" : "Show HSN"}
               </Button>
             </div>
-            <Table>
+            <Table className="item-table">
               <TableHeader>
                 <TableRow>
                   <TableHead className={showLineDescription ? "w-[32%]" : "w-[40%]"}>

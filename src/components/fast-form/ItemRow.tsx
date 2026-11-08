@@ -161,7 +161,7 @@ function ItemRowImpl({
       onBlurCapture={handleBlur}
       onClick={() => onFocusRow(idx)}
     >
-      <TableCell>
+      <TableCell className="m-item">
         <div className="flex gap-1">
           <Combo
             className="flex-1"
@@ -201,7 +201,7 @@ function ItemRowImpl({
         </div>
       </TableCell>
       {showHsnColumn && (
-        <TableCell className="align-middle">
+        <TableCell className="align-middle m-hide">
           {(() => {
             const code = (selectedItem as ItemOpt | undefined)?.hsn_code || "";
             const desc = code ? hsnDescriptionFor?.(code) : undefined;
@@ -219,7 +219,7 @@ function ItemRowImpl({
         </TableCell>
       )}
       {showDescription && (
-        <TableCell>
+        <TableCell className="m-hide">
           <Input
             ref={descRef}
             className="h-9"
@@ -229,7 +229,7 @@ function ItemRowImpl({
           />
         </TableCell>
       )}
-      <TableCell>
+      <TableCell className="m-qty" data-label="Qty / Unit">
         <div className="flex items-center gap-1">
           <Input
             ref={qtyRef}
@@ -252,7 +252,7 @@ function ItemRowImpl({
           </span>
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="m-rate" data-label="Rate">
         <Input
           ref={rateRef}
           className="h-9 w-20 text-right font-mono text-foreground"
@@ -266,7 +266,7 @@ function ItemRowImpl({
           onKeyDown={(e) => commitOnEnter(e, "rate")}
         />
       </TableCell>
-      <TableCell>
+      <TableCell className="m-disc" data-label="Disc %">
         <Input
           ref={discRef}
           className="h-9 w-16 text-right font-mono text-foreground"
@@ -289,7 +289,7 @@ function ItemRowImpl({
         />
       </TableCell>
       {showGstColumn && (
-        <TableCell>
+        <TableCell className="m-gst" data-label="GST %">
           <Select
             value={row.gst_rate}
             onValueChange={(v) => {
@@ -310,7 +310,7 @@ function ItemRowImpl({
           </Select>
         </TableCell>
       )}
-      <TableCell className="text-right">
+      <TableCell className="text-right m-amt" data-label="Amount">
         <Input
           key={`amt-${row.id}-${amountPaise}`}
           className="h-9 w-28 text-right font-mono text-foreground"
@@ -345,7 +345,7 @@ function ItemRowImpl({
           }}
         />
       </TableCell>
-      <TableCell>
+      <TableCell className="m-del">
         <div className="flex items-center justify-end gap-1">
           {costCentres.length > 0 && (() => {
             const cc = costCentres.find((c) => c.id === row.cost_centre_id);
