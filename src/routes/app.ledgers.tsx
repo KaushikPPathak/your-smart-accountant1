@@ -370,7 +370,7 @@ function LedgersPage() {
               </Button>
             </DialogTrigger>
             <DialogContent
-              className="max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col p-0 gap-0"
+              className="max-w-2xl h-[92vh] max-h-[92vh] sm:h-[min(88vh,820px)] sm:max-h-[88vh] flex flex-col p-0 gap-0"
               onPointerDownOutside={(e) => e.preventDefault()}
               onInteractOutside={(e) => e.preventDefault()}
             >

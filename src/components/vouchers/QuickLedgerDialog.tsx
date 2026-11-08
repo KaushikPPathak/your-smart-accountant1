@@ -234,7 +234,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-xl w-full bg-white border border-slate-200 shadow-2xl rounded-xl max-h-[90vh] overflow-y-auto"
+        className="max-w-xl w-full bg-background border border-border shadow-2xl rounded-xl max-h-[90vh] overflow-y-auto"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onKeyDown={(e) => {
@@ -245,7 +245,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-slate-800 font-bold tracking-tight">
+          <DialogTitle className="text-foreground font-bold tracking-tight">
             {editId ? "Edit Ledger" : "Quick Create Ledger"}
           </DialogTitle>
         </DialogHeader>
@@ -253,20 +253,20 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
         <div className="grid gap-4 py-2">
           {/* Name */}
           <div className="space-y-1">
-            <Label className="text-slate-600 text-xs font-semibold">Name *</Label>
+            <Label className="text-muted-foreground text-xs font-semibold">Name *</Label>
             <Input
               autoFocus
               value={name}
               onChange={(e) => setName(toTitleCaseOnType(e.target.value))}
-              className="border-slate-200 focus-visible:ring-indigo-500"
+              className="border-border focus-visible:ring-indigo-500"
             />
           </div>
 
           {/* Type */}
           <div className="space-y-1">
-            <Label className="text-slate-600 text-xs font-semibold">Type *</Label>
+            <Label className="text-muted-foreground text-xs font-semibold">Type *</Label>
             <Select value={type} onValueChange={setType}>
-              <SelectTrigger className="border-slate-200 focus:ring-indigo-500"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="border-border focus:ring-indigo-500"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {LEDGER_TYPES.map((t) => (
                   <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
@@ -274,7 +274,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
               </SelectContent>
             </Select>
             {profile === "internal" && (
-              <p className="text-[11px] text-slate-500 pt-1">
+              <p className="text-[11px] text-muted-foreground pt-1">
                 Nominal / real account — no GSTIN, PAN, credit terms or MSME details apply
                 (per standard accounting classification).
               </p>
@@ -284,38 +284,38 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
           {/* Group (Schedule III / Income-Tax classification) — always editable */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label className="text-slate-600 text-xs font-semibold">Group *</Label>
+              <Label className="text-muted-foreground text-xs font-semibold">Group *</Label>
               <Select value={groupCode} onValueChange={(v) => { setGroupCode(v); setSubgroupId(""); }}>
-                <SelectTrigger className="border-slate-200 focus:ring-indigo-500"><SelectValue placeholder="Select group" /></SelectTrigger>
+                <SelectTrigger className="border-border focus:ring-indigo-500"><SelectValue placeholder="Select group" /></SelectTrigger>
                 <SelectContent className="max-h-72">
                   {compatibleGroups.length > 0 && (
                     <>
-                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400">Suggested for this type</div>
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">Suggested for this type</div>
                       {compatibleGroups.map((g) => (
                         <SelectItem key={g.code} value={g.code}>
                           {resolveGroupLabel(g.code, overrides)}
                         </SelectItem>
                       ))}
-                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 border-t mt-1">All groups</div>
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground border-t mt-1">All groups</div>
                     </>
                   )}
                   {ACCOUNT_GROUPS.filter((g) => !compatibleGroups.includes(g)).map((g) => (
                     <SelectItem key={g.code} value={g.code}>
                       {resolveGroupLabel(g.code, overrides)}
-                      <span className="text-[10px] text-slate-400 ml-1">({builtinGroupLabel(g.code)})</span>
+                      <span className="text-[10px] text-muted-foreground ml-1">({builtinGroupLabel(g.code)})</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-slate-500 pt-0.5">
+              <p className="text-[11px] text-muted-foreground pt-0.5">
                 Controls Balance Sheet / P&amp;L placement (Nominal, Real or Personal).
               </p>
             </div>
             {groupCode && subgroupsFor(groupCode, subgroups).length > 0 && (
               <div className="space-y-1">
-                <Label className="text-slate-600 text-xs font-semibold">Sub-group</Label>
+                <Label className="text-muted-foreground text-xs font-semibold">Sub-group</Label>
                 <Select value={subgroupId || "__none__"} onValueChange={(v) => setSubgroupId(v === "__none__" ? "" : v)}>
-                  <SelectTrigger className="border-slate-200"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="border-border"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">— None —</SelectItem>
                     {subgroupsFor(groupCode, subgroups).map((s) => (
@@ -334,14 +334,14 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full items-start">
                 <div className="space-y-1 w-full flex flex-col">
-                  <Label className="text-slate-600 text-xs font-semibold">GSTIN</Label>
+                  <Label className="text-muted-foreground text-xs font-semibold">GSTIN</Label>
                   <div className="flex items-center gap-2 w-full">
                     <Input
                       value={gstin}
                       onChange={(e) => setGstin(e.target.value.toUpperCase().trim())}
                       maxLength={15}
                       placeholder="24AAAAA0000A1Z5"
-                      className="flex-1 font-mono uppercase tracking-wider h-9 border-slate-200 focus-visible:ring-indigo-500"
+                      className="flex-1 font-mono uppercase tracking-wider h-9 border-border focus-visible:ring-indigo-500"
                     />
                     {verifying && <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />}
                     <GstinPortalWindow
@@ -359,9 +359,9 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                 </div>
 
                 <div className="space-y-1 w-full">
-                  <Label className="text-slate-600 text-xs font-semibold">GST Registration Type</Label>
+                  <Label className="text-muted-foreground text-xs font-semibold">GST Registration Type</Label>
                   <Select value={gstRegType} onValueChange={setGstRegType}>
-                    <SelectTrigger className="w-full h-9 border-slate-200"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full h-9 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {GST_REGISTRATION_TYPES.map((r) => (
                         <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
@@ -373,19 +373,19 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full items-start">
                 <div className="space-y-1 w-full">
-                  <Label className="text-slate-600 text-xs font-semibold">PAN</Label>
+                  <Label className="text-muted-foreground text-xs font-semibold">PAN</Label>
                   <Input
                     value={pan}
                     onChange={(e) => setPan(e.target.value.toUpperCase().trim())}
                     maxLength={10}
                     placeholder="AAAAA0000A"
-                    className="font-mono uppercase tracking-wider h-9 border-slate-200"
+                    className="font-mono uppercase tracking-wider h-9 border-border"
                   />
                 </div>
                 <div className="space-y-1 w-full">
-                  <Label className="text-slate-600 text-xs font-semibold">State</Label>
+                  <Label className="text-muted-foreground text-xs font-semibold">State</Label>
                   <Select value={stateCode} onValueChange={setStateCode}>
-                    <SelectTrigger className="w-full h-9 border-slate-200"><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectTrigger className="w-full h-9 border-border"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
                       {INDIAN_STATES.map((s) => (
                         <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>
@@ -396,59 +396,59 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
               </div>
 
               <div className="space-y-1">
-                <Label className="text-slate-600 text-xs font-semibold">Address</Label>
-                <Input value={address} onChange={(e) => setAddress(e.target.value)} className="border-slate-200" />
+                <Label className="text-muted-foreground text-xs font-semibold">Address</Label>
+                <Input value={address} onChange={(e) => setAddress(e.target.value)} className="border-border" />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label className="text-slate-600 text-xs font-semibold">Phone</Label>
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="border-slate-200" />
+                  <Label className="text-muted-foreground text-xs font-semibold">Phone</Label>
+                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="border-border" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-slate-600 text-xs font-semibold">Email</Label>
-                  <Input value={email} onChange={(e) => setEmail(e.target.value)} className="border-slate-200" />
+                  <Label className="text-muted-foreground text-xs font-semibold">Email</Label>
+                  <Input value={email} onChange={(e) => setEmail(e.target.value)} className="border-border" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label className="text-slate-600 text-xs font-semibold">Credit Limit (₹)</Label>
+                  <Label className="text-muted-foreground text-xs font-semibold">Credit Limit (₹)</Label>
                   <Input
                     type="number"
                     inputMode="decimal"
                     value={creditLimit}
                     onChange={(e) => setCreditLimit(e.target.value)}
-                    className="border-slate-200"
+                    className="border-border"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-slate-600 text-xs font-semibold">Credit Days</Label>
+                  <Label className="text-muted-foreground text-xs font-semibold">Credit Days</Label>
                   <Input
                     type="number"
                     inputMode="numeric"
                     value={creditDays}
                     onChange={(e) => setCreditDays(e.target.value)}
-                    className="border-slate-200"
+                    className="border-border"
                   />
                 </div>
               </div>
 
-              <div className="rounded-md border border-slate-200 p-3 space-y-2">
+              <div className="rounded-md border border-border p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-slate-700 text-xs font-semibold">MSME Registered</Label>
+                  <Label className="text-foreground text-xs font-semibold">MSME Registered</Label>
                   <Switch checked={msme} onCheckedChange={setMsme} />
                 </div>
                 {msme && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label className="text-slate-600 text-[11px] font-semibold">Udyam No.</Label>
-                      <Input value={msmeNo} onChange={(e) => setMsmeNo(e.target.value.toUpperCase())} className="h-9 border-slate-200 font-mono" />
+                      <Label className="text-muted-foreground text-[11px] font-semibold">Udyam No.</Label>
+                      <Input value={msmeNo} onChange={(e) => setMsmeNo(e.target.value.toUpperCase())} className="h-9 border-border font-mono" />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-slate-600 text-[11px] font-semibold">Classification</Label>
+                      <Label className="text-muted-foreground text-[11px] font-semibold">Classification</Label>
                       <Select value={msmeClass} onValueChange={setMsmeClass}>
-                        <SelectTrigger className="h-9 border-slate-200"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 border-border"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {MSME_CLASSIFICATIONS.map((c) => (
                             <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
@@ -466,19 +466,19 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
           {profile === "bank" && (
             <>
               <div className="space-y-1">
-                <Label className="text-slate-600 text-xs font-semibold">Branch / Address</Label>
-                <Input value={address} onChange={(e) => setAddress(e.target.value)} className="border-slate-200" />
+                <Label className="text-muted-foreground text-xs font-semibold">Branch / Address</Label>
+                <Input value={address} onChange={(e) => setAddress(e.target.value)} className="border-border" />
               </div>
               <div className="space-y-1">
-                <Label className="text-slate-600 text-xs font-semibold">Phone</Label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="border-slate-200" />
+                <Label className="text-muted-foreground text-xs font-semibold">Phone</Label>
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="border-border" />
               </div>
             </>
           )}
         </div>
 
-        <DialogFooter className="pt-2 border-t border-slate-100">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-slate-500 hover:bg-slate-50">
+        <DialogFooter className="pt-2 border-t border-border">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground hover:bg-muted">
             Cancel
           </Button>
           <Button
