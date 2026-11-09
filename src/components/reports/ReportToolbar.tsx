@@ -103,18 +103,18 @@ export function ReportToolbar({
 
       {!hideDates && (
         <>
-          <div className="space-y-1">
+          <div className="min-w-0 flex-1 space-y-1 sm:flex-none">
             <Label className="text-xs">{tt("From Date")}</Label>
-            <FyDatePicker value={from} onChange={onFrom} className="w-[170px]" />
+            <FyDatePicker value={from} onChange={onFrom} className="w-full sm:w-[170px]" />
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 flex-1 space-y-1 sm:flex-none">
             <Label className="text-xs">{tt("To Date")}</Label>
-            <FyDatePicker value={to} onChange={onTo} className="w-[170px]" />
+            <FyDatePicker value={to} onChange={onTo} className="w-full sm:w-[170px]" />
           </div>
         </>
       )}
       {extra}
-      <div className="ml-auto flex gap-2">
+      <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
         {extraButtons}
         {onExportCsv && (
           <Button variant="outline" size="sm" onClick={onExportCsv}>

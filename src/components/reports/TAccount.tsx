@@ -146,20 +146,20 @@ export function TAccount({
           </div>
         )}
         {/* Column headers */}
-        <div className="grid grid-cols-2 border-b-2 border-foreground bg-muted/40 text-[11px] font-semibold uppercase tracking-wide print:border-black print:text-[10px]">
-          <div className="flex min-w-0 items-center gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black">
+        <div className="grid grid-cols-1 border-b-2 border-foreground bg-muted/40 sm:grid-cols-2 print:grid-cols-2 text-[11px] font-semibold uppercase tracking-wide print:border-black print:text-[10px]">
+          <div className="flex min-w-0 items-center gap-2 border-b-2 border-foreground px-2 py-1.5 sm:border-b-0 sm:border-r-2 print:border-b-0 print:border-r-2 print:border-black">
             <span className="min-w-0 flex-1 truncate">{loc(leftHeader, lang)}</span>
-            <span className="w-[13rem] shrink-0 whitespace-nowrap text-right print:w-[10rem]">{loc(amountHeader, lang)}</span>
+            <span className="w-[7.5rem] shrink-0 whitespace-nowrap text-right sm:w-[13rem] print:w-[10rem]">{loc(amountHeader, lang)}</span>
           </div>
           <div className="flex min-w-0 items-center gap-2 px-2 py-1.5">
             <span className="min-w-0 flex-1 truncate">{loc(rightHeader, lang)}</span>
-            <span className="w-[13rem] shrink-0 whitespace-nowrap text-right print:w-[10rem]">{loc(amountHeader, lang)}</span>
+            <span className="w-[7.5rem] shrink-0 whitespace-nowrap text-right sm:w-[13rem] print:w-[10rem]">{loc(amountHeader, lang)}</span>
           </div>
         </div>
         {/* Body */}
-        <div className="grid grid-cols-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2">
           {/* Left column (Dr) */}
-          <div className="min-w-0 border-r-2 border-foreground print:border-black">
+          <div className="min-w-0 border-b-2 border-foreground sm:border-b-0 sm:border-r-2 print:border-b-0 print:border-r-2 print:border-black">
             {lpad.length === 0 ? (
               <div className="px-3 py-6 text-center text-sm text-muted-foreground">—</div>
             ) : (
@@ -190,8 +190,8 @@ export function TAccount({
           </div>
         </div>
         {/* Totals strip */}
-        <div className="grid grid-cols-2 border-t-2 border-foreground bg-muted/50 text-[12px] font-semibold print:border-black print:text-[9pt]">
-          <div className="flex min-w-0 items-center gap-2 border-r-2 border-foreground px-2 py-1.5 print:border-black print:py-1">
+        <div className="grid grid-cols-1 border-t-2 border-foreground bg-muted/50 sm:grid-cols-2 print:grid-cols-2 text-[12px] font-semibold print:border-black print:text-[9pt]">
+          <div className="flex min-w-0 items-center gap-2 border-b-2 border-foreground px-2 py-1.5 sm:border-b-0 sm:border-r-2 print:border-b-0 print:border-r-2 print:border-black print:py-1">
             <span className="min-w-0 flex-1 truncate">{totalLabel}</span>
             <span className="w-[6.5rem] shrink-0 print:w-[5rem]" />
             <span className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums print:w-[5rem]">{leftTotal}</span>

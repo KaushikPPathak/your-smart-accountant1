@@ -61,7 +61,7 @@ export function FitToWidth({
     <div
       ref={outerRef}
       className={cn("fit-to-width-outer", className)}
-      style={{ width: "100%", overflow: "hidden", height: innerH ?? undefined }}
+      style={{ width: "100%", overflowX: "auto", overflowY: "hidden", height: innerH ?? undefined }}
     >
       <div
         ref={innerRef}

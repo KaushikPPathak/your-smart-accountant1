@@ -766,9 +766,9 @@ function LedgersPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Group</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>GSTIN</TableHead>
-                    <TableHead>State</TableHead>
+                    <TableHead className="hidden sm:table-cell">Type</TableHead>
+                    <TableHead className="hidden sm:table-cell">GSTIN</TableHead>
+                    <TableHead className="hidden sm:table-cell">State</TableHead>
                     <TableHead className="text-right">Opening</TableHead>
                     {canWrite && <TableHead className="w-[100px]" />}
                   </TableRow>
@@ -789,15 +789,15 @@ function LedgersPage() {
                             {sg && <span className="text-[10px] text-muted-foreground">↳ {sg.name}</span>}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           <Badge variant="secondary" className="text-[10px]">
                             {typeLabel}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-mono text-xs">
+                        <TableCell className="hidden font-mono text-xs sm:table-cell">
                           {l.gstin ?? "—"}
                         </TableCell>
-                        <TableCell className="text-xs">
+                        <TableCell className="hidden text-xs sm:table-cell">
                           {l.state_code ? `${l.state_code} — ${l.state ?? ""}` : "—"}
                         </TableCell>
                         <TableCell className="text-right font-mono">

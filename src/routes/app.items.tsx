@@ -533,13 +533,13 @@ function ItemsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>HSN</TableHead>
-                    <TableHead>Unit</TableHead>
+                    <TableHead className="hidden sm:table-cell">HSN</TableHead>
+                    <TableHead className="hidden sm:table-cell">Unit</TableHead>
                     <TableHead className="text-right">GST</TableHead>
-                    <TableHead className="text-right">Purchase ₹</TableHead>
+                    <TableHead className="hidden text-right sm:table-cell">Purchase ₹</TableHead>
                     <TableHead className="text-right">Sale ₹</TableHead>
                     <TableHead className="text-right">Stock</TableHead>
-                    <TableHead className="text-right">Value</TableHead>
+                    <TableHead className="hidden text-right sm:table-cell">Value</TableHead>
                     {canWrite && <TableHead className="w-[100px]" />}
                   </TableRow>
                 </TableHeader>
@@ -557,10 +557,10 @@ function ItemsPage() {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="font-mono text-xs">
+                        <TableCell className="hidden font-mono text-xs sm:table-cell">
                           {i.hsn_code ?? "—"}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           <Badge variant="secondary" className="text-[10px]">
                             {i.unit}
                           </Badge>
@@ -568,7 +568,7 @@ function ItemsPage() {
                         <TableCell className="text-right font-mono text-xs">
                           {i.gst_rate}%
                         </TableCell>
-                        <TableCell className="text-right font-mono text-xs">
+                        <TableCell className="hidden text-right font-mono text-xs sm:table-cell">
                           {i.purchase_price_paise ? formatINR(i.purchase_price_paise) : "—"}
                         </TableCell>
                         <TableCell className="text-right font-mono text-xs">
@@ -582,7 +582,7 @@ function ItemsPage() {
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right font-mono text-xs">
+                        <TableCell className="hidden text-right font-mono text-xs sm:table-cell">
                           {value ? formatINR(value) : "—"}
                         </TableCell>
                         {canWrite && (
