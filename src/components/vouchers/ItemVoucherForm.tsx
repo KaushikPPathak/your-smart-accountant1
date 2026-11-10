@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   useCallback,
   useDeferredValue,
@@ -37,6 +38,8 @@ import { GstAmountRow } from "./GstAmountRow";
 import { buildItemVoucherPostings } from "@/lib/voucher-postings";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { useEnterAsTab } from "./useEnterAsTab";
+import { useVoucherExit } from "./useVoucherExit";
+import { commitActiveFieldThen } from "@/lib/keyboard/commit-active-field";
 import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
@@ -1015,9 +1018,27 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
     ledgers,
   ]);
 
+  // One save at a time (see EntryVoucherForm).
+  const saveBusyRef = useRef(false);
   const save = useCallback(() => {
-    void performSave();
+    if (saveBusyRef.current) return;
+    saveBusyRef.current = true;
+    setSaving(true);
+    void performSave().finally(() => {
+      saveBusyRef.current = false;
+      setSaving(false);
+    });
   }, [performSave]);
+  const saveLatestRef = useRef(save);
+  saveLatestRef.current = save;
+
+  // Escape and Cancel share one guarded exit path (discard prompt when dirty).
+  const exitVoucher = useVoucherExit({
+    isDirty: () => Boolean(narration.trim() || partyIdState || lines.some((l) => l.item_id)),
+    draftKey,
+    leave: () => navigate({ to: "/app/vouchers" }),
+    discardMessage: `Discard this ${cfg.title.toLowerCase()}? Unsaved changes will be lost.`,
+  });
 
   // Push "voucher" scope while this form is mounted.
   const kb = useOptionalKeyboard();
@@ -1027,14 +1048,13 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
   }, [kb]);
 
   // Save (Ctrl+S / Cmd+S / Alt+S).
+  // Alt+S is not bound to save: the sidebar ribbon uses it to open Sales.
   const saveHandler = useCallback((e: KeyboardEvent) => {
     e.preventDefault();
-    e.stopPropagation();
-    if (!saving) save();
-  }, [save, saving]);
+    commitActiveFieldThen(() => saveLatestRef.current());
+  }, []);
   useShortcut("Ctrl+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
   useShortcut("Meta+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
-  useShortcut("Alt+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
 
   // Ctrl+R — recall last narration.
   const recallHandler = useCallback((e: KeyboardEvent) => {
@@ -1131,7 +1151,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => navigate({ to: "/app/vouchers" })}>
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => exitVoucher()}>
               <X className="mr-1 h-3 w-3" /> Cancel
             </Button>
             <Button

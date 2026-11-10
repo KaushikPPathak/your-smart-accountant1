@@ -415,6 +415,9 @@ function GlobalShortcuts({ onOpenHelp, onOpenCalc }: { onOpenHelp: () => void; o
   useShortcut(
     "Escape",
     (e) => {
+      // A page or overlay already handled this Escape (a voucher exit, a
+      // dropdown, a dialog). Do not run the ladder on top of it.
+      if (e.defaultPrevented) return;
       const target = e.target as HTMLElement | null;
       const openOverlay = document.querySelector(
         '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-radix-popper-content-wrapper]',

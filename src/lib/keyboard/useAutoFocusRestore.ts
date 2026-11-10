@@ -1,4 +1,6 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+
+import { useOptionalKeyboard } from "./KeyboardProvider";
 
 /**
  * Unified focus-restore behavior for Radix popup primitives (Dialog,
@@ -23,6 +25,15 @@ export function useAutoFocusRestore(
   userOnClose?: (e: Event) => void,
 ) {
   const savedRef = useRef<HTMLElement | null>(null);
+
+  // While this popup is mounted, its "dialog" scope shadows the page scope
+  // (voucher, grid, report). Without this, Ctrl+S, F3 or Escape pressed inside
+  // a Quick Ledger / Quick Item dialog acted on the voucher underneath.
+  const kb = useOptionalKeyboard();
+  useEffect(() => {
+    if (!kb) return;
+    return kb.pushScope("dialog");
+  }, [kb]);
 
   const onOpenAutoFocus = useCallback(
     (e: Event) => {

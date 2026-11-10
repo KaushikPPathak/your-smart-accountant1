@@ -63,6 +63,8 @@ interface Props {
   autoFocus?: boolean;
 }
 
+const GENERIC_MSG = "Enter the date as DD/MM or DD/MM/YYYY.";
+
 export function FyDatePicker({
   value,
   onChange,
@@ -75,6 +77,7 @@ export function FyDatePicker({
 
   const { start, end } = useFyRange();
   const [open, setOpen] = React.useState(false);
+  const parseErrorRef = React.useRef<string>(GENERIC_MSG);
 
   const selected = React.useMemo(() => {
     if (!value) return undefined;
@@ -97,8 +100,13 @@ export function FyDatePicker({
    * year, Jan–Mar → FY end year).
    */
   function tryParse(input: string): string | null {
+    const fail = (m: string): null => {
+      parseErrorRef.current = m;
+      return null;
+    };
+    parseErrorRef.current = GENERIC_MSG;
     const s = input.trim();
-    if (!s) return null;
+    if (!s) return fail(GENERIC_MSG);
 
     let dd: number, mm: number, yyyy: number | null = null;
 
@@ -116,33 +124,30 @@ export function FyDatePicker({
         mm = parseInt(s.slice(2, 4), 10);
         yyyy = parseInt(s.slice(4, 8), 10);
       } else {
-        return null;
+        return fail(GENERIC_MSG);
       }
     } else {
       const parts = s.split(/[\/\-\.\s]+/).filter(Boolean);
-      if (parts.length < 2) return null;
+      if (parts.length < 2) return fail(GENERIC_MSG);
       dd = parseInt(parts[0], 10);
       mm = parseInt(parts[1], 10);
       if (parts[2]) {
         let y = parseInt(parts[2], 10);
-        if (isNaN(y)) return null;
+        if (isNaN(y)) return fail(GENERIC_MSG);
         if (y < 100) y += 2000;
         yyyy = y;
       }
     }
 
-    if (!dd || !mm || dd < 1 || dd > 31 || mm < 1 || mm > 12) return null;
+    if (!dd || !mm || dd < 1 || dd > 31 || mm < 1 || mm > 12) return fail(GENERIC_MSG);
     if (yyyy === null) {
       // Auto-pick FY year: months Apr–Dec → FY start year, Jan–Mar → FY end year
       yyyy = mm >= start.getMonth() + 1 ? start.getFullYear() : end.getFullYear();
     }
     const d = new Date(yyyy, mm - 1, dd);
-    if (!isValid(d) || d.getDate() !== dd || d.getMonth() !== mm - 1) return null;
+    if (!isValid(d) || d.getDate() !== dd || d.getMonth() !== mm - 1) return fail(GENERIC_MSG);
     if (!unrestricted && (d < start || d > end)) {
-      toast.error(
-        `Date is outside the open financial year (${format(start, "dd/MM/yyyy")} – ${format(end, "dd/MM/yyyy")}). Switch to that year to enter it.`,
-      );
-      return null;
+      return fail(`Date is outside the open financial year (${format(start, "dd/MM/yyyy")} – ${format(end, "dd/MM/yyyy")}). Switch to that year to enter it.`);
     }
     return format(d, "yyyy-MM-dd");
   }
@@ -179,7 +184,8 @@ export function FyDatePicker({
       setText(fmtIndianDate(iso));
       if (opts?.advance) requestAnimationFrame(() => advanceFocus());
     } else {
-      // revert
+      // Say why it was rejected, then revert the text. Focus stays here.
+      toast.error(parseErrorRef.current || GENERIC_MSG);
       setText(selected ? fmtIndianDate(value) : "");
     }
   }
@@ -212,7 +218,10 @@ export function FyDatePicker({
     if (v.length < prev) return; // backspace guard — don't aggressively advance
     const t = v.trim();
     const digitsOnly = /^\d+$/.test(t);
-    if (digitsOnly && (t.length === 4 || t.length === 6 || t.length === 8)) {
+    // Only a full DDMMYYYY auto-advances. DDMM and DDMMYY are prefixes of a
+    // longer entry, so they wait for Enter or blur (committing at 4 digits
+    // used to move focus away before the year could be typed).
+    if (digitsOnly && t.length === 8) {
       const iso = tryParse(t);
       if (iso) {
         onChange(iso);

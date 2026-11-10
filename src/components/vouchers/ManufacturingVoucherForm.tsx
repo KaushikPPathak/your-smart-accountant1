@@ -1,4 +1,11 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { BookOpen, Plus, Save, Trash2, X, Recycle, Factory } from "lucide-react";
@@ -22,6 +29,8 @@ import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise } from "@/lib/money";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { useEnterAsTab } from "./useEnterAsTab";
+import { useVoucherExit } from "./useVoucherExit";
+import { commitActiveFieldThen } from "@/lib/keyboard/commit-active-field";
 import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
@@ -592,9 +601,19 @@ export function ManufacturingVoucherForm() {
     draftKey,
   ]);
 
+  // One save at a time: performSave awaits checks before it resets the form.
+  const saveBusyRef = useRef(false);
   const save = useCallback(() => {
-    void performSave();
+    if (saveBusyRef.current) return;
+    saveBusyRef.current = true;
+    setSaving(true);
+    void performSave().finally(() => {
+      saveBusyRef.current = false;
+      setSaving(false);
+    });
   }, [performSave]);
+  const saveLatestRef = useRef(save);
+  saveLatestRef.current = save;
 
   // Push the "voucher" scope while this form is mounted so scoped shortcuts
   // resolve. Global shortcuts still work as usual.
@@ -604,31 +623,21 @@ export function ManufacturingVoucherForm() {
     return kb.pushScope("voucher");
   }, [kb]);
 
-  // Save shortcuts (Ctrl+S / Cmd+S / Alt+S). Fire even while typing.
+  // Save shortcuts (Ctrl+S / Cmd+S). Alt+S is left to the ribbon.
   const saveHandler = useCallback((e: KeyboardEvent) => {
     e.preventDefault();
-    e.stopPropagation();
-    if (!saving) save();
-  }, [save, saving]);
+    commitActiveFieldThen(() => saveLatestRef.current());
+  }, []);
   useShortcut("Ctrl+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
   useShortcut("Meta+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
-  useShortcut("Alt+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
 
-  // Escape: confirm-discard when dirty, then leave the form.
-  useShortcut(
-    "Escape",
-    (e) => {
-      const dirty = !isDraftEmpty(draftSnap);
-      if (dirty) {
-        e.preventDefault();
-        const ok = window.confirm("Discard this manufacturing entry? Unsaved changes will be lost.");
-        if (!ok) return;
-        clearVoucherDraft(draftKey);
-      }
-      navigate({ to: "/app/vouchers" });
-    },
-    { scope: "voucher", allowInField: true, description: "Cancel and return" },
-  );
+  // Escape and Cancel share one guarded exit path.
+  const exitVoucher = useVoucherExit({
+    isDirty: () => !isDraftEmpty(draftSnap),
+    draftKey,
+    leave: () => navigate({ to: "/app/vouchers" }),
+    discardMessage: "Discard this manufacturing entry? Unsaved changes will be lost.",
+  });
 
 
   const enterTab = useEnterAsTab(() => {
@@ -653,14 +662,7 @@ export function ManufacturingVoucherForm() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => {
-              if (!isDraftEmpty(draftSnap)) {
-                const ok = window.confirm("Discard this manufacturing entry? Unsaved changes will be lost.");
-                if (!ok) return;
-                clearVoucherDraft(draftKey);
-              }
-              navigate({ to: "/app/vouchers" });
-            }}
+            onClick={() => exitVoucher()}
           >
             Cancel
           </Button>

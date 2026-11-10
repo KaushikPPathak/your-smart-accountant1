@@ -21,6 +21,8 @@ import { useCompany } from "@/lib/company-context";
 import { formatINR, rupeesToPaise } from "@/lib/utils/currency-utils";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { useEnterAsTab } from "./useEnterAsTab";
+import { useVoucherExit } from "./useVoucherExit";
+import { commitActiveFieldThen } from "@/lib/keyboard/commit-active-field";
 import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { RecentVouchersPanel } from "./RecentVouchersPanel";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
@@ -614,7 +616,20 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     );
   }, [activeCompanyId, canWrite, isSimple, cashBankId, simpleLines, lines, balanced, voucherType, date, refNo, narration, totalDr, ledgers, cfg, draftKey, allocs, tdsCode, tdsRate, tdsLedgerId]);
 
-  const save = useCallback(() => { void performSave(); }, [performSave]);
+  // One save at a time: performSave awaits a duplicate-reference check before
+  // it resets the form, so a second Ctrl+S in that window used to post twice.
+  const saveBusyRef = useRef(false);
+  const save = useCallback(() => {
+    if (saveBusyRef.current) return;
+    saveBusyRef.current = true;
+    setSaving(true);
+    void performSave().finally(() => {
+      saveBusyRef.current = false;
+      setSaving(false);
+    });
+  }, [performSave]);
+  const saveLatestRef = useRef(save);
+  saveLatestRef.current = save;
 
   // Push "voucher" scope while this form is mounted.
   const kb = useOptionalKeyboard();
@@ -626,8 +641,8 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
   // Save (Ctrl+S / Cmd+S).
   const saveHandler = useCallback((e: KeyboardEvent) => {
     e.preventDefault();
-    if (!saving) save();
-  }, [save, saving]);
+    commitActiveFieldThen(() => saveLatestRef.current());
+  }, []);
   useShortcut("Ctrl+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
   useShortcut("Meta+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
 
@@ -661,17 +676,13 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
     else toast.info("Pick a ledger on a line first to edit");
   }, { scope: "voucher", allowInField: true, description: "Edit ledger on focused line" });
 
-  // Escape — guarded cancel.
-  useShortcut("Escape", (e) => {
-    const dirty = !isDraftEmpty(draftSnap);
-    if (dirty) {
-      e.preventDefault();
-      const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
-      if (!ok) return;
-      clearVoucherDraft(draftKey);
-    }
-    leaveForm();
-  }, { scope: "voucher", allowInField: true, description: "Cancel and return" });
+  // Escape and Cancel share one guarded exit path.
+  const exitVoucher = useVoucherExit({
+    isDirty: () => !isDraftEmpty(draftSnap),
+    draftKey,
+    leave: leaveForm,
+    discardMessage: "Discard this voucher? Unsaved changes will be lost.",
+  });
 
 
   const onLedgerSaved = (lg: QuickLedger) => {
@@ -723,14 +734,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
               variant="ghost"
               size="sm"
               className="h-8 text-xs"
-              onClick={() => {
-                if (!isDraftEmpty(draftSnap)) {
-                  const ok = window.confirm("Discard this voucher? Unsaved changes will be lost.");
-                  if (!ok) return;
-                  clearVoucherDraft(draftKey);
-                }
-                leaveForm();
-              }}
+              onClick={() => exitVoucher()}
             >
               <X className="mr-1 h-3 w-3" /> {cameFromAssistant ? "Back to Mehtaji" : "Cancel"}
             </Button>

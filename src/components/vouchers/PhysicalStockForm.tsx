@@ -1,4 +1,11 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ClipboardCheck, Plus, Save, Trash2, X } from "lucide-react";
@@ -20,6 +27,8 @@ import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { usePeriodLock, PeriodLockBanner } from "./PeriodLockBanner";
 import { useEnterAsTab } from "./useEnterAsTab";
+import { useVoucherExit } from "./useVoucherExit";
+import { commitActiveFieldThen } from "@/lib/keyboard/commit-active-field";
 import { useShortcut, useOptionalKeyboard } from "@/lib/keyboard";
 import { NextVoucherNumberCard } from "./NextVoucherNumberCard";
 import { Combo } from "./Combo";
@@ -321,9 +330,19 @@ export function PhysicalStockForm() {
     toast.success("Physical stock voucher saved");
   }, [activeCompanyId, canWrite, lines, date, refNo, narration, draftKey]);
 
+  // One save at a time: performSave awaits checks before it resets the form.
+  const saveBusyRef = useRef(false);
   const save = useCallback(() => {
-    void performSave();
+    if (saveBusyRef.current) return;
+    saveBusyRef.current = true;
+    setSaving(true);
+    void performSave().finally(() => {
+      saveBusyRef.current = false;
+      setSaving(false);
+    });
   }, [performSave]);
+  const saveLatestRef = useRef(save);
+  saveLatestRef.current = save;
 
   // ---------- Keyboard shortcuts ----------
   const kb = useOptionalKeyboard();
@@ -332,31 +351,21 @@ export function PhysicalStockForm() {
     return kb.pushScope("voucher");
   }, [kb]);
 
-  const saveHandler = useCallback(
-    (e: KeyboardEvent) => {
-      e.preventDefault();
-      if (!saving) save();
-    },
-    [save, saving],
-  );
+  // Save shortcuts (Ctrl+S / Cmd+S). Alt+S is left to the ribbon.
+  const saveHandler = useCallback((e: KeyboardEvent) => {
+    e.preventDefault();
+    commitActiveFieldThen(() => saveLatestRef.current());
+  }, []);
   useShortcut("Ctrl+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
   useShortcut("Meta+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
-  useShortcut("Alt+s", saveHandler, { scope: "voucher", allowInField: true, description: "Save voucher" });
 
-  useShortcut(
-    "Escape",
-    (e) => {
-      const dirty = !isDraftEmpty(draftSnap);
-      if (dirty) {
-        e.preventDefault();
-        const ok = window.confirm("Discard this stock-take entry? Unsaved changes will be lost.");
-        if (!ok) return;
-        clearVoucherDraft(draftKey);
-      }
-      navigate({ to: "/app/vouchers" });
-    },
-    { scope: "voucher", allowInField: true, description: "Cancel and return" },
-  );
+  // Escape and Cancel share one guarded exit path.
+  const exitVoucher = useVoucherExit({
+    isDirty: () => !isDraftEmpty(draftSnap),
+    draftKey,
+    leave: () => navigate({ to: "/app/vouchers" }),
+    discardMessage: "Discard this stock-take entry? Unsaved changes will be lost.",
+  });
 
   const enterTab = useEnterAsTab(() => {
     if (!saving) save();
@@ -393,14 +402,7 @@ export function PhysicalStockForm() {
             variant="ghost"
             size="sm"
             className="h-8 text-xs"
-            onClick={() => {
-              if (!isDraftEmpty(draftSnap)) {
-                const ok = window.confirm("Discard this stock-take entry? Unsaved changes will be lost.");
-                if (!ok) return;
-                clearVoucherDraft(draftKey);
-              }
-              navigate({ to: "/app/vouchers" });
-            }}
+            onClick={() => exitVoucher()}
           >
             <X className="mr-1 h-3 w-3" /> Cancel
           </Button>
