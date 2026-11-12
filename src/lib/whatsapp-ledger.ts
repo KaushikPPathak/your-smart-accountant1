@@ -150,6 +150,14 @@ export async function sendLedgerViaWhatsApp(
   }
 
   // 3. Feedback
+  if (isAndroidRuntime()) {
+    toast.success("WhatsApp is open", {
+      description: "The statement summary is ready to send. Choose the party's chat and tap send.",
+      duration: 8000,
+    });
+    isSending = false;
+    return;
+  }
   if (copied) {
     toast.success("Ledger PDF ready to attach!", {
       description: phone 

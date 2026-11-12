@@ -99,6 +99,16 @@ export function isAndroidRuntime(): boolean {
  * share sheet is unavailable or was cancelled.
  */
 export async function shareTextAndroid(text: string): Promise<boolean> {
+  // Native plugin (src-tauri/plugins/share-text): opens WhatsApp, or the share sheet.
+  if (hasTauri()) {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("plugin:share-text|share_text", { text });
+      return true;
+    } catch {
+      return false;
+    }
+  }
   const nav = typeof navigator !== "undefined" ? (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }) : null;
   if (!nav?.share) return false;
   try {
