@@ -156,15 +156,14 @@ export async function nextLocalVoucherNumber(
  * Numbers restart per reset scope (year or month), so only vouchers in the same
  * scope can clash. Matching numbers from another year used to block every save.
  */
-async function assertVoucherNumberFree(
-  db: any,
+// Loads the numbering scope matcher BEFORE a Dexie transaction opens. Awaiting
+// non-Dexie work (dynamic imports, another Dexie instance) inside a transaction
+// closes it and fails the save with "Transaction has already completed or failed".
+async function numberScopeMatcher(
   companyId: string,
   voucherType: string,
-  voucherNumber: string,
   voucherDate: string,
-): Promise<void> {
-  const rows: any[] = await db.cache_vouchers.where("company_id").equals(companyId).toArray();
-  let sameScope: (dateIso: string) => boolean = () => true;
+): Promise<(dateIso: string) => boolean> {
   try {
     const [{ loadVoucherPrefs, ruleFor }, { scopeKey }] = await Promise.all([
       import("@/lib/voucher-prefs"),
@@ -172,10 +171,21 @@ async function assertVoucherNumberFree(
     ]);
     const rule = ruleFor(await loadVoucherPrefs(companyId), voucherType);
     const wanted = scopeKey(rule, voucherDate);
-    sameScope = (dateIso) => scopeKey(rule, dateIso || voucherDate) === wanted;
+    return (dateIso) => scopeKey(rule, dateIso || voucherDate) === wanted;
   } catch {
     /* no numbering rule available: compare against every voucher of this type */
+    return () => true;
   }
+}
+
+async function assertVoucherNumberFree(
+  db: any,
+  companyId: string,
+  voucherType: string,
+  voucherNumber: string,
+  sameScope: (dateIso: string) => boolean,
+): Promise<void> {
+  const rows: any[] = await db.cache_vouchers.where("company_id").equals(companyId).toArray();
   const clash = rows.some((v) =>
     v.voucher_type === voucherType &&
     String(v.voucher_number) === voucherNumber &&
@@ -302,6 +312,10 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
       updated_at: stamp,
     }));
 
+  const itemSameScope = presetNumber
+    ? null
+    : await numberScopeMatcher(snap.companyId, snap.voucherType, snap.voucherDate);
+
   await db.transaction(
     "rw",
     db.cache_vouchers,
@@ -310,7 +324,7 @@ async function runLocalItemVoucherCreate(snap: ItemVoucherSnap): Promise<{ vouch
     db.cache_bill_sundries,
     async () => {
       // Auto numbers are re-checked inside the transaction (see assertVoucherNumberFree).
-      if (!presetNumber) await assertVoucherNumberFree(db, snap.companyId, snap.voucherType, voucherNumber, snap.voucherDate);
+      if (itemSameScope) await assertVoucherNumberFree(db, snap.companyId, snap.voucherType, voucherNumber, itemSameScope);
       // Security/Business Logic: Enforce party locking for carry-forward documents.
       if (snap.originalVoucherId) {
         const orig = await db.cache_vouchers.get(snap.originalVoucherId);
@@ -404,13 +418,15 @@ async function runLocalEntryVoucherCreate(snap: EntryVoucherSnap): Promise<void>
       updated_at: stamp,
     }));
 
+  const entrySameScope = await numberScopeMatcher(snap.companyId, snap.voucherType, snap.voucherDate);
+
   await db.transaction(
     "rw",
     db.cache_vouchers,
     db.cache_voucher_entries,
     db.cache_bill_allocations,
     async () => {
-      await assertVoucherNumberFree(db, snap.companyId, snap.voucherType, voucherNumber, snap.voucherDate);
+      await assertVoucherNumberFree(db, snap.companyId, snap.voucherType, voucherNumber, entrySameScope);
       await db.cache_vouchers.put({
         id: voucherId,
         company_id: snap.companyId,
