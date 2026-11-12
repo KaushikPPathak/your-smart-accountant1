@@ -119,6 +119,22 @@ export async function shareTextAndroid(text: string): Promise<boolean> {
   }
 }
 
+/** Opens WhatsApp with the text and the PDF attached (Android plugin). */
+export async function shareFileAndroid(opts: {
+  text: string;
+  filePath: string;
+  fileName: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!hasTauri()) return { ok: false, error: "Sharing needs the Android app." };
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("plugin:share-text|share_file", opts);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /**
  * High-speed WhatsApp opener:
  * 1. Handoff via OS shell (`@tauri-apps/plugin-shell`) if running in Tauri.

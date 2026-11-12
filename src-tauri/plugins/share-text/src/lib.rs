@@ -36,10 +36,43 @@ async fn share_text<R: Runtime>(app: AppHandle<R>, text: String) -> Result<(), S
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+struct ShareFilePayload {
+    text: String,
+    file_path: String,
+    file_name: String,
+}
+
+/// Opens WhatsApp (or the share sheet) with a file attached.
+#[tauri::command]
+async fn share_file<R: Runtime>(
+    app: AppHandle<R>,
+    text: String,
+    file_path: String,
+    file_name: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        let handle = app.state::<ShareHandle<R>>();
+        handle
+            .0
+            .run_mobile_plugin::<serde_json::Value>("shareFile", ShareFilePayload { text, file_path, file_name })
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, text, file_path, file_name);
+        Err("share_file is only available on Android".into())
+    }
+}
+
 /// Registers the share-text plugin.
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("share-text")
-        .invoke_handler(tauri::generate_handler![share_text])
+        .invoke_handler(tauri::generate_handler![share_text, share_file])
         .setup(|app, api| {
             #[cfg(target_os = "android")]
             {

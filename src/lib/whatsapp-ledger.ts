@@ -14,7 +14,7 @@ import {
   buildWhatsAppWebUrl,
   showWhatsAppWeb,
 } from "@/lib/whatsapp-shared";
-import { isAndroidRuntime } from "@/lib/native-bridge";
+import { isAndroidRuntime, shareFileAndroid, shareTextAndroid } from "@/lib/native-bridge";
 
 const pdfCache = new Map<string, Awaited<ReturnType<typeof downloadLedgerPdf>>>();
 
@@ -103,6 +103,24 @@ export async function sendLedgerViaWhatsApp(
   // Validate PDF path before attempting clipboard copy
   let copied = false;
   const runtime = getNativeRuntime();
+
+  if (isAndroidRuntime()) {
+    // Phone: WhatsApp opens with the statement text and the PDF attached.
+    const fileName = `${info.partyName || "Ledger"} statement.pdf`.replace(/[\\/:*?"<>|]+/g, "_");
+    const shared = info.path
+      ? await shareFileAndroid({ text: message, filePath: info.path, fileName })
+      : { ok: await shareTextAndroid(message) };
+    if (shared.ok) {
+      toast.success("WhatsApp is open", {
+        description: "Choose the party's chat and tap send.",
+        duration: 8000,
+      });
+    } else {
+      toast.error("Could not open WhatsApp", { description: shared.error ?? "Try again." });
+    }
+    isSending = false;
+    return;
+  }
 
   if (info.path && typeof info.path === "string") {
     const isAbsolute = /^([a-zA-Z]:[\\\/]|\\\\|\/)/.test(info.path);
