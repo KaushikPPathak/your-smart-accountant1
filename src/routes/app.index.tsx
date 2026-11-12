@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 const SalesPurchaseChart = lazy(() => import("@/components/dashboard/SalesPurchaseChart"));
 import { MorningBriefing } from "@/components/assistant/MorningBriefing";
+import { PhoneHome } from "@/components/phone/PhoneHome";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -302,6 +303,7 @@ function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <PhoneHome />
       {errorState && (
         <div className="rounded-lg bg-warning/10 p-4 border border-warning/20 text-sm text-warning-foreground">
           {errorState} Please verify your connection or wait while migrations conclude.

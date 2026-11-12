@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
 import { TopMenuBar } from "@/components/TopMenuBar";
+import { PhoneBottomNav } from "@/components/phone/PhoneBottomNav";
 import { QuickActionsRibbon } from "@/components/QuickActionsRibbon";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -332,7 +333,7 @@ function AppLayout() {
           backupBusy={savingMirror}
           backupLabel={lastSaveAt ? `Backup now (last: ${new Date(lastSaveAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "Backup now"}
         />
-        <div className="flex items-center border-b border-border bg-background">
+        <div className="hidden items-center border-b border-border bg-background sm:flex">
           <div className="flex-1 min-w-0"><QuickActionsRibbon /></div>
           <div className="flex items-center gap-2 px-2 self-stretch border-l border-border"><InstallAppButton /></div>
         </div>
@@ -344,9 +345,10 @@ function AppLayout() {
           <MastersProvider>
             <BalancesProvider>
               <FocusHintsProvider>
-                <main className="min-w-0 flex-1 overflow-x-hidden p-4 md:p-6">
+                <main className="min-w-0 flex-1 overflow-x-hidden p-4 pb-24 md:p-6 md:pb-6">
                   <Outlet />
                 </main>
+                <PhoneBottomNav />
                 <StatusBar onOpenHelp={() => setHelpOpen(true)} onOpenTray={() => setTrayOpen(true)} />
                 <PendingSavesTray forceOpen={trayOpen} onClose={() => setTrayOpen(false)} />
               </FocusHintsProvider>

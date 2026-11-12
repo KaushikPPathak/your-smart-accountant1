@@ -1,6 +1,8 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { usePhone } from "@/hooks/use-phone";
 import { useCompany } from "@/lib/company-context";
 import { companyFeatures, isUrlEnabled } from "@/lib/company-features";
 
@@ -57,11 +59,13 @@ function ReportsLayout() {
     [gstRegistered, inventoryEnabled, presumptiveEnabled],
   );
 
+  // On desktop, /app/reports opens Day Book. On phones it shows the report list instead.
+  const phone = usePhone();
   useEffect(() => {
-    if (location.pathname === "/app/reports") {
+    if (!phone && location.pathname === "/app/reports") {
       navigate({ to: "/app/reports/day-book", replace: true });
     }
-  }, [location.pathname, navigate]);
+  }, [location.pathname, navigate, phone]);
 
   // Roving arrow-key navigation across report tabs. Left/Right (and Up/Down)
   // move focus between tabs without needing Tab; Home/End jump to first/last.
@@ -115,7 +119,24 @@ function ReportsLayout() {
         <h1 className="text-2xl font-semibold">Reports</h1>
         <p className="text-xs text-muted-foreground">Books of accounts{gstRegistered ? ", GST-ready summaries" : ""} — date filters, PDF & Excel export.</p>
       </div>
-      <Card className="print:hidden">
+      {phone && location.pathname === "/app/reports" && (
+        <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card print:hidden">
+          {TABS.map((t) => (
+            <li key={t.to}>
+              <Link to={t.to} className="flex min-h-[52px] items-center justify-between px-4 text-[15px] active:bg-accent">
+                {t.label}
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {phone && location.pathname !== "/app/reports" && (
+        <Link to="/app/reports" className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-primary print:hidden">
+          <ChevronLeft className="h-4 w-4" /> All reports
+        </Link>
+      )}
+      <Card className="hidden print:hidden sm:block">
         <CardContent className="p-2">
           <nav
             ref={navRef}
