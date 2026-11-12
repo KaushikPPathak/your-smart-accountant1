@@ -1,11 +1,11 @@
 use serde::Serialize;
 use tauri::{
     plugin::{Builder, TauriPlugin},
-    Runtime,
+    AppHandle, Runtime,
 };
 
 #[cfg(target_os = "android")]
-use tauri::{plugin::PluginHandle, AppHandle, Manager};
+use tauri::{plugin::PluginHandle, Manager};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
