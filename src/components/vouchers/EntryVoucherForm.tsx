@@ -728,10 +728,10 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         onKeyDown={enterTab.onKeyDown}
         className="space-y-4"
       >
-        <div className="flex items-center justify-between border-b border-border/60 bg-card text-card-foreground px-4 py-2" style={{ borderTop: `3px solid ${cfg.color}` }}>
+        <div className="flex flex-col gap-2 border-b border-border/60 bg-card text-card-foreground px-4 py-2 sm:flex-row sm:items-center sm:justify-between" style={{ borderTop: `3px solid ${cfg.color}` }}>
           <div className="flex flex-col">
             <h2 className="text-xl font-bold tracking-tight text-foreground">{cfg.title}</h2>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80">
+            <div className="hidden items-center gap-2 text-[10px] text-muted-foreground/80 sm:flex">
               <kbd className="rounded border bg-muted px-1 shadow-sm">Enter</kbd> next field
               <kbd className="ml-1 rounded border bg-muted px-1 shadow-sm">Ctrl+S</kbd> save
               {voucherType === "journal" && taxResolution.status !== "hidden" && (
@@ -749,14 +749,14 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 text-xs"
+              className="h-9 flex-1 text-xs sm:h-8 sm:flex-none"
               onClick={() => exitVoucher()}
             >
               <X className="mr-1 h-3 w-3" /> {cameFromAssistant ? "Back to Mehtaji" : "Cancel"}
             </Button>
             <Button
               size="sm"
-              className="h-8 px-4 text-xs font-bold"
+              className="h-9 flex-1 px-4 text-xs font-bold sm:h-8 sm:flex-none"
               data-assistant-save
               data-primary-action="true"
               onClick={save}
@@ -766,7 +766,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             </Button>
           </div>
           {!saving && saveBlocker && (
-            <p role="status" className="mt-2 text-right text-xs text-muted-foreground">
+            <p role="status" className="text-xs text-muted-foreground sm:order-none sm:text-right">
               {saveBlocker}
             </p>
           )}
@@ -1056,6 +1056,19 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
         );
       })()}
 
+      {/* Phone: Save stays reachable at the bottom, above the app's bottom bar. */}
+      <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] z-30 rounded-xl border border-border bg-card/95 p-3 shadow-md backdrop-blur sm:hidden">
+        <Button
+          className="h-11 w-full text-sm font-bold"
+          onClick={save}
+          disabled={saving || !canWrite || !balanced || locked || taxTemplateBlocksSave}
+        >
+          <Save className="mr-1.5 h-4 w-4" /> {saving ? "Saving…" : "Save voucher"}
+        </Button>
+        {!saving && saveBlocker && (
+          <p className="mt-1.5 text-center text-xs text-muted-foreground">{saveBlocker}</p>
+        )}
+      </div>
       </div>
       <div className="space-y-3">
         <RecentVouchersPanel voucherType={voucherType} refreshKey={savedTick} />
