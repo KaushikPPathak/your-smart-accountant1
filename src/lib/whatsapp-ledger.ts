@@ -135,10 +135,9 @@ export async function sendLedgerViaWhatsApp(
     await showWhatsAppWeb(waUrl);
   } catch (err) {
     if (isAndroidRuntime()) {
-      // Android only lets the share sheet open on a fresh tap, and the PDF
-      // step above used up that tap. The PDF is cached now, so a second tap is quick.
-      toast.info("Tap WhatsApp once more to share the ledger", {
-        description: "The statement is ready.",
+      // The Android web view does not offer the share sheet to the page.
+      toast.error("WhatsApp sharing is not available on this phone yet", {
+        description: "Use the desktop app to send the ledger on WhatsApp.",
       });
     } else {
       toast.error("WhatsApp window not available", {
