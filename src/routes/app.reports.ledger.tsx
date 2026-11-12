@@ -881,14 +881,20 @@ function LedgerStatement() {
           if (error) throw error;
           return (data || []) as { voucher_id: string; ledger_id: string; debit_paise: number; credit_paise: number }[];
         },
-        async () => ((await readVoucherEntriesWithVouchers(activeCompanyId)) as any[])
-          .filter((e) => voucherIds.includes(String(e.voucher_id)))
-          .map((e) => ({
-            voucher_id: String(e.voucher_id),
-            ledger_id: String(e.ledger_id),
-            debit_paise: Number(e.debit_paise ?? 0),
-            credit_paise: Number(e.credit_paise ?? 0),
-          })),
+        // Local: every entry of these vouchers is already in allEntries (same dates),
+        // so reuse it instead of reading the whole company again.
+        async () => {
+          const wanted = new Set(voucherIds);
+          return (allEntries as any[])
+            .map((e) => ({ e, vid: String(e.voucher_id ?? e.vouchers?.id ?? "") }))
+            .filter(({ vid }) => wanted.has(vid))
+            .map(({ e, vid }) => ({
+              voucher_id: vid,
+              ledger_id: String(e.ledger_id),
+              debit_paise: Number(e.debit_paise ?? 0),
+              credit_paise: Number(e.credit_paise ?? 0),
+            }));
+        },
       );
       const ledgerIds = new Set<string>();
       for (const s of sibs) {
