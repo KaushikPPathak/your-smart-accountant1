@@ -2,7 +2,7 @@
 // Shared utilities for all WhatsApp integrations.
 // No business logic — just Tauri bridge, audio, phone sanitisation, and window focus.
 
-import { getNativeRuntime } from "@/lib/native-bridge";
+import { getNativeRuntime, isAndroidRuntime, shareTextAndroid } from "@/lib/native-bridge";
 import { recordFailure, recordStage } from "@/lib/crash-log";
 export { getNativeRuntime };
 
@@ -148,6 +148,15 @@ export function buildWhatsAppWebUrl(phone: string, message: string): string {
  * Throws if Tauri is unavailable so the caller can toast instead of silently failing.
  */
 export async function showWhatsAppWeb(url: string): Promise<void> {
+  if (isAndroidRuntime()) {
+    // Phones: hand the text to the share sheet (WhatsApp is listed there).
+    // Navigating to api.whatsapp.com here would leave the app.
+    const text = new URL(url).searchParams.get("text") ?? "";
+    const ok = await shareTextAndroid(text);
+    if (!ok) throw new Error("Share is not available or was cancelled.");
+    recordStage("whatsapp", "window", { opened: true, mode: "android-share-sheet" });
+    return;
+  }
   const runtime = getNativeRuntime();
   recordStage("whatsapp", "url", { runtime, url_len: url.length, has_phone: url.includes("phone=") });
   if (runtime === "browser") {

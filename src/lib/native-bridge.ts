@@ -88,6 +88,27 @@ export function sanitizePhoneNumber(rawPhone: string): string {
   return digits;
 }
 
+/** True inside the Android app's web view. */
+export function isAndroidRuntime(): boolean {
+  return typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+}
+
+/**
+ * Share text through the Android share sheet (WhatsApp appears there).
+ * Never navigates the web view away from the app. Returns false if the
+ * share sheet is unavailable or was cancelled.
+ */
+export async function shareTextAndroid(text: string): Promise<boolean> {
+  const nav = typeof navigator !== "undefined" ? (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }) : null;
+  if (!nav?.share) return false;
+  try {
+    await nav.share({ text });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * High-speed WhatsApp opener:
  * 1. Handoff via OS shell (`@tauri-apps/plugin-shell`) if running in Tauri.
@@ -97,6 +118,13 @@ export function sanitizePhoneNumber(rawPhone: string): string {
 export async function openWhatsAppChatNative(phone: string, message: string): Promise<SaveNativeResult> {
   const sanitizedPhone = sanitizePhoneNumber(phone);
   const encodedText = encodeURIComponent(message);
+
+  // Android: the web view must not navigate to whatsapp:// or wa.me links (it
+  // leaves the app). Use the share sheet instead.
+  if (isAndroidRuntime()) {
+    const shared = await shareTextAndroid(message);
+    return shared ? { ok: true } : { ok: false, error: "Share is not available here." };
+  }
 
   const nativeAppUri = sanitizedPhone
     ? `whatsapp://send?phone=${sanitizedPhone}&text=${encodedText}`
@@ -275,6 +303,19 @@ function downloadInBrowser(fileName: string, contents: string | ArrayBuffer | Ui
     const bytes = new Blob([blobPart], {
       type: typeof contents === "string" ? "application/json;charset=utf-8" : "application/octet-stream",
     });
+
+    if (isAndroidRuntime()) {
+      // Android web view: a download link can navigate the app away. Use the
+      // share sheet (Drive, WhatsApp, Files...) for the file instead.
+      const name = safeFileName(fileName);
+      const file = new File([bytes], name, { type: bytes.type });
+      const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean; share?: (d: ShareData) => Promise<void> };
+      if (nav.share && nav.canShare?.({ files: [file] })) {
+        void nav.share({ files: [file], title: name }).catch(() => undefined);
+        return { ok: true, path: "Share sheet" };
+      }
+      return { ok: false, error: "Saving files is not supported on this phone yet." };
+    }
 
     const url = URL.createObjectURL(bytes);
     const a = document.createElement("a");
