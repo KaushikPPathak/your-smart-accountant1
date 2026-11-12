@@ -825,6 +825,14 @@ function LedgerStatement() {
   type AllSection = { ledger: LedgerOpt; opening: number; rows: AllRow[]; dr: number; cr: number; closing: number };
   const [allMode, setAllMode] = useState(false);
   const [allSections, setAllSections] = useState<AllSection[] | null>(null);
+  // On screen, draw only the first ledgers; the rest appear on request. Printing shows all.
+  const ALL_PAGE = 8;
+  const [allVisible, setAllVisible] = useState<number>(ALL_PAGE);
+  useEffect(() => {
+    const showAll = () => setAllVisible(Number.POSITIVE_INFINITY);
+    window.addEventListener("beforeprint", showAll);
+    return () => window.removeEventListener("beforeprint", showAll);
+  }, []);
   const [ledgerPrintLayout, setLedgerPrintLayout] = usePrintLayout("all-ledgers", "paged");
   const ledgerPageBreak = ledgerPrintLayout === "paged";
   const [allLoading, setAllLoading] = useState(false);
@@ -914,7 +922,10 @@ function LedgerStatement() {
     }
 
     const sections: AllSection[] = [];
-    for (const l of ledgers) {
+    for (let li = 0; li < ledgers.length; li++) {
+      const l = ledgers[li];
+      // Yield to the UI every few ledgers so the window stays responsive on large books.
+      if (li > 0 && li % 10 === 0) await new Promise((r) => setTimeout(r, 0));
       const obSigned = (l.opening_balance_is_debit ? 1 : -1) * l.opening_balance_paise;
       const opening = obSigned + (movement.get(l.id) ?? 0);
       const list = sortEntriesByVoucherAsc(byLedger.get(l.id) ?? []);
@@ -961,7 +972,7 @@ function LedgerStatement() {
     }
   };
 
-  useEffect(() => { setAllSections(null); }, [from, to, activeCompanyId]);
+  useEffect(() => { setAllSections(null); setAllVisible(ALL_PAGE); }, [from, to, activeCompanyId]);
 
   const onViewAll = async () => { await ensureAllSections(); setAllMode(true); };
 
@@ -1311,7 +1322,7 @@ function LedgerStatement() {
           {(allSections ?? []).length === 0 ? (
             <Card><CardContent className="p-6 text-sm text-muted-foreground">{allLoading ? "Loading all ledgers…" : "No ledgers with activity in this period."}</CardContent></Card>
           ) : (
-            (allSections ?? []).map((s, sIdx) => {
+            (allSections ?? []).slice(0, allVisible).map((s, sIdx) => {
               const pageStyle = ledgerPageBreak && sIdx > 0 ? { breakBefore: "page" as const, pageBreakBefore: "always" as const } : undefined;
               if (view === "horizontal") {
                 const { dr, cr, total } = buildTSides(s);
@@ -1399,6 +1410,13 @@ function LedgerStatement() {
               </Card>
               );
             })
+          )}
+          {(allSections ?? []).length > allVisible && (
+            <div className="flex justify-center print:hidden">
+              <Button variant="outline" size="sm" onClick={() => setAllVisible((n) => n + ALL_PAGE)}>
+                Show more ledgers ({(allSections ?? []).length - allVisible} left)
+              </Button>
+            </div>
           )}
         </div>
       ) : !ledger ? (
