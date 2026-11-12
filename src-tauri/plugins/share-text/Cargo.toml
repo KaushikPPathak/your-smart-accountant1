@@ -3,6 +3,7 @@ name = "tauri-plugin-share-text"
 version = "0.1.0"
 description = "Shares text on Android through WhatsApp or the system share sheet"
 edition = "2021"
+links = "tauri-plugin-share-text"
 rust-version = "1.70"
 
 [dependencies]
