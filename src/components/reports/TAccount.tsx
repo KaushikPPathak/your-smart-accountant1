@@ -133,7 +133,7 @@ export function TAccount({
       <div
         data-print-hide
         className={cn(
-          "w-full max-w-full overflow-hidden rounded-md border-2 border-foreground bg-card text-card-foreground print:border-black",
+          "w-full max-w-full overflow-x-auto print:overflow-hidden rounded-md border-2 border-foreground bg-card text-card-foreground print:border-black",
           className,
         )}
       >

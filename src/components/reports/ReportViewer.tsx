@@ -230,13 +230,13 @@ export function ReportViewer({
   return (
     <div className={cn("report-print-root-wrap space-y-3", className)}>
       {(
-        <div className="flex items-start justify-between gap-2 print:hidden">
+        <div className="flex flex-col gap-2 print:hidden sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">{toolbar}</div>
           <Button
             type="button"
             size="sm"
             variant={autoFit ? "default" : "outline"}
-            className="shrink-0 gap-1.5"
+            className="shrink-0 gap-1.5 self-end sm:self-auto"
             onClick={() => setAutoFit((v) => !v)}
             title={autoFit ? "Auto-fit: ON — report scales to fit screen" : "Auto-fit: OFF — report uses natural width"}
           >
