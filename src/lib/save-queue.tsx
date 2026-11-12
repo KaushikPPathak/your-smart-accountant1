@@ -34,6 +34,11 @@ const ric: Idle = (typeof window !== "undefined" && (window as unknown as { requ
   ? ((window as unknown as { requestIdleCallback: Idle }).requestIdleCallback)
   : (cb) => setTimeout(cb, 0);
 
+function removeJob(job: PendingJob) {
+  const i = queue.indexOf(job);
+  if (i >= 0) queue.splice(i, 1);
+}
+
 async function persistAndDrop(job: PendingJob): Promise<boolean> {
   if (!job.persist) return false;
   try {
@@ -45,7 +50,7 @@ async function persistAndDrop(job: PendingJob): Promise<boolean> {
       company_id: job.persist.companyId,
       label: job.label,
     });
-    queue.shift();
+    removeJob(job);
     markSaved(job.label);
     if (queue.length === 0) clearFailures();
     bump();
@@ -71,8 +76,11 @@ async function flush() {
   if (inFlight) return;
   inFlight = true;
   try {
-    while (queue.length > 0) {
-      const job = queue[0];
+    // A failed job stays in the tray (attempts > 0) until the user retries it,
+    // but it no longer blocks the jobs queued behind it.
+    for (;;) {
+      const job = queue.find((j) => j.attempts === 0);
+      if (!job) break;
       // Persistable jobs ALWAYS go through the durable outbox first.
       // This keeps saves instant even on slow/flaky internet — the outbox
       // drain worker pushes them to Supabase asynchronously.
@@ -83,7 +91,7 @@ async function flush() {
         if (isLocalOnlyMode()) {
           try {
             await job.run();
-            queue.shift();
+            removeJob(job);
             markSaved(job.label);
             if (queue.length === 0) clearFailures();
             bump();
@@ -96,7 +104,7 @@ async function flush() {
             markFailure();
             bump();
             toast.error(`Save failed: ${job.label}`, { description: job.lastError });
-            break;
+            continue;
           }
         }
         if (await persistAndDrop(job)) continue;
@@ -111,14 +119,14 @@ async function flush() {
           markFailure();
           bump();
           toast.error(`Save failed: ${job.label}`, { description: job.lastError });
-          break;
+          continue;
         }
       }
       try {
         await job.run();
-        queue.shift();
+        removeJob(job);
         markSaved(job.label);
-        if (job.attempts > 0) {
+        if (job.attempts > 0 || job.lastError) {
           toast.success(`${job.label} saved`);
         }
         if (queue.length === 0) clearFailures();
@@ -136,8 +144,8 @@ async function flush() {
         markFailure();
         bump();
         toast.error(`Save failed: ${job.label}`, { description: job.lastError });
-        // Stop auto-retry; user retries from tray.
-        break;
+        // Not retried automatically; the tray's Retry runs it again.
+        continue;
       }
     }
   } finally {
@@ -160,6 +168,8 @@ export function enqueueSave(
 }
 
 export function retryPending() {
+  for (const j of queue) if (j.attempts > 0) j.attempts = 0;
+  bump();
   startTransition(() => { ric(() => { void flush(); }); });
 }
 
