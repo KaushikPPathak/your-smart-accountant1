@@ -344,16 +344,17 @@ function BalanceSheet() {
             );
           })()}
           <div
-            className={`mt-2 flex items-center justify-between rounded border px-3 py-2 text-sm ${
+            className={`mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg border-2 px-4 py-3 text-base ${
               diffPaise === 0
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                : "border-destructive/30 bg-destructive/10 text-destructive"
+                ? "border-emerald-600 bg-emerald-100 text-emerald-950 dark:border-emerald-500 dark:bg-emerald-950 dark:text-emerald-50"
+                : "border-red-600 bg-red-100 text-red-950 dark:border-red-500 dark:bg-red-950 dark:text-red-50"
             }`}
+            role="status"
           >
-            <span className="font-medium">
+            <span className="min-w-0 font-semibold">
               {diffPaise === 0 ? "Balance Sheet is tallied" : "Difference in Balance Sheet"}
             </span>
-            <span className="font-mono">
+            <span className="font-mono font-semibold whitespace-nowrap">
               {diffPaise === 0
                 ? formatINR(0)
                 : `${formatINR(Math.abs(diffPaise))} ${diffPaise > 0 ? "(Assets > Liabilities)" : "(Liabilities > Assets)"}`}

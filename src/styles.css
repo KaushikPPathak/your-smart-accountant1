@@ -877,6 +877,11 @@ html[lang="gu"] body {
   .busy-topbar {
     flex-wrap: wrap;
     overflow: visible;
+    /* Stays on screen while the page scrolls, and clears the Android status bar. */
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    padding-top: env(safe-area-inset-top, 0px);
   }
   .busy-brand {
     flex: 0 0 auto;

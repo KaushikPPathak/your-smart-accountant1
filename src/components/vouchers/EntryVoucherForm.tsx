@@ -417,6 +417,22 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
 
   const canWrite =
     activeMembership?.role === "admin" || activeMembership?.role === "accountant";
+  // Why Save is greyed out, shown under the button so it is never a silent dead end.
+  const saveBlocker: string | null = !canWrite
+    ? "Only an admin or accountant can save vouchers in this company."
+    : locked
+      ? "This date falls in a locked period. Change the date or unlock the period."
+      : taxTemplateBlocksSave
+        ? "A tax template on this voucher needs attention before it can be saved."
+        : balanced
+          ? null
+          : isSimple
+            ? cashBankId === ""
+              ? `Choose the ${voucherType === "receipt" ? "bank or cash account received into" : "bank or cash account paid from"}.`
+              : "Enter an amount on at least one line with a ledger."
+            : totalDr === 0 && totalCr === 0
+              ? "Enter at least one debit and one credit line."
+              : "Debit and credit totals must match before you can save.";
 
   const performSave = useCallback(async () => {
     if (!activeCompanyId || !canWrite) return;
@@ -749,6 +765,11 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
               <Save className="mr-1.5 h-3.5 w-3.5" /> {saving ? "Saving…" : "Save"}
             </Button>
           </div>
+          {!saving && saveBlocker && (
+            <p role="status" className="mt-2 text-right text-xs text-muted-foreground">
+              {saveBlocker}
+            </p>
+          )}
         </div>
 
 
