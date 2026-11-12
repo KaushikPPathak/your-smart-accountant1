@@ -14,6 +14,7 @@ import {
   buildWhatsAppWebUrl,
   showWhatsAppWeb,
 } from "@/lib/whatsapp-shared";
+import { isAndroidRuntime } from "@/lib/native-bridge";
 
 const pdfCache = new Map<string, Awaited<ReturnType<typeof downloadLedgerPdf>>>();
 
@@ -133,10 +134,18 @@ export async function sendLedgerViaWhatsApp(
   try {
     await showWhatsAppWeb(waUrl);
   } catch (err) {
-    toast.error("WhatsApp window not available", {
-      description: "Please ensure WhatsApp Web is loaded in the app.",
-      action: { label: "Show details", onClick: () => window.location.assign("/app/diagnostics") },
-    });
+    if (isAndroidRuntime()) {
+      // Android only lets the share sheet open on a fresh tap, and the PDF
+      // step above used up that tap. The PDF is cached now, so a second tap is quick.
+      toast.info("Tap WhatsApp once more to share the ledger", {
+        description: "The statement is ready.",
+      });
+    } else {
+      toast.error("WhatsApp window not available", {
+        description: "Please ensure WhatsApp Web is loaded in the app.",
+        action: { label: "Show details", onClick: () => window.location.assign("/app/diagnostics") },
+      });
+    }
     isSending = false;
     return;
   }
