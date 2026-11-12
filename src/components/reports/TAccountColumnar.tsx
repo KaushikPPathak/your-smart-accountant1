@@ -68,6 +68,50 @@ function Cells({ row, isLeftSide }: { row: TColRow | null; isLeftSide: boolean }
   );
 }
 
+/** Phone view: one side (Dr or Cr) stacked as readable rows, no horizontal scrolling. */
+function StackedSide({ label, rows, total }: { label: string; rows: TColRow[]; total: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="bg-muted/60 px-3 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide">{label}</div>
+      {rows.length === 0 ? (
+        <div className="px-3 py-3 text-xs text-muted-foreground">—</div>
+      ) : (
+        rows.map((r, i) => {
+          const details = [r.vchType, r.vchNo, r.chqRef].filter((v) => v !== undefined && v !== null && v !== "");
+          return (
+            <div
+              key={i}
+              onClick={r.onClick}
+              className={cn(
+                "border-t border-foreground/30 px-3 py-2",
+                r.onClick && "cursor-pointer active:bg-muted/40",
+                r.emphasis === "bold" || r.emphasis === "total" ? "font-semibold" : "",
+              )}
+            >
+              <div className="flex items-baseline justify-between gap-2 text-[12px]">
+                <span className="whitespace-nowrap text-muted-foreground">{r.date ?? ""}</span>
+                <span className="whitespace-nowrap font-mono tabular-nums">{r.amount}</span>
+              </div>
+              <div className="break-words text-[13px] leading-snug">{r.particulars}</div>
+              {details.length > 0 && (
+                <div className="text-[11px] text-muted-foreground">
+                  {details.map((v, k) => (
+                    <React.Fragment key={k}>{k > 0 ? " · " : ""}{v}</React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+      <div className="flex items-center justify-between border-t-2 border-foreground bg-muted/50 px-3 py-2 text-[12px] font-semibold">
+        <span>Total</span>
+        <span className="font-mono tabular-nums">{total}</span>
+      </div>
+    </div>
+  );
+}
+
 export function TAccountColumnar({
   title,
   subtitle,
@@ -97,6 +141,7 @@ export function TAccountColumnar({
           {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
         </div>
       )}
+      <div className="hidden sm:block print:block">
       <table className="w-full border-collapse text-[12px]">
 
         <thead>
@@ -172,6 +217,16 @@ export function TAccountColumnar({
           )}
         </tfoot>
       </table>
+      </div>
+      <div className="sm:hidden print:hidden">
+        <StackedSide label="Dr." rows={leftRows} total={leftTotal} />
+        <StackedSide label="Cr." rows={rightRows} total={rightTotal} />
+        {closingLine && (
+          <div className="border-t border-foreground/40 bg-muted/30 px-3 py-2 text-right text-[12px] font-semibold">
+            {closingLine}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
