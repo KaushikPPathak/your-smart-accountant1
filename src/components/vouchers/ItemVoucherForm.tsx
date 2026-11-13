@@ -1375,7 +1375,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 Supply Nature
               </Label>
               <Select value={supplyNature} onValueChange={(v) => setSupplyNature(v as typeof supplyNature)}>
-                <SelectTrigger className="h-8 w-[220px] text-xs">
+                <SelectTrigger className="h-10 w-full text-sm sm:h-8 sm:w-[220px] sm:text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1393,7 +1393,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     RCM Applicable
                   </Label>
                   <Select value={rcmApplicable ? "yes" : "no"} onValueChange={(v) => setRcmApplicable(v === "yes")}>
-                    <SelectTrigger className="h-8 w-[90px] text-xs">
+                    <SelectTrigger className="h-10 w-[110px] text-sm sm:h-8 sm:w-[90px] sm:text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

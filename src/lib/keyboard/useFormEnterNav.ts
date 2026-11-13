@@ -151,5 +151,37 @@ export function useFormEnterNav<T extends HTMLElement = HTMLDivElement>(opts: Op
     optsRef.current.onLast?.();
   };
 
+  // Radix Select triggers (e.g. "Supply Nature") already hold a value but do
+  // not carry `data-has-value`, and Radix opens its list on Enter during its
+  // own keydown handler — so a bubble-phase handler never gets to move focus
+  // on. Intercept Enter in the capture phase for such closed triggers: stop
+  // Radix from opening, then advance like any other field. Shift+Enter moves
+  // back. Combo (which sets data-has-value) and open lists are left alone.
+  const onKeyDownRef = React.useRef(onKeyDown);
+  onKeyDownRef.current = onKeyDown;
+  const [captureKeyDown] = React.useState(() => (e: KeyboardEvent) => {
+    if (e.key !== "Enter" || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target as HTMLElement | null;
+    if (!t || t.tagName !== "BUTTON" || t.getAttribute("role") !== "combobox") return;
+    if (t.getAttribute("aria-expanded") === "true") return;
+    if (t.hasAttribute("data-has-value") || t.hasAttribute("data-placeholder")) return;
+    e.stopPropagation();
+    e.preventDefault();
+    // Dispatch through the same navigation logic used for every other field.
+    onKeyDownRef.current(e as unknown as React.KeyboardEvent<T>);
+  });
+  const attachedRef = React.useRef<HTMLElement | null>(null);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (el === attachedRef.current) return;
+    attachedRef.current?.removeEventListener("keydown", captureKeyDown, true);
+    attachedRef.current = el;
+    el?.addEventListener("keydown", captureKeyDown, true);
+  });
+  React.useEffect(() => () => {
+    attachedRef.current?.removeEventListener("keydown", captureKeyDown, true);
+    attachedRef.current = null;
+  }, [captureKeyDown]);
+
   return { ref, onKeyDown };
 }
