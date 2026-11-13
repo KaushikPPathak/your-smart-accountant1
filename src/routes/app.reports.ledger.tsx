@@ -899,7 +899,7 @@ function LedgerStatement() {
 
 
   // ---------- All-Ledgers (batch) builder ----------
-  type AllRow = { date: string; particulars: string; vchType: string; vchNo: string; narration: string; debit: number; credit: number; balance: number };
+  type AllRow = { voucherId: string; date: string; particulars: string; vchType: string; vchNo: string; narration: string; debit: number; credit: number; balance: number };
   type AllSection = { ledger: LedgerOpt; opening: number; rows: AllRow[]; dr: number; cr: number; closing: number };
   const [allMode, setAllMode] = useState(false);
   const [allSections, setAllSections] = useState<AllSection[] | null>(null);
@@ -1031,6 +1031,7 @@ function LedgerStatement() {
         bal += e.debit_paise - e.credit_paise;
         dr += e.debit_paise; cr += e.credit_paise;
         rows.push({
+          voucherId: v.id,
           date: v.voucher_date,
           particulars: chosen.length ? chosen.map((x) => x.name).join(", ") : "—",
           vchType: TYPE_LABEL[v.voucher_type] ?? v.voucher_type,
@@ -1446,6 +1447,7 @@ function LedgerStatement() {
               <Card key={s.ledger.id} className="overflow-hidden" style={pageStyle}>
                 <CardContent className="p-0">
                   <div className="bg-muted/40 px-3 py-2 text-sm font-semibold">Ledger A/c — {s.ledger.name}</div>
+                  <div className="hidden sm:block print:block">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/60">
                       <tr>
@@ -1490,6 +1492,15 @@ function LedgerStatement() {
                       </tr>
                     </tfoot>
                   </table>
+                  </div>
+                  <LedgerPhoneList
+                    rows={s.rows.map((r, i) => ({ key: `${i}`, voucherId: r.voucherId, date: r.date, particulars: r.particulars, vchType: r.vchType, vchNo: r.vchNo, narration: r.narration, debit: r.debit, credit: r.credit, balance: r.balance }))}
+                    opening={s.opening}
+                    closing={s.closing}
+                    totals={{ dr: s.dr, cr: s.cr }}
+                    fmtBal={fmtBal}
+                    onOpen={(id) => openVoucherDetail(navigate, id)}
+                  />
                 </CardContent>
               </Card>
               );
