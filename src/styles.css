@@ -933,7 +933,13 @@ html[lang="gu"] body {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
     padding: 8px 10px;
+    /* Each line reads as its own card on phones */
+    border: 1px solid var(--border) !important;
+    border-radius: 0.5rem;
+    background: var(--card);
+    margin-bottom: 8px;
   }
+  .item-table tbody tr:last-child { margin-bottom: 0; }
   .item-table td {
     display: flex;
     flex-direction: column;

@@ -1475,7 +1475,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
               </TableBody>
             </Table>
             <div className="border-t p-3">
-              <Button variant="ghost" size="sm" onClick={addLine}>
+              <Button variant="ghost" size="sm" className="h-12 w-full sm:h-8 sm:w-auto" onClick={addLine}>
                 <Plus className="mr-1 h-4 w-4" /> Add line
               </Button>
             </div>
