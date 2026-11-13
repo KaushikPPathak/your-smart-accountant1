@@ -373,7 +373,7 @@ function ItemRowImpl({
                       value={row.cost_centre_id ?? "__none__"}
                       onValueChange={(v) => onCommit(idx, { cost_centre_id: v === "__none__" ? null : v })}
                     >
-                      <SelectTrigger className="h-8"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectTrigger className="h-12 sm:h-8"><SelectValue placeholder="Select" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">— None —</SelectItem>
                         {costCentres.map((c) => (
@@ -391,7 +391,7 @@ function ItemRowImpl({
                         value={row.cost_category_id ?? "__none__"}
                         onValueChange={(v) => onCommit(idx, { cost_category_id: v === "__none__" ? null : v })}
                       >
-                        <SelectTrigger className="h-8"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectTrigger className="h-12 sm:h-8"><SelectValue placeholder="Select" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">— None —</SelectItem>
                           {costCategories.map((c) => (

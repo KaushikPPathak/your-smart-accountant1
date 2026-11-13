@@ -749,14 +749,14 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             <Button
               variant="ghost"
               size="sm"
-              className="h-9 flex-1 text-xs sm:h-8 sm:flex-none"
+              className="h-12 flex-1 text-xs sm:h-8 sm:flex-none"
               onClick={() => exitVoucher()}
             >
               <X className="mr-1 h-3 w-3" /> {cameFromAssistant ? "Back to Mehtaji" : "Cancel"}
             </Button>
             <Button
               size="sm"
-              className="h-9 flex-1 px-4 text-xs font-bold sm:h-8 sm:flex-none"
+              className="h-12 flex-1 px-4 text-xs font-bold sm:h-8 sm:flex-none"
               data-assistant-save
               data-primary-action="true"
               onClick={save}

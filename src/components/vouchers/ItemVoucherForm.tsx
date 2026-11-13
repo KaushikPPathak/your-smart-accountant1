@@ -1151,12 +1151,12 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => exitVoucher()}>
+            <Button variant="ghost" size="sm" className="h-12 text-xs sm:h-8" onClick={() => exitVoucher()}>
               <X className="mr-1 h-3 w-3" /> Cancel
             </Button>
             <Button
               size="sm"
-              className="h-8 px-4 text-xs font-bold"
+              className="h-12 px-4 text-xs font-bold sm:h-8"
               data-assistant-save
               data-primary-action="true"
               onClick={save}
@@ -1172,7 +1172,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         {(voucherType === "sales" || voucherType === "purchase") && (
           <div className="flex items-center gap-3">
             <Label htmlFor="invoice-number">Invoice No.</Label>
-            <Input id="invoice-number" aria-label="Invoice number" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="Auto" className="w-48" disabled={!canWrite} />
+            <Input id="invoice-number" aria-label="Invoice number" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="Auto" className="w-full sm:w-48" autoCapitalize="characters" autoCorrect="off" spellCheck={false} enterKeyHint="next" disabled={!canWrite} />
           </div>
         )}
 
@@ -1516,7 +1516,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     value={miscPreGst}
                     onChange={(e) => setMiscPreGst(e.target.value.replace(/[^0-9.\-]/g, ""))}
                     onFocus={(e) => e.currentTarget.select()}
-                    className="h-8 text-right font-mono"
+                    className="h-12 text-right font-mono sm:h-8"
                     inputMode="decimal"
                     title="Added to taxable; taxed at weighted-avg GST of lines"
                   />
@@ -1529,7 +1529,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                     value={miscPostGst}
                     onChange={(e) => setMiscPostGst(e.target.value.replace(/[^0-9.\-]/g, ""))}
                     onFocus={(e) => e.currentTarget.select()}
-                    className="h-8 text-right font-mono"
+                    className="h-12 text-right font-mono sm:h-8"
                     inputMode="decimal"
                     title="Added straight to the grand total (no GST)"
                   />
@@ -1571,7 +1571,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                 <Label className="text-[11px] text-muted-foreground shrink-0">Fit total to</Label>
                 <Input
                   key={`fit-${savedTick}`}
-                  className="h-8 flex-1 text-right font-mono"
+                  className="h-12 flex-1 text-right font-mono sm:h-8"
                   inputMode="decimal"
                   placeholder="e.g. 10000"
                   title="Enter a target grand total; every line's rate is scaled proportionally so the bill sums to this amount (misc/sundries/round-off are subtracted first)."
