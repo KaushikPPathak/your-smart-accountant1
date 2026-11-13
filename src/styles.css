@@ -931,8 +931,8 @@ html[lang="gu"] body {
   .item-table tbody tr {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
-    padding: 8px 10px;
+    gap: 8px;
+    padding: 10px 12px;
     /* Each line reads as its own card on phones */
     border: 1px solid var(--border) !important;
     border-radius: 0.5rem;
@@ -963,8 +963,13 @@ html[lang="gu"] body {
   .item-table td.m-gst { grid-column: 4; grid-row: 2; }
   .item-table td.m-amt { grid-column: 1 / span 3; grid-row: 3; }
   .item-table td.m-del { grid-column: 4; grid-row: 3; justify-content: center; }
+  /* Every field in a line card fills its grid cell and shares one 48dp height,
+     so Qty, Rate, Disc, GST and Amount line up across all cards. */
   .item-table td input,
-  .item-table td [role="combobox"] { width: 100% !important; min-width: 0; }
+  .item-table td [role="combobox"] { width: 100%; min-width: 0; height: 3rem; }
+  .item-table td input { font-size: 1rem; }
+  .item-table td.m-item [role="combobox"] { text-align: left; }
+  .item-table td.m-amt input { font-size: 1.125rem; font-weight: 600; }
   .item-table td .flex { min-width: 0; }
   .item-table td.m-qty .flex > input { flex: 1; }
 }
