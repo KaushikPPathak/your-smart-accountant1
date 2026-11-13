@@ -3,6 +3,8 @@ import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { usePhone } from "@/hooks/use-phone";
 import {
   Command,
   CommandEmpty,
@@ -139,9 +141,95 @@ export function Combo({
     });
   };
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+  const panelEl = (
+          <Command
+            shouldFilter={false}
+
+            onKeyDown={(e) => {
+              if (e.altKey && e.key.toLowerCase() === "c" && onCreate) {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpen(false);
+                onCreate(query);
+                return;
+              }
+              // Enter inside the popover picks the highlighted item. Combo
+              // already advances focus itself after selection — stop bubbling
+              // so the outer useEnterAsTab does not advance a second time.
+              if (e.key === "Enter") {
+                e.stopPropagation();
+              }
+            }}
+          >
+            <CommandInput
+              placeholder="Type to search…"
+              value={query}
+              onValueChange={setQuery}
+              autoFocus
+            />
+            <CommandList className="max-h-none flex-1 sm:max-h-[300px] sm:flex-none">
+              <CommandEmpty>
+                <div className="space-y-2 py-2 text-center text-sm">
+                  <div className="text-muted-foreground">{emptyText}</div>
+                  {onCreate && (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-accent"
+                      onClick={() => {
+                        setOpen(false);
+                        onCreate(query);
+                      }}
+                    >
+                      <Plus className="h-3 w-3" /> {createLabel} <kbd className="ml-1 rounded border px-1 text-[10px]">Alt+C</kbd>
+                    </button>
+                  )}
+                </div>
+              </CommandEmpty>
+              <CommandGroup>
+                {ranked.length > MAX_VISIBLE && (
+                  <div className="px-2 py-1 text-[11px] text-muted-foreground">
+                    Showing {MAX_VISIBLE} of {ranked.length} matches. Keep typing to narrow down.
+                  </div>
+                )}
+                {visible.map((o) => (
+                  <CommandItem
+                    className="py-3 sm:py-1.5"
+                    key={o.value}
+                    value={o.value}
+                    onSelect={() => handleSelect(o.value)}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === o.value ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    <span className="flex-1 truncate">{o.label}</span>
+                    {o.hint && (
+                      <span className="ml-2 text-[10px] text-muted-foreground">{o.hint}</span>
+                    )}
+                  </CommandItem>
+                ))}
+                {onCreate && visible.length > 0 && (
+                  <CommandItem
+                    className="py-3 text-primary sm:py-1.5"
+                    value="__create__"
+                    onSelect={() => {
+                      setOpen(false);
+                      onCreate(query);
+                    }}
+                    
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    <span className="flex-1">{createLabel}{query ? `: "${query}"` : ""}</span>
+                    <kbd className="rounded border px-1 text-[10px]">Alt+C</kbd>
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+  );
+  const triggerEl = (
         <Button
           ref={triggerRef}
           type="button"
@@ -166,7 +254,7 @@ export function Combo({
             }
           }}
           className={cn(
-            "flex h-9 w-full items-center justify-between rounded-md border border-border bg-input px-3 py-1 text-sm font-normal text-foreground shadow-sm ring-offset-background hover:bg-input hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-12 w-full items-center justify-between rounded-md sm:h-9 border border-border bg-input px-3 py-1 text-sm font-normal text-foreground shadow-sm ring-offset-background hover:bg-input hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
             className,
           )}
         >
@@ -175,99 +263,25 @@ export function Combo({
           </span>
           <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-(--radix-popover-trigger-width) min-w-[260px] p-0"
-        align="start"
-        onOpenAutoFocus={(e) => {
-          // Let CommandInput inside auto-focus naturally
-          void e;
-        }}
-      >
-        <Command
-          shouldFilter={false}
-
-          onKeyDown={(e) => {
-            if (e.altKey && e.key.toLowerCase() === "c" && onCreate) {
-              e.preventDefault();
-              e.stopPropagation();
-              setOpen(false);
-              onCreate(query);
-              return;
-            }
-            // Enter inside the popover picks the highlighted item. Combo
-            // already advances focus itself after selection — stop bubbling
-            // so the outer useEnterAsTab does not advance a second time.
-            if (e.key === "Enter") {
-              e.stopPropagation();
-            }
-          }}
-        >
-          <CommandInput
-            placeholder="Type to search…"
-            value={query}
-            onValueChange={setQuery}
-            autoFocus
-          />
-          <CommandList>
-            <CommandEmpty>
-              <div className="space-y-2 py-2 text-center text-sm">
-                <div className="text-muted-foreground">{emptyText}</div>
-                {onCreate && (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-accent"
-                    onClick={() => {
-                      setOpen(false);
-                      onCreate(query);
-                    }}
-                  >
-                    <Plus className="h-3 w-3" /> {createLabel} <kbd className="ml-1 rounded border px-1 text-[10px]">Alt+C</kbd>
-                  </button>
-                )}
-              </div>
-            </CommandEmpty>
-            <CommandGroup>
-              {ranked.length > MAX_VISIBLE && (
-                <div className="px-2 py-1 text-[11px] text-muted-foreground">
-                  Showing {MAX_VISIBLE} of {ranked.length} matches. Keep typing to narrow down.
-                </div>
-              )}
-              {visible.map((o) => (
-                <CommandItem
-                  key={o.value}
-                  value={o.value}
-                  onSelect={() => handleSelect(o.value)}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === o.value ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  <span className="flex-1 truncate">{o.label}</span>
-                  {o.hint && (
-                    <span className="ml-2 text-[10px] text-muted-foreground">{o.hint}</span>
-                  )}
-                </CommandItem>
-              ))}
-              {onCreate && visible.length > 0 && (
-                <CommandItem
-                  value="__create__"
-                  onSelect={() => {
-                    setOpen(false);
-                    onCreate(query);
-                  }}
-                  className="text-primary"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  <span className="flex-1">{createLabel}{query ? `: "${query}"` : ""}</span>
-                  <kbd className="rounded border px-1 text-[10px]">Alt+C</kbd>
-                </CommandItem>
-              )}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+  );
+  const phone = usePhone();
+  if (phone) {
+    // Phones: full-height bottom sheet, so the list is easy to scroll and tap.
+    return (
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>{triggerEl}</SheetTrigger>
+        <SheetContent side="bottom" className="flex h-[92dvh] flex-col gap-0 p-0">
+          <SheetTitle className="sr-only">{placeholder}</SheetTitle>
+          {panelEl}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{triggerEl}</PopoverTrigger>
+      <PopoverContent className="w-(--radix-popover-trigger-width) min-w-[260px] p-0" align="start">
+        {panelEl}
       </PopoverContent>
     </Popover>
   );

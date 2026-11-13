@@ -92,11 +92,11 @@ function EntryRowImpl(props: Props) {
             onCreate={() => onAddLedger(idx)}
             createLabel="New ledger"
           />
-          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="New ledger (F3)" onClick={() => onAddLedger(idx)}>
+          <Button type="button" variant="ghost" size="icon" className="h-12 w-12 sm:h-9 sm:w-9 shrink-0" title="New ledger (F3)" onClick={() => onAddLedger(idx)}>
             <UserPlus className="h-4 w-4" />
           </Button>
           {row.ledger_id && (
-            <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Edit ledger (Shift+F3)" onClick={() => onEditLedger(idx, row.ledger_id)}>
+            <Button type="button" variant="ghost" size="icon" className="h-12 w-12 sm:h-9 sm:w-9 shrink-0" title="Edit ledger (Shift+F3)" onClick={() => onEditLedger(idx, row.ledger_id)}>
               <Pencil className="h-4 w-4" />
             </Button>
           )}
@@ -111,7 +111,7 @@ function EntryRowImpl(props: Props) {
         <TableCell>
           <Input
             ref={aRef}
-            className="h-9 text-right font-mono"
+            className="h-12 sm:h-9 text-right font-mono"
             type="text"
             inputMode="decimal"
             autoComplete="off"
@@ -126,7 +126,7 @@ function EntryRowImpl(props: Props) {
           <TableCell>
             <Input
               ref={dRef}
-              className="h-9 text-right font-mono"
+              className="h-12 sm:h-9 text-right font-mono"
               type="text"
               inputMode="decimal"
               autoComplete="off"
@@ -142,7 +142,7 @@ function EntryRowImpl(props: Props) {
           <TableCell>
             <Input
               ref={cRef}
-              className="h-9 text-right font-mono"
+              className="h-12 sm:h-9 text-right font-mono"
               type="text"
               inputMode="decimal"
               autoComplete="off"
@@ -160,7 +160,7 @@ function EntryRowImpl(props: Props) {
       <TableCell>
         <Input
           ref={nRef}
-          className="h-9"
+          className="h-12 sm:h-9"
           defaultValue={row.narration}
           onBlur={(e) => onCommit(idx, { narration: e.target.value })}
         />

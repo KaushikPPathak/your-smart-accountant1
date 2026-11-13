@@ -190,7 +190,7 @@ function ItemRowImpl({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-9 w-9 shrink-0"
+            className="h-12 w-12 sm:h-9 sm:w-9 shrink-0"
             title="New item (F4)"
             onClick={() => onAddItemDlg(idx)}
           >
@@ -222,7 +222,7 @@ function ItemRowImpl({
         <TableCell className="m-hide">
           <Input
             ref={descRef}
-            className="h-9"
+            className="h-12 sm:h-9"
             defaultValue={row.description}
             onBlur={(e) => onCommit(idx, { description: e.target.value })}
             onKeyDown={(e) => commitOnEnter(e, "description")}
@@ -234,7 +234,7 @@ function ItemRowImpl({
           <Input
             ref={qtyRef}
             data-voucher-qty
-            className="h-9 w-20 text-right font-mono text-foreground"
+            className="h-12 sm:h-9 w-20 text-right font-mono text-foreground"
             type="text"
             inputMode="decimal"
             autoComplete="off"
@@ -255,7 +255,7 @@ function ItemRowImpl({
       <TableCell className="m-rate" data-label="Rate">
         <Input
           ref={rateRef}
-          className="h-9 w-20 text-right font-mono text-foreground"
+          className="h-12 sm:h-9 w-20 text-right font-mono text-foreground"
           type="text"
           inputMode="decimal"
           autoComplete="off"
@@ -269,7 +269,7 @@ function ItemRowImpl({
       <TableCell className="m-disc" data-label="Disc %">
         <Input
           ref={discRef}
-          className="h-9 w-16 text-right font-mono text-foreground"
+          className="h-12 sm:h-9 w-16 text-right font-mono text-foreground"
           type="text"
           inputMode="decimal"
           autoComplete="off"
@@ -297,7 +297,7 @@ function ItemRowImpl({
               requestAnimationFrame(() => onAdvanceToNextRow?.(idx));
             }}
           >
-            <SelectTrigger ref={gstTriggerRef} className="h-9" onKeyDown={handleGstKeyDown}>
+            <SelectTrigger ref={gstTriggerRef} className="h-12 sm:h-9" onKeyDown={handleGstKeyDown}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -313,7 +313,7 @@ function ItemRowImpl({
       <TableCell className="text-right m-amt" data-label="Amount">
         <Input
           key={`amt-${row.id}-${amountPaise}`}
-          className="h-9 w-28 text-right font-mono text-foreground"
+          className="h-12 sm:h-9 w-28 text-right font-mono text-foreground"
           type="text"
           inputMode="decimal"
           autoComplete="off"
