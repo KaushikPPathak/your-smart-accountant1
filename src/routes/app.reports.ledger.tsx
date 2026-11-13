@@ -144,6 +144,84 @@ const TYPE_LABEL: Record<string, string> = {
 
 
 
+type PhoneLedgerRow = {
+  key: string;
+  voucherId: string;
+  date: string;
+  particulars: string;
+  vchType?: string;
+  vchNo?: string;
+  narration?: string | null;
+  debit: number;
+  credit: number;
+  balance: number;
+};
+
+/** Phone view of a single ledger: one readable row per entry, no horizontal scrolling. */
+function LedgerPhoneList({
+  rows,
+  opening,
+  closing,
+  totals,
+  fmtBal,
+  onOpen,
+}: {
+  rows: PhoneLedgerRow[];
+  opening: number;
+  closing: number;
+  totals: { dr: number; cr: number };
+  fmtBal: (paise: number) => string;
+  onOpen: (voucherId: string) => void;
+}) {
+  return (
+    <div className="sm:hidden print:hidden divide-y divide-border">
+      <div className="flex justify-between bg-muted/60 px-3 py-2 text-[12px] font-semibold">
+        <span>Opening balance</span>
+        <span className="font-mono tabular-nums">{fmtBal(opening)}</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="p-4 text-center text-sm text-muted-foreground">No entries in this period.</div>
+      ) : (
+        rows.map((r) => (
+          <button
+            type="button"
+            key={r.key}
+            onClick={() => onOpen(r.voucherId)}
+            className="block w-full px-3 py-2 text-left active:bg-muted/40"
+          >
+            <div className="flex justify-between gap-2 text-[11px] text-muted-foreground">
+              <span className="whitespace-nowrap">
+                {fmtIndianDate(r.date)}
+                {r.vchType ? ` · ${r.vchType}` : ""}
+                {r.vchNo ? ` #${r.vchNo}` : ""}
+              </span>
+              <span className="whitespace-nowrap font-mono tabular-nums text-foreground">{fmtBal(r.balance)}</span>
+            </div>
+            <div className="break-words text-[13px] leading-snug">{r.particulars}</div>
+            {(r.debit > 0 || r.credit > 0) && (
+              <div className="flex justify-between gap-2 font-mono text-[12px] tabular-nums">
+                <span>{r.debit > 0 ? `Dr ${formatINR(r.debit, { symbol: false })}` : ""}</span>
+                <span>{r.credit > 0 ? `Cr ${formatINR(r.credit, { symbol: false })}` : ""}</span>
+              </div>
+            )}
+            {r.narration && <div className="break-words text-[11px] text-muted-foreground">{r.narration}</div>}
+          </button>
+        ))
+      )}
+      <div className="flex justify-between bg-muted/50 px-3 py-2 text-[12px] font-semibold">
+        <span>Total</span>
+        <span className="font-mono tabular-nums">
+          Dr {formatINR(totals.dr, { symbol: false })} · Cr {formatINR(totals.cr, { symbol: false })}
+        </span>
+      </div>
+      <div className="flex justify-between bg-muted/30 px-3 py-2 text-[12px] font-semibold">
+        <span>Closing balance</span>
+        <span className="font-mono tabular-nums">{fmtBal(closing)}</span>
+      </div>
+    </div>
+  );
+}
+
 function LedgerStatement() {
   const navigate = useNavigate();
   const { activeCompanyId, activeMembership } = useCompany();
@@ -1430,6 +1508,7 @@ function LedgerStatement() {
       ) : view === "columnar" ? (
         <Card className="overflow-hidden">
           <CardContent className="p-0">
+            <div className="hidden sm:block print:block">
             <table className="w-full text-sm">
               <thead className="bg-muted/60">
                 <tr>
@@ -1484,6 +1563,15 @@ function LedgerStatement() {
                 </tr>
               </tfoot>
             </table>
+            </div>
+            <LedgerPhoneList
+              rows={columnarRows}
+              opening={openingBeforeFrom}
+              closing={closing}
+              totals={totals}
+              fmtBal={fmtBal}
+              onOpen={(id) => openVoucherDetail(navigate, id)}
+            />
           </CardContent>
         </Card>
       ) : view === "horizontal" ? (
@@ -1505,7 +1593,8 @@ function LedgerStatement() {
         </>
       ) : (
         <Card>
-          <CardContent className="p-3">
+          <CardContent className="p-0 sm:p-3">
+            <div className="hidden sm:block print:block">
             <DataGrid
               reportId="ledger"
               rows={columnarRows}
@@ -1518,6 +1607,15 @@ function LedgerStatement() {
               <span className="text-muted-foreground">Opening: <span className="font-mono">{fmtBal(openingBeforeFrom)}</span></span>
               <span className="font-semibold">Closing: <span className="font-mono">{fmtBal(closing)}</span></span>
             </div>
+            </div>
+            <LedgerPhoneList
+              rows={columnarRows}
+              opening={openingBeforeFrom}
+              closing={closing}
+              totals={totals}
+              fmtBal={fmtBal}
+              onOpen={(id) => openVoucherDetail(navigate, id)}
+            />
           </CardContent>
         </Card>
       )}
