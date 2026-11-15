@@ -200,9 +200,18 @@ export async function suggestHsn(prefix: string, limit = 10): Promise<HsnRecord[
   const mem = cachedMemorySearch(p, limit);
   if (mem.length >= limit) return mem;
 
-  // Top up with anything extra stored locally (user-added codes).
+  // Top up with anything extra stored locally (user-added codes). The SQLite
+  // store can be slow to open or seed (first run on a phone), so never make the
+  // suggestions wait for it: the built-in matches are shown at once, and the
+  // local rows are merged only if they arrive within a short window.
+  const DB_WAIT_MS = 250;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const rows = await searchHsn(p, limit);
+    const dbRows = searchHsn(p, limit).catch(() => [] as HsnRecord[]);
+    const timeout = new Promise<HsnRecord[]>((resolve) => {
+      timer = setTimeout(() => resolve([]), DB_WAIT_MS);
+    });
+    const rows = await Promise.race([dbRows, timeout]);
     if (rows.length > 0) {
       const seen = new Set(mem.map((r) => r.hsn_code));
       const merged = [...mem];
@@ -216,6 +225,8 @@ export async function suggestHsn(prefix: string, limit = 10): Promise<HsnRecord[
     }
   } catch {
     /* memory results stand */
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   return mem;
 }
