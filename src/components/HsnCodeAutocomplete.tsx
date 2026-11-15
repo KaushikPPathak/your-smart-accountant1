@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { usePhone } from "@/hooks/use-phone";
 import { closestHeadingFor, suggestHsn, type HsnRecord } from "@/services/hsnService";
 
 interface Props {
@@ -27,6 +28,10 @@ export function HsnCodeAutocomplete({
   const [open, setOpen] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // On phones the list sits in the page flow under the field: a floating
+  // dropdown inside a scrolled dialog or behind the on-screen keyboard was not
+  // reliably visible or tappable on Android.
+  const phone = usePhone();
 
   useEffect(() => {
     const typed = (value || "").trim();
@@ -86,15 +91,18 @@ export function HsnCodeAutocomplete({
         autoComplete="off"
       />
       {open && suggestions.length > 0 && (
-        <div className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-lg">
+        <div
+          className={`${phone ? "mt-1" : "absolute z-50 left-0 right-0 mt-1"} max-h-60 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-lg`}
+        >
           {suggestions.map((rec) => {
             const rate = rec.is_exempt ? 0 : (rec.igst_rate || rec.cgst_rate + rec.sgst_rate);
             return (
               <button
                 key={rec.hsn_code}
                 type="button"
-                onMouseDown={(e) => { e.preventDefault(); pick(rec); }}
-                className="w-full text-left p-2 text-xs hover:bg-accent hover:text-accent-foreground border-b last:border-0 flex flex-col gap-0.5"
+                // pointerdown covers touch (Android) and mouse; preventDefault keeps focus in the field.
+                onPointerDown={(e) => { e.preventDefault(); pick(rec); }}
+                className={`w-full text-left px-3 text-xs hover:bg-accent hover:text-accent-foreground border-b last:border-0 flex flex-col justify-center gap-0.5 ${phone ? "min-h-12 py-2.5" : "p-2"}`}
               >
                 <div className="flex justify-between font-mono font-semibold">
                   <span>{rec.hsn_code.replace(/_PP$/i, "")}</span>

@@ -386,11 +386,17 @@ export async function updateItem(
   const now = new Date().toISOString();
   const offlineDb = await getDbInstance();
   const existing = await offlineDb.cache_items.get(id);
+  // Editing an item that was deleted restores it: the local row was flagged
+  // is_deleted, and the server row carries a deleted_at tombstone. Without
+  // clearing both, the item stayed hidden from pickers and reports after the
+  // edit (and its sales lines lost their item name and HSN).
+  const restoring = existing?.is_deleted === true;
 
   if (existing) {
     const updatedRecord: ItemCacheRow = {
       ...existing,
       ...values,
+      ...(restoring ? { is_deleted: false } : {}),
       updated_at: now,
       is_synced: false,
     };
@@ -409,7 +415,23 @@ export async function updateItem(
     await enqueueWrite({
       op: "update",
       table: "items",
-      payload: { id, values: { ...values, updated_at: now } },
+      payload: {
+        id,
+        values: restoring
+          ? {
+              // Full row so the upsert can re-create it if the server copy is gone.
+              company_id: companyId,
+              name: existing?.name,
+              unit: existing?.unit,
+              gst_rate: existing?.gst_rate,
+              hsn_code: existing?.hsn_code ?? null,
+              is_active: existing?.is_active !== false,
+              ...values,
+              deleted_at: null,
+              updated_at: now,
+            }
+          : { ...values, updated_at: now },
+      },
       company_id: companyId,
       label: `Update item: ${values.name ?? id.slice(0, 8)}`,
     });
