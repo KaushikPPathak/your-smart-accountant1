@@ -13,6 +13,7 @@ import { Pencil, Plus, Save, Truck, UserPlus, X } from "lucide-react";
 import { QuickLedgerDialog, type QuickLedger } from "./QuickLedgerDialog";
 import { QuickItemDialog, type QuickItem } from "./QuickItemDialog";
 import { EwayBillPrepDialog } from "./EwayBillPrepDialog";
+import { focusNextAfterChoice } from "@/lib/keyboard/focus-next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1374,7 +1375,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
               <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Supply Nature
               </Label>
-              <Select value={supplyNature} onValueChange={(v) => setSupplyNature(v as typeof supplyNature)}>
+              <Select value={supplyNature} onValueChange={(v) => { setSupplyNature(v as typeof supplyNature); focusNextAfterChoice(); }}>
                 <SelectTrigger className="h-10 w-full text-sm sm:h-8 sm:w-[220px] sm:text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -1392,7 +1393,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
                   <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     RCM Applicable
                   </Label>
-                  <Select value={rcmApplicable ? "yes" : "no"} onValueChange={(v) => setRcmApplicable(v === "yes")}>
+                  <Select value={rcmApplicable ? "yes" : "no"} onValueChange={(v) => { setRcmApplicable(v === "yes"); focusNextAfterChoice(); }}>
                     <SelectTrigger className="h-10 w-[110px] text-sm sm:h-8 sm:w-[90px] sm:text-xs">
                       <SelectValue />
                     </SelectTrigger>
@@ -1629,6 +1630,20 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             />
           </>
         )}
+        {/* Phone: total and Save stay in reach at the bottom while lines are long. */}
+        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] z-30 rounded-xl border border-border bg-card/95 p-3 shadow-md backdrop-blur sm:hidden">
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Grand total</span>
+            <span className="font-semibold tabular-nums">{formatINR(totals.total_paise)}</span>
+          </div>
+          <Button
+            className="h-12 w-full text-sm font-bold"
+            onClick={save}
+            disabled={saving || !canWrite || locked || taxTemplateBlocksSave}
+          >
+            <Save className="mr-1.5 h-4 w-4" /> {saving ? "Saving…" : "Save voucher"}
+          </Button>
+        </div>
         <EwayBillPrepDialog
           open={ewbDlg.open}
           onOpenChange={(o) => setEwbDlg((s) => ({ ...s, open: o }))}
