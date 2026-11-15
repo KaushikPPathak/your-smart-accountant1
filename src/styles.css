@@ -925,22 +925,23 @@ html[lang="gu"] body {
   }
 }
 
-/* Sales/purchase item lines: on phones each line becomes a stacked block so Amount stays visible */
+/* Sales/purchase item lines and receipt/payment lines: on phones each line
+   becomes a card. Selectors are written out for both tables so the table
+   element itself is never styled or hidden. */
 @media (max-width: 640px) {
-  .item-table, .entry-table thead { display: none; }
-  .item-table, .entry-table tbody tr {
+  .item-table thead, .entry-table thead { display: none; }
+  .item-table tbody tr, .entry-table tbody tr {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
     padding: 10px 12px;
-    /* Each line reads as its own card on phones */
     border: 1px solid var(--border) !important;
     border-radius: 0.5rem;
     background: var(--card);
     margin-bottom: 8px;
   }
-  .item-table, .entry-table tbody tr:last-child { margin-bottom: 0; }
-  .item-table, .entry-table td {
+  .item-table tbody tr:last-child, .entry-table tbody tr:last-child { margin-bottom: 0; }
+  .item-table td, .entry-table td {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -949,31 +950,27 @@ html[lang="gu"] body {
     border: 0;
     white-space: normal;
   }
-  .item-table, .entry-table td[data-label]::before {
+  .item-table td[data-label]::before, .entry-table td[data-label]::before {
     content: attr(data-label);
     font-size: 10px;
     line-height: 1.2;
     color: var(--muted-foreground);
   }
-  .item-table, .entry-table td.m-hide { display: none; }
-  .item-table, .entry-table td.m-item { grid-column: 1 / -1; grid-row: 1; }
-  .item-table, .entry-table td.m-qty { grid-column: 1; grid-row: 2; }
-  .item-table, .entry-table td.m-rate { grid-column: 2; grid-row: 2; }
-  .item-table, .entry-table td.m-disc { grid-column: 3; grid-row: 2; }
-  .item-table, .entry-table td.m-gst { grid-column: 4; grid-row: 2; }
-  .item-table, .entry-table td.m-amt { grid-column: 1 / span 3; grid-row: 3; }
-  .item-table, .entry-table td.m-del { grid-column: 4; grid-row: 3; justify-content: center; }
-  /* Every field in a line card fills its grid cell and shares one 48dp height,
-     so Qty, Rate, Disc, GST and Amount line up across all cards. */
-  .item-table, .entry-table td input,
-  .item-table, .entry-table td [role="combobox"] { width: 100%; min-width: 0; height: 3rem; }
-  .item-table, .entry-table td input { font-size: 1rem; }
-  .item-table, .entry-table td.m-item [role="combobox"] { text-align: left; }
-  .item-table, .entry-table td.m-amt input { font-size: 1.125rem; font-weight: 600; }
-  .item-table, .entry-table td .flex { min-width: 0; }
-  .item-table, .entry-table td.m-qty .flex > input { flex: 1; }
-  /* Receipt / payment lines: same card pattern as item lines.
-     Row 1: account + delete. Row 2: amount (and credit). Row 3: narration. */
+  .item-table td.m-hide, .entry-table td.m-hide { display: none; }
+
+  /* Sales / purchase lines */
+  .item-table td.m-item { grid-column: 1 / -1; grid-row: 1; }
+  .item-table td.m-qty { grid-column: 1; grid-row: 2; }
+  .item-table td.m-rate { grid-column: 2; grid-row: 2; }
+  .item-table td.m-disc { grid-column: 3; grid-row: 2; }
+  .item-table td.m-gst { grid-column: 4; grid-row: 2; }
+  .item-table td.m-amt { grid-column: 1 / span 3; grid-row: 3; }
+  .item-table td.m-del { grid-column: 4; grid-row: 3; justify-content: center; }
+  .item-table td.m-qty .flex > input { flex: 1; }
+  .item-table td.m-amt input { font-size: 1.125rem; font-weight: 600; }
+  .item-table td.m-item [role="combobox"] { text-align: left; }
+
+  /* Receipt / payment lines: row 1 account + delete, row 2 amount (and credit), row 3 narration */
   .entry-table td.e-ledger { grid-column: 1 / span 3; grid-row: 1; }
   .entry-table td.e-del { grid-column: 4; grid-row: 1; justify-content: center; }
   .entry-table td.e-amt { grid-column: 1 / span 2; grid-row: 2; }
@@ -981,4 +978,14 @@ html[lang="gu"] body {
   .entry-table td.e-narr { grid-column: 1 / -1; grid-row: 3; }
   .entry-table td.e-amt input,
   .entry-table td.e-cr input { font-size: 1.125rem; font-weight: 600; }
+
+  /* Every field fills its grid cell and shares one 48dp height. */
+  .item-table td input,
+  .item-table td [role="combobox"],
+  .entry-table td input,
+  .entry-table td [role="combobox"] { width: 100%; min-width: 0; height: 3rem; }
+  .item-table td input,
+  .entry-table td input { font-size: 1rem; }
+  .item-table td .flex,
+  .entry-table td .flex { min-width: 0; }
 }
