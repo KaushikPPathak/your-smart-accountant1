@@ -80,7 +80,7 @@ function EntryRowImpl(props: Props) {
 
   return (
     <TableRow onFocusCapture={handleFocus} onBlurCapture={handleBlur} onClick={() => onFocusRow(idx)}>
-      <TableCell>
+      <TableCell className="e-ledger" data-label="Account">
         <div className="flex gap-1">
           <Combo
             className="flex-1"
@@ -108,7 +108,7 @@ function EntryRowImpl(props: Props) {
         )}
       </TableCell>
       {mode === "simple" ? (
-        <TableCell>
+        <TableCell className="e-amt" data-label="Amount">
           <Input
             ref={aRef}
             className="h-12 sm:h-9 text-right font-mono"
@@ -123,7 +123,7 @@ function EntryRowImpl(props: Props) {
         </TableCell>
       ) : (
         <>
-          <TableCell>
+          <TableCell className="e-amt" data-label="Debit">
             <Input
               ref={dRef}
               className="h-12 sm:h-9 text-right font-mono"
@@ -139,7 +139,7 @@ function EntryRowImpl(props: Props) {
               }}
             />
           </TableCell>
-          <TableCell>
+          <TableCell className="e-cr" data-label="Credit">
             <Input
               ref={cRef}
               className="h-12 sm:h-9 text-right font-mono"
@@ -157,7 +157,7 @@ function EntryRowImpl(props: Props) {
           </TableCell>
         </>
       )}
-      <TableCell>
+      <TableCell className="e-narr" data-label="Narration">
         <Input
           ref={nRef}
           className="h-12 sm:h-9"
@@ -165,7 +165,7 @@ function EntryRowImpl(props: Props) {
           onBlur={(e) => onCommit(idx, { narration: e.target.value })}
         />
       </TableCell>
-      <TableCell>
+      <TableCell className="e-del">
         <Button variant="ghost" size="icon" onClick={() => onDelete(idx)} disabled={!canDelete} title="Delete row (Ctrl+D)">
           <Trash2 className="h-4 w-4" />
         </Button>

@@ -180,7 +180,7 @@ function ItemRowImpl({
                 qtyRef.current?.select();
               });
             }}
-            options={items.map((it) => ({ value: it.id, label: it.name, hint: it.unit }))}
+            options={items.map((it) => ({ value: it.id, label: it.name, hint: it.unit, search: it.hsn_code ?? undefined }))}
             placeholder="Select item"
             emptyText="No items — Alt+C to create"
             onCreate={() => onAddItemDlg(idx)}

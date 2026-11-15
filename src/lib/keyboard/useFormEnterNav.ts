@@ -106,9 +106,14 @@ export function useFormEnterNav<T extends HTMLElement = HTMLDivElement>(opts: Op
     // Radix combobox / Select trigger.
     if (t.getAttribute("role") === "combobox") {
       if (t.getAttribute("aria-expanded") === "true") return;
+      // Combo sets data-has-value explicitly. Radix Select does not: it marks
+      // only an EMPTY trigger with data-placeholder, so a trigger without that
+      // attribute holds a value and Enter should advance, not reopen the list.
+      const explicit = t.getAttribute("data-has-value");
       const hasValue =
-        (t.getAttribute("data-has-value") === "true") ||
-        !!t.getAttribute("data-value");
+        explicit !== null
+          ? explicit === "true"
+          : !!t.getAttribute("data-value") || !t.hasAttribute("data-placeholder");
       if (!hasValue && !e.shiftKey) {
         e.preventDefault();
         t.click();
@@ -164,6 +169,8 @@ export function useFormEnterNav<T extends HTMLElement = HTMLDivElement>(opts: Op
     const t = e.target as HTMLElement | null;
     if (!t || t.tagName !== "BUTTON" || t.getAttribute("role") !== "combobox") return;
     if (t.getAttribute("aria-expanded") === "true") return;
+    // Only closed triggers that already hold a value; empty ones keep the
+    // existing open-on-Enter behaviour, and Combo (data-has-value) is excluded.
     if (t.hasAttribute("data-has-value") || t.hasAttribute("data-placeholder")) return;
     e.stopPropagation();
     e.preventDefault();

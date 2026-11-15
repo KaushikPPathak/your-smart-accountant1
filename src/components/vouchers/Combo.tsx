@@ -22,14 +22,15 @@ const MAX_VISIBLE = 300;
  * word-starts, then plain substrings. Replaces cmdk's fuzzy scorer, which could
  * show unrelated items above the exact match.
  */
-export function rankOptions<T extends { label: string; hint?: string | null }>(options: T[], query: string): T[] {
+export function rankOptions<T extends { label: string; hint?: string | null; search?: string | null }>(options: T[], query: string): T[] {
   const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return options;
   const full = tokens.join(" ");
   const scored: { o: T; score: number }[] = [];
   for (const o of options) {
     const label = o.label.toLowerCase();
-    const hay = `${label} ${(o.hint ?? "").toLowerCase()}`;
+    // `search` holds extra match-only text (e.g. an item's HSN code) that is not shown.
+    const hay = `${label} ${(o.hint ?? "").toLowerCase()} ${(o.search ?? "").toLowerCase()}`;
     if (!tokens.every((t) => hay.includes(t))) continue;
     let score = 1;
     if (label.startsWith(full)) score = 4;
@@ -46,6 +47,8 @@ export interface ComboOption {
   value: string;
   label: string;
   hint?: string;
+  /** Extra searchable text that is not displayed, such as an HSN/SAC code. */
+  search?: string;
 }
 
 interface Props {

@@ -885,7 +885,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-1">
               <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">Particulars</span>
             </div>
-            <Table>
+            <Table className="entry-table">
               <TableHeader className="bg-muted/10">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="py-2 text-[11px] font-bold uppercase text-muted-foreground">{isContra ? "Deposit To (Dr)" : "Ledger Account"}</TableHead>
