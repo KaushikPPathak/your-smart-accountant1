@@ -906,6 +906,7 @@ html[lang="gu"] body {
   }
   .busy-action-label { display: none; }
   .busy-menus {
+    display: none;
     order: 3;
     flex: 1 0 100%;
     width: 100%;

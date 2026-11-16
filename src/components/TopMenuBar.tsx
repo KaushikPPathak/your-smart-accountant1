@@ -62,6 +62,7 @@ import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { Button } from "@/components/ui/button";
 
 import { BackupNowButton } from "@/components/BackupNowButton";
+import { PhoneMenuSheet } from "@/components/phone/PhoneMenuSheet";
 import { RestoreNowButton } from "@/components/RestoreNowButton";
 import {
   AlertDialog,
@@ -638,6 +639,9 @@ export function TopMenuBar({ rightExtras, onLock, onBackupNow, backupBusy, backu
         </MenubarContent>
 
       </MenubarMenu>
+
+      {/* Phone: one menu button instead of the desktop menu row */}
+      <PhoneMenuSheet />
 
       {/* Menu items */}
       <nav
