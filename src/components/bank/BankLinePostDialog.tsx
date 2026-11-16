@@ -143,8 +143,8 @@ export function BankLinePostDialog({
                   createLabel="Create new ledger"
                   onCreate={(typed) => { setNewLedgerSeed(typed); setNewLedgerOpen(true); }}
                 />
-                <p className="text-[11px] text-muted-foreground">
-                  Not listed? Use “Create new ledger” (Alt+C) to open the account now.
+                <p className="text-xs text-foreground/80">
+                  Not listed? Use “Create new ledger” (<kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground">Alt+C</kbd>) to open the account now.
                 </p>
               </div>
 

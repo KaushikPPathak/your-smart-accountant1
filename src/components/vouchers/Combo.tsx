@@ -174,7 +174,7 @@ export function Combo({
             <CommandList className="max-h-none flex-1 sm:max-h-[300px] sm:flex-none">
               <CommandEmpty>
                 <div className="space-y-2 py-2 text-center text-sm">
-                  <div className="text-muted-foreground">{emptyText}</div>
+                  <div className="font-medium text-foreground">{emptyText}</div>
                   {onCreate && (
                     <button
                       type="button"
