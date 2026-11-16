@@ -136,12 +136,12 @@ export function Combo({
     onChange(val);
     setOpen(false);
     setQuery("");
-    // After selecting an option, auto-advance to the next field.
-    // Single rAF: lets Radix Popover finish its close-focus restore, then
-    // we hop past the trigger to the next focusable in one step.
-    requestAnimationFrame(() => {
+    // After selecting an option, auto-advance to the next field. Wait for the
+    // list (a popover on desktop, a bottom sheet on phones) to finish closing:
+    // the close restores focus to the trigger, and that must not win.
+    window.setTimeout(() => {
       advanceFocus();
-    });
+    }, 120);
   };
 
   const panelEl = (
@@ -273,7 +273,12 @@ export function Combo({
     return (
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>{triggerEl}</SheetTrigger>
-        <SheetContent side="bottom" className="flex h-[92dvh] flex-col gap-0 p-0">
+        <SheetContent
+          side="bottom"
+          className="flex h-[92dvh] flex-col gap-0 p-0"
+          // Do not hand focus back to the picker when the sheet closes; advanceFocus moves it on.
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
           <SheetTitle className="sr-only">{placeholder}</SheetTitle>
           {panelEl}
         </SheetContent>

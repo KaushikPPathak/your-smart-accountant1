@@ -61,6 +61,8 @@ interface Props {
   /** If true, do not constrain to FY range. */
   unrestricted?: boolean;
   autoFocus?: boolean;
+  /** Change this value (e.g. after a save) to move the cursor back to the date, text selected. */
+  focusToken?: number;
 }
 
 const GENERIC_MSG = "Enter the date as DD/MM or DD/MM/YYYY.";
@@ -73,6 +75,7 @@ export function FyDatePicker({
   placeholder = "Pick a date",
   unrestricted,
   autoFocus,
+  focusToken,
 }: Props) {
 
   const { start, end } = useFyRange();
@@ -208,6 +211,18 @@ export function FyDatePicker({
       try { el.focus(); el.select(); focusSelectedRef.current = true; } catch { /* noop */ }
     });
   }, [autoFocus]);
+
+  // Re-focus and select the date when the parent asks (after a save).
+  const lastFocusTokenRef = React.useRef<number | undefined>(focusToken);
+  React.useEffect(() => {
+    if (focusToken === lastFocusTokenRef.current) return;
+    lastFocusTokenRef.current = focusToken;
+    const el = inputRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      try { el.focus(); el.select(); } catch { /* noop */ }
+    });
+  }, [focusToken]);
 
   /** Auto-commit & advance when the user types a complete pure-digit date.
    *  Skipped when the length shrank (user is backspacing/correcting). */

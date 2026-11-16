@@ -795,7 +795,7 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
             <div className="grid gap-6 md:grid-cols-[1fr_2fr_1fr_auto] md:items-start">
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">Date</Label>
-                <FyDatePicker value={date} onChange={setDate} autoFocus />
+                <FyDatePicker value={date} onChange={setDate} autoFocus focusToken={savedTick} />
               </div>
               {isSimple && (
                 <div className="space-y-1.5">
