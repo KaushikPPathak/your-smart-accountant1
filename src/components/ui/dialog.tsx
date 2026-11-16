@@ -42,7 +42,7 @@ const DialogContent = React.forwardRef<
         ref={ref}
         {...focusHandlers}
         className={cn(
-          "fixed left-[50%] top-[50%] z-50 grid max-h-[90dvh] w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+          "fixed inset-0 z-50 grid h-dvh w-full max-w-none translate-x-0 translate-y-0 gap-4 overflow-y-auto rounded-none border-0 bg-background p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] shadow-lg sm:inset-auto sm:left-[50%] sm:top-[50%] sm:h-auto sm:max-h-[90dvh] sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:border sm:p-6 sm:pb-6 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
           className,
         )}
         {...props}
@@ -65,7 +65,7 @@ DialogHeader.displayName = "DialogHeader";
 
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)}
+    className={cn("sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-col-reverse gap-2 border-t bg-background p-3 [&_button]:h-12 sm:static sm:mx-0 sm:mb-0 sm:flex-row sm:justify-end sm:space-x-2 sm:gap-0 sm:border-0 sm:p-0 sm:[&_button]:h-9", className)}
     {...props}
   />
 );
