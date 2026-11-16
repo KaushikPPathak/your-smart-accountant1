@@ -635,7 +635,7 @@ function CompaniesPage() {
             <DialogHeader>
               <DialogTitle>{editingId ? "Edit company" : "Create a new company"}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={onSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+            <form onSubmit={onSubmit} className="space-y-4 sm:max-h-[70vh] overflow-y-auto pr-1">
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1.5 md:col-span-2">
                   <Label>Company name *</Label>

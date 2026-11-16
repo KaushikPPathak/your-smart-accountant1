@@ -234,7 +234,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-xl w-full bg-background border border-border shadow-2xl rounded-xl max-h-[90vh] overflow-y-auto"
+        className="max-w-xl w-full bg-background border border-border shadow-2xl sm:rounded-xl max-h-none sm:max-h-[90vh] overflow-y-auto"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onKeyDown={(e) => {
@@ -341,7 +341,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                       onChange={(e) => setGstin(e.target.value.toUpperCase().trim())}
                       maxLength={15}
                       placeholder="24AAAAA0000A1Z5"
-                      className="flex-1 font-mono uppercase tracking-wider h-9 border-border focus-visible:ring-indigo-500"
+                      className="flex-1 font-mono uppercase tracking-wider h-11 sm:h-9 border-border focus-visible:ring-indigo-500"
                     />
                     {verifying && <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />}
                     <GstinPortalWindow
@@ -361,7 +361,7 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                 <div className="space-y-1 w-full">
                   <Label className="text-muted-foreground text-xs font-semibold">GST Registration Type</Label>
                   <Select value={gstRegType} onValueChange={setGstRegType}>
-                    <SelectTrigger className="w-full h-9 border-border"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full h-11 sm:h-9 border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {GST_REGISTRATION_TYPES.map((r) => (
                         <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
@@ -379,13 +379,13 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                     onChange={(e) => setPan(e.target.value.toUpperCase().trim())}
                     maxLength={10}
                     placeholder="AAAAA0000A"
-                    className="font-mono uppercase tracking-wider h-9 border-border"
+                    className="font-mono uppercase tracking-wider h-11 sm:h-9 border-border"
                   />
                 </div>
                 <div className="space-y-1 w-full">
                   <Label className="text-muted-foreground text-xs font-semibold">State</Label>
                   <Select value={stateCode} onValueChange={setStateCode}>
-                    <SelectTrigger className="w-full h-9 border-border"><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectTrigger className="w-full h-11 sm:h-9 border-border"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
                       {INDIAN_STATES.map((s) => (
                         <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>
@@ -443,12 +443,12 @@ export function QuickLedgerDialog({ open, onOpenChange, companyId, editId, onSav
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label className="text-muted-foreground text-[11px] font-semibold">Udyam No.</Label>
-                      <Input value={msmeNo} onChange={(e) => setMsmeNo(e.target.value.toUpperCase())} className="h-9 border-border font-mono" />
+                      <Input value={msmeNo} onChange={(e) => setMsmeNo(e.target.value.toUpperCase())} className="h-11 sm:h-9 border-border font-mono" />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-muted-foreground text-[11px] font-semibold">Classification</Label>
                       <Select value={msmeClass} onValueChange={setMsmeClass}>
-                        <SelectTrigger className="h-9 border-border"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-11 sm:h-9 border-border"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {MSME_CLASSIFICATIONS.map((c) => (
                             <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
