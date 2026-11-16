@@ -1141,7 +1141,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
         <div className="flex items-center justify-between border-b border-border/60 bg-card px-4 py-2 text-card-foreground" style={{ borderTop: `3px solid var(--cat-${voucherType.split('_')[0]})` }}>
           <div className="flex flex-col">
             <h2 className="text-xl font-bold tracking-tight text-foreground">{cfg.title}</h2>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground/80">
+            <div className="hidden items-center gap-2 text-[10px] text-muted-foreground/80 sm:flex">
               <kbd className="rounded border bg-muted px-1 shadow-sm">Enter</kbd> next field
               <kbd className="ml-1 rounded border bg-muted px-1 shadow-sm">Ctrl+S</kbd> save
               {interstate && (
@@ -1489,6 +1489,7 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
               <Label>Narration</Label>
               <Textarea
                 rows={4}
+                className="min-h-24 text-base sm:text-sm"
                 value={narration}
                 onChange={(e) => setNarration(e.target.value)}
                 placeholder="Optional notes"
