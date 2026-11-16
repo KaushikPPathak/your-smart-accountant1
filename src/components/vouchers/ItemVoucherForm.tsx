@@ -1660,9 +1660,14 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
 
 function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
-    <div className={`flex justify-between ${bold ? "text-base font-semibold" : ""}`}>
+    // Phones: taller rows, larger grand total; amounts right-aligned with equal digit widths.
+    <div
+      className={`flex items-center justify-between gap-3 py-1.5 sm:py-0 ${
+        bold ? "text-lg font-semibold sm:text-base" : "text-sm"
+      }`}
+    >
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-mono">{value}</span>
+      <span className="text-right font-mono tabular-nums">{value}</span>
     </div>
   );
 }
