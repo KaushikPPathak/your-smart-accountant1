@@ -184,7 +184,7 @@ export function Combo({
                         onCreate(query);
                       }}
                     >
-                      <Plus className="h-3 w-3" /> {createLabel} <kbd className="ml-1 rounded border px-1 text-[10px]">Alt+C</kbd>
+                      <Plus className="h-3 w-3" /> {createLabel} <kbd className="ml-1 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground">Alt+C</kbd>
                     </button>
                   )}
                 </div>
@@ -216,7 +216,7 @@ export function Combo({
                 ))}
                 {onCreate && visible.length > 0 && (
                   <CommandItem
-                    className="py-3 text-primary sm:py-1.5"
+                    className="py-3 font-medium text-foreground sm:py-1.5"
                     value="__create__"
                     onSelect={() => {
                       setOpen(false);
@@ -226,7 +226,7 @@ export function Combo({
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     <span className="flex-1">{createLabel}{query ? `: "${query}"` : ""}</span>
-                    <kbd className="rounded border px-1 text-[10px]">Alt+C</kbd>
+                    <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground">Alt+C</kbd>
                   </CommandItem>
                 )}
               </CommandGroup>
