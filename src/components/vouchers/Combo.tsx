@@ -87,6 +87,7 @@ export function Combo({
   onQueryChange,
   externalFiltering = false,
 }: Props) {
+  const phone = usePhone();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
 
@@ -168,7 +169,7 @@ export function Combo({
               placeholder="Type to search…"
               value={query}
               onValueChange={setQuery}
-              autoFocus
+              autoFocus={!phone}
             />
             <CommandList className="max-h-none flex-1 sm:max-h-[300px] sm:flex-none">
               <CommandEmpty>
@@ -267,7 +268,6 @@ export function Combo({
           <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
   );
-  const phone = usePhone();
   if (phone) {
     // Phones: full-height bottom sheet, so the list is easy to scroll and tap.
     return (
@@ -275,7 +275,7 @@ export function Combo({
         <SheetTrigger asChild>{triggerEl}</SheetTrigger>
         <SheetContent
           side="bottom"
-          className="flex h-[92dvh] flex-col gap-0 p-0"
+          className="flex h-[70dvh] flex-col gap-0 rounded-t-2xl p-0"
           // Do not hand focus back to the picker when the sheet closes; advanceFocus moves it on.
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
