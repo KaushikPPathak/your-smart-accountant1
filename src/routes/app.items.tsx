@@ -571,10 +571,10 @@ function ItemsPage() {
                         <TableCell className="hidden text-right font-mono text-xs sm:table-cell">
                           {i.purchase_price_paise ? formatINR(i.purchase_price_paise) : "—"}
                         </TableCell>
-                        <TableCell className="text-right font-mono text-xs">
+                        <TableCell className="text-right font-mono text-sm sm:text-xs">
                           {i.sale_price_paise ? formatINR(i.sale_price_paise) : "—"}
                         </TableCell>
-                        <TableCell className="text-right font-mono text-xs">
+                        <TableCell className="text-right font-mono text-sm sm:text-xs">
                           {i.opening_stock_qty || "—"}
                           {i.reorder_level > 0 && (
                             <span className="ml-1 text-[10px] text-muted-foreground">
@@ -591,6 +591,7 @@ function ItemsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-11 w-11 sm:h-9 sm:w-9"
                                 onClick={() => openEdit(i)}
                               >
                                 <Pencil className="h-4 w-4" />
@@ -598,6 +599,7 @@ function ItemsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-11 w-11 sm:h-9 sm:w-9"
                                 onClick={() => onDelete(i)}
                                 disabled={activeMembership?.role !== "admin"}
                                 title={

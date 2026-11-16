@@ -378,7 +378,7 @@ function LedgersPage() {
                 <DialogTitle className="text-base sm:text-lg">{editing ? "Edit ledger" : "Create new ledger"}</DialogTitle>
               </DialogHeader>
               <form onSubmit={onSubmit} className="flex flex-col flex-1 min-h-0">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3 overflow-y-auto px-4 sm:px-6 py-4 flex-1 min-h-0">
+                <div className="grid grid-cols-1 gap-x-4 gap-y-3 overflow-y-auto px-4 sm:grid-cols-2 sm:px-6 py-4 flex-1 min-h-0">
                   
                   <div className="space-y-1 col-span-2">
                     <Label htmlFor="name">Ledger name *</Label>
@@ -800,7 +800,7 @@ function LedgersPage() {
                         <TableCell className="hidden text-xs sm:table-cell">
                           {l.state_code ? `${l.state_code} — ${l.state ?? ""}` : "—"}
                         </TableCell>
-                        <TableCell className="text-right font-mono">
+                        <TableCell className="text-right font-mono text-sm">
                           {l.opening_balance_paise
                             ? `${formatINR(l.opening_balance_paise)} ${l.opening_balance_is_debit ? "Dr" : "Cr"}`
                             : "—"}
@@ -811,6 +811,7 @@ function LedgersPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-11 w-11 sm:h-9 sm:w-9"
                                 onClick={() => openEdit(l)}
                               >
                                 <Pencil className="h-4 w-4" />
@@ -818,6 +819,7 @@ function LedgersPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-11 w-11 sm:h-9 sm:w-9"
                                 onClick={() => onDelete(l)}
                                 disabled={activeMembership?.role !== "admin"}
                                 title={
