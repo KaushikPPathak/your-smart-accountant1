@@ -728,7 +728,7 @@ function VoucherEditPage() {
           <AlertDescription>GST has been recalculated using the current party details. Save changes to update this bill and its accounting entries; printing uses the last saved bill.</AlertDescription>
         </Alert>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => goBackFromVoucher(() => navigate({ to: "/app/vouchers" }))}>
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
@@ -745,14 +745,14 @@ function VoucherEditPage() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           {printable && (
-            <Button variant="outline" size="sm" onClick={() => downloadInvoicePdf(voucher.id, voucher.company_id)}>
+            <Button variant="outline" size="sm" className="h-11 justify-center sm:h-8" onClick={() => downloadInvoicePdf(voucher.id, voucher.company_id)}>
               <Printer className="h-4 w-4 mr-1" /> Print
             </Button>
           )}
           {isEntryKind && (
-            <Button variant="outline" size="sm" onClick={printEntryVoucher}>
+            <Button variant="outline" size="sm" className="h-11 justify-center sm:h-8" onClick={printEntryVoucher}>
               <Printer className="h-4 w-4 mr-1" /> Print
             </Button>
           )}
@@ -760,28 +760,29 @@ function VoucherEditPage() {
             <Button
               variant="outline"
               size="sm"
+              className="h-11 justify-center sm:h-8"
               onClick={() => void sendInvoiceViaWhatsApp(voucher.id, voucher.company_id)}
             >
               <MessageCircle className="h-4 w-4 mr-1" /> Send via WhatsApp
             </Button>
           )}
           {voucher.voucher_type === "sales" && (
-            <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+            <Button variant="outline" size="sm" className="h-11 justify-center sm:h-8" onClick={() => setExportOpen(true)}>
               <Ship className="h-4 w-4 mr-1" /> Export Invoice
             </Button>
           )}
           {voucher.voucher_type === "sales" && (
-            <Button variant="outline" size="sm" onClick={() => setEwbOpen(true)}>
+            <Button variant="outline" size="sm" className="h-11 justify-center sm:h-8" onClick={() => setEwbOpen(true)}>
               <Truck className="h-4 w-4 mr-1" /> EWB / E-Invoice
             </Button>
           )}
           {canDelete && (
-            <Button variant="outline" size="sm" onClick={del}>
+            <Button variant="outline" size="sm" className="h-11 justify-center sm:h-8" onClick={del}>
               <Trash2 className="h-4 w-4 mr-1 text-destructive" /> Delete
             </Button>
           )}
           {canWrite && (
-            <Button size="sm" onClick={save} disabled={saving}>
+            <Button size="sm" className="col-span-2 h-12 justify-center font-bold sm:col-span-1 sm:h-8" onClick={save} disabled={saving}>
               <Save className="h-4 w-4 mr-1" /> {saving ? "Saving…" : "Save changes"}
             </Button>
           )}
@@ -826,6 +827,50 @@ function VoucherEditPage() {
       {isItemKind && (
         <Card>
           <CardContent className="p-0">
+            {/* Phones: one card per line, every field full-width and 48dp. */}
+            <div className="space-y-2 p-3 sm:hidden">
+              {itemLines.map((l, i) => (
+                <div key={i} className="space-y-2 rounded-lg border bg-card p-3">
+                  <Select value={l.item_id} onValueChange={(v) => updateItem(i, { item_id: v })} disabled={!canWrite}>
+                    <SelectTrigger className="h-12"><SelectValue placeholder="Select item" /></SelectTrigger>
+                    <SelectContent>
+                      {items.map((it) => <SelectItem key={it.id} value={it.id}>{it.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Input className="h-12" placeholder="Description" value={l.description} onChange={(e) => updateItem(i, { description: e.target.value })} disabled={!canWrite} />
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">Qty</Label>
+                      <Input className="h-12" inputMode="decimal" type="number" step="0.01" value={l.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} disabled={!canWrite} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">Rate</Label>
+                      <Input className="h-12" inputMode="decimal" type="number" step="0.01" value={l.rate} onChange={(e) => updateItem(i, { rate: e.target.value })} disabled={!canWrite} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">Disc</Label>
+                      <Input className="h-12" inputMode="decimal" type="number" step="0.01" value={l.discount} onChange={(e) => updateItem(i, { discount: e.target.value })} disabled={!canWrite} />
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-[10px] text-muted-foreground">GST %</Label>
+                      <Select value={l.gst_rate} onValueChange={(v) => updateItem(i, { gst_rate: v })} disabled={!canWrite}>
+                        <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {GST_RATES.map((r) => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] text-muted-foreground">Amount</div>
+                      <div className="font-mono text-lg font-semibold tabular-nums">{formatINR(computed?.[i]?.total_paise ?? 0)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden sm:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -866,7 +911,8 @@ function VoucherEditPage() {
                 ))}
               </TableBody>
             </Table>
-            <div className="border-t p-3 flex justify-between text-sm">
+            </div>
+            <div className="flex flex-col gap-3 border-t p-3 text-sm sm:flex-row sm:justify-between">
               <div className="space-y-1 text-sm">
                 <span className="text-muted-foreground">Taxable {formatINR(computed.filter((line) => !isTaxFreeGstLine(line)).reduce((sum, line) => sum + line.taxable_paise, 0))}</span>
                 {computed.some((line) => isTaxFreeGstLine(line) && line.taxable_paise > 0) && (
@@ -882,10 +928,10 @@ function VoucherEditPage() {
                   />
                 ))}
               </div>
-              <div className="space-y-2 text-right">
+              <div className="space-y-2 text-left sm:text-right">
                 <Label htmlFor="invoice-round-off">Round off</Label>
-                <Input id="invoice-round-off" aria-label="Round off" type="number" step="0.01" value={(voucher.round_off_paise ?? 0) / 100} onChange={(e) => setVoucher({ ...voucher, round_off_paise: rupeesToPaise(Number(e.target.value) || 0) })} disabled={!canWrite} className="w-32 text-right" />
-                <span className="font-semibold font-mono">Total {formatINR(totals.total_paise)}</span>
+                <Input id="invoice-round-off" aria-label="Round off" type="number" step="0.01" inputMode="decimal" value={(voucher.round_off_paise ?? 0) / 100} onChange={(e) => setVoucher({ ...voucher, round_off_paise: rupeesToPaise(Number(e.target.value) || 0) })} disabled={!canWrite} className="h-12 w-full text-right sm:h-9 sm:w-32" />
+                <span className="block text-lg font-semibold font-mono tabular-nums sm:text-base">Total {formatINR(totals.total_paise)}</span>
               </div>
             </div>
             <p className="px-3 pb-3 text-xs italic text-muted-foreground">{amountInWords(totals.total_paise)}</p>
