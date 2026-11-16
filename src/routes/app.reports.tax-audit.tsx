@@ -655,7 +655,7 @@ function ManualDisallowanceForm({
       <div className="space-y-1">
         <Label className="text-xs">Section</Label>
         <Select value={section} onValueChange={setSection}>
-          <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-11 sm:h-8 w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="40(a)(ia)">40(a)(ia) — TDS</SelectItem>
             <SelectItem value="40A(7)">40A(7) — Gratuity</SelectItem>
@@ -667,11 +667,11 @@ function ManualDisallowanceForm({
       </div>
       <div className="space-y-1 flex-1 min-w-[200px]">
         <Label className="text-xs">Description</Label>
-        <Input className="h-8" value={desc} onChange={(e) => setDesc(e.target.value)} />
+        <Input className="h-11 sm:h-8" value={desc} onChange={(e) => setDesc(e.target.value)} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">Amount (₹)</Label>
-        <Input className="h-8 w-32 text-right" type="number" value={amt} onChange={(e) => setAmt(e.target.value)} />
+        <Input className="h-11 sm:h-8 w-32 text-right" type="number" value={amt} onChange={(e) => setAmt(e.target.value)} />
       </div>
       <Button size="sm" disabled={disabled || !desc || !amt}
         onClick={() => { onAdd({ section, description: desc, amount_paise: rupeesToPaise(amt) }); setDesc(""); setAmt(""); }}>

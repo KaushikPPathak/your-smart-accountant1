@@ -274,7 +274,7 @@ function VouchersHub() {
             <div className="space-y-1">
               <Label className="text-xs">Type</Label>
               <Select value={type} onValueChange={setType}>
-                <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11 sm:h-9 w-[160px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TYPES.map((t) => (
                     <SelectItem key={t} value={t} className="capitalize">{t === "all" ? "All types" : t.replace("_", " ")}</SelectItem>
@@ -292,7 +292,7 @@ function VouchersHub() {
             </div>
             <div className="space-y-1 flex-1 min-w-[200px]">
               <Label className="text-xs">Search</Label>
-              <Input placeholder="Number / party / reference" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9" />
+              <Input placeholder="Number / party / reference" value={search} onChange={(e) => setSearch(e.target.value)} className="h-11 sm:h-9" />
             </div>
           </div>
         </CardContent>

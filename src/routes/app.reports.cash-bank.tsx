@@ -434,7 +434,7 @@ function CashBankBook() {
               <div className="space-y-1">
                 <Label className="text-xs">Cash / Bank Ledger</Label>
                 <Select value={ledgerId} onValueChange={setLedgerId}>
-                  <SelectTrigger className="h-9 w-[260px]">
+                  <SelectTrigger className="h-11 sm:h-9 w-[260px]">
                     <SelectValue placeholder="Select ledger" />
                   </SelectTrigger>
                   <SelectContent>

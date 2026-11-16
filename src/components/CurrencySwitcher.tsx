@@ -22,7 +22,7 @@ export function CurrencySwitcher({ compact, className }: Props) {
         <span className="hidden text-xs text-muted-foreground sm:inline">Currency</span>
       )}
       <Select value={code} onValueChange={setCode}>
-        <SelectTrigger className={compact ? "h-8 w-[110px]" : "h-9 w-[140px]"}>
+        <SelectTrigger className={compact ? "h-11 sm:h-8 w-[110px]" : "h-11 sm:h-9 w-[140px]"}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="max-h-[340px]">

@@ -151,11 +151,11 @@ export function BankLinePostDialog({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Reference</Label>
-                  <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} className="h-9" />
+                  <Input value={refNo} onChange={(e) => setRefNo(e.target.value)} className="h-11 sm:h-9" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Narration</Label>
-                  <Input value={narration} onChange={(e) => setNarration(e.target.value)} className="h-9" />
+                  <Input value={narration} onChange={(e) => setNarration(e.target.value)} className="h-11 sm:h-9" />
                 </div>
               </div>
 

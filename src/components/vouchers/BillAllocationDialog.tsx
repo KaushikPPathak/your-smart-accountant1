@@ -134,7 +134,7 @@ export function BillAllocationDialog({
                     <TableCell className="text-right font-mono text-xs">{formatINR(b.total_paise)}</TableCell>
                     <TableCell className="text-right font-mono">{formatINR(b.pending_paise)}</TableCell>
                     <TableCell className="text-right">
-                      <Input type="number" step="0.01" className="ml-auto h-8 w-32 text-right font-mono"
+                      <Input type="number" step="0.01" className="ml-auto h-11 sm:h-8 w-32 text-right font-mono"
                         value={amts[b.id] || ""}
                         onChange={(e) => setAmts((cur) => ({ ...cur, [b.id]: e.target.value }))} />
                     </TableCell>

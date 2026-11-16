@@ -107,7 +107,7 @@ function GSTR3BPage() {
             <div className="space-y-1">
               <Label className="text-xs">Filing frequency</Label>
               <Select value={cadence} onValueChange={(v) => setCadence(v as "monthly" | "quarterly")}>
-                <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11 sm:h-9 w-[160px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="monthly">Monthly</SelectItem>
                   <SelectItem value="quarterly">Quarterly (QRMP)</SelectItem>
@@ -118,7 +118,7 @@ function GSTR3BPage() {
               <div className="space-y-1">
                 <Label className="text-xs">Return period</Label>
                 <Select value={month} onValueChange={setMonth}>
-                  <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 sm:h-9 w-[180px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {fyMonths.map((m) => (
                       <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
@@ -131,7 +131,7 @@ function GSTR3BPage() {
                 <div className="space-y-1">
                   <Label className="text-xs">Quarter</Label>
                   <Select value={String(quarter)} onValueChange={(v) => setQuarter(Number(v) as 1 | 2 | 3 | 4)}>
-                    <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11 sm:h-9 w-[180px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">Q1 (Apr–Jun {fyYear})</SelectItem>
                       <SelectItem value="2">Q2 (Jul–Sep {fyYear})</SelectItem>
@@ -943,7 +943,7 @@ function PurchaseExpenseLedger({
                       </TableCell>
                       <TableCell>
                         <Select value={r.category} onValueChange={(v) => update(r.id, { category: v as ItcCategory })}>
-                          <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-11 sm:h-8 w-[140px] text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="general">General Input</SelectItem>
                             <SelectItem value="capital">Capital Goods</SelectItem>
@@ -953,17 +953,17 @@ function PurchaseExpenseLedger({
                       </TableCell>
                       <TableCell>
                         <Select value={r.sub} onValueChange={(v) => { update(r.id, { sub: v as ItcSubcategory }); setShowRuleFor(v as ItcSubcategory); }}>
-                          <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-11 sm:h-8 w-[180px] text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {SUB_OPTIONS[r.category].map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell><Input type="number" className="h-8 w-24 text-right text-xs" value={r.taxable} onChange={(e) => update(r.id, { taxable: +e.target.value })} /></TableCell>
-                      <TableCell><Input type="number" className="h-8 w-20 text-right text-xs" value={r.igst} onChange={(e) => update(r.id, { igst: +e.target.value })} /></TableCell>
-                      <TableCell><Input type="number" className="h-8 w-20 text-right text-xs" value={r.cgst} onChange={(e) => update(r.id, { cgst: +e.target.value })} /></TableCell>
-                      <TableCell><Input type="number" className="h-8 w-20 text-right text-xs" value={r.sgst} onChange={(e) => update(r.id, { sgst: +e.target.value })} /></TableCell>
-                      <TableCell><Input type="number" min={0} max={100} className="h-8 w-16 text-right text-xs" value={r.business_pct} onChange={(e) => update(r.id, { business_pct: Math.max(0, Math.min(100, +e.target.value)) })} /></TableCell>
+                      <TableCell><Input type="number" className="h-11 sm:h-8 w-24 text-right text-xs" value={r.taxable} onChange={(e) => update(r.id, { taxable: +e.target.value })} /></TableCell>
+                      <TableCell><Input type="number" className="h-11 sm:h-8 w-20 text-right text-xs" value={r.igst} onChange={(e) => update(r.id, { igst: +e.target.value })} /></TableCell>
+                      <TableCell><Input type="number" className="h-11 sm:h-8 w-20 text-right text-xs" value={r.cgst} onChange={(e) => update(r.id, { cgst: +e.target.value })} /></TableCell>
+                      <TableCell><Input type="number" className="h-11 sm:h-8 w-20 text-right text-xs" value={r.sgst} onChange={(e) => update(r.id, { sgst: +e.target.value })} /></TableCell>
+                      <TableCell><Input type="number" min={0} max={100} className="h-11 sm:h-8 w-16 text-right text-xs" value={r.business_pct} onChange={(e) => update(r.id, { business_pct: Math.max(0, Math.min(100, +e.target.value)) })} /></TableCell>
                       <TableCell>{statusBadge(status)}</TableCell>
                       <TableCell><Button size="icon" variant="ghost" onClick={() => remove(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button></TableCell>
                     </TableRow>

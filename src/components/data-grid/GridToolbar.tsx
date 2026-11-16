@@ -85,7 +85,7 @@ export function GridToolbar<T>({
         {/* Group by */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-8">
+            <Button variant="outline" size="sm" className="h-11 sm:h-8">
               <Group className="mr-1 h-3.5 w-3.5" /> Group
             </Button>
           </DropdownMenuTrigger>
@@ -106,7 +106,7 @@ export function GridToolbar<T>({
         {/* Columns */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-8">
+            <Button variant="outline" size="sm" className="h-11 sm:h-8">
               <Columns3 className="mr-1 h-3.5 w-3.5" /> Columns
             </Button>
           </DropdownMenuTrigger>
@@ -160,7 +160,7 @@ export function GridToolbar<T>({
         {/* Density / saved views */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-8">
+            <Button variant="outline" size="sm" className="h-11 sm:h-8">
               <SlidersHorizontal className="mr-1 h-3.5 w-3.5" /> Views
             </Button>
           </DropdownMenuTrigger>
@@ -224,14 +224,14 @@ export function GridToolbar<T>({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button variant="ghost" size="sm" className="h-8" onClick={reset} title="Reset filters/sort/group (Shift+R)">
+        <Button variant="ghost" size="sm" className="h-11 sm:h-8" onClick={reset} title="Reset filters/sort/group (Shift+R)">
           <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reset
         </Button>
 
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" type="button">
+              <Button variant="ghost" size="icon" className="h-11 sm:h-8 w-8" type="button">
                 <Keyboard className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>

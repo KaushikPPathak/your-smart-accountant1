@@ -22,7 +22,7 @@ export function DateFormatSwitcher({ compact, className }: Props) {
         <span className="hidden text-xs text-muted-foreground sm:inline">Date</span>
       )}
       <Select value={code} onValueChange={(v) => setCode(v as DateFormatCode)}>
-        <SelectTrigger className={compact ? "h-8 w-[140px]" : "h-9 w-[180px]"}>
+        <SelectTrigger className={compact ? "h-11 sm:h-8 w-[140px]" : "h-11 sm:h-9 w-[180px]"}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

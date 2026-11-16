@@ -990,9 +990,9 @@ function Gstr2bInputPanel({
             )}
 
             <div className="grid gap-3 md:grid-cols-3">
-              <label className="space-y-1"><span className="text-xs font-medium">Source name</span><input value={sourceName} onChange={(event) => setSourceName(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
-              <label className="space-y-1"><span className="text-xs font-medium">Source reference</span><input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} placeholder="e.g. downloaded file name" className="h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
-              <label className="space-y-1"><span className="text-xs font-medium">Notes</span><input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
+              <label className="space-y-1"><span className="text-xs font-medium">Source name</span><input value={sourceName} onChange={(event) => setSourceName(event.target.value)} className="h-11 sm:h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
+              <label className="space-y-1"><span className="text-xs font-medium">Source reference</span><input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} placeholder="e.g. downloaded file name" className="h-11 sm:h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
+              <label className="space-y-1"><span className="text-xs font-medium">Notes</span><input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-11 sm:h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
             </div>
 
             <div className="mt-4 rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground"><strong>Important:</strong> GSTR-2B is the static auto-drafted ITC statement. These figures are stored separately from GSTR-3B ITC claimed so differences can be reviewed later.</div>
@@ -1006,7 +1006,7 @@ function Gstr2bInputPanel({
                       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">ITC available</h3>
                       <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-5">
                         {GSTR2B_AVAILABLE_FIELDS.map(([field, label]) => (
-                          <label key={field} className="space-y-1"><span className="text-[11px] text-muted-foreground">{label}</span><input type="number" min="0" step="0.01" value={period.itcAvailable[field]} onChange={(event) => updatePeriod(index, (current) => { const itcAvailable = { ...current.itcAvailable, [field]: numberValue(event.target.value) }; itcAvailable.total = itcAvailable.importOfGoods + itcAvailable.importOfServices + itcAvailable.reverseCharge + itcAvailable.isd + itcAvailable.otherRegisteredSupplies; return { ...current, itcAvailable }; })} className="h-8 w-full rounded-md border bg-background px-2 text-right text-xs" /></label>
+                          <label key={field} className="space-y-1"><span className="text-[11px] text-muted-foreground">{label}</span><input type="number" min="0" step="0.01" value={period.itcAvailable[field]} onChange={(event) => updatePeriod(index, (current) => { const itcAvailable = { ...current.itcAvailable, [field]: numberValue(event.target.value) }; itcAvailable.total = itcAvailable.importOfGoods + itcAvailable.importOfServices + itcAvailable.reverseCharge + itcAvailable.isd + itcAvailable.otherRegisteredSupplies; return { ...current, itcAvailable }; })} className="h-11 sm:h-8 w-full rounded-md border bg-background px-2 text-right text-xs" /></label>
                         ))}
                       </div>
                       <div className="mt-2 text-right text-xs font-semibold">Total ITC available: {money(period.itcAvailable.total)}</div>
@@ -1016,7 +1016,7 @@ function Gstr2bInputPanel({
                       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">ITC not available</h3>
                       <div className="grid gap-2 md:grid-cols-3">
                         {GSTR2B_NOT_AVAILABLE_FIELDS.map(([field, label]) => (
-                          <label key={field} className="space-y-1"><span className="text-[11px] text-muted-foreground">{label}</span><input type="number" min="0" step="0.01" value={period.itcNotAvailable[field]} onChange={(event) => updatePeriod(index, (current) => { const itcNotAvailable = { ...current.itcNotAvailable, [field]: numberValue(event.target.value) }; itcNotAvailable.total = itcNotAvailable.section16_4 + itcNotAvailable.posRestriction + itcNotAvailable.other; return { ...current, itcNotAvailable }; })} className="h-8 w-full rounded-md border bg-background px-2 text-right text-xs" /></label>
+                          <label key={field} className="space-y-1"><span className="text-[11px] text-muted-foreground">{label}</span><input type="number" min="0" step="0.01" value={period.itcNotAvailable[field]} onChange={(event) => updatePeriod(index, (current) => { const itcNotAvailable = { ...current.itcNotAvailable, [field]: numberValue(event.target.value) }; itcNotAvailable.total = itcNotAvailable.section16_4 + itcNotAvailable.posRestriction + itcNotAvailable.other; return { ...current, itcNotAvailable }; })} className="h-11 sm:h-8 w-full rounded-md border bg-background px-2 text-right text-xs" /></label>
                         ))}
                       </div>
                       <div className="mt-2 text-right text-xs font-semibold">Total ITC not available: {money(period.itcNotAvailable.total)}</div>
@@ -2985,15 +2985,15 @@ function Gstr1InputPanel({
           <div className="grid gap-3 md:grid-cols-3">
             <label className="space-y-1">
               <span className="text-xs font-medium">Source name</span>
-              <input value={sourceName} onChange={(event) => setSourceName(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" />
+              <input value={sourceName} onChange={(event) => setSourceName(event.target.value)} className="h-11 sm:h-9 w-full rounded-md border bg-background px-3 text-sm" />
             </label>
             <label className="space-y-1">
               <span className="text-xs font-medium">Source reference</span>
-              <input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} placeholder="e.g. ARN / file name" className="h-9 w-full rounded-md border bg-background px-3 text-sm" />
+              <input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} placeholder="e.g. ARN / file name" className="h-11 sm:h-9 w-full rounded-md border bg-background px-3 text-sm" />
             </label>
             <label className="space-y-1">
               <span className="text-xs font-medium">Notes</span>
-              <input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" />
+              <input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-11 sm:h-9 w-full rounded-md border bg-background px-3 text-sm" />
             </label>
           </div>
 
@@ -3265,9 +3265,9 @@ function Gstr9TaxPaymentInputPanel({
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <label className="space-y-1"><span className="text-xs font-medium">Source name</span><input value={sourceName} onChange={(event) => setSourceName(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" placeholder={sourceMode === "BOOKS" ? "e.g. GST payment challans" : "e.g. GSTR-3B FY 2025-26"} /></label>
-              <label className="space-y-1"><span className="text-xs font-medium">Source reference</span><input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" placeholder="e.g. ARN / file name / challan reference" /></label>
-              <label className="space-y-1"><span className="text-xs font-medium">Notes</span><input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
+              <label className="space-y-1"><span className="text-xs font-medium">Source name</span><input value={sourceName} onChange={(event) => setSourceName(event.target.value)} className="h-11 sm:h-9 w-full rounded-md border bg-background px-3 text-sm" placeholder={sourceMode === "BOOKS" ? "e.g. GST payment challans" : "e.g. GSTR-3B FY 2025-26"} /></label>
+              <label className="space-y-1"><span className="text-xs font-medium">Source reference</span><input value={sourceReference} onChange={(event) => setSourceReference(event.target.value)} className="h-11 sm:h-9 w-full rounded-md border bg-background px-3 text-sm" placeholder="e.g. ARN / file name / challan reference" /></label>
+              <label className="space-y-1"><span className="text-xs font-medium">Notes</span><input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-11 sm:h-9 w-full rounded-md border bg-background px-3 text-sm" /></label>
             </div>
 
             <div className="mt-5 overflow-x-auto rounded-md border">
@@ -3284,9 +3284,9 @@ function Gstr9TaxPaymentInputPanel({
                   {GSTR9_TAX_PAID_TAX_ROWS.map(([field, label]) => (
                     <TableRow key={field}>
                       <TableCell className="font-medium">{label}</TableCell>
-                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field].taxPayable} onChange={(event) => updateTaxRow(field, "taxPayable", event.target.value)} className="h-8 text-right" /></TableCell>
-                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field].paidThroughCash} onChange={(event) => updateTaxRow(field, "paidThroughCash", event.target.value)} className="h-8 text-right" /></TableCell>
-                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field].paidThroughItc} onChange={(event) => updateTaxRow(field, "paidThroughItc", event.target.value)} className="h-8 text-right" /></TableCell>
+                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field].taxPayable} onChange={(event) => updateTaxRow(field, "taxPayable", event.target.value)} className="h-11 sm:h-8 text-right" /></TableCell>
+                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field].paidThroughCash} onChange={(event) => updateTaxRow(field, "paidThroughCash", event.target.value)} className="h-11 sm:h-8 text-right" /></TableCell>
+                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field].paidThroughItc} onChange={(event) => updateTaxRow(field, "paidThroughItc", event.target.value)} className="h-11 sm:h-8 text-right" /></TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="font-semibold bg-muted/30">
@@ -3311,7 +3311,7 @@ function Gstr9TaxPaymentInputPanel({
                   {GSTR9_TAX_PAID_OTHER_ROWS.map(([field, label]) => (
                     <TableRow key={field}>
                       <TableCell className="font-medium">{label}</TableCell>
-                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field]} onChange={(event) => updateOther(field, event.target.value)} className="h-8 text-right" /></TableCell>
+                      <TableCell className="p-2"><Input type="number" min="0" step="0.01" value={taxPaid[field]} onChange={(event) => updateOther(field, event.target.value)} className="h-11 sm:h-8 text-right" /></TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="font-semibold bg-muted/30">
@@ -4334,7 +4334,7 @@ function GSTR9Page() {
             <div className="space-y-1">
               <Label className="text-xs">Financial year</Label>
               <Select value={financialYear} onValueChange={setFinancialYear}>
-                <SelectTrigger className="h-9 w-[150px]">
+                <SelectTrigger className="h-11 sm:h-9 w-[150px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

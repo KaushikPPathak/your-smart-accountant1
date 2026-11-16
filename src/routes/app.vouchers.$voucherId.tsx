@@ -888,7 +888,7 @@ function VoucherEditPage() {
                   <TableRow key={i}>
                     <TableCell>
                       <Select value={l.item_id} onValueChange={(v) => updateItem(i, { item_id: v })} disabled={!canWrite}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Item" /></SelectTrigger>
+                        <SelectTrigger className="h-11 sm:h-9"><SelectValue placeholder="Item" /></SelectTrigger>
                         <SelectContent>
                           {items.map((it) => <SelectItem key={it.id} value={it.id}>{it.name}</SelectItem>)}
                         </SelectContent>
@@ -900,7 +900,7 @@ function VoucherEditPage() {
                     <TableCell><Input type="number" step="0.01" value={l.discount} onChange={(e) => updateItem(i, { discount: e.target.value })} disabled={!canWrite} /></TableCell>
                     <TableCell>
                       <Select value={l.gst_rate} onValueChange={(v) => updateItem(i, { gst_rate: v })} disabled={!canWrite}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-11 sm:h-9"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {GST_RATES.map((r) => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
                         </SelectContent>
@@ -966,7 +966,7 @@ function VoucherEditPage() {
                   <TableRow key={i}>
                     <TableCell>
                       <Select value={l.ledger_id} onValueChange={(v) => updateEntry(i, { ledger_id: v })} disabled={!canWrite}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Ledger" /></SelectTrigger>
+                        <SelectTrigger className="h-11 sm:h-9"><SelectValue placeholder="Ledger" /></SelectTrigger>
                         <SelectContent>
                           {ledgers.map((lg) => <SelectItem key={lg.id} value={lg.id}>{lg.name}</SelectItem>)}
                         </SelectContent>

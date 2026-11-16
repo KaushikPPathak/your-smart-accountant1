@@ -215,7 +215,7 @@ function GSTR1Page() {
             <div className="space-y-1">
               <Label className="text-xs">Filing frequency</Label>
               <Select value={cadence} onValueChange={(v) => { setCadence(v as "monthly" | "quarterly"); setIffMode(false); }}>
-                <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11 sm:h-9 w-[160px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="monthly">Monthly</SelectItem>
                   <SelectItem value="quarterly">Quarterly (QRMP)</SelectItem>
@@ -227,7 +227,7 @@ function GSTR1Page() {
               <div className="space-y-1">
                 <Label className="text-xs">Month</Label>
                 <Select value={month} onValueChange={setMonth}>
-                  <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 sm:h-9 w-[180px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {fyMonths.map((m) => (
                       <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
@@ -240,7 +240,7 @@ function GSTR1Page() {
                 <div className="space-y-1">
                   <Label className="text-xs">Year</Label>
                   <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-                    <SelectTrigger className="h-9 w-[120px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11 sm:h-9 w-[120px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {[fyYear - 1, fyYear, fyYear + 1].map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
                     </SelectContent>
@@ -249,7 +249,7 @@ function GSTR1Page() {
                 <div className="space-y-1">
                   <Label className="text-xs">Quarter</Label>
                   <Select value={String(quarter)} onValueChange={(v) => setQuarter(Number(v) as 1 | 2 | 3 | 4)}>
-                    <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11 sm:h-9 w-[180px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">Q1 (Apr–Jun)</SelectItem>
                       <SelectItem value="2">Q2 (Jul–Sep)</SelectItem>

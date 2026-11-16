@@ -124,16 +124,16 @@ function ScalarFilter({
   return (
     <div className="space-y-2">
       <Select value={op} onValueChange={(v) => setOp(v as FilterOp)}>
-        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-11 sm:h-8"><SelectValue /></SelectTrigger>
         <SelectContent>
           {ops.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
         </SelectContent>
       </Select>
       {!isBlank && (
-        <Input type={inputType} value={v1} onChange={(e) => setV1(e.target.value)} className="h-8" autoFocus />
+        <Input type={inputType} value={v1} onChange={(e) => setV1(e.target.value)} className="h-11 sm:h-8" autoFocus />
       )}
       {isRange && (
-        <Input type={inputType} value={v2} onChange={(e) => setV2(e.target.value)} className="h-8" placeholder="and" />
+        <Input type={inputType} value={v2} onChange={(e) => setV2(e.target.value)} className="h-11 sm:h-8" placeholder="and" />
       )}
       <Button
         size="sm"
@@ -169,7 +169,7 @@ function EnumFilter({
 
   return (
     <div className="space-y-2">
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="h-8" autoFocus />
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="h-11 sm:h-8" autoFocus />
       <div className="max-h-56 overflow-auto rounded border p-1">
         {filtered.length === 0 && <div className="p-2 text-xs text-muted-foreground">No matches</div>}
         {filtered.map((o) => (

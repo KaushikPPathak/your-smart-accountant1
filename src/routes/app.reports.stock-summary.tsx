@@ -308,7 +308,7 @@ function StockSummary() {
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <span className="text-xs text-muted-foreground">Stock valuation method</span>
             <Select value={method} onValueChange={(v) => chooseMethod(v as ValuationMethod)}>
-              <SelectTrigger className="h-8 w-[260px] text-xs">
+              <SelectTrigger className="h-11 sm:h-8 w-[260px] text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -324,7 +324,7 @@ function StockSummary() {
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <span className="text-xs text-muted-foreground">Show</span>
             <Select value={groupBy} onValueChange={(v) => setGroupBy(v as "item" | "hsn")}>
-              <SelectTrigger className="h-8 w-[260px] text-xs">
+              <SelectTrigger className="h-11 sm:h-8 w-[260px] text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

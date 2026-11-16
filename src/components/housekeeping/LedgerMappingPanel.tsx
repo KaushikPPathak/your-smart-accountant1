@@ -263,7 +263,7 @@ export function LedgerMappingPanel({
             className="h-8 max-w-xs"
           />
           <Select value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
-            <SelectTrigger className="h-8 w-[160px]">
+            <SelectTrigger className="h-11 sm:h-8 w-[160px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -306,7 +306,7 @@ export function LedgerMappingPanel({
                         onValueChange={(v) => setRowGroup(i, v)}
                         disabled={disabled}
                       >
-                        <SelectTrigger className="h-8">
+                        <SelectTrigger className="h-11 sm:h-8">
                           <SelectValue>{(r.group_code ? GROUP_BY_CODE[r.group_code]?.label : null) || r.group_code}</SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -322,7 +322,7 @@ export function LedgerMappingPanel({
                         onValueChange={(v) => setRowType(i, v as LedgerType)}
                         disabled={disabled}
                       >
-                        <SelectTrigger className="h-8">
+                        <SelectTrigger className="h-11 sm:h-8">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>

@@ -175,7 +175,7 @@ function AddChargePopover({
         <div className="space-y-1">
           <Label className="text-[11px]">Type</Label>
           <Select value={type} onValueChange={(v) => onTypeChange(v as SundryType)}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-11 sm:h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               {(Object.keys(SUNDRY_TYPE_LABELS) as SundryType[]).map((t) => (
                 <SelectItem key={t} value={t} className="text-xs">{SUNDRY_TYPE_LABELS[t]}</SelectItem>
@@ -186,7 +186,7 @@ function AddChargePopover({
         <div className="space-y-1">
           <Label className="text-[11px]">Ledger</Label>
           <Select value={ledgerId} onValueChange={setLedgerId}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger className="h-11 sm:h-8 text-xs">
               <SelectValue placeholder="Select ledger" />
             </SelectTrigger>
             <SelectContent className="max-h-64">

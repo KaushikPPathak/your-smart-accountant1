@@ -174,7 +174,7 @@ function BankRecPage() {
             <div className="space-y-1">
               <Label className="text-xs">Bank ledger</Label>
               <Select value={bankLedgerId} onValueChange={setBankLedgerId}>
-                <SelectTrigger className="h-9 w-[260px]"><SelectValue placeholder="Select bank/cash ledger" /></SelectTrigger>
+                <SelectTrigger className="h-11 sm:h-9 w-[260px]"><SelectValue placeholder="Select bank/cash ledger" /></SelectTrigger>
                 <SelectContent>
                   {bankLedgers.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                 </SelectContent>

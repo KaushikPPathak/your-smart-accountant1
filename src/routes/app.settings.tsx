@@ -718,7 +718,7 @@ function SettingsPage() {
                   <TableCell>
                     {isAdmin ? (
                       <Select value={m.role} onValueChange={(v) => updateRole(m.id, v as Member["role"])}>
-                        <SelectTrigger className="h-8 w-[120px]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-11 sm:h-8 w-[120px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="admin">Admin</SelectItem>
                           <SelectItem value="accountant">Accountant</SelectItem>
