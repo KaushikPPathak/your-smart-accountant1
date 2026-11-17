@@ -11,7 +11,7 @@ import { buildCompanyBackup } from "@/lib/backup";
 import { wrapBackup } from "@/lib/backup-policy";
 import { addTombstone } from "@/lib/recovery/tombstones";
 import { getAppPaths } from "@/lib/app-paths";
-import { isDesktopRuntime, writeAbsoluteFileNative } from "@/lib/native-bridge";
+import { hasNativeStorage, writeAbsoluteFileNative } from "@/lib/native-bridge";
 
 /** Every table that carries a company_id. Kept in sync with merge-companies. */
 const COMPANY_SCOPED_TABLES: readonly string[] = [
@@ -114,7 +114,7 @@ async function writeSafetySnapshot(
   companyId: string,
   companyName: string,
 ): Promise<{ path: string | null; error?: string }> {
-  if (!isDesktopRuntime()) return { path: null, error: "Not desktop — snapshot skipped" };
+  if (!hasNativeStorage()) return { path: null, error: "Not desktop — snapshot skipped" };
   try {
     const payload = await buildCompanyBackup(companyId);
     const paths = await getAppPaths();

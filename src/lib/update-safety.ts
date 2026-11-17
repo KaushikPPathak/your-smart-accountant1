@@ -19,7 +19,7 @@
 // Nothing here writes to servers.
 
 import { offlineDb } from "./offline/db";
-import { isDesktopRuntime } from "./native-bridge";
+import { hasNativeStorage } from "./native-bridge";
 import { runAutoSnapshotOnce } from "./auto-snapshot";
 
 const VERSION_KEY = "ym_installed_version";
@@ -203,7 +203,7 @@ export async function runPreUpdateSnapshot(
   companies: { id: string; name: string }[],
 ): Promise<void> {
   if (companies.length === 0) return;
-  if (!isDesktopRuntime()) return; // web has no writeable disk path
+  if (!hasNativeStorage()) return; // web has no writeable disk path
   try {
     // Bypass the daily gate by clearing the marker first.
     try { localStorage.removeItem("ym_last_auto_snapshot_day"); } catch { /* ignore */ }

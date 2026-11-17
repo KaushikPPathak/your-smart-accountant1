@@ -7,7 +7,7 @@
 
 import { buildCompanyBackup } from "./backup";
 import { wrapBackup } from "./backup-policy";
-import { isDesktopRuntime, saveCompanyFileNative, writeAbsoluteFileNative } from "./native-bridge";
+import { hasNativeStorage, saveCompanyFileNative, writeAbsoluteFileNative } from "./native-bridge";
 import { getBackupFolder, setBackupFolder } from "./backup-location";
 import { getShortDataRoot } from "./short-data-root";
 
@@ -79,7 +79,7 @@ export async function writeLocalMirror(
   const envelope = await wrapBackup(backup);
   const jsonStr = JSON.stringify(envelope);
 
-  if (isDesktopRuntime()) {
+  if (hasNativeStorage()) {
     // If the user hasn't picked a backup folder yet, default to the short
     // data root (C:\smartaccountant on Windows, ~/smartaccountant elsewhere)
     // — the same easy-to-find root used for report exports. This is

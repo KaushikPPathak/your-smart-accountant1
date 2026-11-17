@@ -15,7 +15,7 @@
 
 import { getMeta, setMeta, offlineDb } from "@/lib/offline/db";
 import type { CompanyBackup } from "@/lib/backup";
-import { isDesktopRuntime, writeAbsoluteFileNative, readAbsoluteTextFileNative } from "@/lib/native-bridge";
+import { hasNativeStorage, writeAbsoluteFileNative, readAbsoluteTextFileNative } from "@/lib/native-bridge";
 import { getAppPaths } from "@/lib/app-paths";
 
 export interface IntegrityEntry {
@@ -62,7 +62,7 @@ export function totalRows(e: Pick<IntegrityEntry, "ledgers" | "items" | "voucher
 }
 
 async function readMirror(): Promise<IntegrityMap> {
-  if (!isDesktopRuntime()) return {};
+  if (!hasNativeStorage()) return {};
   try {
     const paths = await getAppPaths();
     if (!paths) return {};
@@ -75,7 +75,7 @@ async function readMirror(): Promise<IntegrityMap> {
 }
 
 async function writeMirror(map: IntegrityMap): Promise<void> {
-  if (!isDesktopRuntime()) return;
+  if (!hasNativeStorage()) return;
   try {
     const paths = await getAppPaths();
     if (!paths) return;

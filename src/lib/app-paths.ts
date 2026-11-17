@@ -9,7 +9,7 @@
 // User-initiated "Save as…" writes (file picker) are not bound by this
 // module — those go wherever the user chose.
 
-import { isDesktopRuntime } from "./native-bridge";
+import { hasNativeStorage } from "./native-bridge";
 
 function hasTauri(): boolean {
   if (typeof window === "undefined") return false;
@@ -40,7 +40,7 @@ let cached: AppPaths | null = null;
  */
 export async function getAppPaths(): Promise<AppPaths | null> {
   if (cached) return cached;
-  if (!isDesktopRuntime()) return null;
+  if (!hasNativeStorage()) return null;
 
   if (hasTauri()) {
     const { appLocalDataDir, join } = await import("@tauri-apps/api/path");

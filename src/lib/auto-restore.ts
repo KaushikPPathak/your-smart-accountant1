@@ -15,7 +15,7 @@ yes but in online all data gone , it says create new company but in off line mod
 // installer glitches, or IndexedDB corruption. It runs BEFORE the daily
 // auto-snapshot so we never overwrite good snapshots with empty ones.
 
-import { isDesktopRuntime } from "@/lib/native-bridge";
+import { hasNativeStorage } from "@/lib/native-bridge";
 import { getAppPaths } from "@/lib/app-paths";
 import { getAllIntegrity, countLive, totalRows, recordIntegrityFromSnapshot, type IntegrityEntry } from "@/lib/integrity";
 import { buildCompanyBackup, parseBackupFile, restoreCompanyBackup, recoverMissingFromSnapshot, type CompanyBackup } from "@/lib/backup";
@@ -50,7 +50,7 @@ export interface SnapshotCandidate {
 }
 
 export async function listSnapshotsForCompany(companyName: string): Promise<SnapshotCandidate[]> {
-  if (!isDesktopRuntime()) return [];
+  if (!hasNativeStorage()) return [];
   try {
     const paths = await getAppPaths();
     if (!paths) return [];

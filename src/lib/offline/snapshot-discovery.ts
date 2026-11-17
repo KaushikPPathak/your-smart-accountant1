@@ -7,7 +7,7 @@
 // This is idempotent: existing companies are skipped.
 // Authoritative recovery source: <APPLOCALDATA>/snapshots/<YYYY-MM-DD>/<companySlug>.json
 
-import { listDirectoriesNative, readAbsoluteTextFileNative, isDesktopRuntime } from "@/lib/native-bridge";
+import { listDirectoriesNative, readAbsoluteTextFileNative, hasNativeStorage } from "@/lib/native-bridge";
 import { getAppPaths } from "@/lib/app-paths";
 import { offlineDb } from "./db";
 import { isBackupEnvelope, type BackupEnvelope } from "@/lib/backup-policy";
@@ -27,7 +27,7 @@ interface DiscoveredCompany {
  * Returns the number of newly discovered companies.
  */
 export async function discoverCompaniesFromSnapshots(): Promise<number> {
-  if (!isDesktopRuntime()) return 0;
+  if (!hasNativeStorage()) return 0;
 
   try {
     const paths = await getAppPaths();

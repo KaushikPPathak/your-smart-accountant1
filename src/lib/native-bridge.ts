@@ -57,8 +57,23 @@ export function getNativeRuntime(): NativeRuntime {
   return "browser";
 }
 
-export function isDesktopRuntime(): boolean {
+/**
+ * True wherever the app can read and write files on the device: Windows and
+ * Electron, and the Android app (app-private storage). Use this for data
+ * paths such as backups, snapshots, mirrors, recovery and export saving, so
+ * those keep working on Android exactly as before.
+ */
+export function hasNativeStorage(): boolean {
   return getNativeRuntime() !== "browser";
+}
+
+/**
+ * True only for the Windows/Electron desktop app. Android is excluded even
+ * though it also runs through Tauri. Use this for desktop-only features:
+ * folder pickers, "Show in folder", Windows drive paths.
+ */
+export function isDesktopRuntime(): boolean {
+  return hasNativeStorage() && !isAndroidRuntime();
 }
 
 function safeSeg(s: string): string {

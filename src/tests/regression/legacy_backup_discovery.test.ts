@@ -22,6 +22,7 @@ const fsState: {
 
 vi.mock('@/lib/native-bridge', () => ({
   isDesktopRuntime: () => true,
+  hasNativeStorage: () => true,
   getLegacyScanRootsNative: async () => ({ ok: true, roots: fsState.roots }),
   listDirectoriesNative: async (p: string) => {
     fsState.listedPaths.push(p);

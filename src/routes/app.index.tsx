@@ -310,6 +310,8 @@ function Dashboard() {
         </div>
       )}
 
+      {/* Desktop dashboard: hidden on phones, where PhoneHome is the home screen. */}
+      <div className="hidden space-y-6 sm:block">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">
           {activeMembership?.companies?.name ?? "Dashboard"}
@@ -439,6 +441,7 @@ function Dashboard() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

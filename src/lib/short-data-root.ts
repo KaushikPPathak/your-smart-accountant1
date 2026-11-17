@@ -13,7 +13,7 @@
 //   macOS   → ~/smartaccountant
 //   Linux   → ~/smartaccountant
 
-import { isDesktopRuntime } from "./native-bridge";
+import { hasNativeStorage } from "./native-bridge";
 
 const FOLDER = "smartaccountant";
 const CUSTOM_ROOT_KEY = "ym_custom_data_root";
@@ -34,7 +34,7 @@ let cached: string | null = null;
  */
 export async function getShortDataRoot(): Promise<string | null> {
   if (cached) return cached;
-  if (!isDesktopRuntime()) return null;
+  if (!hasNativeStorage()) return null;
   
   try {
     const [{ join, homeDir }, fs] = await Promise.all([

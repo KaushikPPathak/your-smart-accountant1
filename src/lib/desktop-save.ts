@@ -5,14 +5,14 @@
 //   Downloads folder).
 import { toast } from "sonner";
 import {
-  isDesktopRuntime,
+  hasNativeStorage,
   saveCompanyFileNative,
   showInFolderNative,
   openPathNative,
 } from "./native-bridge";
 
 export function isDesktop(): boolean {
-  return isDesktopRuntime();
+  return hasNativeStorage();
 }
 
 const COMPANY_NAME_KEY = "ym_active_company_name";
@@ -70,7 +70,7 @@ export interface SaveExportOptions {
  * In browser mode it triggers a normal download.
  */
 export async function saveExport(opts: SaveExportOptions): Promise<string | null> {
-  if (!isDesktopRuntime()) {
+  if (!hasNativeStorage()) {
     browserDownload(opts.fileName, opts.contents, opts.mime);
     const downloadToastId = toast.success(opts.toastTitle || opts.fileName, {
       description: "Downloaded to your Downloads folder.",

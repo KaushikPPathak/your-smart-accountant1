@@ -17,7 +17,7 @@
 
 import { buildCompanyBackup, type CompanyBackup, type MultiCompanyBackup, type SaveResult } from "@/lib/backup";
 import { wrapBackup } from "@/lib/backup-policy";
-import { isDesktopRuntime, saveCompanyFileNative, writeAbsoluteFileNative } from "@/lib/native-bridge";
+import { hasNativeStorage, saveCompanyFileNative, writeAbsoluteFileNative } from "@/lib/native-bridge";
 import { getBackupFolder } from "@/lib/backup-location";
 
 export const LACCBAK_EXT = "laccbak";
@@ -50,7 +50,7 @@ export async function exportCompanyLaccbak(
   const envelope = await wrapBackup(payload);
   const contents = JSON.stringify(envelope);
 
-  if (isDesktopRuntime()) {
+  if (hasNativeStorage()) {
     const chosen = getBackupFolder(companyId);
     const res = chosen
       ? await writeAbsoluteFileNative(
@@ -82,7 +82,7 @@ export async function exportAllCompaniesLaccbak(
   const envelope = await wrapBackup(payload);
   const contents = JSON.stringify(envelope);
 
-  if (isDesktopRuntime()) {
+  if (hasNativeStorage()) {
     const res = await saveCompanyFileNative("_AllCompanies", "cloud-backups", fileName, contents);
     if (res.ok) return { fileName, desktopPath: res.path };
   }

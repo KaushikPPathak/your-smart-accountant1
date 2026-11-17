@@ -17,7 +17,7 @@ import {
 } from "@/lib/tech-user";
 import { writeLocalMirror, getLastLocalMirror } from "@/lib/local-mirror";
 import { runAppDataMigrationsOnce } from "@/lib/app-data-migrations";
-import { isDesktopRuntime } from "@/lib/native-bridge";
+import { hasNativeStorage } from "@/lib/native-bridge";
 import { AccountGroupsProvider } from "@/lib/account-groups-runtime";
 import { KeyboardCheatSheet } from "@/components/vouchers/KeyboardCheatSheet";
 import { MastersProvider } from "@/lib/masters-cache";
@@ -135,7 +135,7 @@ function AppLayout() {
           await runOncePerLaunch("update-safety", () => checkUpdateSafety());
         } catch { /* silent — never block boot on the safety check */ }
 
-        if (isDesktopRuntime()) {
+        if (hasNativeStorage()) {
           void runAppDataMigrationsOnce().catch(() => undefined);
           if (memberships.length > 0) {
             const list = memberships

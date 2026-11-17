@@ -16,7 +16,7 @@
 //   • one bad backup must not stop the other companies/roots.
 
 import {
-  isDesktopRuntime,
+  hasNativeStorage,
   getLegacyScanRootsNative,
   listDirectoriesNative,
   readLegacyTextFileNative,
@@ -161,7 +161,7 @@ export async function findLegacyBackupCandidates(
  */
 export async function discoverAndRestoreLegacyBackups(): Promise<LegacyDiscoveryResult> {
   const result = emptyResult();
-  if (!isDesktopRuntime()) return result;
+  if (!hasNativeStorage()) return result;
 
   const { offlineDb } = await import("@/lib/offline/db");
 

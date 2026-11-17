@@ -29,7 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useCompany } from "@/lib/company-context";
-import { isDesktopRuntime } from "@/lib/native-bridge";
+import { hasNativeStorage } from "@/lib/native-bridge";
 import { listSnapshotsForCompany, type SnapshotCandidate } from "@/lib/auto-restore";
 import {
   inspectBackupFile, formatBytes, type InspectionReport,
@@ -70,7 +70,7 @@ export function RestoreNowButton() {
       reset();
       setScanning(true);
       try {
-        if (!isDesktopRuntime()) {
+        if (!hasNativeStorage()) {
           toast.info("Default location isn't available in the browser — use Choose another file.");
           return;
         }

@@ -12,7 +12,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ExportShowcase } from "@/components/export/ExportShowcase";
 import { isUnlocked } from "@/lib/staff-session";
 import { BrainProvider } from "@/brain/BrainProvider";
-import { isDesktopRuntime } from "@/lib/native-bridge";
+import { hasNativeStorage } from "@/lib/native-bridge";
 import { WebDemoLanding } from "@/components/WebDemoLanding";
 import { OfflineBanner } from "@/components/OfflineBanner";
 
@@ -95,7 +95,7 @@ function RootComponent() {
 function WebGate({ children }: { children: React.ReactNode }) {
   // useState so runtime detection is stable across renders and we render the
   // same tree on first paint (avoids a flash of the workspace shell).
-  const [isDesktop] = useState<boolean>(() => isDesktopRuntime());
+  const [isDesktop] = useState<boolean>(() => hasNativeStorage());
   const location = useLocation();
   // Legal pages stay publicly reachable on the web build so store reviewers
   // and users can read the privacy policy without installing anything.
@@ -123,7 +123,7 @@ function LockGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Phase 1: Snapshot Discovery & Auto-Restore (Desktop only)
-    if (!discoveryDone.current && isDesktopRuntime()) {
+    if (!discoveryDone.current && hasNativeStorage()) {
       discoveryDone.current = true;
       void (async () => {
         // Hard safety net: never hold the splash for more than 1.5s.
@@ -205,7 +205,7 @@ function LockGate({ children }: { children: React.ReactNode }) {
           release();
         }
       })();
-    } else if (!isDesktopRuntime()) {
+    } else if (!hasNativeStorage()) {
       setBooting(false);
     }
   }, []);

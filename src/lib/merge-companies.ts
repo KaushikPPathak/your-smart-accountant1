@@ -25,7 +25,7 @@ import { offlineDb } from "@/lib/offline/db";
 import { buildCompanyBackup } from "@/lib/backup";
 import { wrapBackup } from "@/lib/backup-policy";
 import { getAppPaths } from "@/lib/app-paths";
-import { isDesktopRuntime, writeAbsoluteFileNative } from "@/lib/native-bridge";
+import { hasNativeStorage, writeAbsoluteFileNative } from "@/lib/native-bridge";
 import { recordIntegrityFromSnapshot } from "@/lib/integrity";
 
 /** Tables that carry a company_id and belong to a single company. */
@@ -225,7 +225,7 @@ export async function buildMergePreview(keepId: string, fromId: string): Promise
 }
 
 async function writeSafetySnapshot(companyId: string, companyName: string): Promise<{ path: string | null; error?: string }> {
-  if (!isDesktopRuntime()) return { path: null, error: "Not desktop" };
+  if (!hasNativeStorage()) return { path: null, error: "Not desktop" };
   try {
     const payload = await buildCompanyBackup(companyId);
     const paths = await getAppPaths();

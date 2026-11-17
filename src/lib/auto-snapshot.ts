@@ -16,7 +16,7 @@
 
 import { buildCompanyBackup } from "./backup";
 import { wrapBackup, isBackupEnvelope, verifyEnvelope, type BackupEnvelope } from "./backup-policy";
-import { isDesktopRuntime, writeAbsoluteFileNative, readAbsoluteTextFileNative } from "./native-bridge";
+import { hasNativeStorage, writeAbsoluteFileNative, readAbsoluteTextFileNative } from "./native-bridge";
 import { getAppPaths } from "./app-paths";
 import { recordIntegrityFromSnapshot } from "./integrity";
 import { recordSnapshotEvent } from "./snapshot-diagnostics";
@@ -58,7 +58,7 @@ async function existingSnapshotRows(absPath: string): Promise<number | null> {
 export async function runAutoSnapshotOnce(
   companies: { id: string; name: string }[],
 ): Promise<void> {
-  if (!isDesktopRuntime()) {
+  if (!hasNativeStorage()) {
     await recordSnapshotEvent({ status: "no-desktop" });
     return;
   }
