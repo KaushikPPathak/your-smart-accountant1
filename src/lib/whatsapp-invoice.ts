@@ -12,6 +12,7 @@ import {
   buildWhatsAppWebUrl,
   showWhatsAppWeb,
 } from "@/lib/whatsapp-shared";
+import { isAndroidRuntime, shareFileAndroid, shareTextAndroid } from "@/lib/native-bridge";
 
 const pdfCache = new Map<string, Awaited<ReturnType<typeof downloadInvoicePdf>>>();
 
@@ -72,6 +73,24 @@ export async function sendInvoiceViaWhatsApp(
   });
 
   const phone = sanitizePhoneForWhatsApp(info.partyPhone);
+
+  // Phone: open WhatsApp with the message and the PDF attached (native share).
+  if (isAndroidRuntime()) {
+    const fileName = info.safeFileName || `Invoice ${info.voucherNumber}.pdf`;
+    const shared = info.path
+      ? await shareFileAndroid({ text: message, filePath: info.path, fileName })
+      : { ok: await shareTextAndroid(message) };
+    if (shared.ok) {
+      toast.success("WhatsApp is open", {
+        description: "Choose the party's chat and tap send.",
+        duration: 8000,
+      });
+    } else {
+      toast.error("Could not open WhatsApp", { description: shared.error ?? "Try again." });
+    }
+    isSending = false;
+    return;
+  }
 
   // 1. Copy PDF to OS clipboard
   const copied = info.path ? await copyFilesToClipboardNative([info.path]) : false;

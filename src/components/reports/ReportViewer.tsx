@@ -217,7 +217,11 @@ export function ReportViewer({
 
   const [autoFit, setAutoFit] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return true;
-    return window.localStorage.getItem("report.autoFit") !== "0";
+    const saved = window.localStorage.getItem("report.autoFit");
+    if (saved !== null) return saved !== "0";
+    // First visit on a phone: shrinking a wide report to the screen makes it
+    // unreadable, so start at natural width and let the table scroll sideways.
+    return !window.matchMedia("(max-width: 639px)").matches;
   });
   React.useEffect(() => {
     try {
