@@ -965,6 +965,11 @@ html[lang="gu"] body {
   .item-table td.m-rate { grid-column: 2; grid-row: 2; }
   .item-table td.m-disc { grid-column: 3; grid-row: 2; }
   .item-table td.m-gst { grid-column: 4; grid-row: 2; }
+  /* Line description (when enabled) gets its own full-width row on phones. */
+  .item-table td.m-desc { grid-column: 1 / -1; grid-row: 3; }
+  .item-table td.m-desc input { width: 100%; }
+  .item-table tr:has(td.m-desc) td.m-amt { grid-column: 1 / span 3; grid-row: 4; }
+  .item-table tr:has(td.m-desc) td.m-del { grid-column: 4; grid-row: 4; justify-content: center; }
   .item-table td.m-amt { grid-column: 1 / span 3; grid-row: 3; }
   .item-table td.m-del { grid-column: 4; grid-row: 3; justify-content: center; }
   .item-table td.m-qty .flex > input { flex: 1; }

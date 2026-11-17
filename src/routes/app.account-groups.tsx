@@ -14,10 +14,11 @@ import { useCompany } from "@/lib/company-context";
 import {
   addSubgroupLocal, renameSubgroupLocal, deleteSubgroupLocal, setOverrideLocal, removeOverrideLocal,
 } from "@/lib/offline/account-groups-local";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/account-groups")({
   head: () => ({ meta: [{ title: "Group Manager — Your Mehtaji" }] }),
-  component: GroupManagerPage,
+  component: desktopOnly("Balance sheet group editor", GroupManagerPage),
 });
 
 const SECTION_LABEL: Record<AccountSection, string> = {

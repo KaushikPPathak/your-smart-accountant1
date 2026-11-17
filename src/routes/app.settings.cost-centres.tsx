@@ -15,10 +15,11 @@ import {
 } from "@/components/ui/dialog";
 import offlineDb from "@/lib/offline/db";
 import { useCompany } from "@/lib/company-context";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/settings/cost-centres")({
   head: () => ({ meta: [{ title: "Cost centres — Settings" }] }),
-  component: CostCentresPage,
+  component: desktopOnly("Cost centre setup", CostCentresPage),
 });
 
 interface Row {

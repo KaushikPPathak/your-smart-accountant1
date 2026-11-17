@@ -68,15 +68,16 @@ function RowCell({ row }: { row: TRow }) {
       onClick={row.onClick}
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate print:whitespace-normal print:break-words">{row.label}</div>
+        <div className="break-words sm:truncate print:whitespace-normal print:break-words">{row.label}</div>
         {row.hint && (
-          <div className="truncate text-[10px] text-muted-foreground print:text-[8pt]">{row.hint}</div>
+          <div className="break-words text-[10px] text-muted-foreground sm:truncate print:text-[8pt]">{row.hint}</div>
         )}
       </div>
-      <div className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums text-[12px] print:w-[5rem] print:text-[9pt]">
+      {/* Phone: an empty amount column takes no width; desktop keeps the fixed columns. */}
+      <div className="max-sm:empty:hidden w-auto min-w-[4.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums text-[12px] sm:w-[6.5rem] print:w-[5rem] print:text-[9pt]">
         {row.amount}
       </div>
-      <div className="w-[6.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums text-[12px] print:w-[5rem] print:text-[9pt]">
+      <div className="max-sm:empty:hidden w-auto min-w-[4.5rem] shrink-0 whitespace-nowrap text-right font-mono tabular-nums text-[12px] sm:w-[6.5rem] print:w-[5rem] print:text-[9pt]">
         {row.outerAmount}
       </div>
     </div>

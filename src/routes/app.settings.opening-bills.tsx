@@ -32,10 +32,11 @@ import offlineDb from "@/lib/offline/db";
 import { useCompany } from "@/lib/company-context";
 import { getAllLedgers, useMastersVersion, type CachedLedger } from "@/lib/masters-cache";
 import { formatINR, rupeesToPaise } from "@/lib/money";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/settings/opening-bills")({
   head: () => ({ meta: [{ title: "Opening bills — Settings" }] }),
-  component: OpeningBillsPage,
+  component: desktopOnly("Opening bills", OpeningBillsPage),
 });
 
 interface OpeningBillRow {

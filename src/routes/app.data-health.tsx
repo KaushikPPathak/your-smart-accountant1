@@ -11,6 +11,7 @@ import { runAutoRestore, getAutoRestoreEvents, type AutoRestoreOutcome } from "@
 import { getSnapshotEvents, type SnapshotRunEvent } from "@/lib/snapshot-diagnostics";
 import { toast } from "sonner";
 import { FieldIntegrityPanel } from "@/components/data-health/FieldIntegrityPanel";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/data-health")({
   head: () => ({
@@ -19,7 +20,7 @@ export const Route = createFileRoute("/app/data-health")({
       { name: "description", content: "Automatic backup, integrity, and silent recovery status for every company on this device." },
     ],
   }),
-  component: DataHealthPage,
+  component: desktopOnly("Data health", DataHealthPage),
 });
 
 interface Row {

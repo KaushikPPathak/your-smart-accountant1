@@ -952,6 +952,31 @@ function VoucherEditPage() {
       {isEntryKind && (
         <Card>
           <CardContent className="p-0">
+            {/* Phones: one card per entry line, fields full-width. */}
+            <div className="space-y-2 p-3 sm:hidden">
+              {entryLines.map((l, i) => (
+                <div key={i} className="space-y-2 rounded-lg border bg-card p-3">
+                  <Select value={l.ledger_id} onValueChange={(v) => updateEntry(i, { ledger_id: v })} disabled={!canWrite}>
+                    <SelectTrigger className="h-12 w-full"><SelectValue placeholder="Ledger" /></SelectTrigger>
+                    <SelectContent>
+                      {ledgers.map((lg) => <SelectItem key={lg.id} value={lg.id}>{lg.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground">Debit</span>
+                      <Input type="number" step="0.01" inputMode="decimal" className="h-12 text-right font-mono text-base" value={l.debit} onChange={(e) => updateEntry(i, { debit: e.target.value, credit: e.target.value ? "" : l.credit })} disabled={!canWrite} />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground">Credit</span>
+                      <Input type="number" step="0.01" inputMode="decimal" className="h-12 text-right font-mono text-base" value={l.credit} onChange={(e) => updateEntry(i, { credit: e.target.value, debit: e.target.value ? "" : l.debit })} disabled={!canWrite} />
+                    </div>
+                  </div>
+                  <Input className="h-12 text-base" placeholder="Narration" value={l.narration} onChange={(e) => updateEntry(i, { narration: e.target.value })} disabled={!canWrite} />
+                </div>
+              ))}
+            </div>
+            <div className="hidden sm:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -979,6 +1004,7 @@ function VoucherEditPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
             <div className="border-t p-3 flex justify-end gap-6 text-sm font-mono">
               <span>Dr {entryTotals.dr.toFixed(2)}</span>
               <span>Cr {entryTotals.cr.toFixed(2)}</span>

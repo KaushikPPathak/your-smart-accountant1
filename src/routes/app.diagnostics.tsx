@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import TestDashboard from "@/components/TestDashboard";
 import { FlowStagesPanel } from "@/components/diagnostics/FlowStagesPanel";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/diagnostics")({
   head: () => ({
@@ -23,7 +24,7 @@ export const Route = createFileRoute("/app/diagnostics")({
       { name: "robots", content: "noindex" },
     ],
   }),
-  component: DiagnosticsPage,
+  component: desktopOnly("Diagnostics", DiagnosticsPage),
 });
 
 function formatTs(ts: number): string {

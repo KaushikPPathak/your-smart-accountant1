@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/release-checklist")({
   head: () => ({
@@ -9,7 +10,7 @@ export const Route = createFileRoute("/app/release-checklist")({
       { name: "robots", content: "noindex" },
     ],
   }),
-  component: ReleaseChecklistPage,
+  component: desktopOnly("Release checklist", ReleaseChecklistPage),
 });
 
 // Layer 7 — printable release checklist. The source of truth lives at

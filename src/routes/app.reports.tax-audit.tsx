@@ -41,10 +41,11 @@ import {
   type ItAsset,
   type ItMovement,
 } from "@/lib/tax-audit";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/reports/tax-audit")({
   head: () => ({ meta: [{ title: "Tax Audit (Form 3CD) — Reports" }] }),
-  component: TaxAuditPage,
+  component: desktopOnly("Tax audit assistant", TaxAuditPage),
 });
 
 // Typed wrapper for newly-added tables (types regen lags one migration).

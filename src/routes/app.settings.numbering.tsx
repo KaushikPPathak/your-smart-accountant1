@@ -18,10 +18,11 @@ import {
   DEFAULT_RULE, NUMBERING_PRESETS, sampleNumber, type NumberingRule, type ResetPeriod,
 } from "@/lib/voucher-numbering";
 import { voucherTypeLabel } from "@/lib/voucher-type-label";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/settings/numbering")({
   head: () => ({ meta: [{ title: "Voucher numbering — Settings" }] }),
-  component: NumberingSettingsPage,
+  component: desktopOnly("Voucher numbering", NumberingSettingsPage),
 });
 
 const NUMBERED_TYPES = [

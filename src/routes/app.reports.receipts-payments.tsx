@@ -246,7 +246,14 @@ function ReceiptsPayments() {
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <h3 className="mb-2 text-sm font-semibold">Receipts (Cr.)</h3>
-              <table className="w-full text-sm">
+              <StackedSide
+                rows={[
+                  { label: "To Opening Cash & Bank", total: Math.max(0, openingCash) },
+                  ...receipts.map((r) => ({ label: `To ${r.name}`, cash: r.cash, bank: r.bank, total: r.total })),
+                ]}
+                total={totalReceipts + Math.max(0, openingCash)}
+              />
+              <table className="hidden w-full text-sm sm:table">
                 <thead className="text-xs text-muted-foreground">
                   <tr><th className="text-left font-normal py-1">Particulars</th><th className="text-right font-normal">Cash</th><th className="text-right font-normal">Bank / Cheque</th><th className="text-right font-normal">Total</th></tr>
                 </thead>
@@ -266,7 +273,14 @@ function ReceiptsPayments() {
             </div>
             <div>
               <h3 className="mb-2 text-sm font-semibold">Payments (Dr.)</h3>
-              <table className="w-full text-sm">
+              <StackedSide
+                rows={[
+                  ...payments.map((r) => ({ label: `By ${r.name}`, cash: r.cash, bank: r.bank, total: r.total })),
+                  { label: "By Closing Cash & Bank", total: Math.max(0, closingCash) },
+                ]}
+                total={totalPayments + Math.max(0, closingCash)}
+              />
+              <table className="hidden w-full text-sm sm:table">
                 <thead className="text-xs text-muted-foreground">
                   <tr><th className="text-left font-normal py-1">Particulars</th><th className="text-right font-normal">Cash</th><th className="text-right font-normal">Bank / Cheque</th><th className="text-right font-normal">Total</th></tr>
                 </thead>
@@ -289,5 +303,28 @@ function ReceiptsPayments() {
       </Card>
       </div>
     </ReportViewer>
+  );
+}
+
+/** Phone presentation of one side of the Receipts & Payments account. */
+type SideRow = { label: string; cash?: number; bank?: number; total: number };
+function StackedSide({ rows, total }: { rows: SideRow[]; total: number }) {
+  return (
+    <div className="space-y-1 sm:hidden">
+      {rows.map((r, i) => (
+        <div key={i} className="rounded-md border bg-card px-3 py-2 text-sm">
+          <div className="break-words font-medium">{r.label}</div>
+          <div className="mt-1 grid grid-cols-3 gap-2 font-mono text-xs tabular-nums text-muted-foreground">
+            <span>Cash {r.cash ? formatINR(r.cash) : "—"}</span>
+            <span>Bank {r.bank ? formatINR(r.bank) : "—"}</span>
+            <span className="text-right text-sm font-semibold text-foreground">{formatINR(r.total)}</span>
+          </div>
+        </div>
+      ))}
+      <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2 text-sm font-semibold">
+        <span>Total</span>
+        <span className="font-mono tabular-nums">{formatINR(total)}</span>
+      </div>
+    </div>
   );
 }

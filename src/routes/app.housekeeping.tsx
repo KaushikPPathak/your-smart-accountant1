@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { isAndroidRuntime } from "@/lib/native-bridge";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -108,6 +109,33 @@ function HousekeepingPage() {
       resetScroll: false,
     });
   };
+
+  // Bulk changes, merges and deletes are kept to the Windows app. The phone
+  // only gets the notice; its data is untouched.
+  if (isAndroidRuntime()) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Backup and restore</CardTitle>
+            <CardDescription>
+              Data maintenance and bulk changes run on the Windows app. On this phone you can back up and restore this company.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+        {activeCompanyId ? (
+          <BackupRestoreTool
+            companyId={activeCompanyId}
+            companyName={companyName}
+            partyCode={null}
+            disabled={!isAdmin}
+          />
+        ) : (
+          <Card><CardContent className="p-6 text-sm text-muted-foreground">Select a company first.</CardContent></Card>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

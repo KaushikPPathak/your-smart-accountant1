@@ -58,8 +58,74 @@ export function RegisterPrintTable({
   const num = `${td} num text-right tabular-nums whitespace-nowrap`;
   const cols = withGst ? 11 : 7;
 
+  const phoneCards = (
+    <div className="space-y-2 print:hidden sm:hidden">
+      {lines.length === 0 && (
+        <p className="py-6 text-center text-sm text-muted-foreground">No entries in this period.</p>
+      )}
+      {lines.map((l, i) => (
+        <button
+          type="button"
+          key={l.id}
+          onClick={onRowClick ? () => onRowClick(l.id) : undefined}
+          disabled={!onRowClick}
+          className="w-full rounded-lg border bg-card p-3 text-left shadow-sm active:bg-muted/50 disabled:active:bg-card"
+        >
+          <div className="flex items-start justify-between gap-2 text-xs text-muted-foreground">
+            <span>{i + 1}. {fmtIndianDate(l.date)}</span>
+            <span className="text-right">{l.billNo} · {l.mode}</span>
+          </div>
+          <div className="mt-1 break-words text-sm font-semibold">{l.party}</div>
+          {withGst && l.gstin && <div className="text-[11px] text-muted-foreground">{l.gstin}</div>}
+          {l.items.length > 0 && (
+            <div className="mt-1 break-words text-xs text-muted-foreground">
+              {l.items.map((it, k) => (
+                <div key={k}>
+                  {it.name} – {it.qty}
+                  {it.unit ? ` ${it.unit}` : ""}
+                </div>
+              ))}
+            </div>
+          )}
+          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-sm tabular-nums">
+            {withGst && (
+              <>
+                <div className="flex justify-between"><dt className="font-sans text-muted-foreground">Taxable</dt><dd>{amt(l.taxable)}</dd></div>
+                <div className="flex justify-between"><dt className="font-sans text-muted-foreground">CGST</dt><dd>{amt(l.cgst)}</dd></div>
+                <div className="flex justify-between"><dt className="font-sans text-muted-foreground">SGST</dt><dd>{amt(l.sgst)}</dd></div>
+                <div className="flex justify-between"><dt className="font-sans text-muted-foreground">IGST</dt><dd>{amt(l.igst)}</dd></div>
+              </>
+            )}
+            <div className="col-span-2 flex justify-between border-t pt-1 font-semibold">
+              <dt className="font-sans">Bill value</dt>
+              <dd>{amt(l.total)}</dd>
+            </div>
+          </dl>
+        </button>
+      ))}
+      {lines.length > 0 && (
+        <div className="rounded-lg bg-muted p-3 text-sm font-semibold">
+          <div className="mb-1">Total · {lines.length} bills</div>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono tabular-nums">
+            {withGst && (
+              <>
+                <div className="flex justify-between"><dt className="font-sans">Taxable</dt><dd>{amt(t.taxable)}</dd></div>
+                <div className="flex justify-between"><dt className="font-sans">CGST</dt><dd>{amt(t.cgst)}</dd></div>
+                <div className="flex justify-between"><dt className="font-sans">SGST</dt><dd>{amt(t.sgst)}</dd></div>
+                <div className="flex justify-between"><dt className="font-sans">IGST</dt><dd>{amt(t.igst)}</dd></div>
+              </>
+            )}
+            <div className="col-span-2 flex justify-between"><dt className="font-sans">Bill value</dt><dd>{amt(t.total)}</dd></div>
+          </dl>
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <table className="report-data-table w-full table-fixed border-collapse text-[11px] leading-tight">
+    <>
+    {phoneCards}
+    <table className="report-data-table hidden w-full table-fixed border-collapse text-[11px] leading-tight sm:table print:table">
       <colgroup>
         {widths.map((w, i) => (
           <col key={i} style={{ width: w }} />
@@ -147,6 +213,7 @@ export function RegisterPrintTable({
         </tfoot>
       )}
     </table>
+    </>
   );
 }
 

@@ -538,6 +538,57 @@ function CashBankBook() {
       ) : (
         <Card className="overflow-hidden">
           <CardContent className="p-0">
+            {/* Phone: one card per entry. The desktop table is shown from 640px up. */}
+            <div className="space-y-2 p-3 sm:hidden">
+              <div className="flex items-center justify-between rounded-md bg-muted/50 p-3 text-sm font-semibold">
+                <span>Opening balance</span>
+                <span className="font-mono tabular-nums">{fmtBal(opening)}</span>
+              </div>
+              {rows.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No entries in this period.</p>
+              ) : (
+                rows.map((row) => (
+                  <button
+                    type="button"
+                    key={row.key}
+                    onClick={() => openVoucherDetail(navigate, row.voucherId)}
+                    className="w-full rounded-lg border bg-card p-3 text-left shadow-sm active:bg-muted/50"
+                  >
+                    <div className="flex items-start justify-between gap-2 text-xs text-muted-foreground">
+                      <span>{fmtIndianDate(row.date)}</span>
+                      <span className="text-right">{row.vchType} {row.vchNo}</span>
+                    </div>
+                    <div className="mt-1 break-words text-sm font-medium">{row.particulars}</div>
+                    {row.narration && <div className="break-words text-xs text-muted-foreground">{row.narration}</div>}
+                    <div className="mt-2 grid grid-cols-3 gap-2 font-mono text-sm tabular-nums">
+                      <div>
+                        <div className="font-sans text-[11px] uppercase tracking-wide text-muted-foreground">Debit</div>
+                        {row.debit ? formatINR(row.debit, { symbol: false }) : "—"}
+                      </div>
+                      <div>
+                        <div className="font-sans text-[11px] uppercase tracking-wide text-muted-foreground">Credit</div>
+                        {row.credit ? formatINR(row.credit, { symbol: false }) : "—"}
+                      </div>
+                      <div className="text-right">
+                        <div className="font-sans text-[11px] uppercase tracking-wide text-muted-foreground">Balance</div>
+                        {fmtBal(row.balance)}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+              <div className="rounded-lg bg-muted/50 p-3 text-sm font-semibold">
+                <div className="flex justify-between font-mono tabular-nums">
+                  <span className="font-sans">Total Dr / Cr</span>
+                  <span>{formatINR(totals.dr, { symbol: false })} / {formatINR(totals.cr, { symbol: false })}</span>
+                </div>
+                <div className="mt-2 flex justify-between">
+                  <span>Closing balance</span>
+                  <span className="font-mono tabular-nums">{fmtBal(closing)}</span>
+                </div>
+              </div>
+            </div>
+            <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-sm">
               <thead className="bg-muted/60">
                 <tr>
@@ -596,6 +647,7 @@ function CashBankBook() {
                 </tr>
               </tfoot>
             </table>
+            </div>
           </CardContent>
         </Card>
       );

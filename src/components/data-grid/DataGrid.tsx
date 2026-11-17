@@ -411,7 +411,7 @@ export function DataGrid<T>({
           <Button
             size="sm"
             variant={pivotEnabled ? "default" : "outline"}
-            className="h-8"
+            className="hidden h-8 sm:inline-flex"
             onClick={() => setPivot({ ...pivotState, enabled: !pivotEnabled })}
             title="Toggle pivot mode"
           >
@@ -435,7 +435,16 @@ export function DataGrid<T>({
         />
       ) : (
       <>
-      <div className="rounded-md border bg-card" data-print-hide>
+      <PhoneRecordList
+        renderRows={renderRows}
+        rows={rows}
+        visibleColumns={visibleColumns}
+        aggregates={aggregates}
+        onRowClick={onRowClick}
+        loading={!!(externalLoading || processed.loading)}
+        empty={empty}
+      />
+      <div className="hidden rounded-md border bg-card sm:block" data-print-hide>
         {/* Header */}
         <div
           className="grid border-b bg-muted/40 text-xs font-medium uppercase tracking-wide overflow-x-auto"
@@ -734,3 +743,100 @@ function asReact(v: unknown): ReactNode {
 // re-exports for convenience
 export { computeAggregates } from "./grid-engine";
 export type { DGColumn } from "./types";
+
+// Phone presentation: each record is a card (first column as the title, the rest
+// as label/value pairs). Shown below 640px only; the table is unchanged above it.
+const PHONE_PAGE = 100;
+
+function PhoneRecordList<T>({
+  renderRows,
+  rows,
+  visibleColumns,
+  aggregates,
+  onRowClick,
+  loading,
+  empty,
+}: {
+  renderRows: FlatRow<any>[];
+  rows: T[];
+  visibleColumns: DGColumn<T>[];
+  aggregates: Record<string, number>;
+  onRowClick?: (row: T) => void;
+  loading: boolean;
+  empty?: ReactNode;
+}) {
+  const [limit, setLimit] = useState(PHONE_PAGE);
+  const records = renderRows.filter((r) => r.kind === "row");
+  const shown = records.slice(0, limit);
+  const [head, ...rest] = visibleColumns;
+  const aggCols = visibleColumns.filter((c) => c.aggregator);
+  const cellNode = (c: DGColumn<T>, row: T): ReactNode =>
+    c.cell ? c.cell(row) : asReact(c.accessor(row));
+  const cellAlign = (c: DGColumn<T>) => c.align ?? (c.type === "number" ? "right" : "left");
+
+  return (
+    <div className="space-y-2 sm:hidden" data-print-hide>
+      {loading && <div className="py-6 text-center text-sm text-muted-foreground">Loading…</div>}
+      {!loading && records.length === 0 && (
+        <div className="py-6 text-center text-sm text-muted-foreground">{empty ?? "No matching rows."}</div>
+      )}
+      {shown.map((fr) => {
+        const idx = (fr as any).row.__index as number;
+        const row = rows[idx];
+        if (!row || !head) return null;
+        return (
+          <div
+            key={idx}
+            role={onRowClick ? "button" : undefined}
+            tabIndex={onRowClick ? 0 : undefined}
+            onClick={onRowClick ? () => onRowClick(row) : undefined}
+            onKeyDown={onRowClick ? (e) => { if (e.key === "Enter") onRowClick(row); } : undefined}
+            className={cn(
+              "rounded-lg border bg-card p-3 shadow-sm",
+              onRowClick && "cursor-pointer active:bg-muted/50",
+            )}
+          >
+            <div className="min-w-0 break-words text-sm font-semibold">{cellNode(head, row)}</div>
+            {rest.length > 0 && (
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                {rest.map((c) => (
+                  <div key={c.id} className="min-w-0">
+                    <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{c.header}</dt>
+                    <dd
+                      className={cn(
+                        "break-words",
+                        cellAlign(c) === "right" && "font-mono tabular-nums text-right",
+                      )}
+                    >
+                      {cellNode(c, row)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+        );
+      })}
+      {records.length > limit && (
+        <Button variant="outline" className="h-11 w-full" onClick={() => setLimit((l) => l + PHONE_PAGE)}>
+          Show more ({records.length - limit} left)
+        </Button>
+      )}
+      {aggCols.length > 0 && records.length > 0 && (
+        <div className="rounded-lg border bg-muted/50 p-3 text-sm">
+          <div className="mb-2 font-semibold">Total · {records.length} rows</div>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
+            {aggCols.map((c) => (
+              <div key={c.id} className="min-w-0">
+                <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{c.header}</dt>
+                <dd className="font-mono font-semibold tabular-nums">
+                  {c.formatAggregate ? c.formatAggregate(aggregates[c.id] ?? 0) : defaultFormat(aggregates[c.id] ?? 0)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </div>
+  );
+}

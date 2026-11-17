@@ -311,6 +311,49 @@ function OutstandingPage() {
 
       <Card>
         <CardContent className="p-0">
+          {/* Phones: one card per bill. The table below is shown from 640px up. */}
+          <div className="space-y-2 p-3 sm:hidden">
+            {loading ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+            ) : rows.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No outstanding bills 🎉</p>
+            ) : rows.map((r) => {
+              const isMsme = mode === "payables" && !!r.ledgers?.msme_registered;
+              const brk = isMsme
+                ? msmedInterestBreakdown(r.pending_paise, r.voucher_date, asOf, { agreedDueDate: r.due_date, bankRatePct: bankRate })
+                : null;
+              const isMsmeOverdue = !!brk && brk.daysLate > 0;
+              return (
+                <div key={r.id} className={`rounded-lg border p-3 ${isMsmeOverdue ? "bg-destructive/5" : "bg-card"}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="break-words text-sm font-semibold">{r.ledgers?.name || "—"}</div>
+                      <div className="text-xs text-muted-foreground">{r.voucher_number} · {fmtIndianDate(r.voucher_date)}</div>
+                      <div className="text-xs text-muted-foreground">Due {fmtIndianDate(r.due_date || r.voucher_date)}</div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-mono text-base font-semibold tabular-nums">{formatINR(r.pending_paise)}</div>
+                      <div className="text-[11px] text-muted-foreground">pending of {formatINR(r.total_paise)}</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    {r.ledgers?.msme_registered && (
+                      <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">MSME</Badge>
+                    )}
+                    {isMsmeOverdue ? (
+                      <Badge variant="destructive">{r.days}d ⚠</Badge>
+                    ) : (
+                      <Badge variant={r.days > 90 ? "destructive" : r.days > 60 ? "default" : "secondary"}>{r.days}d</Badge>
+                    )}
+                    {mode === "payables" && brk && brk.interestPaise > 0 && (
+                      <span className="font-semibold text-destructive">§16 interest {formatINR(brk.interestPaise)}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -376,6 +419,7 @@ function OutstandingPage() {
               })}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </ReportViewer>

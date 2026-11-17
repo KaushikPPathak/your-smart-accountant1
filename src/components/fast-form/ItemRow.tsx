@@ -219,7 +219,7 @@ function ItemRowImpl({
         </TableCell>
       )}
       {showDescription && (
-        <TableCell className="m-hide">
+        <TableCell className="m-desc">
           <Input
             ref={descRef}
             className="h-12 sm:h-9"

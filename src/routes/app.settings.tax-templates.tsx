@@ -17,10 +17,11 @@ import {
 import { offlineDb } from "@/lib/offline/db";
 import { useCompany } from "@/lib/company-context";
 import type { TaxTemplate } from "@/lib/voucher-resolver";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/settings/tax-templates")({
   head: () => ({ meta: [{ title: "Tax templates — Settings" }] }),
-  component: TaxTemplatesPage,
+  component: desktopOnly("Tax templates", TaxTemplatesPage),
 });
 
 type Draft = Omit<TaxTemplate, "id" | "company_id"> & { id?: string };

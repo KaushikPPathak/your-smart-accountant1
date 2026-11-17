@@ -17,10 +17,11 @@ import {
 import { formatINR } from "@/lib/money";
 import { useLicenseState } from "@/lib/license/hook";
 import { hasFeature } from "@/lib/license/state";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/tools/gstr1-json")({
   head: () => ({ meta: [{ title: "GSTR-1 JSON Converter" }] }),
-  component: Gstr1JsonConverter,
+  component: desktopOnly("GSTR-1 JSON converter", Gstr1JsonConverter),
 });
 
 const CURRENT_YEAR = new Date().getFullYear();

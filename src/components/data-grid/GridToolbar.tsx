@@ -85,7 +85,7 @@ export function GridToolbar<T>({
         {/* Group by */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-11 sm:h-8">
+            <Button variant="outline" size="sm" className="hidden h-8 sm:inline-flex">
               <Group className="mr-1 h-3.5 w-3.5" /> Group
             </Button>
           </DropdownMenuTrigger>
@@ -106,7 +106,7 @@ export function GridToolbar<T>({
         {/* Columns */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-11 sm:h-8">
+            <Button variant="outline" size="sm" className="hidden h-8 sm:inline-flex">
               <Columns3 className="mr-1 h-3.5 w-3.5" /> Columns
             </Button>
           </DropdownMenuTrigger>
@@ -160,7 +160,7 @@ export function GridToolbar<T>({
         {/* Density / saved views */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-11 sm:h-8">
+            <Button variant="outline" size="sm" className="hidden h-8 sm:inline-flex">
               <SlidersHorizontal className="mr-1 h-3.5 w-3.5" /> Views
             </Button>
           </DropdownMenuTrigger>

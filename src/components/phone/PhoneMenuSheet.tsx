@@ -36,7 +36,9 @@ export const PHONE_MENU: Array<{ title: string; items: Array<{ to: string; label
   {
     title: "GST",
     items: [
-      { to: "/app/reports/gstr1", label: "GSTR-1 / 3B / 2B" },
+      { to: "/app/reports/gstr1", label: "GSTR-1" },
+      { to: "/app/reports/gstr3b", label: "GSTR-3B" },
+      { to: "/app/reports/gstr2b", label: "GSTR-2B" },
       { to: "/app/reports/gst-sales-book", label: "GST sales book" },
       { to: "/app/reports/gst-purchase-book", label: "GST purchase book" },
     ],
@@ -44,7 +46,7 @@ export const PHONE_MENU: Array<{ title: string; items: Array<{ to: string; label
   {
     title: "More",
     items: [
-      { to: "/app/housekeeping", label: "Accounting tools" },
+      { to: "/app/housekeeping", label: "Backup & restore" },
       { to: "/app/companies", label: "Companies" },
       { to: "/app/settings", label: "Settings" },
     ],

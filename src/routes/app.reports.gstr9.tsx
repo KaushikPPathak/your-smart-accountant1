@@ -88,10 +88,11 @@ import {
   loadImportLines as loadGstr2bImportLines,
   loadLocalPurchases,
 } from "@/lib/gstr2b-local-store";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/reports/gstr9")({
   head: () => ({ meta: [{ title: "GSTR-9 — Reports" }] }),
-  component: GSTR9Page,
+  component: desktopOnly("GSTR-9 preparation", GSTR9Page),
 });
 
 function currentFinancialYear(): string {
