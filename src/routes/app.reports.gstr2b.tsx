@@ -373,6 +373,9 @@ function Gstr2BPage() {
 
   return (
     <div className="space-y-4">
+      <p className="rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground sm:hidden">
+        Phone: review only. Importing, matching and changes are done in the Windows app.
+      </p>
       <style>{`
         @media print {
           .no-print { display: none !important; }
@@ -391,7 +394,7 @@ function Gstr2BPage() {
           </div>
           <div className="space-y-1 md:col-span-2">
             <Label>Upload GSTR-2B (JSON · Excel · CSV)</Label>
-            <Input type="file" accept=".csv,.json,.xlsx" disabled={busy} onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
+            <Input className="hidden sm:block" type="file" accept=".csv,.json,.xlsx" disabled={busy} onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
           </div>
           <div className="text-xs flex items-end gap-2 flex-wrap">
             <Badge variant="default">{stats.matched} matched</Badge>
@@ -406,7 +409,7 @@ function Gstr2BPage() {
       </Card>
 
       {excelPreview && (
-        <Card className="no-print border-primary/40">
+        <Card className="no-print hidden border-primary/40 sm:block">
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
@@ -602,7 +605,7 @@ function Gstr2BPage() {
                     <TableCell className="no-print">
                       <div className="flex items-center gap-1">
                         <select
-                          className="h-7 text-xs border rounded px-1 bg-background max-w-[160px]"
+                          className="hidden h-7 text-xs border rounded px-1 bg-background max-w-[160px] sm:block"
                           value={l.matched_voucher_id ?? ""}
                           onChange={(e) => void linkVoucher(l, e.target.value)}
                         >
@@ -614,11 +617,11 @@ function Gstr2BPage() {
                           ))}
                         </select>
                         {!MATCHED_STATUSES.has(l.match_status) && (
-                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                          <Button size="sm" variant="outline" className="hidden h-7 px-2 text-xs sm:inline-flex"
                             onClick={() => void acceptAsMatched(l)}>Accept</Button>
                         )}
                         {l.manual_override && (
-                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                          <Button size="sm" variant="ghost" className="hidden h-7 px-2 text-xs sm:inline-flex"
                             onClick={() => void clearManual(l)}>Reset</Button>
                         )}
                       </div>

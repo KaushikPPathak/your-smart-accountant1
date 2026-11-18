@@ -61,7 +61,7 @@ export function Outstanding({ mode }: { mode: "receivables" | "payables" }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [reminderTpl, setReminderTpl] = useState<string>("");
   const isRecv = mode === "receivables";
-  const { view, setView } = useReportView(isRecv ? "receivables" : "payables");
+  const { view, setView } = useReportView(isRecv ? "receivables" : "payables", "classic", "grid");
   const partyType = isRecv ? "sundry_debtor" : "sundry_creditor";
   const companyName = activeMembership?.companies.name || "Company";
 

@@ -61,7 +61,7 @@ function StockSummary() {
   const { from, to, setFrom, setTo } = useFyRangeState();
   const [items, setItems] = useState<Item[]>([]);
   const [moves, setMoves] = useState<ItemMove[]>([]);
-  const { view, setView } = useReportView("stock-summary");
+  const { view, setView } = useReportView("stock-summary", "classic", "grid");
   const [method, setMethod] = useState<ValuationMethod>("average");
   const [groupBy, setGroupBy] = useState<"item" | "hsn">("item");
   // Turnover decides the HSN length: up to ₹5 crore 4 digits, above it 6 digits.

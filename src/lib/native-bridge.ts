@@ -135,6 +135,29 @@ export async function shareTextAndroid(text: string): Promise<boolean> {
 }
 
 /** Opens WhatsApp with the text and the PDF attached (Android plugin). */
+/**
+ * Share backup files through the Android system share sheet (Drive, Files,
+ * email...). Each name gives its file type. Returns ok:false on other platforms.
+ */
+export async function shareFilesAndroid(opts: {
+  title: string;
+  paths: string[];
+  names: string[];
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!hasTauri()) return { ok: false, error: "Sharing needs the Android app." };
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("plugin:share-text|share_files", {
+      title: opts.title,
+      filePaths: opts.paths,
+      fileNames: opts.names,
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function shareFileAndroid(opts: {
   text: string;
   filePath: string;

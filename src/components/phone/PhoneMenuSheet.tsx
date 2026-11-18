@@ -31,6 +31,7 @@ export const PHONE_MENU: Array<{ title: string; items: Array<{ to: string; label
       { to: "/app/reports/profit-loss", label: "Profit & loss" },
       { to: "/app/reports/balance-sheet", label: "Balance sheet" },
       { to: "/app/reports/stock-summary", label: "Stock summary" },
+      { to: "/app/reports/cash-bank", label: "Cash & bank book" },
     ],
   },
   {
@@ -51,6 +52,16 @@ export const PHONE_MENU: Array<{ title: string; items: Array<{ to: string; label
       { to: "/app/settings", label: "Settings" },
     ],
   },
+];
+
+/** Less frequent reports, tucked under "More reports" so the menu stays short. */
+export const PHONE_MORE_REPORTS: Array<{ to: string; label: string }> = [
+  { to: "/app/reports/journal-book", label: "Journal book" },
+  { to: "/app/reports/receivables", label: "Receivables" },
+  { to: "/app/reports/payables", label: "Payables" },
+  { to: "/app/reports/outstanding", label: "Outstanding bills" },
+  { to: "/app/reports/ageing", label: "Ageing" },
+  { to: "/app/reports/brs", label: "Bank reconciliation" },
 ];
 
 export function PhoneMenuSheet() {
@@ -90,6 +101,21 @@ export function PhoneMenuSheet() {
                 ))}
               </div>
             ))}
+            <details className="py-2">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground [&::-webkit-details-marker]:hidden">
+                More reports
+              </summary>
+              {PHONE_MORE_REPORTS.map((it) => (
+                <Link
+                  key={it.to}
+                  to={it.to}
+                  onClick={() => setOpen(false)}
+                  className="flex min-h-12 items-center rounded-md px-3 text-base text-foreground active:bg-accent"
+                >
+                  {it.label}
+                </Link>
+              ))}
+            </details>
           </div>
         </SheetContent>
       </Sheet>

@@ -438,9 +438,12 @@ export function DataGrid<T>({
       <PhoneRecordList
         renderRows={renderRows}
         rows={rows}
+        columns={columns}
         visibleColumns={visibleColumns}
         aggregates={aggregates}
         onRowClick={onRowClick}
+        onToggleGroup={toggleGroup}
+        footerLabel={footerLabel}
         loading={!!(externalLoading || processed.loading)}
         empty={empty}
       />
@@ -751,23 +754,37 @@ const PHONE_PAGE = 100;
 function PhoneRecordList<T>({
   renderRows,
   rows,
+  columns,
   visibleColumns,
   aggregates,
   onRowClick,
+  onToggleGroup,
+  footerLabel,
   loading,
   empty,
 }: {
   renderRows: FlatRow<any>[];
   rows: T[];
+  columns: DGColumn<T>[];
   visibleColumns: DGColumn<T>[];
   aggregates: Record<string, number>;
   onRowClick?: (row: T) => void;
+  onToggleGroup?: (key: string) => void;
+  footerLabel?: ReactNode;
   loading: boolean;
   empty?: ReactNode;
 }) {
   const [limit, setLimit] = useState(PHONE_PAGE);
+  const [expandedCards, setExpandedCards] = useState<Set<number>>(() => new Set());
   const records = renderRows.filter((r) => r.kind === "row");
-  const shown = records.slice(0, limit);
+  // Group headings and their subtotals stay in place; only record cards are limited.
+  let recordsSeen = 0;
+  const shown = renderRows.filter((r) => {
+    if (r.kind !== "row") return true;
+    recordsSeen += 1;
+    return recordsSeen <= limit;
+  });
+  const groupAggCols = visibleColumns.filter((c) => c.aggregator);
   const [head, ...rest] = visibleColumns;
   const aggCols = visibleColumns.filter((c) => c.aggregator);
   const cellNode = (c: DGColumn<T>, row: T): ReactNode =>
@@ -780,7 +797,35 @@ function PhoneRecordList<T>({
       {!loading && records.length === 0 && (
         <div className="py-6 text-center text-sm text-muted-foreground">{empty ?? "No matching rows."}</div>
       )}
-      {shown.map((fr) => {
+      {shown.map((fr, si) => {
+        if (fr.kind === "group") {
+          const gcol = columns.find((c) => c.id === fr.groupCol);
+          const value = fr.key.split("=").slice(1).join("=");
+          return (
+            <button
+              type="button"
+              key={`g-${fr.key}-${si}`}
+              onClick={onToggleGroup ? () => onToggleGroup(fr.key) : undefined}
+              disabled={!onToggleGroup}
+              className="flex w-full flex-col rounded-lg border bg-muted/60 p-3 text-left active:bg-muted disabled:active:bg-muted/60"
+            >
+              <span className="flex w-full items-center justify-between gap-2 text-sm font-semibold">
+                <span className="min-w-0 break-words">{`${String(gcol?.header ?? fr.groupCol)}: ${value}`}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{fr.count} · {fr.expanded ? "Hide" : "Show"}</span>
+              </span>
+              {groupAggCols.length > 0 && (
+                <span className="mt-1 grid grid-cols-2 gap-x-3 font-mono text-xs tabular-nums">
+                  {groupAggCols.map((c) => (
+                    <span key={c.id} className="flex justify-between gap-2">
+                      <span className="font-sans text-muted-foreground">{c.header}</span>
+                      <span>{(c.formatGroupValue ?? c.formatAggregate ?? defaultFormat)(fr.aggregates[c.id] ?? 0)}</span>
+                    </span>
+                  ))}
+                </span>
+              )}
+            </button>
+          );
+        }
         const idx = (fr as any).row.__index as number;
         const row = rows[idx];
         if (!row || !head) return null;
@@ -796,24 +841,19 @@ function PhoneRecordList<T>({
               onRowClick && "cursor-pointer active:bg-muted/50",
             )}
           >
-            <div className="min-w-0 break-words text-sm font-semibold">{cellNode(head, row)}</div>
-            {rest.length > 0 && (
-              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-                {rest.map((c) => (
-                  <div key={c.id} className="min-w-0">
-                    <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{c.header}</dt>
-                    <dd
-                      className={cn(
-                        "break-words",
-                        cellAlign(c) === "right" && "font-mono tabular-nums text-right",
-                      )}
-                    >
-                      {cellNode(c, row)}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
+            <PhoneRecordSummary
+              row={row}
+              head={head}
+              rest={rest}
+              cellNode={cellNode}
+              cellAlign={cellAlign}
+              expanded={expandedCards.has(idx)}
+              onToggle={() => setExpandedCards((prev) => {
+                const next = new Set(prev);
+                if (next.has(idx)) next.delete(idx); else next.add(idx);
+                return next;
+              })}
+            />
           </div>
         );
       })}
@@ -824,7 +864,7 @@ function PhoneRecordList<T>({
       )}
       {aggCols.length > 0 && records.length > 0 && (
         <div className="rounded-lg border bg-muted/50 p-3 text-sm">
-          <div className="mb-2 font-semibold">Total · {records.length} rows</div>
+          <div className="mb-2 font-semibold">{footerLabel ?? "Total"} · {records.length} rows</div>
           <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
             {aggCols.map((c) => (
               <div key={c.id} className="min-w-0">
@@ -838,5 +878,70 @@ function PhoneRecordList<T>({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Compact phone card: the title and the first amount show at once. Every other
+ * field, and the row actions column, sits behind "Details" (actions stay visible).
+ */
+function PhoneRecordSummary<T>({
+  row,
+  head,
+  rest,
+  cellNode,
+  cellAlign,
+  expanded,
+  onToggle,
+}: {
+  row: T;
+  head: DGColumn<T>;
+  rest: DGColumn<T>[];
+  cellNode: (c: DGColumn<T>, row: T) => ReactNode;
+  cellAlign: (c: DGColumn<T>) => "left" | "right" | "center";
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const actionsCol = rest.find((c) => c.id === "actions");
+  const fields = rest.filter((c) => c.id !== "actions");
+  const summaryCol = fields.find((c) => c.type === "number") ?? fields[0];
+  const details = fields.filter((c) => c !== summaryCol);
+  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 break-words text-sm font-semibold">{cellNode(head, row)}</div>
+        {summaryCol && (
+          <div className={cn("shrink-0 text-sm font-mono font-semibold tabular-nums", cellAlign(summaryCol) === "right" ? "text-right" : "")}>
+            {cellNode(summaryCol, row)}
+          </div>
+        )}
+      </div>
+      {details.length > 0 && expanded && (
+        <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 border-t pt-2 text-sm">
+          {details.map((c) => (
+            <div key={c.id} className="min-w-0">
+              <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{c.header}</dt>
+              <dd className={cn("break-words", cellAlign(c) === "right" && "font-mono tabular-nums text-right")}>
+                {cellNode(c, row)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <div className="mt-2 flex items-center justify-between gap-2" onClick={stop} onKeyDown={stop}>
+        {details.length > 0 ? (
+          <button
+            type="button"
+            onClick={onToggle}
+            className="h-9 rounded-md px-2 text-xs font-medium text-primary active:bg-muted"
+            aria-expanded={expanded}
+          >
+            {expanded ? "Hide details" : "Details"}
+          </button>
+        ) : <span />}
+        {actionsCol && <div className="flex items-center gap-1">{cellNode(actionsCol, row)}</div>}
+      </div>
+    </>
   );
 }

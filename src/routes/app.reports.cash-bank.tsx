@@ -74,6 +74,7 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 function CashBankBook() {
+  const [phoneLimit, setPhoneLimit] = useState(100);
   const navigate = useNavigate();
   const { activeCompanyId, activeMembership } = useCompany();
   const pdfHeader = useReportPdfHeader();
@@ -547,7 +548,7 @@ function CashBankBook() {
               {rows.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">No entries in this period.</p>
               ) : (
-                rows.map((row) => (
+                rows.slice(0, phoneLimit).map((row) => (
                   <button
                     type="button"
                     key={row.key}
@@ -576,6 +577,15 @@ function CashBankBook() {
                     </div>
                   </button>
                 ))
+              )}
+              {rows.length > phoneLimit && (
+                <button
+                  type="button"
+                  onClick={() => setPhoneLimit((n) => n + 100)}
+                  className="h-11 w-full rounded-md border text-sm font-medium"
+                >
+                  Show more ({rows.length - phoneLimit} left)
+                </button>
               )}
               <div className="rounded-lg bg-muted/50 p-3 text-sm font-semibold">
                 <div className="flex justify-between font-mono tabular-nums">

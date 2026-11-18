@@ -6,8 +6,9 @@
 // In a browser tab the user gets a manual download.
 
 import { buildCompanyBackup } from "./backup";
+import { buildBackupWorkbook } from "./backup-excel";
 import { wrapBackup } from "./backup-policy";
-import { hasNativeStorage, saveCompanyFileNative, writeAbsoluteFileNative } from "./native-bridge";
+import { hasNativeStorage, isAndroidRuntime, isDesktopRuntime, saveCompanyFileNative, writeAbsoluteFileNative } from "./native-bridge";
 import { getBackupFolder, setBackupFolder } from "./backup-location";
 import { getShortDataRoot } from "./short-data-root";
 
@@ -38,7 +39,13 @@ function browserDownload(fileName: string, contents: string | Uint8Array, mime: 
 export interface MirrorResult {
   jsonFile: string;
   desktopJsonPath?: string;
+  /** True only on the Windows/Electron desktop app. Android is reported with isAndroid. */
   isDesktop: boolean;
+  isAndroid?: boolean;
+  /** Excel companion written beside the JSON (file name, saved path on native platforms). */
+  excelFile?: string;
+  excelPath?: string;
+  excelError?: string;
   /** When set, the user-picked folder was unreachable and we fell back to the legacy default location. */
   fallbackReason?: string;
   /** When fallbackReason is set, this is the folder path the user had picked (now unreachable). */
@@ -79,6 +86,16 @@ export async function writeLocalMirror(
   const envelope = await wrapBackup(backup);
   const jsonStr = JSON.stringify(envelope);
 
+  // Readable Excel companion. A failure here must not block the JSON safety copy.
+  const xlsxName = `${safe}${codePart}_${stamp}.xlsx`;
+  let xlsxBytes: Uint8Array | null = null;
+  let excelError: string | undefined;
+  try {
+    xlsxBytes = new Uint8Array(await buildBackupWorkbook(backup));
+  } catch (e) {
+    excelError = e instanceof Error ? e.message : String(e);
+  }
+
   if (hasNativeStorage()) {
     // If the user hasn't picked a backup folder yet, default to the short
     // data root (C:\smartaccountant on Windows, ~/smartaccountant elsewhere)
@@ -96,9 +113,12 @@ export async function writeLocalMirror(
     let j1, j2;
     let fallbackReason: string | undefined;
     let attemptedFolder: string | undefined;
+    // Folder the JSON was written to; null means the company's default folder.
+    let jsonDir: string | null = null;
     if (chosen) {
       // Write into the user-picked folder: <chosen>/<Company>/backups + /latest
       const base = `${chosen.replace(/[\\/]+$/, "")}/${companySeg}`;
+      jsonDir = base;
       [j1, j2] = await Promise.all([
         writeAbsoluteFileNative(base, "backups", jsonFile, jsonStr),
         writeAbsoluteFileNative(base, "latest", latestJson, jsonStr),
@@ -112,6 +132,7 @@ export async function writeLocalMirror(
         const shortRoot = await getShortDataRoot();
         if (shortRoot && shortRoot !== chosen) {
           const base2 = `${shortRoot.replace(/[\\/]+$/, "")}/${companySeg}`;
+          jsonDir = base2;
           [j1, j2] = await Promise.all([
             writeAbsoluteFileNative(base2, "backups", jsonFile, jsonStr),
             writeAbsoluteFileNative(base2, "latest", latestJson, jsonStr),
@@ -127,6 +148,7 @@ export async function writeLocalMirror(
       }
     } else {
       // Last-resort fallback: legacy %LOCALAPPDATA%\...\mirror\<Company>\... location.
+      jsonDir = null;
       [j1, j2] = await Promise.all([
         saveCompanyFileNative(companyName, "backups", jsonFile, jsonStr),
         saveCompanyFileNative(companyName, "latest", latestJson, jsonStr),
@@ -136,11 +158,23 @@ export async function writeLocalMirror(
       const err = j1.error || j2.error || "Unknown error";
       throw new Error(`Local save failed: ${err}`);
     }
+    let excelPath: string | undefined;
+    if (xlsxBytes) {
+      const xr = jsonDir
+        ? await writeAbsoluteFileNative(jsonDir, "backups", xlsxName, xlsxBytes)
+        : await saveCompanyFileNative(companyName, "backups", xlsxName, xlsxBytes);
+      if (xr.ok) excelPath = xr.path;
+      else excelError = xr.error || "Excel save failed";
+    }
     try { localStorage.setItem(LAST_MIRROR_KEY + companyId, new Date().toISOString()); } catch { /* ignore */ }
     return {
       jsonFile,
       desktopJsonPath: j1.path,
-      isDesktop: true,
+      isDesktop: isDesktopRuntime(),
+      isAndroid: isAndroidRuntime(),
+      excelFile: xlsxBytes ? xlsxName : undefined,
+      excelPath,
+      excelError,
       fallbackReason,
       attemptedFolder,
     };
@@ -148,6 +182,9 @@ export async function writeLocalMirror(
 
   // Browser fallback — single JSON download.
   browserDownload(jsonFile, jsonStr, "application/json");
+  if (xlsxBytes) {
+    browserDownload(xlsxName, xlsxBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  }
   try { localStorage.setItem(LAST_MIRROR_KEY + companyId, new Date().toISOString()); } catch { /* ignore */ }
-  return { jsonFile, isDesktop: false };
+  return { jsonFile, isDesktop: false, isAndroid: false, excelFile: xlsxBytes ? xlsxName : undefined, excelError };
 }

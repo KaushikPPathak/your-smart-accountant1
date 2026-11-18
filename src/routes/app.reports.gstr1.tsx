@@ -76,7 +76,7 @@ function GSTR1Page() {
   const [templateExporting, setTemplateExporting] = useState(false);
   const [livePreviewOn, setLivePreviewOn] = useState(false);
   const [drilldownOpen, setDrilldownOpen] = useState(false);
-  const { view, setView } = useReportView("gstr1");
+  const { view, setView } = useReportView("gstr1", "classic", "grid");
 
   // Determine effective period
   const period = useMemo(() => {

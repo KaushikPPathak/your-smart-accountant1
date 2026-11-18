@@ -76,6 +76,24 @@ export function GstSectionTable({
             />
           </div>
         ) : (
+          <>
+          {/* Phone: one readable card per row. The table is shown from 640px up. */}
+          <div className="space-y-2 p-3 sm:hidden">
+            {rows.map((r, i) => (
+              <div key={i} className="rounded-lg border bg-card p-3">
+                <div className="break-words text-sm font-semibold">{r[0]}</div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-sm tabular-nums">
+                  {headers.slice(1).map((h, k) => (
+                    <div key={k} className="min-w-0">
+                      <dt className="font-sans text-[11px] uppercase tracking-wide text-muted-foreground">{h}</dt>
+                      <dd className="break-words">{r[k + 1]}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -94,6 +112,8 @@ export function GstSectionTable({
               ))}
             </TableBody>
           </Table>
+          </div>
+          </>
         )}
       </CardContent>
     </Card>

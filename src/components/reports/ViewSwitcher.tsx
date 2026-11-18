@@ -4,11 +4,20 @@ import { LayoutGrid, Table as TableIcon } from "lucide-react";
 
 export type ReportView = "classic" | "grid";
 
-export function useReportView(reportId: string, initial: ReportView = "classic") {
+/**
+ * Remembers the Classic/Grid choice per report. On a phone with no saved choice,
+ * `phoneInitial` is used (cards/Grid), so the desktop choice is never overwritten.
+ */
+export function useReportView(reportId: string, initial: ReportView = "classic", phoneInitial?: ReportView) {
   const key = `report-view:${reportId}`;
   const [view, setView] = useState<ReportView>(() => {
     if (typeof window === "undefined") return initial;
-    return ((localStorage.getItem(key) as ReportView) ?? initial);
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved === "classic" || saved === "grid") return saved;
+    } catch { /* ignore */ }
+    const phone = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches;
+    return phone && phoneInitial ? phoneInitial : initial;
   });
   useEffect(() => {
     try { localStorage.setItem(key, view); } catch { /* ignore */ }

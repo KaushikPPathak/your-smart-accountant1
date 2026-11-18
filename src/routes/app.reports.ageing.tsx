@@ -60,7 +60,7 @@ function AgeingPage() {
   const [allocs, setAllocs] = useState<AllocRow[]>([]);
   const [localAged, setLocalAged] = useState<AgedResult | null>(null);
   const pdfHeader = useReportPdfHeader();
-  const { view, setView } = useReportView("ageing");
+  const { view, setView } = useReportView("ageing", "classic", "grid");
 
   useEffect(() => {
     if (!activeCompanyId) return;

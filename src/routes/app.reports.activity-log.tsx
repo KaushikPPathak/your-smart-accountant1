@@ -9,10 +9,11 @@ import { useCompany } from "@/lib/company-context";
 import { listActivity, isActivityLogEnabled, setActivityLogEnabled, getActivityRetentionDays, setActivityRetentionDays, pruneOldActivity, type ActivityRow } from "@/lib/activity-log";
 import { downloadCsv } from "@/lib/csv";
 import { toast } from "sonner";
+import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
 
 export const Route = createFileRoute("/app/reports/activity-log")({
   head: () => ({ meta: [{ title: "Activity Log — Reports" }] }),
-  component: ActivityLogPage,
+  component: desktopOnly("Activity log", ActivityLogPage),
 });
 
 function ActivityLogPage() {

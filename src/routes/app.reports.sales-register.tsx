@@ -518,6 +518,28 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
       <Card className="print:hidden" data-print-hide>
         <CardContent className="p-0">
           <div className="border-b px-4 py-3 font-medium">HSN Summary</div>
+          {/* Phone: compact rows; tap a row for quantity and tax. */}
+          <div className="space-y-2 p-3 sm:hidden">
+            {hsn.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No items in range.</p>}
+            {hsn.map((h, i) => (
+              <details key={i} className="rounded-lg border bg-card p-3">
+                <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+                  <span className="min-w-0">
+                    <span className="block break-all font-mono text-sm font-semibold">{h.hsn}</span>
+                    <span className="text-xs text-muted-foreground">@ {h.rate}%</span>
+                  </span>
+                  <span className="shrink-0 font-mono text-sm font-semibold tabular-nums">{formatINR(h.taxable)}</span>
+                </summary>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t pt-2 font-mono text-sm tabular-nums">
+                  <div className="flex justify-between"><dt className="font-sans text-muted-foreground">Qty</dt><dd>{h.qty}</dd></div>
+                  <div className="flex justify-between"><dt className="font-sans text-muted-foreground">CGST</dt><dd>{formatINR(h.cgst)}</dd></div>
+                  <div className="flex justify-between"><dt className="font-sans text-muted-foreground">SGST</dt><dd>{formatINR(h.sgst)}</dd></div>
+                  <div className="flex justify-between"><dt className="font-sans text-muted-foreground">IGST</dt><dd>{formatINR(h.igst)}</dd></div>
+                </dl>
+              </details>
+            ))}
+          </div>
+          <div className="hidden sm:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -551,6 +573,7 @@ export function Register({ kind }: { kind: "sales" | "purchase" }) {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </ReportViewer>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { fmtIndianDate } from "@/lib/format-date";
 
 /**
@@ -58,12 +59,13 @@ export function RegisterPrintTable({
   const num = `${td} num text-right tabular-nums whitespace-nowrap`;
   const cols = withGst ? 11 : 7;
 
+  const [phoneLimit, setPhoneLimit] = useState(100);
   const phoneCards = (
     <div className="space-y-2 print:hidden sm:hidden">
       {lines.length === 0 && (
         <p className="py-6 text-center text-sm text-muted-foreground">No entries in this period.</p>
       )}
-      {lines.map((l, i) => (
+      {lines.slice(0, phoneLimit).map((l, i) => (
         <button
           type="button"
           key={l.id}
@@ -103,6 +105,15 @@ export function RegisterPrintTable({
           </dl>
         </button>
       ))}
+      {lines.length > phoneLimit && (
+        <button
+          type="button"
+          onClick={() => setPhoneLimit((n) => n + 100)}
+          className="h-11 w-full rounded-md border text-sm font-medium"
+        >
+          Show more ({lines.length - phoneLimit} left)
+        </button>
+      )}
       {lines.length > 0 && (
         <div className="rounded-lg bg-muted p-3 text-sm font-semibold">
           <div className="mb-1">Total · {lines.length} bills</div>

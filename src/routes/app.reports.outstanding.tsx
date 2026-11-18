@@ -57,6 +57,7 @@ interface AllocRow {
 }
 
 function OutstandingPage() {
+  const [phoneLimit, setPhoneLimit] = useState(100);
   const { activeCompanyId } = useCompany();
   const [mode, setMode] = useState<"receivables" | "payables">("receivables");
   const { asOf, setAsOf } = useFyAsOfState();
@@ -317,7 +318,7 @@ function OutstandingPage() {
               <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
             ) : rows.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">No outstanding bills 🎉</p>
-            ) : rows.map((r) => {
+            ) : rows.slice(0, phoneLimit).map((r) => {
               const isMsme = mode === "payables" && !!r.ledgers?.msme_registered;
               const brk = isMsme
                 ? msmedInterestBreakdown(r.pending_paise, r.voucher_date, asOf, { agreedDueDate: r.due_date, bankRatePct: bankRate })
@@ -352,6 +353,15 @@ function OutstandingPage() {
                 </div>
               );
             })}
+            {!loading && rows.length > phoneLimit && (
+              <button
+                type="button"
+                onClick={() => setPhoneLimit((n) => n + 100)}
+                className="h-11 w-full rounded-md border text-sm font-medium"
+              >
+                Show more ({rows.length - phoneLimit} left)
+              </button>
+            )}
           </div>
           <div className="hidden overflow-x-auto sm:block">
           <Table>

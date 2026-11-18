@@ -19,10 +19,10 @@ import {
   type RestoreSummary,
 } from "@/lib/backup";
 import { useCompany } from "@/lib/company-context";
-import { Layers } from "lucide-react";
+import { Layers, Share2 } from "lucide-react";
 import { wrapBackup } from "@/lib/backup-policy";
 import {
-  saveWithPickerNative, isDesktopRuntime, showInFolderNative, openPathNative,
+  saveWithPickerNative, isAndroidRuntime, isDesktopRuntime, showInFolderNative, openPathNative, shareFilesAndroid,
   pickFolderNative, pickFileNative, readAbsoluteTextFileNative, NO_NATIVE_PICKER,
 } from "@/lib/native-bridge";
 import { getAppPaths } from "@/lib/app-paths";
@@ -119,7 +119,12 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     try {
       await preflightIntegrityToast(companyId, "backup");
       const r = await exportCompanyBackup(companyId, companyName);
-      toast.success(`Backup saved: ${r.fileName}${r.desktopPath ? ` (${r.desktopPath})` : ""}`);
+      if (r.androidShared) {
+        if (r.shareError) toast.error("Backup kept on this phone, but sharing failed", { description: r.shareError });
+        else toast.success("Backup ready to save or share", { description: r.fileName, duration: 6000 });
+      } else {
+        toast.success(`Backup saved: ${r.fileName}${r.desktopPath ? ` (${r.desktopPath})` : ""}`);
+      }
       try { localStorage.setItem(`lastBackup:${companyId}`, new Date().toISOString()); } catch { /* ignore */ }
     } catch (e) {
       toast.error((e as Error).message || "Export failed");
@@ -167,6 +172,11 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     setExportingAll(true);
     try {
       const r = await exportAllCompaniesBackup(list);
+      if (r.androidShared) {
+        if (r.shareError) toast.error("Backup kept on this phone, but sharing failed", { description: r.shareError });
+        else toast.success("All-company backup ready to save or share", { description: r.fileName, duration: 6000 });
+        return;
+      }
       toast.success(
         `Backed up ${list.length} compan${list.length === 1 ? "y" : "ies"}: ${r.fileName}`,
         { description: r.desktopPath ?? undefined, duration: 8000 },
@@ -192,10 +202,26 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     setMirroring(true);
     try {
       const r = await writeLocalMirror(companyId, companyName, partyCode ?? null);
-      toast.success(
-        r.isDesktop ? "Local copy saved to your PC" : "JSON backup downloaded",
-        { description: r.jsonFile, duration: 6000 },
-      );
+      if (r.isAndroid) {
+        // Phone: the JSON (restore source) and the Excel copy are kept in app storage
+        // and offered together to the system share sheet.
+        const paths: string[] = [];
+        const names: string[] = [];
+        if (r.desktopJsonPath) { paths.push(r.desktopJsonPath); names.push(r.jsonFile); }
+        if (r.excelPath && r.excelFile) { paths.push(r.excelPath); names.push(r.excelFile); }
+        const shared = paths.length
+          ? await shareFilesAndroid({ title: "Share backup", paths, names })
+          : { ok: false, error: "The backup file was not found on this phone." };
+        if (shared.ok) toast.success("Backup ready to save or share", { description: r.jsonFile, duration: 6000 });
+        else toast.error("Backup kept on this phone, but sharing failed", { description: shared.error });
+        if (r.excelError) toast.warning("Excel copy was not created", { description: r.excelError });
+      } else {
+        toast.success(
+          r.isDesktop ? "Local copy saved to your PC" : "Backup downloaded",
+          { description: [r.jsonFile, r.excelFile].filter(Boolean).join(" · "), duration: 6000 },
+        );
+        if (r.excelError) toast.warning("Excel copy was not created", { description: r.excelError });
+      }
       try { localStorage.setItem(`lastBackup:${companyId}`, new Date().toISOString()); } catch { /* ignore */ }
     } catch (e) {
       toast.error((e as Error).message || "Local save failed");
@@ -405,7 +431,9 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
             <Button onClick={doExport} disabled={exporting || disabled}>
               {exporting
                 ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Exporting…</>
-                : <><Download className="mr-2 h-4 w-4" />Export full backup (.json)</>}
+                : isAndroidRuntime()
+                  ? <><Share2 className="mr-2 h-4 w-4" />Share backup (.json)</>
+                  : <><Download className="mr-2 h-4 w-4" />Export full backup (.json)</>}
             </Button>
             {isDesktopRuntime() && (
               <Button
@@ -430,7 +458,7 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
               >
                 {exportingAll
                   ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Backing up {memberships.length} companies…</>
-                  : <><Layers className="mr-2 h-4 w-4" />Backup ALL {memberships.length} companies (.json)</>}
+                  : <><Layers className="mr-2 h-4 w-4" />{isAndroidRuntime() ? "Share" : "Backup"} ALL {memberships.length} companies (.json)</>}
               </Button>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Recommended before workspace transfers or major upgrades. Produces a single
@@ -447,7 +475,7 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
             >
               {mirroring
                 ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
-                : <><HardDriveDownload className="mr-2 h-4 w-4" />Backup now (JSON + Excel)</>}
+                : <><HardDriveDownload className="mr-2 h-4 w-4" />{isAndroidRuntime() ? "Backup now and share (JSON + Excel)" : "Backup now (JSON + Excel)"}</>}
             </Button>
             <p className="mt-1 text-[11px] text-muted-foreground">
               In the desktop app, both files are written silently to your chosen

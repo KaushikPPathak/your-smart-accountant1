@@ -101,6 +101,9 @@ function GSTR3BPage() {
 
   return (
     <div className="space-y-3">
+      <p className="rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground sm:hidden">
+        Phone: review only. Importing, matching and changes are done in the Windows app.
+      </p>
       <Card>
         <CardContent className="p-3 print:hidden">
           <div className="flex flex-wrap items-end gap-3">
@@ -597,7 +600,7 @@ function ManualEntryCard({ companyId, period, inward, reversal, onChanged }: {
   };
 
   return (
-    <Card>
+    <Card className="hidden sm:block">
       <CardContent className="p-4 space-y-4 print:hidden">
         <div className="text-sm font-medium">Manual entries for {period}</div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -901,7 +904,7 @@ function PurchaseExpenseLedger({
   };
 
   return (
-    <Card className="print:hidden">
+    <Card className="hidden print:hidden sm:block">
       <CardContent className="p-0">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div>

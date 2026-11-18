@@ -51,7 +51,9 @@ export interface MultiCompanyBackup {
 }
 
 // ---------- Native desktop bridge (Electron or Tauri) ----------
-import { hasNativeStorage, saveCompanyFileNative, writeAbsoluteFileNative } from "./native-bridge";
+import {
+  hasNativeStorage, isAndroidRuntime, saveCompanyFileNative, shareFilesAndroid, writeAbsoluteFileNative,
+} from "./native-bridge";
 import { getBackupFolder } from "./backup-location";
 
 // ---------- Helpers ----------
@@ -209,6 +211,24 @@ export async function buildCompanyBackup(companyId: string): Promise<CompanyBack
 export interface SaveResult {
   fileName: string;
   desktopPath?: string;
+  /** Android: the backup is kept in app storage and offered to the system share sheet. */
+  androidShared?: boolean;
+  shareError?: string;
+}
+
+/** Android: keep the backup in app storage (safety copy), then offer it to the share sheet. */
+async function saveAndShareOnAndroid(
+  companyName: string,
+  fileName: string,
+  contents: string,
+  title: string,
+): Promise<SaveResult> {
+  const res = await saveCompanyFileNative(companyName, "backups", fileName, contents);
+  if (!res.ok || !res.path) {
+    throw new Error(res.error || "Could not save the backup on this phone.");
+  }
+  const shared = await shareFilesAndroid({ title, paths: [res.path], names: [fileName] });
+  return { fileName, desktopPath: res.path, androidShared: true, shareError: shared.ok ? undefined : shared.error };
 }
 
 export async function exportCompanyBackup(
@@ -220,6 +240,10 @@ export async function exportCompanyBackup(
   const fileName = `${safeName(companyName)}_backup_${stamp}.json`;
   const envelope = await wrapBackup(payload);
   const contents = JSON.stringify(envelope, null, 2);
+
+  if (isAndroidRuntime()) {
+    return saveAndShareOnAndroid(companyName, fileName, contents, "Share backup");
+  }
 
   if (hasNativeStorage()) {
     const chosen = getBackupFolder(companyId);
@@ -253,6 +277,10 @@ export async function exportAllCompaniesBackup(
   const fileName = `YourMehtaji_AllCompanies_${stamp}.json`;
   const envelope = await wrapBackup(payload);
   const contents = JSON.stringify(envelope, null, 2);
+
+  if (isAndroidRuntime()) {
+    return saveAndShareOnAndroid("_AllCompanies", fileName, contents, "Share all-company backup");
+  }
 
   if (hasNativeStorage()) {
     const res = await saveCompanyFileNative("_AllCompanies", "backups", fileName, contents);
