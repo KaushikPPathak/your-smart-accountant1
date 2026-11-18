@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { printOrViewOnPhone } from "@/components/reports/ReportViewer";
+import { isAndroidTauri } from "@/lib/native-bridge";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { desktopOnly } from "@/components/phone/DesktopOnlyNotice";
@@ -92,7 +94,7 @@ const SECTIONS: Section[] = [
 
 function ReleaseChecklistPage() {
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
+    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8" data-report-view="">
       <div className="flex items-start justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-semibold">Release Checklist</h1>
@@ -101,8 +103,8 @@ function ReleaseChecklistPage() {
             Every release must be signed off against this list.
           </p>
         </div>
-        <Button size="sm" onClick={() => window.print()}>
-          <Printer className="mr-1 h-4 w-4" /> Print
+        <Button size="sm" onClick={(e) => printOrViewOnPhone(e, "Release checklist")}>
+          <Printer className="mr-1 h-4 w-4" /> {isAndroidTauri() ? "View" : "Print"}
         </Button>
       </div>
 

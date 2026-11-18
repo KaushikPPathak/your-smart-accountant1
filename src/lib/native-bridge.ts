@@ -170,6 +170,51 @@ export async function shareFilesAndroid(opts: {
   }
 }
 
+/**
+ * Copy a saved export into the public Downloads folder (Files app → Download →
+ * Your Mehtaji). Android 10 or newer. Resolves with a human-readable location.
+ */
+export async function saveToDownloadsAndroid(opts: {
+  filePath: string;
+  fileName: string;
+  mime: string;
+  folder: string;
+}): Promise<{ ok: boolean; displayPath?: string; error?: string }> {
+  if (!isAndroidTauri()) return { ok: false, error: "Needs the Android app." };
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const res = await invoke<{ displayPath?: string }>("plugin:share-text|save_to_downloads", {
+      filePath: opts.filePath,
+      fileName: opts.fileName,
+      mime: opts.mime,
+      folder: opts.folder,
+    });
+    return { ok: true, displayPath: res?.displayPath };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Open a saved file in a viewer the user chooses (PDF reader, Sheets, Word).
+ * The viewer is a separate screen, so Back returns to Your Mehtaji.
+ */
+export async function openFileAndroid(opts: {
+  title: string;
+  filePath: string;
+  fileName: string;
+  mime: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!isAndroidTauri()) return { ok: false, error: "Opening files needs the Android app." };
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("plugin:share-text|open_file", opts);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function shareFileAndroid(opts: {
   text: string;
   filePath: string;

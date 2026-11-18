@@ -102,10 +102,79 @@ async fn share_files<R: Runtime>(
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+struct OpenFilePayload {
+    title: String,
+    file_path: String,
+    file_name: String,
+    mime: String,
+}
+
+/// Opens a saved file in a viewer app (chooser). Back from the viewer returns to the app.
+#[tauri::command]
+async fn open_file<R: Runtime>(
+    app: AppHandle<R>,
+    title: String,
+    file_path: String,
+    file_name: String,
+    mime: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        let handle = app.state::<ShareHandle<R>>();
+        handle
+            .0
+            .run_mobile_plugin::<serde_json::Value>("openFile", OpenFilePayload { title, file_path, file_name, mime })
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, title, file_path, file_name, mime);
+        Err("open_file is only available on Android".into())
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+struct SaveToDownloadsPayload {
+    file_path: String,
+    file_name: String,
+    mime: String,
+    folder: String,
+}
+
+/// Copies a file into the public Downloads folder. Resolves to { displayPath }.
+#[tauri::command]
+async fn save_to_downloads<R: Runtime>(
+    app: AppHandle<R>,
+    file_path: String,
+    file_name: String,
+    mime: String,
+    folder: String,
+) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "android")]
+    {
+        let handle = app.state::<ShareHandle<R>>();
+        handle
+            .0
+            .run_mobile_plugin::<serde_json::Value>("saveToDownloads", SaveToDownloadsPayload { file_path, file_name, mime, folder })
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, file_path, file_name, mime, folder);
+        Err("save_to_downloads is only available on Android".into())
+    }
+}
+
 /// Registers the share-text plugin.
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("share-text")
-        .invoke_handler(tauri::generate_handler![share_text, share_file, share_files])
+        .invoke_handler(tauri::generate_handler![share_text, share_file, share_files, open_file, save_to_downloads])
         .setup(|app, api| {
             #[cfg(target_os = "android")]
             {

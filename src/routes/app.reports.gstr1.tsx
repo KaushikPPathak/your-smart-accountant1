@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { printOrViewOnPhone } from "@/components/reports/ReportViewer";
+import { isAndroidTauri } from "@/lib/native-bridge";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -208,7 +210,7 @@ function GSTR1Page() {
 
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-report-view="">
       <Card>
         <CardContent className="p-3 print:hidden">
           <div className="flex flex-wrap items-end gap-3">
@@ -296,8 +298,8 @@ function GSTR1Page() {
               <Button variant="outline" size="sm" onClick={onDownloadJson} disabled={!built}>
                 <FileJson className="mr-1 h-4 w-4" /> GSTN JSON
               </Button>
-              <Button variant="outline" size="sm" onClick={() => window.print()}>
-                <Printer className="mr-1 h-4 w-4" /> Print
+              <Button variant="outline" size="sm" onClick={(e) => printOrViewOnPhone(e, "GSTR-1")}>
+                <Printer className="mr-1 h-4 w-4" /> {isAndroidTauri() ? "View" : "Print"}
               </Button>
             </div>
           </div>

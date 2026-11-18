@@ -2,13 +2,17 @@ package com.smartaccountant.sharetext
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
+import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import java.io.File
 
@@ -22,6 +26,23 @@ class ShareFileArgs {
     var text: String? = null
     var filePath: String? = null
     var fileName: String? = null
+}
+
+@InvokeArg
+class OpenFileArgs {
+    var title: String? = null
+    var filePath: String? = null
+    var fileName: String? = null
+    var mime: String? = null
+}
+
+@InvokeArg
+class SaveToDownloadsArgs {
+    var filePath: String? = null
+    var fileName: String? = null
+    var mime: String? = null
+    /** Sub-folder under Download, e.g. "Your Mehtaji/Acme/Reports". */
+    var folder: String? = null
 }
 
 @InvokeArg
@@ -118,7 +139,89 @@ class SharePlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve()
     }
 
+    /**
+     * Copies a saved export into the public Downloads folder (Files app → Download →
+     * Your Mehtaji) so the user can find it without the app. Needs Android 10+.
+     */
+    @Command
+    fun saveToDownloads(invoke: Invoke) {
+        val args = invoke.parseArgs(SaveToDownloadsArgs::class.java)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            invoke.reject("Saving to Downloads needs Android 10 or newer.")
+            return
+        }
+        val source = File(args.filePath ?: "")
+        if (!source.exists()) {
+            invoke.reject("The file was not found on this phone.")
+            return
+        }
+        val name = (args.fileName ?: source.name).replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        val folder = (args.folder ?: "Your Mehtaji").replace(Regex("[\\\\:*?\"<>|]"), "_").trim('/')
+        val resolver = activity.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, name)
+            put(MediaStore.Downloads.MIME_TYPE, args.mime ?: mimeFor(name))
+            put(MediaStore.Downloads.RELATIVE_PATH, "Download/$folder")
+            put(MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        if (uri == null) {
+            invoke.reject("Could not create the file in Downloads.")
+            return
+        }
+        try {
+            resolver.openOutputStream(uri)?.use { out -> source.inputStream().use { it.copyTo(out) } }
+                ?: throw IllegalStateException("No output stream")
+            val done = ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }
+            resolver.update(uri, done, null, null)
+        } catch (e: Exception) {
+            resolver.delete(uri, null, null)
+            invoke.reject("Could not write the file to Downloads: ${e.message}")
+            return
+        }
+        val ret = JSObject()
+        ret.put("displayPath", "Downloads/$folder/$name")
+        invoke.resolve(ret)
+    }
+
+    /**
+     * Opens a saved file in a viewer app chosen by the user (PDF reader, Sheets, Word...).
+     * The viewer runs as a separate screen, so Back returns to Your Mehtaji.
+     */
+    @Command
+    fun openFile(invoke: Invoke) {
+        val args = invoke.parseArgs(OpenFileArgs::class.java)
+        val source = File(args.filePath ?: "")
+        if (!source.exists()) {
+            invoke.reject("The file was not found on this phone.")
+            return
+        }
+        val dir = File(activity.cacheDir, "share").apply { mkdirs() }
+        val name = args.fileName ?: source.name
+        val safeName = name.replace(Regex("[^A-Za-z0-9._ -]"), "_")
+        val target = File(dir, safeName)
+        source.copyTo(target, overwrite = true)
+
+        val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.sharetext.fileprovider", target)
+        val view = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, args.mime ?: mimeFor(name))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            activity.startActivity(Intent.createChooser(view, args.title ?: "Open file"))
+        } catch (e: ActivityNotFoundException) {
+            invoke.reject("No app on this phone can open this file. Use Share instead.")
+            return
+        }
+        invoke.resolve()
+    }
+
     private fun mimeFor(name: String): String = when {
+        name.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
+        name.endsWith(".xls", ignoreCase = true) -> "application/vnd.ms-excel"
+        name.endsWith(".csv", ignoreCase = true) -> "text/csv"
+        name.endsWith(".doc", ignoreCase = true) -> "application/msword"
+        name.endsWith(".docx", ignoreCase = true) -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         name.endsWith(".json", ignoreCase = true) -> "application/json"
         name.endsWith(".xlsx", ignoreCase = true) -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         else -> "application/octet-stream"

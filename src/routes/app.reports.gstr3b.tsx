@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { printOrViewOnPhone } from "@/components/reports/ReportViewer";
+import { isAndroidTauri } from "@/lib/native-bridge";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -100,7 +102,7 @@ function GSTR3BPage() {
   const fileBase = `GSTR3B_${company?.gstin || "GSTIN"}_${period.fp}`;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-report-view="">
       <p className="rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground sm:hidden">
         Phone: review only. Importing, matching and changes are done in the Windows app.
       </p>
@@ -162,7 +164,8 @@ function GSTR3BPage() {
                 onClick={() => built && downloadJson(`${fileBase}.json`, gstr3bToJson(built))}>
                 <FileJson className="mr-1 h-4 w-4" /> GSTN JSON
               </Button>
-              <Button variant="outline" size="sm" onClick={() => {
+              <Button variant="outline" size="sm" onClick={(e) => {
+                if (isAndroidTauri()) { printOrViewOnPhone(e, "GSTR-3B"); return; }
                 const prev = document.title;
                 document.title = fileBase;
                 const restore = () => {
@@ -172,7 +175,7 @@ function GSTR3BPage() {
                 window.addEventListener("afterprint", restore);
                 window.print();
               }}>
-                <Printer className="mr-1 h-4 w-4" /> Print
+                <Printer className="mr-1 h-4 w-4" /> {isAndroidTauri() ? "View" : "Print"}
               </Button>
               <Button variant="default" size="sm" onClick={() => setCalcOpen(true)}>
                 <Calculator className="mr-1 h-4 w-4" /> GST Calculator

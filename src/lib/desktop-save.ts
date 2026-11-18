@@ -6,7 +6,11 @@
 import { toast } from "sonner";
 import {
   hasNativeStorage,
+  isAndroidTauri,
+  openFileAndroid,
   saveCompanyFileNative,
+  saveToDownloadsAndroid,
+  shareFilesAndroid,
   showInFolderNative,
   openPathNative,
 } from "./native-bridge";
@@ -92,6 +96,9 @@ export async function saveExport(opts: SaveExportOptions): Promise<string | null
     return null;
   }
   const savedPath = res.path;
+  if (isAndroidTauri()) {
+    return announceAndroidExport(opts, company, savedPath);
+  }
   // Compact description: show only the parent folder name, not the full path.
   const folderName = savedPath.replace(/[\\/][^\\/]+$/, "").replace(/^.*[\\/]/, "") || "folder";
   const exportToastId = toast.success(opts.toastTitle || opts.fileName, {
@@ -113,4 +120,61 @@ export async function saveExport(opts: SaveExportOptions): Promise<string | null
     },
   });
   return savedPath;
+}
+
+function androidMime(fileName: string, fallback: string): string {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (lower.endsWith(".xls")) return "application/vnd.ms-excel";
+  if (lower.endsWith(".csv")) return "text/csv";
+  if (lower.endsWith(".doc")) return "application/msword";
+  if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (lower.endsWith(".json")) return "application/json";
+  return fallback;
+}
+
+/**
+ * Android: the file is copied to the public Downloads folder (so it can be
+ * found in the Files app) and the toast offers Open (viewer, Back returns here)
+ * and Share (Drive, email, WhatsApp...). Nothing leaves the app until the user taps.
+ */
+async function announceAndroidExport(
+  opts: SaveExportOptions,
+  company: string,
+  appPath: string,
+): Promise<string> {
+  const mime = androidMime(opts.fileName, opts.mime);
+  const safeCompany = company.replace(/[\\/:*?"<>|]+/g, "_").trim() || "Company";
+  const dl = await saveToDownloadsAndroid({
+    filePath: appPath,
+    fileName: opts.fileName,
+    mime,
+    folder: `Your Mehtaji/${safeCompany}/${opts.subFolder}`,
+  });
+  const where = dl.ok && dl.displayPath
+    ? `Saved to ${dl.displayPath} — find it in the Files app.`
+    : `Saved in the app. Downloads copy failed: ${dl.error ?? "unknown error"}`;
+  toast.success(opts.toastTitle || opts.fileName, {
+    description: `${where} Tap Open to view it or Share to send it; Back returns here.`,
+    duration: 30000,
+    closeButton: true,
+    action: {
+      label: "Open",
+      onClick: () => {
+        void openFileAndroid({ title: opts.fileName, filePath: appPath, fileName: opts.fileName, mime }).then((r) => {
+          if (!r.ok) toast.error("Could not open the file", { description: r.error });
+        });
+      },
+    },
+    cancel: {
+      label: "Share",
+      onClick: () => {
+        void shareFilesAndroid({ title: opts.fileName, paths: [appPath], names: [opts.fileName] }).then((r) => {
+          if (!r.ok) toast.error("Could not share the file", { description: r.error });
+        });
+      },
+    },
+  });
+  return dl.ok && dl.displayPath ? dl.displayPath : appPath;
 }

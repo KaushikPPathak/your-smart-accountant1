@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { recordFailure, recordStage } from "@/lib/crash-log";
 import { preparePrintDom, endPrintDom } from "@/lib/print-prepare";
 import { printPreviewCss } from "./print-preview-css";
+import { isAndroidTauri } from "@/lib/native-bridge";
 
 /**
  * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
@@ -153,9 +154,27 @@ export function ReportViewer({
     });
   }, [onExportWord, company, localizedTitle, localizedHeading, subtitleText, periodText, addressLine, exportFileBase, orientation, title]);
 
+  // Android: never send the report to the system print service (it leaves the app
+  // and does not return). View on screen, or save and share a PDF/Word file instead.
+  const phoneApp = isAndroidTauri();
+
+  // The in-app preview's "Save & share PDF" button calls this on Android.
+  React.useEffect(() => {
+    if (!phoneApp) return;
+    const w = window as unknown as { __ymReportSharePdf?: () => void };
+    w.__ymReportSharePdf = () => {
+      if (onExportPdf) onExportPdf();
+      else toast.info("PDF export is not available for this report yet");
+    };
+    return () => {
+      if (w.__ymReportSharePdf) delete w.__ymReportSharePdf;
+    };
+  }, [phoneApp, onExportPdf]);
+
   const handlePick = React.useCallback(
-    (mode: PrintMode) => {
+    (requested: PrintMode) => {
       setPickerOpen(false);
+      const mode: PrintMode = phoneApp && requested === "system" ? "preview" : requested;
       // Allow the dialog to close before invoking blocking print/save APIs.
       window.setTimeout(() => {
         if (mode === "system") {
@@ -172,16 +191,17 @@ export function ReportViewer({
           );
         } else if (mode === "pdf") {
           onExportPdf?.();
-          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+          // On Android the export toast offers Open / Share, so no preview is opened over it.
+          if (!phoneApp) openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
         } else if (mode === "word") {
           doWord();
-          openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
+          if (!phoneApp) openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
         } else if (mode === "preview") {
           openPrintPreview(rootRef.current, company, localizedHeading || localizedTitle, fyShort, orientation);
         }
       }, 50);
     },
-    [onExportPdf, doWord, company, localizedHeading, localizedTitle, fyShort, orientation],
+    [onExportPdf, doWord, company, localizedHeading, localizedTitle, fyShort, orientation, phoneApp],
   );
 
   const [pathname, setPathname] = React.useState(() =>
@@ -299,6 +319,7 @@ export function ReportViewer({
         onPick={handlePick}
         hasPdf={!!onExportPdf}
         hasWord
+        phone={phoneApp}
       />
     </div>
   );
@@ -306,6 +327,34 @@ export function ReportViewer({
 
 function escape(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Android replacement for a page's own Print button: opens the in-app report
+ * view (close returns to the app). `root` is the element to show.
+ */
+export function viewReportOnPhone(root: HTMLElement | null, heading: string): void {
+  let company = "";
+  try {
+    company = localStorage.getItem("ym_active_company_name") || "";
+  } catch {
+    /* ignore */
+  }
+  openPrintPreview(root, company, heading, "", "portrait");
+}
+
+/**
+ * Print button handler for pages that are not built on ReportViewer. Windows
+ * prints as before; Android opens the in-app view of the page's report area.
+ */
+export function printOrViewOnPhone(e: React.MouseEvent<HTMLElement>, heading: string): void {
+  if (!isAndroidTauri()) {
+    window.print();
+    return;
+  }
+  const root = (e.currentTarget.closest("[data-report-view]") as HTMLElement | null)
+    ?? (document.querySelector("main") as HTMLElement | null);
+  viewReportOnPhone(root, heading);
 }
 
 /**
@@ -400,6 +449,9 @@ async function openPrintPreviewAsync(
 
 
   const css = printPreviewCss(orient);
+  const phoneApp = isAndroidTauri();
+  // On Android the preview offers a PDF share only when the page wired one (ReportViewer with onExportPdf).
+  const canSharePdf = phoneApp && typeof (window as unknown as { __ymReportSharePdf?: unknown }).__ymReportSharePdf === "function";
 
 
   const runHeadHtml = `<div class="run-head"><span>${escape(company)}</span><span>${escape(fyShort)}</span></div>
@@ -426,7 +478,9 @@ ${appStyles}
 </head>
 <body>
 <div class="preview-bar">
-  <button id="preview-print-btn" disabled>Print</button>
+  ${phoneApp
+    ? (canSharePdf ? '<button id="preview-print-btn" disabled>Save &amp; share PDF</button>' : "")
+    : '<button id="preview-print-btn" disabled>Print</button>'}
   <button onclick="window.parent.document.getElementById('report-preview-iframe').remove()">Close</button>
   <span style="margin-left:auto;color:#666">Print Preview</span>
 </div>
@@ -475,10 +529,15 @@ ${contentHtml}
     if (btn) {
       btn.disabled = false;
       btn.addEventListener("click", () => {
+        if (phoneApp) {
+          const share = (window as unknown as { __ymReportSharePdf?: () => void }).__ymReportSharePdf;
+          if (share) share();
+          return;
+        }
         printPendingDoc();
       });
     }
-    if (autoPrint) {
+    if (autoPrint && !phoneApp) {
       printPendingDoc();
     }
   });
@@ -503,6 +562,8 @@ const PORTAL_STYLE_ID = "report-print-portal-style";
  * preview content instead of the (print-hidden, therefore blank) app shell.
  */
 function printPendingDoc(): void {
+  // Never on Android: the system print service takes the user out of the app.
+  if (isAndroidTauri()) return;
   const docData = pendingPrintDoc;
   if (!docData) return;
 

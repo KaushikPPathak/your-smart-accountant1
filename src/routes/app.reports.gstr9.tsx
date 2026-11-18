@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { printOrViewOnPhone } from "@/components/reports/ReportViewer";
+import { isAndroidTauri } from "@/lib/native-bridge";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -4328,7 +4330,7 @@ function GSTR9Page() {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-report-view="">
       <Card className="print:hidden">
         <CardContent className="p-3">
           <div className="flex flex-wrap items-end gap-3">
@@ -4369,11 +4371,11 @@ function GSTR9Page() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => window.print()}
+                onClick={(e) => printOrViewOnPhone(e, "GSTR-9")}
                 disabled={!result}
               >
                 <Printer className="mr-1 h-4 w-4" />
-                Print
+                {isAndroidTauri() ? "View" : "Print"}
               </Button>
             </div>
           </div>

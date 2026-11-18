@@ -1,4 +1,6 @@
 import { fmtIndianDate } from "@/lib/format-date";
+import { printOrViewOnPhone } from "@/components/reports/ReportViewer";
+import { isAndroidTauri } from "@/lib/native-bridge";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -383,7 +385,7 @@ function Gstr2BPage() {
   ]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-report-view="">
       <div className="rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground sm:hidden">
         <div className="font-medium text-foreground">Review only on this phone</div>
         <div className="mt-1">Importing the GSTR-2B file, matching, linking vouchers and remarks are done in the Windows app.</div>
@@ -416,7 +418,7 @@ function Gstr2BPage() {
               <div className="hidden sm:block">
                 <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
               </div>
-              <Button size="sm" variant="outline" onClick={() => window.print()}>Print</Button>
+              <Button size="sm" variant="outline" onClick={(e) => printOrViewOnPhone(e, "GSTR-2B reconciliation")}>{isAndroidTauri() ? "View" : "Print"}</Button>
             </div>
           </div>
         </CardContent>

@@ -1,3 +1,3 @@
 [default]
 description = "Allows sharing text through the Android share sheet"
-permissions = ["allow-share-text", "allow-share-file", "allow-share-files"]
+permissions = ["allow-share-text", "allow-share-file", "allow-share-files", "allow-open-file", "allow-save-to-downloads"]

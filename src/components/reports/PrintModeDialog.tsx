@@ -13,12 +13,14 @@ interface Props {
   /** Disable the PDF / Word options when the host report has not wired them. */
   hasPdf?: boolean;
   hasWord?: boolean;
+  /** Android app: no system print; view on screen or save and share files. */
+  phone?: boolean;
 }
 
 /**
  * Print mode picker — triggered by Ctrl+P inside a ReportViewer.
  */
-export function PrintModeDialog({ open, onOpenChange, onPick, hasPdf = true, hasWord = true }: Props) {
+export function PrintModeDialog({ open, onOpenChange, onPick, hasPdf = true, hasWord = true, phone = false }: Props) {
   const { lang } = useI18n();
   const tt = (s: string) => tReportText(s, lang);
   return (
@@ -33,22 +35,28 @@ export function PrintModeDialog({ open, onOpenChange, onPick, hasPdf = true, has
         <div className="grid gap-2 pt-2">
           <ModeButton
             icon={<Eye className="h-5 w-5" />}
-            label={tt("Print Preview")}
-            hint={tt("Opens a preview window with the report formatted for print.")}
+            label={phone ? tt("View report") : tt("Print Preview")}
+            hint={phone
+              ? tt("Shows the report on screen. Close returns you to the app.")
+              : tt("Opens a preview window with the report formatted for print.")}
             shortcut="V"
             onClick={() => onPick("preview")}
           />
-          <ModeButton
-            icon={<Printer className="h-5 w-5" />}
-            label={tt("System Printer")}
-            hint={tt("Opens the browser print dialog (your Windows default printer).")}
-            shortcut="P"
-            onClick={() => onPick("system")}
-          />
+          {!phone && (
+            <ModeButton
+              icon={<Printer className="h-5 w-5" />}
+              label={tt("System Printer")}
+              hint={tt("Opens the browser print dialog (your Windows default printer).")}
+              shortcut="P"
+              onClick={() => onPick("system")}
+            />
+          )}
           <ModeButton
             icon={<FileText className="h-5 w-5" />}
-            label={tt("Save as PDF")}
-            hint={tt("Generates a print-ready PDF in your Reports folder.")}
+            label={phone ? tt("Save & share PDF") : tt("Save as PDF")}
+            hint={phone
+              ? tt("Saves to Downloads, then Open or Share. Back returns to the app.")
+              : tt("Generates a print-ready PDF in your Reports folder.")}
             shortcut="D"
             disabled={!hasPdf}
             onClick={() => onPick("pdf")}
