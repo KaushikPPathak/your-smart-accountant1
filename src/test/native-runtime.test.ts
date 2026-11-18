@@ -3,6 +3,7 @@ import {
   getNativeRuntime,
   hasNativeStorage,
   isAndroidRuntime,
+  isAndroidTauri,
   isDesktopRuntime,
 } from "@/lib/native-bridge";
 
@@ -65,5 +66,24 @@ describe("runtime classification", () => {
     expect(isAndroidRuntime()).toBe(true);
     expect(isDesktopRuntime()).toBe(false);
     expect(hasNativeStorage()).toBe(false);
+  });
+});
+
+describe("Android Tauri vs Android browser", () => {
+  it("Android Tauri is Android and native", () => {
+    setEnv({ ua: ANDROID_UA, tauri: true });
+    expect(isAndroidTauri()).toBe(true);
+  });
+
+  it("ordinary Android Chrome is Android but not native Tauri", () => {
+    setEnv({ ua: ANDROID_UA });
+    expect(isAndroidRuntime()).toBe(true);
+    expect(isAndroidTauri()).toBe(false);
+    expect(hasNativeStorage()).toBe(false);
+  });
+
+  it("Windows Tauri is never Android Tauri", () => {
+    setEnv({ ua: WINDOWS_UA, tauri: true });
+    expect(isAndroidTauri()).toBe(false);
   });
 });

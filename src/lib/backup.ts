@@ -52,7 +52,7 @@ export interface MultiCompanyBackup {
 
 // ---------- Native desktop bridge (Electron or Tauri) ----------
 import {
-  hasNativeStorage, isAndroidRuntime, saveCompanyFileNative, shareFilesAndroid, writeAbsoluteFileNative,
+  hasNativeStorage, isAndroidTauri, saveCompanyFileNative, shareFilesAndroid, writeAbsoluteFileNative,
 } from "./native-bridge";
 import { getBackupFolder } from "./backup-location";
 
@@ -241,7 +241,7 @@ export async function exportCompanyBackup(
   const envelope = await wrapBackup(payload);
   const contents = JSON.stringify(envelope, null, 2);
 
-  if (isAndroidRuntime()) {
+  if (isAndroidTauri()) {
     return saveAndShareOnAndroid(companyName, fileName, contents, "Share backup");
   }
 
@@ -278,7 +278,7 @@ export async function exportAllCompaniesBackup(
   const envelope = await wrapBackup(payload);
   const contents = JSON.stringify(envelope, null, 2);
 
-  if (isAndroidRuntime()) {
+  if (isAndroidTauri()) {
     return saveAndShareOnAndroid("_AllCompanies", fileName, contents, "Share all-company backup");
   }
 

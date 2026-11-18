@@ -777,13 +777,30 @@ function PhoneRecordList<T>({
   const [limit, setLimit] = useState(PHONE_PAGE);
   const [expandedCards, setExpandedCards] = useState<Set<number>>(() => new Set());
   const records = renderRows.filter((r) => r.kind === "row");
-  // Group headings and their subtotals stay in place; only record cards are limited.
+  // Collapsed group headings (with their totals) always stay visible. An expanded
+  // group heading is shown only when at least one of its records is within the
+  // display limit, so no empty expanded group appears beyond the page.
+  const shown: FlatRow<any>[] = [];
   let recordsSeen = 0;
-  const shown = renderRows.filter((r) => {
-    if (r.kind !== "row") return true;
+  let pendingHeading: FlatRow<any> | null = null;
+  for (const r of renderRows) {
+    if (r.kind === "group") {
+      if (!r.expanded) {
+        shown.push(r);
+        pendingHeading = null;
+      } else {
+        pendingHeading = r;
+      }
+      continue;
+    }
     recordsSeen += 1;
-    return recordsSeen <= limit;
-  });
+    if (recordsSeen > limit) continue;
+    if (pendingHeading) {
+      shown.push(pendingHeading);
+      pendingHeading = null;
+    }
+    shown.push(r);
+  }
   const groupAggCols = visibleColumns.filter((c) => c.aggregator);
   const [head, ...rest] = visibleColumns;
   const aggCols = visibleColumns.filter((c) => c.aggregator);

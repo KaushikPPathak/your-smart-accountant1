@@ -241,7 +241,18 @@ function GSTR3BPage() {
           <Card className="print:hidden">
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">3.1 Outward & inward supplies on RCM</div>
-              <Table>
+<div className="space-y-2 p-3 sm:hidden">
+                {([
+                  ["(a) Outward taxable (other than zero rated, nil rated, exempted)", built.sup_details.osup_det],
+                  ["(b) Outward zero-rated", built.sup_details.osup_zero],
+                  ["(c) Other outward (nil/exempt)", built.sup_details.osup_nil_exmp],
+                  ["(d) Inward — reverse charge", built.sup_details.isup_rev],
+                  ["(e) Non-GST outward", built.sup_details.osup_nongst],
+                ] as [string, SupVals][]).map(([label, v]) => (
+                  <MobileCard key={label} title={label} fields={supFields(v)} />
+                ))}
+              </div>
+              <div className="hidden sm:block"><Table>
                 <TableHeader><TableRow>
                   <TableHead>Nature of Supplies</TableHead>
                   <TableHead className="text-right">Taxable</TableHead>
@@ -257,7 +268,7 @@ function GSTR3BPage() {
                   <Sup row={["(d) Inward — reverse charge", built.sup_details.isup_rev]} />
                   <Sup row={["(e) Non-GST outward", built.sup_details.osup_nongst]} />
                 </TableBody>
-              </Table>
+              </Table></div>
             </CardContent>
           </Card>
 
@@ -267,7 +278,13 @@ function GSTR3BPage() {
               {built.inter_sup.unreg_details.length === 0 ? (
                 <div className="px-4 py-6 text-sm text-muted-foreground">No inter-state B2C supplies in this period.</div>
               ) : (
-                <Table>
+              <>
+<div className="space-y-2 p-3 sm:hidden">
+                {built.inter_sup.unreg_details.map((p) => (
+                  <MobileCard key={p.pos} title={`Place of supply ${p.pos}`} fields={[["Taxable", moneyR(p.txval)], ["IGST", moneyR(p.iamt)]]} />
+                ))}
+              </div>
+                <div className="hidden sm:block"><Table>
                   <TableHeader><TableRow>
                     <TableHead>POS</TableHead>
                     <TableHead className="text-right">Taxable</TableHead>
@@ -282,7 +299,8 @@ function GSTR3BPage() {
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                </Table></div>
+              </>
               )}
             </CardContent>
           </Card>
@@ -290,7 +308,16 @@ function GSTR3BPage() {
           <Card className="print:hidden">
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">4. Eligible ITC</div>
-              <Table>
+<div className="space-y-2 p-3 sm:hidden">
+                {built.itc_elg.itc_avl.map((x, i) => (
+                  <MobileCard key={`avl-${i}`} title={`(A) ITC Available — ${x.ty === "ISRC" ? "Inward supplies (RCM)" : "All other ITC"}`} fields={taxFields(x)} />
+                ))}
+                {built.itc_elg.itc_rev.map((x, i) => (
+                  <MobileCard key={`rev-${i}`} title={`(B) ITC Reversed — ${x.ty === "RUL" ? "As per Rule 42 & 43" : "Others"}`} fields={taxFields(x)} />
+                ))}
+                <MobileCard title="(C) Net ITC Available" fields={taxFields(built.itc_elg.itc_net)} />
+              </div>
+              <div className="hidden sm:block"><Table>
                 <TableHeader><TableRow>
                   <TableHead>Details</TableHead>
                   <TableHead className="text-right">IGST</TableHead>
@@ -321,14 +348,23 @@ function GSTR3BPage() {
                     <TableCell className="text-right font-mono font-semibold">{moneyR(built.itc_elg.itc_net.samt)}</TableCell>
                   </TableRow>
                 </TableBody>
-              </Table>
+              </Table></div>
             </CardContent>
           </Card>
 
           <Card className="print:hidden">
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">5. Values of exempt, nil-rated and non-GST inward supplies</div>
-              <Table>
+<div className="space-y-2 p-3 sm:hidden">
+                {built.inward_sup.isup_details.map((x) => (
+                  <MobileCard
+                    key={x.ty}
+                    title={x.ty === "GST" ? "From a supplier under composition / exempt / nil-rated" : "Non-GST supply"}
+                    fields={[["Inter-state", moneyR(x.inter)], ["Intra-state", moneyR(x.intra)]]}
+                  />
+                ))}
+              </div>
+              <div className="hidden sm:block"><Table>
                 <TableHeader><TableRow>
                   <TableHead>Nature</TableHead>
                   <TableHead className="text-right">Inter-state</TableHead>
@@ -343,14 +379,19 @@ function GSTR3BPage() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </Table></div>
             </CardContent>
           </Card>
 
           <Card className="print:hidden">
             <CardContent className="p-0">
               <div className="border-b px-4 py-3 font-medium">6.1 Payment of Tax</div>
-              <Table>
+<div className="space-y-2 p-3 sm:hidden">
+                <MobileCard title="Integrated Tax" fields={[["Tax payable", moneyR(built.tax_pmt.iamt)], ["Net cash payable", moneyR(built.tax_pmt.iamt_payable)]]} />
+                <MobileCard title="Central Tax" fields={[["Tax payable", moneyR(built.tax_pmt.camt)], ["Net cash payable", moneyR(built.tax_pmt.camt_payable)]]} />
+                <MobileCard title="State/UT Tax" fields={[["Tax payable", moneyR(built.tax_pmt.samt)], ["Net cash payable", moneyR(built.tax_pmt.samt_payable)]]} />
+              </div>
+              <div className="hidden sm:block"><Table>
                 <TableHeader><TableRow>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Tax Payable</TableHead>
@@ -361,7 +402,7 @@ function GSTR3BPage() {
                   <TableRow><TableCell>Central Tax</TableCell><TableCell className="text-right font-mono">{moneyR(built.tax_pmt.camt)}</TableCell><TableCell className="text-right font-mono font-semibold">{moneyR(built.tax_pmt.camt_payable)}</TableCell></TableRow>
                   <TableRow><TableCell>State/UT Tax</TableCell><TableCell className="text-right font-mono">{moneyR(built.tax_pmt.samt)}</TableCell><TableCell className="text-right font-mono font-semibold">{moneyR(built.tax_pmt.samt_payable)}</TableCell></TableRow>
                 </TableBody>
-              </Table>
+              </Table></div>
             </CardContent>
           </Card>
         </>
@@ -371,6 +412,34 @@ function GSTR3BPage() {
 }
 
 function moneyR(v: number) { return formatINR(Math.round(v * 100)); }
+
+type SupVals = { txval: number; iamt: number; camt: number; samt: number; csamt: number };
+type TaxVals = { iamt: number; camt: number; samt: number };
+
+/** Phone-only read-only summary card. Values are shown exactly as in the desktop table. */
+function MobileCard({ title, fields }: { title: string; fields: [string, string][] }) {
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="break-words text-sm font-semibold">{title}</div>
+      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-sm tabular-nums">
+        {fields.map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <dt className="font-sans text-[11px] uppercase tracking-wide text-muted-foreground">{label}</dt>
+            <dd className="break-words">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function supFields(v: SupVals): [string, string][] {
+  return [["Taxable", moneyR(v.txval)], ["IGST", moneyR(v.iamt)], ["CGST", moneyR(v.camt)], ["SGST", moneyR(v.samt)], ["Cess", moneyR(v.csamt)]];
+}
+
+function taxFields(v: TaxVals): [string, string][] {
+  return [["IGST", moneyR(v.iamt)], ["CGST", moneyR(v.camt)], ["SGST", moneyR(v.samt)]];
+}
 
 /**
  * Print-only replica of the official GSTR-3B form (matches utility V5.8 layout/colors).

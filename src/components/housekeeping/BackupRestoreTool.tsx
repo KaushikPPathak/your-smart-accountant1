@@ -22,7 +22,7 @@ import { useCompany } from "@/lib/company-context";
 import { Layers, Share2 } from "lucide-react";
 import { wrapBackup } from "@/lib/backup-policy";
 import {
-  saveWithPickerNative, isAndroidRuntime, isDesktopRuntime, showInFolderNative, openPathNative, shareFilesAndroid,
+  saveWithPickerNative, isAndroidTauri, isDesktopRuntime, showInFolderNative, openPathNative, shareFilesAndroid,
   pickFolderNative, pickFileNative, readAbsoluteTextFileNative, NO_NATIVE_PICKER,
 } from "@/lib/native-bridge";
 import { getAppPaths } from "@/lib/app-paths";
@@ -172,6 +172,12 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
     setExportingAll(true);
     try {
       const r = await exportAllCompaniesBackup(list);
+      // The internal save succeeded (exportAllCompaniesBackup throws if it did not),
+      // so record the backup date before any Android share outcome is reported.
+      try {
+        const now = new Date().toISOString();
+        for (const c of list) localStorage.setItem(`lastBackup:${c.id}`, now);
+      } catch { /* ignore */ }
       if (r.androidShared) {
         if (r.shareError) toast.error("Backup kept on this phone, but sharing failed", { description: r.shareError });
         else toast.success("All-company backup ready to save or share", { description: r.fileName, duration: 6000 });
@@ -181,10 +187,6 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
         `Backed up ${list.length} compan${list.length === 1 ? "y" : "ies"}: ${r.fileName}`,
         { description: r.desktopPath ?? undefined, duration: 8000 },
       );
-      try {
-        const now = new Date().toISOString();
-        for (const c of list) localStorage.setItem(`lastBackup:${c.id}`, now);
-      } catch { /* ignore */ }
     } catch (e) {
       toast.error((e as Error).message || "Backup ALL failed");
     } finally {
@@ -431,7 +433,7 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
             <Button onClick={doExport} disabled={exporting || disabled}>
               {exporting
                 ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Exporting…</>
-                : isAndroidRuntime()
+                : isAndroidTauri()
                   ? <><Share2 className="mr-2 h-4 w-4" />Share backup (.json)</>
                   : <><Download className="mr-2 h-4 w-4" />Export full backup (.json)</>}
             </Button>
@@ -458,7 +460,7 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
               >
                 {exportingAll
                   ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Backing up {memberships.length} companies…</>
-                  : <><Layers className="mr-2 h-4 w-4" />{isAndroidRuntime() ? "Share" : "Backup"} ALL {memberships.length} companies (.json)</>}
+                  : <><Layers className="mr-2 h-4 w-4" />{isAndroidTauri() ? "Share" : "Backup"} ALL {memberships.length} companies (.json)</>}
               </Button>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Recommended before workspace transfers or major upgrades. Produces a single
@@ -475,7 +477,7 @@ export function BackupRestoreTool({ companyId, companyName, partyCode, disabled 
             >
               {mirroring
                 ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
-                : <><HardDriveDownload className="mr-2 h-4 w-4" />{isAndroidRuntime() ? "Backup now and share (JSON + Excel)" : "Backup now (JSON + Excel)"}</>}
+                : <><HardDriveDownload className="mr-2 h-4 w-4" />{isAndroidTauri() ? "Backup now and share (JSON + Excel)" : "Backup now (JSON + Excel)"}</>}
             </Button>
             <p className="mt-1 text-[11px] text-muted-foreground">
               In the desktop app, both files are written silently to your chosen

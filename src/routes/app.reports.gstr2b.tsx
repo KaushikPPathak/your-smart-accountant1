@@ -371,11 +371,23 @@ function Gstr2BPage() {
     return (same.length ? same : purchases).slice(0, 200);
   }
 
+  const missingTitle = `Missing ITC: purchases in your books not appearing in GSTR-2B (${missing.length})`;
+  const MISSING_HEADERS = ["Date", "Voucher #", "Supplier", "GSTIN", "Vendor Inv #", "Value"];
+  const missingRows = missing.map((p) => [
+    fmtIndianDate(p.voucher_date),
+    p.voucher_number,
+    p.ledgers?.name || "—",
+    p.ledgers?.gstin || "—",
+    p.vendor_invoice_no || "—",
+    formatINR(p.total_paise),
+  ]);
+
   return (
     <div className="space-y-4">
-      <p className="rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground sm:hidden">
-        Phone: review only. Importing, matching and changes are done in the Windows app.
-      </p>
+      <div className="rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground sm:hidden">
+        <div className="font-medium text-foreground">Review only on this phone</div>
+        <div className="mt-1">Importing the GSTR-2B file, matching, linking vouchers and remarks are done in the Windows app.</div>
+      </div>
       <style>{`
         @media print {
           .no-print { display: none !important; }
@@ -392,16 +404,18 @@ function Gstr2BPage() {
             <Label>Period / FY</Label>
             <Input value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="042026 or 2025-26" />
           </div>
-          <div className="space-y-1 md:col-span-2">
+          <div className="hidden space-y-1 sm:block md:col-span-2">
             <Label>Upload GSTR-2B (JSON · Excel · CSV)</Label>
-            <Input className="hidden sm:block" type="file" accept=".csv,.json,.xlsx" disabled={busy} onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
+            <Input type="file" accept=".csv,.json,.xlsx" disabled={busy} onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
           </div>
           <div className="text-xs flex items-end gap-2 flex-wrap">
             <Badge variant="default">{stats.matched} matched</Badge>
             <Badge variant="secondary">{stats.mismatch} review</Badge>
             <Badge variant="outline">{stats.unmatched} unmatched</Badge>
             <div className="ml-auto flex gap-2">
-              <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
+              <div className="hidden sm:block">
+                <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
+              </div>
               <Button size="sm" variant="outline" onClick={() => window.print()}>Print</Button>
             </div>
           </div>
@@ -485,7 +499,7 @@ function Gstr2BPage() {
         </Card>
       )}
 
-      <Card className="no-print">
+      <Card className="no-print hidden sm:block">
         <CardContent className="p-4">
           <div className="text-xs font-semibold mb-2">Reconciliation tolerances</div>
           <div className="grid gap-3 md:grid-cols-5 text-xs">
@@ -530,7 +544,36 @@ function Gstr2BPage() {
       </Card>
 
       {lines.length > 0 && (
-        view === "grid" ? (
+      <>
+        <div className="space-y-2 sm:hidden">
+          <div className="px-1 text-sm font-medium">2B lines vs Purchase Register · {visibleLines.length} invoices</div>
+          {visibleLines.map((l) => {
+            const sv = STATUS_VARIANTS[l.match_status] ?? { label: l.match_status, variant: "outline" as const };
+            return (
+              <div key={l.id} className="rounded-lg border bg-card p-3 text-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="break-words font-semibold">{l.supplier_name || l.supplier_gstin}</div>
+                    <div className="break-all font-mono text-xs text-muted-foreground">{l.supplier_gstin}</div>
+                  </div>
+                  <Badge variant={sv.variant}>{sv.label}</Badge>
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 tabular-nums">
+                  <div><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Invoice no</dt><dd className="break-all font-mono text-xs">{l.invoice_no}</dd></div>
+                  <div><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Invoice date</dt><dd className="font-mono text-xs">{l.invoice_date || "—"}</dd></div>
+                  <div><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Section</dt><dd>{l.section ?? "B2B"}</dd></div>
+                  <div><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Invoice value</dt><dd className="font-mono">{formatINR(l.invoice_value_paise)}</dd></div>
+                  <div><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">IGST</dt><dd className="font-mono">{formatINR(l.igst_paise)}</dd></div>
+                  <div><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">CGST</dt><dd className="font-mono">{formatINR(l.cgst_paise)}</dd></div>
+                  <div><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">SGST</dt><dd className="font-mono">{formatINR(l.sgst_paise)}</dd></div>
+                  {l.remarks ? <div className="col-span-2"><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Remarks</dt><dd className="break-words text-xs">{l.remarks}</dd></div> : null}
+                </dl>
+              </div>
+            );
+          })}
+        </div>
+        <div className="hidden sm:block">
+        {view === "grid" ? (
           <GstSectionTable
             view={view}
             reportId="gstr2b"
@@ -633,25 +676,17 @@ function Gstr2BPage() {
             </Table>
           </CardContent>
         </Card>
-        )
+        )}
+        </div>
+      </>
       )}
 
+      <div className="sm:hidden">
+        <GstSectionTable view="classic" reportId="gstr2b" title={missingTitle} headers={MISSING_HEADERS} rows={missingRows} numericFromCol={5} />
+      </div>
+      <div className="hidden sm:block">
       {view === "grid" && missing.length > 0 ? (
-        <GstSectionTable
-          view={view}
-          reportId="gstr2b"
-          title={`Missing ITC: purchases in your books not appearing in GSTR-2B (${missing.length})`}
-          headers={["Date", "Voucher #", "Supplier", "GSTIN", "Vendor Inv #", "Value"]}
-          rows={missing.map((p) => [
-            fmtIndianDate(p.voucher_date),
-            p.voucher_number,
-            p.ledgers?.name || "—",
-            p.ledgers?.gstin || "—",
-            p.vendor_invoice_no || "—",
-            formatINR(p.total_paise),
-          ])}
-          numericFromCol={5}
-        />
+        <GstSectionTable view={view} reportId="gstr2b" title={missingTitle} headers={MISSING_HEADERS} rows={missingRows} numericFromCol={5} />
       ) : (
       <Card className="print-area">
         <CardContent className="p-0">
@@ -683,6 +718,7 @@ function Gstr2BPage() {
         </CardContent>
       </Card>
       )}
+      </div>
     </div>
   );
 }

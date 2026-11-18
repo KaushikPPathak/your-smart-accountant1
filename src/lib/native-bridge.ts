@@ -103,9 +103,21 @@ export function sanitizePhoneNumber(rawPhone: string): string {
   return digits;
 }
 
-/** True inside the Android app's web view. */
+/**
+ * True on Android (the Android app's web view, or ordinary Android Chrome).
+ * UI-only: use isAndroidTauri() before invoking native file or share commands.
+ */
 export function isAndroidRuntime(): boolean {
   return typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+}
+
+/**
+ * True only inside the Android Tauri app: Android AND the native Tauri bridge.
+ * Ordinary Android Chrome has no native storage, so it must use the browser
+ * download path instead of the native save-and-share path.
+ */
+export function isAndroidTauri(): boolean {
+  return isAndroidRuntime() && hasTauri();
 }
 
 /**
