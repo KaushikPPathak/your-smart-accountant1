@@ -108,11 +108,11 @@ function GSTR3BPage() {
       </p>
       <Card>
         <CardContent className="p-3 print:hidden">
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end">
             <div className="space-y-1">
               <Label className="text-xs">Filing frequency</Label>
               <Select value={cadence} onValueChange={(v) => setCadence(v as "monthly" | "quarterly")}>
-                <SelectTrigger className="h-11 sm:h-9 w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11 w-full sm:h-9 sm:w-[160px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="monthly">Monthly</SelectItem>
                   <SelectItem value="quarterly">Quarterly (QRMP)</SelectItem>
@@ -123,7 +123,7 @@ function GSTR3BPage() {
               <div className="space-y-1">
                 <Label className="text-xs">Return period</Label>
                 <Select value={month} onValueChange={setMonth}>
-                  <SelectTrigger className="h-11 sm:h-9 w-[180px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 w-full sm:h-9 sm:w-[180px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {fyMonths.map((m) => (
                       <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
@@ -136,7 +136,7 @@ function GSTR3BPage() {
                 <div className="space-y-1">
                   <Label className="text-xs">Quarter</Label>
                   <Select value={String(quarter)} onValueChange={(v) => setQuarter(Number(v) as 1 | 2 | 3 | 4)}>
-                    <SelectTrigger className="h-11 sm:h-9 w-[180px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11 w-full sm:h-9 sm:w-[180px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">Q1 (Apr–Jun {fyYear})</SelectItem>
                       <SelectItem value="2">Q2 (Jul–Sep {fyYear})</SelectItem>
@@ -147,8 +147,8 @@ function GSTR3BPage() {
                 </div>
               </>
             )}
-            <div className="ml-auto flex gap-2">
-              <Button variant="outline" size="sm" disabled={!built}
+            <div className="grid grid-cols-1 gap-2 sm:ml-auto sm:flex sm:gap-2">
+              <Button variant="outline" size="sm" className="h-11 justify-start sm:h-8 sm:justify-center" disabled={!built}
                 onClick={async () => {
                   if (!built) return;
                   try {
@@ -160,11 +160,11 @@ function GSTR3BPage() {
                 }}>
                 <FileSpreadsheet className="mr-1 h-4 w-4" /> GSTR-3B Utility (.xlsm)
               </Button>
-              <Button variant="outline" size="sm" disabled={!built}
+              <Button variant="outline" size="sm" className="h-11 justify-start sm:h-8 sm:justify-center" disabled={!built}
                 onClick={() => built && downloadJson(`${fileBase}.json`, gstr3bToJson(built))}>
                 <FileJson className="mr-1 h-4 w-4" /> GSTN JSON
               </Button>
-              <Button variant="outline" size="sm" onClick={(e) => {
+              <Button variant="outline" size="sm" className="h-11 justify-start sm:h-8 sm:justify-center" onClick={(e) => {
                 if (isAndroidTauri()) { printOrViewOnPhone(e, "GSTR-3B"); return; }
                 const prev = document.title;
                 document.title = fileBase;
@@ -177,7 +177,7 @@ function GSTR3BPage() {
               }}>
                 <Printer className="mr-1 h-4 w-4" /> {isAndroidTauri() ? "View" : "Print"}
               </Button>
-              <Button variant="default" size="sm" onClick={() => setCalcOpen(true)}>
+              <Button variant="default" size="sm" className="hidden sm:inline-flex" onClick={() => setCalcOpen(true)}>
                 <Calculator className="mr-1 h-4 w-4" /> GST Calculator
               </Button>
             </div>
@@ -214,6 +214,7 @@ function GSTR3BPage() {
 
           <ValidationPanel issues={validateGstr3B(built)} />
 
+          <div className="hidden sm:block">
           <PeriodLockCard
             returnType="GSTR3B"
             period={cadence === "quarterly" ? `${year}-Q${quarter}` : month}
@@ -221,6 +222,7 @@ function GSTR3BPage() {
             periodEnd={period.to}
             periodLabel={cadence === "quarterly" ? `Q${quarter} ${year}` : new Date(period.from).toLocaleString("en-IN", { month: "short", year: "numeric" })}
           />
+          </div>
 
           <ManualEntryCard
             companyId={activeCompanyId!}

@@ -1,6 +1,9 @@
 import { createRouter, createHashHistory, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { routeTree } from "./routeTree.gen";
+import { installAndroidPrintGuard } from "./lib/phone-report-view";
+
+installAndroidPrintGuard();
 
 // Hash history works identically on https://, file://, and tauri:// — no
 // SPA-fallback rewrite required. Used everywhere (web + Tauri desktop).

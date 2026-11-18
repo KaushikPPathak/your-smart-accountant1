@@ -15,6 +15,7 @@ import { recordFailure, recordStage } from "@/lib/crash-log";
 import { preparePrintDom, endPrintDom } from "@/lib/print-prepare";
 import { printPreviewCss } from "./print-preview-css";
 import { isAndroidTauri } from "@/lib/native-bridge";
+import { openPhoneReportView } from "@/lib/phone-report-view";
 
 /**
  * Routes excluded from the universal Ctrl+P picker. GST reports (GSTR-1,
@@ -452,6 +453,17 @@ async function openPrintPreviewAsync(
   const phoneApp = isAndroidTauri();
   // On Android the preview offers a PDF share only when the page wired one (ReportViewer with onExportPdf).
   const canSharePdf = phoneApp && typeof (window as unknown as { __ymReportSharePdf?: unknown }).__ymReportSharePdf === "function";
+  if (phoneApp) {
+    // Android: show the report in the app (Close / Back return to the page).
+    openPhoneReportView({
+      content: clone,
+      heading: heading || "Report",
+      onSharePdf: canSharePdf
+        ? () => (window as unknown as { __ymReportSharePdf?: () => void }).__ymReportSharePdf?.()
+        : undefined,
+    });
+    return;
+  }
 
 
   const runHeadHtml = `<div class="run-head"><span>${escape(company)}</span><span>${escape(fyShort)}</span></div>
