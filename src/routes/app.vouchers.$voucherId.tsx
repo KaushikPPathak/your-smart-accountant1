@@ -57,6 +57,7 @@ interface Voucher {
   narration: string | null;
   is_interstate: boolean;
   place_of_supply_code: string | null;
+  supply_nature?: string | null;
   subtotal_paise: number;
   cgst_paise: number;
   sgst_paise: number;
@@ -443,6 +444,9 @@ function VoucherEditPage() {
           ...headerPatch,
           is_interstate: voucher.is_interstate,
           place_of_supply_code: voucher.place_of_supply_code,
+          // Persist the supply nature so a corrected invoice (e.g. exempt → taxable)
+          // moves between GSTR-1 sections and the HSN summary on the next report run.
+          supply_nature: voucher.supply_nature ?? "taxable",
           subtotal_paise: totals.subtotal_paise,
           cgst_paise: totals.cgst_paise,
           sgst_paise: totals.sgst_paise,
@@ -803,6 +807,37 @@ function VoucherEditPage() {
             <Label className="text-xs">Voucher No.</Label>
             <Input aria-label="Invoice number" value={voucher.voucher_number} onChange={(e) => setVoucher({ ...voucher, voucher_number: e.target.value })} disabled={!canWrite || !["sales", "purchase"].includes(voucher.voucher_type)} />
           </div>
+          {isItemKind && (
+            <div className="space-y-1">
+              <Label className="text-xs">Supply Nature</Label>
+              <Select
+                value={voucher.supply_nature ?? "taxable"}
+                onValueChange={(v) => setVoucher({ ...voucher, supply_nature: v })}
+                disabled={!canWrite}
+              >
+                <SelectTrigger aria-label="Supply nature" className="h-10 w-full text-sm sm:h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="taxable">Taxable</SelectItem>
+                  <SelectItem value="nil_rated">Nil-rated</SelectItem>
+                  <SelectItem value="exempt">Exempt</SelectItem>
+                  <SelectItem value="non_gst">Non-GST</SelectItem>
+                  <SelectItem value="zero_rated_wp">Zero-rated (with payment / LUT-WPAY)</SelectItem>
+                  <SelectItem value="zero_rated_wop">Zero-rated (without payment / LUT-WOPAY)</SelectItem>
+                  {(voucher.supply_nature ?? "") === "rcm_inward" && (
+                    <SelectItem value="rcm_inward">Reverse charge (RCM)</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              {(voucher.supply_nature ?? "taxable") !== "taxable" &&
+                itemLines.some((l) => l.item_id && (parseFloat(l.gst_rate) || 0) > 0) && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    This invoice is not taxable, but some lines still carry a GST %. Set those lines to 0% if no tax should be charged.
+                  </p>
+                )}
+            </div>
+          )}
           <div className="md:col-span-3 space-y-1">
             <Label className="text-xs">Narration</Label>
             <Textarea rows={2} value={voucher.narration ?? ""} onChange={(e) => setVoucher({ ...voucher, narration: e.target.value })} disabled={!canWrite} />
