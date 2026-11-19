@@ -35,7 +35,7 @@ function LicensePage() {
           bad_signature: "License key signature failed — key is tampered or from a different vendor.",
           no_public_key: "This build has no public key baked in — contact support.",
           expired: "This license has expired.",
-          device_limit_reached: "Maximum devices reached for this key. Contact the seller for a reset or a larger key.",
+          device_limit_reached: "This key already has its seats recorded. Contact the seller for a reset or a larger key.",
           storage_unavailable: "This device cannot save the license (app storage is blocked). Allow app storage and try again.",
         };
         toast.error(msgs[res.reason ?? ""] ?? "Activation failed.");
@@ -114,7 +114,7 @@ function LicensePage() {
                     : state.expiresAt?.toLocaleDateString() ?? "—"
                 }
               />
-              <Row label="Devices used" value={`${state.deviceCount} / ${state.maxDevices}`} />
+              <Row label="Seats recorded on this computer" value={`${state.deviceCount} / ${state.maxDevices}`} />
               <Row label="License ID" value={<span className="font-mono text-xs">{state.licenseId}</span>} />
               <div className="pt-2">
                 <Button variant="outline" size="sm" onClick={removeKey}>
