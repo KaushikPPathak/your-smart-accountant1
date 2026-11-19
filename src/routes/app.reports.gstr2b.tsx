@@ -1,4 +1,5 @@
 import { fmtIndianDate } from "@/lib/format-date";
+import { PhoneReportHeading } from "@/components/reports/PhoneReportHeading";
 import { printOrViewOnPhone } from "@/components/reports/ReportViewer";
 import { isAndroidTauri } from "@/lib/native-bridge";
 import { createFileRoute } from "@tanstack/react-router";
@@ -386,6 +387,7 @@ function Gstr2BPage() {
 
   return (
     <div className="space-y-4" data-report-view="">
+      <PhoneReportHeading title="GSTR-2B — Reconciliation" />
       <div className="rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground sm:hidden">
         <div className="font-medium text-foreground">Review only on this phone</div>
         <div className="mt-1">Importing the GSTR-2B file, matching, linking vouchers and remarks are done in the Windows app.</div>

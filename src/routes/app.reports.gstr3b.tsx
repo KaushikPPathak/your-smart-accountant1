@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { PhoneReportHeading } from "@/components/reports/PhoneReportHeading";
 import { printOrViewOnPhone } from "@/components/reports/ReportViewer";
 import { isAndroidTauri } from "@/lib/native-bridge";
 import { useEffect, useMemo, useState } from "react";
@@ -11,7 +12,9 @@ import { FyDatePicker } from "@/components/ui/fy-date-picker";
 import { Button } from "@/components/ui/button";
 import { saveGstr3bManualLocal } from "@/lib/offline/gstr3b-local";
 import { toast } from "sonner";
-import { FileSpreadsheet, FileJson, Printer, Plus, Trash2, BookOpen } from "lucide-react";
+import { FileSpreadsheet, FileJson, FileText, Printer, Plus, Trash2, BookOpen } from "lucide-react";
+import { downloadPdfMultiTable } from "@/lib/exporters";
+import { useReportPdfHeader } from "@/lib/report-pdf-header";
 import { Calculator } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCompany } from "@/lib/company-context";
@@ -100,9 +103,77 @@ function GSTR3BPage() {
   }, [activeCompanyId, company, period.from, period.to, period.fp]);
 
   const fileBase = `GSTR3B_${company?.gstin || "GSTIN"}_${period.fp}`;
+  const pdfHeader = useReportPdfHeader();
+
+  // Android: the same summary as the screen, as a PDF (saved to Downloads, then Open / Share).
+  const onExportPdf = () => {
+    if (!built) return;
+    const n2 = (v: number) => (Math.round(v * 100) / 100).toFixed(2);
+    const supRow = (label: string, v: SupVals) => [label, n2(v.txval), n2(v.iamt), n2(v.camt), n2(v.samt), n2(v.csamt)];
+    const taxRow = (label: string, v: TaxVals) => [label, n2(v.iamt), n2(v.camt), n2(v.samt)];
+    downloadPdfMultiTable({
+      title: "GSTR-3B — Monthly summary",
+      subtitle: pdfHeader.dateRangeSubtitle(period.from, period.to),
+      companyName: pdfHeader.companyName,
+      companySubLine: pdfHeader.companySubLine,
+      fileName: `${fileBase}.pdf`,
+      orientation: "p",
+      sections: [
+        {
+          sectionTitle: "3.1 Outward and inward supplies",
+          head: [["Nature of supplies", "Taxable", "IGST", "CGST", "SGST", "Cess"]],
+          body: [
+            supRow("(a) Outward taxable (other than zero rated, nil rated, exempted)", built.sup_details.osup_det),
+            supRow("(b) Outward zero-rated", built.sup_details.osup_zero),
+            supRow("(c) Other outward (nil/exempt)", built.sup_details.osup_nil_exmp),
+            supRow("(d) Inward — reverse charge", built.sup_details.isup_rev),
+            supRow("(e) Non-GST outward", built.sup_details.osup_nongst),
+          ],
+          rightAlignCols: [1, 2, 3, 4, 5],
+        },
+        {
+          sectionTitle: "3.2 Inter-state supplies to unregistered persons",
+          head: [["Place of supply", "Taxable", "IGST"]],
+          body: built.inter_sup.unreg_details.map((p) => [p.pos, n2(p.txval), n2(p.iamt)]),
+          rightAlignCols: [1, 2],
+        },
+        {
+          sectionTitle: "4. Eligible ITC",
+          head: [["Details", "IGST", "CGST", "SGST"]],
+          body: [
+            ...built.itc_elg.itc_avl.map((x) => taxRow(`(A) ITC Available — ${x.ty === "ISRC" ? "Inward supplies (RCM)" : "All other ITC"}`, x)),
+            ...built.itc_elg.itc_rev.map((x) => taxRow(`(B) ITC Reversed — ${x.ty === "RUL" ? "As per Rule 42 & 43" : "Others"}`, x)),
+            taxRow("(C) Net ITC Available", built.itc_elg.itc_net),
+          ],
+          rightAlignCols: [1, 2, 3],
+        },
+        {
+          sectionTitle: "5. Exempt, nil-rated and non-GST inward supplies",
+          head: [["Details", "Inter-state", "Intra-state"]],
+          body: built.inward_sup.isup_details.map((x) => [
+            x.ty === "GST" ? "From a supplier under composition / exempt / nil-rated" : "Non-GST supply",
+            n2(x.inter),
+            n2(x.intra),
+          ]),
+          rightAlignCols: [1, 2],
+        },
+        {
+          sectionTitle: "6.1 Payment of tax",
+          head: [["Head", "Tax payable", "Net cash payable"]],
+          body: [
+            ["Integrated Tax", n2(built.tax_pmt.iamt), n2(built.tax_pmt.iamt_payable)],
+            ["Central Tax", n2(built.tax_pmt.camt), n2(built.tax_pmt.camt_payable)],
+            ["State/UT Tax", n2(built.tax_pmt.samt), n2(built.tax_pmt.samt_payable)],
+          ],
+          rightAlignCols: [1, 2],
+        },
+      ],
+    });
+  };
 
   return (
     <div className="space-y-3" data-report-view="">
+      <PhoneReportHeading title="GSTR-3B — Monthly summary" from={period.from} to={period.to} />
       <p className="rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground sm:hidden">
         Phone: review only. Importing, matching and changes are done in the Windows app.
       </p>
@@ -148,6 +219,11 @@ function GSTR3BPage() {
               </>
             )}
             <div className="grid grid-cols-1 gap-2 sm:ml-auto sm:flex sm:gap-2">
+              {isAndroidTauri() && (
+                <Button variant="outline" size="sm" className="h-11 justify-start sm:h-8" disabled={!built} onClick={onExportPdf}>
+                  <FileText className="mr-1 h-4 w-4" /> Save & share PDF
+                </Button>
+              )}
               <Button variant="outline" size="sm" className="h-11 justify-start sm:h-8 sm:justify-center" disabled={!built}
                 onClick={async () => {
                   if (!built) return;

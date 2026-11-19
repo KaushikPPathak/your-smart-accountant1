@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { PhoneReportHeading } from "@/components/reports/PhoneReportHeading";
 import { printOrViewOnPhone } from "@/components/reports/ReportViewer";
 import { isAndroidTauri } from "@/lib/native-bridge";
 import { useEffect, useMemo, useState } from "react";
@@ -211,6 +212,7 @@ function GSTR1Page() {
 
   return (
     <div className="space-y-3" data-report-view="">
+      <PhoneReportHeading title="GSTR-1 — Outward supplies" from={period.from} to={period.to} />
       <Card>
         <CardContent className="p-3 print:hidden">
           <div className="flex flex-wrap items-end gap-3">
