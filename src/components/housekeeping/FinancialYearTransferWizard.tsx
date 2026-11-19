@@ -285,7 +285,7 @@ export function FinancialYearTransferWizard({ companyId, disabled, fyStartHint }
                   <CheckRow
                     label="Unreconciled bank transactions"
                     count={unreconciled}
-                    detail={unreconciled > 0 ? "Reconcile in Bank &amp; Reconciliation before closing for clean opening balances." : "All bank lines matched."}
+                    detail={unreconciled > 0 ? "Reconcile in Bank & Reconciliation before closing for clean opening balances." : "All bank lines matched."}
                   />
                   <CheckRow
                     label="Negative cash / bank balances"
@@ -505,7 +505,7 @@ function CheckRow({ label, count, detail }: { label: string; count: number; deta
     )}>
       <div>
         <div className="font-medium">{label}</div>
-        <div className="text-xs text-muted-foreground mt-0.5" dangerouslySetInnerHTML={{ __html: detail }} />
+        <div className="text-xs text-muted-foreground mt-0.5">{detail}</div>
       </div>
       <Badge variant={tone === "ok" ? "secondary" : "destructive"} className="shrink-0">
         {count}
