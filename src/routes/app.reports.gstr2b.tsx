@@ -27,8 +27,11 @@ import {
 } from "@/lib/gstr2b-recon";
 import { analyseGstr2bExcelBuffer } from "@/lib/gstr2b-excel-import";
 import {
-  loadLocalPurchases, latestImport, loadImportLines, saveImport, patchG2BLine,
+  loadLocalPurchases, latestImport, loadAllImportLines, saveImport, patchG2BLine,
 } from "@/lib/gstr2b-local-store";
+import { GstPeriodPicker } from "@/components/reports/GstPeriodPicker";
+import { defaultSelection, resolveGstPeriod, type GstPeriodSelection } from "@/lib/gst-period";
+import { coverageForRange, g2bPeriodInRange, monthsCoveredBy, normaliseG2bPeriod } from "@/lib/gstr2b-periods";
 
 export const Route = createFileRoute("/app/reports/gstr2b")({
   head: () => ({ meta: [{ title: "GSTR-2B Reconciliation — Reports" }] }),
@@ -58,6 +61,7 @@ interface G2BLine {
   matched_voucher_id: string | null;
   remarks: string | null;
   manual_override: boolean;
+  import_period?: string | null;
 }
 interface Purchase {
   id: string; voucher_number: string; voucher_date: string; total_paise: number;
@@ -82,13 +86,37 @@ const STATUS_VARIANTS: Record<string, { label: string; variant: "default" | "sec
 
 const MATCHED_STATUSES = new Set(["matched", "matched_with_tolerance", "manual_match", "accept_as_matched"]);
 
+/** Maps a stored period (MMYYYY, Mon-YYYY or FY) to the range selector. */
+function selectionForPeriod(raw: string): GstPeriodSelection | null {
+  const p = normaliseG2bPeriod(raw);
+  if (!p) return null;
+  const base = defaultSelection("monthly");
+  return p.kind === "month"
+    ? { ...base, mode: "month", month: p.ym }
+    : { ...base, mode: "range", from: p.from, to: p.to };
+}
+
+function monthTag(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleString("en-IN", { month: "short", year: "numeric" });
+}
+
 function Gstr2BPage() {
   const { activeCompanyId } = useCompany();
   const [period, setPeriod] = useState(() => {
     const d = new Date();
     return `${String(d.getMonth() + 1).padStart(2, "0")}${d.getFullYear()}`;
   });
-  const [lines, setLines] = useState<G2BLine[]>([]);
+  // The return period (or range) being reviewed. Upload target stays in `period`.
+  const [sel, setSel] = useState<GstPeriodSelection>(() => defaultSelection("monthly"));
+  const resolved = useMemo(() => resolveGstPeriod(sel), [sel]);
+  const scope = useMemo(() => ({ fps: resolved.fps, from: resolved.from, to: resolved.to }), [resolved]);
+  // Every stored line across all imports; `lines` is the slice in the selected range.
+  const [allLines, setAllLines] = useState<G2BLine[]>([]);
+  const lines = useMemo(
+    () => allLines.filter((l) => g2bPeriodInRange(l.gstr2b_period, l.import_period, scope)),
+    [allLines, scope],
+  );
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const { view, setView } = useReportView("gstr2b");
   const [tol, setTol] = useState<ReconTolerances>(DEFAULT_TOLERANCES);
@@ -105,21 +133,38 @@ function Gstr2BPage() {
     loadLocalPurchases(activeCompanyId).then((rows) => setPurchases(rows as unknown as Purchase[]));
   }, [activeCompanyId]);
 
-  // Load the most recent local import on mount.
+  // Load every stored import; open the range on the latest import's period.
   useEffect(() => {
     if (!activeCompanyId) return;
     latestImport(activeCompanyId).then((imp) => {
       if (!imp) return;
       setPeriod(imp.period);
-      loadLines(imp.id);
+      const s = selectionForPeriod(imp.period);
+      if (s) setSel(s);
     });
+    reloadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompanyId]);
 
-  async function loadLines(impId: string) {
-    const rows = await loadImportLines(impId);
-    setLines(rows as unknown as G2BLine[]);
+  async function reloadAll() {
+    if (!activeCompanyId) return;
+    const rows = await loadAllImportLines(activeCompanyId);
+    setAllLines(rows as unknown as G2BLine[]);
   }
+
+  // Purchases dated inside the selected range, for missing-ITC and re-matching.
+  const scopedPurchases = useMemo(
+    () => purchases.filter((p) => p.voucher_date >= resolved.from && p.voucher_date <= resolved.to),
+    [purchases, resolved],
+  );
+
+  const monthsWithData = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of allLines) for (const ym of monthsCoveredBy(l.gstr2b_period, l.import_period)) set.add(ym);
+    return set;
+  }, [allLines]);
+  const coverage = useMemo(() => coverageForRange(monthsWithData, resolved), [monthsWithData, resolved]);
+  const missingMonths = coverage.filter((c) => !c.imported);
 
   async function onUpload(file: File) {
     if (!activeCompanyId) return;
@@ -259,8 +304,10 @@ function Gstr2BPage() {
         matched_voucher_id: r.matched_voucher_id,
       }));
       const matched = rows.filter((r) => MATCHED_STATUSES.has(r.match_status)).length;
-      const imp = await saveImport(activeCompanyId, period, source, file.name, rows, matched);
-      await loadLines(imp.id);
+      await saveImport(activeCompanyId, period, source, file.name, rows, matched);
+      const s = selectionForPeriod(period);
+      if (s) setSel(s);
+      await reloadAll();
       toast.success(`Imported ${parsed.length} rows · ${matched} matched (stored on this device only)`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Import failed");
@@ -276,7 +323,7 @@ function Gstr2BPage() {
     try {
       const matched = excelPreview.lines.filter((row) => MATCHED_STATUSES.has(row.match_status)).length;
       const savePeriod = excelPreview.analysis.financialYear || period;
-      const imp = await saveImport(
+      await saveImport(
         activeCompanyId,
         savePeriod,
         "xlsx",
@@ -285,7 +332,9 @@ function Gstr2BPage() {
         matched,
       );
       setPeriod(savePeriod);
-      await loadLines(imp.id);
+      const s = selectionForPeriod(savePeriod);
+      if (s) setSel(s);
+      await reloadAll();
       setExcelPreview(null);
       toast.success(
         `Saved ${excelPreview.lines.length} GSTR-2B rows · ${excelPreview.analysis.regularB2B.length} B2B · ${excelPreview.analysis.rcm.length} RCM · ${excelPreview.analysis.cdnr.length} CDNR`,
@@ -311,11 +360,12 @@ function Gstr2BPage() {
       sgst_paise: l.sgst_paise,
       cess_paise: 0,
     }));
-    const results = reconcile(parsed, purchases, tol);
+    const results = reconcile(parsed, scopedPurchases, tol);
     const byKey = new Map<string, ReconResult>();
     results.forEach((r) => byKey.set(`${r.row.supplier_gstin}|${r.row.invoice_no}`, r));
-    setLines((prev) => prev.map((l) => {
-      if (l.manual_override) return l; // never overwrite manual decisions
+    const inScope = new Set(lines.map((l) => l.id));
+    setAllLines((prev) => prev.map((l) => {
+      if (!inScope.has(l.id) || l.manual_override) return l; // never overwrite manual decisions
       const r = byKey.get(`${l.supplier_gstin}|${l.invoice_no}`);
       return r ? { ...l, match_status: r.match_status, matched_voucher_id: r.matched_voucher_id } : l;
     }));
@@ -324,7 +374,7 @@ function Gstr2BPage() {
 
   // Inline edit helpers — optimistic + persist
   async function patchLine(id: string, patch: Partial<G2BLine>) {
-    setLines((prev) => prev.map((l) => l.id === id ? { ...l, ...patch } : l));
+    setAllLines((prev) => prev.map((l) => l.id === id ? { ...l, ...patch } : l));
     try {
       await patchG2BLine(id, patch as any);
     } catch (e) {
@@ -351,11 +401,11 @@ function Gstr2BPage() {
   const missing = useMemo(() => {
     if (!lines.length) return [] as Purchase[];
     const matchedIds = new Set(lines.map((l) => l.matched_voucher_id).filter(Boolean) as string[]);
-    return purchases.filter((p) => {
+    return scopedPurchases.filter((p) => {
       if (!p.ledgers?.gstin || !p.vendor_invoice_no) return false;
       return !matchedIds.has(p.id);
     });
-  }, [lines, purchases]);
+  }, [lines, scopedPurchases]);
 
   const stats = useMemo(() => ({
     matched: lines.filter((l) => MATCHED_STATUSES.has(l.match_status)).length,
@@ -370,8 +420,8 @@ function Gstr2BPage() {
   // Candidate purchases for a given 2B line — same GSTIN preferred, fallback to all
   function candidatesFor(l: G2BLine): Purchase[] {
     const g = normGstin(l.supplier_gstin);
-    const same = purchases.filter((p) => normGstin(p.ledgers?.gstin || "") === g);
-    return (same.length ? same : purchases).slice(0, 200);
+    const same = scopedPurchases.filter((p) => normGstin(p.ledgers?.gstin || "") === g);
+    return (same.length ? same : scopedPurchases).slice(0, 200);
   }
 
   const missingTitle = `Missing ITC: purchases in your books not appearing in GSTR-2B (${missing.length})`;
@@ -402,10 +452,28 @@ function Gstr2BPage() {
         }
       `}</style>
 
+      <div className="no-print space-y-2">
+        <GstPeriodPicker value={sel} onChange={setSel} resolved={resolved} />
+        {resolved.valid && coverage.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            {coverage.slice(0, 24).map((c) => (
+              <Badge key={c.ym} variant={c.imported ? "default" : "outline"}>
+                {monthTag(c.ym)} {c.imported ? "imported" : "missing"}
+              </Badge>
+            ))}
+            {coverage.length > 24 && <span className="text-muted-foreground">+{coverage.length - 24} more</span>}
+            <span className="w-full text-muted-foreground">
+              {coverage.length - missingMonths.length} of {coverage.length} months imported
+              {missingMonths.length > 0 && ` · upload the missing months to complete the range`}
+            </span>
+          </div>
+        )}
+      </div>
+
       <Card className="no-print">
         <CardContent className="grid gap-3 p-4 md:grid-cols-4">
           <div className="space-y-1">
-            <Label>Period / FY</Label>
+            <Label>Upload target (MMYYYY or FY)</Label>
             <Input value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="042026 or 2025-26" />
           </div>
           <div className="hidden space-y-1 sm:block md:col-span-2">
@@ -602,7 +670,7 @@ function Gstr2BPage() {
         <Card className="print-area">
           <CardContent className="p-0">
             <div className="border-b bg-muted/30 px-3 py-2 text-xs font-semibold flex items-center justify-between">
-              <span>2B lines vs Purchase Register · Period {period}</span>
+              <span>2B lines vs Purchase Register · {resolved.label}</span>
               <span className="text-muted-foreground">
                 {stats.matched} matched · {stats.mismatch} review · {stats.unmatched} unmatched
               </span>

@@ -92,6 +92,19 @@ export async function loadImportLines(importId: string): Promise<G2BLineRow[]> {
   return rows;
 }
 
+/** Every stored line across all imports of a company, each tagged with its import's period. */
+export async function loadAllImportLines(
+  companyId: string,
+): Promise<(G2BLineRow & { import_period: string })[]> {
+  const imps = (await offlineDb.cache_gstr2b_imports.where("company_id").equals(companyId).toArray()) as G2BImport[];
+  const out: (G2BLineRow & { import_period: string })[] = [];
+  for (const imp of imps) {
+    const rows = await loadImportLines(imp.id);
+    for (const r of rows) out.push({ ...r, import_period: imp.period });
+  }
+  return out;
+}
+
 export async function saveImport(
   companyId: string,
   period: string,
