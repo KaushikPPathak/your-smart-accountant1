@@ -57,4 +57,35 @@ describe("Journal Book scope", () => {
     const ids = cashBankVoucherIds([{ ledger_id: "ghost", vouchers: { id: "V7" } }], types);
     expect(ids.size).toBe(0);
   });
+
+  it("keeps a bank charge with split GST in the Bank Book, not the Journal Book", () => {
+    const t = new Map(types);
+    t.set("bankch", "indirect_expense");
+    t.set("icgst", "duties_taxes");
+    t.set("isgst", "duties_taxes");
+    const gst = [
+      { ledger_id: "bankch", vouchers: { id: "BC1" } },
+      { ledger_id: "icgst", vouchers: { id: "BC1" } },
+      { ledger_id: "isgst", vouchers: { id: "BC1" } },
+      { ledger_id: "bank1", vouchers: { id: "BC1" } },
+    ];
+    const ids = cashBankVoucherIds(gst, t);
+    expect(isJournalBookVoucher("journal", "BC1", ids)).toBe(false);
+  });
+
+  it("keeps the same charge as a journal when no bank ledger is involved", () => {
+    const t = new Map(types);
+    t.set("bankch", "indirect_expense");
+    t.set("icgst", "duties_taxes");
+    t.set("isgst", "duties_taxes");
+    t.set("party", "sundry_creditor");
+    const accrual = [
+      { ledger_id: "bankch", vouchers: { id: "AC1" } },
+      { ledger_id: "icgst", vouchers: { id: "AC1" } },
+      { ledger_id: "isgst", vouchers: { id: "AC1" } },
+      { ledger_id: "party", vouchers: { id: "AC1" } },
+    ];
+    const ids = cashBankVoucherIds(accrual, t);
+    expect(isJournalBookVoucher("journal", "AC1", ids)).toBe(true);
+  });
 });

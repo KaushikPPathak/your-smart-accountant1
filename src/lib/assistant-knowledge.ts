@@ -122,7 +122,7 @@ export const ASSISTANT_KB: KbEntry[] = [
     category: "Vouchers",
     keywords: ["which book", "books", "cash book", "bank book", "journal book", "contra", "where does entry show", "day book", "book wise"],
     answer:
-      "- **Sales / Purchase** → Sales and Purchase books and GST returns.\n- **Credit Note / Debit Note** → sales return and purchase return books.\n- **Receipt / Payment / Contra** → **Cash Book** and **Bank Book** (any entry with a cash or bank ledger). A contra is cash ↔ bank or bank ↔ bank.\n- **Journal** → **Journal Book**, only when no cash or bank ledger is involved.\n\nThe **Day Book** lists every voucher. A journal that touches cash or bank is shown in the Cash or Bank Book, not in the Journal Book.",
+      "- **Sales / Purchase** → Sales and Purchase books and GST returns.\n- **Credit Note / Debit Note** → sales return and purchase return books.\n- **Receipt / Payment / Contra** → **Cash Book** and **Bank Book** (any entry with a cash or bank ledger). A contra is cash ↔ bank or bank ↔ bank.\n- **Journal** → **Journal Book**, only when no cash or bank ledger is involved.\n\nThe **Day Book** lists every voucher. A journal that touches cash or bank is shown in the Cash or Bank Book, not in the Journal Book.\n\n**Example, bank charge of ₹100 with 18% GST (₹9 CGST + ₹9 SGST):** Bank Charges Dr 100, Input CGST Dr 9, Input SGST Dr 9, Bank Cr 118. The bank line makes it a bank entry, so it shows in the Bank Book. Without a bank line (for example an accrued charge against a party), it stays in the Journal Book.",
     actions: [
       { kind: "navigate", label: "Cash & Bank Book", to: "/app/reports/cash-bank" },
       { kind: "navigate", label: "Journal Book", to: "/app/reports/journal-book" },
