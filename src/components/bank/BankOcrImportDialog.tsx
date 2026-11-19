@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, FileScan, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { tryParseToPaise } from "@/lib/utils/currency-utils";
 import { commitStatement, listLines, loadVoucherCandidates } from "@/lib/bank/local-store";
 import type { ParsedBankLine } from "@/lib/bank/parse-client";
 import { extractTextFromFile, type OcrProgress } from "@/lib/ocr";
@@ -94,6 +95,16 @@ export function BankOcrImportDialog({
       setBusy(false);
       setProgress(null);
     }
+  }
+
+  /** Typed amounts go through the strict parser; malformed text is refused, not coerced. */
+  function setAmount(key: string, field: "debit" | "credit", text: string) {
+    const paise = text.trim() === "" ? 0 : tryParseToPaise(text);
+    if (paise === null) {
+      toast.error("Enter a valid amount (digits, optional commas, up to 2 decimals)");
+      return;
+    }
+    updateRow(key, { [field]: paise / 100 } as Partial<EditableTxn>);
   }
 
   function updateRow(key: string, patch: Partial<EditableTxn>) {
@@ -248,11 +259,11 @@ export function BankOcrImportDialog({
                       </TableCell>
                       <TableCell>
                         <Input className="h-7 text-xs text-right" type="number" value={r.debit || ""}
-                          onChange={(e) => updateRow(r._key, { debit: parseFloat(e.target.value) || 0 })} />
+                          onChange={(e) => setAmount(r._key, "debit", e.target.value)} />
                       </TableCell>
                       <TableCell>
                         <Input className="h-7 text-xs text-right" type="number" value={r.credit || ""}
-                          onChange={(e) => updateRow(r._key, { credit: parseFloat(e.target.value) || 0 })} />
+                          onChange={(e) => setAmount(r._key, "credit", e.target.value)} />
                       </TableCell>
                       <TableCell>
                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => removeRow(r._key)}>

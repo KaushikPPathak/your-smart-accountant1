@@ -67,6 +67,28 @@ export function parseToPaise(rupeeString: any): number {
   return cleanStr.startsWith("-") ? -total : total;
 }
 
+/**
+ * Strict rupee parser for user-typed amounts. Returns integer paise, or null when the
+ * text is not a valid amount, so the caller can show an error instead of guessing.
+ * Accepts an optional leading minus, a ₹/Rs/INR prefix, digits with optional thousands
+ * commas (any grouping), and at most two decimal places.
+ * "1.2.3", "12-3", "1,20.5x" and "1.234" are rejected.
+ */
+export function tryParseToPaise(input: unknown): number | null {
+  if (typeof input === "number") {
+    return Number.isFinite(input) ? Math.round(input * 100) : null;
+  }
+  if (input == null) return null;
+  const s = String(input).trim().replace(/^(₹|rs\.?|inr)\s*/i, "");
+  const m = /^(-)?(\d{1,3}(?:,\d{2,3})*|\d+)(?:\.(\d{1,2}))?$/.exec(s);
+  if (!m) return null;
+  const whole = Number(m[2].replace(/,/g, ""));
+  const frac = Number((m[3] ?? "").padEnd(2, "0"));
+  const total = whole * 100 + frac;
+  if (!Number.isSafeInteger(total)) return null;
+  return m[1] ? -total : total;
+}
+
 /** Alias for parseToPaise to maintain backward compatibility */
 export const rupeesToPaise = parseToPaise;
 

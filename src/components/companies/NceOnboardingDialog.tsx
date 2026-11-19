@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { tryParseToPaise } from "@/lib/utils/currency-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,12 @@ interface Props {
  * user doesn't have to open the full settings form to unlock the correct
  * disclosure shape (cash flow, related-party, etc.).
  */
+/** Lakhs text to paise (1 lakh = 10,000,000 paise). Empty is 0; malformed is null. */
+function lakhsToPaise(text: string): number | null {
+  const p = text.trim() === "" ? 0 : tryParseToPaise(text);
+  return p === null ? null : p * 100000;
+}
+
 export function NceOnboardingDialog({
   open, onOpenChange, companyId, entity,
   initialTurnoverLakhs = "", initialBorrowingsLakhs = "",
@@ -42,17 +49,28 @@ export function NceOnboardingDialog({
     }
   }, [open, initialTurnoverLakhs, initialBorrowingsLakhs]);
 
+  // Amounts are typed in lakhs. Empty means 0; malformed text is refused (null).
+  const tPaiseOrNull = lakhsToPaise(turnover);
+  const bPaiseOrNull = lakhsToPaise(borrow);
+  const amountsValid = tPaiseOrNull !== null && bPaiseOrNull !== null;
+
   const auto = useMemo(() => {
-    const tPaise = Math.round((parseFloat(turnover) || 0) * 100000 * 100);
-    const bPaise = Math.round((parseFloat(borrow) || 0) * 100000 * 100);
-    return classifyNceLevel({ entity, turnoverPaise: tPaise, borrowingsPaise: bPaise });
-  }, [turnover, borrow, entity]);
+    return classifyNceLevel({
+      entity,
+      turnoverPaise: tPaiseOrNull ?? 0,
+      borrowingsPaise: bPaiseOrNull ?? 0,
+    });
+  }, [tPaiseOrNull, bPaiseOrNull, entity]);
 
   const save = async () => {
+    if (!amountsValid) {
+      toast.error("Enter turnover and borrowings in lakhs (digits, optional commas, up to 2 decimals).");
+      return;
+    }
     setSaving(true);
     const patch = {
-      annual_turnover_paise: Math.round((parseFloat(turnover) || 0) * 100000 * 100),
-      borrowings_paise: Math.round((parseFloat(borrow) || 0) * 100000 * 100),
+      annual_turnover_paise: tPaiseOrNull as number,
+      borrowings_paise: bPaiseOrNull as number,
       updated_at: new Date().toISOString(),
     };
     try {

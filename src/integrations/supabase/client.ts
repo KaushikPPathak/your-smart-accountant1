@@ -25,6 +25,13 @@ const OFFLINE_CLOUD_ERROR = {
   hint: null,
 };
 
+const AUTH_DISABLED_ERROR = {
+  message: "Cloud sign-in is not available in this build.",
+  name: "AuthError",
+  status: 400,
+  code: "AUTH_DISABLED",
+};
+
 // No-op proxy handler for when Supabase is not configured
 const noopHandler: ProxyHandler<any> = {
   get: (target, prop) => {
@@ -44,8 +51,10 @@ const noopHandler: ProxyHandler<any> = {
         },
         
         // 3. Prevent crashes if login/signup buttons are accidentally clicked
-        signInWithPassword: async () => ({ data: { session: offlineSession, user: offlineSession.user }, error: null }),
-        signUp: async () => ({ data: { session: offlineSession, user: offlineSession.user }, error: null }),
+        // Sign-in and sign-up are refused here. This stub is used only when cloud is not
+        // configured, so it must never report a real account login as successful.
+        signInWithPassword: async () => ({ data: { session: null, user: null }, error: AUTH_DISABLED_ERROR }),
+        signUp: async () => ({ data: { session: null, user: null }, error: AUTH_DISABLED_ERROR }),
         signOut: async () => ({ error: null }),
       };
     }
