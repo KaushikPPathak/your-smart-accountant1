@@ -15,21 +15,28 @@ function randomHex(bytes: number): string {
   return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function getMachineId(): string {
+/**
+ * This device's id, or null when it cannot be created or stored (for example
+ * localStorage is blocked). Never returns a shared constant: two devices with
+ * no stored id must not look like the same seat.
+ */
+export function tryGetMachineId(): string | null {
   try {
     let id = localStorage.getItem(KEY);
     if (!id || id.length < 16) {
       id = randomHex(16);
       localStorage.setItem(KEY, id);
+      if (localStorage.getItem(KEY) !== id) return null;
     }
     return id;
   } catch {
-    return "unknown-machine";
+    return null;
   }
 }
 
 /** Short form for display in Settings → License. */
 export function getMachineIdShort(): string {
-  const id = getMachineId();
+  const id = tryGetMachineId();
+  if (!id) return "unavailable";
   return id.slice(0, 4) + "-" + id.slice(4, 8) + "-" + id.slice(8, 12);
 }

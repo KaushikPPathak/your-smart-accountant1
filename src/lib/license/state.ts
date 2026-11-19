@@ -9,7 +9,7 @@
 // voucher creation) uses `isReadOnlyLocked()`.
 
 import { verifyLicenseKey, type LicensePayload, type Plan } from "./verify";
-import { getMachineId } from "./machine-id";
+import { tryGetMachineId } from "./machine-id";
 
 const KEY_LIC = "sm.license.v1";
 const KEY_TRIAL = "sm.trial_started_at.v1";
@@ -58,12 +58,18 @@ function readStoredLicense(): StoredLicense | null {
   }
 }
 
-function writeStoredLicense(v: StoredLicense | null): void {
+/** Writes the license and reads it back. Returns false if it was not saved. */
+function writeStoredLicense(v: StoredLicense | null): boolean {
   try {
-    if (v) localStorage.setItem(KEY_LIC, JSON.stringify(v));
-    else localStorage.removeItem(KEY_LIC);
+    if (v) {
+      const raw = JSON.stringify(v);
+      localStorage.setItem(KEY_LIC, raw);
+      return localStorage.getItem(KEY_LIC) === raw;
+    }
+    localStorage.removeItem(KEY_LIC);
+    return localStorage.getItem(KEY_LIC) === null;
   } catch {
-    /* ignore */
+    return false;
   }
 }
 
@@ -71,8 +77,8 @@ export async function getLicenseState(): Promise<LicenseState> {
   const stored = readStoredLicense();
   if (stored) {
     const res = await verifyLicenseKey(stored.key);
-    if (res.ok) {
-      const machineId = getMachineId();
+    const machineId = tryGetMachineId();
+    if (res.ok && machineId) {
       const activated = stored.devices.includes(machineId);
       const overLimit = !activated && stored.devices.length >= res.payload.d;
       if (activated || !overLimit) {
@@ -116,7 +122,8 @@ export interface ActivateResult {
     | "bad_signature"
     | "no_public_key"
     | "expired"
-    | "device_limit_reached";
+    | "device_limit_reached"
+    | "storage_unavailable";
   state?: LicenseState;
 }
 
@@ -124,8 +131,10 @@ export async function activateLicenseKey(rawKey: string): Promise<ActivateResult
   const res = await verifyLicenseKey(rawKey);
   if (!res.ok) return { ok: false, reason: res.reason };
 
+  const machineId = tryGetMachineId();
+  if (!machineId) return { ok: false, reason: "storage_unavailable" };
+
   const existing = readStoredLicense();
-  const machineId = getMachineId();
   const sameLicense = existing?.payload.id === res.payload.id;
   const devices = sameLicense
     ? Array.from(new Set([...existing!.devices, machineId]))
@@ -135,8 +144,11 @@ export async function activateLicenseKey(rawKey: string): Promise<ActivateResult
     return { ok: false, reason: "device_limit_reached" };
   }
 
-  writeStoredLicense({ key: rawKey.trim(), payload: res.payload, devices });
+  const saved = writeStoredLicense({ key: rawKey.trim(), payload: res.payload, devices });
+  if (!saved) return { ok: false, reason: "storage_unavailable" };
   const state = await getLicenseState();
+  // A save that reads back but is not licensed on this device means the seat was not kept.
+  if (state.mode !== "licensed") return { ok: false, reason: "storage_unavailable" };
   return { ok: true, state };
 }
 

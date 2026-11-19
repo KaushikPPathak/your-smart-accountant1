@@ -36,6 +36,7 @@ function LicensePage() {
           no_public_key: "This build has no public key baked in — contact support.",
           expired: "This license has expired.",
           device_limit_reached: "Maximum devices reached for this key. Contact the seller for a reset or a larger key.",
+          storage_unavailable: "This device cannot save the license (app storage is blocked). Allow app storage and try again.",
         };
         toast.error(msgs[res.reason ?? ""] ?? "Activation failed.");
         return;
