@@ -102,10 +102,31 @@ export const ASSISTANT_KB: KbEntry[] = [
     id: "journal",
     title: "Pass a Journal entry",
     category: "Vouchers",
-    keywords: ["journal", "adjustment", "debit credit", "manual entry", "alt+j"],
+    keywords: ["journal", "adjustment", "debit credit", "manual entry", "alt+j", "jv", "journal voucher"],
     answer:
-      "Sidebar → **Transactions → Journal** (Alt+J). Use this for non-cash adjustments like depreciation, provisions or reclassifications.",
+      "Sidebar → **Transactions → Journal** (Alt+J). A Journal voucher is for entries **without any cash or bank ledger**: depreciation, provisions, accruals, prepaid adjustments, reclassifications, discount allowed or received, and year-end closing. Every journal must balance (total debit = total credit).\n\nFor money moving in or out of cash or bank, use **Receipt**, **Payment** or **Contra** instead, so the entry shows in the Cash Book or Bank Book.",
     actions: [{ kind: "navigate", label: "New Journal", to: "/app/vouchers/new/journal" }],
+  },
+  {
+    id: "double-entry-rules",
+    title: "Double-entry rules (debit and credit)",
+    category: "Vouchers",
+    keywords: ["double entry", "double-entry", "debit credit rule", "dr cr", "golden rules", "accounting equation", "personal account", "real account", "nominal account", "contra account", "balanced", "trial balance"],
+    answer:
+      "**Every transaction affects at least two ledgers, and total debits must equal total credits.** An unbalanced voucher cannot be saved.\n\n**Debit and credit effects:**\n- Assets and expenses (including losses) increase with a **debit** and decrease with a **credit**.\n- Liabilities, capital and income (including gains) increase with a **credit** and decrease with a **debit**.\n\n**Account types (classical rules):**\n- **Personal** (a person or party): debit the receiver, credit the giver.\n- **Real** (assets such as cash, bank, stock, machinery): debit what comes in, credit what goes out.\n- **Nominal** (expenses and income): debit all expenses and losses, credit all incomes and gains.\n\n**Accounting equation:** Assets = Liabilities + Capital.\n\n**Contra accounts** (such as accumulated depreciation or a discount ledger) reduce the balance of the account they are paired with.",
+    actions: [{ kind: "navigate", label: "Trial Balance", to: "/app/reports/trial-balance" }],
+  },
+  {
+    id: "voucher-books",
+    title: "Which book each voucher appears in",
+    category: "Vouchers",
+    keywords: ["which book", "books", "cash book", "bank book", "journal book", "contra", "where does entry show", "day book", "book wise"],
+    answer:
+      "- **Sales / Purchase** → Sales and Purchase books and GST returns.\n- **Credit Note / Debit Note** → sales return and purchase return books.\n- **Receipt / Payment / Contra** → **Cash Book** and **Bank Book** (any entry with a cash or bank ledger). A contra is cash ↔ bank or bank ↔ bank.\n- **Journal** → **Journal Book**, only when no cash or bank ledger is involved.\n\nThe **Day Book** lists every voucher. A journal that touches cash or bank is shown in the Cash or Bank Book, not in the Journal Book.",
+    actions: [
+      { kind: "navigate", label: "Cash & Bank Book", to: "/app/reports/cash-bank" },
+      { kind: "navigate", label: "Journal Book", to: "/app/reports/journal-book" },
+    ],
   },
   {
     id: "credit-debit-note",
@@ -158,6 +179,15 @@ export const ASSISTANT_KB: KbEntry[] = [
     answer:
       "Day Book lists every voucher for a date range. Use it for an end-of-day audit. Reports → **Day Book**.",
     actions: [{ kind: "navigate", label: "Open Day Book", to: "/app/reports/day-book" }],
+  },
+  {
+    id: "journal-book",
+    title: "Journal Book",
+    category: "Reports",
+    keywords: ["journal book", "journal register", "jv book", "journal report", "year end entries", "closing entries", "discount entries"],
+    answer:
+      "The Journal Book shows **journal vouchers only**, one row per ledger posting with Debit and Credit columns. It leaves out any voucher that has a cash or bank ledger, because those belong in the Cash Book or Bank Book.\n\nIt includes year-end closing entries, discount allowed or received, depreciation, provisions and any other entry between non-cash ledgers. Each voucher balances within the book.",
+    actions: [{ kind: "navigate", label: "Open Journal Book", to: "/app/reports/journal-book" }],
   },
   {
     id: "ledger-statement",

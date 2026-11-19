@@ -21,6 +21,7 @@ import { DateBoundPrintBook } from "@/components/reports/DateBoundPrintBook";
 import { usePrintLayout } from "@/lib/print-layout";
 import { readLocalBookDataset } from "@/lib/offline/cache-read";
 import { voucherTypeLabel } from "@/lib/voucher-type-label";
+import { cashBankVoucherIds, isJournalBookVoucher } from "@/lib/journal-book-scope";
 
 export const Route = createFileRoute("/app/reports/journal-book")({
   head: () => ({ meta: [{ title: "Journal Book — Reports" }] }),
@@ -43,11 +44,6 @@ interface Row {
   reference_no: string;
   debit_paise: number;
   credit_paise: number;
-}
-
-/** Journal Book covers manual journals plus legacy/untyped vouchers. */
-function isJournalType(t: string | null | undefined): boolean {
-  return !t || t === "journal";
 }
 
 function JournalBook() {
@@ -79,10 +75,18 @@ function JournalBook() {
         const names = new Map(
           dataset.ledgers.map((ledger: any) => [String(ledger.id), String(ledger.name ?? "")]),
         );
+        // Cash and bank movements belong to the Cash/Bank books, so any voucher touching
+        // a cash or bank ledger is left out of the Journal Book, whatever its type.
+        const ledgerTypes = new Map(
+          dataset.ledgers.map((ledger: any) => [String(ledger.id), String(ledger.type ?? "")]),
+        );
+        const cashBank = cashBankVoucherIds(dataset.entries as any[], ledgerTypes);
         const data = dataset.entries
           .filter((entry: any) => {
             const date = String(entry.vouchers?.voucher_date ?? "");
-            return date >= from && date <= to && isJournalType(entry.vouchers?.voucher_type);
+            const voucherId = String(entry.vouchers?.id ?? entry.voucher_id ?? "");
+            return date >= from && date <= to
+              && isJournalBookVoucher(entry.vouchers?.voucher_type, voucherId, cashBank);
           })
           .map((entry: any) => toRow(entry, names.get(String(entry.ledger_id)) ?? ""));
         if (!cancelled) setRows(sortRows(data));
