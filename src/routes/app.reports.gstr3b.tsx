@@ -28,6 +28,8 @@ import { downloadGstr3bOfficial } from "@/lib/gstr3b-template";
 import { useFyRange } from "@/components/ui/fy-date-picker";
 import { ValidationPanel } from "@/components/reports/ValidationPanel";
 import { PeriodLockCard } from "@/components/reports/PeriodLockCard";
+import { GstPeriodPicker } from "@/components/reports/GstPeriodPicker";
+import { defaultSelection, fpsInRange, mergeInwardSummaries, resolveGstPeriod, type GstPeriodSelection } from "@/lib/gst-period";
 
 export const Route = createFileRoute("/app/reports/gstr3b")({
   head: () => ({ meta: [{ title: "GSTR-3B — Reports" }] }),
@@ -40,25 +42,7 @@ function GSTR3BPage() {
   const today = new Date();
   const { start: openFyStart } = useFyRange();
   const fyYear = openFyStart.getFullYear();
-  const fyMonths = useMemo(() => {
-    const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    return Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(openFyStart.getFullYear(), openFyStart.getMonth() + i, 1);
-      return { value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: `${names[d.getMonth()]} ${d.getFullYear()}` };
-    });
-  }, [openFyStart]);
-  const [cadence, setCadence] = useState<"monthly" | "quarterly">("monthly");
-  const [month, setMonth] = useState<string>(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`);
-  useEffect(() => {
-    if (!fyMonths.some((m) => m.value === month)) setMonth(fyMonths[0].value);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fyMonths]);
-  const [quarter, setQuarter] = useState<1 | 2 | 3 | 4>(() => {
-    const m = today.getMonth();
-    return (m < 3 ? 4 : m < 6 ? 1 : m < 9 ? 2 : 3) as 1 | 2 | 3 | 4;
-  });
-  // Calendar year containing the chosen quarter's months, bound to the open FY.
-  const year = quarter === 4 ? fyYear + 1 : fyYear;
+  const [sel, setSel] = useState<GstPeriodSelection>(() => defaultSelection("monthly"));
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [built, setBuilt] = useState<BuiltGstr3B | null>(null);
   const [inward, setInward] = useState<InwardSummaryRow[]>([]);
@@ -67,14 +51,8 @@ function GSTR3BPage() {
   const [ineligible, setIneligible] = useState<{ i: number; c: number; s: number }>({ i: 0, c: 0, s: 0 });
   const [calcOpen, setCalcOpen] = useState(false);
 
-  const period = useMemo(() => {
-    if (cadence === "quarterly") {
-      const r = quarterRange(year, quarter);
-      return { ...r, fp: periodFP(r.to) };
-    }
-    const r = monthRange(month);
-    return { ...r, fp: periodFP(r.from) };
-  }, [cadence, year, quarter, month]);
+  const period = useMemo(() => resolveGstPeriod(sel), [sel]);
+  const fpsKey = period.fps.join(",");
 
   useEffect(() => {
     if (!activeCompanyId) return;
@@ -89,20 +67,20 @@ function GSTR3BPage() {
         fetchVouchers(activeCompanyId, period.from, period.to, ["purchase"]),
         fetchVouchers(activeCompanyId, period.from, period.to, ["credit_note"]),
         fetchVouchers(activeCompanyId, period.from, period.to, ["debit_note"]),
-        fetchInwardSummary(activeCompanyId, period.fp),
-        fetchItcReversal(activeCompanyId, period.fp),
+        fetchInwardRange(activeCompanyId, fpsKey.split(",")),
+        fetchReversalRange(activeCompanyId, fpsKey.split(",")),
       ]);
       setInward(inwardRows);
       setReversal(reversalRows);
       setBuilt(buildGstr3B({
         company, from: period.from, to: period.to, fp: period.fp,
         sales, purchases, creditNotes, debitNotes,
-        inwardSummary: inwardRows, itcReversal: reversalRows,
+        inwardSummary: mergeInwardSummaries(inwardRows), itcReversal: reversalRows,
       }));
     })();
-  }, [activeCompanyId, company, period.from, period.to, period.fp]);
+  }, [activeCompanyId, company, period.from, period.to, period.fp, fpsKey]);
 
-  const fileBase = `GSTR3B_${company?.gstin || "GSTIN"}_${period.fp}`;
+  const fileBase = `GSTR3B_${company?.gstin || "GSTIN"}_${period.fp}${period.singleReturn ? "" : `_${period.from}_${period.to}`}`;
   const pdfHeader = useReportPdfHeader();
 
   // Android: the same summary as the screen, as a PDF (saved to Downloads, then Open / Share).
@@ -179,52 +157,17 @@ function GSTR3BPage() {
       </p>
       <Card>
         <CardContent className="p-3 print:hidden">
-          <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-end">
-            <div className="space-y-1">
-              <Label className="text-xs">Filing frequency</Label>
-              <Select value={cadence} onValueChange={(v) => setCadence(v as "monthly" | "quarterly")}>
-                <SelectTrigger className="h-11 w-full sm:h-9 sm:w-[160px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="quarterly">Quarterly (QRMP)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {cadence === "monthly" ? (
-              <div className="space-y-1">
-                <Label className="text-xs">Return period</Label>
-                <Select value={month} onValueChange={setMonth}>
-                  <SelectTrigger className="h-11 w-full sm:h-9 sm:w-[180px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {fyMonths.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-1">
-                  <Label className="text-xs">Quarter</Label>
-                  <Select value={String(quarter)} onValueChange={(v) => setQuarter(Number(v) as 1 | 2 | 3 | 4)}>
-                    <SelectTrigger className="h-11 w-full sm:h-9 sm:w-[180px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">Q1 (Apr–Jun {fyYear})</SelectItem>
-                      <SelectItem value="2">Q2 (Jul–Sep {fyYear})</SelectItem>
-                      <SelectItem value="3">Q3 (Oct–Dec {fyYear})</SelectItem>
-                      <SelectItem value="4">Q4 (Jan–Mar {fyYear + 1})</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
+          <div className="space-y-3">
+            <GstPeriodPicker value={sel} onChange={setSel} resolved={period} />
+            <div className="flex flex-wrap items-center gap-3">
             <div className="grid grid-cols-1 gap-2 sm:ml-auto sm:flex sm:gap-2">
               {isAndroidTauri() && (
                 <Button variant="outline" size="sm" className="h-11 justify-start sm:h-8" disabled={!built} onClick={onExportPdf}>
                   <FileText className="mr-1 h-4 w-4" /> Save & share PDF
                 </Button>
               )}
-              <Button variant="outline" size="sm" className="h-11 justify-start sm:h-8 sm:justify-center" disabled={!built}
+              <Button variant="outline" size="sm" className="h-11 justify-start sm:h-8 sm:justify-center" disabled={!built || !period.singleReturn}
+                title={period.singleReturn ? undefined : "Utility is for a single month or quarter"}
                 onClick={async () => {
                   if (!built) return;
                   try {
@@ -236,7 +179,8 @@ function GSTR3BPage() {
                 }}>
                 <FileSpreadsheet className="mr-1 h-4 w-4" /> GSTR-3B Utility (.xlsm)
               </Button>
-              <Button variant="outline" size="sm" className="h-11 justify-start sm:h-8 sm:justify-center" disabled={!built}
+              <Button variant="outline" size="sm" className="h-11 justify-start sm:h-8 sm:justify-center" disabled={!built || !period.singleReturn}
+                title={period.singleReturn ? undefined : "GSTN JSON is for a single month or quarter"}
                 onClick={() => built && downloadJson(`${fileBase}.json`, gstr3bToJson(built))}>
                 <FileJson className="mr-1 h-4 w-4" /> GSTN JSON
               </Button>
@@ -256,6 +200,7 @@ function GSTR3BPage() {
               <Button variant="default" size="sm" className="hidden sm:inline-flex" onClick={() => setCalcOpen(true)}>
                 <Calculator className="mr-1 h-4 w-4" /> GST Calculator
               </Button>
+            </div>
             </div>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">Period: <strong>{period.from}</strong> to <strong>{period.to}</strong> · FP <code>{period.fp}</code></p>
@@ -290,16 +235,19 @@ function GSTR3BPage() {
 
           <ValidationPanel issues={validateGstr3B(built)} />
 
+          {period.singleReturn && (
           <div className="hidden sm:block">
           <PeriodLockCard
             returnType="GSTR3B"
-            period={cadence === "quarterly" ? `${year}-Q${quarter}` : month}
+            period={sel.mode === "quarter" ? `${sel.quarterYear}-Q${sel.quarter}` : period.from.slice(0, 7)}
             periodStart={period.from}
             periodEnd={period.to}
-            periodLabel={cadence === "quarterly" ? `Q${quarter} ${year}` : new Date(period.from).toLocaleString("en-IN", { month: "short", year: "numeric" })}
+            periodLabel={period.label}
           />
           </div>
+          )}
 
+          {period.singleReturn ? (
           <ManualEntryCard
             companyId={activeCompanyId!}
             period={period.fp}
@@ -318,6 +266,9 @@ function GSTR3BPage() {
               setBuilt(buildGstr3B({ company, from: period.from, to: period.to, fp: period.fp, sales, purchases, creditNotes, debitNotes, inwardSummary: i, itcReversal: r }));
             }}
           />
+          ) : (
+          <p className="text-xs text-muted-foreground print:hidden">Manual ITC and reversal entries are kept per month. Select a single month to edit them; the range total uses the saved entries of each month.</p>
+          )}
 
           <Card className="print:hidden">
             <CardContent className="p-0">
@@ -698,6 +649,16 @@ function Sup({ row }: { row: [string, { txval: number; iamt: number; camt: numbe
       <TableCell className="text-right font-mono">{moneyR(s.csamt)}</TableCell>
     </TableRow>
   );
+}
+
+/** Inward-supply rows for each month in a range. */
+async function fetchInwardRange(companyId: string, fps: string[]): Promise<InwardSummaryRow[]> {
+  return (await Promise.all(fps.map((fp) => fetchInwardSummary(companyId, fp)))).flat();
+}
+
+/** ITC reversal rows for each month in a range. */
+async function fetchReversalRange(companyId: string, fps: string[]): Promise<ItcReversalRow[]> {
+  return (await Promise.all(fps.map((fp) => fetchItcReversal(companyId, fp)))).flat();
 }
 
 function ManualEntryCard({ companyId, period, inward, reversal, onChanged }: {

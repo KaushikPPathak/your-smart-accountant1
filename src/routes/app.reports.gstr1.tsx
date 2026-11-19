@@ -26,6 +26,8 @@ import { toast } from "sonner";
 
 import { ValidationPanel } from "@/components/reports/ValidationPanel";
 import { PeriodLockCard } from "@/components/reports/PeriodLockCard";
+import { GstPeriodPicker } from "@/components/reports/GstPeriodPicker";
+import { defaultSelection, resolveGstPeriod, type GstPeriodSelection } from "@/lib/gst-period";
 import { ViewSwitcher, useReportView } from "@/components/reports/ViewSwitcher";
 import { GstSectionTable } from "@/components/reports/GstSectionTable";
 import { useFyRange } from "@/components/ui/fy-date-picker";
@@ -54,24 +56,10 @@ function GSTR1Page() {
   useEffect(() => { prefetchGstr1Template(); }, []);
 
   const { start: openFyStart } = useFyRange();
-  const fyMonths = useMemo(() => {
-    const out: { value: string; label: string }[] = [];
-    const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(openFyStart.getFullYear(), openFyStart.getMonth() + i, 1);
-      out.push({ value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: `${names[d.getMonth()]} ${d.getFullYear()}` });
-    }
-    return out;
-  }, [openFyStart]);
   const [cadence, setCadence] = useState<"monthly" | "quarterly">("monthly");
   const [iffMode, setIffMode] = useState(false);
-  const [year, setYear] = useState<number>(today.getFullYear());
-  const [month, setMonth] = useState<string>(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`);
-  useEffect(() => {
-    if (!fyMonths.some((m) => m.value === month)) setMonth(fyMonths[0].value);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fyMonths]);
-  const [quarter, setQuarter] = useState<1 | 2 | 3 | 4>(((Math.floor(today.getMonth() / 3) + 1) as 1 | 2 | 3 | 4));
+  // Any period: a month, a quarter, N months, or a date range (see GstPeriodPicker).
+  const [sel, setSel] = useState<GstPeriodSelection>(() => defaultSelection("monthly"));
 
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [sales, setSales] = useState<VoucherRow[]>([]);
@@ -82,14 +70,7 @@ function GSTR1Page() {
   const { view, setView } = useReportView("gstr1", "classic", "grid");
 
   // Determine effective period
-  const period = useMemo(() => {
-    if (cadence === "quarterly") {
-      const r = quarterRange(year, quarter);
-      return { ...r, fp: periodFP(r.to) };
-    }
-    const r = monthRange(month);
-    return { ...r, fp: periodFP(r.from) };
-  }, [cadence, year, quarter, month]);
+  const period = useMemo(() => resolveGstPeriod(sel), [sel]);
 
   // Load company settings (for cadence default)
   useEffect(() => {
@@ -100,7 +81,11 @@ function GSTR1Page() {
       // Filing frequency chosen in Settings is saved on this computer.
       const { offlineDb } = await import("@/lib/offline/db");
       const s = await offlineDb.cache_company_settings.where("company_id").equals(activeCompanyId).first();
-      if (s?.gst_filing_frequency) setCadence(s.gst_filing_frequency as "monthly" | "quarterly");
+      if (s?.gst_filing_frequency) {
+        const freq = s.gst_filing_frequency as "monthly" | "quarterly";
+        setCadence(freq);
+        setSel(defaultSelection(freq));
+      }
     })();
   }, [activeCompanyId]);
 
@@ -215,60 +200,15 @@ function GSTR1Page() {
       <PhoneReportHeading title="GSTR-1 — Outward supplies" from={period.from} to={period.to} />
       <Card>
         <CardContent className="p-3 print:hidden">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Filing frequency</Label>
-              <Select value={cadence} onValueChange={(v) => { setCadence(v as "monthly" | "quarterly"); setIffMode(false); }}>
-                <SelectTrigger className="h-11 sm:h-9 w-[160px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="quarterly">Quarterly (QRMP)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {cadence === "monthly" ? (
-              <div className="space-y-1">
-                <Label className="text-xs">Month</Label>
-                <Select value={month} onValueChange={setMonth}>
-                  <SelectTrigger className="h-11 sm:h-9 w-[180px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {fyMonths.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-1">
-                  <Label className="text-xs">Year</Label>
-                  <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-                    <SelectTrigger className="h-11 sm:h-9 w-[120px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {[fyYear - 1, fyYear, fyYear + 1].map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Quarter</Label>
-                  <Select value={String(quarter)} onValueChange={(v) => setQuarter(Number(v) as 1 | 2 | 3 | 4)}>
-                    <SelectTrigger className="h-11 sm:h-9 w-[180px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">Q1 (Apr–Jun)</SelectItem>
-                      <SelectItem value="2">Q2 (Jul–Sep)</SelectItem>
-                      <SelectItem value="3">Q3 (Oct–Dec)</SelectItem>
-                      <SelectItem value="4">Q4 (Jan–Mar)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2 pb-1">
+          <div className="space-y-3">
+            <GstPeriodPicker value={sel} onChange={(next) => { setSel(next); setIffMode(false); }} resolved={period} />
+            <div className="flex flex-wrap items-center gap-3">
+              {(sel.mode === "month" || sel.mode === "quarter") && (
+                <div className="flex items-center gap-2">
                   <Switch id="iff" checked={iffMode} onCheckedChange={setIffMode} />
                   <Label htmlFor="iff" className="text-xs">IFF (only B2B)</Label>
                 </div>
-              </>
-            )}
-
+              )}
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1 pr-2 border-r">
                 <Switch id="live" checked={livePreviewOn} onCheckedChange={setLivePreviewOn} />
@@ -278,7 +218,7 @@ function GSTR1Page() {
                 <Search className="mr-1 h-4 w-4" /> Explain Difference
               </Button>
               <ViewSwitcher view={view} onChange={setView} classicLabel="Table" />
-              {cadence === "quarterly" ? (
+              {sel.mode === "quarter" ? (
                 <>
                   <Button variant="outline" size="sm" onClick={() => exportQuarter(false)} disabled={!company}>
                     <FileSpreadsheet className="mr-1 h-4 w-4" /> Full Quarter (3 months)
@@ -292,17 +232,18 @@ function GSTR1Page() {
                   <Button variant="outline" size="sm" onClick={() => built && downloadXlsx(`${fileBase}.xlsx`, gstr1ToXlsxSheets(built))} disabled={!built}>
                     <FileSpreadsheet className="mr-1 h-4 w-4" /> Excel (fast)
                   </Button>
-                   <Button variant="outline" size="sm" onClick={onDownloadExcel} disabled={!built || templateExporting}>
+                   <Button variant="outline" size="sm" onClick={onDownloadExcel} disabled={!built || templateExporting || !period.singleReturn} title={period.singleReturn ? undefined : "Filing files are for a single month or quarter"}>
                      <FileSpreadsheet className="mr-1 h-4 w-4" /> {templateExporting ? "Preparing…" : "Offline Tool Format"}
                   </Button>
                 </>
               )}
-              <Button variant="outline" size="sm" onClick={onDownloadJson} disabled={!built}>
+              <Button variant="outline" size="sm" onClick={onDownloadJson} disabled={!built || !period.singleReturn} title={period.singleReturn ? undefined : "Filing files are for a single month or quarter"}>
                 <FileJson className="mr-1 h-4 w-4" /> GSTN JSON
               </Button>
               <Button variant="outline" size="sm" onClick={(e) => printOrViewOnPhone(e, "GSTR-1")}>
                 <Printer className="mr-1 h-4 w-4" /> {isAndroidTauri() ? "View" : "Print"}
               </Button>
+            </div>
             </div>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
@@ -344,17 +285,15 @@ function GSTR1Page() {
           <ValidationPanel issues={validateGstr1(built, validationOpts)} />
 
 
-          <PeriodLockCard
-            returnType="GSTR1"
-            period={cadence === "quarterly" ? `${year}-Q${quarter}` : month}
-            periodStart={period.from}
-            periodEnd={period.to}
-            periodLabel={
-              cadence === "quarterly"
-                ? `Q${quarter} ${year}`
-                : new Date(period.from).toLocaleString("en-IN", { month: "short", year: "numeric" })
-            }
-          />
+          {period.singleReturn && (
+            <PeriodLockCard
+              returnType="GSTR1"
+              period={sel.mode === "quarter" ? `${sel.quarterYear}-Q${sel.quarter}` : period.from.slice(0, 7)}
+              periodStart={period.from}
+              periodEnd={period.to}
+              periodLabel={period.label}
+            />
+          )}
 
           <GstSectionTable view={view} reportId="gstr1" title={`B2B (${built.b2b.length})`} headers={["GSTIN", "Invoice", "Date", "POS", "Value", "Taxable", "IGST", "CGST", "SGST"]}
             rows={built.b2b.map((x) => [x.ctin, x.inum, x.idt, x.pos, money(x.val), money(sumLine(x.itms, "txval")), money(sumLine(x.itms, "iamt")), money(sumLine(x.itms, "camt")), money(sumLine(x.itms, "samt"))])} />
