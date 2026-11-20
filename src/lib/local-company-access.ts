@@ -21,6 +21,34 @@ export interface LocalCompanyUser {
   recoveryHash?: string;
 }
 
+/**
+ * Password rule chosen by the company's admin.
+ *  basic:  at least 4 characters.
+ *  strict: at least 8 characters, with a letter and a number. This is the default.
+ * Changing the rule does not re-check passwords that are already set.
+ */
+export type PasswordPolicy = "basic" | "strict";
+export const DEFAULT_PASSWORD_POLICY: PasswordPolicy = "strict";
+const POLICY_KEY = (companyId: string) => `ym_company_password_policy:${companyId}`;
+
+export function getPasswordPolicy(companyId: string): PasswordPolicy {
+  try {
+    const v = localStorage.getItem(POLICY_KEY(companyId));
+    return v === "basic" || v === "strict" ? v : DEFAULT_PASSWORD_POLICY;
+  } catch {
+    return DEFAULT_PASSWORD_POLICY;
+  }
+}
+
+export function setPasswordPolicy(companyId: string, policy: PasswordPolicy): void {
+  localStorage.setItem(POLICY_KEY(companyId), policy);
+}
+
+export const POLICY_HELP: Record<PasswordPolicy, string> = {
+  basic: "At least 4 characters",
+  strict: "At least 8 characters, with a letter and a number",
+};
+
 export const MIN_PASSWORD_LENGTH = 8;
 const ITER_CURRENT = 310_000;
 const ITER_LEGACY = 100_000;
@@ -28,15 +56,18 @@ const ITER_LEGACY = 100_000;
 const KEY = (companyId: string) => `ym_company_access:${companyId}`;
 export const OWNER_NAME = "Owner";
 
-/** Returns a message when a new password is too weak, otherwise null. */
-export function passwordProblem(pw: string): string | null {
+/** Returns a message when a new password does not meet the rule, otherwise null. */
+export function passwordProblem(pw: string, policy: PasswordPolicy = DEFAULT_PASSWORD_POLICY): string | null {
+  if (policy === "basic") {
+    return pw.length >= 4 ? null : "Password must be at least 4 characters";
+  }
   if (pw.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
   if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return "Password must include a letter and a number";
   return null;
 }
 
-function assertPassword(pw: string): void {
-  const problem = passwordProblem(pw);
+function assertPassword(companyId: string, pw: string): void {
+  const problem = passwordProblem(pw, getPasswordPolicy(companyId));
   if (problem) throw new Error(problem);
 }
 
@@ -116,7 +147,7 @@ export async function upsertCompanyUser(
 ): Promise<LocalCompanyUser & { recoveryCode: string }> {
   const clean = name.trim();
   if (!clean) throw new Error("Enter a user name");
-  assertPassword(password);
+  assertPassword(companyId, password);
   const list = listCompanyUsers(companyId);
   const idx = list.findIndex((u) => u.name.toLowerCase() === clean.toLowerCase());
   const recoveryCode = generateRecoveryCode();
@@ -135,7 +166,7 @@ export async function upsertCompanyUser(
 
 /** Sets a new password and issues a new recovery code (returned once). */
 export async function resetUserPassword(companyId: string, userId: string, password: string): Promise<string> {
-  assertPassword(password);
+  assertPassword(companyId, password);
   const list = listCompanyUsers(companyId);
   const u = list.find((x) => x.id === userId);
   if (!u) throw new Error("User not found");

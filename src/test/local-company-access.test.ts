@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   listCompanyUsers, upsertCompanyUser, verifyCompanyUser, resetUserPassword, resetWithRecoveryCode,
   setUserRole, removeCompanyUser, clearCompanyAccess, passwordProblem, generateRecoveryCode,
+  getPasswordPolicy, setPasswordPolicy,
 } from "@/lib/local-company-access";
 
 const C = "co-1";
@@ -37,6 +38,18 @@ describe("password policy", () => {
     expect(passwordProblem("secret12")).toBeNull();
   });
 
+  it("basic policy only needs 4 characters", () => {
+    expect(passwordProblem("abcd", "basic")).toBeNull();
+    expect(passwordProblem("abc", "basic")).toMatch(/at least 4/);
+  });
+
+  it("strict is the default and the admin can choose basic for a company", () => {
+    localStorage.clear();
+    expect(getPasswordPolicy(C)).toBe("strict");
+    setPasswordPolicy(C, "basic");
+    expect(getPasswordPolicy(C)).toBe("basic");
+  });
+
   it("refuses to create a user with a weak password", async () => {
     localStorage.clear();
     await expect(upsertCompanyUser(C, "Owner", "admin", "secret1")).rejects.toThrow(/at least 8/);
@@ -45,6 +58,13 @@ describe("password policy", () => {
 
 describe("local company users & passwords", () => {
   beforeEach(() => localStorage.clear());
+
+  it("with the basic rule a 4-character password is accepted", async () => {
+    setPasswordPolicy(C, "basic");
+    const u = await upsertCompanyUser(C, "Owner", "admin", "pin1");
+    expect(await verifyCompanyUser(C, u.id, "pin1")).not.toBeNull();
+    setPasswordPolicy(C, "strict");
+  }, SLOW);
 
   it("adds users, verifies the right password and rejects a wrong one", async () => {
     const a = await upsertCompanyUser(C, "Owner", "admin", "secret123");

@@ -40,6 +40,7 @@ import { consumeReturnTo } from "@/lib/return-to";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   listCompanyUsers, verifyCompanyUser, resetWithRecoveryCode, passwordProblem, type LocalCompanyUser,
+  upsertCompanyUser, setPasswordPolicy, POLICY_HELP, type PasswordPolicy,
 } from "@/lib/local-company-access";
 
 function gotoAfterUnlock(navigate: ReturnType<typeof useNavigate>) {
@@ -87,6 +88,11 @@ function StartScreen() {
   const [pwd, setPwd] = useState("");
   const [pendingUsers, setPendingUsers] = useState<LocalCompanyUser[]>([]);
   const [pendingUserId, setPendingUserId] = useState("");
+  // First open of a company with no local user: create the owner login before opening.
+  const [setupMode, setSetupMode] = useState(false);
+  const [setupName, setSetupName] = useState("Owner");
+  const [setupConfirm, setSetupConfirm] = useState("");
+  const [setupPolicy, setSetupPolicy] = useState<PasswordPolicy>("strict");
   const [forgotMode, setForgotMode] = useState(false);
   const [recoveryAnswer, setRecoveryAnswer] = useState("");
   const [verifying, setVerifying] = useState(false);
@@ -364,13 +370,19 @@ function StartScreen() {
     else setCompanyLang(c.id, lang);
     
     const users = listCompanyUsers(c.id);
-    if ((users.length === 0 && !c.has_password) || isCompanyUnlocked(c.id)) {
+    if (isCompanyUnlocked(c.id)) {
       localStorage.setItem("ym_active_company_id", c.id);
       setActiveCompanyId(c.id);
       markCompanyUnlocked(c.id);
       gotoAfterUnlock(navigate);
       return;
     }
+    // No local user and no cloud password: nothing may open the company without a login.
+    // Create the owner login first.
+    setSetupMode(users.length === 0 && !c.has_password);
+    setSetupConfirm("");
+    setSetupName("Owner");
+    setSetupPolicy("strict");
     setPendingUsers(users);
     setPendingUserId(users[0]?.id ?? "");
     setForgotMode(false);
@@ -393,6 +405,19 @@ function StartScreen() {
     if (!pendingCompany) return;
     setVerifying(true);
     try {
+      if (setupMode) {
+        if (pwd !== setupConfirm) {
+          toast.error("The two passwords do not match");
+          return;
+        }
+        // Save the rule first, so the owner password is checked against it.
+        setPasswordPolicy(pendingCompany.id, setupPolicy);
+        const owner = await upsertCompanyUser(pendingCompany.id, setupName.trim() || "Owner", "admin", pwd);
+        toast.success(`Owner login created. Recovery code: ${owner.recoveryCode}. Write it down, it is shown once.`, { duration: Infinity });
+        setSetupMode(false);
+        finishUnlock(pendingCompany.id);
+        return;
+      }
       // Local users & passwords (saved on this computer).
       if (pendingUsers.length > 0) {
         if (forgotMode) {
@@ -629,7 +654,7 @@ function StartScreen() {
                     )}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    {(c.has_password || listCompanyUsers(c.id).length > 0) ? t("company.passwordProtected") : t("company.opensDirectly")}
+                    {(c.has_password || listCompanyUsers(c.id).length > 0) ? t("company.passwordProtected") : "Owner login needed on first open"}
                   </div>
                 </div>
                 <div className="text-muted-foreground/60 transition-all group-hover:translate-x-0.5 group-hover:text-primary">
@@ -644,20 +669,47 @@ function StartScreen() {
       <Dialog open={!!pendingCompany} onOpenChange={(o) => !o && setPendingCompany(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>{t("common.open")} “{pendingCompany?.name}”</DialogTitle>
+            <DialogTitle>{setupMode ? "Create owner login" : `${t("common.open")} “${pendingCompany?.name}”`}</DialogTitle>
           </DialogHeader>
           <form onSubmit={submitPassword} className="space-y-4">
+            {setupMode && (
+              <p className="text-xs text-muted-foreground">
+                “{pendingCompany?.name}” has no login yet. Create one before opening it. You can add more users later in Settings.
+              </p>
+            )}
+            {setupMode && (
+              <div className="space-y-1.5">
+                <Label htmlFor="setupname">Name</Label>
+                <Input id="setupname" value={setupName} onChange={(e) => setSetupName(e.target.value)} />
+              </div>
+            )}
+            {setupMode && (
+              <div className="space-y-1.5">
+                <Label htmlFor="setuprule">Password rule</Label>
+                <select
+                  id="setuprule"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={setupPolicy}
+                  onChange={(e) => setSetupPolicy(e.target.value as PasswordPolicy)}
+                >
+                  <option value="strict">Strict: {POLICY_HELP.strict}</option>
+                  <option value="basic">Basic: {POLICY_HELP.basic}</option>
+                </select>
+              </div>
+            )}
             {pendingUsers.length > 0 && (
               <div className="space-y-1.5">
-                <Label>User</Label>
-                <Select value={pendingUserId} onValueChange={setPendingUserId}>
-                  <SelectTrigger><SelectValue placeholder="Select user" /></SelectTrigger>
-                  <SelectContent>
-                    {pendingUsers.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="cuser">User</Label>
+                <select
+                  id="cuser"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={pendingUserId}
+                  onChange={(e) => setPendingUserId(e.target.value)}
+                >
+                  {pendingUsers.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  ))}
+                </select>
               </div>
             )}
             {forgotMode && (
@@ -674,9 +726,15 @@ function StartScreen() {
                 autoFocus={!forgotMode}
                 value={pwd}
                 onChange={(e) => setPwd(e.target.value)}
-                placeholder={forgotMode ? "Min 4 characters" : t("company.passwordPlaceholder")}
+                placeholder={forgotMode || setupMode ? POLICY_HELP[setupMode ? setupPolicy : "strict"] : t("company.passwordPlaceholder")}
               />
             </div>
+            {setupMode && (
+              <div className="space-y-1.5">
+                <Label htmlFor="cpwd2">Confirm password</Label>
+                <Input id="cpwd2" type="password" value={setupConfirm} onChange={(e) => setSetupConfirm(e.target.value)} />
+              </div>
+            )}
             {pendingUsers.length > 0 && (
               <button
                 type="button"
@@ -690,8 +748,8 @@ function StartScreen() {
               <Button type="button" variant="ghost" onClick={() => setPendingCompany(null)}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={verifying || !pwd}>
-                {verifying ? t("common.checking") : t("common.open")}
+              <Button type="submit" disabled={verifying || !pwd || (setupMode && !setupConfirm)}>
+                {verifying ? t("common.checking") : setupMode ? "Create and open" : t("common.open")}
               </Button>
             </DialogFooter>
           </form>

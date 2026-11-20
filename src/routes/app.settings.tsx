@@ -40,6 +40,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import {
   listCompanyUsers, upsertCompanyUser, resetUserPassword, setUserRole, removeCompanyUser,
+  getPasswordPolicy, setPasswordPolicy, POLICY_HELP, type PasswordPolicy,
   clearCompanyAccess, OWNER_NAME, type LocalCompanyUser,
 } from "@/lib/local-company-access";
 
@@ -129,6 +130,7 @@ function SettingsPage() {
   const [savingCompanyPwd, setSavingCompanyPwd] = useState(false);
   const [localUsers, setLocalUsers] = useState<LocalCompanyUser[]>([]);
   const [newUserPwd, setNewUserPwd] = useState("");
+  const [passwordRule, setPasswordRule] = useState<PasswordPolicy>("strict");
 
   const refreshLocalUsers = () => {
     if (!activeCompanyId) return;
@@ -137,7 +139,11 @@ function SettingsPage() {
     setHasCompanyPwd(list.length > 0);
   };
 
-  useEffect(() => { refreshLocalUsers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeCompanyId]);
+  useEffect(() => {
+    refreshLocalUsers();
+    if (activeCompanyId) setPasswordRule(getPasswordPolicy(activeCompanyId));
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [activeCompanyId]);
 
   const saveCompanyPwd = async (clear: boolean) => {
     if (!activeCompanyId) return;
@@ -221,7 +227,7 @@ function SettingsPage() {
 
   const resetLocalPwd = async (userId: string, name: string) => {
     if (!activeCompanyId) return;
-    const pwd = window.prompt(`New password for ${name} (min 8 characters, with a letter and a number):`);
+    const pwd = window.prompt(`New password for ${name} (${POLICY_HELP[getPasswordPolicy(activeCompanyId)]}):`);
     if (pwd == null) return;
     try {
       const code = await resetUserPassword(activeCompanyId, userId, pwd);
@@ -686,6 +692,25 @@ function SettingsPage() {
         <CardHeader><CardTitle className="text-base">{t("settings.users")}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {isAdmin && (
+            <div className="space-y-1.5">
+              <Label htmlFor="pwrule">Password rule for this company</Label>
+              <select
+                id="pwrule"
+                className="h-10 w-full max-w-md rounded-md border border-input bg-background px-3 text-sm"
+                value={passwordRule}
+                onChange={(e) => {
+                  const next = e.target.value as PasswordPolicy;
+                  if (activeCompanyId) setPasswordPolicy(activeCompanyId, next);
+                  setPasswordRule(next);
+                  toast.success("Password rule updated. Existing passwords are not changed.");
+                }}
+              >
+                <option value="strict">Strict: {POLICY_HELP.strict}</option>
+                <option value="basic">Basic: {POLICY_HELP.basic}</option>
+              </select>
+            </div>
+          )}
+          {isAdmin && (
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[160px] space-y-1.5">
                 <Label>Name</Label>
@@ -693,7 +718,7 @@ function SettingsPage() {
               </div>
               <div className="flex-1 min-w-[160px] space-y-1.5">
                 <Label>Password</Label>
-                <Input type="password" autoComplete="new-password" value={newUserPwd} onChange={(e) => setNewUserPwd(e.target.value)} placeholder="Min 4 characters" />
+                <Input type="password" autoComplete="new-password" value={newUserPwd} onChange={(e) => setNewUserPwd(e.target.value)} placeholder={POLICY_HELP[passwordRule]} />
               </div>
               <div className="space-y-1.5">
                 <Label>Role</Label>
