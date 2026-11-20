@@ -1,3 +1,4 @@
+import { BANK_ALIAS_PATTERN, findBankInText } from "./bank-aliases";
 // src/lib/ai/query-router.ts
 import type { StructuredCard } from "./sqliteContext";
 
@@ -35,7 +36,7 @@ export interface RouteResult {
   asOn?: string;
   from?: string;
   to?: string;
-  latestKind?: string;   // "latest" / "year_end" / voucher kind
+  latestKind?: "latest" | "year_end";
   balanceDateMode?: "latest" | "year_end" | "explicit";
   companyHint?: string;
   deterministicAnswer?: string | null;
@@ -120,8 +121,8 @@ const INTENT_PATTERNS: { intent: IntentType; patterns: RegExp[]; deterministic: 
       // Common Indian bank abbreviations/names. These deliberately require
       // a balance/account context, except for a bare bank-name query handled
       // separately in routeQuery().
-      /\b(?:sbi|bob|boi|pnb|hdfc|icici|axis|kotak|indusind|canara|union|idbi|yes|rbl|uco|bank of baroda|state bank of india|bank of india|punjab national bank|hdfc bank|icici bank|axis bank|kotak mahindra bank|indusind bank|canara bank|union bank(?: of india)?|idbi bank|yes bank|rbl bank|uco bank)\b.{0,30}\b(?:balance|how much|status)\b/i,
-      /\b(?:balance|how much|status)\b.{0,30}\b(?:in|of|for)\b.{0,30}\b(?:sbi|bob|boi|pnb|hdfc|icici|axis|kotak|indusind|canara|union|idbi|yes|rbl|uco)\b/i,
+      new RegExp(`\\b${BANK_ALIAS_PATTERN}\\b.{0,30}\\b(?:balance|how much|status)\\b`, "i"),
+      new RegExp(`\\b(?:balance|how much|status)\\b.{0,30}\\b(?:in|of|for)\\b.{0,30}\\b${BANK_ALIAS_PATTERN}\\b`, "i"),
     ],
   },
 
@@ -296,39 +297,6 @@ function extractDateInfo(text: string): DateInfo {
   return out;
 }
 
-const BANK_ALIASES: { alias: string; canonical: string }[] = [
-  { alias: "bank of baroda", canonical: "Bank of Baroda" },
-  { alias: "bob", canonical: "Bank of Baroda" },
-  { alias: "state bank of india", canonical: "State Bank of India" },
-  { alias: "sbi", canonical: "State Bank of India" },
-  { alias: "bank of india", canonical: "Bank of India" },
-  { alias: "boi", canonical: "Bank of India" },
-  { alias: "punjab national bank", canonical: "Punjab National Bank" },
-  { alias: "pnb", canonical: "Punjab National Bank" },
-  { alias: "hdfc bank", canonical: "HDFC Bank" },
-  { alias: "hdfc", canonical: "HDFC Bank" },
-  { alias: "icici bank", canonical: "ICICI Bank" },
-  { alias: "icici", canonical: "ICICI Bank" },
-  { alias: "axis bank", canonical: "Axis Bank" },
-  { alias: "axis", canonical: "Axis Bank" },
-  { alias: "kotak mahindra bank", canonical: "Kotak Mahindra Bank Ltd" },
-  { alias: "kotak", canonical: "Kotak Mahindra Bank Ltd" },
-  { alias: "indusind bank", canonical: "INDUSIND BANK" },
-  { alias: "indusind", canonical: "INDUSIND BANK" },
-  { alias: "canara bank", canonical: "Canara Bank" },
-  { alias: "canara", canonical: "Canara Bank" },
-  { alias: "union bank of india", canonical: "Union Bank of India" },
-  { alias: "union bank", canonical: "Union Bank of India" },
-  { alias: "idbi bank", canonical: "IDBI Bank" },
-  { alias: "idbi", canonical: "IDBI Bank" },
-  { alias: "yes bank", canonical: "YES Bank" },
-  { alias: "yes", canonical: "YES Bank" },
-  { alias: "rbl bank", canonical: "RBL Bank" },
-  { alias: "rbl", canonical: "RBL Bank" },
-  { alias: "uco bank", canonical: "UCO Bank" },
-  { alias: "uco", canonical: "UCO Bank" },
-];
-
 function normalizeComparable(value: string): string {
   return value
     .toLowerCase()
@@ -338,21 +306,24 @@ function normalizeComparable(value: string): string {
     .trim();
 }
 
-function extractBankAccount(text: string): string | undefined {
-  const lower = normalizeComparable(text);
+const BANK_NAME_LEAD_NOISE = new Set([
+  "show", "give", "tell", "what", "whats", "what's", "is", "are", "the", "my", "our", "your", "me",
+  "current", "check", "get", "see", "please", "of", "for", "in", "and", "to", "balance", "bal", "how", "much", "status",
+  "yes", "yeah", "yep", "ok", "okay",
+]);
 
-  // Prefer the longest aliases first so "bank of baroda" wins over "bob".
-  const aliases = [...BANK_ALIASES].sort((a, b) => b.alias.length - a.alias.length);
-  for (const item of aliases) {
-    const alias = normalizeComparable(item.alias);
-    if (!new RegExp(`\\b${alias.replace(/\s+/g, "\\s+")}\\b`, "i").test(lower)) continue;
-    return item.canonical;
-  }
+function extractBankAccount(text: string): string | undefined {
+  // Longest alias first, so "bank of baroda" wins over "bob" (see bank-aliases.ts).
+  const known = findBankInText(text);
+  if (known) return known;
 
   // Generic named-bank form: "ABC Bank balance" / "ABC bank".
+  // Leading request words ("show", "what is the") are not part of the bank's name.
   const namedBank = text.match(/\b([A-Za-z][A-Za-z0-9&.'-]*(?:\s+[A-Za-z][A-Za-z0-9&.'-]*){0,5})\s+bank\b/i);
   if (namedBank) {
-    return stripOuterPunctuation(`${namedBank[1]} Bank`);
+    const words = namedBank[1].split(/\s+/);
+    while (words.length && BANK_NAME_LEAD_NOISE.has(words[0].toLowerCase())) words.shift();
+    if (words.length) return stripOuterPunctuation(`${words.join(" ")} Bank`);
   }
 
   // Generic "account <name>" form. This is used only when the query is
@@ -440,10 +411,16 @@ function extractEntities(text: string, intent?: IntentType): RouteResult["entity
     if (subject) entity.partyName = subject;
   }
 
+  // A bare number is an amount only after years and financial-year labels are removed
+  // ("sales in 2025", "FY 2025-26", "31-03-2025"). Rupee-marked amounts are unaffected.
+  const withoutYears = text
+    .replace(/\bFY\s*\d{4}\s*[-/]\s*\d{2,4}\b/gi, " ")
+    .replace(/\b(?:19|20)\d{2}\s*[-/]\s*\d{2,4}\b/g, " ")
+    .replace(/\b(?:19|20)\d{2}\b/g, " ");
   const amountMatch =
-    text.match(/(?:rs|rupees|₹)\s*([\d,]+(?:\.\d{2})?)/i) ||
-    text.match(/\b([\d,]+(?:\.\d{2})?)\s*(?:rs|rupees|₹)/i) ||
-    text.match(/\b(\d{4,})\b/);
+    text.match(/(?:\b(?:rs|rupees)\.?|₹)\s*([\d,]+(?:\.\d{2})?)/i) ||
+    text.match(/\b([\d,]+(?:\.\d{2})?)\s*(?:\brs\b|\brupees\b|₹)/i) ||
+    withoutYears.match(/\b(\d{4,})\b/);
   if (amountMatch) {
     entity.amount = parseFloat(amountMatch[1].replace(/,/g, ""));
   }
@@ -469,7 +446,9 @@ function extractEntities(text: string, intent?: IntentType): RouteResult["entity
 
 export function routeQuery(text: string, contextCard?: StructuredCard): RouteResult {
   const originalText = text ?? "";
-  const trimmed = originalText.trim();
+  // "Yes, ..." / "Ok, ..." is an interjection. Without it, "Yes, show bank balance" reads as a
+  // party called "Yes bank" and is promoted to YES Bank. "Yes bank balance" (no comma) still means YES Bank.
+  const trimmed = originalText.trim().replace(/^(?:yes|yeah|yep|ok|okay)\s*[,.!;:-]\s*/i, "");
 
   if (!trimmed) {
     return {
@@ -500,7 +479,7 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
   const hasBankContext = /\bbank\b|\bbank\s+account\b|\baccount\b/i.test(trimmed);
   const hasCashContext = /\bcash(?:[-\s]?in[-\s]?hand)?\b/i.test(trimmed);
   const hasBalanceContext = /\b(?:balance|bal|how much|status)\b/i.test(trimmed);
-  const hasBankAlias = !!bankAccount && /\b(?:sbi|bob|boi|pnb|hdfc|icici|axis|kotak|indusind|canara|union|idbi|yes|rbl|uco)\b/i.test(trimmed);
+  const hasBankAlias = !!bankAccount && new RegExp(`\\b${BANK_ALIAS_PATTERN}\\b`, "i").test(trimmed);
 
   if (hasCashContext && hasBalanceContext) {
     const entity = extractEntities(trimmed, "cash_balance");
@@ -632,7 +611,7 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
     from: dateInfo.from,
     to: dateInfo.to,
     companyHint: undefined,
-    latestKind: entity?.voucherType ?? (dateInfo.yearEndRequested ? "year_end" : "latest"),
+    latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
     balanceDateMode: dateInfo.to ? "explicit" : dateInfo.yearEndRequested ? "year_end" : "latest",
     deterministicAnswer: canAnswerLocal ? null : undefined,
   };

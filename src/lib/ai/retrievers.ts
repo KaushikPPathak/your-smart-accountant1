@@ -1,3 +1,4 @@
+import { resolveBankAlias } from "./bank-aliases";
 // Scoped retrievers — one per QueryIntent.
 // Each returns the SMALLEST slice of the books needed to answer the question,
 // so the payload sent to the cloud LLM is tight instead of "everything".
@@ -636,19 +637,6 @@ async function retrieveProfitLoss(companyId: string, routed: RouteResult): Promi
 // Deliberately does NOT go through retrieveParty()/fuzzyPickLedger(): cash and
 // bank accounts are never the voucher's "party", so the party path undercounts.
 
-const BANK_ALIASES: Record<string, string> = {
-  sbi: "state bank of india",
-  bob: "bank of baroda",
-  pnb: "punjab national bank",
-  boi: "bank of india",
-  hdfc: "hdfc bank",
-  icici: "icici bank",
-  axis: "axis bank",
-  kotak: "kotak mahindra bank",
-  idbi: "idbi bank",
-  bom: "bank of maharashtra",
-};
-
 function normKey(s: string): string {
   return normalizeName(String(s ?? "")).replace(/[^a-z0-9 ]/gi, " ").replace(/\s+/g, " ").trim().toLowerCase();
 }
@@ -666,8 +654,7 @@ function tokenF1(a: string, b: string): number {
 /** Resolve a cash/bank account name to a real ledger — exact first, fuzzy last. */
 export function resolveAccountLedger(ledgers: any[], account: string): any | null {
   const raw = String(account ?? "cash").trim();
-  const q0 = normKey(raw);
-  const q = BANK_ALIASES[q0] ?? q0;
+  const q = normKey(resolveBankAlias(raw) ?? raw);
   const cash = ledgers.filter((l) => classifyLedger(l) === "cash");
   const banks = ledgers.filter((l) => classifyLedger(l) === "bank");
 

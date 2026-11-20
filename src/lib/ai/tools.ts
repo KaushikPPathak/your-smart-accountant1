@@ -1,3 +1,5 @@
+import { onDataChange } from "./cache-events";
+import { validateDateArgs } from "./ai-validation";
 // src/lib/ai/tools.ts
 // Client-side tool registry for the AI assistant.
 // Tier 3: typed tools the model can call to fetch exactly what it needs.
@@ -281,6 +283,7 @@ async function execEngineBalance(
   const latencyMs = Math.round(performance.now() - start);
 
   if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
   if (res.status === "ambiguous") {
     return {
       success: true,
@@ -466,6 +469,7 @@ async function execGetTrialBalance(args: Record<string, unknown> = {}): Promise<
   const latencyMs = Math.round(performance.now() - start);
 
   if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
 
   const rows = res.rows
     .filter((r) => r.closingPaise !== 0 || r.entryDebitPaise !== 0 || r.entryCreditPaise !== 0)
@@ -532,7 +536,25 @@ async function execGetJournalBook(args: Record<string, unknown>): Promise<ToolRe
 //  MAIN EXECUTE GATE
 // ═════════════════════════════════════════════════════════════════════════════
 
+/** Drops every cached tool answer, in memory and in IndexedDB. */
+export function clearToolCache(): void {
+  _memCache.clear();
+  void (async () => {
+    try {
+      const db = await getToolCacheDB();
+      await db.clear("tool_results");
+    } catch {
+      /* ignore */
+    }
+  })();
+}
+
+// Books changed (voucher, master or year-end write): cached answers are no longer trustworthy.
+onDataChange(() => clearToolCache());
+
 export async function executeTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+  const argError = validateDateArgs(args);
+  if (argError) return { success: false, error: argError, latencyMs: 0 };
   switch (name) {
     case "get_party_balance":
       return execGetPartyBalance(args);

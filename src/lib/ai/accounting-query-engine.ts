@@ -1,3 +1,5 @@
+import { coerceDateArg, normalizeStoredDate } from "./ai-validation";
+import { resolveBankAlias } from "./bank-aliases";
 // src/lib/ai/accounting-query-engine.ts
 //
 // Authoritative, deterministic accounting calculator for the three supported
@@ -48,7 +50,10 @@ export interface BalanceBreakdown {
   entryCount: number;
 }
 
+export const INVALID_DATE_MESSAGE = "Dates must be real calendar dates in YYYY-MM-DD form.";
+
 export type AccountingQueryResult =
+  | { status: "invalid_date"; message: string }
   | ({
       status: "resolved";
       ledgerId: string;
@@ -91,21 +96,6 @@ const QUERY_NOISE =
 export function stripQueryNoise(value: string): string {
   return stripHonorifics(value).replace(QUERY_NOISE, " ").replace(/\s+/g, " ").trim();
 }
-
-export const BANK_ALIASES: Record<string, string> = {
-  sbi: "state bank of india",
-  bob: "bank of baroda",
-  pnb: "punjab national bank",
-  boi: "bank of india",
-  hdfc: "hdfc bank",
-  icici: "icici bank",
-  axis: "axis bank",
-  kotak: "kotak mahindra bank",
-  idbi: "idbi bank",
-  bom: "bank of maharashtra",
-  ubi: "union bank of india",
-  canara: "canara bank",
-};
 
 const CASH_QUERY = /^(cash|cash in hand|cash on hand|cash in hands|petty cash|hand)$/;
 
@@ -230,7 +220,7 @@ export function resolveCashBankLedger(
   const cash = ledgers.filter((l) => classifyLedger(l) === "cash");
   const banks = ledgers.filter((l) => classifyLedger(l) === "bank");
   const raw = stripQueryNoise(String(nameIn ?? "")) || (kind === "cash_balance" ? "cash" : "");
-  const aliased = BANK_ALIASES[raw] ?? raw;
+  const aliased = resolveBankAlias(raw) ?? raw;
 
   if (kind === "cash_balance" || CASH_QUERY.test(aliased)) {
     if (!cash.length) return { status: "not_found" };
@@ -317,7 +307,7 @@ async function sumLedgerTotals(companyId: string, ledgerId: string, asOn: string
       v: { voucher_date?: unknown; date?: unknown; is_deleted?: boolean } | undefined,
       i: number,
     ) => {
-      if (v && v.is_deleted !== true) dateById.set(ids[i], String(v.voucher_date ?? v.date ?? ""));
+      if (v && v.is_deleted !== true) dateById.set(ids[i], normalizeStoredDate(v.voucher_date ?? v.date));
     },
   );
 
@@ -338,11 +328,13 @@ async function sumLedgerTotals(companyId: string, ledgerId: string, asOn: string
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function runAccountingQuery(query: AccountingQuery): Promise<AccountingQueryResult> {
+  const asOnArg = coerceDateArg(query.asOn);
+  if (!asOnArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
   const companyId = await resolveCompanyId(query.companyId);
   if (!companyId) return { status: "no_company" };
 
   const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
-  const asOn = query.asOn ? String(query.asOn) : null;
+  const asOn = asOnArg.value;
 
   const resolution =
     query.kind === "party_balance"
@@ -486,13 +478,19 @@ async function readTrialBalanceEntries(
   asOn: string,
 ): Promise<TrialBalanceEntry[]> {
   const { offlineDb } = await import("@/lib/offline/db");
+  // Whole-company read with normalised dates. An index range would miss stored dates that are
+  // not zero-padded (e.g. "2025-4-5"), because they sort outside an ISO range.
   const vouchers = (await offlineDb.cache_vouchers
     .where("[company_id+voucher_date]")
-    .between([companyId, ""], [companyId, asOn], true, true)
-    .toArray()) as Array<{ id?: unknown; voucher_date?: unknown; is_deleted?: boolean }>;
+    .between([companyId, ""], [companyId, "￿"], true, true)
+    .toArray()) as Array<{ id?: unknown; voucher_date?: unknown; date?: unknown; is_deleted?: boolean }>;
 
-  const live = vouchers.filter((v) => v?.is_deleted !== true);
-  const dateById = new Map(live.map((v) => [String(v.id), String(v.voucher_date ?? "")]));
+  const dateById = new Map<string, string>();
+  for (const v of vouchers) {
+    if (v?.is_deleted === true) continue;
+    const d = normalizeStoredDate(v.voucher_date ?? v.date);
+    if (d && d <= asOn) dateById.set(String(v.id), d);
+  }
   const ids = [...dateById.keys()];
 
   const out: TrialBalanceEntry[] = [];
@@ -530,11 +528,13 @@ export interface TrialBalanceQuery {
 
 export async function runTrialBalance(
   query: TrialBalanceQuery = {},
-): Promise<TrialBalanceResult | { status: "no_company" }> {
+): Promise<TrialBalanceResult | { status: "no_company" } | { status: "invalid_date"; message: string }> {
+  const asOnArg = coerceDateArg(query.asOn);
+  if (!asOnArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
   const companyId = await resolveCompanyId(query.companyId);
   if (!companyId) return { status: "no_company" };
 
-  const asOn = query.asOn ? String(query.asOn) : fyEndFor();
+  const asOn = asOnArg.value ?? fyEndFor();
   const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
   const entries = await readTrialBalanceEntries(companyId, asOn);
   return computeTrialBalance(ledgers, entries, asOn);
@@ -595,6 +595,7 @@ export interface LedgerStatementResult {
 }
 
 export type LedgerStatementOutcome =
+  | { status: "invalid_date"; message: string }
   | LedgerStatementResult
   | { status: "ambiguous"; candidates: string[] }
   | { status: "not_found"; query: string }
@@ -752,7 +753,7 @@ async function readLedgerStatementTxns(
     if (!v) continue;
     out.push({
       voucherId: String(v.id),
-      date: String(v.voucher_date ?? v.date ?? ""),
+      date: normalizeStoredDate(v.voucher_date ?? v.date),
       voucherNumber: String(v.voucher_number ?? ""),
       voucherType: (v.voucher_type as string | null) ?? null,
       referenceNo: (v.reference_no as string | null) ?? null,
@@ -768,6 +769,9 @@ async function readLedgerStatementTxns(
 export async function runLedgerStatement(
   query: LedgerStatementQuery,
 ): Promise<LedgerStatementOutcome> {
+  if ([query.from, query.to, query.asOn].some((v) => !coerceDateArg(v).ok)) {
+    return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  }
   const companyId = await resolveCompanyId(query.companyId);
   if (!companyId) return { status: "no_company" };
 
