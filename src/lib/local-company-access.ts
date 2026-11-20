@@ -71,14 +71,14 @@ function assertPassword(companyId: string, pw: string): void {
   if (problem) throw new Error(problem);
 }
 
-function b64(buf: ArrayBuffer | Uint8Array): string {
+export function b64(buf: ArrayBuffer | Uint8Array): string {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   let s = "";
   bytes.forEach((b) => (s += String.fromCharCode(b)));
   return btoa(s);
 }
 
-async function derive(secret: string, salt: string, iterations: number): Promise<string> {
+export async function derive(secret: string, salt: string, iterations: number): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey("raw", enc.encode(secret), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
@@ -106,7 +106,7 @@ export function generateRecoveryCode(): string {
 }
 
 /** Recovery code as typed: case, spaces and dashes are ignored. */
-function normalizeCode(code: string): string {
+export function normalizeCode(code: string): string {
   return code.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 

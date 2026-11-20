@@ -38,10 +38,8 @@ import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { dedupeLocalCompaniesOnce } from "@/lib/dedupe-local-companies";
 import { consumeReturnTo } from "@/lib/return-to";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  listCompanyUsers, verifyCompanyUser, resetWithRecoveryCode, passwordProblem, type LocalCompanyUser,
-  POLICY_HELP,
-} from "@/lib/local-company-access";
+import { DeviceLoginGate } from "@/components/DeviceLoginGate";
+import { isDeviceUnlocked } from "@/lib/device-login";
 
 function gotoAfterUnlock(navigate: ReturnType<typeof useNavigate>) {
   const back = consumeReturnTo();
@@ -86,10 +84,8 @@ function StartScreen() {
   const [companies, setCompanies] = useState<PickerCompany[]>([]);
   const [pendingCompany, setPendingCompany] = useState<PickerCompany | null>(null);
   const [pwd, setPwd] = useState("");
-  const [pendingUsers, setPendingUsers] = useState<LocalCompanyUser[]>([]);
-  const [pendingUserId, setPendingUserId] = useState("");
-  const [forgotMode, setForgotMode] = useState(false);
-  const [recoveryAnswer, setRecoveryAnswer] = useState("");
+  // One computer sign-in per app launch; it opens every company on this device.
+  const [deviceReady, setDeviceReady] = useState(() => isDeviceUnlocked());
   const [verifying, setVerifying] = useState(false);
   const [focusedCompanyIndex, setFocusedCompanyIndex] = useState(0);
   const companyGridRef = useRef<HTMLDivElement>(null);
@@ -364,7 +360,6 @@ function StartScreen() {
     if (cl) setLang(cl);
     else setCompanyLang(c.id, lang);
     
-    const users = listCompanyUsers(c.id);
     if (isCompanyUnlocked(c.id)) {
       localStorage.setItem("ym_active_company_id", c.id);
       setActiveCompanyId(c.id);
@@ -372,16 +367,12 @@ function StartScreen() {
       gotoAfterUnlock(navigate);
       return;
     }
-    // One user on this computer: open straight away, no password. A password is asked for only
-    // when several local users exist for this company, or when the company has a cloud password.
-    if (!c.has_password && users.length < 2) {
+    // Companies on this computer open with the computer sign-in already passed.
+    // Only a cloud-protected company asks for its own password, checked online.
+    if (!c.has_password) {
       finishUnlock(c.id);
       return;
     }
-    setPendingUsers(users);
-    setPendingUserId(users[0]?.id ?? "");
-    setForgotMode(false);
-    setRecoveryAnswer("");
     setPendingCompany(c);
     setPwd("");
   };
@@ -400,28 +391,6 @@ function StartScreen() {
     if (!pendingCompany) return;
     setVerifying(true);
     try {
-      // Local users & passwords (saved on this computer).
-      if (pendingUsers.length > 0) {
-        if (forgotMode) {
-          const problem = passwordProblem(pwd);
-          if (problem) {
-            toast.error(problem);
-            return;
-          }
-          const newCode = await resetWithRecoveryCode(pendingCompany.id, pendingUserId, recoveryAnswer, pwd);
-          toast.success(`Password reset. New recovery code: ${newCode}. Write it down, it is shown once.`, { duration: Infinity });
-          finishUnlock(pendingCompany.id);
-          return;
-        }
-        const ok = await verifyCompanyUser(pendingCompany.id, pendingUserId, pwd);
-        if (!ok) {
-          toast.error("Wrong password");
-          setPwd("");
-          return;
-        }
-        finishUnlock(pendingCompany.id);
-        return;
-      }
       if (!isOnlineNow()) {
         // A cloud-protected company cannot be unlocked offline without a local user.
         // Never open it without a password.
@@ -487,6 +456,10 @@ function StartScreen() {
       .slice(0, 2)
       .map((w) => w[0]!.toUpperCase())
       .join("") || "?";
+
+  if (!deviceReady) {
+    return <DeviceLoginGate onReady={() => setDeviceReady(true)} />;
+  }
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -629,14 +602,14 @@ function StartScreen() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-[15px] font-semibold tracking-tight">{c.name}</span>
-                    {(c.has_password || listCompanyUsers(c.id).length >= 2) ? (
+                    {c.has_password ? (
                       <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                     ) : (
                       <Unlock className="h-3.5 w-3.5 text-success" />
                     )}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    {(c.has_password || listCompanyUsers(c.id).length >= 2) ? t("company.passwordProtected") : "Opens without a password"}
+                    {c.has_password ? t("company.passwordProtected") : "Opens without a password"}
                   </div>
                 </div>
                 <div className="text-muted-foreground/60 transition-all group-hover:translate-x-0.5 group-hover:text-primary">
@@ -654,47 +627,17 @@ function StartScreen() {
             <DialogTitle>{`${t("common.open")} “${pendingCompany?.name}”`}</DialogTitle>
           </DialogHeader>
           <form onSubmit={submitPassword} className="space-y-4">
-            {pendingUsers.length > 0 && (
-              <div className="space-y-1.5">
-                <Label htmlFor="cuser">User</Label>
-                <select
-                  id="cuser"
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  value={pendingUserId}
-                  onChange={(e) => setPendingUserId(e.target.value)}
-                >
-                  {pendingUsers.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {forgotMode && (
-              <div className="space-y-1.5">
-                <Label htmlFor="crec">Recovery code</Label>
-                <Input id="crec" autoFocus value={recoveryAnswer} onChange={(e) => setRecoveryAnswer(e.target.value)} placeholder="XXXX-XXXX-XXXX-XXXX (given when the user was created)" />
-              </div>
-            )}
             <div className="space-y-1.5">
-              <Label htmlFor="cpwd">{forgotMode ? "New password" : t("company.password")}</Label>
+              <Label htmlFor="cpwd">{t("company.password")}</Label>
               <Input
                 id="cpwd"
                 type="password"
-                autoFocus={!forgotMode}
+                autoFocus
                 value={pwd}
                 onChange={(e) => setPwd(e.target.value)}
-                placeholder={forgotMode ? POLICY_HELP.strict : t("company.passwordPlaceholder")}
+                placeholder={t("company.passwordPlaceholder")}
               />
             </div>
-            {pendingUsers.length > 0 && (
-              <button
-                type="button"
-                className="text-xs text-primary underline"
-                onClick={() => { setForgotMode((f) => !f); setPwd(""); setRecoveryAnswer(""); }}
-              >
-                {forgotMode ? "Back to sign in" : "Forgot password?"}
-              </button>
-            )}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setPendingCompany(null)}>
                 {t("common.cancel")}
