@@ -86,7 +86,7 @@ export function normalizeLedger<T extends AnyRow>(row: T | null | undefined): T 
   if (!row || typeof row !== "object") return null;
   const out: AnyRow = { ...row };
   if (out.is_active == null) out.is_active = true;
-  if (out.is_deleted == null) out.is_deleted = false;
+  out.is_deleted = out.is_deleted === true || !!out.deleted_at;
   if (out.opening_balance_paise == null) out.opening_balance_paise = 0;
   if (out.opening_balance_is_debit == null) out.opening_balance_is_debit = true;
   if (out.credit_limit_paise == null) out.credit_limit_paise = 0;
@@ -141,7 +141,7 @@ export function normalizeItem<T extends AnyRow>(row: T | null | undefined): T | 
   if (!row || typeof row !== "object") return null;
   const out: AnyRow = { ...row };
   if (out.is_active == null) out.is_active = true;
-  if (out.is_deleted == null) out.is_deleted = false;
+  out.is_deleted = out.is_deleted === true || !!out.deleted_at;
   if (out.gst_rate == null) out.gst_rate = 0;
   if (out.opening_qty == null) out.opening_qty = 0;
   if (out.opening_value_paise == null) out.opening_value_paise = 0;
@@ -153,7 +153,7 @@ export function normalizeItem<T extends AnyRow>(row: T | null | undefined): T | 
 export function normalizeVoucher<T extends AnyRow>(row: T | null | undefined): T | null {
   if (!row || typeof row !== "object") return null;
   const out: AnyRow = { ...row };
-  if (out.is_deleted == null) out.is_deleted = false;
+  out.is_deleted = out.is_deleted === true || !!out.deleted_at;
   if (out.total_amount_paise == null) out.total_amount_paise = 0;
   return out as T;
 }

@@ -1,4 +1,6 @@
 // GSTR-2B reconciliation engine — robust fuzzy matching against purchase register.
+import { tryParseToPaise } from "@/lib/utils/currency-utils";
+import { isRealCalendarDate } from "@/lib/schemas/voucher";
 // Handles GSTN JSON, CSV (portal/offline-tool), and Excel exports (B2B sheet).
 
 export interface ParsedRow {
@@ -19,6 +21,10 @@ export interface BookPurchase {
   voucher_number: string;
   voucher_date: string;
   total_paise: number;
+  /** Bill-level tax heads. When present, the reconciliation compares each head to the GSTR-2B row. */
+  cgst_paise?: number;
+  sgst_paise?: number;
+  igst_paise?: number;
   vendor_invoice_no: string | null;
   ledgers: { name: string; gstin: string | null } | null;
 }
@@ -98,13 +104,15 @@ export function parseAnyDate(s: unknown): string | null {
   }
   const t = String(s).trim();
   if (!t) return null;
+  // Only real calendar dates: 31/02/2026 and 2026-02-31 are rejected, not rolled over.
+  const real = (iso: string | null): string | null => (iso && isRealCalendarDate(iso) ? iso : null);
   let m = t.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
   if (m) {
     const y = m[3].length === 2 ? `20${m[3]}` : m[3];
-    return `${y}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    return real(`${y}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`);
   }
   m = t.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
-  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  if (m) return real(`${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`);
   m = t.match(/^(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s](\d{2,4})$/);
   if (m) {
     const months: Record<string, string> = {
@@ -113,19 +121,31 @@ export function parseAnyDate(s: unknown): string | null {
     };
     const mm = months[m[2].slice(0, 3).toLowerCase()];
     const y = m[3].length === 2 ? `20${m[3]}` : m[3];
-    if (mm) return `${y}-${mm}-${m[1].padStart(2, "0")}`;
+    if (mm) return real(`${y}-${mm}-${m[1].padStart(2, "0")}`);
   }
   const d = new Date(t);
-  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  if (!Number.isNaN(d.getTime())) return real(d.toISOString().slice(0, 10));
   return null;
 }
 
+/**
+ * Amount in a GSTR-2B file to paise. Blank and dash cells are zero. Brackets mean negative.
+ * Anything else that is not a clean amount throws, so a bad cell is reported rather than
+ * silently read as a different number (parseFloat read "1.2.3" as 1.2 and "12-3" as 12).
+ */
 export function toPaise(v: unknown): number {
-  if (v == null || v === "") return 0;
-  if (typeof v === "number") return Math.round(v * 100);
-  const s = String(v).replace(/[₹,\s]/g, "").replace(/^\(([^)]+)\)$/, "-$1");
-  const n = parseFloat(s);
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+  if (v == null) return 0;
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) throw new Error(`Invalid amount "${v}" in GSTR-2B file`);
+    return Math.round(v * 100);
+  }
+  const raw = String(v).trim();
+  if (raw === "" || raw === "-" || raw === "—" || raw.toUpperCase() === "NA") return 0;
+  const negative = /^\(.*\)$/.test(raw);
+  const inner = negative ? raw.slice(1, -1).trim() : raw;
+  const p = tryParseToPaise(inner);
+  if (p === null) throw new Error(`Invalid amount "${raw}" in GSTR-2B file`);
+  return negative ? -Math.abs(p) : p;
 }
 
 // ---------- parsers ----------
@@ -382,9 +402,27 @@ export function reconcile(rows: ParsedRow[], books: BookPurchase[], tol: ReconTo
     if (best) {
       consumed.add(best.b.id);
       // sharpen status: check tax heads diff
-      const taxDiff =
-        Math.abs(best.b.raw.total_paise - row.invoice_value_paise);
+      // Compare each tax head (CGST, SGST, IGST), not just the invoice total.
+      const bookRaw = best.b.raw;
+      const hasHeads = bookRaw.cgst_paise !== undefined || bookRaw.sgst_paise !== undefined || bookRaw.igst_paise !== undefined;
+      const headDiff = hasHeads
+        ? {
+            cgst: Math.abs((bookRaw.cgst_paise ?? 0) - row.cgst_paise),
+            sgst: Math.abs((bookRaw.sgst_paise ?? 0) - row.sgst_paise),
+            igst: Math.abs((bookRaw.igst_paise ?? 0) - row.igst_paise),
+          }
+        : null;
+      const taxDiff = headDiff
+        ? headDiff.cgst + headDiff.sgst + headDiff.igst
+        : Math.abs(bookRaw.total_paise - row.invoice_value_paise);
       let status = best.reason;
+      if (
+        headDiff &&
+        (status === "matched" || status === "matched_with_tolerance") &&
+        (headDiff.cgst > tol.taxPaise || headDiff.sgst > tol.taxPaise || headDiff.igst > tol.taxPaise)
+      ) {
+        status = "tax_mismatch";
+      }
       // promote near-exact to matched
       if (
         status === "matched_with_tolerance" &&

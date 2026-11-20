@@ -97,11 +97,19 @@ function BankRecPage() {
 
   async function onConfirmImport(rows: import("@/lib/bank/parse-client").ParsedBankLine[]) {
     if (!activeCompanyId || !bankLedgerId) return;
-    const res = await commitStatement(activeCompanyId, bankLedgerId, pendingFileName, rows, candidates);
-    toast.success(`Imported ${rows.length} lines · ${res.matched} auto-matched`);
-    setPreviewOpen(false);
-    setParseResult(null);
-    reloadLines();
+    try {
+      const res = await commitStatement(activeCompanyId, bankLedgerId, pendingFileName, rows, candidates);
+      const imported = rows.length - res.skipped;
+      toast.success(
+        `Imported ${imported} lines · ${res.matched} auto-matched` +
+          (res.skipped ? ` · ${res.skipped} already imported, skipped` : ""),
+      );
+      setPreviewOpen(false);
+      setParseResult(null);
+      reloadLines();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    }
   }
 
   async function setStatus(id: string, status: LocalBankLine["match_status"], voucherId?: string | null) {

@@ -1,5 +1,12 @@
 // Local-only company users & passwords. Stored on this device only
-// (localStorage), never sent to our servers. Passwords are salted PBKDF2 hashes.
+// (localStorage), never sent to our servers.
+//
+// Passwords are salted PBKDF2-SHA256 hashes. New hashes use ITER_CURRENT rounds; hashes saved
+// before that use ITER_LEGACY and are upgraded the next time the user signs in.
+//
+// Forgot password is answered with a one-time recovery code shown when the user is created or the
+// password is reset. PAN and GSTIN are not used, because they are printed on invoices and shared
+// with customers and suppliers, so they are not secrets.
 
 export type LocalRole = "admin" | "accountant" | "viewer";
 export interface LocalCompanyUser {
@@ -8,10 +15,30 @@ export interface LocalCompanyUser {
   role: LocalRole;
   salt: string;
   hash: string;
+  /** PBKDF2 rounds used for `hash`. Missing on users created before the upgrade (ITER_LEGACY). */
+  iter?: number;
+  recoverySalt?: string;
+  recoveryHash?: string;
 }
+
+export const MIN_PASSWORD_LENGTH = 8;
+const ITER_CURRENT = 310_000;
+const ITER_LEGACY = 100_000;
 
 const KEY = (companyId: string) => `ym_company_access:${companyId}`;
 export const OWNER_NAME = "Owner";
+
+/** Returns a message when a new password is too weak, otherwise null. */
+export function passwordProblem(pw: string): string | null {
+  if (pw.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return "Password must include a letter and a number";
+  return null;
+}
+
+function assertPassword(pw: string): void {
+  const problem = passwordProblem(pw);
+  if (problem) throw new Error(problem);
+}
 
 function b64(buf: ArrayBuffer | Uint8Array): string {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
@@ -20,15 +47,36 @@ function b64(buf: ArrayBuffer | Uint8Array): string {
   return btoa(s);
 }
 
-async function hashPassword(password: string, salt: string): Promise<string> {
+async function derive(secret: string, salt: string, iterations: number): Promise<string> {
   const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt: enc.encode(salt), iterations: 100_000, hash: "SHA-256" },
+    { name: "PBKDF2", salt: enc.encode(salt), iterations, hash: "SHA-256" },
     key,
     256,
   );
   return b64(bits);
+}
+
+// Recovery codes avoid look-alike characters (no 0/O, 1/I/L).
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
+
+/** 16 random characters from CODE_ALPHABET, grouped 4-4-4-4. Rejection sampling avoids modulo bias. */
+export function generateRecoveryCode(): string {
+  const limit = 256 - (256 % CODE_ALPHABET.length);
+  let out = "";
+  while (out.length < 16) {
+    const buf = crypto.getRandomValues(new Uint8Array(32));
+    for (const b of buf) {
+      if (b < limit && out.length < 16) out += CODE_ALPHABET[b % CODE_ALPHABET.length];
+    }
+  }
+  return out.match(/.{4}/g)!.join("-");
+}
+
+/** Recovery code as typed: case, spaces and dashes are ignored. */
+function normalizeCode(code: string): string {
+  return code.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
 export function listCompanyUsers(companyId: string): LocalCompanyUser[] {
@@ -49,40 +97,73 @@ export function hasLocalAccess(companyId: string): boolean {
   return listCompanyUsers(companyId).length > 0;
 }
 
+/** Fresh salt, password hash and recovery code for a user. The recovery code is returned once. */
+async function credentialsFor(password: string): Promise<Pick<LocalCompanyUser, "salt" | "hash" | "iter">> {
+  const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+  return { salt, hash: await derive(password, salt, ITER_CURRENT), iter: ITER_CURRENT };
+}
+
+async function recoveryFor(code: string): Promise<Pick<LocalCompanyUser, "recoverySalt" | "recoveryHash">> {
+  const recoverySalt = b64(crypto.getRandomValues(new Uint8Array(16)));
+  return { recoverySalt, recoveryHash: await derive(normalizeCode(code), recoverySalt, ITER_CURRENT) };
+}
+
 export async function upsertCompanyUser(
   companyId: string,
   name: string,
   role: LocalRole,
   password: string,
-): Promise<LocalCompanyUser> {
+): Promise<LocalCompanyUser & { recoveryCode: string }> {
   const clean = name.trim();
   if (!clean) throw new Error("Enter a user name");
-  if (password.length < 4) throw new Error("Password must be at least 4 characters");
+  assertPassword(password);
   const list = listCompanyUsers(companyId);
-  const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
-  const hash = await hashPassword(password, salt);
   const idx = list.findIndex((u) => u.name.toLowerCase() === clean.toLowerCase());
+  const recoveryCode = generateRecoveryCode();
   const user: LocalCompanyUser = {
     id: idx >= 0 ? list[idx].id : crypto.randomUUID(),
     name: idx >= 0 ? list[idx].name : clean,
     role,
-    salt,
-    hash,
+    ...(await credentialsFor(password)),
+    ...(await recoveryFor(recoveryCode)),
   };
   if (idx >= 0) list[idx] = user;
   else list.push(user);
   save(companyId, list);
-  return user;
+  return { ...user, recoveryCode };
 }
 
-export async function resetUserPassword(companyId: string, userId: string, password: string): Promise<void> {
-  if (password.length < 4) throw new Error("Password must be at least 4 characters");
+/** Sets a new password and issues a new recovery code (returned once). */
+export async function resetUserPassword(companyId: string, userId: string, password: string): Promise<string> {
+  assertPassword(password);
   const list = listCompanyUsers(companyId);
   const u = list.find((x) => x.id === userId);
   if (!u) throw new Error("User not found");
-  u.salt = b64(crypto.getRandomValues(new Uint8Array(16)));
-  u.hash = await hashPassword(password, u.salt);
+  const recoveryCode = generateRecoveryCode();
+  Object.assign(u, await credentialsFor(password), await recoveryFor(recoveryCode));
   save(companyId, list);
+  return recoveryCode;
+}
+
+/**
+ * Forgot password: the user types the recovery code issued to them. On a match the password
+ * is replaced and a new recovery code is returned (the old one stops working).
+ */
+export async function resetWithRecoveryCode(
+  companyId: string,
+  userId: string,
+  recoveryAttempt: string,
+  newPassword: string,
+): Promise<string> {
+  const list = listCompanyUsers(companyId);
+  const u = list.find((x) => x.id === userId);
+  if (!u) throw new Error("User not found");
+  if (!u.recoverySalt || !u.recoveryHash) {
+    throw new Error("This user has no recovery code. Ask an admin to reset the password from Settings.");
+  }
+  const attempt = await derive(normalizeCode(recoveryAttempt), u.recoverySalt, ITER_CURRENT);
+  if (attempt !== u.recoveryHash) throw new Error("Recovery code does not match");
+  return resetUserPassword(companyId, userId, newPassword);
 }
 
 export function setUserRole(companyId: string, userId: string, role: LocalRole): void {
@@ -104,22 +185,21 @@ export function clearCompanyAccess(companyId: string): void {
   localStorage.removeItem(KEY(companyId));
 }
 
+/**
+ * Checks a password. A correct password on an older hash upgrades that hash to the current
+ * number of rounds, so the stronger setting applies without the user changing anything.
+ */
 export async function verifyCompanyUser(companyId: string, userId: string, password: string): Promise<LocalCompanyUser | null> {
-  const u = listCompanyUsers(companyId).find((x) => x.id === userId);
+  const list = listCompanyUsers(companyId);
+  const u = list.find((x) => x.id === userId);
   if (!u) return null;
-  return (await hashPassword(password, u.salt)) === u.hash ? u : null;
-}
-
-/** Forgot-password check: the company's PAN or GSTIN (case-insensitive).
- *  Falls back to the exact company name when neither is recorded. */
-export function recoveryMatches(
-  answer: string,
-  company: { pan?: string | null; gstin?: string | null; name?: string | null },
-): boolean {
-  const a = answer.trim().toUpperCase();
-  if (!a) return false;
-  const pan = (company.pan ?? "").trim().toUpperCase();
-  const gstin = (company.gstin ?? "").trim().toUpperCase();
-  if (pan || gstin) return a === pan || a === gstin;
-  return a === (company.name ?? "").trim().toUpperCase();
+  const rounds = u.iter ?? ITER_LEGACY;
+  if ((await derive(password, u.salt, rounds)) !== u.hash) return null;
+  if (rounds < ITER_CURRENT) {
+    const upgraded = await derive(password, u.salt, ITER_CURRENT);
+    Object.assign(u, { hash: upgraded, iter: ITER_CURRENT });
+    save(companyId, list);
+    return { ...u };
+  }
+  return u;
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { suggestClosingStock } from "@/lib/inventory/closing-stock";
 import { toast } from "sonner";
 import { CalendarCheck, Loader2, RotateCcw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -181,6 +182,10 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
   const [fyStart, setFyStart] = useState(fy.start);
   const [fyEnd, setFyEnd] = useState(fy.end);
   const [closingStockRupees, setClosingStockRupees] = useState("");
+  // Closing stock from the stock valuation for this FY end. The typed value must agree with it,
+  // or the user must acknowledge the difference before the close is previewed or posted.
+  const [suggestedStock, setSuggestedStock] = useState<{ paise: number; source: "manual" | "engine" } | null>(null);
+  const [acknowledgeStockDiff, setAcknowledgeStockDiff] = useState(false);
   const [loading, setLoading] = useState(false);
   const [posting, setPosting] = useState(false);
   const [steps, setSteps] = useState<PreviewStep[] | null>(null);
@@ -221,8 +226,31 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
+  useEffect(() => {
+    if (!companyId || !fyEnd) return;
+    let cancelled = false;
+    suggestClosingStock(companyId, fyEnd)
+      .then((s) => { if (!cancelled) setSuggestedStock(s); })
+      .catch(() => { if (!cancelled) setSuggestedStock(null); });
+    return () => { cancelled = true; };
+  }, [companyId, fyEnd]);
+
+  /** Returns a message when the typed closing stock needs the user's acknowledgement, else null. */
+  const stockMismatch = (typedPaise: number): string | null => {
+    if (!suggestedStock) return null;
+    if (Math.abs(typedPaise - suggestedStock.paise) <= 100) return null;
+    if (acknowledgeStockDiff) return null;
+    return `Closing stock differs from the stock valuation (₹${(suggestedStock.paise / 100).toFixed(2)}). Use the valuation, or tick the box to use the typed value.`;
+  };
+
   const buildPreview = async () => {
     if (!companyId) return;
+    const typedStock = rupeesToPaise(parseFloat(closingStockRupees) || 0);
+    const mismatch = stockMismatch(typedStock);
+    if (mismatch) {
+      toast.error(mismatch);
+      return;
+    }
     setLoading(true);
     setSteps(null);
     try {
@@ -487,6 +515,11 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
 
   const postClosure = async () => {
     if (!companyId || !steps || steps.length === 0) return;
+    const mismatch = stockMismatch(rupeesToPaise(parseFloat(closingStockRupees) || 0));
+    if (mismatch) {
+      toast.error(mismatch);
+      return;
+    }
     setPosting(true);
     try {
       const closingStockPaise = rupeesToPaise(parseFloat(closingStockRupees) || 0);
@@ -715,8 +748,32 @@ export function YearEndClosure({ companyId, disabled, fyStartHint }: YearEndClos
               step="0.01"
               placeholder="0.00"
               value={closingStockRupees}
-              onChange={(e) => setClosingStockRupees(e.target.value)}
+              onChange={(e) => { setClosingStockRupees(e.target.value); setAcknowledgeStockDiff(false); }}
             />
+            {suggestedStock && (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>
+                  Stock valuation ({suggestedStock.source === "manual" ? "manual" : "costing"}): ₹{(suggestedStock.paise / 100).toFixed(2)}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => { setClosingStockRupees((suggestedStock.paise / 100).toFixed(2)); setAcknowledgeStockDiff(false); }}
+                >
+                  Use valuation
+                </Button>
+                <label className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={acknowledgeStockDiff}
+                    onChange={(e) => setAcknowledgeStockDiff(e.target.checked)}
+                  />
+                  Use typed value
+                </label>
+              </div>
+            )}
           </div>
         </div>
 

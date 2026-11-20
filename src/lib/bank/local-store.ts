@@ -85,13 +85,42 @@ export async function loadVoucherCandidates(companyId: string, bankLedgerId: str
     }));
 }
 
+function lineKey(l: { txn_date: string; debit_paise: number; credit_paise: number; description: string | null }): string {
+  const desc = (l.description ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  return `${l.txn_date}|${Number(l.debit_paise) || 0}|${Number(l.credit_paise) || 0}|${desc}`;
+}
+
 export async function commitStatement(
   companyId: string,
   bankLedgerId: string,
   fileName: string,
   parsed: ParsedBankLine[],
   candidates: VoucherCandidate[],
-): Promise<{ statementId: string; matched: number; unmatched: number }> {
+): Promise<{ statementId: string; matched: number; unmatched: number; skipped: number }> {
+  // Skip lines this bank account already has for the same date, amount and description.
+  // Counted per line, so a genuine repeat inside one statement still imports.
+  const dates0 = parsed.map((p) => p.txn_date).sort();
+  const existing = (await offlineDb.cache_bank_statement_lines
+    .where("[company_id+bank_ledger_id+txn_date]")
+    .between([companyId, bankLedgerId, dates0[0] || ""], [companyId, bankLedgerId, dates0[dates0.length - 1] || ""], true, true)
+    .toArray()) as LocalBankLine[];
+  const seen = new Map<string, number>();
+  for (const l of existing) {
+    const k = lineKey(l);
+    seen.set(k, (seen.get(k) ?? 0) + 1);
+  }
+  const fresh: ParsedBankLine[] = [];
+  for (const p of parsed) {
+    const k = lineKey(p);
+    const n = seen.get(k) ?? 0;
+    if (n > 0) seen.set(k, n - 1);
+    else fresh.push(p);
+  }
+  const skipped = parsed.length - fresh.length;
+  if (fresh.length === 0) {
+    throw new Error("Every line in this statement is already imported for this bank account.");
+  }
+  parsed = fresh;
   const dates = parsed.map((p) => p.txn_date).sort();
   const stmt: LocalBankStatement = {
     id: uid(),
@@ -127,6 +156,7 @@ export async function commitStatement(
     statementId: stmt.id,
     matched: lines.filter((l) => l.matched_voucher_id).length,
     unmatched: lines.filter((l) => !l.matched_voucher_id).length,
+    skipped,
   };
 }
 

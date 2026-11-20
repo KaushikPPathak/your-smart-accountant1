@@ -95,7 +95,9 @@ export async function listSalesVouchersLocal(companyId: string, limit = 200): Pr
 /** Company, voucher and party details used by the e-way bill dialog. */
 export async function getEwbContextLocal(companyId: string, voucherId: string) {
   const company: any = await db.cache_companies.get(companyId);
-  const voucher: any = await db.cache_vouchers.get(voucherId);
+  const found: any = await db.cache_vouchers.get(voucherId);
+  // A voucher from another company must not be combined with this company's details.
+  const voucher: any = found && String(found.company_id) === String(companyId) ? found : null;
   const party: any = voucher?.party_ledger_id ? await db.cache_ledgers.get(voucher.party_ledger_id) : null;
   return {
     company: company

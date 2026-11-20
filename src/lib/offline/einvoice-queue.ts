@@ -111,7 +111,21 @@ function isTransient(err: unknown): boolean {
  * connectivity returns. Best-effort — a permanent portal rejection leaves the
  * row in place with status="failed" so the user can review it.
  */
-export async function drainEinvoiceQueue(): Promise<{ ok: number; failed: number; kept: number }> {
+let drainInFlight: Promise<{ ok: number; failed: number; kept: number }> | null = null;
+
+/**
+ * Runs one drain at a time. A second call while one is running waits for it and returns
+ * its result, so the same pending IRN or e-way bill is never sent twice.
+ */
+export function drainEinvoiceQueue(): Promise<{ ok: number; failed: number; kept: number }> {
+  if (drainInFlight) return drainInFlight;
+  drainInFlight = runDrainEinvoiceQueue().finally(() => {
+    drainInFlight = null;
+  });
+  return drainInFlight;
+}
+
+async function runDrainEinvoiceQueue(): Promise<{ ok: number; failed: number; kept: number }> {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     return { ok: 0, failed: 0, kept: await einvoiceQueueSize() };
   }

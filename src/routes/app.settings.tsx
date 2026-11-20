@@ -151,8 +151,11 @@ function SettingsPage() {
     setSavingCompanyPwd(true);
     try {
       const owner = listCompanyUsers(activeCompanyId).find((u) => u.name.toLowerCase() === OWNER_NAME.toLowerCase());
-      await upsertCompanyUser(activeCompanyId, OWNER_NAME, owner?.role ?? "admin", newCompanyPwd);
-      toast.success(hasCompanyPwd ? "Password changed" : "Password set");
+      const saved = await upsertCompanyUser(activeCompanyId, OWNER_NAME, owner?.role ?? "admin", newCompanyPwd);
+      toast.success(
+        `${hasCompanyPwd ? "Password changed" : "Password set"}. Recovery code: ${saved.recoveryCode}. Write it down, it is shown once.`,
+        { duration: Infinity },
+      );
       setNewCompanyPwd("");
       refreshLocalUsers();
     } catch (e) {
@@ -203,8 +206,11 @@ function SettingsPage() {
     }
     try {
       const firstUser = listCompanyUsers(activeCompanyId).length === 0;
-      await upsertCompanyUser(activeCompanyId, inviteEmail, firstUser ? "admin" : inviteRole, newUserPwd);
-      toast.success(firstUser ? "User added as Admin (first user)" : "User added");
+      const added = await upsertCompanyUser(activeCompanyId, inviteEmail, firstUser ? "admin" : inviteRole, newUserPwd);
+      toast.success(
+        `${firstUser ? "User added as Admin (first user)" : "User added"}. Recovery code: ${added.recoveryCode}. Write it down, it is shown once.`,
+        { duration: Infinity },
+      );
       setInviteEmail("");
       setNewUserPwd("");
       refreshLocalUsers();
@@ -215,11 +221,11 @@ function SettingsPage() {
 
   const resetLocalPwd = async (userId: string, name: string) => {
     if (!activeCompanyId) return;
-    const pwd = window.prompt(`New password for ${name} (min 4 characters):`);
+    const pwd = window.prompt(`New password for ${name} (min 8 characters, with a letter and a number):`);
     if (pwd == null) return;
     try {
-      await resetUserPassword(activeCompanyId, userId, pwd);
-      toast.success(`Password reset for ${name}`);
+      const code = await resetUserPassword(activeCompanyId, userId, pwd);
+      toast.success(`Password reset for ${name}. New recovery code: ${code}. Write it down, it is shown once.`, { duration: Infinity });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to reset password");
     }

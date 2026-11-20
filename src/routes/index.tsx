@@ -39,7 +39,7 @@ import { dedupeLocalCompaniesOnce } from "@/lib/dedupe-local-companies";
 import { consumeReturnTo } from "@/lib/return-to";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  listCompanyUsers, verifyCompanyUser, resetUserPassword, recoveryMatches, type LocalCompanyUser,
+  listCompanyUsers, verifyCompanyUser, resetWithRecoveryCode, passwordProblem, type LocalCompanyUser,
 } from "@/lib/local-company-access";
 
 function gotoAfterUnlock(navigate: ReturnType<typeof useNavigate>) {
@@ -396,14 +396,13 @@ function StartScreen() {
       // Local users & passwords (saved on this computer).
       if (pendingUsers.length > 0) {
         if (forgotMode) {
-          const { offlineDb } = await import("@/lib/offline/db");
-          const co = (await offlineDb.cache_companies.get(pendingCompany.id)) as any;
-          if (!recoveryMatches(recoveryAnswer, { pan: co?.pan, gstin: co?.gstin, name: co?.name ?? pendingCompany.name })) {
-            toast.error("That doesn't match the company's PAN or GSTIN");
+          const problem = passwordProblem(pwd);
+          if (problem) {
+            toast.error(problem);
             return;
           }
-          await resetUserPassword(pendingCompany.id, pendingUserId, pwd);
-          toast.success("Password reset");
+          const newCode = await resetWithRecoveryCode(pendingCompany.id, pendingUserId, recoveryAnswer, pwd);
+          toast.success(`Password reset. New recovery code: ${newCode}. Write it down, it is shown once.`, { duration: Infinity });
           finishUnlock(pendingCompany.id);
           return;
         }
@@ -417,13 +416,10 @@ function StartScreen() {
         return;
       }
       if (!isOnlineNow()) {
-        console.warn("Offline system bypass: local voucher lock validated.");
-        markCompanyUnlocked(pendingCompany.id);
-        localStorage.setItem("ym_active_company_id", pendingCompany.id);
-        setActiveCompanyId(pendingCompany.id);
-        setCompanyLang(pendingCompany.id, lang);
-        setPendingCompany(null);
-        gotoAfterUnlock(navigate);
+        // A cloud-protected company cannot be unlocked offline without a local user.
+        // Never open it without a password.
+        toast.error("This company is password-protected. Connect to the internet to unlock it, or ask the owner to add a local user on this computer.");
+        setPwd("");
         return;
       }
 
@@ -666,8 +662,8 @@ function StartScreen() {
             )}
             {forgotMode && (
               <div className="space-y-1.5">
-                <Label htmlFor="crec">Company PAN or GSTIN</Label>
-                <Input id="crec" autoFocus value={recoveryAnswer} onChange={(e) => setRecoveryAnswer(e.target.value)} placeholder="If none recorded, type the company name" />
+                <Label htmlFor="crec">Recovery code</Label>
+                <Input id="crec" autoFocus value={recoveryAnswer} onChange={(e) => setRecoveryAnswer(e.target.value)} placeholder="XXXX-XXXX-XXXX-XXXX (given when the user was created)" />
               </div>
             )}
             <div className="space-y-1.5">

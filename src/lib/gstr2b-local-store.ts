@@ -74,6 +74,9 @@ export async function loadLocalPurchases(companyId: string): Promise<LocalPurcha
         voucher_number: String(v.voucher_number || ""),
         voucher_date: String(v.voucher_date || ""),
         total_paise: Number(v.total_paise || 0),
+        cgst_paise: Number(v.cgst_paise || 0),
+        sgst_paise: Number(v.sgst_paise || 0),
+        igst_paise: Number(v.igst_paise || 0),
         vendor_invoice_no: v.vendor_invoice_no ? String(v.vendor_invoice_no) : null,
         ledgers: party ? { name: String(party.name || ""), gstin: party.gstin ? String(party.gstin) : null } : null,
       };
