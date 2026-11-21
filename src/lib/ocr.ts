@@ -76,7 +76,7 @@ function isReadablePdfText(text: string): boolean {
 // ---------------------------------------------------------------------------
 interface PdfGlyph { x: number; y: number; w: number; s: string }
 
-function reconstructPageText(items: { str: string; transform: number[]; width?: number }[]): string {
+export function reconstructPageText(items: { str: string; transform: number[]; width?: number }[]): string {
   const glyphs: PdfGlyph[] = [];
   for (const it of items) {
     if (!it.str || !it.str.trim()) continue;
@@ -111,9 +111,18 @@ function reconstructPageText(items: { str: string; transform: number[]; width?: 
   const pageMaxX = Math.max(...glyphs.map((g) => g.x + g.w));
   let splitX: number | null = null;
 
+  // A "Liabilities … Assets" column header fixes the split exactly. Gap voting can miss it
+  // because right-aligned amounts put the gaps at different x positions on each row.
+  const headerWord = (word: string) => glyphs.find((g) => g.s.replace(/\s+/g, "").toLowerCase() === word);
+  const liabHeader = headerWord("liabilities");
+  const assetsHeader = headerWord("assets");
+  if (liabHeader && assetsHeader && assetsHeader.x > liabHeader.x) splitX = assetsHeader.x - 15;
+
   const pipeXs: number[] = [];
   for (const row of sortedRows) for (const g of row) if (g.s.trim() === "|") pipeXs.push(g.x);
-  if (pipeXs.length >= Math.max(3, sortedRows.length * 0.25)) {
+  if (splitX !== null) {
+    // Header split already chosen.
+  } else if (pipeXs.length >= Math.max(3, sortedRows.length * 0.25)) {
     pipeXs.sort((a, b) => a - b);
     splitX = pipeXs[Math.floor(pipeXs.length / 2)];
   } else {

@@ -182,10 +182,14 @@ const GROUP_HEADINGS: { rx: RegExp; side: "Dr" | "Cr"; group?: string }[] = [
 // "Total Salary"). We only skip them later if they have no useful amount or
 // look like a grand-total summary line.
 const SKIP_LINE_RX =
-  /^(particulars|trial\s+balance|balance\s+sheet|profit\s*&?\s*loss|company|gstin|address|date\s*[:\-]|page\s+\d|continued|note(s)?\s*[:\-]|schedule\s*[:\-]|amount\s*\(?rs|in\s+rupees|figures\s+in)/i;
+  /^(particulars|trial\s+balance|balance\s+sheet|company|gstin|address|date\s*[:\-]|page\s+\d|continued|note(s)?\s*[:\-]|schedule\s*[:\-]|amount\s*\(?rs|in\s+rupees|figures\s+in)/i;
 
 // Hard skip: standalone summary/total rows (no account name).
 const TOTAL_LINE_RX = /^(grand\s+total|sub.?total|total)\s*[:\-]?\s*[\d.,\-]*\s*(dr|cr)?\.?\s*$/i;
+// Rows that are never ledgers: letterhead/address lines, column headers, carry-forward and
+// profit-and-loss workings (the balancing P&L balance itself is kept).
+const NON_ACCOUNT_LINE_RX =
+  /contact\s*:|\bplot\s+no\b|\bgujarat\b|^liabilities\b|^assets\b|\bas\s+at\s+\d|^(brought\s*forward|carried\s*over|current\s*period|less\s*:?\s*transferred|opening\s*balance)\b/i;
 const AMOUNT_TOKEN_PATTERN = "-?\\d{1,3}(?:,\\d{2,3})*(?:\\.\\d{1,2})?|-?\\d+(?:\\.\\d{1,2})?";
 const FULL_AMOUNT_TOKEN_PATTERN = "-?\\d{1,3}(?:,\\d{2,3})+(?:\\.\\d{1,2})?|-?\\d+(?:\\.\\d{1,2})?";
 const AMOUNT_TOKEN_RX = new RegExp(AMOUNT_TOKEN_PATTERN, "g");
@@ -197,7 +201,7 @@ function normaliseOpeningText(text: string): string {
   return text
     // Some OCR engines insert spaces between every letter for stylised headings
     // like "B A L A N C E   S H E E T". Collapse those before parsing.
-    .replace(/\b((?:[A-Z]\s){2,}[A-Z])\b/g, (m) => m.replace(/\s+/g, ""))
+    .replace(/\b((?:[A-Za-z]\s){2,}[A-Za-z])\b/g, (m) => m.replace(/\s+/g, ""))
     .replace(/\bSOURCESOFFUNDS\b/gi, "Sources of Funds")
     .replace(/\bAPPLICATIONSOFFUNDS\b/gi, "Applications of Funds")
     .replace(/\bAPPLICATIONOFFUNDS\b/gi, "Application of Funds")
@@ -504,6 +508,96 @@ function parseRunOnOpeningBalanceText(text: string): ExtractedOpening[] {
  *     Sub-total / group-total numbers (no leading account name) are skipped.
  *     Negative amounts flip the side inherited from the surrounding heading.
  */
+/**
+ * Splits a row into its name and its trailing amounts. Only numbers at the end count as amounts, so
+ * "TEX RELIEF 96 FUND 1,80,000.00" has the amount 1,80,000.00 and the name keeps "96".
+ */
+function splitTrailingAmounts(line: string): { name: string; amounts: string[] } {
+  const core = line.replace(/\s+(dr|cr|debit|credit)\.?\s*$/i, "").trim();
+  const toks = core.split(/\s+/);
+  let k = toks.length;
+  while (k > 0 && /^\(?-?\d[\d,]*(?:\.\d+)?\)?$/.test(toks[k - 1])) k--;
+  return {
+    name: toks.slice(0, k).join(" ").trim(),
+    amounts: toks.slice(k).join(" ").match(AMOUNT_TOKEN_RX) ?? [],
+  };
+}
+
+/** True when the line ends with a number (after an optional Dr/Cr marker). */
+function endsWithAmountToken(line: string): boolean {
+  const last = line.replace(/\s+(dr|cr|debit|credit)\.?\s*$/i, "").trim().split(/\s+/).pop() ?? "";
+  return /^\(?-?\d[\d,]*(?:\.\d+)?\)?$/.test(last);
+}
+
+/** A line that holds only numbers, typically an amount whose name sits on a neighbouring line. */
+function isAmountOnlyLine(line: string): boolean {
+  return /\d/.test(line) && /^[\s\d,.\-()]+(dr|cr)?\.?$/i.test(line.trim());
+}
+
+function headingOrSkip(line: string): boolean {
+  return (
+    GROUP_HEADINGS.some((h) => h.rx.test(line)) ||
+    SKIP_LINE_RX.test(line) ||
+    NON_ACCOUNT_LINE_RX.test(line) ||
+    TOTAL_LINE_RX.test(line)
+  );
+}
+
+/**
+ * PDF rows are often split across lines: the amount on one line and the name on the next, or a
+ * long ledger name wrapped below its amount. Rejoin them so each row is one line.
+ */
+function mergeWrappedBalanceLines(lines: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const cur = lines[i];
+    if (isAmountOnlyLine(cur)) {
+      const next = lines[i + 1];
+      if (next && !endsWithAmountToken(next) && !isAmountOnlyLine(next) && !headingOrSkip(next)) {
+        out.push(`${next} ${cur}`);
+        i++;
+        continue;
+      }
+    }
+    const prev = out[out.length - 1];
+    if (
+      prev &&
+      endsWithAmountToken(prev) &&
+      !endsWithAmountToken(cur) &&
+      !isAmountOnlyLine(cur) &&
+      !headingOrSkip(cur) &&
+      !headingOrSkip(prev)
+    ) {
+      const m = prev.match(/^(.*?)(\s+\(?-?\d[\d,]*(?:\.\d+)?\)?(?:\s+(?:dr|cr|debit|credit)\.?)?\s*)$/i);
+      if (m) {
+        out[out.length - 1] = `${m[1].trim()} ${cur.trim()}${m[2]}`;
+        continue;
+      }
+    }
+    out.push(cur);
+  }
+  return out;
+}
+
+/**
+ * Drop a row that is a group subtotal: the rows that follow it on the same side add up to its amount.
+ * Only exact sums count, so a real heading followed by smaller ledgers is kept.
+ */
+function dropSumSubtotals(rows: ExtractedOpening[]): ExtractedOpening[] {
+  const tolerance = 0.75;
+  return rows.filter((row, index) => {
+    let sum = 0;
+    for (let i = index + 1; i < rows.length; i += 1) {
+      const next = rows[i];
+      if (next.side !== row.side) break;
+      sum += next.amount;
+      if (Math.abs(sum - row.amount) <= tolerance) return false;
+      if (sum > row.amount + tolerance) break;
+    }
+    return true;
+  });
+}
+
 export function parseTrialBalanceText(text: string): ExtractedOpening[] {
   const normalised = normaliseOpeningText(text);
 
@@ -525,14 +619,17 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
   let currentSide: "Dr" | "Cr" = "Dr"; // updated as we walk through sections
   let currentSection = "";
 
-  for (const raw of lines) {
+  for (const raw of mergeWrappedBalanceLines(lines)) {
     if (SKIP_LINE_RX.test(raw)) continue;
     if (TOTAL_LINE_RX.test(raw)) continue;
+    if (NON_ACCOUNT_LINE_RX.test(raw)) continue;
+    // A row must end with its amount; text such as "TEX RELIEF 96 FUND" is a name fragment, not a row.
+    if (!endsWithAmountToken(raw)) continue;
 
     // Section heading: sets the side for following detail rows. Heading lines
     // typically have NO numbers, or only a single group-total number.
     const headingHit = GROUP_HEADINGS.find((h) => h.rx.test(raw));
-    const numericTokens = raw.match(AMOUNT_TOKEN_RX) || [];
+    const numericTokens = splitTrailingAmounts(raw).amounts;
 
     if (headingHit) {
       currentSide = headingHit.side;
@@ -546,8 +643,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
     if (numericTokens.length === 0) continue;
 
     // Account name = everything before the first numeric token
-    const firstNumIdx = raw.search(FIRST_AMOUNT_TOKEN_RX);
-    let name = (firstNumIdx > 0 ? raw.slice(0, firstNumIdx) : "").trim();
+    let name = splitTrailingAmounts(raw).name;
     name = name.replace(/[:\-|.]+$/g, "").trim();
 
     // Lines that start with numbers (no name) are sub-totals — skip.
@@ -591,7 +687,7 @@ export function parseTrialBalanceText(text: string): ExtractedOpening[] {
     if (paragraphRows.length > out.length) return paragraphRows;
   }
 
-  return dedupeOpenings(out);
+  return dedupeOpenings(dropSumSubtotals(out));
 }
 
 // ============================================================================
