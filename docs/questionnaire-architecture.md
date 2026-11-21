@@ -2,7 +2,7 @@
 
 Generated from `src/lib/ai/question-catalog.ts`. Edit the catalogue, then regenerate this file.
 
-Status: 11 answered, 0 partial, 21 planned, 3 not in the books.
+Status: 12 answered, 0 partial, 20 planned, 3 not in the books.
 Build phase: 26 buildable from stored data (phase 1), 7 need new fields or capture (phase 2), 2 blocked on a decision or outside the books (phase 3).
 
 Phases: 1 = the books already hold the data; 2 = the app needs a new field, record or capture first; 3 = blocked on a decision or outside the books.
@@ -43,7 +43,7 @@ Phases: 1 = the books already hold the data; 2 = the app needs a new field, reco
 |---|---|---|---|---|---|---|---|
 | 4.1 | What is our gross profit, operating profit, and net profit for March compared to the previous period? | cannot | `get_profit_loss` | planned | 3 | Profit and loss tool exists; closing stock from the year-end closure. | Blocked on the closing-stock decision for net profit. The wording is not routed to the tool yet. |
 | 4.2 | Which products, services, or cost centres generate the highest margins and which ones are loss-making? | declined | `item_margins` | planned | 2 | Item-level sales and purchase lines with cost. Cost centres are stored; their link to items is not confirmed. | Margin per item needs item lines on sales and purchase vouchers. |
-| 4.3 | What is our month-on-month revenue and expense trend for the current financial year? | cannot | `monthly_trend` | planned | 1 | Sales and expense postings by voucher date. | Monthly groups of the same postings the sales total uses. |
+| 4.3 | What is our month-on-month revenue and expense trend for the current financial year? | local | `get_monthly_trend` | answered | 1 | Sales and expense ledger postings by voucher date. | Revenue = net credit to sales ledgers; expenses = net debit to direct and indirect expense ledgers; by month of voucher date, with month-on-month change. Net is before closing stock. |
 | 4.4 | Which expense ledgers have exceeded budget or grown significantly compared to last month? | declined | `budget_variance` | not_in_books | 2 | Missing: budgets per expense ledger. Monthly growth can be computed without them. | Budget comparison needs a budget table first. |
 | 4.5 | What is our total purchase return or sales return value this quarter, and why did it occur? | cannot | `returns_summary` | planned | 1 | Return vouchers and their totals; narration for the reason. | The reason is only as good as the narration entered. |
 

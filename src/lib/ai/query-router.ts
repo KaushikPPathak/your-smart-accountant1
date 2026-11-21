@@ -29,6 +29,7 @@ export type IntentType =
   | "vendor_overdue"
   | "duplicate_check"
   | "vendor_concentration"
+  | "monthly_trend"
   | "vendor_spend_cycle"
   | "unknown";
 
@@ -549,6 +550,10 @@ function duplicateCheckQuestion(text: string): boolean {
   return /\bduplicate\b|\bsame (bill|invoice) (no|number)\b|\bidentical amounts?\b|\bprice (jump|increase|hike|rise)s?\b|\bunusual (price|rate)s?\b|\bpaid twice\b|\brepeat(ed)? payments?\b/i.test(text);
 }
 
+function monthlyTrendQuestion(text: string): boolean {
+  return /\bmonth[- ]on[- ]month\b|\bmonthly\b.*\b(revenue|sales|expenses?|income|trend)\b|\b(revenue|sales|expenses?|income)\b.*\bmonthly\b|\btrend\b.*\b(revenue|sales|expenses?|income)\b/i.test(text);
+}
+
 function vendorConcentrationQuestion(text: string): boolean {
   if (!/\bvendors?\b|\bsuppliers?\b/i.test(text)) return false;
   return /\b80\s?%|\beighty percent\b|\bconcentration\b|\baccount for\b|\bshare of (our )?(purchase|spend)\b/i.test(text);
@@ -594,6 +599,21 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
     };
   }
 
+  if (monthlyTrendQuestion(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    return {
+      intent: "monthly_trend",
+      confidence: 0.9,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: {},
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
   if (vendorConcentrationQuestion(trimmed)) {
     const dateInfo = extractDateInfo(trimmed);
     return {

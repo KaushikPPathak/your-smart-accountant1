@@ -1953,3 +1953,101 @@ export async function runVendorConcentration(query: {
     reachedThreshold: reached,
   };
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Monthly revenue and expense trend for the financial year (questionnaire 4.3)
+//
+//  Revenue : net credit to income ledgers of the sales kind (direct income), by voucher date.
+//  Expense : net debit to direct and indirect expense ledgers, by voucher date.
+//  Net     : revenue less expense (a profit figure before closing stock; see questionnaire item 7).
+//  Months run from the start of the period to the latest month with a posting; later months are not shown.
+//  Read-only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MonthlyTrendRow {
+  month: string;
+  revenuePaise: number;
+  expensePaise: number;
+  netPaise: number;
+  /** Change from the previous month shown; null for the first month or when the previous month is zero. */
+  revenueChangePct: number | null;
+  expenseChangePct: number | null;
+}
+
+export type MonthlyTrendResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | {
+      status: "resolved";
+      from: string;
+      to: string;
+      rows: MonthlyTrendRow[];
+      revenueTotalPaise: number;
+      expenseTotalPaise: number;
+    };
+
+export async function runMonthlyTrend(query: {
+  from?: string | null;
+  to?: string | null;
+  companyId?: string | null;
+}): Promise<MonthlyTrendResult> {
+  const fromArg = coerceDateArg(query.from);
+  const toArg = coerceDateArg(query.to);
+  if (!fromArg.ok || !toArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+  const from = fromArg.value ?? fyStartFor();
+  const to = toArg.value ?? fyEndFor();
+
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
+  const kindById = new Map(ledgers.map((l) => [String(l.id), classifyLedger(l)]));
+  const { readVoucherEntriesWithVouchers } = await import("@/lib/offline/cache-read");
+  const entries = (await readVoucherEntriesWithVouchers(companyId, { from, to })) as any[];
+
+  const byMonth = new Map<string, { rev: number; exp: number }>();
+  for (const e of entries) {
+    if (e?.is_deleted === true) continue;
+    const kind = kindById.get(String(e.ledger_id));
+    // The entry reader nests the voucher under `vouchers`; its voucher_date is the posting date.
+    const date = normalizeStoredDate(e.vouchers?.voucher_date ?? e.voucher_date ?? e.date);
+    if (!date) continue;
+    const m = date.slice(0, 7);
+    const cur = byMonth.get(m) ?? { rev: 0, exp: 0 };
+    const debit = Number(e.debit_paise ?? 0);
+    const credit = Number(e.credit_paise ?? 0);
+    if (kind === "direct_income") cur.rev += credit - debit;
+    else if (kind === "direct_expense" || kind === "indirect_expense") cur.exp += debit - credit;
+    byMonth.set(m, cur);
+  }
+
+  const rows: MonthlyTrendRow[] = [];
+  const latest = [...byMonth.keys()].sort().pop();
+  if (latest) {
+    const endMonth = to.slice(0, 7) < latest ? to.slice(0, 7) : latest;
+    let prev: { rev: number; exp: number } | null = null;
+    for (let m = from.slice(0, 7); m <= endMonth; m = shiftMonth(m, 1)) {
+      const cur = byMonth.get(m) ?? { rev: 0, exp: 0 };
+      const pct = (now: number, before: number | undefined) =>
+        before && before > 0 ? Math.round((now / before - 1) * 1000) / 10 : null;
+      rows.push({
+        month: m,
+        revenuePaise: cur.rev,
+        expensePaise: cur.exp,
+        netPaise: cur.rev - cur.exp,
+        revenueChangePct: prev ? pct(cur.rev, prev.rev) : null,
+        expenseChangePct: prev ? pct(cur.exp, prev.exp) : null,
+      });
+      prev = cur;
+    }
+  }
+
+  return {
+    status: "resolved",
+    from,
+    to,
+    rows,
+    revenueTotalPaise: rows.reduce((t, r) => t + r.revenuePaise, 0),
+    expenseTotalPaise: rows.reduce((t, r) => t + r.expensePaise, 0),
+  };
+}

@@ -34,6 +34,7 @@ export type CardKind =
   | "vendor_overdue"
   | "duplicate_check"
   | "vendor_concentration"
+  | "monthly_trend"
   | "vendor_spend_cycle"
   | "party_balance"
   | "cash_balance"
@@ -119,6 +120,14 @@ export interface VendorConcentrationCard {
   rows: { vendor: string; spendPaise: number; sharePct: number; cumulativePct: number }[];
 }
 
+export interface MonthlyTrendCard {
+  from: string;
+  to: string;
+  revenueTotalPaise: number;
+  expenseTotalPaise: number;
+  rows: { month: string; revenuePaise: number; expensePaise: number; netPaise: number; revenueChangePct: number | null; expenseChangePct: number | null }[];
+}
+
 export interface VendorSpendCycleCard {
   status: "resolved" | "not_found" | "ambiguous" | "no_name";
   vendor: string | null;
@@ -154,6 +163,7 @@ export interface StructuredCard {
   vendorOverdue?: VendorOverdueCard;
   duplicateCheck?: DuplicateCheckCard;
   vendorConcentration?: VendorConcentrationCard;
+  monthlyTrend?: MonthlyTrendCard;
   vendorSpendCycle?: VendorSpendCycleCard;
   companyName?: string | null;
   partyName?: string;

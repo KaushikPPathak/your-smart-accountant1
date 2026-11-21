@@ -110,6 +110,21 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "monthly_trend": {
+      const t = card.monthlyTrend;
+      if (!t) return null;
+      const rule = "Revenue is the net credit to sales ledgers. Expenses are the net debit to direct and indirect expense ledgers. Both are by voucher date. Net is before closing stock, so it is not a profit figure.";
+      const note = "_Answered locally from your books._";
+      if (!t.rows.length) {
+        return `No postings from ${t.from} to ${t.to} to show by month.\n\n${rule}\n\n${note}`;
+      }
+      const label = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleString("en-IN", { month: "short", year: "numeric" });
+      const change = (p: number | null) => (p === null ? "" : ` (${p >= 0 ? "+" : ""}${p}% on the month before)`);
+      const lines = t.rows.map((r) => `- ${label(r.month)}: revenue ${formatInr(r.revenuePaise)}${change(r.revenueChangePct)}, expenses ${formatInr(r.expensePaise)}${change(r.expenseChangePct)}, net ${formatInr(r.netPaise)}`);
+      const head = `Revenue ${formatInr(t.revenueTotalPaise)} and expenses ${formatInr(t.expenseTotalPaise)} over ${t.rows.length} month${t.rows.length === 1 ? "" : "s"}, ${t.from} to ${t.to}.`;
+      return [head, lines.join("\n"), rule, note].join("\n\n");
+    }
+
     case "vendor_concentration": {
       const c = card.vendorConcentration;
       if (!c) return null;

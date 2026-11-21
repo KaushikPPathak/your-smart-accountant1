@@ -238,6 +238,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "vendor_overdue",
   "duplicate_check",
   "vendor_concentration",
+  "monthly_trend",
   "vendor_spend_cycle",
   "party_balance",
   "party_ledger",
@@ -290,6 +291,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "vendor_spend_cycle":
       toolName = "get_vendor_spend_cycle";
       toolArgs = { vendor: route.entity?.partyName ?? "", from: route.from ?? null, to: route.to ?? null };
+      break;
+    case "monthly_trend":
+      toolName = "get_monthly_trend";
+      toolArgs = { from: route.from ?? null, to: route.to ?? null };
       break;
     case "vendor_concentration":
       toolName = "get_vendor_concentration";
@@ -455,6 +460,20 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
         method: "none",
         averageCycleDays: null,
         unmatchedPaymentsPaise: 0,
+      },
+    };
+  }
+  if (intent === "monthly_trend") {
+    const rows = Array.isArray(data?.data?.rows) ? data.data.rows : null;
+    if (!rows) return undefined;
+    return {
+      kind: "monthly_trend",
+      monthlyTrend: {
+        from: String(facts.from ?? ""),
+        to: String(facts.to ?? ""),
+        revenueTotalPaise: Number(facts.revenue_total_paise ?? 0),
+        expenseTotalPaise: Number(facts.expense_total_paise ?? 0),
+        rows: rows.map((r: any) => ({ month: String(r.month ?? ""), revenuePaise: Number(r.revenue_paise ?? 0), expensePaise: Number(r.expense_paise ?? 0), netPaise: Number(r.net_paise ?? 0), revenueChangePct: r.revenue_change_pct ?? null, expenseChangePct: r.expense_change_pct ?? null })),
       },
     };
   }
