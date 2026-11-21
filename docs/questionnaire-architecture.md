@@ -2,7 +2,7 @@
 
 Generated from `src/lib/ai/question-catalog.ts`. Edit the catalogue, then regenerate this file.
 
-Status: 13 answered, 1 partial, 18 planned, 3 not in the books.
+Status: 14 answered, 1 partial, 17 planned, 3 not in the books.
 Build phase: 26 buildable from stored data (phase 1), 7 need new fields or capture (phase 2), 2 blocked on a decision or outside the books (phase 3).
 
 Phases: 1 = the books already hold the data; 2 = the app needs a new field, record or capture first; 3 = blocked on a decision or outside the books.
@@ -52,7 +52,7 @@ Phases: 1 = the books already hold the data; 2 = the app needs a new field, reco
 | # | Question | Router | Tool | Status | Phase | Data | Note |
 |---|---|---|---|---|---|---|---|
 | 5.1 | What is the current stock quantity and valuation for Rice Basmati across all godowns? | local | `get_item_stock` | partial | 1 | Stock items (opening quantity and rate); stock lines on vouchers (quantity, rate, date). | Quantity and value for one item across all godowns. Value uses the last purchase rate. Godown split needs a godown on stock lines (not recorded), so it is not shown. |
-| 5.2 | Which stock items are fast-moving, slow-moving, or dead stock (no movement for 90+ days)? | declined | `stock_movement` | planned | 1 | Stock movement dates per item. | Thresholds (fast, slow, dead) need agreeing. |
+| 5.2 | Which stock items are fast-moving, slow-moving, or dead stock (no movement for 90+ days)? | local | `get_stock_movement` | answered | 1 | Stock movement dates and quantities per item (stock lines on vouchers); opening stock per item. | Items on hand only. Fast = 3+ movements in 30 days; dead = no movement for 90+ days or never moved; slow = last movement 31 to 90 days ago. Thresholds are defaults and are stated in each answer. |
 | 5.3 | Which items are below reorder level and need a purchase order raised? | declined | `stock_reorder` | planned | 1 | Reorder level (optional item field); current stock per item. | Items without a reorder level are not reported. |
 | 5.4 | Are there negative stock balances or valuation mismatches between stock ledgers and financial accounts? | declined | `stock_audit` | planned | 1 | Stock valuation from items; stock ledger balances. | Mismatch tolerance needs agreeing. |
 | 5.5 | What is the impact of stock valuation changes on Cost of Goods Sold (COGS) for this period? | cannot | `cogs` | planned | 3 | Opening and closing stock; purchases; sales cost. | Blocked on the closing-stock decision. |

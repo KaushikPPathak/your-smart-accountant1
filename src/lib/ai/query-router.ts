@@ -32,6 +32,7 @@ export type IntentType =
   | "monthly_trend"
   | "returns_summary"
   | "item_stock"
+  | "stock_movement"
   | "vendor_spend_cycle"
   | "unknown";
 
@@ -553,6 +554,10 @@ function duplicateCheckQuestion(text: string): boolean {
   return /\bduplicate\b|\bsame (bill|invoice) (no|number)\b|\bidentical amounts?\b|\bprice (jump|increase|hike|rise)s?\b|\bunusual (price|rate)s?\b|\bpaid twice\b|\brepeat(ed)? payments?\b/i.test(text);
 }
 
+function stockMovementQuestion(text: string): boolean {
+  return /\bfast[- ]moving\b|\bslow[- ]moving\b|\bdead stock\b|\bnon[- ]moving\b/i.test(text);
+}
+
 function itemNameFromText(text: string): string | undefined {
   // Only "stock [quantity|valuation …] for|of <item>" counts, so "stock valuation changes on COGS" does not.
   const m = /\b(?:stock|inventory)\s+(?:(?:quantity|qty|valuation|value|balance)\s*(?:and\s+)?)*(?:for|of)\s+(.+?)(?:\s+(?:across|in|at|as\s+on|as\s+of|on|all)\b|[?.!,]|$)/i.exec(text);
@@ -620,6 +625,21 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
     };
   }
 
+  if (stockMovementQuestion(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    return {
+      intent: "stock_movement",
+      confidence: 0.9,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: {},
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
   if (itemStockQuestion(trimmed)) {
     const dateInfo = extractDateInfo(trimmed);
     return {

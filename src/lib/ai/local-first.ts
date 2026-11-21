@@ -110,6 +110,34 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "stock_movement": {
+      const m = card.stockMovement;
+      if (!m) return null;
+      const note = "_Answered locally from your books._";
+      const rule = "Only items on hand are counted. Fast-moving: 3 or more movements in the last 30 days. Slow-moving: last movement 31 to 90 days ago. Dead: no movement for more than 90 days, or never moved. These thresholds are defaults.";
+      if (m.counted === 0) {
+        return `No items on hand as on ${m.asOn}.\n\n${rule}\n\n${note}`;
+      }
+      const count = (c: string) => m.rows.filter((r) => r.classification === c).length;
+      const list = (c: "fast" | "slow" | "dead") =>
+        m.rows
+          .filter((r) => r.classification === c)
+          .slice(0, 10)
+          .map((r) => {
+            const unit = r.unit ? ` ${r.unit}` : "";
+            const when = r.daysSinceMovement === null ? "never moved" : `last moved ${r.daysSinceMovement} days ago`;
+            return `- ${r.item}: ${r.closingQty.toLocaleString("en-IN", { maximumFractionDigits: 2 })}${unit}, ${when}`;
+          });
+      const section = (title: string, c: "fast" | "slow" | "dead") => {
+        const n = count(c);
+        if (n === 0) return `${title}: none.`;
+        const more = n > 10 ? `\n- and ${n - 10} more` : "";
+        return `${title} (${n}):\n${list(c).join("\n")}${more}`;
+      };
+      const head = `${m.counted} item${m.counted === 1 ? " is" : "s are"} on hand as on ${m.asOn}; ${count("normal")} moved recently but are neither fast nor slow.`;
+      return [head, section("Dead stock", "dead"), section("Slow-moving", "slow"), section("Fast-moving", "fast"), rule, note].join("\n\n");
+    }
+
     case "item_stock": {
       const s = card.itemStock;
       if (!s) return null;

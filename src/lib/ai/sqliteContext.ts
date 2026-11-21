@@ -37,6 +37,7 @@ export type CardKind =
   | "monthly_trend"
   | "returns_summary"
   | "item_stock"
+  | "stock_movement"
   | "vendor_spend_cycle"
   | "party_balance"
   | "cash_balance"
@@ -154,6 +155,12 @@ export interface ItemStockCard {
   valuePaise: number | null;
 }
 
+export interface StockMovementCard {
+  asOn: string;
+  counted: number;
+  rows: { item: string; unit: string; closingQty: number; lastMovementDate: string | null; daysSinceMovement: number | null; movementsLast30: number; classification: "fast" | "normal" | "slow" | "dead" }[];
+}
+
 export interface VendorSpendCycleCard {
   status: "resolved" | "not_found" | "ambiguous" | "no_name";
   vendor: string | null;
@@ -192,6 +199,7 @@ export interface StructuredCard {
   monthlyTrend?: MonthlyTrendCard;
   returnsSummary?: ReturnsSummaryCard;
   itemStock?: ItemStockCard;
+  stockMovement?: StockMovementCard;
   vendorSpendCycle?: VendorSpendCycleCard;
   companyName?: string | null;
   partyName?: string;

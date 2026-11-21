@@ -2279,3 +2279,106 @@ export async function runItemStock(query: {
     valuePaise: rate === null ? null : Math.round(closingQty * rate),
   };
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Fast-moving, slow-moving and dead stock (questionnaire 5.2)
+//
+//  Only items on hand (closing quantity above zero) are classified. Movements are the stock lines
+//  counted in item stock (5.1). Classes, checked in this order:
+//    fast    : at least MOVEMENT_FAST_COUNT movements in the last MOVEMENT_FAST_DAYS days
+//    dead    : no movement for more than MOVEMENT_DEAD_DAYS days, or never moved
+//    slow    : last movement more than MOVEMENT_SLOW_DAYS days ago
+//    normal  : anything else (moved recently, but not often enough to be fast)
+//  The thresholds are defaults and are stated in each answer. Read-only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const MOVEMENT_FAST_COUNT = 3;
+export const MOVEMENT_FAST_DAYS = 30;
+export const MOVEMENT_SLOW_DAYS = 30;
+export const MOVEMENT_DEAD_DAYS = 90;
+
+export type StockClass = "fast" | "normal" | "slow" | "dead";
+
+export interface StockMovementRow {
+  item: string;
+  unit: string;
+  closingQty: number;
+  lastMovementDate: string | null;
+  daysSinceMovement: number | null;
+  movementsLast30: number;
+  classification: StockClass;
+}
+
+export type StockMovementResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | { status: "resolved"; asOn: string; counted: number; rows: StockMovementRow[] };
+
+export async function runStockMovement(query: {
+  asOn?: string | null;
+  companyId?: string | null;
+}): Promise<StockMovementResult> {
+  const asOnArg = coerceDateArg(query.asOn);
+  if (!asOnArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+  const asOn = asOnArg.value ?? new Date().toISOString().slice(0, 10);
+  const windowStart = (() => {
+    const d = new Date(`${asOn}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - MOVEMENT_FAST_DAYS);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const { offlineDb } = await import("@/lib/offline/db");
+  const { readVouchers } = await import("@/lib/offline/cache-read");
+  const items = ((await offlineDb.cache_items.where("company_id").equals(companyId).toArray()) as any[]).filter(
+    (i) => i && i.is_deleted !== true,
+  );
+  const vouchers = (await readVouchers(companyId)) as any[];
+  const voucherById = new Map(
+    vouchers.map((v) => [String(v.id), { type: String(v.voucher_type ?? ""), date: normalizeStoredDate(v.voucher_date ?? v.date) }]),
+  );
+  const lines = (await offlineDb.cache_voucher_items.where("company_id").equals(companyId).toArray()) as any[];
+
+  const agg = new Map<string, { qty: number; last: string | null; recent: number }>();
+  for (const r of lines) {
+    if (!r || r.is_deleted === true || !r.item_id) continue;
+    const v = voucherById.get(String(r.voucher_id));
+    if (!v || !v.date || v.date > asOn) continue;
+    const isIn = STOCK_IN_TYPES.includes(v.type);
+    const isOut = STOCK_OUT_TYPES.includes(v.type);
+    if (!isIn && !isOut) continue;
+    const id = String(r.item_id);
+    const a = agg.get(id) ?? { qty: 0, last: null, recent: 0 };
+    a.qty += Math.abs(Number(r.qty ?? 0)) * (isIn ? 1 : -1);
+    if (!a.last || v.date > a.last) a.last = v.date;
+    if (v.date >= windowStart) a.recent++;
+    agg.set(id, a);
+  }
+
+  const rows: StockMovementRow[] = [];
+  for (const item of items) {
+    const a = agg.get(String(item.id)) ?? { qty: 0, last: null, recent: 0 };
+    const closingQty = Number(item.opening_stock_qty ?? 0) + a.qty;
+    if (!(closingQty > 0)) continue;
+    const days = a.last ? daysBetween(a.last, asOn) : null;
+    let classification: StockClass;
+    if (a.recent >= MOVEMENT_FAST_COUNT) classification = "fast";
+    else if (days === null || days > MOVEMENT_DEAD_DAYS) classification = "dead";
+    else if (days > MOVEMENT_SLOW_DAYS) classification = "slow";
+    else classification = "normal";
+    rows.push({
+      item: String(item.name ?? ""),
+      unit: String(item.unit ?? ""),
+      closingQty,
+      lastMovementDate: a.last,
+      daysSinceMovement: days,
+      movementsLast30: a.recent,
+      classification,
+    });
+  }
+  rows.sort((x, y) => (y.daysSinceMovement ?? Infinity) - (x.daysSinceMovement ?? Infinity) || x.item.localeCompare(y.item));
+
+  return { status: "resolved", asOn, counted: rows.length, rows };
+}

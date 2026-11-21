@@ -241,6 +241,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "monthly_trend",
   "returns_summary",
   "item_stock",
+  "stock_movement",
   "vendor_spend_cycle",
   "party_balance",
   "party_ledger",
@@ -293,6 +294,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "vendor_spend_cycle":
       toolName = "get_vendor_spend_cycle";
       toolArgs = { vendor: route.entity?.partyName ?? "", from: route.from ?? null, to: route.to ?? null };
+      break;
+    case "stock_movement":
+      toolName = "get_stock_movement";
+      toolArgs = { asOn: route.asOn ?? null };
       break;
     case "item_stock":
       toolName = "get_item_stock";
@@ -470,6 +475,26 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
         method: "none",
         averageCycleDays: null,
         unmatchedPaymentsPaise: 0,
+      },
+    };
+  }
+  if (intent === "stock_movement") {
+    const rows = Array.isArray(data?.data?.rows) ? data.data.rows : null;
+    if (!rows) return undefined;
+    return {
+      kind: "stock_movement",
+      stockMovement: {
+        asOn: String(facts.as_on ?? ""),
+        counted: Number(facts.counted ?? 0),
+        rows: rows.map((r: any) => ({
+          item: String(r.item ?? ""),
+          unit: String(r.unit ?? ""),
+          closingQty: Number(r.closing_qty ?? 0),
+          lastMovementDate: r.last_movement_date ? String(r.last_movement_date) : null,
+          daysSinceMovement: r.days_since_movement == null ? null : Number(r.days_since_movement),
+          movementsLast30: Number(r.movements_last_30 ?? 0),
+          classification: String(r.classification ?? "normal") as "fast" | "normal" | "slow" | "dead",
+        })),
       },
     };
   }
