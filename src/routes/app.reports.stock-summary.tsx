@@ -174,6 +174,15 @@ function StockSummary() {
         voucherId: m.voucher_id
       }));
 
+      // The stored opening is the book's original opening. The window opens with the stock held
+      // the day before `from` (last year's closing when `from` is 1 April), so roll the moves before it in.
+      const openingQty = calculateWac(
+        Number(it.opening_stock_qty),
+        Number(it.opening_stock_rate_paise),
+        wacMoves.filter(m => m.date < from),
+        method,
+      ).closingQty;
+
       const val = calculateWac(
         Number(it.opening_stock_qty),
         Number(it.opening_stock_rate_paise),
@@ -183,7 +192,7 @@ function StockSummary() {
 
       return {
         ...it,
-        opening: Number(it.opening_stock_qty),
+        opening: openingQty,
         inWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isInward(m.vouchers.voucher_type) || (m.vouchers.voucher_type === "physical_stock" && Number(m.qty) > 0))).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
         outWindow: itemMoves.filter(m => m.vouchers && m.vouchers.voucher_date >= from && m.vouchers.voucher_date <= to && (isOutward(m.vouchers.voucher_type) || (m.vouchers.voucher_type === "physical_stock" && Number(m.qty) < 0))).reduce((s, m) => s + Math.abs(Number(m.qty)), 0),
 
