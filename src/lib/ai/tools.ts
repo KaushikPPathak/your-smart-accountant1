@@ -78,6 +78,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_vendor_concentration",
+    description:
+      "Vendors ranked by gross purchase spend in a period, with each share and the cumulative share, up to the vendor that takes the total to 80%.",
+    argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_duplicate_check",
     description:
       "Purchase bills from one vendor with the same bill number, the same payment amount paid to a vendor within 30 days, and purchase prices more than 25% above the vendor's previous rate for the item.",
@@ -628,6 +634,36 @@ async function execGetVendorOverdue(args: Record<string, unknown> = {}): Promise
   };
 }
 
+/** Vendor concentration comes from the accounting engine, never recomputed here. */
+async function execGetVendorConcentration(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runVendorConcentration } = await import("./accounting-query-engine");
+  const res = await runVendorConcentration({ from: args.from ? String(args.from) : null, to: args.to ? String(args.to) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  return {
+    success: true,
+    data: {
+      scope: `Vendor concentration (${res.thresholdPct}% of purchase spend)`,
+      facts: {
+        total_paise: res.totalPaise,
+        vendor_count: res.vendorCount,
+        threshold_pct: res.thresholdPct,
+        reached_threshold: res.reachedThreshold,
+        from: res.from,
+        to: res.to,
+      },
+      data: {
+        rows: res.rows.map((r) => ({ vendor: r.vendor, spend_paise: r.spendPaise, share_pct: r.sharePct, cumulative_pct: r.cumulativePct })),
+      },
+    },
+    latencyMs,
+  };
+}
+
 /** Duplicate and price checks come from the accounting engine, never recomputed here. */
 async function execGetDuplicateCheck(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
@@ -979,6 +1015,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetVendorOverdue(args);
     case "get_duplicate_check":
       return execGetDuplicateCheck(args);
+    case "get_vendor_concentration":
+      return execGetVendorConcentration(args);
     case "get_vendor_spend_cycle":
       return execGetVendorSpendCycle(args);
     case "get_journal_book":

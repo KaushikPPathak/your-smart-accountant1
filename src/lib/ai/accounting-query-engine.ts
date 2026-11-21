@@ -1859,3 +1859,97 @@ export async function runDuplicateCheck(query: {
     thresholds: { priceJumpPct: PRICE_JUMP_PCT, repeatPaymentWindowDays: REPEAT_PAYMENT_WINDOW_DAYS },
   };
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Vendor concentration: which vendors make up the first 80% of purchase spend (questionnaire 3.5)
+//
+//  Spend = gross purchase bills per vendor in the period (purchase returns are not deducted).
+//  Vendors are ranked by spend, largest first. The list stops at the vendor that takes the cumulative
+//  share to CONCENTRATION_PCT or more, and that vendor is included. Read-only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const CONCENTRATION_PCT = 80;
+
+export interface ConcentrationRow {
+  vendor: string;
+  spendPaise: number;
+  sharePct: number;
+  cumulativePct: number;
+}
+
+export type VendorConcentrationResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | {
+      status: "resolved";
+      from: string | null;
+      to: string | null;
+      totalPaise: number;
+      vendorCount: number;
+      thresholdPct: number;
+      /** Vendors up to and including the one that crosses the threshold. */
+      rows: ConcentrationRow[];
+      /** True when the threshold is reached within the rows shown. */
+      reachedThreshold: boolean;
+    };
+
+export async function runVendorConcentration(query: {
+  from?: string | null;
+  to?: string | null;
+  companyId?: string | null;
+}): Promise<VendorConcentrationResult> {
+  const fromArg = coerceDateArg(query.from);
+  const toArg = coerceDateArg(query.to);
+  if (!fromArg.ok || !toArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+
+  const { readVouchers } = await import("@/lib/offline/cache-read");
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
+  const vendorName = new Map(ledgers.map((l) => [String(l.id), String(l.name ?? "")]));
+
+  const spendByVendor = new Map<string, number>();
+  for (const v of (await readVouchers(companyId)) as any[]) {
+    if (!v || v.is_deleted === true || String(v.voucher_type ?? "") !== "purchase" || !v.party_ledger_id) continue;
+    const date = normalizeStoredDate(v.voucher_date ?? v.date);
+    if (fromArg.value && date < fromArg.value) continue;
+    if (toArg.value && date > toArg.value) continue;
+    const party = String(v.party_ledger_id);
+    spendByVendor.set(party, (spendByVendor.get(party) ?? 0) + Number(v.total_paise ?? 0));
+  }
+
+  const ranked = [...spendByVendor.entries()]
+    .filter(([, paise]) => paise > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const total = ranked.reduce((t, [, paise]) => t + paise, 0);
+
+  const rows: ConcentrationRow[] = [];
+  let cumulative = 0;
+  let reached = false;
+  for (const [id, paise] of ranked) {
+    cumulative += paise;
+    const cumulativePct = total > 0 ? Math.round((cumulative / total) * 1000) / 10 : 0;
+    rows.push({
+      vendor: vendorName.get(id) ?? id,
+      spendPaise: paise,
+      sharePct: total > 0 ? Math.round((paise / total) * 1000) / 10 : 0,
+      cumulativePct,
+    });
+    if (cumulativePct >= CONCENTRATION_PCT) {
+      reached = true;
+      break;
+    }
+  }
+
+  return {
+    status: "resolved",
+    from: fromArg.value ?? null,
+    to: toArg.value ?? null,
+    totalPaise: total,
+    vendorCount: ranked.length,
+    thresholdPct: CONCENTRATION_PCT,
+    rows,
+    reachedThreshold: reached,
+  };
+}

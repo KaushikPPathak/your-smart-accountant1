@@ -110,6 +110,20 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "vendor_concentration": {
+      const c = card.vendorConcentration;
+      if (!c) return null;
+      const period = c.from || c.to ? ` from ${c.from ?? "the start"} to ${c.to ?? "today"}` : "";
+      const rule = `Spend is gross purchase bills per vendor, before purchase returns. Vendors are listed largest first until they reach ${c.thresholdPct}% of the total.`;
+      const note = "_Answered locally from your books._";
+      if (!c.rows.length) {
+        return `No purchase bills${period} to rank.\n\n${rule}\n\n${note}`;
+      }
+      const lines = c.rows.map((r, i) => `${i + 1}. ${r.vendor}: ${formatInr(r.spendPaise)} (${r.sharePct}%, cumulative ${r.cumulativePct}%)`);
+      const head = `${c.rows.length} of ${c.vendorCount} vendor${c.vendorCount === 1 ? "" : "s"} make up ${c.thresholdPct}% of purchase spend${period} (total ${formatInr(c.totalPaise)}).`;
+      return [head, lines.join("\n"), rule, note].join("\n\n");
+    }
+
     case "duplicate_check": {
       const d = card.duplicateCheck;
       if (!d) return null;

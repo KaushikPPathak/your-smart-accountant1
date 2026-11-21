@@ -28,6 +28,7 @@ export type IntentType =
   | "customer_ranking"
   | "vendor_overdue"
   | "duplicate_check"
+  | "vendor_concentration"
   | "vendor_spend_cycle"
   | "unknown";
 
@@ -548,6 +549,11 @@ function duplicateCheckQuestion(text: string): boolean {
   return /\bduplicate\b|\bsame (bill|invoice) (no|number)\b|\bidentical amounts?\b|\bprice (jump|increase|hike|rise)s?\b|\bunusual (price|rate)s?\b|\bpaid twice\b|\brepeat(ed)? payments?\b/i.test(text);
 }
 
+function vendorConcentrationQuestion(text: string): boolean {
+  if (!/\bvendors?\b|\bsuppliers?\b/i.test(text)) return false;
+  return /\b80\s?%|\beighty percent\b|\bconcentration\b|\baccount for\b|\bshare of (our )?(purchase|spend)\b/i.test(text);
+}
+
 function vendorOverdueQuestion(text: string): boolean {
   return /\b(?:vendors?|suppliers?|creditors?)\b.{0,40}\b(?:overdue|unadjusted|advances?|debit\s+notes?)\b|\b(?:overdue|unadjusted|advances?|debit\s+notes?)\b.{0,40}\b(?:vendors?|suppliers?|creditors?)\b/i.test(text);
 }
@@ -588,6 +594,21 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
     };
   }
 
+  if (vendorConcentrationQuestion(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    return {
+      intent: "vendor_concentration",
+      confidence: 0.9,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: {},
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
   if (duplicateCheckQuestion(trimmed)) {
     const dateInfo = extractDateInfo(trimmed);
     return {

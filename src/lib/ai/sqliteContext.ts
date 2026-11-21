@@ -33,6 +33,7 @@ export type CardKind =
   | "customer_ranking"
   | "vendor_overdue"
   | "duplicate_check"
+  | "vendor_concentration"
   | "vendor_spend_cycle"
   | "party_balance"
   | "cash_balance"
@@ -108,6 +109,16 @@ export interface DuplicateCheckCard {
   repeatPaymentWindowDays: number;
 }
 
+export interface VendorConcentrationCard {
+  totalPaise: number;
+  vendorCount: number;
+  thresholdPct: number;
+  reachedThreshold: boolean;
+  from: string | null;
+  to: string | null;
+  rows: { vendor: string; spendPaise: number; sharePct: number; cumulativePct: number }[];
+}
+
 export interface VendorSpendCycleCard {
   status: "resolved" | "not_found" | "ambiguous" | "no_name";
   vendor: string | null;
@@ -142,6 +153,7 @@ export interface StructuredCard {
   customerRanking?: CustomerRankingCard;
   vendorOverdue?: VendorOverdueCard;
   duplicateCheck?: DuplicateCheckCard;
+  vendorConcentration?: VendorConcentrationCard;
   vendorSpendCycle?: VendorSpendCycleCard;
   companyName?: string | null;
   partyName?: string;

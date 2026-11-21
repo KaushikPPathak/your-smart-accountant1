@@ -2,7 +2,7 @@
 
 Generated from `src/lib/ai/question-catalog.ts`. Edit the catalogue, then regenerate this file.
 
-Status: 10 answered, 0 partial, 22 planned, 3 not in the books.
+Status: 11 answered, 0 partial, 21 planned, 3 not in the books.
 Build phase: 26 buildable from stored data (phase 1), 7 need new fields or capture (phase 2), 2 blocked on a decision or outside the books (phase 3).
 
 Phases: 1 = the books already hold the data; 2 = the app needs a new field, record or capture first; 3 = blocked on a decision or outside the books.
@@ -35,7 +35,7 @@ Phases: 1 = the books already hold the data; 2 = the app needs a new field, reco
 | 3.2 | Which vendors have overdue balances or unadjusted debit notes/advances? | local | `get_vendor_overdue` | answered | 1 | Payable settlement per vendor (recorded allocations first, FIFO for the rest); credit days per ledger. | Flags a vendor with a payable past its credit days (30 where none is set, disclosed per row), or with an unadjusted advance or debit note. Advances and debit notes are listed separately. |
 | 3.3 | What is the total spend and average payment cycle for ABC Traders over the last 6 months? | local | `get_vendor_spend_cycle` | answered | 1 | Purchase bills and payments on the vendor ledger, by date; recorded bill allocations (cache_bill_allocations). | Gross purchases less purchase returns (debit notes) less other debit adjustments gives net purchases, each shown separately. Payment cycle uses recorded bill allocations first; the unallocated part is matched FIFO and disclosed as an estimate. Payments that settled an opening balance are reported, not timed. |
 | 3.4 | Are there duplicate bill numbers, unusual price jumps, or identical amounts paid to the same vendor? | local | `get_duplicate_check` | answered | 1 | Bill number (reference) on purchase vouchers, vendor, amount, payment dates and item rates. | Duplicate bill = same vendor and bill number. Repeat payment = same amount to the same vendor within 30 days. Price jump = more than 25% above the vendor's previous rate for the item. Thresholds are defaults and are stated in each answer. |
-| 3.5 | Which vendors account for 80% of our purchase spend this year? | declined | `vendor_concentration` | planned | 1 | Purchase totals per vendor. | Cumulative share ranking. |
+| 3.5 | Which vendors account for 80% of our purchase spend this year? | local | `get_vendor_concentration` | answered | 1 | Gross purchase bills per vendor in the period. | Vendors ranked by gross purchase spend, listed until the cumulative share reaches 80% (that vendor included). Returns are not deducted. |
 
 ## Sales, purchases & profitability
 

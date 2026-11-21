@@ -237,6 +237,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "customer_ranking",
   "vendor_overdue",
   "duplicate_check",
+  "vendor_concentration",
   "vendor_spend_cycle",
   "party_balance",
   "party_ledger",
@@ -289,6 +290,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "vendor_spend_cycle":
       toolName = "get_vendor_spend_cycle";
       toolArgs = { vendor: route.entity?.partyName ?? "", from: route.from ?? null, to: route.to ?? null };
+      break;
+    case "vendor_concentration":
+      toolName = "get_vendor_concentration";
+      toolArgs = { from: route.from ?? null, to: route.to ?? null };
       break;
     case "duplicate_check":
       toolName = "get_duplicate_check";
@@ -450,6 +455,22 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
         method: "none",
         averageCycleDays: null,
         unmatchedPaymentsPaise: 0,
+      },
+    };
+  }
+  if (intent === "vendor_concentration") {
+    const rows = Array.isArray(data?.data?.rows) ? data.data.rows : null;
+    if (!rows) return undefined;
+    return {
+      kind: "vendor_concentration",
+      vendorConcentration: {
+        totalPaise: Number(facts.total_paise ?? 0),
+        vendorCount: Number(facts.vendor_count ?? 0),
+        thresholdPct: Number(facts.threshold_pct ?? 80),
+        reachedThreshold: facts.reached_threshold === true,
+        from: facts.from ? String(facts.from) : null,
+        to: facts.to ? String(facts.to) : null,
+        rows: rows.map((r: any) => ({ vendor: String(r.vendor ?? ""), spendPaise: Number(r.spend_paise ?? 0), sharePct: Number(r.share_pct ?? 0), cumulativePct: Number(r.cumulative_pct ?? 0) })),
       },
     };
   }
