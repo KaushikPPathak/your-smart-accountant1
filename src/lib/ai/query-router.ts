@@ -26,6 +26,7 @@ export type IntentType =
   | "cash_runway"
   | "credit_watch"
   | "customer_ranking"
+  | "vendor_overdue"
   | "unknown";
 
 export interface RouteResult {
@@ -540,11 +541,32 @@ function customerRankingQuestion(text: string): boolean {
   return /\b(?:customers?|debtors?)\b.{0,30}\bby\s+(?:revenue|overdue|sales)\b/i.test(text);
 }
 
+/** "vendors with overdue balances", "unadjusted advances to suppliers", "debit notes to vendors". */
+function vendorOverdueQuestion(text: string): boolean {
+  return /\b(?:vendors?|suppliers?|creditors?)\b.{0,40}\b(?:overdue|unadjusted|advances?|debit\s+notes?)\b|\b(?:overdue|unadjusted|advances?|debit\s+notes?)\b.{0,40}\b(?:vendors?|suppliers?|creditors?)\b/i.test(text);
+}
+
 export function routeQuery(text: string, contextCard?: StructuredCard): RouteResult {
   const originalText = text ?? "";
   // "Yes, ..." / "Ok, ..." is an interjection. Without it, "Yes, show bank balance" reads as a
   // party called "Yes bank" and is promoted to YES Bank. "Yes bank balance" (no comma) still means YES Bank.
   const trimmed = originalText.trim().replace(/^(?:yes|yeah|yep|ok|okay)\s*[,.!;:-]\s*/i, "");
+
+  if (vendorOverdueQuestion(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    return {
+      intent: "vendor_overdue",
+      confidence: 0.95,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: {},
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
 
   if (customerRankingQuestion(trimmed)) {
     const dateInfo = extractDateInfo(trimmed);

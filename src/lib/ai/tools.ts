@@ -72,6 +72,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_vendor_overdue",
+    description:
+      "Vendors with payables older than 30 days, and vendors with unadjusted advances or debit notes (excess paid over their bills).",
+    argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_cash_balance",
     description:
       "Closing balance of the Cash ledger or a named bank account, optionally frozen at a date.",
@@ -519,6 +525,34 @@ async function execGetCashBankTotal(args: Record<string, unknown> = {}): Promise
   };
 }
 
+/** Vendor overdue comes from the accounting engine, never recomputed here. */
+async function execGetVendorOverdue(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runVendorOverdue } = await import("./accounting-query-engine");
+  const res = await runVendorOverdue({ asOn: args.asOn ? String(args.asOn) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  return {
+    success: true,
+    data: {
+      scope: `Vendor overdue as on ${res.asOn} (${res.checked} payable parties)`,
+      facts: { as_on_date: res.asOn, checked: res.checked, flagged_count: res.flagged.length },
+      data: {
+        rows: res.flagged.map((r) => ({
+          name: r.name,
+          overdue_paise: r.overduePaise,
+          outstanding_paise: r.outstandingPaise,
+          advance_paise: r.advancePaise,
+        })),
+      },
+    },
+    latencyMs,
+  };
+}
+
 /** Customer ranking comes from the accounting engine, never recomputed here. */
 async function execGetCustomerRanking(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
@@ -834,6 +868,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetCreditWatch(args);
     case "get_customer_ranking":
       return execGetCustomerRanking(args);
+    case "get_vendor_overdue":
+      return execGetVendorOverdue(args);
     case "get_journal_book":
       return execGetJournalBook(args);
     case "get_profit_loss":

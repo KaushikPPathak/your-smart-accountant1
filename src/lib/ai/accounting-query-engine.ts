@@ -1343,3 +1343,51 @@ export async function runCustomerRanking(query: {
 
   return { status: "resolved", from, to, byRevenue, byOverdue };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Vendors overdue or with unadjusted advances (questionnaire 3.2)
+//
+//  Overdue:  payable older than 30 days as on the as-on date (same rule as 2.2, for vendors).
+//            Opening balances count as overdue, because their age is not recorded.
+//  Advance:  money paid or debit notes raised that the ageing could not match to a bill
+//            (the ageing settles the oldest bill first, so this is the unmatched excess).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface VendorOverdueRow {
+  ledgerId: string;
+  name: string;
+  overduePaise: number;
+  outstandingPaise: number;
+  advancePaise: number;
+}
+
+export type VendorOverdueResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | { status: "resolved"; asOn: string; checked: number; flagged: VendorOverdueRow[] };
+
+export async function runVendorOverdue(query: {
+  asOn?: string | null;
+  companyId?: string | null;
+}): Promise<VendorOverdueResult> {
+  const summary = await runPartySummary({ side: "payable", asOn: query.asOn ?? null, companyId: query.companyId ?? null });
+  if (summary.status === "no_company") return { status: "no_company" };
+  if (summary.status === "invalid_date") return { status: "invalid_date", message: summary.message };
+
+  const flagged: VendorOverdueRow[] = [];
+  for (const row of summary.rows) {
+    const b = row.buckets;
+    const overdue = b.opening + b.d31_60 + b.d61_90 + b.d90p;
+    if (overdue > 0 || row.advancePaise > 0) {
+      flagged.push({
+        ledgerId: row.ledgerId,
+        name: row.name,
+        overduePaise: overdue,
+        outstandingPaise: row.outstandingPaise,
+        advancePaise: row.advancePaise,
+      });
+    }
+  }
+  flagged.sort((a, b) => b.overduePaise - a.overduePaise || b.advancePaise - a.advancePaise);
+  return { status: "resolved", asOn: summary.asOn, checked: summary.rows.length, flagged };
+}

@@ -78,6 +78,28 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "vendor_overdue": {
+      const v = card.vendorOverdue;
+      if (!v) return null;
+      const rule = "Overdue means a payable over 30 days old; opening balances count as overdue. Advance means money paid or debit notes that are not matched to a bill.";
+      const note = "_Answered locally from your books._";
+      if (!v.rows.length) {
+        return `No vendor has a payable over 30 days old, and none has an unadjusted advance. Checked ${v.checked} payable part${v.checked === 1 ? "y" : "ies"}.\n\n${rule}\n\n${note}`;
+      }
+      const lines = v.rows.map((r) => {
+        const parts: string[] = [];
+        if (r.overduePaise > 0) parts.push(`${formatInr(r.overduePaise)} overdue`);
+        if (r.advancePaise > 0) parts.push(`${formatInr(r.advancePaise)} unadjusted advance`);
+        return `- ${r.name}: ${parts.join("; ")} (of ${formatInr(r.outstandingPaise)} payable).`;
+      });
+      return [
+        `${v.rows.length} vendor${v.rows.length === 1 ? " has" : "s have"} an overdue balance or an unadjusted advance.`,
+        lines.join("\n"),
+        rule,
+        note,
+      ].join("\n\n");
+    }
+
     case "customer_ranking": {
       const c = card.customerRanking;
       if (!c) return null;

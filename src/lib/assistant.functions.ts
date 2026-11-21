@@ -235,6 +235,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "cash_runway",
   "credit_watch",
   "customer_ranking",
+  "vendor_overdue",
   "party_balance",
   "party_ledger",
   "cash_balance",
@@ -281,6 +282,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
       break;
     case "cash_bank_total":
       toolName = "get_cash_bank_total";
+      toolArgs = { asOn: route.asOn ?? null };
+      break;
+    case "vendor_overdue":
+      toolName = "get_vendor_overdue";
       toolArgs = { asOn: route.asOn ?? null };
       break;
     case "customer_ranking":
@@ -379,6 +384,22 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
           closingPaise: Number(r.closing_paise ?? 0),
         })),
         totalPaise: Number(facts.total_paise ?? 0),
+      },
+    };
+  }
+  if (intent === "vendor_overdue") {
+    const rows = Array.isArray(data?.data?.rows) ? data.data.rows : null;
+    if (!rows) return undefined;
+    return {
+      kind: "vendor_overdue",
+      vendorOverdue: {
+        checked: Number(facts.checked ?? 0),
+        rows: rows.map((r: any) => ({
+          name: String(r.name ?? ""),
+          overduePaise: Number(r.overdue_paise ?? 0),
+          outstandingPaise: Number(r.outstanding_paise ?? 0),
+          advancePaise: Number(r.advance_paise ?? 0),
+        })),
       },
     };
   }

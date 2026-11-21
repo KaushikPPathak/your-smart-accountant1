@@ -31,6 +31,7 @@ export type CardKind =
   | "cash_runway"
   | "credit_watch"
   | "customer_ranking"
+  | "vendor_overdue"
   | "party_balance"
   | "cash_balance"
   | "bank_balance"
@@ -90,6 +91,11 @@ export interface CustomerRankingCard {
   byOverdue: { name: string; overduePaise: number; outstandingPaise: number }[];
 }
 
+export interface VendorOverdueCard {
+  checked: number;
+  rows: { name: string; overduePaise: number; outstandingPaise: number; advancePaise: number }[];
+}
+
 export interface StructuredCard {
   kind: CardKind;
   partySummary?: PartySummaryCard;
@@ -99,6 +105,7 @@ export interface StructuredCard {
   cashRunway?: CashRunwayCard;
   creditWatch?: CreditWatchCard;
   customerRanking?: CustomerRankingCard;
+  vendorOverdue?: VendorOverdueCard;
   companyName?: string | null;
   partyName?: string;
   partyGroup?: string | null;
