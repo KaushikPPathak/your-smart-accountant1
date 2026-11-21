@@ -78,6 +78,29 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "cash_runway": {
+      const c = card.cashRunway;
+      if (!c) return null;
+      const basis = `Monthly burn is the fall in cash and bank over the three full months from ${c.windowFrom} to ${c.windowTo}, divided by three.`;
+      const note = "_Answered locally from your books._";
+      if (c.reason === "no_data") return `There are no postings to measure a runway from.\n\n${note}`;
+      if (c.reason === "short_history") {
+        return `The books start on ${c.latestDate ?? "an unknown date"}, too late to measure three full months before the latest posting. Runway needs that history.\n\n${note}`;
+      }
+      if (c.reason === "exhausted") {
+        return `Cash and bank are nil or overdrawn (${formatInr(Math.abs(c.currentPositionPaise))} ${c.currentPositionPaise < 0 ? "Cr" : "Dr"} as on ${c.latestDate}). There is no runway left.\n\n${note}`;
+      }
+      if (c.reason === "not_burning") {
+        return `Cash and bank did not fall over the last three full months, so the current trend gives no runway limit. Current position: ${formatInr(c.currentPositionPaise)} as on ${c.latestDate}.\n\n${basis}\n\n${note}`;
+      }
+      return [
+        `About ${c.runwayDays} days of runway at the current burn of ${formatInr(c.monthlyBurnPaise)} a month.`,
+        `Cash and bank: ${formatInr(c.currentPositionPaise)} as on ${c.latestDate}.`,
+        basis,
+        note,
+      ].join("\n\n");
+    }
+
     case "bank_anomalies": {
       const b = card.bankAnomalies;
       if (!b) return null;

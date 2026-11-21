@@ -54,6 +54,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_cash_runway",
+    description:
+      "Days of cash runway: current cash and bank position divided by the average monthly net burn of the three full months before the latest posting.",
+    argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_cash_balance",
     description:
       "Closing balance of the Cash ledger or a named bank account, optionally frozen at a date.",
@@ -501,6 +507,50 @@ async function execGetCashBankTotal(args: Record<string, unknown> = {}): Promise
   };
 }
 
+/** Runway comes from the accounting engine, never recomputed here. */
+async function execGetCashRunway(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runCashRunway } = await import("./accounting-query-engine");
+  const res = await runCashRunway({ asOn: args.asOn ? String(args.asOn) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  if (res.status === "no_data") {
+    return { success: true, data: { scope: "Cash runway", facts: { reason: "no_data" }, data: { reason: "no_data" } }, latencyMs };
+  }
+  if (res.status === "short_history") {
+    return {
+      success: true,
+      data: {
+        scope: "Cash runway",
+        facts: { reason: "short_history", earliest_date: res.earliestDate },
+        data: { reason: "short_history", earliest_date: res.earliestDate, needs_from: res.needsFrom },
+      },
+      latencyMs,
+    };
+  }
+  const reason = res.reason;
+  return {
+    success: true,
+    data: {
+      scope: `Cash runway from ${res.windowFrom} to ${res.windowTo}`,
+      facts: { reason, latest_date: res.latestDate, window_from: res.windowFrom, window_to: res.windowTo },
+      data: {
+        reason,
+        latest_date: res.latestDate,
+        window_from: res.windowFrom,
+        window_to: res.windowTo,
+        current_position_paise: res.currentPositionPaise,
+        monthly_burn_paise: res.monthlyBurnPaise,
+        runway_days: res.runwayDays,
+      },
+    },
+    latencyMs,
+  };
+}
+
 /** Outflow spikes come from the accounting engine, never recomputed here. */
 async function execGetBankAnomalies(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
@@ -709,6 +759,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetSalesTotal(args);
     case "get_bank_anomalies":
       return execGetBankAnomalies(args);
+    case "get_cash_runway":
+      return execGetCashRunway(args);
     case "get_journal_book":
       return execGetJournalBook(args);
     case "get_profit_loss":

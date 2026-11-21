@@ -28,6 +28,7 @@ export type CardKind =
   | "cash_bank_total"
   | "sales_total"
   | "bank_anomalies"
+  | "cash_runway"
   | "party_balance"
   | "cash_balance"
   | "bank_balance"
@@ -64,12 +65,24 @@ export interface BankAnomalyCard {
   rows: { name: string; kind: "cash" | "bank"; month: string; outflowPaise: number; baselinePaise: number; baselineMonths: number; ratio: number }[];
 }
 
+export interface CashRunwayCard {
+  reason: "runway" | "not_burning" | "exhausted" | "short_history" | "no_data";
+  latestDate: string | null;
+  windowFrom: string | null;
+  windowTo: string | null;
+  currentPositionPaise: number;
+  monthlyBurnPaise: number;
+  runwayDays: number | null;
+  message: string | null;
+}
+
 export interface StructuredCard {
   kind: CardKind;
   partySummary?: PartySummaryCard;
   cashBankTotal?: CashBankTotalCard;
   salesTotal?: SalesTotalCard;
   bankAnomalies?: BankAnomalyCard;
+  cashRunway?: CashRunwayCard;
   companyName?: string | null;
   partyName?: string;
   partyGroup?: string | null;

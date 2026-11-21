@@ -1093,3 +1093,105 @@ export async function runBankAnomalies(query: {
   flagged.sort((a, b) => b.outflowPaise - a.outflowPaise);
   return { status: "resolved", asOn, checkedLedgers: targets.length, flagged };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Cash runway (questionnaire 1.5)
+//
+//  Cash position  = signed total of all cash and bank ledgers (runCashBankTotal).
+//  Monthly burn   = (position at the end of the month before the window − position at the end of
+//                   the window's last month) ÷ 3, where the window is the three calendar months
+//                   before the latest posted month.
+//  Runway (days)  = current position (latest posting) ÷ (monthly burn ÷ 30).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CashRunwayResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | { status: "no_data" }
+  | { status: "short_history"; earliestDate: string; needsFrom: string }
+  | {
+      status: "resolved";
+      latestDate: string;
+      windowFrom: string;
+      windowTo: string;
+      startPositionPaise: number;
+      endPositionPaise: number;
+      currentPositionPaise: number;
+      monthlyBurnPaise: number;
+      runwayDays: number | null;
+      reason: "runway" | "not_burning" | "exhausted";
+    };
+
+/** "YYYY-MM" shifted by a number of months. */
+function shiftMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const idx = y * 12 + (m - 1) + delta;
+  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
+}
+
+/** Last calendar day of a "YYYY-MM" month. */
+function lastDayOfMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
+export async function runCashRunway(query: {
+  asOn?: string | null;
+  companyId?: string | null;
+}): Promise<CashRunwayResult> {
+  const asOnArg = coerceDateArg(query.asOn);
+  if (!asOnArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+  const asOn = asOnArg.value;
+
+  const { readVouchers } = await import("@/lib/offline/cache-read");
+  const dates = ((await readVouchers(companyId)) as any[])
+    .map((v) => normalizeStoredDate(v.voucher_date ?? v.date))
+    .filter((d) => d && (!asOn || d <= asOn))
+    .sort();
+  if (dates.length === 0) return { status: "no_data" };
+  const earliest = dates[0];
+  const latestDate = dates[dates.length - 1];
+
+  // The window: the three full months before the month of the latest posting.
+  const latestMonth = latestDate.slice(0, 7);
+  const windowFrom = shiftMonth(latestMonth, -3);
+  const windowTo = shiftMonth(latestMonth, -1);
+  const startAsOn = lastDayOfMonth(shiftMonth(windowFrom, -1));
+  const endAsOn = lastDayOfMonth(windowTo);
+  if (earliest > startAsOn) {
+    return { status: "short_history", earliestDate: earliest, needsFrom: startAsOn };
+  }
+
+  const at = async (date: string | null) => {
+    const r = await runCashBankTotal({ companyId, asOn: date });
+    return r.status === "resolved" ? r.totalPaise : null;
+  };
+  const start = await at(startAsOn);
+  const end = await at(endAsOn);
+  const current = await at(latestDate);
+  if (start === null || end === null || current === null) return { status: "no_data" };
+
+  const monthlyBurn = Math.round((start - end) / 3);
+  let reason: "runway" | "not_burning" | "exhausted";
+  let runwayDays: number | null = null;
+  if (current <= 0) reason = "exhausted";
+  else if (monthlyBurn <= 0) reason = "not_burning";
+  else {
+    reason = "runway";
+    runwayDays = Math.floor((current * 30) / monthlyBurn); // multiply first: exact in integer paise
+  }
+  return {
+    status: "resolved",
+    latestDate,
+    windowFrom,
+    windowTo,
+    startPositionPaise: start,
+    endPositionPaise: end,
+    currentPositionPaise: current,
+    monthlyBurnPaise: monthlyBurn,
+    runwayDays,
+    reason,
+  };
+}

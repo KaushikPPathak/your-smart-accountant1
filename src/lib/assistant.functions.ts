@@ -232,6 +232,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "cash_bank_total",
   "sales_total",
   "bank_anomalies",
+  "cash_runway",
   "party_balance",
   "party_ledger",
   "cash_balance",
@@ -278,6 +279,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
       break;
     case "cash_bank_total":
       toolName = "get_cash_bank_total";
+      toolArgs = { asOn: route.asOn ?? null };
+      break;
+    case "cash_runway":
+      toolName = "get_cash_runway";
       toolArgs = { asOn: route.asOn ?? null };
       break;
     case "bank_anomalies":
@@ -364,6 +369,23 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
           closingPaise: Number(r.closing_paise ?? 0),
         })),
         totalPaise: Number(facts.total_paise ?? 0),
+      },
+    };
+  }
+  if (intent === "cash_runway") {
+    const d = data?.data ?? {};
+    const reason = String(d.reason ?? "no_data");
+    return {
+      kind: "cash_runway",
+      cashRunway: {
+        reason: reason as "runway" | "not_burning" | "exhausted" | "short_history" | "no_data",
+        latestDate: d.latest_date ?? null,
+        windowFrom: d.window_from ?? null,
+        windowTo: d.window_to ?? null,
+        currentPositionPaise: Number(d.current_position_paise ?? 0),
+        monthlyBurnPaise: Number(d.monthly_burn_paise ?? 0),
+        runwayDays: d.runway_days === null || d.runway_days === undefined ? null : Number(d.runway_days),
+        message: null,
       },
     };
   }
