@@ -38,6 +38,9 @@ describe("stored voucher dates are normalised", () => {
     expect(normalizeStoredDate("2025-4-5")).toBe("2025-04-05");
     expect(normalizeStoredDate("2025-04-05T10:30:00Z")).toBe("2025-04-05");
     expect(normalizeStoredDate("2025-02-30")).toBe("");
+    expect(normalizeStoredDate("15/03/2026")).toBe("2026-03-15");
+    expect(normalizeStoredDate("5-4-2025")).toBe("2025-04-05");
+    expect(normalizeStoredDate("03/15/2026")).toBe("");
     expect(normalizeStoredDate(undefined)).toBe("");
   });
 });
@@ -125,5 +128,36 @@ describe("stored dates in a real trial balance", () => {
   it("excludes vouchers after the as-on date", async () => {
     const res = await runAccountingQuery({ kind: "cash_balance", asOn: "2025-04-07", companyId: CO });
     expect(res).toMatchObject({ status: "resolved", debitPaise: 100000, entryCount: 1 });
+  });
+});
+
+describe("bank balance from seeded books", () => {
+  beforeEach(async () => {
+    localStorage.setItem("ym_active_company_id", CO);
+    await Promise.all([
+      offlineDb.cache_ledgers.clear(),
+      offlineDb.cache_vouchers.clear(),
+      offlineDb.cache_voucher_entries.clear(),
+    ]);
+    const now = new Date().toISOString();
+    await offlineDb.cache_ledgers.bulkPut([
+      { id: "led-kotak", company_id: CO, name: "Kotak Mahindra Bank Ltd", group_name: "Bank Accounts", opening_balance_paise: 0, opening_balance_is_debit: true, updated_at: now },
+      { id: "led-sales", company_id: CO, name: "Sales Account", group_name: "Sales Accounts", opening_balance_paise: 0, opening_balance_is_debit: true, updated_at: now },
+    ] as never[]);
+    await offlineDb.cache_vouchers.bulkPut([
+      { id: "k1", company_id: CO, voucher_type: "receipt", voucher_number: "1", voucher_date: "2026-03-10", updated_at: now },
+      { id: "k2", company_id: CO, voucher_type: "receipt", voucher_number: "2", voucher_date: "15/03/2026", updated_at: now },
+    ] as never[]);
+    await offlineDb.cache_voucher_entries.bulkPut([
+      { id: "k1-e1", voucher_id: "k1", ledger_id: "led-kotak", company_id: CO, debit_paise: 100000, credit_paise: 0 },
+      { id: "k1-e2", voucher_id: "k1", ledger_id: "led-sales", company_id: CO, debit_paise: 0, credit_paise: 100000 },
+      { id: "k2-e1", voucher_id: "k2", ledger_id: "led-kotak", company_id: CO, debit_paise: 50000, credit_paise: 0 },
+      { id: "k2-e2", voucher_id: "k2", ledger_id: "led-sales", company_id: CO, debit_paise: 0, credit_paise: 50000 },
+    ] as never[]);
+  });
+
+  it("counts both ISO and day-first dated postings in the Kotak balance", async () => {
+    const res = await runAccountingQuery({ kind: "bank_balance", name: "kotak", asOn: "2026-03-31", companyId: CO });
+    expect(res).toMatchObject({ status: "resolved", debitPaise: 150000, entryCount: 2 });
   });
 });
