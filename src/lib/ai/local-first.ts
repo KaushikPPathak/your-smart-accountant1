@@ -110,6 +110,31 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "duplicate_check": {
+      const d = card.duplicateCheck;
+      if (!d) return null;
+      const rule = `Definitions: a duplicate bill is two purchase bills from one vendor with the same bill number. A repeat payment is the same amount paid to a vendor within ${d.repeatPaymentWindowDays} days. An unusual price is a purchase rate more than ${d.priceJumpPct}% above the vendor's previous rate for that item.`;
+      const note = "_Answered locally from your books._";
+      const none = d.duplicateBills.length + d.repeatPayments.length + d.priceJumps.length === 0;
+      const parts: string[] = [];
+      if (none) {
+        parts.push(`No duplicate bills, repeat payments or unusual purchase prices found across ${d.purchaseCount} purchase bill${d.purchaseCount === 1 ? "" : "s"}.`);
+      }
+      if (d.duplicateBills.length) {
+        parts.push(`Duplicate bill numbers (${d.duplicateBills.length}):\n` + d.duplicateBills.map((x) => `- ${x.vendor}: bill ${x.billNo}, ${x.voucherIds.length} vouchers, ${formatInr(x.totalPaise)}`).join("\n"));
+      }
+      if (d.repeatPayments.length) {
+        parts.push(`Repeat payments (${d.repeatPayments.length}):\n` + d.repeatPayments.map((x) => `- ${x.vendor}: ${formatInr(x.amountPaise)} on ${x.dates.join(", ")}`).join("\n"));
+      }
+      if (d.priceJumps.length) {
+        parts.push(`Unusual purchase prices (${d.priceJumps.length}):\n` + d.priceJumps.slice(0, 10).map((x) => `- ${x.item} from ${x.vendor} on ${x.date}: ${formatInr(x.ratePaise)} against ${formatInr(x.previousRatePaise)} (+${x.changePct}%)`).join("\n"));
+      }
+      if (d.purchasesWithoutBillNo > 0) {
+        parts.push(`${d.purchasesWithoutBillNo} purchase bill${d.purchasesWithoutBillNo === 1 ? " has" : "s have"} no bill number, so ${d.purchasesWithoutBillNo === 1 ? "it was" : "they were"} not compared.`);
+      }
+      return [...parts, rule, note].join("\n\n");
+    }
+
     case "vendor_overdue": {
       const v = card.vendorOverdue;
       if (!v) return null;

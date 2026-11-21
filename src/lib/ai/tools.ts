@@ -78,6 +78,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_duplicate_check",
+    description:
+      "Purchase bills from one vendor with the same bill number, the same payment amount paid to a vendor within 30 days, and purchase prices more than 25% above the vendor's previous rate for the item.",
+    argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_vendor_spend_cycle",
     description:
       "For one vendor: purchase spend in a period (default six months to the latest posting), and the average days to pay, matching payments to the oldest bills (FIFO).",
@@ -622,6 +628,38 @@ async function execGetVendorOverdue(args: Record<string, unknown> = {}): Promise
   };
 }
 
+/** Duplicate and price checks come from the accounting engine, never recomputed here. */
+async function execGetDuplicateCheck(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runDuplicateCheck } = await import("./accounting-query-engine");
+  const res = await runDuplicateCheck({ from: args.from ? String(args.from) : null, to: args.to ? String(args.to) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  const found = res.duplicateBills.length + res.repeatPayments.length + res.priceJumps.length;
+  return {
+    success: true,
+    data: {
+      scope: `Duplicate and price checks on ${res.purchaseCount} purchase bills`,
+      facts: {
+        purchase_count: res.purchaseCount,
+        purchases_without_bill_no: res.purchasesWithoutBillNo,
+        finding_count: found,
+        price_jump_pct: res.thresholds.priceJumpPct,
+        repeat_payment_window_days: res.thresholds.repeatPaymentWindowDays,
+      },
+      data: {
+        duplicate_bills: res.duplicateBills.map((d) => ({ vendor: d.vendor, bill_no: d.billNo, voucher_ids: d.voucherIds, total_paise: d.totalPaise })),
+        repeat_payments: res.repeatPayments.map((p) => ({ vendor: p.vendor, amount_paise: p.amountPaise, voucher_ids: p.voucherIds, dates: p.dates })),
+        price_jumps: res.priceJumps.map((j) => ({ vendor: j.vendor, item: j.item, date: j.date, previous_rate_paise: j.previousRatePaise, rate_paise: j.ratePaise, change_pct: j.changePct })),
+      },
+    },
+    latencyMs,
+  };
+}
+
 /** Customer ranking comes from the accounting engine, never recomputed here. */
 async function execGetCustomerRanking(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
@@ -939,6 +977,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetCustomerRanking(args);
     case "get_vendor_overdue":
       return execGetVendorOverdue(args);
+    case "get_duplicate_check":
+      return execGetDuplicateCheck(args);
     case "get_vendor_spend_cycle":
       return execGetVendorSpendCycle(args);
     case "get_journal_book":

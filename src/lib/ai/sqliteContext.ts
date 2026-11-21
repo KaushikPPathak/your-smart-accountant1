@@ -32,6 +32,7 @@ export type CardKind =
   | "credit_watch"
   | "customer_ranking"
   | "vendor_overdue"
+  | "duplicate_check"
   | "vendor_spend_cycle"
   | "party_balance"
   | "cash_balance"
@@ -97,6 +98,16 @@ export interface VendorOverdueCard {
   rows: { name: string; overduePaise: number; outstandingPaise: number; advancePaise: number; debitNotePaise: number; creditDays: number; creditDaysSource: "ledger" | "default_30" }[];
 }
 
+export interface DuplicateCheckCard {
+  purchaseCount: number;
+  purchasesWithoutBillNo: number;
+  duplicateBills: { vendor: string; billNo: string; voucherIds: string[]; totalPaise: number }[];
+  repeatPayments: { vendor: string; amountPaise: number; voucherIds: string[]; dates: string[] }[];
+  priceJumps: { vendor: string; item: string; date: string; previousRatePaise: number; ratePaise: number; changePct: number }[];
+  priceJumpPct: number;
+  repeatPaymentWindowDays: number;
+}
+
 export interface VendorSpendCycleCard {
   status: "resolved" | "not_found" | "ambiguous" | "no_name";
   vendor: string | null;
@@ -130,6 +141,7 @@ export interface StructuredCard {
   creditWatch?: CreditWatchCard;
   customerRanking?: CustomerRankingCard;
   vendorOverdue?: VendorOverdueCard;
+  duplicateCheck?: DuplicateCheckCard;
   vendorSpendCycle?: VendorSpendCycleCard;
   companyName?: string | null;
   partyName?: string;

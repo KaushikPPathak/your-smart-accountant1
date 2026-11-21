@@ -1681,3 +1681,181 @@ export async function runVendorSpendCycle(query: {
     method,
   };
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Duplicate bills, repeat payments and unusual purchase prices (questionnaire 3.4)
+//
+//  Definitions (disclosed in every answer):
+//    Duplicate bill:   two or more purchase vouchers from the same vendor with the same reference number
+//                      (the supplier's bill number). Vouchers without a reference are counted, not compared.
+//    Repeat payment:   two or more payments to the same vendor of the same amount, dated within
+//                      REPEAT_PAYMENT_WINDOW_DAYS of each other.
+//    Price jump:       an item bought from the same vendor at a rate more than PRICE_JUMP_PCT above that
+//                      vendor's previous purchase rate for the item. The default threshold is 25%.
+//  Read-only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const PRICE_JUMP_PCT = 25;
+export const REPEAT_PAYMENT_WINDOW_DAYS = 30;
+
+export interface DuplicateBillFinding {
+  vendor: string;
+  billNo: string;
+  voucherIds: string[];
+  totalPaise: number;
+}
+
+export interface RepeatPaymentFinding {
+  vendor: string;
+  amountPaise: number;
+  voucherIds: string[];
+  dates: string[];
+}
+
+export interface PriceJumpFinding {
+  vendor: string;
+  item: string;
+  date: string;
+  previousRatePaise: number;
+  ratePaise: number;
+  changePct: number;
+}
+
+export type DuplicateCheckResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | {
+      status: "resolved";
+      from: string | null;
+      to: string | null;
+      purchaseCount: number;
+      purchasesWithoutBillNo: number;
+      duplicateBills: DuplicateBillFinding[];
+      repeatPayments: RepeatPaymentFinding[];
+      priceJumps: PriceJumpFinding[];
+      thresholds: { priceJumpPct: number; repeatPaymentWindowDays: number };
+    };
+
+export async function runDuplicateCheck(query: {
+  from?: string | null;
+  to?: string | null;
+  companyId?: string | null;
+}): Promise<DuplicateCheckResult> {
+  const fromArg = coerceDateArg(query.from);
+  const toArg = coerceDateArg(query.to);
+  if (!fromArg.ok || !toArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+
+  const { readVouchers } = await import("@/lib/offline/cache-read");
+  const { offlineDb } = await import("@/lib/offline/db");
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
+  const vendorName = new Map(ledgers.map((l) => [String(l.id), String(l.name ?? "")]));
+
+  const all = ((await readVouchers(companyId)) as any[])
+    .filter((v) => v && v.is_deleted !== true)
+    .map((v) => ({
+      id: String(v.id),
+      type: String(v.voucher_type ?? ""),
+      date: normalizeStoredDate(v.voucher_date ?? v.date),
+      party: v.party_ledger_id ? String(v.party_ledger_id) : null,
+      ref: String(v.ref_no ?? "").trim(),
+      total: Number(v.total_paise ?? 0),
+    }))
+    .filter((v) => (!fromArg.value || v.date >= fromArg.value) && (!toArg.value || v.date <= toArg.value));
+
+  const purchases = all
+    .filter((v) => v.type === "purchase" && v.party)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  const purchaseIds = new Map(purchases.map((p) => [p.id, p]));
+
+  // Duplicate bill numbers from the same vendor.
+  const byBill = new Map<string, typeof purchases>();
+  let withoutBillNo = 0;
+  for (const p of purchases) {
+    if (!p.ref) {
+      withoutBillNo++;
+      continue;
+    }
+    const key = `${p.party}|${p.ref.toLowerCase()}`;
+    byBill.set(key, [...(byBill.get(key) ?? []), p]);
+  }
+  const duplicateBills: DuplicateBillFinding[] = [...byBill.values()]
+    .filter((g) => g.length > 1)
+    .map((g) => ({
+      vendor: vendorName.get(g[0].party as string) ?? "",
+      billNo: g[0].ref,
+      voucherIds: g.map((x) => x.id),
+      totalPaise: g.reduce((t, x) => t + x.total, 0),
+    }))
+    .sort((a, b) => b.totalPaise - a.totalPaise);
+
+  // Same amount paid to the same vendor within the window.
+  const payments = all
+    .filter((v) => v.type === "payment" && v.party && v.total > 0)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  const byAmount = new Map<string, typeof payments>();
+  for (const p of payments) {
+    const key = `${p.party}|${p.total}`;
+    byAmount.set(key, [...(byAmount.get(key) ?? []), p]);
+  }
+  const repeatPayments: RepeatPaymentFinding[] = [];
+  for (const g of byAmount.values()) {
+    if (g.length < 2) continue;
+    const flagged = new Set<number>();
+    for (let i = 1; i < g.length; i++) {
+      if (daysBetween(g[i - 1].date, g[i].date) <= REPEAT_PAYMENT_WINDOW_DAYS) {
+        flagged.add(i - 1);
+        flagged.add(i);
+      }
+    }
+    if (flagged.size === 0) continue;
+    const members = [...flagged].sort((a, b) => a - b).map((i) => g[i]);
+    repeatPayments.push({
+      vendor: vendorName.get(g[0].party as string) ?? "",
+      amountPaise: g[0].total,
+      voucherIds: members.map((m) => m.id),
+      dates: members.map((m) => m.date),
+    });
+  }
+
+  // Unusual purchase prices: compare each purchase line with the previous rate for the same vendor and item.
+  const lineRows = ((await offlineDb.cache_voucher_items.where("company_id").equals(companyId).toArray()) as any[])
+    .filter((r) => r && r.is_deleted !== true && r.item_id && Number(r.rate_paise ?? 0) > 0 && purchaseIds.has(String(r.voucher_id)))
+    .map((r) => ({ v: purchaseIds.get(String(r.voucher_id))!, item: String(r.item_id), rate: Number(r.rate_paise) }))
+    .sort((a, b) => a.v.date.localeCompare(b.v.date) || a.v.id.localeCompare(b.v.id));
+  const itemIds = [...new Set(lineRows.map((l) => l.item))];
+  const itemRows = itemIds.length ? await offlineDb.cache_items.bulkGet(itemIds) : [];
+  const itemName = new Map(itemIds.map((id, i) => [id, String((itemRows[i] as any)?.name ?? id)]));
+  const lastRate = new Map<string, number>();
+  const priceJumps: PriceJumpFinding[] = [];
+  for (const l of lineRows) {
+    const key = `${l.v.party}|${l.item}`;
+    const prev = lastRate.get(key);
+    if (prev && l.rate > prev * (1 + PRICE_JUMP_PCT / 100)) {
+      priceJumps.push({
+        vendor: vendorName.get(l.v.party as string) ?? "",
+        item: itemName.get(l.item) ?? l.item,
+        date: l.v.date,
+        previousRatePaise: prev,
+        ratePaise: l.rate,
+        changePct: Math.round((l.rate / prev - 1) * 1000) / 10,
+      });
+    }
+    lastRate.set(key, l.rate);
+  }
+  priceJumps.sort((a, b) => b.changePct - a.changePct);
+
+  return {
+    status: "resolved",
+    from: fromArg.value ?? null,
+    to: toArg.value ?? null,
+    purchaseCount: purchases.length,
+    purchasesWithoutBillNo: withoutBillNo,
+    duplicateBills,
+    repeatPayments,
+    priceJumps,
+    thresholds: { priceJumpPct: PRICE_JUMP_PCT, repeatPaymentWindowDays: REPEAT_PAYMENT_WINDOW_DAYS },
+  };
+}

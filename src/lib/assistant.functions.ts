@@ -236,6 +236,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "credit_watch",
   "customer_ranking",
   "vendor_overdue",
+  "duplicate_check",
   "vendor_spend_cycle",
   "party_balance",
   "party_ledger",
@@ -288,6 +289,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "vendor_spend_cycle":
       toolName = "get_vendor_spend_cycle";
       toolArgs = { vendor: route.entity?.partyName ?? "", from: route.from ?? null, to: route.to ?? null };
+      break;
+    case "duplicate_check":
+      toolName = "get_duplicate_check";
+      toolArgs = { from: route.from ?? null, to: route.to ?? null };
       break;
     case "vendor_overdue":
       toolName = "get_vendor_overdue";
@@ -445,6 +450,22 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
         method: "none",
         averageCycleDays: null,
         unmatchedPaymentsPaise: 0,
+      },
+    };
+  }
+  if (intent === "duplicate_check") {
+    const d = data?.data;
+    if (!d || !Array.isArray(d.duplicate_bills)) return undefined;
+    return {
+      kind: "duplicate_check",
+      duplicateCheck: {
+        purchaseCount: Number(facts.purchase_count ?? 0),
+        purchasesWithoutBillNo: Number(facts.purchases_without_bill_no ?? 0),
+        duplicateBills: d.duplicate_bills.map((x: any) => ({ vendor: String(x.vendor ?? ""), billNo: String(x.bill_no ?? ""), voucherIds: x.voucher_ids ?? [], totalPaise: Number(x.total_paise ?? 0) })),
+        repeatPayments: (d.repeat_payments ?? []).map((x: any) => ({ vendor: String(x.vendor ?? ""), amountPaise: Number(x.amount_paise ?? 0), voucherIds: x.voucher_ids ?? [], dates: x.dates ?? [] })),
+        priceJumps: (d.price_jumps ?? []).map((x: any) => ({ vendor: String(x.vendor ?? ""), item: String(x.item ?? ""), date: String(x.date ?? ""), previousRatePaise: Number(x.previous_rate_paise ?? 0), ratePaise: Number(x.rate_paise ?? 0), changePct: Number(x.change_pct ?? 0) })),
+        priceJumpPct: Number(facts.price_jump_pct ?? 25),
+        repeatPaymentWindowDays: Number(facts.repeat_payment_window_days ?? 30),
       },
     };
   }
