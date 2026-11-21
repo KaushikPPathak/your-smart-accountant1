@@ -334,6 +334,8 @@ function partySummarySide(text: string): AgingSide | null {
     return null;
   }
   if (/\b(?:revenue|spend|80\s*%|next\s+\d+\s+days|due\s+in|by\s+spend)\b/i.test(text)) return null;
+  // Per-invoice, credit-limit, advance and debit-note questions need invoice-level data this summary does not have.
+  if (/\b(?:invoices?|bills?\s+(?:are|is)|credit\s+limits?|debit\s+notes?|credit\s+notes?|advances?|unallocated|partially)\b/i.test(text)) return null;
   if (/\bfrom\s+[A-Z]/.test(text)) return null; // a named party is a party balance question
   if (/\b(?:accounts?\s+payable|payables?|creditors?|vendors?|suppliers?|we\s+owe)\b/i.test(text)) return "payable";
   if (/\b(?:accounts?\s+receivable|receivables?|debtors?|customers?|who\s+owes\s+(?:us|me)|owes\s+us)\b/i.test(text)) {

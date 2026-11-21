@@ -137,5 +137,10 @@ describe("party receivables and payables are answered locally", () => {
   it("a named party stays a party question", () => {
     expect(routeQuery("receivable from Ram Traders").intent).not.toBe("party_summary");
   });
-});
 
+  it("invoice, credit-limit and advance questions are not party totals", () => {
+    expect(routeQuery("Which invoices are partially paid, unallocated, or sitting as customer advances?").intent).not.toBe("party_summary");
+    expect(routeQuery("Which customers have overdue invoices past their credit limit or credit period?").intent).not.toBe("party_summary");
+    expect(routeQuery("Which vendors have overdue balances or unadjusted debit notes/advances?").intent).not.toBe("party_summary");
+  });
+});
