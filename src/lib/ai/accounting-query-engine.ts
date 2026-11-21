@@ -1195,3 +1195,58 @@ export async function runCashRunway(query: {
     reason,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Customers over credit limit or overdue (questionnaire 2.2)
+//
+//  Over limit: outstanding receivable above the ledger's credit limit (only where one is set).
+//  Overdue:    any receivable older than 30 days. Opening balances count as overdue, because
+//              their age is not recorded. Credit days on the ledger are not used yet.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CreditWatchRow {
+  ledgerId: string;
+  name: string;
+  outstandingPaise: number;
+  creditLimitPaise: number | null;
+  overLimitPaise: number;
+  overdue30Paise: number;
+}
+
+export type CreditWatchResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | { status: "resolved"; asOn: string; checked: number; flagged: CreditWatchRow[] };
+
+export async function runCreditWatch(query: {
+  asOn?: string | null;
+  companyId?: string | null;
+}): Promise<CreditWatchResult> {
+  const summary = await runPartySummary({ side: "receivable", asOn: query.asOn ?? null, companyId: query.companyId ?? null });
+  if (summary.status === "no_company") return { status: "no_company" };
+  if (summary.status === "invalid_date") return { status: "invalid_date", message: summary.message };
+
+  const companyId = await resolveCompanyId(query.companyId);
+  const ledgers = companyId ? ((await readLedgers(companyId)) as unknown as Array<{ id: unknown; credit_limit_paise?: unknown }>) : [];
+  const limitById = new Map(ledgers.map((l) => [String(l.id), Number(l.credit_limit_paise ?? 0)]));
+
+  const flagged: CreditWatchRow[] = [];
+  for (const row of summary.rows) {
+    const b = row.buckets;
+    const overdue30 = b.opening + b.d31_60 + b.d61_90 + b.d90p;
+    const limit = limitById.get(row.ledgerId) ?? 0;
+    const overLimit = limit > 0 && row.outstandingPaise > limit ? row.outstandingPaise - limit : 0;
+    if (overLimit > 0 || overdue30 > 0) {
+      flagged.push({
+        ledgerId: row.ledgerId,
+        name: row.name,
+        outstandingPaise: row.outstandingPaise,
+        creditLimitPaise: limit > 0 ? limit : null,
+        overLimitPaise: overLimit,
+        overdue30Paise: overdue30,
+      });
+    }
+  }
+  flagged.sort((a, b) => b.overLimitPaise - a.overLimitPaise || b.overdue30Paise - a.overdue30Paise);
+  return { status: "resolved", asOn: summary.asOn, checked: summary.rows.length, flagged };
+}

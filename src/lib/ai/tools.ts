@@ -60,6 +60,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_credit_watch",
+    description:
+      "Customers whose receivable is above their credit limit (where set) or has balances older than 30 days. Opening balances count as overdue.",
+    argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_cash_balance",
     description:
       "Closing balance of the Cash ledger or a named bank account, optionally frozen at a date.",
@@ -507,6 +513,35 @@ async function execGetCashBankTotal(args: Record<string, unknown> = {}): Promise
   };
 }
 
+/** Credit watch comes from the accounting engine, never recomputed here. */
+async function execGetCreditWatch(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runCreditWatch } = await import("./accounting-query-engine");
+  const res = await runCreditWatch({ asOn: args.asOn ? String(args.asOn) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  return {
+    success: true,
+    data: {
+      scope: `Credit watch as on ${res.asOn} (${res.checked} receivable parties)`,
+      facts: { as_on_date: res.asOn, checked: res.checked, flagged_count: res.flagged.length },
+      data: {
+        rows: res.flagged.map((r) => ({
+          name: r.name,
+          outstanding_paise: r.outstandingPaise,
+          credit_limit_paise: r.creditLimitPaise,
+          over_limit_paise: r.overLimitPaise,
+          overdue_30_paise: r.overdue30Paise,
+        })),
+      },
+    },
+    latencyMs,
+  };
+}
+
 /** Runway comes from the accounting engine, never recomputed here. */
 async function execGetCashRunway(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
@@ -761,6 +796,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetBankAnomalies(args);
     case "get_cash_runway":
       return execGetCashRunway(args);
+    case "get_credit_watch":
+      return execGetCreditWatch(args);
     case "get_journal_book":
       return execGetJournalBook(args);
     case "get_profit_loss":

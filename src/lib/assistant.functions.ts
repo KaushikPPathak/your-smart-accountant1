@@ -233,6 +233,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "sales_total",
   "bank_anomalies",
   "cash_runway",
+  "credit_watch",
   "party_balance",
   "party_ledger",
   "cash_balance",
@@ -279,6 +280,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
       break;
     case "cash_bank_total":
       toolName = "get_cash_bank_total";
+      toolArgs = { asOn: route.asOn ?? null };
+      break;
+    case "credit_watch":
+      toolName = "get_credit_watch";
       toolArgs = { asOn: route.asOn ?? null };
       break;
     case "cash_runway":
@@ -369,6 +374,23 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
           closingPaise: Number(r.closing_paise ?? 0),
         })),
         totalPaise: Number(facts.total_paise ?? 0),
+      },
+    };
+  }
+  if (intent === "credit_watch") {
+    const rows = Array.isArray(data?.data?.rows) ? data.data.rows : null;
+    if (!rows) return undefined;
+    return {
+      kind: "credit_watch",
+      creditWatch: {
+        checked: Number(facts.checked ?? 0),
+        rows: rows.map((r: any) => ({
+          name: String(r.name ?? ""),
+          outstandingPaise: Number(r.outstanding_paise ?? 0),
+          creditLimitPaise: r.credit_limit_paise === null || r.credit_limit_paise === undefined ? null : Number(r.credit_limit_paise),
+          overLimitPaise: Number(r.over_limit_paise ?? 0),
+          overdue30Paise: Number(r.overdue_30_paise ?? 0),
+        })),
       },
     };
   }

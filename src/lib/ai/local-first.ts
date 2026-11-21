@@ -78,6 +78,29 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "credit_watch": {
+      const w = card.creditWatch;
+      if (!w) return null;
+      const rule = "A customer is flagged when the balance is above its credit limit (where one is set), or any balance is over 30 days old. Opening balances count as overdue.";
+      const note = "_Answered locally from your books._";
+      if (!w.rows.length) {
+        return `No customer is over a credit limit or has balances over 30 days. Checked ${w.checked} receivable part${w.checked === 1 ? "y" : "ies"}.\n\n${rule}\n\n${note}`;
+      }
+      const lines = w.rows.map((r) => {
+        const parts = [`outstanding ${formatInr(r.outstandingPaise)}`];
+        if (r.creditLimitPaise !== null) parts.push(`limit ${formatInr(r.creditLimitPaise)}`);
+        if (r.overLimitPaise > 0) parts.push(`over limit by ${formatInr(r.overLimitPaise)}`);
+        if (r.overdue30Paise > 0) parts.push(`${formatInr(r.overdue30Paise)} over 30 days`);
+        return `- ${r.name}: ${parts.join("; ")}.`;
+      });
+      return [
+        `${w.rows.length} customer${w.rows.length === 1 ? " is" : "s are"} over a credit limit or have balances over 30 days.`,
+        lines.join("\n"),
+        rule,
+        note,
+      ].join("\n\n");
+    }
+
     case "cash_runway": {
       const c = card.cashRunway;
       if (!c) return null;

@@ -29,6 +29,7 @@ export type CardKind =
   | "sales_total"
   | "bank_anomalies"
   | "cash_runway"
+  | "credit_watch"
   | "party_balance"
   | "cash_balance"
   | "bank_balance"
@@ -76,6 +77,11 @@ export interface CashRunwayCard {
   message: string | null;
 }
 
+export interface CreditWatchCard {
+  checked: number;
+  rows: { name: string; outstandingPaise: number; creditLimitPaise: number | null; overLimitPaise: number; overdue30Paise: number }[];
+}
+
 export interface StructuredCard {
   kind: CardKind;
   partySummary?: PartySummaryCard;
@@ -83,6 +89,7 @@ export interface StructuredCard {
   salesTotal?: SalesTotalCard;
   bankAnomalies?: BankAnomalyCard;
   cashRunway?: CashRunwayCard;
+  creditWatch?: CreditWatchCard;
   companyName?: string | null;
   partyName?: string;
   partyGroup?: string | null;
