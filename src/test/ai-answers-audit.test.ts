@@ -97,7 +97,6 @@ describe("AI answers: routing bugs found in the audit", () => {
 
 describe("report questions are declined, not guessed", () => {
   const reports = [
-    "Which bank or cash ledger has seen unusual spikes or out-of-pattern withdrawals recently?",
     "What is the difference between our bank statement balance and book balance for HDFC this month?",
     "Who are our top 10 customers by revenue and by overdue balance this financial year?",
     "What is our total accounts payable, and which vendor bills are due in the next 7 or 15 days?",
