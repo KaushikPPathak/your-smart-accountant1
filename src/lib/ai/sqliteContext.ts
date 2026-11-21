@@ -82,7 +82,7 @@ export interface CashRunwayCard {
 
 export interface CreditWatchCard {
   checked: number;
-  rows: { name: string; outstandingPaise: number; creditLimitPaise: number | null; overLimitPaise: number; overdue30Paise: number }[];
+  rows: { name: string; outstandingPaise: number; creditLimitPaise: number | null; overLimitPaise: number; overdue30Paise: number; creditDays: number; creditDaysSource: "ledger" | "default_30" }[];
 }
 
 export interface CustomerRankingCard {
@@ -94,7 +94,7 @@ export interface CustomerRankingCard {
 
 export interface VendorOverdueCard {
   checked: number;
-  rows: { name: string; overduePaise: number; outstandingPaise: number; advancePaise: number }[];
+  rows: { name: string; overduePaise: number; outstandingPaise: number; advancePaise: number; debitNotePaise: number; creditDays: number; creditDaysSource: "ledger" | "default_30" }[];
 }
 
 export interface VendorSpendCycleCard {
@@ -109,6 +109,11 @@ export interface VendorSpendCycleCard {
   settledPaise: number;
   allocatedPaise: number;
   fifoPaise: number;
+  grossPurchasesPaise: number;
+  purchaseReturnsPaise: number;
+  debitAdjustmentsPaise: number;
+  netPurchasesPaise: number;
+  openingSettledPaise: number;
   averageCycleDays: number | null;
   unmatchedPaymentsPaise: number;
   unusableAllocations: number;

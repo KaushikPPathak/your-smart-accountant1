@@ -100,11 +100,12 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
             : c.method === "fifo"
               ? "No bill allocations are recorded for these payments, so they are matched FIFO. This is an estimate."
               : "";
+      const opening = c.openingSettledPaise > 0 ? ` ${formatInr(c.openingSettledPaise)} of payments settled the opening balance; its age is unknown, so it is not timed.` : "";
       const unusable = c.unusableAllocations > 0 ? ` ${c.unusableAllocations} recorded allocation${c.unusableAllocations === 1 ? " points" : "s point"} at a bill dated after the payment or a missing bill, and was not used.` : "";
       return [
-        `Spend with ${c.vendor}, ${period}: ${formatInr(c.spendPaise)} across ${c.billCount} purchase bill${c.billCount === 1 ? "" : "s"}.`,
+        `Purchases from ${c.vendor}, ${period}: gross ${formatInr(c.grossPurchasesPaise)} across ${c.billCount} bill${c.billCount === 1 ? "" : "s"}; less purchase returns ${formatInr(c.purchaseReturnsPaise)}; less other debit adjustments ${formatInr(c.debitAdjustmentsPaise)}; net ${formatInr(c.netPurchasesPaise)}.`,
         `${cycle}${unmatched}`,
-        `${method}${unusable} Purchase returns and debit notes are not deducted from spend.`.trim(),
+        `${method}${unusable}`.trim(),
         note,
       ].join("\n\n");
     }
@@ -112,15 +113,16 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
     case "vendor_overdue": {
       const v = card.vendorOverdue;
       if (!v) return null;
-      const rule = "Overdue means a payable over 30 days old; opening balances count as overdue. Advance means money paid or debit notes that are not matched to a bill.";
+      const rule = "Overdue means a payable past the vendor's credit days (30 where none is set). Advances are unmatched payments; debit notes are unmatched debit notes. They are shown separately.";
       const note = "_Answered locally from your books._";
       if (!v.rows.length) {
-        return `No vendor has a payable over 30 days old, and none has an unadjusted advance. Checked ${v.checked} payable part${v.checked === 1 ? "y" : "ies"}.\n\n${rule}\n\n${note}`;
+        return `No vendor has a payable past its credit days, and none has an unadjusted advance or debit note. Checked ${v.checked} payable part${v.checked === 1 ? "y" : "ies"}.\n\n${rule}\n\n${note}`;
       }
       const lines = v.rows.map((r) => {
         const parts: string[] = [];
         if (r.overduePaise > 0) parts.push(`${formatInr(r.overduePaise)} overdue`);
         if (r.advancePaise > 0) parts.push(`${formatInr(r.advancePaise)} unadjusted advance`);
+        if (r.debitNotePaise > 0) parts.push(`${formatInr(r.debitNotePaise)} unadjusted debit note`);
         return `- ${r.name}: ${parts.join("; ")} (of ${formatInr(r.outstandingPaise)} payable).`;
       });
       return [
@@ -152,20 +154,20 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
     case "credit_watch": {
       const w = card.creditWatch;
       if (!w) return null;
-      const rule = "A customer is flagged when the balance is above its credit limit (where one is set), or any balance is over 30 days old. Opening balances count as overdue.";
+      const rule = "A customer is flagged when the balance is above its credit limit (where one is set), or any bill is past its credit days. Credit days are the ledger's own where set; otherwise 30 days, and the row says so. Opening balances count as overdue.";
       const note = "_Answered locally from your books._";
       if (!w.rows.length) {
-        return `No customer is over a credit limit or has balances over 30 days. Checked ${w.checked} receivable part${w.checked === 1 ? "y" : "ies"}.\n\n${rule}\n\n${note}`;
+        return `No customer is over a credit limit or past its credit days. Checked ${w.checked} receivable part${w.checked === 1 ? "y" : "ies"}.\n\n${rule}\n\n${note}`;
       }
       const lines = w.rows.map((r) => {
         const parts = [`outstanding ${formatInr(r.outstandingPaise)}`];
         if (r.creditLimitPaise !== null) parts.push(`limit ${formatInr(r.creditLimitPaise)}`);
         if (r.overLimitPaise > 0) parts.push(`over limit by ${formatInr(r.overLimitPaise)}`);
-        if (r.overdue30Paise > 0) parts.push(`${formatInr(r.overdue30Paise)} over 30 days`);
+        if (r.overdue30Paise > 0) parts.push(`${formatInr(r.overdue30Paise)} past ${r.creditDays} credit days${r.creditDaysSource === "default_30" ? " (30-day default)" : ""}`);
         return `- ${r.name}: ${parts.join("; ")}.`;
       });
       return [
-        `${w.rows.length} customer${w.rows.length === 1 ? " is" : "s are"} over a credit limit or have balances over 30 days.`,
+        `${w.rows.length} customer${w.rows.length === 1 ? " is" : "s are"} over a credit limit or past credit days.`,
         lines.join("\n"),
         rule,
         note,
@@ -246,7 +248,7 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
         top.join("\n"),
         ...more,
         ageing,
-        "Ranked by outstanding balance. Each receipt or payment settles the oldest bill first.",
+        "Ranked by outstanding balance. Recorded bill allocations are applied first; unallocated receipts and payments settle the oldest bill first (FIFO).",
         "_Answered locally from your books._",
       ].join("\n\n");
     }

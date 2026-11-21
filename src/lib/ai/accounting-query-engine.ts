@@ -1,4 +1,5 @@
-import { ageOutstanding, type AgedOutstanding, type AgingBucket, type AgingSide, type DatedEntry } from "./aging";
+import { ageOutstanding, bucketFor, daysBetween, type AgedOutstanding, type AgingBucket, type AgingSide, type DatedEntry } from "./aging";
+import { settleParty, type PartyPosting, type RecordedAllocation } from "./settlement";
 import { coerceDateArg, normalizeStoredDate } from "./ai-validation";
 import { resolveBankAlias } from "./bank-aliases";
 // src/lib/ai/accounting-query-engine.ts
@@ -29,6 +30,8 @@ export interface EngineLedger {
   group_name?: string | null;
   opening_balance_paise?: number | null;
   opening_balance_is_debit?: boolean | null;
+  credit_days?: number | null;
+  credit_limit_paise?: number | null;
 }
 
 export type AccountingQueryKind = "party_balance" | "cash_balance" | "bank_balance";
@@ -808,14 +811,56 @@ export async function runLedgerStatement(
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Receivables / payables by party, with ageing
+//
+//  Recorded bill allocations are applied first; FIFO covers only unallocated amounts. Advances,
+//  credit notes, debit notes and other unmatched amounts are separate categories (settlement.ts).
+//  Overdue uses each ledger's credit days where set; otherwise 30 days, and the row says which.
+//  Read-only: nothing here writes to the books or to cache_bill_allocations.
 // ─────────────────────────────────────────────────────────────────────────────
+
+export const DEFAULT_CREDIT_DAYS = 30;
+
+export interface PartyReconciliation {
+  /** Ledger balance from every non-deleted entry, in the party's own direction. */
+  ledgerBalancePaise: number;
+  /** Net as on the as-on date, from the settlement. */
+  netAsOnPaise: number;
+  /** ledgerBalancePaise − netAsOnPaise. */
+  differencePaise: number;
+  /** Postings dated after the as-on date (explains part of the difference). */
+  postingsAfterAsOnPaise: number;
+  postingsAfterAsOnCount: number;
+  /** Entries whose voucher is missing from the local cache or deleted (explains part of the difference). */
+  orphanPaise: number;
+  orphanCount: number;
+  /** Difference not explained by the two items above. Zero when the books reconcile. */
+  unexplainedPaise: number;
+}
 
 export interface PartySummaryRow {
   ledgerId: string;
   name: string;
+  /** Open bills after recorded allocations and FIFO. */
   outstandingPaise: number;
+  /** Open bills past their credit days. Opening balances count (their age is not recorded). */
+  overduePaise: number;
+  /** Receivable: unmatched receipts. Payable: unmatched payments. */
   advancePaise: number;
+  /** Receivable only: unmatched credit notes. */
+  customerCreditNotePaise: number;
+  /** Payable only: unmatched debit notes. */
+  vendorDebitNotePaise: number;
+  /** Unmatched journals and other postings. */
+  otherUnmatchedPaise: number;
+  /** Outstanding less every unmatched amount: the balance in the party's own direction. */
+  netPaise: number;
+  creditDays: number;
+  creditDaysSource: "ledger" | "default_30";
+  allocatedPaise: number;
+  fifoPaise: number;
+  invalidAllocations: number;
   buckets: AgedOutstanding["buckets"];
+  reconciliation: PartyReconciliation;
 }
 
 export type PartySummaryResult =
@@ -830,10 +875,83 @@ export type PartySummaryResult =
   | { status: "no_company" }
   | { status: "invalid_date"; message: string };
 
+interface LedgerPostingSet {
+  postings: PartyPosting[];
+  /** Every non-deleted entry, in the party's own direction, excluding the opening balance. */
+  ledgerNetPaise: number;
+  afterAsOnPaise: number;
+  afterAsOnCount: number;
+  orphanPaise: number;
+  orphanCount: number;
+}
+
+async function loadLedgerPostings(companyId: string, ledgerId: string, asOn: string, owedSign: 1 | -1): Promise<LedgerPostingSet> {
+  const { offlineDb } = await import("@/lib/offline/db");
+  const raw: Array<{ voucher_id: unknown; debit_paise?: unknown; credit_paise?: unknown; is_deleted?: boolean }> = [];
+  await offlineDb.cache_voucher_entries
+    .where("[company_id+ledger_id]")
+    .equals([companyId, ledgerId])
+    .each((e: (typeof raw)[number]) => {
+      if (e?.is_deleted === true) return;
+      raw.push(e);
+    });
+  const ids = [...new Set(raw.map((e) => String(e.voucher_id)))];
+  const vouchers = await offlineDb.cache_vouchers.bulkGet(ids);
+  const live = new Map<string, { date: string; type: string }>();
+  vouchers.forEach((v: { voucher_date?: unknown; date?: unknown; voucher_type?: unknown; is_deleted?: boolean } | undefined, i: number) => {
+    if (v && v.is_deleted !== true) {
+      live.set(ids[i], { date: normalizeStoredDate(v.voucher_date ?? v.date), type: String(v.voucher_type ?? "") });
+    }
+  });
+  const out: LedgerPostingSet = { postings: [], ledgerNetPaise: 0, afterAsOnPaise: 0, afterAsOnCount: 0, orphanPaise: 0, orphanCount: 0 };
+  for (const e of raw) {
+    const debit = Number(e.debit_paise ?? 0);
+    const credit = Number(e.credit_paise ?? 0);
+    const owed = owedSign * (debit - credit);
+    out.ledgerNetPaise += owed;
+    const v = live.get(String(e.voucher_id));
+    if (!v) {
+      out.orphanPaise += owed;
+      out.orphanCount++;
+      continue;
+    }
+    if (v.date > asOn) {
+      out.afterAsOnPaise += owed;
+      out.afterAsOnCount++;
+    }
+    out.postings.push({ voucherId: String(e.voucher_id), date: v.date, debitPaise: debit, creditPaise: credit, voucherType: v.type });
+  }
+  return out;
+}
+
+/** Recorded bill allocations for the company, grouped by the ledger they belong to. Read-only. */
+export async function allocationsByLedger(companyId: string): Promise<Map<string, RecordedAllocation[]>> {
+  const { offlineDb } = await import("@/lib/offline/db");
+  const rows = (await offlineDb.cache_bill_allocations.where("company_id").equals(companyId).toArray()) as Array<{
+    invoice_voucher_id: unknown;
+    payment_voucher_id: unknown;
+    ledger_id: unknown;
+    amount_paise?: unknown;
+    is_deleted?: boolean;
+  }>;
+  const map = new Map<string, RecordedAllocation[]>();
+  for (const r of rows) {
+    if (r.is_deleted === true) continue;
+    const key = String(r.ledger_id);
+    const list = map.get(key) ?? [];
+    list.push({
+      invoiceVoucherId: String(r.invoice_voucher_id),
+      paymentVoucherId: String(r.payment_voucher_id),
+      amountPaise: Number(r.amount_paise ?? 0),
+    });
+    map.set(key, list);
+  }
+  return map;
+}
+
 /**
- * Outstanding receivables (sundry debtors) or payables (sundry creditors) for every party,
- * largest first, with the same ageing buckets for each party. Figures come from the books
- * as on the given date, never from a cached answer.
+ * Outstanding receivables (sundry debtors) or payables (sundry creditors) for every party, largest
+ * first. Figures come from the books as on the given date, never from a cached answer.
  */
 export async function runPartySummary(query: {
   side: AgingSide;
@@ -846,47 +964,81 @@ export async function runPartySummary(query: {
   if (!companyId) return { status: "no_company" };
   const asOn = asOnArg.value ?? new Date().toISOString().slice(0, 10);
 
-  const { offlineDb } = await import("@/lib/offline/db");
   const wantGroup = query.side === "receivable" ? "debtor" : "creditor";
   const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
   const parties = ledgers.filter((l) => (l.group_name ?? "").toLowerCase().includes(wantGroup));
+  const allocs = await allocationsByLedger(companyId);
+  // Receivables are owed in the debit direction; payables in the credit direction.
+  const owedSign: 1 | -1 = query.side === "receivable" ? 1 : -1;
 
   const rows: PartySummaryRow[] = [];
   for (const ledger of parties) {
-    const entries: DatedEntry[] = [];
-    const raw: Array<{ voucher_id: unknown; debit_paise?: unknown; credit_paise?: unknown; is_deleted?: boolean }> = [];
-    await offlineDb.cache_voucher_entries
-      .where("[company_id+ledger_id]")
-      .equals([companyId, String(ledger.id)])
-      .each((e: (typeof raw)[number]) => {
-        if (e?.is_deleted === true) return;
-        raw.push(e);
-      });
-    const ids = [...new Set(raw.map((e) => String(e.voucher_id)))];
-    const vouchers = await offlineDb.cache_vouchers.bulkGet(ids);
-    const dateById = new Map<string, string>();
-    vouchers.forEach((v: { voucher_date?: unknown; date?: unknown; is_deleted?: boolean } | undefined, i: number) => {
-      if (v && v.is_deleted !== true) dateById.set(ids[i], normalizeStoredDate(v.voucher_date ?? v.date));
-    });
-    for (const e of raw) {
-      const date = dateById.get(String(e.voucher_id));
-      if (!date || date > asOn) continue;
-      entries.push({ date, debitPaise: Number(e.debit_paise ?? 0), creditPaise: Number(e.credit_paise ?? 0) });
-    }
-    entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-
-    // Signed opening balance: positive is a debit. Receivables are owed in the debit direction;
-    // payables are owed in the credit direction.
+    const ledgerId = String(ledger.id);
     const signedOpening = Number(ledger.opening_balance_paise ?? 0) * (ledger.opening_balance_is_debit === false ? -1 : 1);
-    const opening = query.side === "receivable" ? signedOpening : -signedOpening;
-    const aged = ageOutstanding(query.side, opening, entries, asOn);
-    if (aged.outstandingPaise === 0 && aged.advancePaise === 0) continue;
+    const opening = owedSign * signedOpening; // positive = owed to us (receivable) or by us (payable)
+
+    const set = await loadLedgerPostings(companyId, ledgerId, asOn, owedSign);
+    const s = settleParty({
+      side: query.side,
+      openingPaise: opening,
+      postings: set.postings,
+      allocations: allocs.get(ledgerId) ?? [],
+      asOn,
+    });
+
+    const cd = Number(ledger.credit_days ?? 0);
+    const creditDays = cd > 0 ? cd : DEFAULT_CREDIT_DAYS;
+    const buckets: AgedOutstanding["buckets"] = { opening: 0, d0_30: 0, d31_60: 0, d61_90: 0, d90p: 0 };
+    let outstanding = 0;
+    let overdue = 0;
+    for (const b of s.openBills) {
+      outstanding += b.openPaise;
+      if (b.date === null) {
+        buckets.opening += b.openPaise;
+        overdue += b.openPaise; // age unknown: counted as overdue, and the answer says so
+        continue;
+      }
+      const days = daysBetween(b.date, asOn);
+      buckets[bucketFor(days)] += b.openPaise;
+      if (days > creditDays) overdue += b.openPaise;
+    }
+
+    const u = s.unmatched;
+    const advance = query.side === "receivable" ? u.customer_advance : u.vendor_advance;
+    const customerCreditNote = query.side === "receivable" ? u.customer_credit_note : 0;
+    const vendorDebitNote = query.side === "payable" ? u.vendor_debit_note : 0;
+    if (outstanding === 0 && advance === 0 && customerCreditNote === 0 && vendorDebitNote === 0 && u.other_unmatched === 0 && s.invalid.length === 0) {
+      continue;
+    }
+
+    const ledgerBalance = opening + set.ledgerNetPaise;
+    const difference = ledgerBalance - s.netPaise;
     rows.push({
-      ledgerId: String(ledger.id),
+      ledgerId,
       name: ledger.name,
-      outstandingPaise: aged.outstandingPaise,
-      advancePaise: aged.advancePaise,
-      buckets: aged.buckets,
+      outstandingPaise: outstanding,
+      overduePaise: overdue,
+      advancePaise: advance,
+      customerCreditNotePaise: customerCreditNote,
+      vendorDebitNotePaise: vendorDebitNote,
+      otherUnmatchedPaise: u.other_unmatched,
+      netPaise: s.netPaise,
+      creditDays,
+      creditDaysSource: cd > 0 ? "ledger" : "default_30",
+      allocatedPaise: s.allocatedPaise,
+      fifoPaise: s.fifoPaise,
+      invalidAllocations: s.invalid.length,
+      buckets,
+      reconciliation: {
+        ledgerBalancePaise: ledgerBalance,
+        netAsOnPaise: s.netPaise,
+        differencePaise: difference,
+        postingsAfterAsOnPaise: set.afterAsOnPaise,
+        postingsAfterAsOnCount: set.afterAsOnCount,
+        orphanPaise: set.orphanPaise,
+        orphanCount: set.orphanCount,
+        unexplainedPaise: difference - set.afterAsOnPaise - set.orphanPaise,
+      },
     });
   }
 
@@ -1200,8 +1352,9 @@ export async function runCashRunway(query: {
 //  Customers over credit limit or overdue (questionnaire 2.2)
 //
 //  Over limit: outstanding receivable above the ledger's credit limit (only where one is set).
-//  Overdue:    any receivable older than 30 days. Opening balances count as overdue, because
-//              their age is not recorded. Credit days on the ledger are not used yet.
+//  Overdue:    open bills past the ledger's credit days. Where the ledger has none, 30 days is used and
+//              the row says so. Opening balances count as overdue (their age is not recorded).
+//  Bills are settled by recorded allocations first, FIFO for the rest (settlement.ts).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface CreditWatchRow {
@@ -1210,7 +1363,10 @@ export interface CreditWatchRow {
   outstandingPaise: number;
   creditLimitPaise: number | null;
   overLimitPaise: number;
+  /** Open bills past their credit days (30 days where the ledger sets none). */
   overdue30Paise: number;
+  creditDays: number;
+  creditDaysSource: "ledger" | "default_30";
 }
 
 export type CreditWatchResult =
@@ -1232,18 +1388,18 @@ export async function runCreditWatch(query: {
 
   const flagged: CreditWatchRow[] = [];
   for (const row of summary.rows) {
-    const b = row.buckets;
-    const overdue30 = b.opening + b.d31_60 + b.d61_90 + b.d90p;
     const limit = limitById.get(row.ledgerId) ?? 0;
     const overLimit = limit > 0 && row.outstandingPaise > limit ? row.outstandingPaise - limit : 0;
-    if (overLimit > 0 || overdue30 > 0) {
+    if (overLimit > 0 || row.overduePaise > 0) {
       flagged.push({
         ledgerId: row.ledgerId,
         name: row.name,
         outstandingPaise: row.outstandingPaise,
         creditLimitPaise: limit > 0 ? limit : null,
         overLimitPaise: overLimit,
-        overdue30Paise: overdue30,
+        overdue30Paise: row.overduePaise,
+        creditDays: row.creditDays,
+        creditDaysSource: row.creditDaysSource,
       });
     }
   }
@@ -1329,11 +1485,10 @@ export async function runCustomerRanking(query: {
   }
   const byOverdue: CustomerOverdueRow[] = summary.rows
     .map((row) => {
-      const b = row.buckets;
       return {
         ledgerId: row.ledgerId,
         name: row.name,
-        overduePaise: b.opening + b.d31_60 + b.d61_90 + b.d90p,
+        overduePaise: row.overduePaise,
         outstandingPaise: row.outstandingPaise,
       };
     })
@@ -1347,10 +1502,9 @@ export async function runCustomerRanking(query: {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Vendors overdue or with unadjusted advances (questionnaire 3.2)
 //
-//  Overdue:  payable older than 30 days as on the as-on date (same rule as 2.2, for vendors).
-//            Opening balances count as overdue, because their age is not recorded.
-//  Advance:  money paid or debit notes raised that the ageing could not match to a bill
-//            (the ageing settles the oldest bill first, so this is the unmatched excess).
+//  Overdue:  payables past the vendor's credit days (30 where none is set; the row says so).
+//  Advances: unmatched payments (vendor advances), reported apart from debit notes.
+//  Debit notes: unmatched debit notes, reported apart from advances.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface VendorOverdueRow {
@@ -1359,6 +1513,9 @@ export interface VendorOverdueRow {
   overduePaise: number;
   outstandingPaise: number;
   advancePaise: number;
+  debitNotePaise: number;
+  creditDays: number;
+  creditDaysSource: "ledger" | "default_30";
 }
 
 export type VendorOverdueResult =
@@ -1376,33 +1533,33 @@ export async function runVendorOverdue(query: {
 
   const flagged: VendorOverdueRow[] = [];
   for (const row of summary.rows) {
-    const b = row.buckets;
-    const overdue = b.opening + b.d31_60 + b.d61_90 + b.d90p;
-    if (overdue > 0 || row.advancePaise > 0) {
+    if (row.overduePaise > 0 || row.advancePaise > 0 || row.vendorDebitNotePaise > 0) {
       flagged.push({
         ledgerId: row.ledgerId,
         name: row.name,
-        overduePaise: overdue,
+        overduePaise: row.overduePaise,
         outstandingPaise: row.outstandingPaise,
         advancePaise: row.advancePaise,
+        debitNotePaise: row.vendorDebitNotePaise,
+        creditDays: row.creditDays,
+        creditDaysSource: row.creditDaysSource,
       });
     }
   }
-  flagged.sort((a, b) => b.overduePaise - a.overduePaise || b.advancePaise - a.advancePaise);
+  flagged.sort((a, b) => b.overduePaise - a.overduePaise || b.advancePaise + b.debitNotePaise - (a.advancePaise + a.debitNotePaise));
   return { status: "resolved", asOn: summary.asOn, checked: summary.rows.length, flagged };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Vendor spend and payment cycle (questionnaire 3.3)
 //
-//  Spend:         purchase bills to the vendor dated in the window (credit side of purchase
-//                 vouchers on the vendor ledger). Purchase returns and debit notes are NOT deducted.
-//  Payment cycle: for each payment in the window, first use the recorded bill allocations
-//                 (cache_bill_allocations: payment → bill, amount). Any part of a payment with no
-//                 recorded allocation is matched FIFO to the oldest open bill dated on or before
-//                 the payment. Days = payment date − bill date, weighted by amount.
-//                 Payment left after all bills is an advance and is reported separately.
-//  Window:        six calendar months ending in the latest posted month, unless from/to are given.
+//  Purchases (for the period): gross purchase bills; less purchase returns (debit notes); less other
+//  debit adjustments (journals, contra and other debits to the vendor, excluding payments); net.
+//  Payment cycle: payments in the period are settled first by recorded bill allocations, then FIFO
+//  for the unallocated part (settlement.ts). Days = payment date − bill date, weighted by amount.
+//  Payments that settled an opening balance have no bill date and are reported, not timed.
+//  Payments left after all bills are unmatched advances, reported separately.
+//  Window: six calendar months ending in the latest posted month, unless from/to are given.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface VendorSpendCycleResolved {
@@ -1410,14 +1567,21 @@ export interface VendorSpendCycleResolved {
   vendor: string;
   from: string;
   to: string;
+  /** Same as grossPurchasesPaise; kept for existing callers. */
   spendPaise: number;
+  grossPurchasesPaise: number;
+  purchaseReturnsPaise: number;
+  debitAdjustmentsPaise: number;
+  netPurchasesPaise: number;
   billCount: number;
+  /** Payments in the period that settled a bill with a known date. */
   settledPaise: number;
   allocatedPaise: number;
   fifoPaise: number;
+  openingSettledPaise: number;
   averageCycleDays: number | null;
   unmatchedPaymentsPaise: number;
-  /** Allocations that point at a bill dated after the payment, or at a missing bill. Not used. */
+  /** Recorded allocations for this vendor that could not be applied (any date). */
   unusableAllocations: number;
   method: "bill_allocations" | "mixed" | "fifo" | "none";
 }
@@ -1428,8 +1592,6 @@ export type VendorSpendCycleResult =
   | { status: "not_found"; query: string }
   | { status: "ambiguous"; query: string; candidates: string[] }
   | VendorSpendCycleResolved;
-
-const DAY_MS = 86_400_000;
 
 export async function runVendorSpendCycle(query: {
   vendorName: string;
@@ -1453,100 +1615,48 @@ export async function runVendorSpendCycle(query: {
   const vendorId = String(vendor.id);
 
   const { readVouchers } = await import("@/lib/offline/cache-read");
-  const { offlineDb } = await import("@/lib/offline/db");
   const vouchers = (await readVouchers(companyId)) as any[];
-  const info = new Map<string, { date: string; type: string }>();
-  for (const v of vouchers) {
-    const date = normalizeStoredDate(v.voucher_date ?? v.date);
-    if (date) info.set(String(v.id), { date, type: String(v.voucher_type ?? "") });
-  }
-
-  const entries = await offlineDb.cache_voucher_entries
-    .where("[company_id+ledger_id]")
-    .equals([companyId, vendorId])
-    .toArray();
-
-  const bills: { id: string; date: string; remaining: number; amount: number }[] = [];
-  const payments: { id: string; date: string; amount: number }[] = [];
-  for (const e of entries as any[]) {
-    if (e.is_deleted === true) continue;
-    const v = info.get(String(e.voucher_id));
-    if (!v) continue;
-    if (v.type === "purchase" && Number(e.credit_paise ?? 0) > 0) {
-      const amount = Number(e.credit_paise);
-      bills.push({ id: String(e.voucher_id), date: v.date, remaining: amount, amount });
-    } else if (v.type === "payment" && Number(e.debit_paise ?? 0) > 0) {
-      payments.push({ id: String(e.voucher_id), date: v.date, amount: Number(e.debit_paise) });
-    }
-  }
-  bills.sort((a, b) => a.date.localeCompare(b.date));
-  payments.sort((a, b) => a.date.localeCompare(b.date));
-
-  // Recorded allocations for this vendor, grouped by the payment they came from.
-  const allocs = (await offlineDb.cache_bill_allocations.where("company_id").equals(companyId).toArray()).filter(
-    (a: any) => String(a.ledger_id) === vendorId && a.is_deleted !== true,
-  ) as Array<{ invoice_voucher_id: string; payment_voucher_id: string; amount_paise: number }>;
-  const allocsByPayment = new Map<string, Array<{ invoiceId: string; amount: number }>>();
-  for (const a of allocs) {
-    const list = allocsByPayment.get(String(a.payment_voucher_id)) ?? [];
-    list.push({ invoiceId: String(a.invoice_voucher_id), amount: Number(a.amount_paise ?? 0) });
-    allocsByPayment.set(String(a.payment_voucher_id), list);
-  }
-
-  // Window: explicit dates, else the six months ending in the latest posted month.
-  const allDates = [...info.values()].map((v) => v.date).sort();
-  const latest = allDates[allDates.length - 1];
+  const dates = vouchers.map((v) => normalizeStoredDate(v.voucher_date ?? v.date)).filter(Boolean).sort();
+  const latest = dates[dates.length - 1];
   const toMonth = latest ? latest.slice(0, 7) : "1970-01";
   const from = fromArg.value ?? (latest ? `${shiftMonth(toMonth, -5)}-01` : "1970-01-01");
   const to = toArg.value ?? (latest ? lastDayOfMonth(toMonth) : "1970-01-01");
   const inWindow = (d: string) => d >= from && d <= to;
 
-  const spendPaise = bills.filter((b) => inWindow(b.date)).reduce((s, b) => s + b.amount, 0);
-  const billCount = bills.filter((b) => inWindow(b.date)).length;
+  const set = await loadLedgerPostings(companyId, vendorId, to, -1);
+  const signedOpening = Number(vendor.opening_balance_paise ?? 0) * (vendor.opening_balance_is_debit === false ? -1 : 1);
+  const opening = -signedOpening; // payable: a credit balance is owed to the vendor (positive)
+  const allocs = (await allocationsByLedger(companyId)).get(vendorId) ?? [];
+  const s = settleParty({ side: "payable", openingPaise: opening, postings: set.postings, allocations: allocs, asOn: to });
 
-  const billById = new Map(bills.map((b) => [b.id, b]));
-  let allocatedPaise = 0;
-  let fifoPaise = 0;
-  let weightedDays = 0;
-  let unmatchedPaymentsPaise = 0;
-  let unusableAllocations = 0;
-  for (const p of payments) {
-    const inWin = inWindow(p.date);
-    let left = p.amount;
-
-    // 1. Recorded allocations first.
-    for (const a of allocsByPayment.get(p.id) ?? []) {
-      const bill = billById.get(a.invoiceId);
-      if (!bill || bill.date > p.date) {
-        unusableAllocations++;
-        continue;
-      }
-      const take = Math.min(a.amount, bill.remaining, left);
-      if (take <= 0) continue;
-      bill.remaining -= take;
-      left -= take;
-      if (inWin) {
-        allocatedPaise += take;
-        weightedDays += ((Date.parse(p.date) - Date.parse(bill.date)) / DAY_MS) * take;
-      }
+  // Purchase figures from the vendor's own postings in the period.
+  let gross = 0;
+  let returns = 0;
+  let adjustments = 0;
+  const billVouchers = new Set<string>();
+  for (const p of set.postings) {
+    if (!inWindow(p.date)) continue;
+    if (p.voucherType === "purchase" && p.creditPaise > 0) {
+      gross += p.creditPaise;
+      billVouchers.add(p.voucherId);
+    } else if (p.voucherType === "debit_note" && p.debitPaise > 0) {
+      returns += p.debitPaise;
+    } else if (p.voucherType !== "payment" && p.debitPaise > 0) {
+      adjustments += p.debitPaise;
     }
-
-    // 2. FIFO for whatever no allocation covered (disclosed as the fallback).
-    for (const bill of bills) {
-      if (left <= 0) break;
-      if (bill.date > p.date || bill.remaining <= 0) continue;
-      const take = Math.min(left, bill.remaining);
-      bill.remaining -= take;
-      left -= take;
-      if (inWin) {
-        fifoPaise += take;
-        weightedDays += ((Date.parse(p.date) - Date.parse(bill.date)) / DAY_MS) * take;
-      }
-    }
-    if (inWin) unmatchedPaymentsPaise += left;
   }
 
-  const settledPaise = allocatedPaise + fifoPaise;
+  // Payments in the period, by how they were matched.
+  const apps = s.applications.filter((a) => a.settlementType === "payment" && inWindow(a.settlementDate));
+  const dated = apps.filter((a) => a.billDate !== null);
+  const settledPaise = dated.reduce((t, a) => t + a.amountPaise, 0);
+  const weightedDays = dated.reduce((t, a) => t + daysBetween(a.billDate as string, a.settlementDate) * a.amountPaise, 0);
+  const allocatedPaise = dated.filter((a) => a.method === "allocation").reduce((t, a) => t + a.amountPaise, 0);
+  const fifoPaise = dated.filter((a) => a.method === "fifo").reduce((t, a) => t + a.amountPaise, 0);
+  const openingSettledPaise = apps.filter((a) => a.billDate === null).reduce((t, a) => t + a.amountPaise, 0);
+  const unmatchedPaymentsPaise = s.settlementRemainders
+    .filter((r) => r.type === "payment" && inWindow(r.date))
+    .reduce((t, r) => t + r.remainingPaise, 0);
   const method: VendorSpendCycleResolved["method"] =
     allocatedPaise > 0 && fifoPaise > 0 ? "mixed" : allocatedPaise > 0 ? "bill_allocations" : fifoPaise > 0 ? "fifo" : "none";
 
@@ -1555,14 +1665,19 @@ export async function runVendorSpendCycle(query: {
     vendor: String(vendor.name ?? ""),
     from,
     to,
-    spendPaise,
-    billCount,
+    spendPaise: gross,
+    grossPurchasesPaise: gross,
+    purchaseReturnsPaise: returns,
+    debitAdjustmentsPaise: adjustments,
+    netPurchasesPaise: gross - returns - adjustments,
+    billCount: billVouchers.size,
     settledPaise,
     allocatedPaise,
     fifoPaise,
+    openingSettledPaise,
     averageCycleDays: settledPaise > 0 ? Math.round((weightedDays / settledPaise) * 10) / 10 : null,
     unmatchedPaymentsPaise,
-    unusableAllocations,
+    unusableAllocations: s.invalid.length,
     method,
   };
 }
