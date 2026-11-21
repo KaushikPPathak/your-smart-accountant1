@@ -4092,6 +4092,39 @@ function Gstr9PrintInputWorking({
         ["6O — Total ITC availed (I + N)", fmt(totalA)],
       ]} />
 
+      {result?.itcByClass && (() => {
+        const cls = result.itcByClass;
+        const classRow = (label: string, t: { taxableValue: number; igst: number; cgst: number; sgst: number; totalTax: number }) => [
+          label, money(t.taxableValue), money(t.igst), money(t.cgst), money(t.sgst), money(t.totalTax),
+        ];
+        const eligible = (k: "inputs" | "inputServices" | "capitalGoods") => cls[k];
+        const sum = (keys: ("inputs" | "inputServices" | "capitalGoods")[]) => keys.reduce(
+          (acc, k) => ({
+            taxableValue: acc.taxableValue + eligible(k).taxableValue,
+            igst: acc.igst + eligible(k).igst,
+            cgst: acc.cgst + eligible(k).cgst,
+            sgst: acc.sgst + eligible(k).sgst,
+            cess: 0,
+            totalTax: acc.totalTax + eligible(k).totalTax,
+          }),
+          { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, totalTax: 0 },
+        );
+        return (
+          <OfficialTable
+            onRowAction={onRowAction}
+            title="Purchase ITC from books, by class (working for Table 6 and Table 7)"
+            columns={["Class", "Taxable value", "IGST", "CGST", "SGST", "Total ITC"]}
+            rows={[
+              classRow("Goods (inputs)", cls.inputs),
+              classRow("Expenses (input services)", cls.inputServices),
+              classRow("Capital goods", cls.capitalGoods),
+              totalsRow("Eligible ITC — goods, expenses and capital goods", sum(["inputs", "inputServices", "capitalGoods"])),
+              classRow("Blocked / ineligible (reported under Table 7 or 4D)", cls.ineligible),
+            ]}
+          />
+        );
+      })()}
+
       <OfficialTable onRowAction={onRowAction} title="Table 7 — Details of ITC Reversed and Ineligible ITC for the financial year" columns={["Row", "Amount"]} rows={[
         ["7A — As per Rule 37", fmt(table7?.reversalUnderRule37)],
         ["7A1 — As per Rule 37A", fmt(table7?.reversalUnderRule37A)],

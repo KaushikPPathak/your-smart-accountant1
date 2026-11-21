@@ -36,6 +36,13 @@ export interface Gstr9Period {
   to: string;
 }
 
+export interface Gstr9ItcByClass {
+  inputs: Gstr9TaxTotals;
+  inputServices: Gstr9TaxTotals;
+  capitalGoods: Gstr9TaxTotals;
+  ineligible: Gstr9TaxTotals;
+}
+
 export interface Gstr9TaxTotals {
   taxableValue: number;
   igst: number;
@@ -151,6 +158,12 @@ export interface Gstr9Result {
 
   /** Table 18 — HSN-wise inward supplies from purchase vouchers in the books. */
   hsnInward: Gstr9HsnRow[];
+
+  /**
+   * ITC on purchase bills from the books, split by class: goods (inputs), expenses (input services),
+   * capital goods, and blocked / ineligible purchases. Information for the ITC tables.
+   */
+  itcByClass: Gstr9ItcByClass;
 
   /** Table 4I / 4J — outward credit and debit notes from the books (positive amounts). */
   notes: { creditNotes: Gstr9TaxTotals; debitNotes: Gstr9TaxTotals };
@@ -317,6 +330,32 @@ function voucherTotals(
       sign * (taxable + totalTaxPaise),
     ),
   };
+}
+
+/**
+ * Purchase ITC from the books by class. Blocked purchases (itc_eligible false or class ineligible)
+ * are kept apart; everything else is grouped as goods, input services or capital goods.
+ * Unclassified purchases count as goods, as they do in the GSTR-3B build.
+ */
+function buildItcByClass(purchases: VoucherRow[]): Gstr9ItcByClass {
+  const out: Gstr9ItcByClass = {
+    inputs: zeroTaxTotals(),
+    inputServices: zeroTaxTotals(),
+    capitalGoods: zeroTaxTotals(),
+    ineligible: zeroTaxTotals(),
+  };
+  for (const v of purchases) {
+    const bucket =
+      v.itc_eligible === false || v.itc_class === "ineligible"
+        ? out.ineligible
+        : v.itc_class === "capital_goods"
+          ? out.capitalGoods
+          : v.itc_class === "input_services"
+            ? out.inputServices
+            : out.inputs;
+    addTotals(bucket, voucherTotals(v, 1));
+  }
+  return out;
 }
 
 function addTotals(
@@ -844,6 +883,8 @@ export function buildGstr9(
     hsn: buildHsn(allVouchers),
 
     hsnInward: buildHsn(purchases.map((v) => ({ ...v, voucher_items: reconcileBillTaxLines(v.voucher_items, v) }))),
+
+    itcByClass: buildItcByClass(purchases),
 
     notes: (() => {
       const cn = zeroTaxTotals();
