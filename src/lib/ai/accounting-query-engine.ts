@@ -1395,14 +1395,14 @@ export async function runVendorOverdue(query: {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Vendor spend and payment cycle (questionnaire 3.3)
 //
-//  Spend:        purchase bills to the vendor dated in the window (credit side of purchase
-//                vouchers on the vendor ledger). Purchase returns and debit notes are NOT deducted.
-//  Payment cycle: each payment is matched FIFO to the oldest open bill it can settle (bills dated on
-//                or before the payment). Days = payment date − bill date, weighted by matched
-//                amount, for payments dated in the window. Bill-wise allocation is not stored, so
-//                FIFO is the disclosed method. Payment left over after all bills is an advance and is
-//                reported separately.
-//  Window:       six calendar months ending in the latest posted month, unless from/to are given.
+//  Spend:         purchase bills to the vendor dated in the window (credit side of purchase
+//                 vouchers on the vendor ledger). Purchase returns and debit notes are NOT deducted.
+//  Payment cycle: for each payment in the window, first use the recorded bill allocations
+//                 (cache_bill_allocations: payment → bill, amount). Any part of a payment with no
+//                 recorded allocation is matched FIFO to the oldest open bill dated on or before
+//                 the payment. Days = payment date − bill date, weighted by amount.
+//                 Payment left after all bills is an advance and is reported separately.
+//  Window:        six calendar months ending in the latest posted month, unless from/to are given.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface VendorSpendCycleResolved {
@@ -1413,9 +1413,13 @@ export interface VendorSpendCycleResolved {
   spendPaise: number;
   billCount: number;
   settledPaise: number;
+  allocatedPaise: number;
+  fifoPaise: number;
   averageCycleDays: number | null;
   unmatchedPaymentsPaise: number;
-  method: "fifo";
+  /** Allocations that point at a bill dated after the payment, or at a missing bill. Not used. */
+  unusableAllocations: number;
+  method: "bill_allocations" | "mixed" | "fifo" | "none";
 }
 
 export type VendorSpendCycleResult =
@@ -1446,6 +1450,7 @@ export async function runVendorSpendCycle(query: {
     return { status: "ambiguous", query: query.vendorName, candidates: found.candidates.map((c) => String(c.name)) };
   }
   const vendor = found.ledger;
+  const vendorId = String(vendor.id);
 
   const { readVouchers } = await import("@/lib/offline/cache-read");
   const { offlineDb } = await import("@/lib/offline/db");
@@ -1458,24 +1463,35 @@ export async function runVendorSpendCycle(query: {
 
   const entries = await offlineDb.cache_voucher_entries
     .where("[company_id+ledger_id]")
-    .equals([companyId, String(vendor.id)])
+    .equals([companyId, vendorId])
     .toArray();
 
-  const bills: { date: string; remaining: number; amount: number }[] = [];
-  const payments: { date: string; amount: number }[] = [];
+  const bills: { id: string; date: string; remaining: number; amount: number }[] = [];
+  const payments: { id: string; date: string; amount: number }[] = [];
   for (const e of entries as any[]) {
     if (e.is_deleted === true) continue;
     const v = info.get(String(e.voucher_id));
     if (!v) continue;
     if (v.type === "purchase" && Number(e.credit_paise ?? 0) > 0) {
       const amount = Number(e.credit_paise);
-      bills.push({ date: v.date, remaining: amount, amount });
+      bills.push({ id: String(e.voucher_id), date: v.date, remaining: amount, amount });
     } else if (v.type === "payment" && Number(e.debit_paise ?? 0) > 0) {
-      payments.push({ date: v.date, amount: Number(e.debit_paise) });
+      payments.push({ id: String(e.voucher_id), date: v.date, amount: Number(e.debit_paise) });
     }
   }
   bills.sort((a, b) => a.date.localeCompare(b.date));
   payments.sort((a, b) => a.date.localeCompare(b.date));
+
+  // Recorded allocations for this vendor, grouped by the payment they came from.
+  const allocs = (await offlineDb.cache_bill_allocations.where("company_id").equals(companyId).toArray()).filter(
+    (a: any) => String(a.ledger_id) === vendorId && a.is_deleted !== true,
+  ) as Array<{ invoice_voucher_id: string; payment_voucher_id: string; amount_paise: number }>;
+  const allocsByPayment = new Map<string, Array<{ invoiceId: string; amount: number }>>();
+  for (const a of allocs) {
+    const list = allocsByPayment.get(String(a.payment_voucher_id)) ?? [];
+    list.push({ invoiceId: String(a.invoice_voucher_id), amount: Number(a.amount_paise ?? 0) });
+    allocsByPayment.set(String(a.payment_voucher_id), list);
+  }
 
   // Window: explicit dates, else the six months ending in the latest posted month.
   const allDates = [...info.values()].map((v) => v.date).sort();
@@ -1488,24 +1504,51 @@ export async function runVendorSpendCycle(query: {
   const spendPaise = bills.filter((b) => inWindow(b.date)).reduce((s, b) => s + b.amount, 0);
   const billCount = bills.filter((b) => inWindow(b.date)).length;
 
-  let settledPaise = 0;
+  const billById = new Map(bills.map((b) => [b.id, b]));
+  let allocatedPaise = 0;
+  let fifoPaise = 0;
   let weightedDays = 0;
   let unmatchedPaymentsPaise = 0;
+  let unusableAllocations = 0;
   for (const p of payments) {
+    const inWin = inWindow(p.date);
     let left = p.amount;
+
+    // 1. Recorded allocations first.
+    for (const a of allocsByPayment.get(p.id) ?? []) {
+      const bill = billById.get(a.invoiceId);
+      if (!bill || bill.date > p.date) {
+        unusableAllocations++;
+        continue;
+      }
+      const take = Math.min(a.amount, bill.remaining, left);
+      if (take <= 0) continue;
+      bill.remaining -= take;
+      left -= take;
+      if (inWin) {
+        allocatedPaise += take;
+        weightedDays += ((Date.parse(p.date) - Date.parse(bill.date)) / DAY_MS) * take;
+      }
+    }
+
+    // 2. FIFO for whatever no allocation covered (disclosed as the fallback).
     for (const bill of bills) {
       if (left <= 0) break;
       if (bill.date > p.date || bill.remaining <= 0) continue;
       const take = Math.min(left, bill.remaining);
       bill.remaining -= take;
       left -= take;
-      if (inWindow(p.date)) {
-        settledPaise += take;
+      if (inWin) {
+        fifoPaise += take;
         weightedDays += ((Date.parse(p.date) - Date.parse(bill.date)) / DAY_MS) * take;
       }
     }
-    if (inWindow(p.date)) unmatchedPaymentsPaise += left;
+    if (inWin) unmatchedPaymentsPaise += left;
   }
+
+  const settledPaise = allocatedPaise + fifoPaise;
+  const method: VendorSpendCycleResolved["method"] =
+    allocatedPaise > 0 && fifoPaise > 0 ? "mixed" : allocatedPaise > 0 ? "bill_allocations" : fifoPaise > 0 ? "fifo" : "none";
 
   return {
     status: "resolved",
@@ -1515,8 +1558,11 @@ export async function runVendorSpendCycle(query: {
     spendPaise,
     billCount,
     settledPaise,
+    allocatedPaise,
+    fifoPaise,
     averageCycleDays: settledPaise > 0 ? Math.round((weightedDays / settledPaise) * 10) / 10 : null,
     unmatchedPaymentsPaise,
-    method: "fifo",
+    unusableAllocations,
+    method,
   };
 }

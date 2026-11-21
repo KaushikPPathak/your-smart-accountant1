@@ -3,7 +3,7 @@
 Generated from `src/lib/ai/question-catalog.ts`. Edit the catalogue, then regenerate this file.
 
 Status: 9 answered, 0 partial, 23 planned, 3 not in the books.
-Build phase: 25 buildable from stored data (phase 1), 8 need new fields or capture (phase 2), 2 blocked on a decision or outside the books (phase 3).
+Build phase: 26 buildable from stored data (phase 1), 7 need new fields or capture (phase 2), 2 blocked on a decision or outside the books (phase 3).
 
 Phases: 1 = the books already hold the data; 2 = the app needs a new field, record or capture first; 3 = blocked on a decision or outside the books.
 
@@ -24,7 +24,7 @@ Phases: 1 = the books already hold the data; 2 = the app needs a new field, reco
 | 2.1 | What is our total accounts receivable, broken down by aging buckets (0–30, 31–60, 61–90, 90+ days)? | local | `get_party_summary` | answered | 1 | Debtor ledgers; sales and receipt entries; openings. | Per party, largest first, with ageing buckets. Oldest bill settled first. |
 | 2.2 | Which customers have overdue invoices past their credit limit or credit period? | local | `get_credit_watch` | answered | 1 | Receivable ageing per party; credit limit per ledger (optional). Credit days on the ledger are not used yet. | Flags a customer whose balance is above its credit limit (where set), or who has any balance over 30 days old. Opening balances count as overdue. |
 | 2.3 | What is the total outstanding balance and payment history for Ram Traders? | local | `get_party_balance` | answered | 1 | Party ledger entries. | Balance from the party ledger; history from the ledger statement. |
-| 2.4 | Which invoices are partially paid, unallocated, or sitting as customer advances? | declined | `bill_allocations` | planned | 2 | Ageing allocates receipts to bills oldest first; the allocation itself is not stored per bill. | Needs stored bill-wise allocations to report which invoice a receipt paid. |
+| 2.4 | Which invoices are partially paid, unallocated, or sitting as customer advances? | declined | `bill_allocations` | planned | 1 | Bill-wise allocations are recorded when a receipt or payment is entered against bills (cache_bill_allocations). Partly paid and unallocated amounts can be derived from them. | Not built yet. The ageing answers still use FIFO for everything; switching them to recorded allocations is the next step under the calculation standards. |
 | 2.5 | Who are our top 10 customers by revenue and by overdue balance this financial year? | local | `get_customer_ranking` | answered | 1 | Sales vouchers per customer (revenue); receivable ageing per customer (overdue). | Top 10 by sales revenue in the period, and top 10 by balance over 30 days old as on the period end. |
 
 ## Payables & vendors
@@ -33,7 +33,7 @@ Phases: 1 = the books already hold the data; 2 = the app needs a new field, reco
 |---|---|---|---|---|---|---|---|
 | 3.1 | What is our total accounts payable, and which vendor bills are due in the next 7 or 15 days? | declined | `payables_due` | planned | 2 | Payables total (available via the payables side of the party summary). Due dates on purchase bills: not confirmed in the schema. | The total can be answered now; the 7- and 15-day window needs a due date on each bill. |
 | 3.2 | Which vendors have overdue balances or unadjusted debit notes/advances? | local | `get_vendor_overdue` | answered | 1 | Payable ageing per vendor; unmatched excess (advances and debit notes) from the ageing. | Flags a vendor with a payable over 30 days old, or with an unadjusted advance or debit note. |
-| 3.3 | What is the total spend and average payment cycle for ABC Traders over the last 6 months? | local | `get_vendor_spend_cycle` | answered | 1 | Purchase bills and payments on the vendor ledger, by date. | Spend = purchase bills in the window (returns not deducted). Payment cycle = FIFO-matched days from bill to payment, disclosed as an estimate because bill-wise allocation is not stored. |
+| 3.3 | What is the total spend and average payment cycle for ABC Traders over the last 6 months? | local | `get_vendor_spend_cycle` | answered | 1 | Purchase bills and payments on the vendor ledger, by date; recorded bill allocations (cache_bill_allocations). | Spend = purchase bills in the window (returns not deducted). Payment cycle uses recorded bill allocations first; the unallocated part is matched FIFO and disclosed as an estimate. |
 | 3.4 | Are there duplicate bill numbers, unusual price jumps, or identical amounts paid to the same vendor? | declined | `duplicate_check` | planned | 1 | Voucher number, party, amount and item rate on purchase vouchers. | Price-jump threshold needs a definition. |
 | 3.5 | Which vendors account for 80% of our purchase spend this year? | declined | `vendor_concentration` | planned | 1 | Purchase totals per vendor. | Cumulative share ranking. |
 

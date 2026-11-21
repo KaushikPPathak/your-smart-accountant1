@@ -92,10 +92,19 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
         ? "No payment in the period settled a bill, so there is no payment cycle."
         : `Average payment cycle: ${c.averageCycleDays} days, measured on ${formatInr(c.settledPaise)} of payments matched to bills.`;
       const unmatched = c.unmatchedPaymentsPaise > 0 ? ` ${formatInr(c.unmatchedPaymentsPaise)} of payments in the period was not matched to a bill (advances).` : "";
+      const method =
+        c.method === "bill_allocations"
+          ? "Payments are matched to the bills they were recorded against."
+          : c.method === "mixed"
+            ? `${formatInr(c.allocatedPaise)} is matched to the bills it was recorded against. ${formatInr(c.fifoPaise)} had no recorded allocation and is matched FIFO, so it is an estimate.`
+            : c.method === "fifo"
+              ? "No bill allocations are recorded for these payments, so they are matched FIFO. This is an estimate."
+              : "";
+      const unusable = c.unusableAllocations > 0 ? ` ${c.unusableAllocations} recorded allocation${c.unusableAllocations === 1 ? " points" : "s point"} at a bill dated after the payment or a missing bill, and was not used.` : "";
       return [
         `Spend with ${c.vendor}, ${period}: ${formatInr(c.spendPaise)} across ${c.billCount} purchase bill${c.billCount === 1 ? "" : "s"}.`,
         `${cycle}${unmatched}`,
-        "Method: payments are matched to the oldest open bills first (FIFO). Bill-wise allocation is not stored, so this is an estimate. Purchase returns and debit notes are not deducted from spend.",
+        `${method}${unusable} Purchase returns and debit notes are not deducted from spend.`.trim(),
         note,
       ].join("\n\n");
     }

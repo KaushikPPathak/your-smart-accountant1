@@ -107,8 +107,12 @@ export interface VendorSpendCycleCard {
   spendPaise: number;
   billCount: number;
   settledPaise: number;
+  allocatedPaise: number;
+  fifoPaise: number;
   averageCycleDays: number | null;
   unmatchedPaymentsPaise: number;
+  unusableAllocations: number;
+  method: "bill_allocations" | "mixed" | "fifo" | "none";
 }
 
 export interface StructuredCard {
