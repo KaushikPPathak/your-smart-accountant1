@@ -22,6 +22,7 @@ export type IntentType =
   | "party_summary"
   | "cash_bank_total"
   | "sales_total"
+  | "bank_anomalies"
   | "unknown";
 
 export interface RouteResult {
@@ -513,11 +514,32 @@ function salesTotalQuestion(text: string): boolean {
   return true;
 }
 
+/** "unusual spikes in the bank", "out-of-pattern withdrawals from cash". */
+function bankAnomalyQuestion(text: string): boolean {
+  return /\b(?:bank|cash)\b.{0,40}\b(?:unusual|spikes?|out[- ]of[- ]pattern|unexpected)\b|\b(?:unusual|spikes?|out[- ]of[- ]pattern)\b.{0,40}\b(?:bank|cash)\b/i.test(text);
+}
+
 export function routeQuery(text: string, contextCard?: StructuredCard): RouteResult {
   const originalText = text ?? "";
   // "Yes, ..." / "Ok, ..." is an interjection. Without it, "Yes, show bank balance" reads as a
   // party called "Yes bank" and is promoted to YES Bank. "Yes bank balance" (no comma) still means YES Bank.
   const trimmed = originalText.trim().replace(/^(?:yes|yeah|yep|ok|okay)\s*[,.!;:-]\s*/i, "");
+
+  if (bankAnomalyQuestion(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    return {
+      intent: "bank_anomalies",
+      confidence: 0.95,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: {},
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
 
   // Totals across ledgers: all cash and bank, and sales for a period.
   if (cashAndBankTotalQuestion(trimmed) || salesTotalQuestion(trimmed)) {

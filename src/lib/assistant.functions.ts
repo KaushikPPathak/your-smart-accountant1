@@ -231,6 +231,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "party_summary",
   "cash_bank_total",
   "sales_total",
+  "bank_anomalies",
   "party_balance",
   "party_ledger",
   "cash_balance",
@@ -277,6 +278,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
       break;
     case "cash_bank_total":
       toolName = "get_cash_bank_total";
+      toolArgs = { asOn: route.asOn ?? null };
+      break;
+    case "bank_anomalies":
+      toolName = "get_bank_anomalies";
       toolArgs = { asOn: route.asOn ?? null };
       break;
     case "sales_total":
@@ -359,6 +364,25 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
           closingPaise: Number(r.closing_paise ?? 0),
         })),
         totalPaise: Number(facts.total_paise ?? 0),
+      },
+    };
+  }
+  if (intent === "bank_anomalies") {
+    const rows = Array.isArray(data?.data?.rows) ? data.data.rows : null;
+    if (!rows) return undefined;
+    return {
+      kind: "bank_anomalies",
+      bankAnomalies: {
+        checkedLedgers: Number(facts.checked_ledgers ?? 0),
+        rows: rows.map((r: any) => ({
+          name: String(r.name ?? ""),
+          kind: r.kind === "cash" ? "cash" : "bank",
+          month: String(r.month ?? ""),
+          outflowPaise: Number(r.outflow_paise ?? 0),
+          baselinePaise: Number(r.baseline_paise ?? 0),
+          baselineMonths: Number(r.baseline_months ?? 0),
+          ratio: Number(r.ratio ?? 0),
+        })),
       },
     };
   }

@@ -983,3 +983,113 @@ export async function runSalesTotal(query: {
   }
   return { status: "resolved", from, to, count, totalPaise };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Bank and cash outflow spikes (questionnaire 1.4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A month is a spike when its outflow is at least this many times the average of earlier months… */
+export const SPIKE_RATIO = 2;
+/** …and at least this much (paise, ₹10,000), so small accounts do not generate noise. */
+export const SPIKE_MIN_PAISE = 1_000_000;
+
+export interface BankAnomalyRow {
+  ledgerName: string;
+  kind: "cash" | "bank";
+  month: string;
+  outflowPaise: number;
+  baselinePaise: number;
+  baselineMonths: number;
+  ratio: number;
+}
+
+export type BankAnomalyResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | { status: "resolved"; asOn: string | null; checkedLedgers: number; flagged: BankAnomalyRow[] };
+
+/** Every "YYYY-MM" from start up to, not including, end. */
+function monthsBetween(start: string, end: string): string[] {
+  const out: string[] = [];
+  let [y, m] = start.split("-").map(Number);
+  const [ey, em] = end.split("-").map(Number);
+  while (y < ey || (y === ey && m < em)) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  return out;
+}
+
+/**
+ * Flags cash and bank ledgers whose latest posted month has an outflow (credits) well above
+ * their earlier monthly average. Months with no postings count as zero in the average.
+ */
+export async function runBankAnomalies(query: {
+  asOn?: string | null;
+  companyId?: string | null;
+}): Promise<BankAnomalyResult> {
+  const asOnArg = coerceDateArg(query.asOn);
+  if (!asOnArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+  const asOn = asOnArg.value;
+
+  const { offlineDb } = await import("@/lib/offline/db");
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
+  const targets = ledgers.filter((l) => {
+    const k = classifyLedger(l);
+    return k === "cash" || k === "bank";
+  });
+
+  const flagged: BankAnomalyRow[] = [];
+  for (const ledger of targets) {
+    const raw: Array<{ voucher_id: unknown; credit_paise?: unknown; is_deleted?: boolean }> = [];
+    await offlineDb.cache_voucher_entries
+      .where("[company_id+ledger_id]")
+      .equals([companyId, String(ledger.id)])
+      .each((e: (typeof raw)[number]) => {
+        if (e?.is_deleted === true) return;
+        raw.push(e);
+      });
+    const ids = [...new Set(raw.map((e) => String(e.voucher_id)))];
+    const vouchers = await offlineDb.cache_vouchers.bulkGet(ids);
+    const dateById = new Map<string, string>();
+    vouchers.forEach((v: { voucher_date?: unknown; date?: unknown; is_deleted?: boolean } | undefined, i: number) => {
+      if (v && v.is_deleted !== true) dateById.set(ids[i], normalizeStoredDate(v.voucher_date ?? v.date));
+    });
+
+    // Outflow leaves a bank or cash ledger on its credit side.
+    const outByMonth = new Map<string, number>();
+    for (const e of raw) {
+      const date = dateById.get(String(e.voucher_id));
+      if (!date || (asOn && date > asOn)) continue;
+      const month = date.slice(0, 7);
+      outByMonth.set(month, (outByMonth.get(month) ?? 0) + Number(e.credit_paise ?? 0));
+    }
+    if (outByMonth.size === 0) continue;
+
+    const months = [...outByMonth.keys()].sort();
+    const latest = months[months.length - 1];
+    const earlier = monthsBetween(months[0], latest);
+    if (earlier.length === 0) continue;
+    const baseline = Math.round(earlier.reduce((s, m) => s + (outByMonth.get(m) ?? 0), 0) / earlier.length);
+    const outflow = outByMonth.get(latest) ?? 0;
+    if (outflow >= SPIKE_MIN_PAISE && outflow >= SPIKE_RATIO * baseline) {
+      flagged.push({
+        ledgerName: String(ledger.name ?? ""),
+        kind: classifyLedger(ledger) === "cash" ? "cash" : "bank",
+        month: latest,
+        outflowPaise: outflow,
+        baselinePaise: baseline,
+        baselineMonths: earlier.length,
+        ratio: baseline > 0 ? Math.round((outflow / baseline) * 10) / 10 : Number.POSITIVE_INFINITY,
+      });
+    }
+  }
+  flagged.sort((a, b) => b.outflowPaise - a.outflowPaise);
+  return { status: "resolved", asOn, checkedLedgers: targets.length, flagged };
+}

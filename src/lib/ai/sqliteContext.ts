@@ -27,6 +27,7 @@ export type CardKind =
   | "party_summary"
   | "cash_bank_total"
   | "sales_total"
+  | "bank_anomalies"
   | "party_balance"
   | "cash_balance"
   | "bank_balance"
@@ -58,11 +59,17 @@ export interface SalesTotalCard {
   totalPaise: number;
 }
 
+export interface BankAnomalyCard {
+  checkedLedgers: number;
+  rows: { name: string; kind: "cash" | "bank"; month: string; outflowPaise: number; baselinePaise: number; baselineMonths: number; ratio: number }[];
+}
+
 export interface StructuredCard {
   kind: CardKind;
   partySummary?: PartySummaryCard;
   cashBankTotal?: CashBankTotalCard;
   salesTotal?: SalesTotalCard;
+  bankAnomalies?: BankAnomalyCard;
   companyName?: string | null;
   partyName?: string;
   partyGroup?: string | null;

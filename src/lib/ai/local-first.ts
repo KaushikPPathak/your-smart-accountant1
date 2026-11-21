@@ -78,6 +78,25 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "bank_anomalies": {
+      const b = card.bankAnomalies;
+      if (!b) return null;
+      const rule = "A month counts as a spike at 2× its earlier monthly average and ₹10,000 or more.";
+      if (!b.rows.length) {
+        return `No spike in cash or bank outflows. Checked ${b.checkedLedgers} cash and bank ledger${b.checkedLedgers === 1 ? "" : "s"}. ${rule}\n\n_Answered locally from your books._`;
+      }
+      const lines = b.rows.map((r) => {
+        const ratio = Number.isFinite(r.ratio) ? `${r.ratio}×` : "from nil";
+        return `- ${r.name} (${r.month}): ${formatInr(r.outflowPaise)} out, against an average of ${formatInr(r.baselinePaise)} over ${r.baselineMonths} earlier month${r.baselineMonths === 1 ? "" : "s"} (${ratio}).`;
+      });
+      return [
+        `${b.rows.length} cash or bank ledger${b.rows.length === 1 ? " shows" : "s show"} an unusual outflow in the latest month.`,
+        lines.join("\n"),
+        rule,
+        "_Answered locally from your books._",
+      ].join("\n\n");
+    }
+
     case "sales_total": {
       const s = card.salesTotal;
       if (!s) return null;

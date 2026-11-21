@@ -2,7 +2,7 @@
 
 Generated from `src/lib/ai/question-catalog.ts`. Edit the catalogue, then regenerate this file.
 
-Status: 3 answered, 0 partial, 29 planned, 3 not in the books.
+Status: 4 answered, 0 partial, 28 planned, 3 not in the books.
 Build phase: 25 buildable from stored data (phase 1), 8 need new fields or capture (phase 2), 2 blocked on a decision or outside the books (phase 3).
 
 Phases: 1 = the books already hold the data; 2 = the app needs a new field, record or capture first; 3 = blocked on a decision or outside the books.
@@ -14,7 +14,7 @@ Phases: 1 = the books already hold the data; 2 = the app needs a new field, reco
 | 1.1 | What is our current cash and bank balance across all accounts as of today? | local | `get_cash_bank_total` | answered | 1 | Ledgers in cash and bank groups; openings; voucher entries. | Signed sum of all cash and bank ledgers as of the latest posting. |
 | 1.2 | Are there any cheques issued or received that are still uncleared or bouncing? | declined | `cheque_status` | not_in_books | 2 | Missing: cheque number, cheque date and clearing date on receipt and payment vouchers. | Not stored as fields today. |
 | 1.3 | What is the difference between our bank statement balance and book balance for HDFC this month? | declined | `reconcile_bank` | planned | 2 | Bank statement lines. A statement parser exists (src/lib/statement-parse.ts); whether its lines are stored is not confirmed. | Needs the statement lines kept per account before a reconciliation can be answered. |
-| 1.4 | Which bank or cash ledger has seen unusual spikes or out-of-pattern withdrawals recently? | declined | `bank_anomalies` | planned | 1 | Voucher entries per bank and cash ledger, by month. | Needs a per-ledger monthly baseline. |
+| 1.4 | Which bank or cash ledger has seen unusual spikes or out-of-pattern withdrawals recently? | local | `get_bank_anomalies` | answered | 1 | Voucher entries per bank and cash ledger, by month. | Flags a latest month whose outflow is at least 2× the earlier monthly average and at least ₹10,000. |
 | 1.5 | How many days of operating runway do we have based on current cash and average monthly burn? | cannot | `cash_runway` | planned | 1 | Cash and bank total (answered); payment and expense entries per month. | Needs a definition of burn, agreed before building. |
 
 ## Receivables & customers

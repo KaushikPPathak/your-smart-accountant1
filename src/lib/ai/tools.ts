@@ -48,6 +48,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_bank_anomalies",
+    description:
+      "Cash and bank ledgers whose latest posted month has an outflow at least 2x their earlier monthly average (and at least Rs 10,000).",
+    argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_cash_balance",
     description:
       "Closing balance of the Cash ledger or a named bank account, optionally frozen at a date.",
@@ -495,6 +501,37 @@ async function execGetCashBankTotal(args: Record<string, unknown> = {}): Promise
   };
 }
 
+/** Outflow spikes come from the accounting engine, never recomputed here. */
+async function execGetBankAnomalies(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runBankAnomalies } = await import("./accounting-query-engine");
+  const res = await runBankAnomalies({ asOn: args.asOn ? String(args.asOn) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  return {
+    success: true,
+    data: {
+      scope: `Outflow spikes in ${res.checkedLedgers} cash and bank ledger(s)`,
+      facts: { checked_ledgers: res.checkedLedgers, flagged_count: res.flagged.length },
+      data: {
+        rows: res.flagged.map((r) => ({
+          name: r.ledgerName,
+          kind: r.kind,
+          month: r.month,
+          outflow_paise: r.outflowPaise,
+          baseline_paise: r.baselinePaise,
+          baseline_months: r.baselineMonths,
+          ratio: r.ratio,
+        })),
+      },
+    },
+    latencyMs,
+  };
+}
+
 /** Sales total comes from the accounting engine, never recomputed here. */
 async function execGetSalesTotal(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
@@ -670,6 +707,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetCashBankTotal(args);
     case "get_sales_total":
       return execGetSalesTotal(args);
+    case "get_bank_anomalies":
+      return execGetBankAnomalies(args);
     case "get_journal_book":
       return execGetJournalBook(args);
     case "get_profit_loss":
