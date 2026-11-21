@@ -2,7 +2,7 @@
 
 Generated from `src/lib/ai/question-catalog.ts`. Edit the catalogue, then regenerate this file.
 
-Status: 14 answered, 1 partial, 17 planned, 3 not in the books.
+Status: 16 answered, 1 partial, 15 planned, 3 not in the books.
 Build phase: 26 buildable from stored data (phase 1), 7 need new fields or capture (phase 2), 2 blocked on a decision or outside the books (phase 3).
 
 Phases: 1 = the books already hold the data; 2 = the app needs a new field, record or capture first; 3 = blocked on a decision or outside the books.
@@ -53,7 +53,7 @@ Phases: 1 = the books already hold the data; 2 = the app needs a new field, reco
 |---|---|---|---|---|---|---|---|
 | 5.1 | What is the current stock quantity and valuation for Rice Basmati across all godowns? | local | `get_item_stock` | partial | 1 | Stock items (opening quantity and rate); stock lines on vouchers (quantity, rate, date). | Quantity and value for one item across all godowns. Value uses the last purchase rate. Godown split needs a godown on stock lines (not recorded), so it is not shown. |
 | 5.2 | Which stock items are fast-moving, slow-moving, or dead stock (no movement for 90+ days)? | local | `get_stock_movement` | answered | 1 | Stock movement dates and quantities per item (stock lines on vouchers); opening stock per item. | Items on hand only. Fast = 3+ movements in 30 days; dead = no movement for 90+ days or never moved; slow = last movement 31 to 90 days ago. Thresholds are defaults and are stated in each answer. |
-| 5.3 | Which items are below reorder level and need a purchase order raised? | declined | `stock_reorder` | planned | 1 | Reorder level (optional item field); current stock per item. | Items without a reorder level are not reported. |
+| 5.3 | Which items are below reorder level and need a purchase order raised? | local | `get_stock_reorder` | answered | 1 | Reorder level (optional item field); current stock per item. | Items with a reorder level above zero and stock on hand at or below it. Items without a reorder level are not reported. |
 | 5.4 | Are there negative stock balances or valuation mismatches between stock ledgers and financial accounts? | declined | `stock_audit` | planned | 1 | Stock valuation from items; stock ledger balances. | Mismatch tolerance needs agreeing. |
 | 5.5 | What is the impact of stock valuation changes on Cost of Goods Sold (COGS) for this period? | cannot | `cogs` | planned | 3 | Opening and closing stock; purchases; sales cost. | Blocked on the closing-stock decision. |
 
@@ -75,4 +75,4 @@ Phases: 1 = the books already hold the data; 2 = the app needs a new field, reco
 | 7.2 | Are there any suspense, uncategorised, or miscoded entries sitting in asset, liability, or expense ledgers? | declined | `suspense_check` | planned | 1 | Ledger names and groups; postings to suspense-type ledgers. | Miscoding beyond suspense ledgers needs an account-type rule per ledger. |
 | 7.3 | Which vouchers are missing narration, supporting references, or proper cost-centre tags? | declined | `voucher_hygiene` | planned | 1 | Narration, reference number and cost-centre fields on vouchers. | Which vouchers need a reference is a rule to agree. |
 | 7.4 | Do Trial Balance, Balance Sheet, and Profit & Loss totals reconcile cleanly with zero unexplained differences? | declined | `get_trial_balance` | planned | 1 | Trial balance engine; balance sheet and profit and loss totals. | The trial balance tool exists; this wording is not routed to it yet. Balance sheet and profit and loss checks are planned. |
-| 7.5 | Which accounts show abnormal balances (such as a credit balance in a normally debit expense/asset account)? | declined | `abnormal_balances` | planned | 1 | Ledger group and closing balance per ledger. | Expected sign per group needs a table. |
+| 7.5 | Which accounts show abnormal balances (such as a credit balance in a normally debit expense/asset account)? | local | `get_abnormal_balances` | answered | 1 | Ledger group and closing balance per ledger. | Ledger closing side opposite to its normal side. Duties and taxes are not checked; a bank in overdraft shows as abnormal. |

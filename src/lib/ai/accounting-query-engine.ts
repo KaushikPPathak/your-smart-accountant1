@@ -2382,3 +2382,139 @@ export async function runStockMovement(query: {
 
   return { status: "resolved", asOn, counted: rows.length, rows };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  5.3 Items below reorder level
+//  Only items with a reorder level above zero are checked. Stock on hand is the
+//  opening stock plus stock-in less stock-out up to the as-on date.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ReorderRow {
+  item: string;
+  unit: string;
+  closingQty: number;
+  reorderLevel: number;
+  shortfall: number;
+}
+
+export type StockReorderResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | { status: "resolved"; asOn: string; itemsWithLevel: number; rows: ReorderRow[] };
+
+export async function runStockReorder(query: {
+  asOn?: string | null;
+  companyId?: string | null;
+}): Promise<StockReorderResult> {
+  const asOnArg = coerceDateArg(query.asOn);
+  if (!asOnArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+  const asOn = asOnArg.value ?? new Date().toISOString().slice(0, 10);
+
+  const { offlineDb } = await import("@/lib/offline/db");
+  const { readVouchers } = await import("@/lib/offline/cache-read");
+  const items = ((await offlineDb.cache_items.where("company_id").equals(companyId).toArray()) as any[]).filter(
+    (i) => i && i.is_deleted !== true,
+  );
+  const vouchers = (await readVouchers(companyId)) as any[];
+  const voucherById = new Map(
+    vouchers.map((v) => [String(v.id), { type: String(v.voucher_type ?? ""), date: normalizeStoredDate(v.voucher_date ?? v.date) }]),
+  );
+  const lines = (await offlineDb.cache_voucher_items.where("company_id").equals(companyId).toArray()) as any[];
+
+  const net = new Map<string, number>();
+  for (const r of lines) {
+    if (!r || r.is_deleted === true || !r.item_id) continue;
+    const v = voucherById.get(String(r.voucher_id));
+    if (!v || !v.date || v.date > asOn) continue;
+    const isIn = STOCK_IN_TYPES.includes(v.type);
+    const isOut = STOCK_OUT_TYPES.includes(v.type);
+    if (!isIn && !isOut) continue;
+    const id = String(r.item_id);
+    net.set(id, (net.get(id) ?? 0) + Math.abs(Number(r.qty ?? 0)) * (isIn ? 1 : -1));
+  }
+
+  let itemsWithLevel = 0;
+  const rows: ReorderRow[] = [];
+  for (const item of items) {
+    const level = Number(item.reorder_level ?? 0);
+    if (!(level > 0)) continue;
+    itemsWithLevel++;
+    const closingQty = Number(item.opening_stock_qty ?? 0) + (net.get(String(item.id)) ?? 0);
+    if (closingQty > level) continue;
+    rows.push({
+      item: String(item.name ?? ""),
+      unit: String(item.unit ?? ""),
+      closingQty,
+      reorderLevel: level,
+      shortfall: level - closingQty,
+    });
+  }
+  rows.sort((x, y) => y.shortfall - x.shortfall || x.item.localeCompare(y.item));
+  return { status: "resolved", asOn, itemsWithLevel, rows };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  7.5 Abnormal balances
+//  A ledger whose closing side is opposite to its normal side. Duties and taxes
+//  can sit on either side legitimately, so they are not checked.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const NORMAL_DEBIT_TYPES = new Set([
+  "sundry_debtor", "cash", "bank", "expense_direct", "expense_indirect", "fixed_asset", "current_asset", "stock_in_hand",
+]);
+const NORMAL_CREDIT_TYPES = new Set([
+  "sundry_creditor", "income_direct", "income_indirect", "current_liability", "loan_liability", "capital",
+]);
+
+export interface AbnormalBalanceRow {
+  ledger: string;
+  group: string | null;
+  ledgerType: string;
+  expected: "Dr" | "Cr";
+  actual: "Dr" | "Cr";
+  amountPaise: number;
+}
+
+export type AbnormalBalancesResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | { status: "resolved"; asOn: string; checked: number; rows: AbnormalBalanceRow[] };
+
+export async function runAbnormalBalances(query: {
+  asOn?: string | null;
+  companyId?: string | null;
+}): Promise<AbnormalBalancesResult> {
+  const asOnArg = coerceDateArg(query.asOn);
+  if (!asOnArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+  const asOn = asOnArg.value ?? fyEndFor();
+
+  const tb = await runTrialBalance({ asOn, companyId });
+  if (!("rows" in tb)) return { status: "no_company" };
+  const ledgers = (await readLedgers(companyId)) as unknown as Array<{ id: unknown; type?: unknown }>;
+  const typeById = new Map(ledgers.map((l) => [String(l.id), String(l.type ?? "")]));
+
+  let checked = 0;
+  const rows: AbnormalBalanceRow[] = [];
+  for (const r of tb.rows) {
+    if (r.closingPaise === 0) continue;
+    const type = typeById.get(r.ledgerId) ?? "";
+    const expected: "Dr" | "Cr" | null = NORMAL_DEBIT_TYPES.has(type) ? "Dr" : NORMAL_CREDIT_TYPES.has(type) ? "Cr" : null;
+    if (!expected) continue;
+    checked++;
+    if (r.direction === expected) continue;
+    rows.push({
+      ledger: r.ledgerName,
+      group: r.ledgerGroup,
+      ledgerType: type,
+      expected,
+      actual: r.direction as "Dr" | "Cr",
+      amountPaise: Math.abs(r.closingPaise),
+    });
+  }
+  rows.sort((x, y) => y.amountPaise - x.amountPaise || x.ledger.localeCompare(y.ledger));
+  return { status: "resolved", asOn, checked, rows };
+}

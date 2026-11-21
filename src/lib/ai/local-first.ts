@@ -110,6 +110,40 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "stock_reorder": {
+      const r = card.stockReorder;
+      if (!r) return null;
+      const note = "_Answered locally from your books._";
+      const rule = "Only items with a reorder level above zero are checked. An item is listed when its stock on hand is at or below that level.";
+      if (r.itemsWithLevel === 0) {
+        return `No item has a reorder level set, so nothing can be checked as on ${r.asOn}. Set a reorder level on each item to see this.\n\n${rule}\n\n${note}`;
+      }
+      if (r.rows.length === 0) {
+        return `No item is below its reorder level as on ${r.asOn} (${r.itemsWithLevel} item${r.itemsWithLevel === 1 ? " has" : "s have"} a reorder level).\n\n${rule}\n\n${note}`;
+      }
+      const lines = r.rows.slice(0, 20).map((x) => {
+        const unit = x.unit ? ` ${x.unit}` : "";
+        return `- ${x.item}: on hand ${x.closingQty.toLocaleString("en-IN", { maximumFractionDigits: 2 })}${unit}, reorder level ${x.reorderLevel.toLocaleString("en-IN", { maximumFractionDigits: 2 })}, short by ${x.shortfall.toLocaleString("en-IN", { maximumFractionDigits: 2 })}${unit}`;
+      });
+      const more = r.rows.length > 20 ? `\n- and ${r.rows.length - 20} more` : "";
+      return [`${r.rows.length} of ${r.itemsWithLevel} item${r.itemsWithLevel === 1 ? "" : "s"} with a reorder level ${r.rows.length === 1 ? "is" : "are"} at or below it as on ${r.asOn}; these need a purchase order:`, lines.join("\n") + more, rule, note].join("\n\n");
+    }
+
+    case "abnormal_balances": {
+      const a = card.abnormalBalances;
+      if (!a) return null;
+      const note = "_Answered locally from your books._";
+      const rule = "A ledger is abnormal when its closing side is opposite to its normal side: debtors, cash, bank, expenses, fixed and current assets and stock are normally debit; creditors, income, capital, loans and current liabilities are normally credit. Duties and taxes are not checked. A bank in overdraft shows as abnormal.";
+      if (a.rows.length === 0) {
+        return `No abnormal balances as on ${a.asOn}. ${a.checked} ledger${a.checked === 1 ? " was" : "s were"} checked.\n\n${rule}\n\n${note}`;
+      }
+      const lines = a.rows.slice(0, 20).map((x) =>
+        `- ${x.ledger}${x.group ? ` (${x.group})` : ""}: ${formatInr(x.amountPaise)} ${x.actual === "Dr" ? "debit" : "credit"}, normally ${x.expected === "Dr" ? "debit" : "credit"}`,
+      );
+      const more = a.rows.length > 20 ? `\n- and ${a.rows.length - 20} more` : "";
+      return [`${a.rows.length} ledger${a.rows.length === 1 ? " has" : "s have"} an abnormal balance as on ${a.asOn}:`, lines.join("\n") + more, rule, note].join("\n\n");
+    }
+
     case "stock_movement": {
       const m = card.stockMovement;
       if (!m) return null;

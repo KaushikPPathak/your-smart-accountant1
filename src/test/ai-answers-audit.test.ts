@@ -99,7 +99,6 @@ describe("report questions are declined, not guessed", () => {
   const reports = [
     "What is the difference between our bank statement balance and book balance for HDFC this month?",
     "What is our total accounts payable, and which vendor bills are due in the next 7 or 15 days?",
-    "Which accounts show abnormal balances (such as a credit balance in a normally debit expense/asset account)?",
     "Do Trial Balance, Balance Sheet, and Profit & Loss totals reconcile cleanly with zero unexplained differences?",
   ];
   for (const q of reports) {

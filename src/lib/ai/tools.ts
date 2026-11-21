@@ -78,6 +78,18 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_stock_reorder",
+    description:
+      "Items with a reorder level whose stock on hand is at or below it, as on a date, with the shortfall. Items without a reorder level are not reported.",
+    argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
+  },
+  {
+    name: "get_abnormal_balances",
+    description:
+      "Ledgers whose closing balance is on the side opposite to their normal side (for example a credit balance in a debtor or expense ledger), as on a date.",
+    argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_stock_movement",
     description:
       "Items on hand classified as fast-moving, normal, slow-moving or dead, by days since the last stock movement and the number of movements in the last 30 days, as on a date.",
@@ -658,6 +670,65 @@ async function execGetVendorOverdue(args: Record<string, unknown> = {}): Promise
   };
 }
 
+/** Reorder check comes from the accounting engine, never recomputed here. */
+async function execGetStockReorder(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runStockReorder } = await import("./accounting-query-engine");
+  const res = await runStockReorder({ asOn: args.asOn ? String(args.asOn) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  return {
+    success: true,
+    data: {
+      scope: `Items below reorder level as on ${res.asOn}`,
+      facts: { as_on: res.asOn, items_with_level: res.itemsWithLevel, below: res.rows.length },
+      data: {
+        rows: res.rows.map((r) => ({
+          item: r.item,
+          unit: r.unit,
+          closing_qty: r.closingQty,
+          reorder_level: r.reorderLevel,
+          shortfall: r.shortfall,
+        })),
+      },
+    },
+    latencyMs,
+  };
+}
+
+/** Abnormal balances come from the accounting engine, never recomputed here. */
+async function execGetAbnormalBalances(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runAbnormalBalances } = await import("./accounting-query-engine");
+  const res = await runAbnormalBalances({ asOn: args.asOn ? String(args.asOn) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  return {
+    success: true,
+    data: {
+      scope: `Abnormal balances as on ${res.asOn}`,
+      facts: { as_on: res.asOn, checked: res.checked, abnormal: res.rows.length },
+      data: {
+        rows: res.rows.map((r) => ({
+          ledger: r.ledger,
+          group: r.group,
+          ledger_type: r.ledgerType,
+          expected_side: r.expected,
+          actual_side: r.actual,
+          amount_paise: r.amountPaise,
+        })),
+      },
+    },
+    latencyMs,
+  };
+}
+
 /** Stock movement comes from the accounting engine, never recomputed here. */
 async function execGetStockMovement(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
@@ -1177,6 +1248,10 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetItemStock(args);
     case "get_stock_movement":
       return execGetStockMovement(args);
+    case "get_stock_reorder":
+      return execGetStockReorder(args);
+    case "get_abnormal_balances":
+      return execGetAbnormalBalances(args);
     case "get_vendor_spend_cycle":
       return execGetVendorSpendCycle(args);
     case "get_journal_book":

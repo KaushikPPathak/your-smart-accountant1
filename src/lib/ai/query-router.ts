@@ -33,6 +33,8 @@ export type IntentType =
   | "returns_summary"
   | "item_stock"
   | "stock_movement"
+  | "stock_reorder"
+  | "abnormal_balances"
   | "vendor_spend_cycle"
   | "unknown";
 
@@ -554,6 +556,14 @@ function duplicateCheckQuestion(text: string): boolean {
   return /\bduplicate\b|\bsame (bill|invoice) (no|number)\b|\bidentical amounts?\b|\bprice (jump|increase|hike|rise)s?\b|\bunusual (price|rate)s?\b|\bpaid twice\b|\brepeat(ed)? payments?\b/i.test(text);
 }
 
+function stockReorderQuestion(text: string): boolean {
+  return /\breorder[- ](level|point|quantity)s?\b/i.test(text);
+}
+
+function abnormalBalanceQuestion(text: string): boolean {
+  return /\babnormal (balances?|ledgers?|accounts?)\b|\b(credit|debit) balances? in (a |an )?(normally |usually )?(debit|credit)\b/i.test(text);
+}
+
 function stockMovementQuestion(text: string): boolean {
   return /\bfast[- ]moving\b|\bslow[- ]moving\b|\bdead stock\b|\bnon[- ]moving\b/i.test(text);
 }
@@ -625,6 +635,36 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
     };
   }
 
+  if (stockReorderQuestion(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    return {
+      intent: "stock_reorder",
+      confidence: 0.9,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: {},
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
+  if (abnormalBalanceQuestion(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    return {
+      intent: "abnormal_balances",
+      confidence: 0.9,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: {},
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
   if (stockMovementQuestion(trimmed)) {
     const dateInfo = extractDateInfo(trimmed);
     return {

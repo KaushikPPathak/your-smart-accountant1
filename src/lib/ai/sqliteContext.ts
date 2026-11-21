@@ -38,6 +38,8 @@ export type CardKind =
   | "returns_summary"
   | "item_stock"
   | "stock_movement"
+  | "stock_reorder"
+  | "abnormal_balances"
   | "vendor_spend_cycle"
   | "party_balance"
   | "cash_balance"
@@ -155,6 +157,18 @@ export interface ItemStockCard {
   valuePaise: number | null;
 }
 
+export interface StockReorderCard {
+  asOn: string;
+  itemsWithLevel: number;
+  rows: { item: string; unit: string; closingQty: number; reorderLevel: number; shortfall: number }[];
+}
+
+export interface AbnormalBalancesCard {
+  asOn: string;
+  checked: number;
+  rows: { ledger: string; group: string | null; ledgerType: string; expected: "Dr" | "Cr"; actual: "Dr" | "Cr"; amountPaise: number }[];
+}
+
 export interface StockMovementCard {
   asOn: string;
   counted: number;
@@ -200,6 +214,8 @@ export interface StructuredCard {
   returnsSummary?: ReturnsSummaryCard;
   itemStock?: ItemStockCard;
   stockMovement?: StockMovementCard;
+  stockReorder?: StockReorderCard;
+  abnormalBalances?: AbnormalBalancesCard;
   vendorSpendCycle?: VendorSpendCycleCard;
   companyName?: string | null;
   partyName?: string;

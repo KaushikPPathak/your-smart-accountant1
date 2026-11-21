@@ -242,6 +242,8 @@ const DETERMINISTIC_INTENTS = new Set([
   "returns_summary",
   "item_stock",
   "stock_movement",
+  "stock_reorder",
+  "abnormal_balances",
   "vendor_spend_cycle",
   "party_balance",
   "party_ledger",
@@ -294,6 +296,14 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "vendor_spend_cycle":
       toolName = "get_vendor_spend_cycle";
       toolArgs = { vendor: route.entity?.partyName ?? "", from: route.from ?? null, to: route.to ?? null };
+      break;
+    case "stock_reorder":
+      toolName = "get_stock_reorder";
+      toolArgs = { asOn: route.asOn ?? null };
+      break;
+    case "abnormal_balances":
+      toolName = "get_abnormal_balances";
+      toolArgs = { asOn: route.asOn ?? null };
       break;
     case "stock_movement":
       toolName = "get_stock_movement";
@@ -475,6 +485,43 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
         method: "none",
         averageCycleDays: null,
         unmatchedPaymentsPaise: 0,
+      },
+    };
+  }
+  if (intent === "stock_reorder") {
+    const rows = Array.isArray(data?.data?.rows) ? data.data.rows : null;
+    if (!rows) return undefined;
+    return {
+      kind: "stock_reorder",
+      stockReorder: {
+        asOn: String(facts.as_on ?? ""),
+        itemsWithLevel: Number(facts.items_with_level ?? 0),
+        rows: rows.map((r: any) => ({
+          item: String(r.item ?? ""),
+          unit: String(r.unit ?? ""),
+          closingQty: Number(r.closing_qty ?? 0),
+          reorderLevel: Number(r.reorder_level ?? 0),
+          shortfall: Number(r.shortfall ?? 0),
+        })),
+      },
+    };
+  }
+  if (intent === "abnormal_balances") {
+    const rows = Array.isArray(data?.data?.rows) ? data.data.rows : null;
+    if (!rows) return undefined;
+    return {
+      kind: "abnormal_balances",
+      abnormalBalances: {
+        asOn: String(facts.as_on ?? ""),
+        checked: Number(facts.checked ?? 0),
+        rows: rows.map((r: any) => ({
+          ledger: String(r.ledger ?? ""),
+          group: r.group ? String(r.group) : null,
+          ledgerType: String(r.ledger_type ?? ""),
+          expected: r.expected_side === "Cr" ? "Cr" : "Dr",
+          actual: r.actual_side === "Cr" ? "Cr" : "Dr",
+          amountPaise: Number(r.amount_paise ?? 0),
+        })),
       },
     };
   }
