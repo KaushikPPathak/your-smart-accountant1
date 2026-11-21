@@ -4110,6 +4110,7 @@ function Gstr9PrintInputWorking({
           { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, totalTax: 0 },
         );
         return (
+          <>
           <OfficialTable
             onRowAction={onRowAction}
             title="Purchase ITC from books, by class (working for Table 6 and Table 7)"
@@ -4122,6 +4123,22 @@ function Gstr9PrintInputWorking({
               classRow("Blocked / ineligible (reported under Table 7 or 4D)", cls.ineligible),
             ]}
           />
+          {result.itcJournals.length > 0 && (
+            <OfficialTable
+              onRowAction={onRowAction}
+              title={`Journal vouchers carrying input tax (${result.itcJournals.length}, included in the class table above)`}
+              columns={["Date", "Voucher no.", "Class", "Posted against", "Taxable value", "Total ITC"]}
+              rows={result.itcJournals.map((j) => [
+                j.date,
+                j.voucherNumber,
+                j.bucket === "capitalGoods" ? "Capital goods" : j.bucket === "inputServices" ? "Expenses" : "Goods",
+                j.againstLedger,
+                money(j.taxableValue),
+                money(j.totalItc),
+              ])}
+            />
+          )}
+          </>
         );
       })()}
 

@@ -5,6 +5,14 @@ import {
 } from "@/lib/gst-returns";
 import { isTaxFreeGstLine } from "@/lib/gst-supply-classification";
 import { reconcileBillTaxLines } from "@/lib/gst-bill-lines";
+import {
+  journalItcVouchers,
+  purchaseBucketHints,
+  type BooksLedger,
+  type BooksLine,
+  type ItcBucket,
+  type JournalItc,
+} from "@/lib/gst-itc-from-books";
 
 /**
  * GSTR-9 Phase 1
@@ -34,6 +42,18 @@ export interface Gstr9Period {
   financialYear: string;
   from: string;
   to: string;
+}
+
+export interface Gstr9JournalItcRow {
+  date: string;
+  voucherNumber: string;
+  bucket: ItcBucket;
+  againstLedger: string;
+  taxableValue: number;
+  igst: number;
+  cgst: number;
+  sgst: number;
+  totalItc: number;
 }
 
 export interface Gstr9ItcByClass {
@@ -164,6 +184,8 @@ export interface Gstr9Result {
    * capital goods, and blocked / ineligible purchases. Information for the ITC tables.
    */
   itcByClass: Gstr9ItcByClass;
+  /** Journal vouchers that posted input tax, included in itcByClass. */
+  itcJournals: Gstr9JournalItcRow[];
 
   /** Table 4I / 4J — outward credit and debit notes from the books (positive amounts). */
   notes: { creditNotes: Gstr9TaxTotals; debitNotes: Gstr9TaxTotals };
@@ -337,25 +359,76 @@ function voucherTotals(
  * are kept apart; everything else is grouped as goods, input services or capital goods.
  * Unclassified purchases count as goods, as they do in the GSTR-3B build.
  */
-function buildItcByClass(purchases: VoucherRow[]): Gstr9ItcByClass {
+function buildItcByClass(
+  purchases: VoucherRow[],
+  purchaseBuckets?: Map<string, ItcBucket>,
+  journalItc: JournalItc[] = [],
+): Gstr9ItcByClass {
   const out: Gstr9ItcByClass = {
     inputs: zeroTaxTotals(),
     inputServices: zeroTaxTotals(),
     capitalGoods: zeroTaxTotals(),
     ineligible: zeroTaxTotals(),
   };
+  const bucketOf = (k: ItcBucket): Gstr9TaxTotals =>
+    k === "capitalGoods" ? out.capitalGoods : k === "inputServices" ? out.inputServices : out.inputs;
   for (const v of purchases) {
+    // A class stored on the voucher wins; otherwise infer it from the books lines.
+    const stored =
+      v.itc_class === "capital_goods" ? "capitalGoods"
+        : v.itc_class === "input_services" ? "inputServices"
+          : v.itc_class === "inputs" ? "inputs"
+            : null;
     const bucket =
       v.itc_eligible === false || v.itc_class === "ineligible"
         ? out.ineligible
-        : v.itc_class === "capital_goods"
-          ? out.capitalGoods
-          : v.itc_class === "input_services"
-            ? out.inputServices
-            : out.inputs;
+        : bucketOf(stored ?? purchaseBuckets?.get(String(v.id)) ?? "inputs");
     addTotals(bucket, voucherTotals(v, 1));
   }
+  for (const j of journalItc) {
+    const t: Gstr9TaxTotals = {
+      taxableValue: rupees(j.taxablePaise),
+      igst: rupees(j.igstPaise),
+      cgst: rupees(j.cgstPaise),
+      sgst: rupees(j.sgstPaise),
+      cess: 0,
+      totalTax: rupees(j.igstPaise + j.cgstPaise + j.sgstPaise),
+      grossValue: rupees(j.taxablePaise + j.igstPaise + j.cgstPaise + j.sgstPaise),
+    };
+    addTotals(bucketOf(j.bucket), t);
+  }
   return out;
+}
+
+/** Books lines and ledgers for the year, used to classify purchases and read journal ITC. */
+export async function readBooksItcInputs(
+  companyId: string,
+  from: string,
+  to: string,
+): Promise<{ lines: BooksLine[]; ledgers: Map<string, BooksLedger> }> {
+  const { readLedgers, readVoucherEntriesWithVouchers } = await import("@/lib/offline/cache-read");
+  const [entries, ledgerRows] = await Promise.all([
+    readVoucherEntriesWithVouchers(companyId, { from, to }),
+    readLedgers(companyId),
+  ]);
+  const ledgers = new Map<string, BooksLedger>(
+    (ledgerRows as any[]).map((l) => [
+      String(l.id),
+      { name: String(l.name ?? ""), type: String(l.type ?? ""), group: l.group_name ?? null },
+    ]),
+  );
+  const lines: BooksLine[] = (entries as any[])
+    .filter((e) => e?.vouchers && (e.vouchers.voucher_type === "journal" || e.vouchers.voucher_type === "purchase"))
+    .map((e) => ({
+      voucherId: String(e.voucher_id),
+      voucherType: String(e.vouchers.voucher_type),
+      voucherDate: String(e.vouchers.voucher_date ?? ""),
+      voucherNumber: String(e.vouchers.voucher_number ?? ""),
+      ledgerId: String(e.ledger_id ?? ""),
+      debitPaise: Number(e.debit_paise ?? 0),
+      creditPaise: Number(e.credit_paise ?? 0),
+    }));
+  return { lines, ledgers };
 }
 
 function addTotals(
@@ -524,6 +597,10 @@ export interface BuildGstr9Args {
   sales: VoucherRow[];
   creditNotes: VoucherRow[];
   purchases?: VoucherRow[];
+  /** Class per purchase voucher from its books lines, used when the voucher has no stored class. */
+  purchaseBuckets?: Map<string, ItcBucket>;
+  /** Journal vouchers that posted input tax. */
+  journalItc?: JournalItc[];
 }
 
 function contribution(voucher: VoucherRow, totals: Gstr9TaxTotals, nature: string,
@@ -560,6 +637,8 @@ export function buildGstr9(
     sales,
     creditNotes,
     purchases = [],
+    purchaseBuckets,
+    journalItc = [],
   } = args;
 
   const { from, to } =
@@ -884,7 +963,18 @@ export function buildGstr9(
 
     hsnInward: buildHsn(purchases.map((v) => ({ ...v, voucher_items: reconcileBillTaxLines(v.voucher_items, v) }))),
 
-    itcByClass: buildItcByClass(purchases),
+    itcByClass: buildItcByClass(purchases, purchaseBuckets, journalItc),
+    itcJournals: journalItc.map((j) => ({
+      date: j.voucherDate,
+      voucherNumber: j.voucherNumber,
+      bucket: j.bucket,
+      againstLedger: j.againstLedger,
+      taxableValue: rupees(j.taxablePaise),
+      igst: rupees(j.igstPaise),
+      cgst: rupees(j.cgstPaise),
+      sgst: rupees(j.sgstPaise),
+      totalItc: rupees(j.igstPaise + j.cgstPaise + j.sgstPaise),
+    })),
 
     notes: (() => {
       const cn = zeroTaxTotals();
@@ -958,12 +1048,16 @@ export async function loadGstr9Books(
       ),
     ]);
 
+  const { lines, ledgers } = await readBooksItcInputs(companyId, from, to);
+
   return buildGstr9({
     company,
     financialYear,
     sales,
     creditNotes,
     purchases,
+    purchaseBuckets: purchaseBucketHints(lines, ledgers),
+    journalItc: journalItcVouchers(lines, ledgers),
   });
 }
 
