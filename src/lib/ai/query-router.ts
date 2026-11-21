@@ -450,6 +450,11 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
   // party called "Yes bank" and is promoted to YES Bank. "Yes bank balance" (no comma) still means YES Bank.
   const trimmed = originalText.trim().replace(/^(?:yes|yeah|yep|ok|okay)\s*[,.!;:-]\s*/i, "");
 
+  // A balance sheet is not a party balance. It is not answered locally yet.
+  if (/\bbalance\s*sheet\b/i.test(trimmed)) {
+    return { intent: "unknown", confidence: 0.5, requiresLLM: true, requiresTools: false, entityHints: [] };
+  }
+
   if (!trimmed) {
     return {
       intent: "unknown",
@@ -481,7 +486,9 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
   const hasBalanceContext = /\b(?:balance|bal|how much|status)\b/i.test(trimmed);
   const hasBankAlias = !!bankAccount && new RegExp(`\\b${BANK_ALIAS_PATTERN}\\b`, "i").test(trimmed);
 
-  if (hasCashContext && hasBalanceContext) {
+  // "what is cash in hand", "cash in hand", "show cash" with no other words.
+  const cashInHandOnly = /^\s*(?:(?:what(?:'s|\s+is)|how much(?:\s+is)?|show|check|tell me)\s+)?(?:the\s+)?cash(?:[-\s]?in[-\s]?hand)?\s*[?.!]*\s*$/i.test(trimmed);
+  if ((hasCashContext && hasBalanceContext) || cashInHandOnly) {
     const entity = extractEntities(trimmed, "cash_balance");
     const dateInfo = extractDateInfo(trimmed);
     return {
@@ -503,6 +510,24 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
   // Named bank aliases are treated as bank balances when the question has
   // balance/account context. A bare "Bank of Baroda" is also accepted because
   // users commonly type the account name alone when asking for its balance.
+  // "bank balance" with no bank named: all bank accounts. The engine uses the only bank
+  // ledger, or reports that several exist.
+  if (!bankAccount && /^\s*(?:(?:show|what(?:'s|\s+is)|check|my|the|current|please)\s+)*bank\s+(?:balance|bal)\b/i.test(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    return {
+      intent: "bank_balance",
+      confidence: 0.95,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: {},
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
+
   if (bankAccount && (hasBalanceContext || hasBankContext || hasBankAlias)) {
     const entity = extractEntities(trimmed, "bank_balance") ?? {};
     entity.accountName = bankAccount;
