@@ -1,3 +1,4 @@
+import { ageOutstanding, type AgedOutstanding, type AgingBucket, type AgingSide, type DatedEntry } from "./aging";
 import { coerceDateArg, normalizeStoredDate } from "./ai-validation";
 import { resolveBankAlias } from "./bank-aliases";
 // src/lib/ai/accounting-query-engine.ts
@@ -802,5 +803,102 @@ export async function runLedgerStatement(
     ledgerName: String(ledger.name ?? ""),
     ledgerGroup: (ledger.group_name as string | null) ?? null,
     ...computeLedgerStatement(ledger, txns, { from, to }),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Receivables / payables by party, with ageing
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PartySummaryRow {
+  ledgerId: string;
+  name: string;
+  outstandingPaise: number;
+  advancePaise: number;
+  buckets: AgedOutstanding["buckets"];
+}
+
+export type PartySummaryResult =
+  | {
+      status: "resolved";
+      side: AgingSide;
+      asOn: string;
+      rows: PartySummaryRow[];
+      totalOutstandingPaise: number;
+      totalBuckets: AgedOutstanding["buckets"];
+    }
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string };
+
+/**
+ * Outstanding receivables (sundry debtors) or payables (sundry creditors) for every party,
+ * largest first, with the same ageing buckets for each party. Figures come from the books
+ * as on the given date, never from a cached answer.
+ */
+export async function runPartySummary(query: {
+  side: AgingSide;
+  asOn?: string | null;
+  companyId?: string | null;
+}): Promise<PartySummaryResult> {
+  const asOnArg = coerceDateArg(query.asOn);
+  if (!asOnArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+  const asOn = asOnArg.value ?? new Date().toISOString().slice(0, 10);
+
+  const { offlineDb } = await import("@/lib/offline/db");
+  const wantGroup = query.side === "receivable" ? "debtor" : "creditor";
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
+  const parties = ledgers.filter((l) => (l.group_name ?? "").toLowerCase().includes(wantGroup));
+
+  const rows: PartySummaryRow[] = [];
+  for (const ledger of parties) {
+    const entries: DatedEntry[] = [];
+    const raw: Array<{ voucher_id: unknown; debit_paise?: unknown; credit_paise?: unknown; is_deleted?: boolean }> = [];
+    await offlineDb.cache_voucher_entries
+      .where("[company_id+ledger_id]")
+      .equals([companyId, String(ledger.id)])
+      .each((e: (typeof raw)[number]) => {
+        if (e?.is_deleted === true) return;
+        raw.push(e);
+      });
+    const ids = [...new Set(raw.map((e) => String(e.voucher_id)))];
+    const vouchers = await offlineDb.cache_vouchers.bulkGet(ids);
+    const dateById = new Map<string, string>();
+    vouchers.forEach((v: { voucher_date?: unknown; date?: unknown; is_deleted?: boolean } | undefined, i: number) => {
+      if (v && v.is_deleted !== true) dateById.set(ids[i], normalizeStoredDate(v.voucher_date ?? v.date));
+    });
+    for (const e of raw) {
+      const date = dateById.get(String(e.voucher_id));
+      if (!date || date > asOn) continue;
+      entries.push({ date, debitPaise: Number(e.debit_paise ?? 0), creditPaise: Number(e.credit_paise ?? 0) });
+    }
+    entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+    // Signed opening balance: positive is a debit. Receivables are owed in the debit direction;
+    // payables are owed in the credit direction.
+    const signedOpening = Number(ledger.opening_balance_paise ?? 0) * (ledger.opening_balance_is_debit === false ? -1 : 1);
+    const opening = query.side === "receivable" ? signedOpening : -signedOpening;
+    const aged = ageOutstanding(query.side, opening, entries, asOn);
+    if (aged.outstandingPaise === 0 && aged.advancePaise === 0) continue;
+    rows.push({
+      ledgerId: String(ledger.id),
+      name: ledger.name,
+      outstandingPaise: aged.outstandingPaise,
+      advancePaise: aged.advancePaise,
+      buckets: aged.buckets,
+    });
+  }
+
+  rows.sort((a, b) => b.outstandingPaise - a.outstandingPaise);
+  const totalBuckets: AgedOutstanding["buckets"] = { opening: 0, d0_30: 0, d31_60: 0, d61_90: 0, d90p: 0 };
+  for (const r of rows) for (const k of Object.keys(totalBuckets) as AgingBucket[]) totalBuckets[k] += r.buckets[k];
+  return {
+    status: "resolved",
+    side: query.side,
+    asOn,
+    rows,
+    totalOutstandingPaise: rows.reduce((s, r) => s + r.outstandingPaise, 0),
+    totalBuckets,
   };
 }

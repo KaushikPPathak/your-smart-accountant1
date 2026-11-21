@@ -1,4 +1,5 @@
 import { BANK_ALIAS_PATTERN, findBankInText } from "./bank-aliases";
+import type { AgingSide } from "./aging";
 // src/lib/ai/query-router.ts
 import type { StructuredCard } from "./sqliteContext";
 
@@ -18,6 +19,7 @@ export type IntentType =
   | "stock_query"
   | "party_ledger"
   | "date_range_report"
+  | "party_summary"
   | "unknown";
 
 export interface RouteResult {
@@ -31,6 +33,8 @@ export interface RouteResult {
     partyName?: string;
     dateRange?: { from?: string; to?: string };
     amount?: number;
+    /** For party_summary: receivables (debtors) or payables (creditors). */
+    summarySide?: AgingSide;
     voucherType?: "payment" | "receipt" | "journal" | "contra" | "sales" | "purchase";
     accountName?: string;
   };
@@ -320,6 +324,24 @@ const REPORT_QUESTION = new RegExp(
   "i",
 );
 
+/**
+ * Receivables or payables across all parties ("total accounts receivable", "who owes us",
+ * "top 10 vendors"). Questions about revenue, spend, a percentage share, or due dates in N days
+ * are not answered this way, so they return null and fall through to the report guard.
+ */
+function partySummarySide(text: string): AgingSide | null {
+  if (!/\b(?:total|top|list|which|who|all|outstanding|overdue|ageing|aging|buckets?|due|pending|owe|owes|owed)\b/i.test(text)) {
+    return null;
+  }
+  if (/\b(?:revenue|spend|80\s*%|next\s+\d+\s+days|due\s+in|by\s+spend)\b/i.test(text)) return null;
+  if (/\bfrom\s+[A-Z]/.test(text)) return null; // a named party is a party balance question
+  if (/\b(?:accounts?\s+payable|payables?|creditors?|vendors?|suppliers?|we\s+owe)\b/i.test(text)) return "payable";
+  if (/\b(?:accounts?\s+receivable|receivables?|debtors?|customers?|who\s+owes\s+(?:us|me)|owes\s+us)\b/i.test(text)) {
+    return "receivable";
+  }
+  return null;
+}
+
 const BANK_NAME_LEAD_NOISE = new Set([
   "show", "give", "tell", "what", "whats", "what's", "is", "are", "the", "my", "our", "your", "me",
   "current", "check", "get", "see", "please", "of", "for", "in", "and", "to", "balance", "bal", "how", "much", "status",
@@ -465,6 +487,24 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
   // "Yes, ..." / "Ok, ..." is an interjection. Without it, "Yes, show bank balance" reads as a
   // party called "Yes bank" and is promoted to YES Bank. "Yes bank balance" (no comma) still means YES Bank.
   const trimmed = originalText.trim().replace(/^(?:yes|yeah|yep|ok|okay)\s*[,.!;:-]\s*/i, "");
+
+  // Who owes what, and how old it is: receivables or payables across all parties.
+  const summarySide = partySummarySide(trimmed);
+  if (summarySide) {
+    const dateInfo = extractDateInfo(trimmed);
+    return {
+      intent: "party_summary",
+      confidence: 0.95,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: { summarySide },
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
 
   // Analytical and report questions ("which", "top 10", "abnormal", "reconcile", "accounts payable")
   // are not single-ledger balances. Say so plainly instead of guessing a balance.

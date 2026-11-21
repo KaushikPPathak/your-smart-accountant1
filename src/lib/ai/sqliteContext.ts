@@ -24,6 +24,7 @@ export interface AccountingContext {
 }
 
 export type CardKind =
+  | "party_summary"
   | "party_balance"
   | "cash_balance"
   | "bank_balance"
@@ -34,8 +35,17 @@ export type CardKind =
 /** Structured answer card — the deterministic "ground truth" the client
  *  renders alongside (and above) the model's prose commentary. Built from
  *  local aggregators, never from the LLM. */
+export interface PartySummaryCard {
+  side: "receivable" | "payable";
+  asOnDate: string | null;
+  rows: { name: string; outstandingPaise: number; advancePaise: number; buckets: Record<string, number> }[];
+  totalOutstandingPaise: number;
+  totalBuckets: Record<string, number>;
+}
+
 export interface StructuredCard {
   kind: CardKind;
+  partySummary?: PartySummaryCard;
   companyName?: string | null;
   partyName?: string;
   partyGroup?: string | null;

@@ -66,6 +66,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_party_summary",
+    description:
+      "Receivables (debtors) or payables (creditors) by party, largest first, with ageing buckets from bill dates.",
+    argsHint: `{ "side": "receivable" | "payable", "asOn"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_profit_loss",
     description:
       "Profit and Loss account summary, grouped by direct/indirect income and expense.",
@@ -458,6 +464,35 @@ async function execGetVoucher(args: Record<string, unknown>): Promise<ToolResult
  * Rows and totals are returned verbatim — never cached, never recomputed by
  * the model. Without an as-on date the engine's current-FY-end rule applies.
  */
+async function execGetPartySummary(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const side = args.side === "payable" ? "payable" : "receivable";
+  const { runPartySummary } = await import("./accounting-query-engine");
+  const res = await runPartySummary({ side, asOn: args.asOn ? String(args.asOn) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  return {
+    success: true,
+    data: {
+      scope: `${side === "receivable" ? "Receivables" : "Payables"} as on ${res.asOn} (${res.rows.length} parties)`,
+      facts: { as_on_date: res.asOn, side, total_outstanding_paise: res.totalOutstandingPaise, party_count: res.rows.length },
+      data: {
+        rows: res.rows.map((r) => ({
+          name: r.name,
+          outstanding_paise: r.outstandingPaise,
+          advance_paise: r.advancePaise,
+          buckets: r.buckets,
+        })),
+        total_buckets: res.totalBuckets,
+      },
+    },
+    latencyMs,
+  };
+}
+
 async function execGetTrialBalance(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
   const cid = await activeCompanyId();
@@ -568,6 +603,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetVoucher(args);
     case "get_trial_balance":
       return execGetTrialBalance(args);
+    case "get_party_summary":
+      return execGetPartySummary(args);
     case "get_journal_book":
       return execGetJournalBook(args);
     case "get_profit_loss":

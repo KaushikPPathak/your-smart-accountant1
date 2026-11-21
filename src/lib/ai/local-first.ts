@@ -65,6 +65,32 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       return parts.join("\n\n");
     }
 
+    case "party_summary": {
+      const s = card.partySummary;
+      if (!s) return null;
+      const word = s.side === "receivable" ? "Receivables" : "Payables";
+      const asOn = s.asOnDate ? ` as on ${s.asOnDate}` : "";
+      if (!s.rows.length) {
+        return `No ${s.side === "receivable" ? "receivables" : "payables"} outstanding${asOn}.\n\n_Answered locally._`;
+      }
+      const top = s.rows.slice(0, 10).map((r, i) => `${i + 1}. ${r.name} — ${formatInr(r.outstandingPaise)}`);
+      const more = s.rows.length > 10 ? [`…and ${s.rows.length - 10} more parties.`] : [];
+      const b = s.totalBuckets as Record<string, number>;
+      const ageing =
+        `Ageing from bill dates: 0–30 days ${formatInr(b.d0_30 ?? 0)}, 31–60 ${formatInr(b.d31_60 ?? 0)}, ` +
+        `61–90 ${formatInr(b.d61_90 ?? 0)}, over 90 ${formatInr(b.d90p ?? 0)}` +
+        ((b.opening ?? 0) > 0 ? `, opening balances ${formatInr(b.opening ?? 0)}` : "") +
+        ".";
+      return [
+        `${word}${asOn}: ${formatInr(s.totalOutstandingPaise)} from ${s.rows.length} part${s.rows.length === 1 ? "y" : "ies"}.`,
+        top.join("\n"),
+        ...more,
+        ageing,
+        "Ranked by outstanding balance. Each receipt or payment settles the oldest bill first.",
+        "_Answered locally from your books._",
+      ].join("\n\n");
+    }
+
     case "cash_balance": {
       const label = "Cash";
       return `${label} balance is ${formatInr(card.closingPaise ?? 0)} ${card.isDebit ? "Dr" : "Cr"}.\n\n_Answered locally._`;

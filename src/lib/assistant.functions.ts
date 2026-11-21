@@ -228,6 +228,7 @@ function detectCreateCompanyIntent(t: string): boolean {
 /** Intents whose answer can be produced entirely from local books — no LLM, no
  *  compressed-context build. Phase 1 local-first gate. */
 const DETERMINISTIC_INTENTS = new Set([
+  "party_summary",
   "party_balance",
   "party_ledger",
   "cash_balance",
@@ -271,6 +272,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "bank_balance":
       toolName = "get_cash_balance";
       toolArgs = { account: route.entity?.accountName || "bank", asOn: route.entity?.dateRange?.to };
+      break;
+    case "party_summary":
+      toolName = "get_party_summary";
+      toolArgs = { side: route.entity?.summarySide ?? "receivable", asOn: route.asOn ?? null };
       break;
     case "trial_balance":
       toolName = "get_trial_balance";
@@ -329,6 +334,26 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
       accountName: String(facts.account_name || entity?.accountName || (intent === "cash_balance" ? "Cash" : "Bank")),
       closingPaise: closing,
       isDebit: closing >= 0,
+    };
+  }
+  if (intent === "party_summary") {
+    const rows = Array.isArray(data?.data?.rows) ? data.data.rows : null;
+    if (!rows) return undefined;
+    const side = facts.side === "payable" ? "payable" : "receivable";
+    return {
+      kind: "party_summary",
+      partySummary: {
+        side,
+        asOnDate: facts.as_on_date ?? null,
+        rows: rows.map((r: any) => ({
+          name: String(r.name ?? ""),
+          outstandingPaise: Number(r.outstanding_paise ?? 0),
+          advancePaise: Number(r.advance_paise ?? 0),
+          buckets: r.buckets ?? {},
+        })),
+        totalOutstandingPaise: Number(facts.total_outstanding_paise ?? 0),
+        totalBuckets: data?.data?.total_buckets ?? {},
+      },
     };
   }
   if (intent === "trial_balance") {

@@ -104,7 +104,6 @@ describe("report questions are declined, not guessed", () => {
     "Which vendors account for 80% of our purchase spend this year?",
     "Which accounts show abnormal balances (such as a credit balance in a normally debit expense/asset account)?",
     "Do Trial Balance, Balance Sheet, and Profit & Loss totals reconcile cleanly with zero unexplained differences?",
-    "What is our total accounts receivable, broken down by aging buckets?",
   ];
   for (const q of reports) {
     it(`declines: ${q.slice(0, 60)}`, () => {
@@ -116,6 +115,27 @@ describe("report questions are declined, not guessed", () => {
     const r = routeQuery("total outstanding balance and payment history for Ram Traders");
     expect(r.intent).toBe("party_balance");
     expect(r.entity?.partyName).toBe("Ram Traders");
+  });
+});
+
+describe("party receivables and payables are answered locally", () => {
+  it("receivables by ageing buckets", () => {
+    const r = routeQuery("What is our total accounts receivable, broken down by aging buckets?");
+    expect(r.intent).toBe("party_summary");
+    expect(r.entity?.summarySide).toBe("receivable");
+    expect(r.requiresLLM).toBe(false);
+  });
+
+  it("'who owes us' is a receivables question", () => {
+    expect(routeQuery("who owes us the most").entity?.summarySide).toBe("receivable");
+  });
+
+  it("'top 10 vendors' is a payables question", () => {
+    expect(routeQuery("top 10 vendors by outstanding").entity?.summarySide).toBe("payable");
+  });
+
+  it("a named party stays a party question", () => {
+    expect(routeQuery("receivable from Ram Traders").intent).not.toBe("party_summary");
   });
 });
 
