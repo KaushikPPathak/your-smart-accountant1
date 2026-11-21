@@ -25,6 +25,8 @@ export interface RouteResult {
   confidence: number;
   requiresLLM: boolean;
   requiresTools: boolean;
+  /** Set for analytical or report questions the local engine does not answer yet. */
+  unsupportedReport?: boolean;
   entity?: {
     partyName?: string;
     dateRange?: { from?: string; to?: string };
@@ -136,6 +138,7 @@ const INTENT_PATTERNS: { intent: IntentType; patterns: RegExp[]; deterministic: 
       /\b(?:how much|what)\b.{0,40}\b(?:owe|owes|due|outstanding|pending)\b.{0,40}\b(?:from|to|by)\b/i,
       /\b(?:show|get|tell)\b.{0,20}\bbalance\b.{0,80}\b(?:of|for|in)\b/i,
       /\bbalance\s+(?:of|for|in)\b/i,
+      /\b(?:outstanding|balance)\b.{0,40}\bfor\s+[A-Za-z]/i,
       // Natural accounting questions such as "Hasmukhbhai balance" or
       // "Avni balance at year end".
       /\b(?:balance|bal)\b/i,
@@ -146,7 +149,7 @@ const INTENT_PATTERNS: { intent: IntentType; patterns: RegExp[]; deterministic: 
     deterministic: true,
     patterns: [
       /(?:trial balance|tb)/i,
-      /(?:all|total).{0,20}(?:balance|ledger)/i,
+      /\b(?:all|total)\s+(?:ledgers?|balances?)\b/i,
     ],
   },
   {
@@ -306,6 +309,17 @@ function normalizeComparable(value: string): string {
     .trim();
 }
 
+const REPORT_QUESTION = new RegExp(
+  [
+    "^\\s*(?:which|who are|are there|is there|do we have any)\\b",
+    "^\\s*top\\s+(?:\\d+|ten|five|three)\\b",
+    "\\b(?:abnormal|unusual|spikes?|out[- ]of[- ]pattern|reconcil\\w*|difference between|statement balance|book balance|balance sheet)\\b",
+    "\\b(?:80\\s*%|accounts?\\s+payable|accounts?\\s+receivable|by revenue|by spend)\\b",
+    "\\blist\\s+(?:all\\s+)?(?:customers|vendors|parties|debtors|creditors|items|stock)\\b",
+  ].join("|"),
+  "i",
+);
+
 const BANK_NAME_LEAD_NOISE = new Set([
   "show", "give", "tell", "what", "whats", "what's", "is", "are", "the", "my", "our", "your", "me",
   "current", "check", "get", "see", "please", "of", "for", "in", "and", "to", "balance", "bal", "how", "much", "status",
@@ -367,6 +381,8 @@ function extractBalanceSubject(text: string): string | undefined {
   // Remove the balance word and common trailing qualifiers.
   value = value
     .replace(/\b(?:balance|bal|amount|status)\b/gi, " ")
+    .replace(/\b(?:total|outstanding|payment\s+history|history)\b/gi, " ")
+    .replace(/^\s*and\b/i, " ")
     .replace(/\b(?:of|for|in|from|to|on|at|as|per)\b/gi, " ")
     .replace(/\b(?:today|now|current|present|particular|date|year|end|sheet)\b/gi, " ");
 
@@ -450,9 +466,10 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
   // party called "Yes bank" and is promoted to YES Bank. "Yes bank balance" (no comma) still means YES Bank.
   const trimmed = originalText.trim().replace(/^(?:yes|yeah|yep|ok|okay)\s*[,.!;:-]\s*/i, "");
 
-  // A balance sheet is not a party balance. It is not answered locally yet.
-  if (/\bbalance\s*sheet\b/i.test(trimmed)) {
-    return { intent: "unknown", confidence: 0.5, requiresLLM: true, requiresTools: false, entityHints: [] };
+  // Analytical and report questions ("which", "top 10", "abnormal", "reconcile", "accounts payable")
+  // are not single-ledger balances. Say so plainly instead of guessing a balance.
+  if (REPORT_QUESTION.test(trimmed)) {
+    return { intent: "unknown", confidence: 0.5, requiresLLM: false, requiresTools: false, entityHints: [], unsupportedReport: true };
   }
 
   if (!trimmed) {

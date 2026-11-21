@@ -94,3 +94,28 @@ describe("AI answers: routing bugs found in the audit", () => {
     expect(routeQuery("what is cash in hand").intent).toBe("cash_balance");
   });
 });
+
+describe("report questions are declined, not guessed", () => {
+  const reports = [
+    "Which bank or cash ledger has seen unusual spikes or out-of-pattern withdrawals recently?",
+    "What is the difference between our bank statement balance and book balance for HDFC this month?",
+    "Who are our top 10 customers by revenue and by overdue balance this financial year?",
+    "What is our total accounts payable, and which vendor bills are due in the next 7 or 15 days?",
+    "Which vendors account for 80% of our purchase spend this year?",
+    "Which accounts show abnormal balances (such as a credit balance in a normally debit expense/asset account)?",
+    "Do Trial Balance, Balance Sheet, and Profit & Loss totals reconcile cleanly with zero unexplained differences?",
+    "What is our total accounts receivable, broken down by aging buckets?",
+  ];
+  for (const q of reports) {
+    it(`declines: ${q.slice(0, 60)}`, () => {
+      expect(routeQuery(q).unsupportedReport).toBe(true);
+    });
+  }
+
+  it("a party's outstanding balance and payment history is still a party question", () => {
+    const r = routeQuery("total outstanding balance and payment history for Ram Traders");
+    expect(r.intent).toBe("party_balance");
+    expect(r.entity?.partyName).toBe("Ram Traders");
+  });
+});
+

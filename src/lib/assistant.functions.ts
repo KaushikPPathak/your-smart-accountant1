@@ -370,6 +370,17 @@ const ENTRY_HELP =
 
 const NO_COMPANY_HELP = "Open a company first. Then I can record entries for it.";
 
+const UNSUPPORTED_REPORT =
+  "I cannot produce that report yet. I answer single-ledger questions from your books: " +
+  "cash balance, bank balance (for example \"HDFC balance\"), a party's balance and ledger " +
+  "(for example \"balance of Ram Traders\"), the trial balance (for example \"trial balance as on 31/03/2026\"), " +
+  "and vouchers by date. For entries, tell me the type, the amount and the party.";
+
+const CANNOT_ANSWER_YET =
+  "I cannot answer that from your books yet. " +
+  "I answer cash balance, bank balance, a party's balance and ledger, the trial balance and vouchers by date. " +
+  "For entries, tell me the type, the amount and the party.";
+
 const CLARIFY_DIRECTION =
   "Nothing is saved yet. Did this money come in or go out? Reply with \"received\" for money in, or \"paid\" for money out, and I will prepare the entry. " +
   "For example: \"received 5000 from Ram in HDFC\" or \"paid 1200 to landlord cash\".";
@@ -439,6 +450,9 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
     }
 
     const route = routeQuery(question);
+    if (route.unsupportedReport) {
+      return { ok: true, text: UNSUPPORTED_REPORT, latencyMs: Math.round(performance.now() - start) };
+    }
 
     // 1. Instant greeting / deterministic
     if (!route.requiresLLM && !route.requiresTools && route.deterministicAnswer) {
@@ -494,9 +508,14 @@ export async function assistantChat(args?: AssistantArgs): Promise<AssistantChat
 
     // 6. Data-entry assistant: no free-form LLM answers. Say plainly what
     // can be entered instead of guessing.
+    const asksSomething = looksLikeQuestion;
     return {
       ok: true,
-      text: companyId || earlyCompanyId ? ENTRY_HELP : NO_COMPANY_HELP,
+      text: !(companyId || earlyCompanyId)
+        ? NO_COMPANY_HELP
+        : asksSomething
+          ? CANNOT_ANSWER_YET
+          : ENTRY_HELP,
       latencyMs: Math.round(performance.now() - start),
     };
   } catch (err) {
