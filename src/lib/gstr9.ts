@@ -5,14 +5,8 @@ import {
 } from "@/lib/gst-returns";
 import { isTaxFreeGstLine } from "@/lib/gst-supply-classification";
 import { reconcileBillTaxLines } from "@/lib/gst-bill-lines";
-import {
-  journalItcVouchers,
-  purchaseBucketHints,
-  type BooksLedger,
-  type BooksLine,
-  type ItcBucket,
-  type JournalItc,
-} from "@/lib/gst-itc-from-books";
+import type { ItcBucket, JournalItc } from "@/lib/gst-itc-from-books";
+import { loadItcClassInputs } from "@/lib/gst-itc-inputs";
 
 /**
  * GSTR-9 Phase 1
@@ -49,6 +43,7 @@ export interface Gstr9JournalItcRow {
   voucherNumber: string;
   bucket: ItcBucket;
   againstLedger: string;
+  againstLedgerId: string;
   taxableValue: number;
   igst: number;
   cgst: number;
@@ -400,36 +395,6 @@ function buildItcByClass(
   return out;
 }
 
-/** Books lines and ledgers for the year, used to classify purchases and read journal ITC. */
-export async function readBooksItcInputs(
-  companyId: string,
-  from: string,
-  to: string,
-): Promise<{ lines: BooksLine[]; ledgers: Map<string, BooksLedger> }> {
-  const { readLedgers, readVoucherEntriesWithVouchers } = await import("@/lib/offline/cache-read");
-  const [entries, ledgerRows] = await Promise.all([
-    readVoucherEntriesWithVouchers(companyId, { from, to }),
-    readLedgers(companyId),
-  ]);
-  const ledgers = new Map<string, BooksLedger>(
-    (ledgerRows as any[]).map((l) => [
-      String(l.id),
-      { name: String(l.name ?? ""), type: String(l.type ?? ""), group: l.group_name ?? null },
-    ]),
-  );
-  const lines: BooksLine[] = (entries as any[])
-    .filter((e) => e?.vouchers && (e.vouchers.voucher_type === "journal" || e.vouchers.voucher_type === "purchase"))
-    .map((e) => ({
-      voucherId: String(e.voucher_id),
-      voucherType: String(e.vouchers.voucher_type),
-      voucherDate: String(e.vouchers.voucher_date ?? ""),
-      voucherNumber: String(e.vouchers.voucher_number ?? ""),
-      ledgerId: String(e.ledger_id ?? ""),
-      debitPaise: Number(e.debit_paise ?? 0),
-      creditPaise: Number(e.credit_paise ?? 0),
-    }));
-  return { lines, ledgers };
-}
 
 function addTotals(
   target: Gstr9TaxTotals,
@@ -969,6 +934,7 @@ export function buildGstr9(
       voucherNumber: j.voucherNumber,
       bucket: j.bucket,
       againstLedger: j.againstLedger,
+      againstLedgerId: j.againstLedgerId,
       taxableValue: rupees(j.taxablePaise),
       igst: rupees(j.igstPaise),
       cgst: rupees(j.cgstPaise),
@@ -1048,7 +1014,7 @@ export async function loadGstr9Books(
       ),
     ]);
 
-  const { lines, ledgers } = await readBooksItcInputs(companyId, from, to);
+  const itcInputs = await loadItcClassInputs(companyId, from, to);
 
   return buildGstr9({
     company,
@@ -1056,8 +1022,8 @@ export async function loadGstr9Books(
     sales,
     creditNotes,
     purchases,
-    purchaseBuckets: purchaseBucketHints(lines, ledgers),
-    journalItc: journalItcVouchers(lines, ledgers),
+    purchaseBuckets: itcInputs.purchaseBuckets,
+    journalItc: itcInputs.journalItc,
   });
 }
 

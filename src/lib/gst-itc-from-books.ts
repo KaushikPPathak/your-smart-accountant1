@@ -33,6 +33,7 @@ export interface JournalItc {
   bucket: ItcBucket;
   /** Ledger the ITC was posted against (the main debit that is not tax). */
   againstLedger: string;
+  againstLedgerId: string;
   taxablePaise: number;
   igstPaise: number;
   cgstPaise: number;
@@ -61,7 +62,11 @@ export function bucketOfLedger(ledger: BooksLedger | undefined): ItcBucket {
 }
 
 /** Journal vouchers that post input tax, one result per voucher. */
-export function journalItcVouchers(lines: BooksLine[], ledgers: Map<string, BooksLedger>): JournalItc[] {
+export function journalItcVouchers(
+  lines: BooksLine[],
+  ledgers: Map<string, BooksLedger>,
+  overrides: Map<string, ItcBucket> = new Map(),
+): JournalItc[] {
   const byVoucher = new Map<string, BooksLine[]>();
   for (const l of lines) {
     if (l.voucherType !== "journal") continue;
@@ -98,8 +103,9 @@ export function journalItcVouchers(lines: BooksLine[], ledgers: Map<string, Book
       voucherId,
       voucherDate: first.voucherDate,
       voucherNumber: first.voucherNumber,
-      bucket: bucketOfLedger(against),
+      bucket: overrides.get(best.ledgerId) ?? bucketOfLedger(against),
       againstLedger: against?.name ?? "",
+      againstLedgerId: best.ledgerId,
       taxablePaise: taxable,
       igstPaise: igst,
       cgstPaise: cgst,
@@ -110,7 +116,11 @@ export function journalItcVouchers(lines: BooksLine[], ledgers: Map<string, Book
 }
 
 /** Class of each purchase voucher from its main purchase-side credit (party and tax ledgers excluded). */
-export function purchaseBucketHints(lines: BooksLine[], ledgers: Map<string, BooksLedger>): Map<string, ItcBucket> {
+export function purchaseBucketHints(
+  lines: BooksLine[],
+  ledgers: Map<string, BooksLedger>,
+  overrides: Map<string, ItcBucket> = new Map(),
+): Map<string, ItcBucket> {
   const best = new Map<string, { ledgerId: string; amount: number }>();
   for (const l of lines) {
     if (l.voucherType !== "purchase" || l.creditPaise <= 0) continue;
@@ -120,6 +130,6 @@ export function purchaseBucketHints(lines: BooksLine[], ledgers: Map<string, Boo
     if (!cur || l.creditPaise > cur.amount) best.set(l.voucherId, { ledgerId: l.ledgerId, amount: l.creditPaise });
   }
   const out = new Map<string, ItcBucket>();
-  for (const [voucherId, b] of best) out.set(voucherId, bucketOfLedger(ledgers.get(b.ledgerId)));
+  for (const [voucherId, b] of best) out.set(voucherId, overrides.get(b.ledgerId) ?? bucketOfLedger(ledgers.get(b.ledgerId)));
   return out;
 }

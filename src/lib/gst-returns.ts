@@ -9,6 +9,7 @@ import type { XlsxSheet } from "@/lib/exporters";
 import { GSTR1_PORTAL_VERSION, DOC_TYPES, portalHsnBlock } from "./gstr1-portal-format";
 import { isTaxFreeGstLine } from "./gst-supply-classification";
 import { reconcileBillTaxLines } from "./gst-bill-lines";
+import type { ItcBucket, JournalItc } from "./gst-itc-from-books";
 import { fetchInwardSummaryLocal, fetchItcReversalLocal } from "@/lib/offline/gstr3b-local";
 import {
   readCompanies,
@@ -1147,6 +1148,10 @@ export interface BuildGstr3BArgs {
   inwardSummary?: InwardSummaryRow[];
   itcReversal?: ItcReversalRow[];
   itcInelig?: { ty: "RUL_42_43" | "OTH"; iamt: number; camt: number; samt: number; csamt: number }[];
+  /** Class per purchase voucher from the books, for vouchers with no stored class. */
+  purchaseBuckets?: Map<string, ItcBucket>;
+  /** Input tax posted in journal vouchers; it is part of the ITC available. */
+  journalItc?: JournalItc[];
 }
 
 const zeroSup = (): SupRow => ({ txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0 });
@@ -1228,7 +1233,10 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
     if (isBlocked(v)) return "ineligible_blocked";
     if (v.itc_class === "capital_goods") return "capital_goods";
     if (v.itc_class === "input_services") return "input_services";
-    // default — treat unclassified as inputs (preserves legacy behaviour)
+    // No stored class: take the class the books give the voucher, else treat as inputs.
+    const hinted = args.purchaseBuckets?.get(String(v.id));
+    if (hinted === "capitalGoods") return "capital_goods";
+    if (hinted === "inputServices") return "input_services";
     return "inputs";
   };
   for (const v of purchases) {
@@ -1241,6 +1249,13 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
     } else {
       itcAll.iamt += v.igst_paise; itcAll.camt += v.cgst_paise; itcAll.samt += v.sgst_paise;
     }
+  }
+  // Journal input tax: available as other ITC, classed by the ledger it was posted against.
+  for (const j of args.journalItc ?? []) {
+    const klass: keyof typeof cb = j.bucket === "capitalGoods" ? "capital_goods" : j.bucket === "inputServices" ? "input_services" : "inputs";
+    cb[klass].iamt += j.igstPaise; cb[klass].camt += j.cgstPaise;
+    cb[klass].samt += j.sgstPaise; cb[klass].txval += j.taxablePaise;
+    itcAll.iamt += j.igstPaise; itcAll.camt += j.cgstPaise; itcAll.samt += j.sgstPaise;
   }
   for (const v of debitNotes) if (v.voucher_type === "debit_note") {
     if (isBlocked(v)) {

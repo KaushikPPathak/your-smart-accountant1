@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { Gstr9Drilldown, type Gstr9DrillSelection } from "@/components/reports/Gstr9Drilldown";
 import { onDataChange } from "@/lib/ai/cache-events";
+import { saveItcOverride } from "@/lib/gst-itc-inputs";
+import type { ItcBucket } from "@/lib/gst-itc-from-books";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -3918,8 +3920,10 @@ function Gstr9PrintInputWorking({
   company,
   result,
   onRowAction,
+  onJournalClassChange,
 }: {
   onRowAction?: (title: string, row: string, index: number) => void;
+  onJournalClassChange?: (ledgerId: string, bucket: ItcBucket) => void;
   result?: Gstr9Result | null;
   record: Gstr9InputRecord | undefined;
   financialYear: string;
@@ -4124,19 +4128,46 @@ function Gstr9PrintInputWorking({
             ]}
           />
           {result.itcJournals.length > 0 && (
-            <OfficialTable
-              onRowAction={onRowAction}
-              title={`Journal vouchers carrying input tax (${result.itcJournals.length}, included in the class table above)`}
-              columns={["Date", "Voucher no.", "Class", "Posted against", "Taxable value", "Total ITC"]}
-              rows={result.itcJournals.map((j) => [
-                j.date,
-                j.voucherNumber,
-                j.bucket === "capitalGoods" ? "Capital goods" : j.bucket === "inputServices" ? "Expenses" : "Goods",
-                j.againstLedger,
-                money(j.taxableValue),
-                money(j.totalItc),
-              ])}
-            />
+            <div className="mt-2 rounded border p-2 print:hidden">
+              <p className="mb-1 text-xs font-semibold">Journal vouchers carrying input tax ({result.itcJournals.length}), included in the class table above</p>
+              <p className="mb-2 text-[11px] text-muted-foreground">Set the class for each ledger the ITC was posted against. Changing it applies to every journal posted to that ledger, and is saved for this company.</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-muted-foreground">
+                      <th className="py-1 pr-2">Date</th>
+                      <th className="py-1 pr-2">Voucher no.</th>
+                      <th className="py-1 pr-2">Posted against</th>
+                      <th className="py-1 pr-2 text-right">Taxable value</th>
+                      <th className="py-1 pr-2 text-right">Total ITC</th>
+                      <th className="py-1">Class</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.itcJournals.map((j, idx) => (
+                      <tr key={`${j.voucherNumber}-${idx}`} className="border-t">
+                        <td className="py-1 pr-2">{j.date}</td>
+                        <td className="py-1 pr-2">{j.voucherNumber}</td>
+                        <td className="py-1 pr-2">{j.againstLedger}</td>
+                        <td className="py-1 pr-2 text-right">{money(j.taxableValue)}</td>
+                        <td className="py-1 pr-2 text-right">{money(j.totalItc)}</td>
+                        <td className="py-1">
+                          <select
+                            className="h-8 rounded border bg-background px-1"
+                            value={j.bucket}
+                            onChange={(e) => onJournalClassChange?.(j.againstLedgerId, e.target.value as ItcBucket)}
+                          >
+                            <option value="inputs">Goods</option>
+                            <option value="inputServices">Expenses</option>
+                            <option value="capitalGoods">Capital goods</option>
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
           </>
         );
@@ -4567,6 +4598,10 @@ function GSTR9Page() {
               company={company}
               result={result}
               onRowAction={annualRowAction}
+              onJournalClassChange={async (ledgerId, bucket) => {
+                await saveItcOverride(activeCompanyId, ledgerId, bucket);
+                await load();
+              }}
             />
           )}
 

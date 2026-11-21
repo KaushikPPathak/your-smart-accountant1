@@ -106,3 +106,29 @@ describe("purchase class when none is stored", () => {
     expect(hints.get("p-cap")).toBe("capitalGoods");
   });
 });
+
+describe("class chosen by the user for a ledger", () => {
+  it("reclassifies every journal posted to a supplier ledger", () => {
+    const lines = [
+      L("j50", "journal", "efo", 1446321, 0),
+      L("j50", "journal", "icgst", 130168, 0),
+      L("j50", "journal", "party", 0, 1576489),
+      L("j51", "journal", "efo", 500000, 0),
+      L("j51", "journal", "isgst", 45000, 0),
+      L("j51", "journal", "party", 0, 545000),
+    ];
+    const overrides = new Map([["efo", "capitalGoods" as const]]);
+    const vs = journalItcVouchers(lines, ledgers, overrides);
+    expect(vs).toHaveLength(2);
+    expect(vs.every((v) => v.bucket === "capitalGoods")).toBe(true);
+    expect(vs[0].againstLedgerId).toBe("efo");
+  });
+
+  it("applies an override to a purchase-side ledger", () => {
+    const lines = [
+      L("p1", "purchase", "purch", 0, 1000),
+      L("p1", "purchase", "party", 0, 1180),
+    ];
+    expect(purchaseBucketHints(lines, ledgers, new Map([["purch", "inputServices" as const]])).get("p1")).toBe("inputServices");
+  });
+});

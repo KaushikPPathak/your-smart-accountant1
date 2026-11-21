@@ -1,3 +1,4 @@
+import { loadItcClassInputs } from "@/lib/gst-itc-inputs";
 import { createFileRoute } from "@tanstack/react-router";
 import { PhoneReportHeading } from "@/components/reports/PhoneReportHeading";
 import { printOrViewOnPhone } from "@/components/reports/ReportViewer";
@@ -72,10 +73,12 @@ function GSTR3BPage() {
       ]);
       setInward(inwardRows);
       setReversal(reversalRows);
+      const itcInputs = await loadItcClassInputs(activeCompanyId, period.from, period.to);
       setBuilt(buildGstr3B({
         company, from: period.from, to: period.to, fp: period.fp,
         sales, purchases, creditNotes, debitNotes,
         inwardSummary: mergeInwardSummaries(inwardRows), itcReversal: reversalRows,
+        purchaseBuckets: itcInputs.purchaseBuckets, journalItc: itcInputs.journalItc,
       }));
     })();
   }, [activeCompanyId, company, period.from, period.to, period.fp, fpsKey]);
@@ -263,7 +266,8 @@ function GSTR3BPage() {
                 fetchVouchers(activeCompanyId, period.from, period.to, ["credit_note"]),
                 fetchVouchers(activeCompanyId, period.from, period.to, ["debit_note"]),
               ]);
-              setBuilt(buildGstr3B({ company, from: period.from, to: period.to, fp: period.fp, sales, purchases, creditNotes, debitNotes, inwardSummary: i, itcReversal: r }));
+              const itcInputs = await loadItcClassInputs(activeCompanyId, period.from, period.to);
+              setBuilt(buildGstr3B({ company, from: period.from, to: period.to, fp: period.fp, sales, purchases, creditNotes, debitNotes, inwardSummary: i, itcReversal: r, purchaseBuckets: itcInputs.purchaseBuckets, journalItc: itcInputs.journalItc }));
             }}
           />
           ) : (
