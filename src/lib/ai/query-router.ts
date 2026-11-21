@@ -31,6 +31,7 @@ export type IntentType =
   | "vendor_concentration"
   | "monthly_trend"
   | "returns_summary"
+  | "item_stock"
   | "vendor_spend_cycle"
   | "unknown";
 
@@ -43,6 +44,7 @@ export interface RouteResult {
   unsupportedReport?: boolean;
   entity?: {
     partyName?: string;
+    itemName?: string;
     dateRange?: { from?: string; to?: string };
     amount?: number;
     /** For party_summary: receivables (debtors) or payables (creditors). */
@@ -551,6 +553,20 @@ function duplicateCheckQuestion(text: string): boolean {
   return /\bduplicate\b|\bsame (bill|invoice) (no|number)\b|\bidentical amounts?\b|\bprice (jump|increase|hike|rise)s?\b|\bunusual (price|rate)s?\b|\bpaid twice\b|\brepeat(ed)? payments?\b/i.test(text);
 }
 
+function itemNameFromText(text: string): string | undefined {
+  // Only "stock [quantity|valuation …] for|of <item>" counts, so "stock valuation changes on COGS" does not.
+  const m = /\b(?:stock|inventory)\s+(?:(?:quantity|qty|valuation|value|balance)\s*(?:and\s+)?)*(?:for|of)\s+(.+?)(?:\s+(?:across|in|at|as\s+on|as\s+of|on|all)\b|[?.!,]|$)/i.exec(text);
+  const name = m?.[1]?.trim();
+  if (!name || /^(?:the\s+)?(?:last|this|past|current|previous)\b/i.test(name) || /^\d/.test(name)) return undefined;
+  return name;
+}
+
+function itemStockQuestion(text: string): boolean {
+  if (!/\b(stock|inventory)\b/i.test(text)) return false;
+  if (!/\b(quantity|qty|valuation|value|how much|balance|on hand|in hand)\b/i.test(text)) return false;
+  return itemNameFromText(text) !== undefined;
+}
+
 function returnsSummaryQuestion(text: string): boolean {
   return /\b(purchase|sales) returns?\b|\breturn (value|values|summary|total)\b|\breturns? (this|the) (quarter|month|year)\b/i.test(text);
 }
@@ -604,6 +620,21 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
     };
   }
 
+  if (itemStockQuestion(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    return {
+      intent: "item_stock",
+      confidence: 0.9,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: { itemName: itemNameFromText(trimmed) },
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
   if (returnsSummaryQuestion(trimmed)) {
     const dateInfo = extractDateInfo(trimmed);
     return {

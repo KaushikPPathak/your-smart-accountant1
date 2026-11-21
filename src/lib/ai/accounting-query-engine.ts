@@ -2161,3 +2161,121 @@ export async function runReturnsSummary(query: {
     purchaseReturns: bucket("debit_note"),
   };
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Stock quantity and valuation for one item (questionnaire 5.1, partial)
+//
+//  Quantity  = opening stock of the item + stock movements dated on or before the as-on date.
+//              In:  purchase, receipt note, sales return (credit note), stock journal in.
+//              Out: sales, delivery note, purchase return (debit note), stock journal out.
+//              Manufacturing vouchers are not counted (the same rule the negative-stock check uses).
+//  Value     = quantity × valuation rate. Rate = the last purchase rate on or before the as-on date;
+//              otherwise the opening stock rate; otherwise the item's purchase price. Each is named.
+//  Godowns   = not available. The books do not record a godown on stock lines, so the figure is the
+//              total across all godowns.
+//  Read-only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const STOCK_IN_TYPES = ["purchase", "receipt_note", "credit_note", "stock_journal_in"];
+export const STOCK_OUT_TYPES = ["sales", "delivery_note", "debit_note", "stock_journal_out"];
+
+export type ItemStockResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | { status: "not_found"; query: string }
+  | { status: "ambiguous"; query: string; candidates: string[] }
+  | {
+      status: "resolved";
+      item: string;
+      unit: string;
+      asOn: string;
+      openingQty: number;
+      movementQty: number;
+      closingQty: number;
+      valuationRatePaise: number | null;
+      rateSource: "last_purchase" | "opening_rate" | "purchase_price" | "none";
+      rateDate: string | null;
+      valuePaise: number | null;
+    };
+
+export async function runItemStock(query: {
+  itemName: string;
+  asOn?: string | null;
+  companyId?: string | null;
+}): Promise<ItemStockResult> {
+  const asOnArg = coerceDateArg(query.asOn);
+  if (!asOnArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+  const asOn = asOnArg.value ?? new Date().toISOString().slice(0, 10);
+
+  const { offlineDb } = await import("@/lib/offline/db");
+  const live = ((await offlineDb.cache_items.where("company_id").equals(companyId).toArray()) as any[]).filter(
+    (i) => i && i.is_deleted !== true,
+  );
+  const q = query.itemName.trim().toLowerCase();
+  let matches = live.filter((i) => String(i.name ?? "").trim().toLowerCase() === q);
+  if (matches.length === 0) matches = live.filter((i) => String(i.name ?? "").toLowerCase().includes(q));
+  if (q === "") return { status: "not_found", query: query.itemName };
+  if (matches.length === 0) return { status: "not_found", query: query.itemName };
+  if (matches.length > 1) {
+    return { status: "ambiguous", query: query.itemName, candidates: matches.map((m) => String(m.name)) };
+  }
+  const item = matches[0];
+  const itemId = String(item.id);
+
+  const { readVouchers } = await import("@/lib/offline/cache-read");
+  const vouchers = (await readVouchers(companyId)) as any[];
+  const voucherById = new Map(
+    vouchers.map((v) => [String(v.id), { type: String(v.voucher_type ?? ""), date: normalizeStoredDate(v.voucher_date ?? v.date) }]),
+  );
+  const lines = ((await offlineDb.cache_voucher_items.where("company_id").equals(companyId).toArray()) as any[]).filter(
+    (r) => r && r.is_deleted !== true && String(r.item_id) === itemId,
+  );
+
+  let movement = 0;
+  let lastPurchase: { date: string; rate: number } | null = null;
+  for (const r of lines) {
+    const v = voucherById.get(String(r.voucher_id));
+    if (!v || !v.date || v.date > asOn) continue;
+    const qty = Math.abs(Number(r.qty ?? 0));
+    if (STOCK_IN_TYPES.includes(v.type)) movement += qty;
+    else if (STOCK_OUT_TYPES.includes(v.type)) movement -= qty;
+    const rate = Number(r.rate_paise ?? 0);
+    if (v.type === "purchase" && rate > 0 && (!lastPurchase || v.date >= lastPurchase.date)) {
+      lastPurchase = { date: v.date, rate };
+    }
+  }
+
+  const openingQty = Number(item.opening_stock_qty ?? 0);
+  const closingQty = openingQty + movement;
+  let rate: number | null = null;
+  let rateSource: "last_purchase" | "opening_rate" | "purchase_price" | "none" = "none";
+  let rateDate: string | null = null;
+  if (lastPurchase) {
+    rate = lastPurchase.rate;
+    rateSource = "last_purchase";
+    rateDate = lastPurchase.date;
+  } else if (Number(item.opening_stock_rate_paise ?? 0) > 0) {
+    rate = Number(item.opening_stock_rate_paise);
+    rateSource = "opening_rate";
+  } else if (Number(item.purchase_price_paise ?? 0) > 0) {
+    rate = Number(item.purchase_price_paise);
+    rateSource = "purchase_price";
+  }
+
+  return {
+    status: "resolved",
+    item: String(item.name ?? ""),
+    unit: String(item.unit ?? ""),
+    asOn,
+    openingQty,
+    movementQty: movement,
+    closingQty,
+    valuationRatePaise: rate,
+    rateSource,
+    rateDate,
+    valuePaise: rate === null ? null : Math.round(closingQty * rate),
+  };
+}

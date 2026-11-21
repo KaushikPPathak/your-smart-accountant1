@@ -36,6 +36,7 @@ export type CardKind =
   | "vendor_concentration"
   | "monthly_trend"
   | "returns_summary"
+  | "item_stock"
   | "vendor_spend_cycle"
   | "party_balance"
   | "cash_balance"
@@ -137,6 +138,22 @@ export interface ReturnsSummaryCard {
   purchaseReturns: { totalPaise: number; count: number; rows: { voucherNumber: string; date: string; party: string; amountPaise: number; reason: string | null }[] };
 }
 
+export interface ItemStockCard {
+  status: "resolved" | "not_found" | "ambiguous";
+  query: string;
+  candidates: string[];
+  item: string | null;
+  unit: string;
+  asOn: string | null;
+  openingQty: number;
+  movementQty: number;
+  closingQty: number;
+  valuationRatePaise: number | null;
+  rateSource: "last_purchase" | "opening_rate" | "purchase_price" | "none";
+  rateDate: string | null;
+  valuePaise: number | null;
+}
+
 export interface VendorSpendCycleCard {
   status: "resolved" | "not_found" | "ambiguous" | "no_name";
   vendor: string | null;
@@ -174,6 +191,7 @@ export interface StructuredCard {
   vendorConcentration?: VendorConcentrationCard;
   monthlyTrend?: MonthlyTrendCard;
   returnsSummary?: ReturnsSummaryCard;
+  itemStock?: ItemStockCard;
   vendorSpendCycle?: VendorSpendCycleCard;
   companyName?: string | null;
   partyName?: string;

@@ -240,6 +240,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "vendor_concentration",
   "monthly_trend",
   "returns_summary",
+  "item_stock",
   "vendor_spend_cycle",
   "party_balance",
   "party_ledger",
@@ -292,6 +293,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "vendor_spend_cycle":
       toolName = "get_vendor_spend_cycle";
       toolArgs = { vendor: route.entity?.partyName ?? "", from: route.from ?? null, to: route.to ?? null };
+      break;
+    case "item_stock":
+      toolName = "get_item_stock";
+      toolArgs = { item: route.entity?.itemName ?? "", asOn: route.asOn ?? null };
       break;
     case "returns_summary":
       toolName = "get_returns_summary";
@@ -465,6 +470,28 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
         method: "none",
         averageCycleDays: null,
         unmatchedPaymentsPaise: 0,
+      },
+    };
+  }
+  if (intent === "item_stock") {
+    const f = facts;
+    if (!f || !f.status) return undefined;
+    return {
+      kind: "item_stock",
+      itemStock: {
+        status: String(f.status) as "resolved" | "not_found" | "ambiguous",
+        query: String(f.query ?? ""),
+        candidates: Array.isArray(data?.data?.candidates) ? data.data.candidates.map(String) : [],
+        item: f.item ? String(f.item) : null,
+        unit: String(f.unit ?? ""),
+        asOn: f.as_on ? String(f.as_on) : null,
+        openingQty: Number(f.opening_qty ?? 0),
+        movementQty: Number(f.movement_qty ?? 0),
+        closingQty: Number(f.closing_qty ?? 0),
+        valuationRatePaise: f.valuation_rate_paise == null ? null : Number(f.valuation_rate_paise),
+        rateSource: (f.rate_source ?? "none") as "last_purchase" | "opening_rate" | "purchase_price" | "none",
+        rateDate: f.rate_date ? String(f.rate_date) : null,
+        valuePaise: f.value_paise == null ? null : Number(f.value_paise),
       },
     };
   }

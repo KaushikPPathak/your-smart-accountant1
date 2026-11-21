@@ -110,6 +110,31 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "item_stock": {
+      const s = card.itemStock;
+      if (!s) return null;
+      const note = "_Answered locally from your books._";
+      if (s.status === "not_found") {
+        return `No stock item called "${s.query}" in your books. Check the spelling of the item name.\n\n${note}`;
+      }
+      if (s.status === "ambiguous") {
+        return `More than one item matches "${s.query}": ${s.candidates.join(", ")}. Which one do you mean?\n\n${note}`;
+      }
+      const qty = (n: number) => n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+      const unit = s.unit ? ` ${s.unit}` : "";
+      const first = `${s.item}: closing stock ${qty(s.closingQty)}${unit} as on ${s.asOn} (opening ${qty(s.openingQty)}, movements ${s.movementQty >= 0 ? "+" : ""}${qty(s.movementQty)}).`;
+      let value: string;
+      if (s.valuationRatePaise === null || s.valuePaise === null) {
+        value = "No purchase rate, opening rate or purchase price is recorded for this item, so its value cannot be stated.";
+      } else {
+        const basis = s.rateSource === "last_purchase" ? `the last purchase rate${s.rateDate ? ` on ${s.rateDate}` : ""}` : s.rateSource === "opening_rate" ? "the opening stock rate" : "the purchase price";
+        value = `Valued at ${formatInr(s.valuePaise)}: ${qty(s.closingQty)} × ${formatInr(s.valuationRatePaise)} per${unit || " unit"}, using ${basis}.`;
+      }
+      const godowns = "Godown split: not available. The books do not record godowns on stock lines, so this is the total across all godowns.";
+      const rule = "Quantity counts purchases, sales returns, sales, purchase returns, delivery notes and stock journals. Manufacturing is not counted.";
+      return [first, value, godowns, rule, note].join("\n\n");
+    }
+
     case "returns_summary": {
       const r = card.returnsSummary;
       if (!r) return null;

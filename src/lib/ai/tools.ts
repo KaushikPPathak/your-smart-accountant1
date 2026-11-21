@@ -78,6 +78,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_item_stock",
+    description:
+      "Quantity and valuation of one stock item as on a date: opening stock plus movements, valued at the last purchase rate. Godowns are not recorded, so the figure covers all godowns.",
+    argsHint: `{ "item": string, "asOn"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_returns_summary",
     description:
       "Sales returns (credit notes) and purchase returns (debit notes) in a period, default the current financial-year quarter, with value, count and each voucher's narration as the reason.",
@@ -646,6 +652,46 @@ async function execGetVendorOverdue(args: Record<string, unknown> = {}): Promise
   };
 }
 
+/** Item stock comes from the accounting engine, never recomputed here. */
+async function execGetItemStock(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runItemStock } = await import("./accounting-query-engine");
+  const res = await runItemStock({ itemName: String(args.item ?? ""), asOn: args.asOn ? String(args.asOn) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  if (res.status === "not_found") {
+    return { success: true, data: { scope: `Item ${res.query}`, facts: { status: "not_found", query: res.query }, data: {} }, latencyMs };
+  }
+  if (res.status === "ambiguous") {
+    return { success: true, data: { scope: `Item ${res.query}`, facts: { status: "ambiguous", query: res.query }, data: { candidates: res.candidates } }, latencyMs };
+  }
+  return {
+    success: true,
+    data: {
+      scope: `Stock of ${res.item} as on ${res.asOn}`,
+      facts: {
+        status: "resolved",
+        item: res.item,
+        unit: res.unit,
+        as_on: res.asOn,
+        opening_qty: res.openingQty,
+        movement_qty: res.movementQty,
+        closing_qty: res.closingQty,
+        valuation_rate_paise: res.valuationRatePaise,
+        rate_source: res.rateSource,
+        rate_date: res.rateDate,
+        value_paise: res.valuePaise,
+        godown_split: "not_available",
+      },
+      data: {},
+    },
+    latencyMs,
+  };
+}
+
 /** Returns come from the accounting engine, never recomputed here. */
 async function execGetReturnsSummary(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
@@ -1090,6 +1136,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetMonthlyTrend(args);
     case "get_returns_summary":
       return execGetReturnsSummary(args);
+    case "get_item_stock":
+      return execGetItemStock(args);
     case "get_vendor_spend_cycle":
       return execGetVendorSpendCycle(args);
     case "get_journal_book":
