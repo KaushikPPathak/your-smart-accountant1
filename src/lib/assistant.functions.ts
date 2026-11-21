@@ -234,6 +234,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "bank_anomalies",
   "cash_runway",
   "credit_watch",
+  "customer_ranking",
   "party_balance",
   "party_ledger",
   "cash_balance",
@@ -281,6 +282,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "cash_bank_total":
       toolName = "get_cash_bank_total";
       toolArgs = { asOn: route.asOn ?? null };
+      break;
+    case "customer_ranking":
+      toolName = "get_customer_ranking";
+      toolArgs = { from: route.from ?? null, to: route.to ?? null };
       break;
     case "credit_watch":
       toolName = "get_credit_watch";
@@ -374,6 +379,20 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
           closingPaise: Number(r.closing_paise ?? 0),
         })),
         totalPaise: Number(facts.total_paise ?? 0),
+      },
+    };
+  }
+  if (intent === "customer_ranking") {
+    const rev = Array.isArray(data?.data?.by_revenue) ? data.data.by_revenue : null;
+    const ov = Array.isArray(data?.data?.by_overdue) ? data.data.by_overdue : null;
+    if (!rev || !ov) return undefined;
+    return {
+      kind: "customer_ranking",
+      customerRanking: {
+        from: String(facts.from ?? ""),
+        to: String(facts.to ?? ""),
+        byRevenue: rev.map((r: any) => ({ name: String(r.name ?? ""), revenuePaise: Number(r.revenue_paise ?? 0), vouchers: Number(r.vouchers ?? 0) })),
+        byOverdue: ov.map((r: any) => ({ name: String(r.name ?? ""), overduePaise: Number(r.overdue_paise ?? 0), outstandingPaise: Number(r.outstanding_paise ?? 0) })),
       },
     };
   }

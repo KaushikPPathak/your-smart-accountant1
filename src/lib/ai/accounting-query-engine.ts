@@ -1250,3 +1250,96 @@ export async function runCreditWatch(query: {
   flagged.sort((a, b) => b.overLimitPaise - a.overLimitPaise || b.overdue30Paise - a.overdue30Paise);
   return { status: "resolved", asOn: summary.asOn, checked: summary.rows.length, flagged };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Top customers by revenue and by overdue balance (questionnaire 2.5)
+//
+//  Revenue:  sum of sales voucher totals per customer (party ledger) in the period. Credit notes
+//            are not deducted, as in the sales total.
+//  Overdue:  receivable older than 30 days as on the period end (same rule as 2.2).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const RANKING_SIZE = 10;
+
+export interface CustomerRevenueRow {
+  ledgerId: string;
+  name: string;
+  revenuePaise: number;
+  vouchers: number;
+}
+
+export interface CustomerOverdueRow {
+  ledgerId: string;
+  name: string;
+  overduePaise: number;
+  outstandingPaise: number;
+}
+
+export type CustomerRankingResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | {
+      status: "resolved";
+      from: string;
+      to: string;
+      byRevenue: CustomerRevenueRow[];
+      byOverdue: CustomerOverdueRow[];
+    };
+
+export async function runCustomerRanking(query: {
+  from?: string | null;
+  to?: string | null;
+  companyId?: string | null;
+}): Promise<CustomerRankingResult> {
+  const fromArg = coerceDateArg(query.from);
+  const toArg = coerceDateArg(query.to);
+  if (!fromArg.ok || !toArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+  const from = fromArg.value ?? fyStartFor();
+  const to = toArg.value ?? fyEndFor();
+
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
+  const nameById = new Map(ledgers.map((l) => [String(l.id), String(l.name ?? "")]));
+
+  // Revenue per customer from sales vouchers in the period.
+  const { readVouchers } = await import("@/lib/offline/cache-read");
+  const sales = (await readVouchers(companyId, { voucher_type: "sales" })) as any[];
+  const revenue = new Map<string, { revenuePaise: number; vouchers: number }>();
+  for (const v of sales) {
+    const date = normalizeStoredDate(v.voucher_date ?? v.date);
+    const party = v.party_ledger_id ? String(v.party_ledger_id) : null;
+    if (!party || !date || date < from || date > to) continue;
+    const cur = revenue.get(party) ?? { revenuePaise: 0, vouchers: 0 };
+    cur.revenuePaise += Number(v.total_paise ?? 0);
+    cur.vouchers += 1;
+    revenue.set(party, cur);
+  }
+  const byRevenue: CustomerRevenueRow[] = [...revenue.entries()]
+    .map(([ledgerId, r]) => ({ ledgerId, name: nameById.get(ledgerId) ?? "", revenuePaise: r.revenuePaise, vouchers: r.vouchers }))
+    .sort((a, b) => b.revenuePaise - a.revenuePaise)
+    .slice(0, RANKING_SIZE);
+
+  // Overdue per customer as on the period end.
+  const summary = await runPartySummary({ side: "receivable", asOn: to, companyId });
+  if (summary.status !== "resolved") {
+    return summary.status === "invalid_date"
+      ? { status: "invalid_date", message: summary.message }
+      : { status: "no_company" };
+  }
+  const byOverdue: CustomerOverdueRow[] = summary.rows
+    .map((row) => {
+      const b = row.buckets;
+      return {
+        ledgerId: row.ledgerId,
+        name: row.name,
+        overduePaise: b.opening + b.d31_60 + b.d61_90 + b.d90p,
+        outstandingPaise: row.outstandingPaise,
+      };
+    })
+    .filter((r) => r.overduePaise > 0)
+    .sort((a, b) => b.overduePaise - a.overduePaise)
+    .slice(0, RANKING_SIZE);
+
+  return { status: "resolved", from, to, byRevenue, byOverdue };
+}

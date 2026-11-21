@@ -18,8 +18,7 @@ describe("routing: customers over credit limit or overdue", () => {
 
   it("keeps the top-customers-by-overdue question out of the credit watch", () => {
     const r = routeQuery("Who are our top 10 customers by revenue and by overdue balance this financial year?");
-    expect(r.intent).not.toBe("credit_watch");
-    expect(r.unsupportedReport).toBe(true);
+    expect(r.intent).toBe("customer_ranking");
   });
 
   it("keeps the vendors question out of the credit watch", () => {

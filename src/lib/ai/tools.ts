@@ -66,6 +66,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_customer_ranking",
+    description:
+      "Top 10 customers by sales revenue in a period (default current financial year) and top 10 by balance older than 30 days as on the period end.",
+    argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_cash_balance",
     description:
       "Closing balance of the Cash ledger or a named bank account, optionally frozen at a date.",
@@ -513,6 +519,34 @@ async function execGetCashBankTotal(args: Record<string, unknown> = {}): Promise
   };
 }
 
+/** Customer ranking comes from the accounting engine, never recomputed here. */
+async function execGetCustomerRanking(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runCustomerRanking } = await import("./accounting-query-engine");
+  const res = await runCustomerRanking({
+    from: args.from ? String(args.from) : null,
+    to: args.to ? String(args.to) : null,
+    companyId: cid,
+  });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  return {
+    success: true,
+    data: {
+      scope: `Top customers from ${res.from} to ${res.to}`,
+      facts: { from: res.from, to: res.to, revenue_count: res.byRevenue.length, overdue_count: res.byOverdue.length },
+      data: {
+        by_revenue: res.byRevenue.map((r) => ({ name: r.name, revenue_paise: r.revenuePaise, vouchers: r.vouchers })),
+        by_overdue: res.byOverdue.map((r) => ({ name: r.name, overdue_paise: r.overduePaise, outstanding_paise: r.outstandingPaise })),
+      },
+    },
+    latencyMs,
+  };
+}
+
 /** Credit watch comes from the accounting engine, never recomputed here. */
 async function execGetCreditWatch(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
@@ -798,6 +832,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetCashRunway(args);
     case "get_credit_watch":
       return execGetCreditWatch(args);
+    case "get_customer_ranking":
+      return execGetCustomerRanking(args);
     case "get_journal_book":
       return execGetJournalBook(args);
     case "get_profit_loss":

@@ -30,6 +30,7 @@ export type CardKind =
   | "bank_anomalies"
   | "cash_runway"
   | "credit_watch"
+  | "customer_ranking"
   | "party_balance"
   | "cash_balance"
   | "bank_balance"
@@ -82,6 +83,13 @@ export interface CreditWatchCard {
   rows: { name: string; outstandingPaise: number; creditLimitPaise: number | null; overLimitPaise: number; overdue30Paise: number }[];
 }
 
+export interface CustomerRankingCard {
+  from: string;
+  to: string;
+  byRevenue: { name: string; revenuePaise: number; vouchers: number }[];
+  byOverdue: { name: string; overduePaise: number; outstandingPaise: number }[];
+}
+
 export interface StructuredCard {
   kind: CardKind;
   partySummary?: PartySummaryCard;
@@ -90,6 +98,7 @@ export interface StructuredCard {
   bankAnomalies?: BankAnomalyCard;
   cashRunway?: CashRunwayCard;
   creditWatch?: CreditWatchCard;
+  customerRanking?: CustomerRankingCard;
   companyName?: string | null;
   partyName?: string;
   partyGroup?: string | null;

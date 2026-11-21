@@ -78,6 +78,24 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "customer_ranking": {
+      const c = card.customerRanking;
+      if (!c) return null;
+      const note = "_Answered locally from your books._";
+      const revLines = c.byRevenue.length
+        ? c.byRevenue.map((r, i) => `${i + 1}. ${r.name}: ${formatInr(r.revenuePaise)} across ${r.vouchers} sales voucher${r.vouchers === 1 ? "" : "s"}`).join("\n")
+        : "No sales to a customer in this period.";
+      const ovLines = c.byOverdue.length
+        ? c.byOverdue.map((r, i) => `${i + 1}. ${r.name}: ${formatInr(r.overduePaise)} over 30 days (of ${formatInr(r.outstandingPaise)} outstanding)`).join("\n")
+        : "No customer has a balance over 30 days old.";
+      return [
+        `**Top customers by revenue, ${c.from} to ${c.to}**\n\n${revLines}`,
+        `**Top customers by overdue balance, as on ${c.to}**\n\n${ovLines}`,
+        "Revenue is the sum of sales vouchers; credit notes are not deducted. Overdue means a balance over 30 days old; opening balances count as overdue.",
+        note,
+      ].join("\n\n");
+    }
+
     case "credit_watch": {
       const w = card.creditWatch;
       if (!w) return null;

@@ -2,7 +2,7 @@
 
 Generated from `src/lib/ai/question-catalog.ts`. Edit the catalogue, then regenerate this file.
 
-Status: 6 answered, 0 partial, 26 planned, 3 not in the books.
+Status: 7 answered, 0 partial, 25 planned, 3 not in the books.
 Build phase: 25 buildable from stored data (phase 1), 8 need new fields or capture (phase 2), 2 blocked on a decision or outside the books (phase 3).
 
 Phases: 1 = the books already hold the data; 2 = the app needs a new field, record or capture first; 3 = blocked on a decision or outside the books.
@@ -25,7 +25,7 @@ Phases: 1 = the books already hold the data; 2 = the app needs a new field, reco
 | 2.2 | Which customers have overdue invoices past their credit limit or credit period? | local | `get_credit_watch` | answered | 1 | Receivable ageing per party; credit limit per ledger (optional). Credit days on the ledger are not used yet. | Flags a customer whose balance is above its credit limit (where set), or who has any balance over 30 days old. Opening balances count as overdue. |
 | 2.3 | What is the total outstanding balance and payment history for Ram Traders? | local | `get_party_balance` | answered | 1 | Party ledger entries. | Balance from the party ledger; history from the ledger statement. |
 | 2.4 | Which invoices are partially paid, unallocated, or sitting as customer advances? | declined | `bill_allocations` | planned | 2 | Ageing allocates receipts to bills oldest first; the allocation itself is not stored per bill. | Needs stored bill-wise allocations to report which invoice a receipt paid. |
-| 2.5 | Who are our top 10 customers by revenue and by overdue balance this financial year? | declined | `party_ranking` | planned | 1 | Receivable ageing per party (overdue); sales vouchers per party (revenue). | Overdue ranking reuses the receivables summary; revenue ranking needs sales totals per party. |
+| 2.5 | Who are our top 10 customers by revenue and by overdue balance this financial year? | local | `get_customer_ranking` | answered | 1 | Sales vouchers per customer (revenue); receivable ageing per customer (overdue). | Top 10 by sales revenue in the period, and top 10 by balance over 30 days old as on the period end. |
 
 ## Payables & vendors
 
