@@ -239,6 +239,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "duplicate_check",
   "vendor_concentration",
   "monthly_trend",
+  "returns_summary",
   "vendor_spend_cycle",
   "party_balance",
   "party_ledger",
@@ -291,6 +292,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "vendor_spend_cycle":
       toolName = "get_vendor_spend_cycle";
       toolArgs = { vendor: route.entity?.partyName ?? "", from: route.from ?? null, to: route.to ?? null };
+      break;
+    case "returns_summary":
+      toolName = "get_returns_summary";
+      toolArgs = { from: route.from ?? null, to: route.to ?? null };
       break;
     case "monthly_trend":
       toolName = "get_monthly_trend";
@@ -460,6 +465,26 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
         method: "none",
         averageCycleDays: null,
         unmatchedPaymentsPaise: 0,
+      },
+    };
+  }
+  if (intent === "returns_summary") {
+    const sr = data?.data?.sales_returns;
+    const pr = data?.data?.purchase_returns;
+    if (!Array.isArray(sr) || !Array.isArray(pr)) return undefined;
+    const bucket = (rows: any[], total: unknown, count: unknown) => ({
+      totalPaise: Number(total ?? 0),
+      count: Number(count ?? 0),
+      rows: rows.map((x: any) => ({ voucherNumber: String(x.voucher_number ?? ""), date: String(x.date ?? ""), party: String(x.party ?? ""), amountPaise: Number(x.amount_paise ?? 0), reason: x.reason ? String(x.reason) : null })),
+    });
+    return {
+      kind: "returns_summary",
+      returnsSummary: {
+        periodLabel: String(facts.period_label ?? ""),
+        from: String(facts.from ?? ""),
+        to: String(facts.to ?? ""),
+        salesReturns: bucket(sr, facts.sales_return_total_paise, facts.sales_return_count),
+        purchaseReturns: bucket(pr, facts.purchase_return_total_paise, facts.purchase_return_count),
       },
     };
   }

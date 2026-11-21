@@ -110,6 +110,27 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "returns_summary": {
+      const r = card.returnsSummary;
+      if (!r) return null;
+      const note = "_Answered locally from your books._";
+      const rule = "Sales returns are credit notes; purchase returns are debit notes. The reason is the narration entered on each voucher.";
+      type ReturnsBucketCard = { totalPaise: number; count: number; rows: { voucherNumber: string; date: string; party: string; amountPaise: number; reason: string | null }[] };
+      const section = (title: string, b: ReturnsBucketCard) => {
+        if (b.count === 0) return `${title}: none recorded.`;
+        const shown = b.rows.slice(0, 5).map((x) => `- ${x.date} ${x.voucherNumber}${x.party ? ` (${x.party})` : ""}: ${formatInr(x.amountPaise)}, reason: ${x.reason ?? "no reason recorded"}`);
+        const more = b.count > shown.length ? `\n- and ${b.count - shown.length} more` : "";
+        return `${title}: ${formatInr(b.totalPaise)} across ${b.count} voucher${b.count === 1 ? "" : "s"}.\n${shown.join("\n")}${more}`;
+      };
+      return [
+        `Returns for ${r.periodLabel}.`,
+        section("Sales returns", r.salesReturns),
+        section("Purchase returns", r.purchaseReturns),
+        rule,
+        note,
+      ].join("\n\n");
+    }
+
     case "monthly_trend": {
       const t = card.monthlyTrend;
       if (!t) return null;

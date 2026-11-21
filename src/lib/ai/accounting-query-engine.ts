@@ -2051,3 +2051,113 @@ export async function runMonthlyTrend(query: {
     expenseTotalPaise: rows.reduce((t, r) => t + r.expensePaise, 0),
   };
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Sales and purchase returns, with reasons (questionnaire 4.5)
+//
+//  Sales returns    = credit note vouchers (total value and count).
+//  Purchase returns = debit note vouchers.
+//  Default period   = the current quarter of the financial year (Apr–Jun, Jul–Sep, Oct–Dec, Jan–Mar).
+//  Reason           = the narration on each voucher. A blank narration is reported as "no reason recorded".
+//  Read-only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FyQuarter {
+  from: string;
+  to: string;
+  label: string;
+}
+
+/** The financial-year quarter (April start) that contains the given date. */
+export function fyQuarterFor(date: Date = new Date()): FyQuarter {
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const fyStartYear = m >= 4 ? y : y - 1;
+  const qIndex = Math.floor((((m - 4 + 12) % 12)) / 3); // 0..3
+  const startMonthNo = ((3 + qIndex * 3) % 12) + 1; // 4, 7, 10, 1
+  const startYear = startMonthNo >= 4 ? fyStartYear : fyStartYear + 1;
+  const endTotal = startMonthNo + 2;
+  const endMonthNo = ((endTotal - 1) % 12) + 1;
+  const endYear = endTotal > 12 ? startYear + 1 : startYear;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const from = `${startYear}-${pad(startMonthNo)}-01`;
+  const to = lastDayOfMonth(`${endYear}-${pad(endMonthNo)}`);
+  return { from, to, label: `Q${qIndex + 1} FY${fyStartYear}-${String((fyStartYear + 1) % 100).padStart(2, "0")}` };
+}
+
+export interface ReturnRow {
+  voucherNumber: string;
+  date: string;
+  party: string;
+  amountPaise: number;
+  reason: string | null;
+}
+
+export interface ReturnsBucket {
+  totalPaise: number;
+  count: number;
+  rows: ReturnRow[];
+}
+
+export type ReturnsSummaryResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | {
+      status: "resolved";
+      from: string;
+      to: string;
+      periodLabel: string;
+      salesReturns: ReturnsBucket;
+      purchaseReturns: ReturnsBucket;
+    };
+
+export async function runReturnsSummary(query: {
+  from?: string | null;
+  to?: string | null;
+  companyId?: string | null;
+}): Promise<ReturnsSummaryResult> {
+  const fromArg = coerceDateArg(query.from);
+  const toArg = coerceDateArg(query.to);
+  if (!fromArg.ok || !toArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+
+  const quarter = fyQuarterFor();
+  const from = fromArg.value ?? quarter.from;
+  const to = toArg.value ?? quarter.to;
+  const periodLabel = fromArg.value || toArg.value ? `${from} to ${to}` : quarter.label;
+
+  const { readVouchers } = await import("@/lib/offline/cache-read");
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
+  const partyName = new Map(ledgers.map((l) => [String(l.id), String(l.name ?? "")]));
+  const vouchers = (await readVouchers(companyId)) as any[];
+
+  const bucket = (type: string): ReturnsBucket => {
+    const rows: ReturnRow[] = [];
+    for (const v of vouchers) {
+      if (!v || v.is_deleted === true || String(v.voucher_type ?? "") !== type) continue;
+      const date = normalizeStoredDate(v.voucher_date ?? v.date);
+      if (!date || date < from || date > to) continue;
+      const reason = String(v.narration ?? "").trim();
+      rows.push({
+        voucherNumber: String(v.voucher_number ?? v.id),
+        date,
+        party: v.party_ledger_id ? partyName.get(String(v.party_ledger_id)) ?? "" : "",
+        amountPaise: Number(v.total_paise ?? 0),
+        reason: reason || null,
+      });
+    }
+    rows.sort((a, b) => b.amountPaise - a.amountPaise || a.date.localeCompare(b.date));
+    return { totalPaise: rows.reduce((t, r) => t + r.amountPaise, 0), count: rows.length, rows };
+  };
+
+  return {
+    status: "resolved",
+    from,
+    to,
+    periodLabel,
+    salesReturns: bucket("credit_note"),
+    purchaseReturns: bucket("debit_note"),
+  };
+}

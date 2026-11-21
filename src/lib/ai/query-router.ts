@@ -30,6 +30,7 @@ export type IntentType =
   | "duplicate_check"
   | "vendor_concentration"
   | "monthly_trend"
+  | "returns_summary"
   | "vendor_spend_cycle"
   | "unknown";
 
@@ -550,6 +551,10 @@ function duplicateCheckQuestion(text: string): boolean {
   return /\bduplicate\b|\bsame (bill|invoice) (no|number)\b|\bidentical amounts?\b|\bprice (jump|increase|hike|rise)s?\b|\bunusual (price|rate)s?\b|\bpaid twice\b|\brepeat(ed)? payments?\b/i.test(text);
 }
 
+function returnsSummaryQuestion(text: string): boolean {
+  return /\b(purchase|sales) returns?\b|\breturn (value|values|summary|total)\b|\breturns? (this|the) (quarter|month|year)\b/i.test(text);
+}
+
 function monthlyTrendQuestion(text: string): boolean {
   return /\bmonth[- ]on[- ]month\b|\bmonthly\b.*\b(revenue|sales|expenses?|income|trend)\b|\b(revenue|sales|expenses?|income)\b.*\bmonthly\b|\btrend\b.*\b(revenue|sales|expenses?|income)\b/i.test(text);
 }
@@ -599,6 +604,21 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
     };
   }
 
+  if (returnsSummaryQuestion(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    return {
+      intent: "returns_summary",
+      confidence: 0.9,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: {},
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
   if (monthlyTrendQuestion(trimmed)) {
     const dateInfo = extractDateInfo(trimmed);
     return {

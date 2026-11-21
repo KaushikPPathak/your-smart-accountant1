@@ -78,6 +78,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_returns_summary",
+    description:
+      "Sales returns (credit notes) and purchase returns (debit notes) in a period, default the current financial-year quarter, with value, count and each voucher's narration as the reason.",
+    argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_monthly_trend",
     description:
       "Revenue (net credit to sales ledgers), expenses (net debit to direct and indirect expense ledgers) and net by month for a period (default current financial year), with month-on-month change.",
@@ -640,6 +646,40 @@ async function execGetVendorOverdue(args: Record<string, unknown> = {}): Promise
   };
 }
 
+/** Returns come from the accounting engine, never recomputed here. */
+async function execGetReturnsSummary(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runReturnsSummary } = await import("./accounting-query-engine");
+  const res = await runReturnsSummary({ from: args.from ? String(args.from) : null, to: args.to ? String(args.to) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  const mapRows = (b: { rows: { voucherNumber: string; date: string; party: string; amountPaise: number; reason: string | null }[] }) =>
+    b.rows.map((r) => ({ voucher_number: r.voucherNumber, date: r.date, party: r.party, amount_paise: r.amountPaise, reason: r.reason }));
+  return {
+    success: true,
+    data: {
+      scope: `Returns, ${res.periodLabel}`,
+      facts: {
+        from: res.from,
+        to: res.to,
+        period_label: res.periodLabel,
+        sales_return_total_paise: res.salesReturns.totalPaise,
+        sales_return_count: res.salesReturns.count,
+        purchase_return_total_paise: res.purchaseReturns.totalPaise,
+        purchase_return_count: res.purchaseReturns.count,
+      },
+      data: {
+        sales_returns: mapRows(res.salesReturns),
+        purchase_returns: mapRows(res.purchaseReturns),
+      },
+    },
+    latencyMs,
+  };
+}
+
 /** Monthly trend comes from the accounting engine, never recomputed here. */
 async function execGetMonthlyTrend(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
@@ -1048,6 +1088,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetVendorConcentration(args);
     case "get_monthly_trend":
       return execGetMonthlyTrend(args);
+    case "get_returns_summary":
+      return execGetReturnsSummary(args);
     case "get_vendor_spend_cycle":
       return execGetVendorSpendCycle(args);
     case "get_journal_book":

@@ -35,6 +35,7 @@ export type CardKind =
   | "duplicate_check"
   | "vendor_concentration"
   | "monthly_trend"
+  | "returns_summary"
   | "vendor_spend_cycle"
   | "party_balance"
   | "cash_balance"
@@ -128,6 +129,14 @@ export interface MonthlyTrendCard {
   rows: { month: string; revenuePaise: number; expensePaise: number; netPaise: number; revenueChangePct: number | null; expenseChangePct: number | null }[];
 }
 
+export interface ReturnsSummaryCard {
+  periodLabel: string;
+  from: string;
+  to: string;
+  salesReturns: { totalPaise: number; count: number; rows: { voucherNumber: string; date: string; party: string; amountPaise: number; reason: string | null }[] };
+  purchaseReturns: { totalPaise: number; count: number; rows: { voucherNumber: string; date: string; party: string; amountPaise: number; reason: string | null }[] };
+}
+
 export interface VendorSpendCycleCard {
   status: "resolved" | "not_found" | "ambiguous" | "no_name";
   vendor: string | null;
@@ -164,6 +173,7 @@ export interface StructuredCard {
   duplicateCheck?: DuplicateCheckCard;
   vendorConcentration?: VendorConcentrationCard;
   monthlyTrend?: MonthlyTrendCard;
+  returnsSummary?: ReturnsSummaryCard;
   vendorSpendCycle?: VendorSpendCycleCard;
   companyName?: string | null;
   partyName?: string;
