@@ -236,6 +236,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "credit_watch",
   "customer_ranking",
   "vendor_overdue",
+  "vendor_spend_cycle",
   "party_balance",
   "party_ledger",
   "cash_balance",
@@ -283,6 +284,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "cash_bank_total":
       toolName = "get_cash_bank_total";
       toolArgs = { asOn: route.asOn ?? null };
+      break;
+    case "vendor_spend_cycle":
+      toolName = "get_vendor_spend_cycle";
+      toolArgs = { vendor: route.entity?.partyName ?? "", from: route.from ?? null, to: route.to ?? null };
       break;
     case "vendor_overdue":
       toolName = "get_vendor_overdue";
@@ -384,6 +389,44 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
           closingPaise: Number(r.closing_paise ?? 0),
         })),
         totalPaise: Number(facts.total_paise ?? 0),
+      },
+    };
+  }
+  if (intent === "vendor_spend_cycle") {
+    const d = data?.data ?? {};
+    const status = String(d.status ?? "no_name");
+    if (status === "resolved") {
+      return {
+        kind: "vendor_spend_cycle",
+        vendorSpendCycle: {
+          status: "resolved",
+          vendor: String(d.vendor ?? ""),
+          query: null,
+          candidates: [],
+          from: String(d.from ?? ""),
+          to: String(d.to ?? ""),
+          spendPaise: Number(d.spend_paise ?? 0),
+          billCount: Number(d.bill_count ?? 0),
+          settledPaise: Number(d.settled_paise ?? 0),
+          averageCycleDays: d.average_cycle_days === null || d.average_cycle_days === undefined ? null : Number(d.average_cycle_days),
+          unmatchedPaymentsPaise: Number(d.unmatched_payments_paise ?? 0),
+        },
+      };
+    }
+    return {
+      kind: "vendor_spend_cycle",
+      vendorSpendCycle: {
+        status: status === "not_found" || status === "ambiguous" ? status : "no_name",
+        vendor: null,
+        query: d.query ? String(d.query) : null,
+        candidates: Array.isArray(d.candidates) ? d.candidates.map(String) : [],
+        from: null,
+        to: null,
+        spendPaise: 0,
+        billCount: 0,
+        settledPaise: 0,
+        averageCycleDays: null,
+        unmatchedPaymentsPaise: 0,
       },
     };
   }

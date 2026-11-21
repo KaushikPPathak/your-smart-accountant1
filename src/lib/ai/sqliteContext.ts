@@ -32,6 +32,7 @@ export type CardKind =
   | "credit_watch"
   | "customer_ranking"
   | "vendor_overdue"
+  | "vendor_spend_cycle"
   | "party_balance"
   | "cash_balance"
   | "bank_balance"
@@ -96,6 +97,20 @@ export interface VendorOverdueCard {
   rows: { name: string; overduePaise: number; outstandingPaise: number; advancePaise: number }[];
 }
 
+export interface VendorSpendCycleCard {
+  status: "resolved" | "not_found" | "ambiguous" | "no_name";
+  vendor: string | null;
+  query: string | null;
+  candidates: string[];
+  from: string | null;
+  to: string | null;
+  spendPaise: number;
+  billCount: number;
+  settledPaise: number;
+  averageCycleDays: number | null;
+  unmatchedPaymentsPaise: number;
+}
+
 export interface StructuredCard {
   kind: CardKind;
   partySummary?: PartySummaryCard;
@@ -106,6 +121,7 @@ export interface StructuredCard {
   creditWatch?: CreditWatchCard;
   customerRanking?: CustomerRankingCard;
   vendorOverdue?: VendorOverdueCard;
+  vendorSpendCycle?: VendorSpendCycleCard;
   companyName?: string | null;
   partyName?: string;
   partyGroup?: string | null;

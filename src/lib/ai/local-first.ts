@@ -78,6 +78,28 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       ].join("\n\n");
     }
 
+    case "vendor_spend_cycle": {
+      const c = card.vendorSpendCycle;
+      if (!c) return null;
+      const note = "_Answered locally from your books._";
+      if (c.status === "no_name") return `Name the vendor, for example "spend and payment cycle for ABC Traders".\n\n${note}`;
+      if (c.status === "not_found") return `I could not find a ledger named "${c.query}". Check the spelling, or give the exact ledger name.\n\n${note}`;
+      if (c.status === "ambiguous") {
+        return `More than one ledger matches "${c.query}": ${c.candidates.join(", ")}. Say which one.\n\n${note}`;
+      }
+      const period = `${c.from} to ${c.to}`;
+      const cycle = c.averageCycleDays === null
+        ? "No payment in the period settled a bill, so there is no payment cycle."
+        : `Average payment cycle: ${c.averageCycleDays} days, measured on ${formatInr(c.settledPaise)} of payments matched to bills.`;
+      const unmatched = c.unmatchedPaymentsPaise > 0 ? ` ${formatInr(c.unmatchedPaymentsPaise)} of payments in the period was not matched to a bill (advances).` : "";
+      return [
+        `Spend with ${c.vendor}, ${period}: ${formatInr(c.spendPaise)} across ${c.billCount} purchase bill${c.billCount === 1 ? "" : "s"}.`,
+        `${cycle}${unmatched}`,
+        "Method: payments are matched to the oldest open bills first (FIFO). Bill-wise allocation is not stored, so this is an estimate. Purchase returns and debit notes are not deducted from spend.",
+        note,
+      ].join("\n\n");
+    }
+
     case "vendor_overdue": {
       const v = card.vendorOverdue;
       if (!v) return null;

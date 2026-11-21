@@ -78,6 +78,12 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_vendor_spend_cycle",
+    description:
+      "For one vendor: purchase spend in a period (default six months to the latest posting), and the average days to pay, matching payments to the oldest bills (FIFO).",
+    argsHint: `{ "vendor": "ledger name", "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_cash_balance",
     description:
       "Closing balance of the Cash ledger or a named bank account, optionally frozen at a date.",
@@ -525,6 +531,60 @@ async function execGetCashBankTotal(args: Record<string, unknown> = {}): Promise
   };
 }
 
+/** Vendor spend and payment cycle come from the accounting engine, never recomputed here. */
+async function execGetVendorSpendCycle(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const vendorName = args.vendor ? String(args.vendor) : "";
+  if (!vendorName) {
+    return {
+      success: true,
+      data: { scope: "Vendor spend", facts: { status: "no_name" }, data: { status: "no_name" } },
+      latencyMs: Math.round(performance.now() - start),
+    };
+  }
+  const { runVendorSpendCycle } = await import("./accounting-query-engine");
+  const res = await runVendorSpendCycle({
+    vendorName,
+    from: args.from ? String(args.from) : null,
+    to: args.to ? String(args.to) : null,
+    companyId: cid,
+  });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  if (res.status === "not_found") {
+    return { success: true, data: { scope: "Vendor spend", facts: { status: "not_found" }, data: { status: "not_found", query: res.query } }, latencyMs };
+  }
+  if (res.status === "ambiguous") {
+    return {
+      success: true,
+      data: { scope: "Vendor spend", facts: { status: "ambiguous" }, data: { status: "ambiguous", query: res.query, candidates: res.candidates } },
+      latencyMs,
+    };
+  }
+  return {
+    success: true,
+    data: {
+      scope: `Spend with ${res.vendor} from ${res.from} to ${res.to}`,
+      facts: { status: "resolved", vendor: res.vendor, from: res.from, to: res.to },
+      data: {
+        status: "resolved",
+        vendor: res.vendor,
+        from: res.from,
+        to: res.to,
+        spend_paise: res.spendPaise,
+        bill_count: res.billCount,
+        settled_paise: res.settledPaise,
+        average_cycle_days: res.averageCycleDays,
+        unmatched_payments_paise: res.unmatchedPaymentsPaise,
+      },
+    },
+    latencyMs,
+  };
+}
+
 /** Vendor overdue comes from the accounting engine, never recomputed here. */
 async function execGetVendorOverdue(args: Record<string, unknown> = {}): Promise<ToolResult> {
   const start = performance.now();
@@ -870,6 +930,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetCustomerRanking(args);
     case "get_vendor_overdue":
       return execGetVendorOverdue(args);
+    case "get_vendor_spend_cycle":
+      return execGetVendorSpendCycle(args);
     case "get_journal_book":
       return execGetJournalBook(args);
     case "get_profit_loss":

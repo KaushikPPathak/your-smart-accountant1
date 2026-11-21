@@ -2,7 +2,7 @@
 
 Generated from `src/lib/ai/question-catalog.ts`. Edit the catalogue, then regenerate this file.
 
-Status: 8 answered, 0 partial, 24 planned, 3 not in the books.
+Status: 9 answered, 0 partial, 23 planned, 3 not in the books.
 Build phase: 25 buildable from stored data (phase 1), 8 need new fields or capture (phase 2), 2 blocked on a decision or outside the books (phase 3).
 
 Phases: 1 = the books already hold the data; 2 = the app needs a new field, record or capture first; 3 = blocked on a decision or outside the books.
@@ -33,7 +33,7 @@ Phases: 1 = the books already hold the data; 2 = the app needs a new field, reco
 |---|---|---|---|---|---|---|---|
 | 3.1 | What is our total accounts payable, and which vendor bills are due in the next 7 or 15 days? | declined | `payables_due` | planned | 2 | Payables total (available via the payables side of the party summary). Due dates on purchase bills: not confirmed in the schema. | The total can be answered now; the 7- and 15-day window needs a due date on each bill. |
 | 3.2 | Which vendors have overdue balances or unadjusted debit notes/advances? | local | `get_vendor_overdue` | answered | 1 | Payable ageing per vendor; unmatched excess (advances and debit notes) from the ageing. | Flags a vendor with a payable over 30 days old, or with an unadjusted advance or debit note. |
-| 3.3 | What is the total spend and average payment cycle for ABC Traders over the last 6 months? | cannot | `vendor_spend` | planned | 1 | Purchase and payment vouchers per vendor, by date. | Payment cycle is the gap between purchase and payment, per bill. |
+| 3.3 | What is the total spend and average payment cycle for ABC Traders over the last 6 months? | local | `get_vendor_spend_cycle` | answered | 1 | Purchase bills and payments on the vendor ledger, by date. | Spend = purchase bills in the window (returns not deducted). Payment cycle = FIFO-matched days from bill to payment, disclosed as an estimate because bill-wise allocation is not stored. |
 | 3.4 | Are there duplicate bill numbers, unusual price jumps, or identical amounts paid to the same vendor? | declined | `duplicate_check` | planned | 1 | Voucher number, party, amount and item rate on purchase vouchers. | Price-jump threshold needs a definition. |
 | 3.5 | Which vendors account for 80% of our purchase spend this year? | declined | `vendor_concentration` | planned | 1 | Purchase totals per vendor. | Cumulative share ranking. |
 

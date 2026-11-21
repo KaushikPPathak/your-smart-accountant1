@@ -27,6 +27,7 @@ export type IntentType =
   | "credit_watch"
   | "customer_ranking"
   | "vendor_overdue"
+  | "vendor_spend_cycle"
   | "unknown";
 
 export interface RouteResult {
@@ -546,11 +547,41 @@ function vendorOverdueQuestion(text: string): boolean {
   return /\b(?:vendors?|suppliers?|creditors?)\b.{0,40}\b(?:overdue|unadjusted|advances?|debit\s+notes?)\b|\b(?:overdue|unadjusted|advances?|debit\s+notes?)\b.{0,40}\b(?:vendors?|suppliers?|creditors?)\b/i.test(text);
 }
 
+/** "total spend and average payment cycle for <vendor>", "days to pay <vendor>". */
+function vendorSpendCycleQuestion(text: string): boolean {
+  return /\bpayment\s+cycle\b|\bdays\s+to\s+pay\b|\baverage\s+payment\b|\bpayment\s+period\b/i.test(text);
+}
+
+/** The vendor named after "for", "of" or "with", ending before a period or a clause word. */
+function vendorNameFromText(text: string): string | undefined {
+  const m = /\b(?:for|of|with)\s+(.+?)(?:\s+(?:over|in|during|since|from|between|as\s+on|last|this|for\s+the)\b|[?.!,]|$)/i.exec(text);
+  const name = m?.[1]?.trim();
+  if (!name || /^(?:the\s+)?(?:last|this|past|current|previous)\b/i.test(name) || /^\d/.test(name)) return undefined;
+  return name;
+}
+
 export function routeQuery(text: string, contextCard?: StructuredCard): RouteResult {
   const originalText = text ?? "";
   // "Yes, ..." / "Ok, ..." is an interjection. Without it, "Yes, show bank balance" reads as a
   // party called "Yes bank" and is promoted to YES Bank. "Yes bank balance" (no comma) still means YES Bank.
   const trimmed = originalText.trim().replace(/^(?:yes|yeah|yep|ok|okay)\s*[,.!;:-]\s*/i, "");
+
+  if (vendorSpendCycleQuestion(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    const partyName = vendorNameFromText(trimmed);
+    return {
+      intent: "vendor_spend_cycle",
+      confidence: 0.9,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: partyName ? { partyName } : {},
+      entityHints: [],
+      asOn: dateInfo.to,
+      from: dateInfo.from,
+      to: dateInfo.to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
 
   if (vendorOverdueQuestion(trimmed)) {
     const dateInfo = extractDateInfo(trimmed);

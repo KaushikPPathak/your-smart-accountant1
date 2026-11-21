@@ -1391,3 +1391,132 @@ export async function runVendorOverdue(query: {
   flagged.sort((a, b) => b.overduePaise - a.overduePaise || b.advancePaise - a.advancePaise);
   return { status: "resolved", asOn: summary.asOn, checked: summary.rows.length, flagged };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Vendor spend and payment cycle (questionnaire 3.3)
+//
+//  Spend:        purchase bills to the vendor dated in the window (credit side of purchase
+//                vouchers on the vendor ledger). Purchase returns and debit notes are NOT deducted.
+//  Payment cycle: each payment is matched FIFO to the oldest open bill it can settle (bills dated on
+//                or before the payment). Days = payment date − bill date, weighted by matched
+//                amount, for payments dated in the window. Bill-wise allocation is not stored, so
+//                FIFO is the disclosed method. Payment left over after all bills is an advance and is
+//                reported separately.
+//  Window:       six calendar months ending in the latest posted month, unless from/to are given.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface VendorSpendCycleResolved {
+  status: "resolved";
+  vendor: string;
+  from: string;
+  to: string;
+  spendPaise: number;
+  billCount: number;
+  settledPaise: number;
+  averageCycleDays: number | null;
+  unmatchedPaymentsPaise: number;
+  method: "fifo";
+}
+
+export type VendorSpendCycleResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | { status: "not_found"; query: string }
+  | { status: "ambiguous"; query: string; candidates: string[] }
+  | VendorSpendCycleResolved;
+
+const DAY_MS = 86_400_000;
+
+export async function runVendorSpendCycle(query: {
+  vendorName: string;
+  from?: string | null;
+  to?: string | null;
+  companyId?: string | null;
+}): Promise<VendorSpendCycleResult> {
+  const fromArg = coerceDateArg(query.from);
+  const toArg = coerceDateArg(query.to);
+  if (!fromArg.ok || !toArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
+  const found = resolveLedgerDeterministic(ledgers, query.vendorName);
+  if (found.status === "not_found") return { status: "not_found", query: query.vendorName };
+  if (found.status === "ambiguous") {
+    return { status: "ambiguous", query: query.vendorName, candidates: found.candidates.map((c) => String(c.name)) };
+  }
+  const vendor = found.ledger;
+
+  const { readVouchers } = await import("@/lib/offline/cache-read");
+  const { offlineDb } = await import("@/lib/offline/db");
+  const vouchers = (await readVouchers(companyId)) as any[];
+  const info = new Map<string, { date: string; type: string }>();
+  for (const v of vouchers) {
+    const date = normalizeStoredDate(v.voucher_date ?? v.date);
+    if (date) info.set(String(v.id), { date, type: String(v.voucher_type ?? "") });
+  }
+
+  const entries = await offlineDb.cache_voucher_entries
+    .where("[company_id+ledger_id]")
+    .equals([companyId, String(vendor.id)])
+    .toArray();
+
+  const bills: { date: string; remaining: number; amount: number }[] = [];
+  const payments: { date: string; amount: number }[] = [];
+  for (const e of entries as any[]) {
+    if (e.is_deleted === true) continue;
+    const v = info.get(String(e.voucher_id));
+    if (!v) continue;
+    if (v.type === "purchase" && Number(e.credit_paise ?? 0) > 0) {
+      const amount = Number(e.credit_paise);
+      bills.push({ date: v.date, remaining: amount, amount });
+    } else if (v.type === "payment" && Number(e.debit_paise ?? 0) > 0) {
+      payments.push({ date: v.date, amount: Number(e.debit_paise) });
+    }
+  }
+  bills.sort((a, b) => a.date.localeCompare(b.date));
+  payments.sort((a, b) => a.date.localeCompare(b.date));
+
+  // Window: explicit dates, else the six months ending in the latest posted month.
+  const allDates = [...info.values()].map((v) => v.date).sort();
+  const latest = allDates[allDates.length - 1];
+  const toMonth = latest ? latest.slice(0, 7) : "1970-01";
+  const from = fromArg.value ?? (latest ? `${shiftMonth(toMonth, -5)}-01` : "1970-01-01");
+  const to = toArg.value ?? (latest ? lastDayOfMonth(toMonth) : "1970-01-01");
+  const inWindow = (d: string) => d >= from && d <= to;
+
+  const spendPaise = bills.filter((b) => inWindow(b.date)).reduce((s, b) => s + b.amount, 0);
+  const billCount = bills.filter((b) => inWindow(b.date)).length;
+
+  let settledPaise = 0;
+  let weightedDays = 0;
+  let unmatchedPaymentsPaise = 0;
+  for (const p of payments) {
+    let left = p.amount;
+    for (const bill of bills) {
+      if (left <= 0) break;
+      if (bill.date > p.date || bill.remaining <= 0) continue;
+      const take = Math.min(left, bill.remaining);
+      bill.remaining -= take;
+      left -= take;
+      if (inWindow(p.date)) {
+        settledPaise += take;
+        weightedDays += ((Date.parse(p.date) - Date.parse(bill.date)) / DAY_MS) * take;
+      }
+    }
+    if (inWindow(p.date)) unmatchedPaymentsPaise += left;
+  }
+
+  return {
+    status: "resolved",
+    vendor: String(vendor.name ?? ""),
+    from,
+    to,
+    spendPaise,
+    billCount,
+    settledPaise,
+    averageCycleDays: settledPaise > 0 ? Math.round((weightedDays / settledPaise) * 10) / 10 : null,
+    unmatchedPaymentsPaise,
+    method: "fifo",
+  };
+}
