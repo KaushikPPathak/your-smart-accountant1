@@ -65,6 +65,30 @@ export function localFirstAnswer(card: StructuredCard | undefined): string | nul
       return parts.join("\n\n");
     }
 
+    case "cash_bank_total": {
+      const t = card.cashBankTotal;
+      if (!t) return null;
+      if (!t.rows.length) return "No cash or bank ledgers found in this company.\n\n_Answered locally from your books._";
+      const asOn = t.asOnDate ? ` as on ${t.asOnDate}` : "";
+      const lines = t.rows.map((r) => `- ${r.name}: ${formatInr(Math.abs(r.closingPaise))} ${r.closingPaise < 0 ? "Cr" : "Dr"}`);
+      return [
+        `Cash and bank total${asOn}: ${formatInr(Math.abs(t.totalPaise))} ${t.totalPaise < 0 ? "Cr" : "Dr"}.`,
+        lines.join("\n"),
+        "_Answered locally from your books._",
+      ].join("\n\n");
+    }
+
+    case "sales_total": {
+      const s = card.salesTotal;
+      if (!s) return null;
+      if (s.count === 0) return `No sales vouchers from ${s.from} to ${s.to}.\n\n_Answered locally from your books._`;
+      return [
+        `Sales from ${s.from} to ${s.to}: ${formatInr(s.totalPaise)} across ${s.count} sales voucher${s.count === 1 ? "" : "s"}.`,
+        "This is the sum of each sales voucher's total. Credit notes are not deducted.",
+        "_Answered locally from your books._",
+      ].join("\n\n");
+    }
+
     case "party_summary": {
       const s = card.partySummary;
       if (!s) return null;

@@ -36,6 +36,18 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     argsHint: `{ "name": string, "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
   },
   {
+    name: "get_cash_bank_total",
+    description:
+      "Sum of the closing balances of all cash and bank ledgers, optionally frozen at a date. Overdrawn banks count negative.",
+    argsHint: `{ "asOn"?: "YYYY-MM-DD" }`,
+  },
+  {
+    name: "get_sales_total",
+    description:
+      "Total of sales vouchers in a period, defaulting to the current financial year. Credit notes are not deducted.",
+    argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
+  },
+  {
     name: "get_cash_balance",
     description:
       "Closing balance of the Cash ledger or a named bank account, optionally frozen at a date.",
@@ -459,6 +471,55 @@ async function execGetVoucher(args: Record<string, unknown>): Promise<ToolResult
   return { success: true, data: result, latencyMs: Math.round(performance.now() - start) };
 }
 
+/** Cash and bank total comes from the accounting engine, never recomputed here. */
+async function execGetCashBankTotal(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runCashBankTotal } = await import("./accounting-query-engine");
+  const res = await runCashBankTotal({ asOn: args.asOn ? String(args.asOn) : null, companyId: cid });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  return {
+    success: true,
+    data: {
+      scope: `Cash and bank as on ${res.asOn ?? "latest posting"} (${res.rows.length} ledgers)`,
+      facts: { as_on_date: res.asOn, total_paise: res.totalPaise, ledger_count: res.rows.length },
+      data: {
+        rows: res.rows.map((r) => ({ name: r.name, kind: r.kind, closing_paise: r.closingPaise })),
+        total_paise: res.totalPaise,
+      },
+    },
+    latencyMs,
+  };
+}
+
+/** Sales total comes from the accounting engine, never recomputed here. */
+async function execGetSalesTotal(args: Record<string, unknown> = {}): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const { runSalesTotal } = await import("./accounting-query-engine");
+  const res = await runSalesTotal({
+    from: args.from ? String(args.from) : null,
+    to: args.to ? String(args.to) : null,
+    companyId: cid,
+  });
+  const latencyMs = Math.round(performance.now() - start);
+  if (res.status === "no_company") return { success: false, error: "no active company", latencyMs };
+  if (res.status === "invalid_date") return { success: false, error: res.message, latencyMs };
+  return {
+    success: true,
+    data: {
+      scope: `Sales from ${res.from} to ${res.to} (${res.count} vouchers)`,
+      facts: { from: res.from, to: res.to, count: res.count, total_paise: res.totalPaise },
+      data: { count: res.count, total_paise: res.totalPaise },
+    },
+    latencyMs,
+  };
+}
+
 /**
  * Trial Balance comes from the authoritative Accounting Query Engine.
  * Rows and totals are returned verbatim — never cached, never recomputed by
@@ -605,6 +666,10 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetTrialBalance(args);
     case "get_party_summary":
       return execGetPartySummary(args);
+    case "get_cash_bank_total":
+      return execGetCashBankTotal(args);
+    case "get_sales_total":
+      return execGetSalesTotal(args);
     case "get_journal_book":
       return execGetJournalBook(args);
     case "get_profit_loss":

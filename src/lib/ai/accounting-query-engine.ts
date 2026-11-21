@@ -902,3 +902,84 @@ export async function runPartySummary(query: {
     totalBuckets,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Totals: all cash and bank ledgers, and sales vouchers for a period
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CashBankRow {
+  ledgerId: string;
+  name: string;
+  kind: "cash" | "bank";
+  closingPaise: number;
+}
+
+export type CashBankTotalResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | { status: "resolved"; asOn: string | null; rows: CashBankRow[]; totalPaise: number };
+
+/** Signed sum of closing balances of every cash and bank ledger (overdrawn banks count negative). */
+export async function runCashBankTotal(query: {
+  asOn?: string | null;
+  companyId?: string | null;
+}): Promise<CashBankTotalResult> {
+  const asOnArg = coerceDateArg(query.asOn);
+  if (!asOnArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+  const asOn = asOnArg.value;
+
+  const ledgers = (await readLedgers(companyId)) as unknown as EngineLedger[];
+  const rows: CashBankRow[] = [];
+  for (const ledger of ledgers) {
+    const kind = classifyLedger(ledger);
+    if (kind !== "cash" && kind !== "bank") continue;
+    const totals = await sumLedgerTotals(companyId, String(ledger.id), asOn);
+    const balance = computeBalance(ledger, totals);
+    rows.push({
+      ledgerId: String(ledger.id),
+      name: String(ledger.name ?? ""),
+      kind,
+      closingPaise: balance.closingPaise,
+    });
+  }
+  rows.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "cash" ? -1 : 1));
+  const totalPaise = rows.reduce((s, r) => s + r.closingPaise, 0);
+  return { status: "resolved", asOn, rows, totalPaise };
+}
+
+export type SalesTotalResult =
+  | { status: "no_company" }
+  | { status: "invalid_date"; message: string }
+  | { status: "resolved"; from: string; to: string; count: number; totalPaise: number };
+
+/**
+ * Sum of the total on each live sales voucher dated in the period.
+ * Defaults to the current financial year. Credit notes are not deducted.
+ */
+export async function runSalesTotal(query: {
+  from?: string | null;
+  to?: string | null;
+  companyId?: string | null;
+}): Promise<SalesTotalResult> {
+  const fromArg = coerceDateArg(query.from);
+  const toArg = coerceDateArg(query.to);
+  if (!fromArg.ok || !toArg.ok) return { status: "invalid_date", message: INVALID_DATE_MESSAGE };
+  const companyId = await resolveCompanyId(query.companyId);
+  if (!companyId) return { status: "no_company" };
+  const from = fromArg.value ?? fyStartFor();
+  const to = toArg.value ?? fyEndFor();
+
+  const { readVouchers } = await import("@/lib/offline/cache-read");
+  const vouchers = (await readVouchers(companyId, { voucher_type: "sales" })) as any[];
+  let count = 0;
+  let totalPaise = 0;
+  for (const v of vouchers) {
+    const date = normalizeStoredDate(v.voucher_date ?? v.date);
+    if (!date || date < from || date > to) continue;
+    count++;
+    totalPaise += Number(v.total_paise ?? 0);
+  }
+  return { status: "resolved", from, to, count, totalPaise };
+}

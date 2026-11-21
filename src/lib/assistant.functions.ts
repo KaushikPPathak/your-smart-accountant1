@@ -229,6 +229,8 @@ function detectCreateCompanyIntent(t: string): boolean {
  *  compressed-context build. Phase 1 local-first gate. */
 const DETERMINISTIC_INTENTS = new Set([
   "party_summary",
+  "cash_bank_total",
+  "sales_total",
   "party_balance",
   "party_ledger",
   "cash_balance",
@@ -272,6 +274,14 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "bank_balance":
       toolName = "get_cash_balance";
       toolArgs = { account: route.entity?.accountName || "bank", asOn: route.entity?.dateRange?.to };
+      break;
+    case "cash_bank_total":
+      toolName = "get_cash_bank_total";
+      toolArgs = { asOn: route.asOn ?? null };
+      break;
+    case "sales_total":
+      toolName = "get_sales_total";
+      toolArgs = { from: route.from ?? null, to: route.to ?? null };
       break;
     case "party_summary":
       toolName = "get_party_summary";
@@ -334,6 +344,33 @@ function buildCardFromResult(intent: string, data: any, entity: any): Structured
       accountName: String(facts.account_name || entity?.accountName || (intent === "cash_balance" ? "Cash" : "Bank")),
       closingPaise: closing,
       isDebit: closing >= 0,
+    };
+  }
+  if (intent === "cash_bank_total") {
+    const rows = Array.isArray(data?.data?.rows) ? data.data.rows : null;
+    if (!rows) return undefined;
+    return {
+      kind: "cash_bank_total",
+      cashBankTotal: {
+        asOnDate: facts.as_on_date ?? null,
+        rows: rows.map((r: any) => ({
+          name: String(r.name ?? ""),
+          kind: r.kind === "cash" ? "cash" : "bank",
+          closingPaise: Number(r.closing_paise ?? 0),
+        })),
+        totalPaise: Number(facts.total_paise ?? 0),
+      },
+    };
+  }
+  if (intent === "sales_total") {
+    return {
+      kind: "sales_total",
+      salesTotal: {
+        from: String(facts.from ?? ""),
+        to: String(facts.to ?? ""),
+        count: Number(facts.count ?? 0),
+        totalPaise: Number(facts.total_paise ?? 0),
+      },
     };
   }
   if (intent === "party_summary") {

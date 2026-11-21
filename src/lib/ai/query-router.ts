@@ -20,6 +20,8 @@ export type IntentType =
   | "party_ledger"
   | "date_range_report"
   | "party_summary"
+  | "cash_bank_total"
+  | "sales_total"
   | "unknown";
 
 export interface RouteResult {
@@ -484,11 +486,62 @@ function extractEntities(text: string, intent?: IntentType): RouteResult["entity
 // Router
 // -----------------------------------------------------------------------------
 
+/** "cash and bank balance", "total of cash and bank", "bank and cash across all accounts". */
+function cashAndBankTotalQuestion(text: string): boolean {
+  const both =
+    /\bcash\b.{0,30}?\b(?:and|&|plus)\b.{0,30}?\bbank\b|\bbank\b.{0,30}?\b(?:and|&|plus)\b.{0,30}?\bcash\b/i.test(text);
+  if (!both) return false;
+  return /\b(?:balance|balances|total|totals|all|across|combined|overall|how much|current|today)\b/i.test(text);
+}
+
+/** Total sales for a period. Party-specific, register, trend and return questions go to other routes. */
+function salesTotalQuestion(text: string): boolean {
+  if (!/\bsales?\b/i.test(text)) return false;
+  if (!/\b(?:total|gross|net|overall|how much)\b|\bsales?\s+(?:of|for|in|during)\b/i.test(text)) return false;
+  if (
+    /\b(?:register|list|customers?|parties|party|top|monthly|month|trend|growth|returns?|vouchers?|ledgers?|items?|products?|by|compare|vs|versus|ranking|margins?|profit|tax|gst|invoices?|credit|debit|outstanding|receivables?|purchases?|expenses?)\b/i.test(
+      text,
+    )
+  )
+    return false;
+  // "sales of Ram Traders" names a party; "sales of 2025-26" and "sales of the year" do not.
+  if (/\bsales?\s+(?:of|to|for|with|from)\s+(?!(?:the\s+)?(?:year|fy|financial|this|last|current|april|march|q[1-4]|quarter|month|day|today|yesterday|week)\b|\d)[a-z]/i.test(text))
+    return false;
+  // "sales in march 2026" is the month report's question (date_range_report), not the year total.
+  if (/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i.test(text))
+    return false;
+  return true;
+}
+
 export function routeQuery(text: string, contextCard?: StructuredCard): RouteResult {
   const originalText = text ?? "";
   // "Yes, ..." / "Ok, ..." is an interjection. Without it, "Yes, show bank balance" reads as a
   // party called "Yes bank" and is promoted to YES Bank. "Yes bank balance" (no comma) still means YES Bank.
   const trimmed = originalText.trim().replace(/^(?:yes|yeah|yep|ok|okay)\s*[,.!;:-]\s*/i, "");
+
+  // Totals across ledgers: all cash and bank, and sales for a period.
+  if (cashAndBankTotalQuestion(trimmed) || salesTotalQuestion(trimmed)) {
+    const dateInfo = extractDateInfo(trimmed);
+    const intent: IntentType = cashAndBankTotalQuestion(trimmed) ? "cash_bank_total" : "sales_total";
+    // A bare financial year ("sales of 2025-26") is not picked up by extractDateInfo; read it here.
+    const bareFy = /\b(20\d{2})\s*[-/]\s*(\d{2})\b/.exec(trimmed);
+    const fyFrom = !dateInfo.from && bareFy ? `${bareFy[1]}-04-01` : undefined;
+    const fyTo = !dateInfo.to && bareFy ? `${Number(bareFy[1]) + 1}-03-31` : undefined;
+    const from = dateInfo.from ?? fyFrom;
+    const to = dateInfo.to ?? fyTo;
+    return {
+      intent,
+      confidence: 0.95,
+      requiresLLM: false,
+      requiresTools: true,
+      entity: {},
+      entityHints: [],
+      asOn: to,
+      from,
+      to,
+      latestKind: dateInfo.yearEndRequested ? "year_end" : "latest",
+    };
+  }
 
   // Who owes what, and how old it is: receivables or payables across all parties.
   const summarySide = partySummarySide(trimmed);

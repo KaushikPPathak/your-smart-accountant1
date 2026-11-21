@@ -25,6 +25,8 @@ export interface AccountingContext {
 
 export type CardKind =
   | "party_summary"
+  | "cash_bank_total"
+  | "sales_total"
   | "party_balance"
   | "cash_balance"
   | "bank_balance"
@@ -43,9 +45,24 @@ export interface PartySummaryCard {
   totalBuckets: Record<string, number>;
 }
 
+export interface CashBankTotalCard {
+  asOnDate: string | null;
+  rows: { name: string; kind: "cash" | "bank"; closingPaise: number }[];
+  totalPaise: number;
+}
+
+export interface SalesTotalCard {
+  from: string;
+  to: string;
+  count: number;
+  totalPaise: number;
+}
+
 export interface StructuredCard {
   kind: CardKind;
   partySummary?: PartySummaryCard;
+  cashBankTotal?: CashBankTotalCard;
+  salesTotal?: SalesTotalCard;
   companyName?: string | null;
   partyName?: string;
   partyGroup?: string | null;

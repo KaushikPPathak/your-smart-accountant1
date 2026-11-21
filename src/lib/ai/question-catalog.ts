@@ -32,7 +32,7 @@ export interface CatalogQuestion {
 
 export const QUESTION_CATALOG: CatalogQuestion[] = [
   // 1. Cash, bank and liquidity
-  { id: "1.1", section: "Cash, bank & liquidity", question: "What is our current cash and bank balance across all accounts as of today?", routeIntent: "cash_balance", router: "local", tool: "get_cash_balance", status: "partial", note: "Cash only. Bank balances across all accounts need a total across bank ledgers." },
+  { id: "1.1", section: "Cash, bank & liquidity", question: "What is our current cash and bank balance across all accounts as of today?", routeIntent: "cash_bank_total", router: "local", tool: "get_cash_bank_total", status: "answered", note: "Signed sum of all cash and bank ledgers as of the latest posting." },
   { id: "1.2", section: "Cash, bank & liquidity", question: "Are there any cheques issued or received that are still uncleared or bouncing?", routeIntent: "unknown", router: "declined", tool: null, status: "not_in_books", note: "Cheque numbers and clearing dates are not stored as fields." },
   { id: "1.3", section: "Cash, bank & liquidity", question: "What is the difference between our bank statement balance and book balance for HDFC this month?", routeIntent: "unknown", router: "declined", tool: "reconcile_bank", status: "planned", note: "Needs the imported bank statement lines; the bank import exists in the app." },
   { id: "1.4", section: "Cash, bank & liquidity", question: "Which bank or cash ledger has seen unusual spikes or out-of-pattern withdrawals recently?", routeIntent: "unknown", router: "declined", tool: "bank_anomalies", status: "planned", note: "Needs a per-ledger baseline from past postings." },
