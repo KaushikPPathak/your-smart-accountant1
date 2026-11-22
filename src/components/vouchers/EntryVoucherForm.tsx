@@ -19,6 +19,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/lib/company-context";
 import { formatINR, rupeesToPaise } from "@/lib/utils/currency-utils";
+import { loadPolicy } from "@/lib/policy-settings";
+import { missingRequirements } from "@/lib/voucher-requirements";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { useEnterAsTab } from "./useEnterAsTab";
 import { useVoucherExit } from "./useVoucherExit";
@@ -436,6 +438,43 @@ export function EntryVoucherForm({ voucherType }: { voucherType: EntryVoucherTyp
 
   const performSave = useCallback(async () => {
     if (!activeCompanyId || !canWrite) return;
+    // 7.3: document reference for journals; instrument reference for bank payments and receipts;
+    // expense cost centres are not captured on this form yet, so they are not enforced here.
+    const allLedgerIds = [...lines.map((l) => l.ledger_id), ...simpleLines.map((l) => l.ledger_id)];
+    const bankMode = allLedgerIds.some((id) => ledgers.find((x) => x.id === id)?.type === "bank");
+    const expenseSide = lines.some(
+      (l) => (parseFloat(l.debit) || 0) > 0 && /^expense/.test(ledgers.find((x) => x.id === l.ledger_id)?.type ?? ""),
+    );
+    const refMissing = missingRequirements({
+      voucherType,
+      documentRef: refNo,
+      instrumentRef: refNo,
+      bankMode,
+      expenseSide,
+      costCentresEnabled: false,
+    });
+    if (refMissing.length > 0) {
+      toast.error(`Not saved. ${refMissing.join(" ")}`);
+      return;
+    }
+    // 6.5: an on-account receipt at or above the advance threshold gets a notice (never a block).
+    if (voucherType === "receipt") {
+      const policy = await loadPolicy(activeCompanyId);
+      const advanceFrom = simpleLines
+        .map((l) => {
+          const lg = ledgers.find((x) => x.id === l.ledger_id);
+          if (!lg || lg.type !== "sundry_debtor") return null;
+          const onAccount = rupeesToPaise(parseFloat(l.amount) || 0) - (allocs[l.id] ?? []).reduce((s, a) => s + a.amount_paise, 0);
+          return onAccount >= policy.advanceNoticePaise ? `${lg.name} (${formatINR(onAccount)})` : null;
+        })
+        .filter((x): x is string => x !== null);
+      if (advanceFrom.length > 0) {
+        toast.warning(
+          `On-account receipt from ${advanceFrom.join(", ")}. If this advance is for services, GST may be payable at receipt (Notification 66/2017). Check with your accountant.`,
+          { duration: 12000 },
+        );
+      }
+    }
     let entriesToInsert: { ledger_id: string; debit_paise: number; credit_paise: number; narration: string | null; line_no: number }[] = [];
     let totalForVoucher = 0;
     let partyLedgerId: string | null = null;

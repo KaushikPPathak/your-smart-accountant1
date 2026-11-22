@@ -66,6 +66,8 @@ function pushIssue(
 }
 
 import { formatINR } from "@/lib/utils/currency-utils";
+import { ledgerTypeMismatches } from "@/lib/ledger-type-check";
+import { loadPolicy } from "@/lib/policy-settings";
 import { duplicateInvoiceGroups } from "@/lib/invoice-uniqueness";
 const RUPEE = (paise: number) => formatINR(paise);
 
@@ -671,20 +673,43 @@ export async function runAccountingAudit(companyId: string): Promise<AuditReport
   // 14) Excessive round-off (> ₹10) — likely a calculation error
   // ========================================================================
   {
-    const big = vouchers.filter((v) => Math.abs(v.round_off_paise) > 1000);
+    // 6.5: round-off above the company's automatic limit (default ₹1) is flagged for review.
+    const roundOffLimit = (await loadPolicy(companyId)).roundOffAutoPaise;
+    const big = vouchers.filter((v) => Math.abs(v.round_off_paise) > roundOffLimit);
     if (big.length > 0) {
       pushIssue(findings, {
         key: "big_roundoff",
-        label: "Round-off exceeds ₹10",
+        label: `Round-off above ${RUPEE(roundOffLimit)}`,
         severity: "warn",
         count: big.length,
         message:
-          `${big.length} voucher(s) have a round-off of more than ₹10. ` +
-          `True round-off should always be < ₹1; bigger values usually indicate a tax-rate or quantity error.`,
+          `${big.length} voucher(s) have a round-off above ${RUPEE(roundOffLimit)}. ` +
+          `Round-off should be nearest-rupee rounding only; bigger values usually indicate a discount, rounding or tax-rate error.`,
         examples: big.slice(0, 5).map((v) => `${v.voucher_type} ${v.voucher_number}: ${RUPEE(v.round_off_paise)}`),
       });
     } else {
-      pushOk(findings, "big_roundoff", "Round-off magnitude", "All round-offs within ₹10 ✓");
+      pushOk(findings, "big_roundoff", "Round-off magnitude", `All round-offs within ${RUPEE(roundOffLimit)} ✓`);
+    }
+  }
+
+  // ========================================================================
+  // 14b) Ledger names that do not match their account type (7.2)
+  // ========================================================================
+  {
+    const mismatches = ledgerTypeMismatches(ledgers.map((l) => ({ id: l.id, name: l.name, type: l.type })));
+    if (mismatches.length > 0) {
+      pushIssue(findings, {
+        key: "ledger_type_mismatch",
+        label: "Ledger type does not match its name",
+        severity: "warn",
+        count: mismatches.length,
+        message:
+          `${mismatches.length} ledger(s) have a name that belongs to a different account type. ` +
+          `GST output and input, round-off and suspense ledgers must sit in their own type, or the balance sheet and GST return will not reconcile.`,
+        examples: mismatches.slice(0, 5).map((m) => `${m.name} (${m.type}) — ${m.rule}: expected ${m.accepted.join(" or ") || "reclassify"}`),
+      });
+    } else {
+      pushOk(findings, "ledger_type_mismatch", "Ledger types", "Ledger names match their account types ✓");
     }
   }
 

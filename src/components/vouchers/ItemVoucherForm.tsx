@@ -32,6 +32,8 @@ import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { readVouchers } from "@/lib/offline/cache-read";
 import { findDuplicateInvoice, type InvoiceRow } from "@/lib/invoice-uniqueness";
 import { itemsGoingNegative, loadStockPosition, stockSignFor } from "@/lib/stock-negative-warning";
+import { loadPolicy } from "@/lib/policy-settings";
+import { missingRequirements } from "@/lib/voucher-requirements";
 import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/utils/currency-utils";
@@ -942,6 +944,19 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
       }
     }
 
+    // 7.3: a supplier bill number (purchase) or an invoice number (sales, notes) is required on the voucher.
+    const refMissing = missingRequirements({
+      voucherType: snap.voucherType,
+      documentRef: snap.voucherType === "purchase" ? snap.refNo : snap.voucherNumber,
+      expenseSide: snap.voucherType === "purchase",
+      // Cost centres are not captured per line on this form yet, so they are not enforced here.
+      costCentresEnabled: false,
+    });
+    if (refMissing.length > 0) {
+      toast.error(`Not saved. ${refMissing.join(" ")}`);
+      return;
+    }
+
     // Invoice-number uniqueness: a repeated sales number or a repeated supplier bill (which would
     // claim its input tax twice) is refused before anything is queued.
     const invoiceNumberToCheck = snap.voucherType === "purchase" ? snap.refNo.trim() : (snap.voucherNumber ?? "");
@@ -957,6 +972,17 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           `This voucher is not saved: ${where} already exists in this financial year (${hits[0].voucher_date}). Change the ${snap.voucherType === "purchase" ? "bill number" : "invoice number"}.`,
         );
         return;
+      }
+    }
+
+    // 6.5: round-off above the auto-absorb limit is flagged for review; the save still goes ahead.
+    if (activeCompanyId && Math.abs(roundOffPaise) > 0) {
+      const policy = await loadPolicy(activeCompanyId);
+      if (Math.abs(roundOffPaise) > policy.roundOffAutoPaise) {
+        toast.warning(
+          `Round-off of ${formatINR(roundOffPaise)} is above the automatic limit. Check for a discount or rounding mismatch.`,
+          { duration: 12000 },
+        );
       }
     }
 
