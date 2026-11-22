@@ -42,3 +42,9 @@ export function lastIntegrityResult(): IntegrityResult | null {
     return null;
   }
 }
+
+/** Whether the warning should show: the last check failed and this result was not dismissed. */
+export function shouldShowIntegrityWarning(result: IntegrityResult | null, dismissedCheckedAt: string | null): boolean {
+  if (!result || result.ok) return false;
+  return dismissedCheckedAt !== result.checkedAt;
+}
