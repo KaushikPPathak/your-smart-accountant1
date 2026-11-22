@@ -439,6 +439,25 @@ function GSTR3BPage() {
                   <TableRow><TableCell>State/UT Tax</TableCell><TableCell className="text-right font-mono">{moneyR(built.tax_pmt.samt)}</TableCell><TableCell className="text-right font-mono font-semibold">{moneyR(built.tax_pmt.samt_payable)}</TableCell></TableRow>
                 </TableBody>
               </Table></div>
+              <p className="text-xs text-muted-foreground">Tax rounded to nearest rupee per Section 170; ledger retains exact paise.</p>
+              {built.unrounded && (() => {
+                const ex = built.unrounded.tax_pmt;
+                const heads: [string, number, number][] = [
+                  ["Integrated Tax", ex.iamt, built.tax_pmt.iamt],
+                  ["Central Tax", ex.camt, built.tax_pmt.camt],
+                  ["State/UT Tax", ex.samt, built.tax_pmt.samt],
+                ];
+                const moved = heads.filter(([, exact, rounded]) => Math.round(exact * 100) !== Math.round(rounded * 100));
+                if (moved.length === 0) return null;
+                return (
+                  <div className="rounded border border-border/60 bg-muted/30 p-2 text-xs">
+                    <div className="mb-1 font-medium">Books to return difference (Section 170)</div>
+                    {moved.map(([label, exact, rounded]) => (
+                      <div key={label} className="font-mono">{label}: {moneyR(exact)} → {moneyR(rounded)} (difference {moneyR(rounded - exact)})</div>
+                    ))}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </>

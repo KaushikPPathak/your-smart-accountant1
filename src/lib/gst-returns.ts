@@ -3,6 +3,7 @@
 // Output formats: GSTN portal JSON + GST Offline-Tool Excel sheets.
 // All amounts internally in paise; converted to rupees (2dp) on output.
 
+import { roundReturnTaxes } from "./gst/section-170";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import type { XlsxSheet } from "@/lib/exporters";
@@ -1139,6 +1140,12 @@ export interface BuiltGstr3B {
     iamt: number; camt: number; samt: number; csamt: number;
     iamt_payable: number; camt_payable: number; samt_payable: number; csamt_payable: number;
   };
+  /** Exact (paisa) figures before the Section 170 rounding on the lines above. Filled by buildGstr3B. */
+  unrounded?: {
+    sup_details: BuiltGstr3B["sup_details"];
+    itc_elg: BuiltGstr3B["itc_elg"];
+    tax_pmt: BuiltGstr3B["tax_pmt"];
+  };
 }
 
 interface SupRow { txval: number; iamt: number; camt: number; samt: number; csamt: number }
@@ -1379,7 +1386,9 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
   const camt_payable = Math.max(0, outCamt - itc_net.camt * 100);
   const samt_payable = Math.max(0, outSamt - itc_net.samt * 100);
 
-  return {
+  // The figures below are exact to the paisa. They are rounded per tax head at the end (Section 170);
+  // the exact figures are kept on `unrounded` so the books-to-return difference can be shown.
+  const exact: BuiltGstr3B = {
     meta: { gstin: company.gstin || "", fp, from, to, legal_name: company.name },
     sup_details: {
       osup_det: { txval: r(osup_det.txval), iamt: r(osup_det.iamt), camt: r(osup_det.camt), samt: r(osup_det.samt), csamt: 0 },
@@ -1401,6 +1410,14 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
     tax_pmt: {
       iamt: r(outIamt), camt: r(outCamt), samt: r(outSamt), csamt: 0,
       iamt_payable: r(iamt_payable), camt_payable: r(camt_payable), samt_payable: r(samt_payable), csamt_payable: 0,
+    },
+  };
+  return {
+    ...roundReturnTaxes(exact),
+    unrounded: {
+      sup_details: exact.sup_details,
+      itc_elg: exact.itc_elg,
+      tax_pmt: exact.tax_pmt,
     },
   };
 }

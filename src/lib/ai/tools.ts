@@ -11,6 +11,8 @@ import { routeQuery, normalizeVoiceInput } from "./query-router";
 import { retrieveForQuery } from "./retrievers";
 import { readCompanies, readLedgers, readVouchers } from "@/lib/offline/cache-read";
 import { openDB, DBSchema, IDBPDatabase } from "idb";
+import { provisionalNetGst } from "@/lib/gst/provisional-gst";
+import { bookRuleIssues } from "@/lib/gst/book-rule-issues";
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  TOOL CATALOG
@@ -178,6 +180,18 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     description:
       "Closing stock summary for all inventory items.",
     argsHint: `{}`,
+  },
+  {
+    name: "get_gst_provisional_payable",
+    description:
+      "Provisional net GST payable for one month (GSTR-3B basis, rounded per Section 170). Always label the figure PROVISIONAL, state the period and the reconciliation status, and link to the GSTR-3B report screen. It refuses when the period is locked, books are incomplete, or books and GSTR-2B differ beyond tolerance; relay the refusal reason. Read-only.",
+    argsHint: `{ "month": "YYYY-MM" }`,
+  },
+  {
+    name: "check_book_rules",
+    description:
+      "Advisory list of voucher rules that would fail on save: missing bill or invoice references on purchase, sales, credit and debit notes, and ledgers filed under the wrong account type. Read-only: it points to the rows; the save and report screens enforce the rules.",
+    argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
   },
 ];
 
@@ -1261,6 +1275,10 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetProfitLoss(args);
     case "get_stock_summary":
       return execGetStockSummary();
+    case "get_gst_provisional_payable":
+      return execGetGstProvisionalPayable(args);
+    case "check_book_rules":
+      return execCheckBookRules(args);
     default:
       return { success: false, error: `unknown tool: ${name}`, latencyMs: 0 };
   }
@@ -1299,3 +1317,30 @@ export function invalidateToolCache(pattern?: string): void {
 // ═════════════════════════════════════════════════════════════════════════════
 
 export { normalizeVoiceInput };
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  GST (6.1 / 6.2 / 6.3) — read-only
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function execGetGstProvisionalPayable(args: Record<string, unknown>): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const month = String(args.month ?? "");
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    return { success: false, error: "month must be YYYY-MM", latencyMs: Math.round(performance.now() - start) };
+  }
+  const data = await provisionalNetGst({ companyId: cid, month });
+  return { success: true, data, latencyMs: Math.round(performance.now() - start) };
+}
+
+async function execCheckBookRules(args: Record<string, unknown>): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const from = args.from ? String(args.from) : undefined;
+  const to = args.to ? String(args.to) : undefined;
+  const data = await bookRuleIssues(cid, from, to);
+  return { success: true, data, latencyMs: Math.round(performance.now() - start) };
+}
