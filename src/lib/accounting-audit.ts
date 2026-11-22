@@ -66,6 +66,7 @@ function pushIssue(
 }
 
 import { formatINR } from "@/lib/utils/currency-utils";
+import { duplicateInvoiceGroups } from "@/lib/invoice-uniqueness";
 const RUPEE = (paise: number) => formatINR(paise);
 
 const TOL = 100; // ₹1 rounding tolerance for cross-check sums
@@ -85,6 +86,7 @@ export async function runAccountingAudit(companyId: string): Promise<AuditReport
     place_of_supply_code: string | null;
     vendor_invoice_no: string | null;
     vendor_invoice_date: string | null;
+    reference_no: string | null;
     subtotal_paise: number;
     cgst_paise: number;
     sgst_paise: number;
@@ -121,6 +123,7 @@ export async function runAccountingAudit(companyId: string): Promise<AuditReport
     is_interstate: v.is_interstate ?? null,
     place_of_supply_code: v.place_of_supply_code ?? null,
     vendor_invoice_no: v.vendor_invoice_no ?? null,
+    reference_no: v.reference_no ?? null,
     vendor_invoice_date: v.vendor_invoice_date ?? null,
     subtotal_paise: Number(v.subtotal_paise ?? 0),
     cgst_paise: Number(v.cgst_paise ?? 0),
@@ -161,7 +164,7 @@ export async function runAccountingAudit(companyId: string): Promise<AuditReport
           .from("vouchers")
           .select(
             "id, voucher_number, voucher_type, voucher_date, party_ledger_id, " +
-              "is_interstate, place_of_supply_code, vendor_invoice_no, vendor_invoice_date, " +
+              "is_interstate, place_of_supply_code, vendor_invoice_no, vendor_invoice_date, reference_no, " +
               "subtotal_paise, cgst_paise, sgst_paise, igst_paise, round_off_paise, total_paise",
           )
           .eq("company_id", companyId),
@@ -598,32 +601,34 @@ export async function runAccountingAudit(companyId: string): Promise<AuditReport
   }
 
   // ========================================================================
-  // 12) Duplicate vendor invoice (same party + invoice no + date)
+  // 12) Duplicate invoice numbers: sales-side per year, supplier bills per supplier per year
   // ========================================================================
   {
-    const seen = new Map<string, string[]>();
-    for (const v of vouchers) {
-      if (v.voucher_type !== "purchase") continue;
-      if (!v.vendor_invoice_no || !v.party_ledger_id) continue;
-      const k = `${v.party_ledger_id}::${v.vendor_invoice_no.trim().toLowerCase()}`;
-      const arr = seen.get(k) ?? [];
-      arr.push(v.voucher_number);
-      seen.set(k, arr);
-    }
-    const dups = [...seen.entries()].filter(([, arr]) => arr.length > 1);
-    if (dups.length > 0) {
+    const groups = duplicateInvoiceGroups(
+      vouchers.map((v) => ({
+        id: v.id,
+        voucher_type: v.voucher_type,
+        voucher_date: v.voucher_date,
+        voucher_number: v.voucher_number,
+        reference_no: v.reference_no ?? null,
+        vendor_invoice_no: v.vendor_invoice_no ?? null,
+        party_ledger_id: v.party_ledger_id ?? null,
+        is_deleted: false,
+      })),
+    );
+    if (groups.length > 0) {
       pushIssue(findings, {
         key: "dup_vendor_inv",
-        label: "Duplicate vendor invoice numbers",
+        label: "Duplicate invoice numbers",
         severity: "warn",
-        count: dups.length,
+        count: groups.length,
         message:
-          `${dups.length} vendor invoice number(s) appear more than once for the same supplier — ` +
+          `${groups.length} invoice number(s) repeat within a financial year — for supplier bills this is ` +
           `possible double-booking of ITC.`,
-        examples: dups.slice(0, 5).map(([, arr]) => arr.join(", ")),
+        examples: groups.slice(0, 5).map((g) => g.map((v) => v.voucher_number).join(", ")),
       });
     } else {
-      pushOk(findings, "dup_vendor_inv", "Vendor invoice numbers", "No duplicate vendor invoices ✓");
+      pushOk(findings, "dup_vendor_inv", "Invoice numbers", "No duplicate invoice numbers ✓");
     }
   }
 

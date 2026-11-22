@@ -54,3 +54,30 @@ describe("supplier bill numbers", () => {
     expect(findDuplicateInvoice({ voucherType: "purchase", voucherDate: "2026-07-01", number: "  ", partyId: "p1" }, existing)).toHaveLength(0);
   });
 });
+
+describe("duplicate groups for the audit", () => {
+  it("groups repeated supplier bills, reading vendor_invoice_no or reference_no", async () => {
+    const { duplicateInvoiceGroups, supplierBillNumber } = await import("@/lib/invoice-uniqueness");
+    const rows: InvoiceRow[] = [
+      row({ id: "a", voucher_type: "purchase", voucher_number: "PUR-1", vendor_invoice_no: "BILL-9", party_ledger_id: "p1" }),
+      row({ id: "b", voucher_type: "purchase", voucher_number: "PUR-2", reference_no: "bill-009", party_ledger_id: "p1" }),
+      row({ id: "c", voucher_type: "purchase", voucher_number: "PUR-3", reference_no: "BILL-9", party_ledger_id: "p2" }),
+    ];
+    expect(supplierBillNumber(rows[1])).toBe("bill-009");
+    const groups = duplicateInvoiceGroups(rows);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].map((v) => v.id).sort()).toEqual(["a", "b"]);
+  });
+
+  it("groups repeated sales invoice numbers in the same year only", async () => {
+    const { duplicateInvoiceGroups } = await import("@/lib/invoice-uniqueness");
+    const rows: InvoiceRow[] = [
+      row({ id: "s1", voucher_type: "sales", voucher_number: "INV-5", voucher_date: "2026-05-01" }),
+      row({ id: "s2", voucher_type: "sales", voucher_number: "INV-05", voucher_date: "2026-08-01" }),
+      row({ id: "s3", voucher_type: "sales", voucher_number: "INV-5", voucher_date: "2027-05-01" }),
+    ];
+    const groups = duplicateInvoiceGroups(rows);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].map((v) => v.id).sort()).toEqual(["s1", "s2"]);
+  });
+});

@@ -17,8 +17,14 @@ export interface InvoiceRow {
   voucher_date: string;
   voucher_number: string | null;
   reference_no: string | null;
+  vendor_invoice_no?: string | null;
   party_ledger_id: string | null;
   is_deleted?: boolean | null;
+}
+
+/** The supplier's bill number on a purchase: vendor_invoice_no, else reference_no. */
+export function supplierBillNumber(v: InvoiceRow): string {
+  return (v.vendor_invoice_no || v.reference_no || "").trim();
 }
 
 export interface InvoiceCandidate {
@@ -60,7 +66,27 @@ export function findDuplicateInvoice(candidate: InvoiceCandidate, existing: Invo
     if (v.voucher_type !== candidate.voucherType) return false;
     if (financialYearOf(v.voucher_date) !== fy) return false;
     if (isPurchase && String(v.party_ledger_id ?? "") !== String(candidate.partyId ?? "")) return false;
-    const field = isPurchase ? v.reference_no : v.voucher_number;
+    const field = isPurchase ? supplierBillNumber(v) : v.voucher_number;
     return normalizeInvoiceNumber(field ?? "") === wanted;
   });
+}
+
+/**
+ * Groups of live vouchers that share an invoice number under the same scope as findDuplicateInvoice.
+ * Used by the accounting audit. Returns only groups with more than one voucher.
+ */
+export function duplicateInvoiceGroups(rows: InvoiceRow[]): InvoiceRow[][] {
+  const groups = new Map<string, InvoiceRow[]>();
+  for (const v of rows) {
+    if (v.is_deleted) continue;
+    const isPurchase = v.voucher_type === "purchase";
+    if (!isPurchase && !SALES_SIDE.has(v.voucher_type)) continue;
+    const number = normalizeInvoiceNumber(isPurchase ? supplierBillNumber(v) : (v.voucher_number ?? ""));
+    if (!number) continue;
+    const key = [v.voucher_type, financialYearOf(v.voucher_date), isPurchase ? String(v.party_ledger_id ?? "") : "", number].join("|");
+    const list = groups.get(key) ?? [];
+    list.push(v);
+    groups.set(key, list);
+  }
+  return [...groups.values()].filter((g) => g.length > 1);
 }
