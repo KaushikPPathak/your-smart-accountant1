@@ -2,8 +2,8 @@
 
 Generated from `src/lib/ai/question-catalog.ts`. Edit the catalogue, then regenerate this file.
 
-Status: 19 answered, 4 implemented, 1 partial, 9 planned, 1 blocked, 3 not in the books.
-Build phase: 28 buildable from stored data (phase 1), 7 need new fields or capture (phase 2), 2 blocked on a decision or outside the books (phase 3).
+Status: 19 answered, 4 implemented, 1 partial, 9 planned, 1 blocked, 2 out of scope, 3 not in the books.
+Build phase: 28 buildable from stored data (phase 1), 8 need new fields or capture (phase 2), 3 blocked on a decision or outside the books (phase 3).
 
 Phases: 1 = the books already hold the data; 2 = the app needs a new field, record or capture first; 3 = blocked on a decision or outside the books.
 
@@ -66,7 +66,9 @@ Phases: 1 = the books already hold the data; 2 = the app needs a new field, reco
 | 6.3 | Which transactions lack valid tax registration numbers, HSN/SAC codes, or proper tax invoices? | local | `get_tax_compliance_issues` | answered | 1 | GSTIN on parties; HSN on items and voucher lines. | Lists registered parties without a well-formed GSTIN and taxable lines without HSN/SAC. Presence and format only, not verified with the GST portal. Proper tax invoices are not checked here. Advisory: the entry screens enforce what they can. |
 | 6.4 | How much TDS has been deducted across sections this quarter, and is any challan payment or return filing pending? | cannot | `tds_summary` | not_in_books | 2 | Missing: TDS section, amount and challan on vouchers. Only TDS ledgers, if kept, can be read today. | Needs TDS fields on vouchers before this can be answered. |
 | 6.5 | Are there any unadjusted advance receipts or round-off/tax ledger discrepancies before period close? | declined | `round_off_check` | implemented | 1 | Round-off and tax ledger balances; advance receipts from ageing. | Section 170: tax on the GSTR-3B return rounds to the nearest rupee per tax head at the return line. Ledgers keep exact paise. Statutory exports carry rounded figures only; the paise difference is in the internal books-to-return reconciliation on the 3B screen. Round-off notice and advance-GST notice are on the entry screens. |
-| 6.5b | Why does the GST on my return differ from my books by a few paise? | cannot | `section_170_explain` | planned | 1 | Round-off and tax ledger balances; advance receipts from ageing. | Chat explanation of the Section 170 difference, not started. The rule itself is implemented (see 6.5). Chat would read the books-to-return reconciliation and explain it; it does not change any figure. |
+| 6.5b | Why does the GST on my return differ from my books by a few paise? | cannot | `section_170_explain` | planned | 1 | Round-off and tax ledger balances; advance receipts from ageing. | Planned, low value. The rule is enforced and the 3B screen carries the note, so chat adds little. If closed later: a static explanation of Section 170 with a link to the 3B screen, with no computation. |
+| 6.3a | Does every sales invoice carry all the fields a GST tax invoice must have, such as serial number, date, party, HSN, taxable value, tax heads and place of supply? | cannot | `section_170_explain` | out_of_scope | 2 | Round-off and tax ledger balances; advance receipts from ageing. | Out of scope for chat. Rule 46 completeness depends on the recipient's registration status and the turnover slab, so a chat list would produce false positives. Build as a required-field check on the invoice screen with the invoice form validations (separate backlog item). |
+| 6.3b | Is each party's GSTIN genuine and active on the GST portal? | cannot | `section_170_explain` | out_of_scope | 3 | Round-off and tax ledger balances; advance receipts from ageing. | Out of scope for 6.3. Portal validation needs a GSP or live GSTN API, credentials, rate limits and terms-of-service review. It would add a network dependency the offline app does not have. Separate backlog item: a Verify GSTIN button on the party master with a cached result and timestamp. |
 
 ## Ledger hygiene & audit readiness
 

@@ -31,7 +31,11 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { DEFAULT_POLICY, policyBlob } from "@/lib/policy-settings";
+import {
+  DEFAULT_POLICY, loadPolicyStatus, mirrorPolicyFromRecords, policyBlob, policyFromForm, policySourceLine, policyToForm,
+  type PolicyFormErrors, type PolicyFormValues,
+} from "@/lib/policy-settings";
+import { PolicyThresholdsFields } from "@/components/companies/PolicyThresholdsFields";
 import { findExistingClosureVoucherIds } from "@/lib/year-end-state";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
@@ -134,6 +138,17 @@ function CompaniesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(empty);
+  const [policyForm, setPolicyForm] = useState<PolicyFormValues>(policyToForm(DEFAULT_POLICY));
+  const [policyErrors, setPolicyErrors] = useState<PolicyFormErrors>({});
+  const [policySource, setPolicySource] = useState("New company: the defaults are saved with it.");
+  // The blob as it was loaded. Only a change against it is reported as a thresholds failure.
+  const [policyOriginal, setPolicyOriginal] = useState<string | null>(null);
+  const resetPolicyForNew = () => {
+    setPolicyForm(policyToForm(DEFAULT_POLICY));
+    setPolicyErrors({});
+    setPolicySource("New company: the defaults are saved with it.");
+    setPolicyOriginal(null);
+  };
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [fyLocks, setFyLocks] = useState<Record<string, boolean>>({});
@@ -240,6 +255,7 @@ function CompaniesPage() {
     if (sp.get("new") === "1") {
       setEditingId(null);
       setForm(empty);
+      resetPolicyForNew();
       setOpen(true);
       // Clean the query string so closing & re-opening behaves predictably.
       navigate({ to: "/app/companies", search: {} as never, replace: true });
@@ -256,6 +272,7 @@ function CompaniesPage() {
   const openNew = () => {
     setEditingId(null);
     setForm(empty);
+    resetPolicyForNew();
     setOpen(true);
   };
 
@@ -282,6 +299,12 @@ function CompaniesPage() {
       return;
     }
     setEditingId(id);
+    // Reading the thresholds never writes: the cache is only read here.
+    const loaded = await loadPolicyStatus(id);
+    setPolicyForm(policyToForm(loaded.policy));
+    setPolicyErrors({});
+    setPolicySource(policySourceLine(loaded.status));
+    setPolicyOriginal(JSON.stringify(policyBlob(loaded.policy)));
     setForm({
       name: data.name,
       entity_status: ((data as { entity_status?: EntityStatus }).entity_status ?? "individual"),
@@ -370,6 +393,14 @@ function CompaniesPage() {
       } catch { /* ignore */ }
       return;
     }
+    const polResult = policyFromForm(policyForm);
+    if (!polResult.ok) {
+      setPolicyErrors(polResult.errors);
+      toast.error("Check the policy thresholds", { description: "Fix the highlighted values. Nothing was saved." });
+      return;
+    }
+    const policyNext = policyBlob(polResult.policy);
+    const policyChanged = !!editingId && policyOriginal !== null && JSON.stringify(policyNext) !== policyOriginal;
     setSubmitting(true);
     const { data: sessionData } = await supabase.auth.getSession();
     const currentUserId = sessionData.session?.user?.id ?? user?.id;
@@ -414,6 +445,7 @@ function CompaniesPage() {
       mode: "trial_local",
       currency_code: parsed.data.currency_code || "INR",
       date_format: parsed.data.date_format || "dd-mm-yyyy",
+      policy_thresholds: policyNext,
     };
 
     let savedId: string | null = null;
@@ -421,7 +453,15 @@ function CompaniesPage() {
       if (editingId) {
         const { error } = await supabase.from("companies").update(payload).eq("id", editingId);
         // Ignore cloud error for local-only / restored companies; still mirror locally.
-        if (error && !isLocalOnlyMode()) { setSubmitting(false); toast.error(error.message); return; }
+        if (error && !isLocalOnlyMode()) {
+          setSubmitting(false);
+          toast.error(
+            policyChanged
+              ? "Thresholds could not be saved. The previous synced values are still in effect. Nothing else was changed."
+              : error.message,
+          );
+          return;
+        }
         try {
           const { offlineDb } = await import("@/lib/offline/db");
           const existing = (await offlineDb.cache_companies.get(editingId)) || { id: editingId };
@@ -441,8 +481,6 @@ function CompaniesPage() {
           const now = new Date().toISOString();
           await offlineDb.cache_companies.put({
             ...payload,
-            // Seed the agreed thresholds so a local-only company is never left without a blob.
-            policy_thresholds: policyBlob(DEFAULT_POLICY),
             id: newId,
             company_id: newId,
             created_by: "local-user",
@@ -492,6 +530,7 @@ function CompaniesPage() {
           updated_at: new Date().toISOString(),
         });
         if (merged) await offlineDb.cache_companies.put(merged as any);
+        await mirrorPolicyFromRecords([{ id: savedId, policy_thresholds: policyNext }]);
       }
     } catch { /* cache refresh is best-effort */ }
     await refresh();
@@ -951,6 +990,12 @@ function CompaniesPage() {
                   Save the company first — you'll then be able to add {getEntityFeatures(form.entity_status).membersTabLabel} (PAN/DIN, share %, profit-sharing ratio, capital contribution) on edit.
                 </p>
               )}
+              <PolicyThresholdsFields
+                values={policyForm}
+                errors={policyErrors}
+                sourceLine={policySource}
+                onChange={(next) => { setPolicyForm(next); setPolicyErrors({}); }}
+              />
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={submitting}>{submitting ? "Saving…" : editingId ? "Save changes" : "Create company"}</Button>

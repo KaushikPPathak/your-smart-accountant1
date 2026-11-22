@@ -4,9 +4,7 @@
 // SQLite row and the Dexie company cache mirror it; neither is ever edited on its own. A device
 // that cannot read a usable blob uses the defaults and shows a banner. It never substitutes
 // numbers silently, because two devices must not disagree on what counts as a problem.
-import { supabase } from "@/integrations/supabase/client";
 import { offlineDb } from "@/lib/offline/db";
-import { isLocalOnlyMode } from "@/lib/local-only-mode";
 
 export interface PolicySettings {
   /** 5.4: physical count variance warning floor, paise (₹500). */
@@ -97,20 +95,6 @@ export async function loadPolicy(companyId: string): Promise<PolicySettings> {
 }
 
 /**
- * Save thresholds to the company record. There is no offline override: if the cloud write fails,
- * nothing changes locally and the user is told to try again when connected. Local-only companies
- * have no cloud record, so their local mirror is the record.
- */
-export async function savePolicy(companyId: string, next: PolicySettings): Promise<void> {
-  const blob = policyBlob(next);
-  if (!isLocalOnlyMode()) {
-    const { error } = await supabase.from("companies").update({ policy_thresholds: blob }).eq("id", companyId);
-    if (error) throw new Error(`Thresholds not saved (${error.message}). Connect and try again.`);
-  }
-  await mirrorPolicy(companyId, blob);
-}
-
-/**
  * Called when company rows arrive from the cloud: refresh the desktop SQLite mirror from each row's
  * blob. The company record stays the only source; this never writes a value that did not come from it.
  */
@@ -126,18 +110,86 @@ export async function mirrorPolicyFromRecords(rows: { id: string; policy_thresho
   }
 }
 
-/** Write the mirrors: the Dexie company cache and, on desktop, the SQLite company row. */
-async function mirrorPolicy(companyId: string, blob: PolicyBlobV1): Promise<void> {
-  await offlineDb.cache_companies.update(companyId, { policy_thresholds: blob });
-  const { isTauri, getDb } = await import("@/utils/nativeDb");
-  if (isTauri()) {
-    const db = await getDb();
-    await db.execute("UPDATE companies SET policy_thresholds = $1 WHERE id = $2", [JSON.stringify(blob), companyId]);
-  }
-}
-
 /** Count variance needs a reason when it exceeds the higher of the floor or the rate of the line value. */
 export function countVarianceNeedsReason(varianceAbsPaise: number, lineValuePaise: number, policy: PolicySettings): boolean {
   const rateLimit = Math.round((Math.abs(lineValuePaise) * policy.countVarianceRateBps) / 10_000);
   return Math.abs(varianceAbsPaise) > Math.max(policy.countVarianceFloorPaise, rateLimit);
+}
+
+// ---------------------------------------------------------------------------
+// Editor: the form values, validation and caps. The company save path is the only writer.
+// ---------------------------------------------------------------------------
+
+/**
+ * Caps are not legal limits. They stop a typo (₹1,00,000 for ₹1,000) from silently disabling a
+ * control. Raise a cap here, deliberately, if a company genuinely needs more.
+ */
+export const POLICY_CAPS = {
+  stockAbsPaise: 200_000_00,   // ₹2,00,000 count-variance floor
+  roundOffPaise: 10_00,        // ₹10 round-off absorbed automatically
+  advancePaise: 10_000_00,     // ₹10,000 advance notice floor
+} as const;
+
+export interface PolicyFormValues {
+  stockAbsRupees: string;
+  stockPct: string;     // a fraction, 0 to 1 (0.01 = 1%)
+  roundOffRupees: string;
+  advanceRupees: string;
+}
+
+export function policyToForm(p: PolicySettings): PolicyFormValues {
+  return {
+    stockAbsRupees: String(p.countVarianceFloorPaise / 100),
+    stockPct: String(p.countVarianceRateBps / 10_000),
+    roundOffRupees: String(p.roundOffAutoPaise / 100),
+    advanceRupees: String(p.advanceNoticePaise / 100),
+  };
+}
+
+export type PolicyFormErrors = Partial<Record<keyof PolicyFormValues, string>>;
+
+function nonNegativeNumber(raw: string): number | null {
+  const t = raw.trim();
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Validate the editor values. Ok only when every field is in range and under its cap. */
+export function policyFromForm(v: PolicyFormValues): { ok: true; policy: PolicySettings } | { ok: false; errors: PolicyFormErrors } {
+  const errors: PolicyFormErrors = {};
+
+  const stockAbs = nonNegativeNumber(v.stockAbsRupees);
+  if (stockAbs === null) errors.stockAbsRupees = "Enter an amount of zero or more.";
+  else if (Math.round(stockAbs * 100) > POLICY_CAPS.stockAbsPaise) errors.stockAbsRupees = "Above the ₹2,00,000 cap. Check for a typo.";
+
+  const pct = nonNegativeNumber(v.stockPct);
+  if (pct === null || pct > 1) errors.stockPct = "Enter a fraction from 0 to 1 (for example 0.01 for 1%).";
+
+  const roundOff = nonNegativeNumber(v.roundOffRupees);
+  if (roundOff === null) errors.roundOffRupees = "Enter an amount of zero or more.";
+  else if (Math.round(roundOff * 100) > POLICY_CAPS.roundOffPaise) errors.roundOffRupees = "Above the ₹10 cap. Round-off above ₹10 is flagged for review, not absorbed.";
+
+  const advance = nonNegativeNumber(v.advanceRupees);
+  if (advance === null) errors.advanceRupees = "Enter an amount of zero or more.";
+  else if (Math.round(advance * 100) > POLICY_CAPS.advancePaise) errors.advanceRupees = "Above the ₹10,000 cap. Check for a typo.";
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    policy: {
+      countVarianceFloorPaise: Math.round((stockAbs as number) * 100),
+      countVarianceRateBps: Math.round((pct as number) * 10_000),
+      roundOffAutoPaise: Math.round((roundOff as number) * 100),
+      advanceNoticePaise: Math.round((advance as number) * 100),
+    },
+  };
+}
+
+/** Where the values on screen came from, for the one line under the editor. */
+export function policySourceLine(status: PolicyStatus): string {
+  if (status.synced) return "Current values come from the company record.";
+  if (status.reason === "missing") return "Defaults are in use: this company record has no thresholds yet.";
+  if (status.reason === "newer_version") return "Defaults are in use: the stored thresholds use a newer format. Update the app.";
+  return "Defaults are in use: the stored thresholds could not be read.";
 }

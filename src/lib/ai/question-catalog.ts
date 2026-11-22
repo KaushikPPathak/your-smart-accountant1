@@ -20,7 +20,8 @@
 // question-catalog.test.ts checks every entry against the real router and the real tool list.
 
 /** implemented: a statutory or policy rule is enforced in the builder or on save/report; chat narration is separate. blocked: waiting on a form change. */
-export type QuestionStatus = "answered" | "partial" | "planned" | "not_in_books" | "implemented" | "blocked";
+/** out_of_scope: a decided exclusion, with its own backlog item, not unfinished work. */
+export type QuestionStatus = "answered" | "partial" | "planned" | "not_in_books" | "implemented" | "blocked" | "out_of_scope";
 export type RouterOutcome = "local" | "declined" | "cannot";
 export type Phase = 1 | 2 | 3;
 
@@ -82,7 +83,9 @@ export const QUESTION_CATALOG: CatalogQuestion[] = [
   { id: "6.3", section: "Tax, statutory & compliance", question: "Which transactions lack valid tax registration numbers, HSN/SAC codes, or proper tax invoices?", routeIntent: "tax_compliance", router: "local", tool: "get_tax_compliance_issues", status: "answered", phase: 1, dataUsed: "GSTIN on parties; HSN on items and voucher lines.", note: "Lists registered parties without a well-formed GSTIN and taxable lines without HSN/SAC. Presence and format only, not verified with the GST portal. Proper tax invoices are not checked here. Advisory: the entry screens enforce what they can." },
   { id: "6.4", section: "Tax, statutory & compliance", question: "How much TDS has been deducted across sections this quarter, and is any challan payment or return filing pending?", routeIntent: "explanation", router: "cannot", tool: "tds_summary", status: "not_in_books", phase: 2, dataUsed: "Missing: TDS section, amount and challan on vouchers. Only TDS ledgers, if kept, can be read today.", note: "Needs TDS fields on vouchers before this can be answered." },
   { id: "6.5", section: "Tax, statutory & compliance", question: "Are there any unadjusted advance receipts or round-off/tax ledger discrepancies before period close?", routeIntent: "unknown", router: "declined", tool: "round_off_check", status: "implemented", phase: 1, dataUsed: "Round-off and tax ledger balances; advance receipts from ageing.", note: "Section 170: tax on the GSTR-3B return rounds to the nearest rupee per tax head at the return line. Ledgers keep exact paise. Statutory exports carry rounded figures only; the paise difference is in the internal books-to-return reconciliation on the 3B screen. Round-off notice and advance-GST notice are on the entry screens." },
-  { id: "6.5b", section: "Tax, statutory & compliance", question: "Why does the GST on my return differ from my books by a few paise?", routeIntent: "gst_query", router: "cannot", tool: "section_170_explain", status: "planned", phase: 1, dataUsed: "Round-off and tax ledger balances; advance receipts from ageing.", note: "Chat explanation of the Section 170 difference, not started. The rule itself is implemented (see 6.5). Chat would read the books-to-return reconciliation and explain it; it does not change any figure." },
+  { id: "6.5b", section: "Tax, statutory & compliance", question: "Why does the GST on my return differ from my books by a few paise?", routeIntent: "gst_query", router: "cannot", tool: "section_170_explain", status: "planned", phase: 1, dataUsed: "Round-off and tax ledger balances; advance receipts from ageing.", note: "Planned, low value. The rule is enforced and the 3B screen carries the note, so chat adds little. If closed later: a static explanation of Section 170 with a link to the 3B screen, with no computation." },
+  { id: "6.3a", section: "Tax, statutory & compliance", question: "Does every sales invoice carry all the fields a GST tax invoice must have, such as serial number, date, party, HSN, taxable value, tax heads and place of supply?", routeIntent: "gst_query", router: "cannot", tool: "section_170_explain", status: "out_of_scope", phase: 2, dataUsed: "Round-off and tax ledger balances; advance receipts from ageing.", note: "Out of scope for chat. Rule 46 completeness depends on the recipient's registration status and the turnover slab, so a chat list would produce false positives. Build as a required-field check on the invoice screen with the invoice form validations (separate backlog item)." },
+  { id: "6.3b", section: "Tax, statutory & compliance", question: "Is each party's GSTIN genuine and active on the GST portal?", routeIntent: "gst_query", router: "cannot", tool: "section_170_explain", status: "out_of_scope", phase: 3, dataUsed: "Round-off and tax ledger balances; advance receipts from ageing.", note: "Out of scope for 6.3. Portal validation needs a GSP or live GSTN API, credentials, rate limits and terms-of-service review. It would add a network dependency the offline app does not have. Separate backlog item: a Verify GSTIN button on the party master with a cached result and timestamp." },
 
   // 7. Ledger hygiene, vouchers and audit readiness
   { id: "7.1", section: "Ledger hygiene & audit readiness", question: "Which journal entries or vouchers were manually posted, backdated, edited, or deleted after period close?", routeIntent: "unknown", router: "declined", tool: "voucher_audit", status: "planned", phase: 2, dataUsed: "Activity log records AI-originated actions and year-end runs (src/lib/ai/audit-log.ts). Manual edits and backdating history are not stored.", note: "Needs a change history on vouchers before edits can be reported." },
@@ -94,7 +97,7 @@ export const QUESTION_CATALOG: CatalogQuestion[] = [
 ];
 
 export function catalogSummary(): Record<QuestionStatus, number> {
-  const out: Record<QuestionStatus, number> = { answered: 0, partial: 0, planned: 0, not_in_books: 0, implemented: 0, blocked: 0 };
+  const out: Record<QuestionStatus, number> = { answered: 0, partial: 0, planned: 0, not_in_books: 0, implemented: 0, blocked: 0, out_of_scope: 0 };
   for (const q of QUESTION_CATALOG) out[q.status]++;
   return out;
 }
@@ -114,7 +117,7 @@ export function renderCatalogueMarkdown(): string {
     "",
     "Generated from `src/lib/ai/question-catalog.ts`. Edit the catalogue, then regenerate this file.",
     "",
-    `Status: ${s.answered} answered, ${s.implemented} implemented, ${s.partial} partial, ${s.planned} planned, ${s.blocked} blocked, ${s.not_in_books} not in the books.`,
+    `Status: ${s.answered} answered, ${s.implemented} implemented, ${s.partial} partial, ${s.planned} planned, ${s.blocked} blocked, ${s.out_of_scope} out of scope, ${s.not_in_books} not in the books.`,
     `Build phase: ${p[1]} buildable from stored data (phase 1), ${p[2]} need new fields or capture (phase 2), ${p[3]} blocked on a decision or outside the books (phase 3).`,
     "",
     "Phases: 1 = the books already hold the data; 2 = the app needs a new field, record or capture first; 3 = blocked on a decision or outside the books.",
