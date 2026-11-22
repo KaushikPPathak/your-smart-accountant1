@@ -41,7 +41,8 @@ import {
 } from "@/lib/offline/voucher-executors";
 import { useVoucherDraft, clearVoucherDraft } from "@/hooks/useVoucherDraft";
 import { DraftRecoveredBanner } from "./DraftRecoveredBanner";
-import { calculateWac, type ItemMove as WacMove } from "@/lib/inventory/valuation-engine";
+import { calculateWac, type ItemMove as WacMove, type ValuationResult } from "@/lib/inventory/valuation-engine";
+import { DEFAULT_POLICY, countVarianceNeedsReason, loadPolicy, type PolicySettings } from "@/lib/policy-settings";
 import {
   readItems,
   readVouchers,
@@ -62,24 +63,30 @@ interface StockLine {
   id: string;
   item_id: string;
   bookQty: number;
+  /** Valuation rate per unit, paise, at the stock date. */
+  wacPaise: number;
   countedQty: string;
   unit: string;
+  /** Required when the difference is above the count variance threshold (5.4). */
+  varianceReason: string;
 }
 
 const blankLine = (): StockLine => ({
   id: crypto.randomUUID(),
   item_id: "",
   bookQty: 0,
+  wacPaise: 0,
+  varianceReason: "",
   countedQty: "",
   unit: "",
 });
 
 /** Compute the current book quantity for an item as of a date. */
-function computeBookQty(
+function computeBookValuation(
   item: ItemOpt,
   moves: Array<{ item_id: string; qty: number; voucher_type: string; voucher_date: string }>,
   asOfDate: string,
-): number {
+): ValuationResult {
   const wacMoves: WacMove[] = moves
     .filter((m) => m.item_id === item.id && m.voucher_date <= asOfDate)
     .map((m) => ({
@@ -94,7 +101,7 @@ function computeBookQty(
     Number(item.opening_stock_rate_paise || 0),
     wacMoves,
   );
-  return val.closingQty;
+  return val;
 }
 
 export function PhysicalStockForm() {
@@ -106,6 +113,13 @@ export function PhysicalStockForm() {
   const [refNo, setRefNo] = useState("");
   const [narration, setNarration] = useState("");
   const [lines, setLines] = useState<StockLine[]>([blankLine()]);
+  const [policy, setPolicy] = useState<PolicySettings>(DEFAULT_POLICY);
+  useEffect(() => {
+    if (!activeCompanyId) return;
+    let cancelled = false;
+    void loadPolicy(activeCompanyId).then((p) => { if (!cancelled) setPolicy(p); });
+    return () => { cancelled = true; };
+  }, [activeCompanyId]);
   const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(0);
   const { lock, locked } = usePeriodLock(date);
@@ -220,11 +234,13 @@ export function PhysicalStockForm() {
       cur.map((l, i) => {
         if (i !== idx) return l;
         const item = items.find((x) => x.id === itemId);
-        const bookQty = item ? computeBookQty(item, allMoves, date) : 0;
+        const val = item ? computeBookValuation(item, allMoves, date) : null;
+        const bookQty = val?.closingQty ?? 0;
         return {
           ...l,
           item_id: itemId,
           bookQty,
+          wacPaise: val?.wacPaise ?? 0,
           unit: item?.unit ?? "",
           countedQty: l.countedQty || String(bookQty),
         };
@@ -269,6 +285,17 @@ export function PhysicalStockForm() {
       return;
     }
 
+    // 5.4: a difference above the threshold needs a reason before it is saved.
+    const needReason = adjLines.filter((l) => {
+      const diffValue = Math.abs(l.diff) * l.wacPaise;
+      const bookValue = Math.abs(l.bookQty) * l.wacPaise;
+      return countVarianceNeedsReason(diffValue, bookValue, policy) && !l.varianceReason.trim();
+    });
+    if (needReason.length > 0) {
+      toast.error(`Give a reason for the large difference on: ${needReason.map((l) => items.find((i) => i.id === l.item_id)?.name ?? "item").join(", ")}`);
+      return;
+    }
+
     setSaving(true);
 
     const snap: ItemVoucherSnap = {
@@ -294,7 +321,7 @@ export function PhysicalStockForm() {
       lines: adjLines.map((l, i) => ({
         l: {
           item_id: l.item_id,
-          description: `Book: ${l.bookQty} → Counted: ${parseFloat(l.countedQty) || 0} (${l.unit})`,
+          description: `Book: ${l.bookQty} → Counted: ${parseFloat(l.countedQty) || 0} (${l.unit})${l.varianceReason.trim() ? ` — ${l.varianceReason.trim()}` : ""}`,
           qty: String(l.diff),
           rate: "0",
         },
@@ -328,7 +355,7 @@ export function PhysicalStockForm() {
     );
 
     toast.success("Physical stock voucher saved");
-  }, [activeCompanyId, canWrite, lines, date, refNo, narration, draftKey]);
+  }, [activeCompanyId, canWrite, lines, date, refNo, narration, draftKey, policy, items]);
 
   // One save at a time: performSave awaits checks before it resets the form.
   const saveBusyRef = useRef(false);
@@ -489,6 +516,7 @@ export function PhysicalStockForm() {
                 <TableHead className="w-32 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Counted Qty</TableHead>
                 <TableHead className="w-28 py-2 text-right text-[11px] font-bold uppercase text-muted-foreground">Difference</TableHead>
                 <TableHead className="w-16 py-2 text-[11px] font-bold uppercase text-muted-foreground">Unit</TableHead>
+                <TableHead className="w-48 py-2 text-[11px] font-bold uppercase text-muted-foreground">Reason (large difference)</TableHead>
                 <TableHead className="w-10 py-2"></TableHead>
               </TableRow>
             </TableHeader>
@@ -524,6 +552,16 @@ export function PhysicalStockForm() {
                       {l.item_id ? (diff > 0 ? `+${diff}` : diff === 0 ? "0" : String(diff)) : ""}
                     </TableCell>
                     <TableCell className="py-2 text-xs text-muted-foreground">{l.unit}</TableCell>
+                    <TableCell className="py-2">
+                      {l.item_id && diff !== 0 && countVarianceNeedsReason(Math.abs(diff) * l.wacPaise, Math.abs(l.bookQty) * l.wacPaise, policy) ? (
+                        <Input
+                          value={l.varianceReason}
+                          onChange={(e) => setLines((cur) => cur.map((x, i) => (i === idx ? { ...x, varianceReason: e.target.value } : x)))}
+                          placeholder="Why the difference? (required)"
+                          className="bg-white text-xs"
+                        />
+                      ) : null}
+                    </TableCell>
                     <TableCell className="py-2">
                       <Button
                         variant="ghost"
