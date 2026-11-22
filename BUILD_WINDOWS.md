@@ -74,7 +74,7 @@ npm ci
 npm run tauri build
 ```
 
-Then re-run the new versioned `.exe` over the old one. Your business data remains in `%LOCALAPPDATA%\com.smartaccountant.app\` and is untouched by re-install.
+Then re-run the new versioned `.exe` over the old one. Your business data remains in `%LOCALAPPDATA%\com.smartaccountant.app\` and is untouched by re-install or uninstall (the installer keeps it, `deleteAppDataOnUninstall: false`). Back up from the app before any major change.
 
 If the old app opens after updating, close it and check Windows **Installed Apps** for more than one SmartAccountant entry. Uninstall all app entries, keep `%LOCALAPPDATA%\com.smartaccountant.app\` untouched, and install the newest `.exe` once.
 
