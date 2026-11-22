@@ -187,6 +187,8 @@ function LockGate({ children }: { children: React.ReactNode }) {
                 }
                 const { checkSqliteIntegrity } = await import("@/lib/sqlite-integrity");
                 await runOncePerLaunch("sqlite-integrity", () => checkSqliteIntegrity());
+                const { takeDailySqliteSnapshot } = await import("@/lib/sqlite-snapshot");
+                await runOncePerLaunch("sqlite-snapshot", () => takeDailySqliteSnapshot());
                 const { runAutoRestore } = await import("@/lib/auto-restore");
                 const list = await offlineDb.companies.toArray();
                 await runOncePerLaunch("auto-restore", () => runAutoRestore(list));
