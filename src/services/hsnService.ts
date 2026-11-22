@@ -14,6 +14,7 @@
 
 import { findHsnByCode, searchHsn, upsertHsn, type HsnRecord } from "@/repositories/hsnRepository";
 import { HSN_MASTER_DATASET } from "@/lib/hsn/seedHsnData";
+import { EXEMPT_GOODS } from "@/lib/gst/exempt-goods-data";
 
 type Seed = { code: string; desc: string; cgst: number; sgst: number; igst: number };
 
@@ -58,6 +59,33 @@ function buildIndex(): HsnIndex {
       const bucket = wordBuckets.get(key);
       if (bucket) bucket.push(s);
       else wordBuckets.set(key, [s]);
+    }
+  }
+
+  // Exempt-goods codes (Notification 10/2025-CT(R)) that the built-in list lacks are
+  // added at 0% so they can be found in the dropdown. Existing codes keep their rates.
+  for (const e of EXEMPT_GOODS) {
+    if (!e.autoMatch) continue;
+    for (const scope of e.scopes) {
+      if (scope.length < 4 || byCode.has(scope)) continue;
+      const seed: Seed = {
+        code: scope,
+        desc: `${e.description} (exempt, Notif 10/2025 entry ${e.serial})`,
+        cgst: 0, sgst: 0, igst: 0,
+      };
+      byCode.set(scope, seed);
+      codeToSeed.set(scope.toLowerCase(), seed);
+      const words = seed.desc.toLowerCase().split(/[^a-z0-9]+/);
+      const seenBucket = new Set<string>();
+      for (const w of words) {
+        if (w.length < 2) continue;
+        const key = w.slice(0, 3);
+        if (seenBucket.has(key)) continue;
+        seenBucket.add(key);
+        const bucket = wordBuckets.get(key);
+        if (bucket) bucket.push(seed);
+        else wordBuckets.set(key, [seed]);
+      }
     }
   }
 

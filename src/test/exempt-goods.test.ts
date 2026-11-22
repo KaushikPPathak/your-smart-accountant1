@@ -50,3 +50,14 @@ describe("picker label for 0% codes", () => {
     expect(taxFreeLabel("6911")).toBe("Nil rated (0%)");
   });
 });
+
+describe("exempt codes in the HSN dropdown", () => {
+  it("finds an exempt heading missing from the built-in list, at 0%", async () => {
+    const { suggestHsn } = await import("@/services/hsnService");
+    const rows = await suggestHsn("0101", 10);
+    const hit = rows.find((r) => r.hsn_code === "0101");
+    expect(hit).toBeDefined();
+    expect(hit?.igst_rate).toBe(0);
+    expect(hit?.description).toMatch(/entry 1\)/);
+  });
+});
