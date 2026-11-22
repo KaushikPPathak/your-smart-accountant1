@@ -31,6 +31,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { readVouchers } from "@/lib/offline/cache-read";
 import { findDuplicateInvoice, type InvoiceRow } from "@/lib/invoice-uniqueness";
+import { itemsGoingNegative, loadStockPosition, stockSignFor } from "@/lib/stock-negative-warning";
 import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/utils/currency-utils";
@@ -956,6 +957,35 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
           `This voucher is not saved: ${where} already exists in this financial year (${hits[0].voucher_date}). Change the ${snap.voucherType === "purchase" ? "bill number" : "invoice number"}.`,
         );
         return;
+      }
+    }
+
+    // Negative stock is allowed: the save goes ahead and the user is told which items go below zero,
+    // because a missing purchase or an unrecorded raw-material conversion is the usual cause.
+    if (activeCompanyId && snap.lines.length > 0) {
+      const sign = stockSignFor(snap.voucherType);
+      const thisVoucher = new Map<string, { name: string; qty: number }>();
+      if (sign !== 0) {
+        for (const { l } of snap.lines) {
+          if (!l.item_id) continue;
+          const prev = thisVoucher.get(l.item_id);
+          const name = items.find((i) => i.id === l.item_id)?.name ?? "item";
+          thisVoucher.set(l.item_id, { name, qty: (prev?.qty ?? 0) + sign * (parseFloat(l.qty) || 0) });
+        }
+      }
+      if (thisVoucher.size > 0) {
+        try {
+          const position = await loadStockPosition(activeCompanyId, originalVoucherId ?? null);
+          const negative = itemsGoingNegative({ ...position, thisVoucher });
+          if (negative.length > 0) {
+            toast.warning(
+              `Saved, but stock goes negative: ${negative.map((n) => `${n.name} (${n.closing.toFixed(2)})`).join(", ")}. Check for a purchase or raw-material conversion not yet recorded, or adjust the stock.`,
+              { duration: 12000 },
+            );
+          }
+        } catch {
+          /* a failed stock check never blocks the save */
+        }
       }
     }
 

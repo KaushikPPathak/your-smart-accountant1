@@ -149,10 +149,10 @@ export async function scanNegativeStock(companyId: string): Promise<Anomaly[]> {
     if (closing < 0) {
       out.push({
         id: `negstock:${item.id}`,
-        severity: "danger",
+        severity: "warn",
         category: "stock",
         title: `Negative stock — ${item.name}`,
-        detail: `Closing quantity is ${closing.toFixed(2)}. A sale was posted without a matching purchase or opening balance.`,
+        detail: `Closing quantity is ${closing.toFixed(2)}. Check for a purchase, opening balance or raw-material conversion that is not yet recorded, or adjust the stock.`,
         href: `/app/items`,
         refs: { itemIds: [String(item.id)] },
       });
