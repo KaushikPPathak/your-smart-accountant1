@@ -41,3 +41,21 @@ describe("bill tax allocation to lines", () => {
     expect(out.reduce((s, l) => s + l.sgst_paise, 0)).toBe(18);
   });
 });
+
+import { unplacedBillTax } from "@/lib/gst-bill-lines";
+
+describe("zero-weight bills", () => {
+  it("reports the whole header tax as unplaced when every line is 0%", () => {
+    const lines = [
+      { taxable_paise: 10000, gst_rate: 0, cgst_paise: 0, sgst_paise: 0, igst_paise: 0 },
+      { taxable_paise: 5000, gst_rate: 0, cgst_paise: 0, sgst_paise: 0, igst_paise: 0 },
+    ];
+    expect(unplacedBillTax(lines, { cgst_paise: 90, sgst_paise: 90, igst_paise: 0 }))
+      .toEqual({ cgst_paise: 90, sgst_paise: 90, igst_paise: 0 });
+  });
+  it("reports nothing unplaced when the lines can carry the tax", () => {
+    const lines = [{ taxable_paise: 10000, gst_rate: 18, cgst_paise: 900, sgst_paise: 900, igst_paise: 0 }];
+    expect(unplacedBillTax(lines, { cgst_paise: 900, sgst_paise: 900, igst_paise: 0 }))
+      .toEqual({ cgst_paise: 0, sgst_paise: 0, igst_paise: 0 });
+  });
+});
