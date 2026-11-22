@@ -33,7 +33,6 @@
       "nsis": {
         "installerIcon": "icons/icon.ico",
         "installMode": "currentUser",
-        "deleteAppDataOnUninstall": false,
         "displayLanguageSelector": false
       },
       "wix": {
