@@ -680,7 +680,7 @@ const VOUCHER_BATCH = 300;
 /** Rupees to paise, keeping the sign (used for the signed round-off). */
 const signedPaise = (rupees: number | undefined) => Math.round((rupees ?? 0) * 100);
 
-interface StoredVoucherMatch { id: string; total: number; hasItems: boolean; used: boolean }
+interface StoredVoucherMatch { id: string; total: number; hasItems: boolean; used: boolean; party: string | null }
 
 /** Header fields of a voucher, from the import (or the plain total when there is no tax breakdown). */
 function headerFieldsOf(v: VoucherRecord, debitPaise: number, partyId: string | null, stamp: string) {
@@ -785,7 +785,7 @@ export async function postVouchers(
     if (v.is_deleted || !v.voucher_number) continue;
     const k = `${v.voucher_type}|${v.voucher_number}|${v.voucher_date}`;
     const list = stored.get(k) ?? [];
-    list.push({ id: v.id, total: v.total_paise ?? 0, hasItems: (itemsPerVoucher.get(v.id) ?? 0) > 0, used: false });
+    list.push({ id: v.id, total: v.total_paise ?? 0, hasItems: (itemsPerVoucher.get(v.id) ?? 0) > 0, used: false, party: v.party_ledger_id ?? null });
     stored.set(k, list);
   }
 
@@ -826,8 +826,10 @@ export async function postVouchers(
     }
     const hasItems = (v.items ?? []).length > 0;
 
+    const dupKey = `${v.vtype}|${v.voucher_no}|${v.date}`;
+    const seenHere = v.voucher_no ? (stored.get(dupKey) ?? []) : [];
     if (v.voucher_no) {
-      const cands = (stored.get(`${v.vtype}|${v.voucher_no}|${v.date}`) ?? []).filter((c) => !c.used);
+      const cands = seenHere.filter((c) => !c.used);
       const pick = cands.find((c) => c.total === debitPaise)
         ?? (hasItems ? cands.find((c) => !c.hasItems) : undefined);
       if (pick) {
@@ -861,9 +863,27 @@ export async function postVouchers(
         }
         continue;
       }
+      // The same voucher (same total) already stored or earlier in this file: skip it.
+      if (seenHere.some((c) => c.total === debitPaise && c.party === partyId)) {
+        result.skipped++;
+        continue;
+      }
+      // Same number, date and party but a different total: import it, but flag it for checking.
+      // Different parties can share a number (numbers repeat across parties in some exports).
+      if (seenHere.some((c) => c.party === partyId)) {
+        result.failed.push({
+          name: label,
+          reason: "Imported, but a voucher with this type, number and date already exists with a different total. Check for a duplicate.",
+        });
+      }
     }
 
     const voucherId = newId();
+    if (v.voucher_no) {
+      const list = stored.get(dupKey) ?? [];
+      list.push({ id: voucherId, total: debitPaise, hasItems, used: true, party: partyId });
+      stored.set(dupKey, list);
+    }
     const interstate = (v.header?.igst ?? 0) > 0;
     pending.vouchers.push({
       id: voucherId,
