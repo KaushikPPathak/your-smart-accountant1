@@ -8,6 +8,7 @@ import type { Database } from "@/integrations/supabase/types";
 import type { XlsxSheet } from "@/lib/exporters";
 import { GSTR1_PORTAL_VERSION, DOC_TYPES, portalHsnBlock } from "./gstr1-portal-format";
 import { isTaxFreeGstLine } from "./gst-supply-classification";
+import { natureOfTaxFreeLine } from "./gst/exempt-goods";
 import { reconcileBillTaxLines } from "./gst-bill-lines";
 import type { ItcBucket, JournalItc } from "./gst-itc-from-books";
 import { fetchInwardSummaryLocal, fetchItcReversalLocal } from "@/lib/offline/gstr3b-local";
@@ -526,6 +527,9 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
   const exp: EXPInvoice[] = [];
   const nilMap = new Map<NilGroup["sply_ty"], NilGroup>();
 
+  const sumTaxable = (lines: VoucherRow["voucher_items"]) =>
+    lines.reduce((sum, it) => sum + (it.taxable_paise || 0), 0);
+
   const accNil = (v: VoucherRow, natureOverride?: SupplyNature, sign: 1 | -1 = 1) => {
     const interstate = v.is_interstate;
     const partyGstin = v.ledgers?.gstin || "";
@@ -584,9 +588,10 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     const taxableItems = partitionNilLines ? v.voucher_items.filter((it) => !isNilLine(it)) : v.voucher_items;
     let separatedNilPaise = 0;
     if (nilItems.length > 0) {
-      const nilAmt = nilItems.reduce((s, it) => s + (it.taxable_paise || 0), 0);
-      separatedNilPaise = nilAmt;
-      if (nilAmt > 0) {
+      const nilAmt = sumTaxable(nilItems.filter((it) => natureOfTaxFreeLine(it) !== "exempt"));
+      const exemptAmt = sumTaxable(nilItems.filter((it) => natureOfTaxFreeLine(it) === "exempt"));
+      separatedNilPaise = nilAmt + exemptAmt;
+      if (nilAmt + exemptAmt > 0) {
         const interstate = v.is_interstate;
         const partyGstin = v.ledgers?.gstin || "";
         const key: NilGroup["sply_ty"] = interstate
@@ -594,6 +599,7 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
           : (partyGstin ? "INTRAB2B" : "INTRAB2C");
         const cur = nilMap.get(key) ?? { sply_ty: key, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 };
         cur.nil_amt += nilAmt;
+        cur.expt_amt += exemptAmt;
         nilMap.set(key, cur);
       }
       // Drop the nil lines so downstream B2B/B2CS aggregators don't emit a 0%
@@ -736,15 +742,17 @@ export function buildGstr1(args: BuildGstr1Args): BuiltGstr1 {
     const taxableItemsCN = partitionNilLines ? v.voucher_items.filter((it) => !isNilLine(it)) : v.voucher_items;
     let separatedNilPaise = 0;
     if (nilItemsCN.length > 0) {
-      const nilAmt = nilItemsCN.reduce((s, it) => s + (it.taxable_paise || 0), 0);
-      separatedNilPaise = nilAmt;
-      if (nilAmt > 0) {
+      const nilAmt = sumTaxable(nilItemsCN.filter((it) => natureOfTaxFreeLine(it) !== "exempt"));
+      const exemptAmt = sumTaxable(nilItemsCN.filter((it) => natureOfTaxFreeLine(it) === "exempt"));
+      separatedNilPaise = nilAmt + exemptAmt;
+      if (nilAmt + exemptAmt > 0) {
         const interstate = v.is_interstate;
         const key: NilGroup["sply_ty"] = interstate
           ? (partyGstin ? "INTRB2B" : "INTRB2C")
           : (partyGstin ? "INTRAB2B" : "INTRAB2C");
         const cur = nilMap.get(key) ?? { sply_ty: key, nil_amt: 0, expt_amt: 0, ngsup_amt: 0 };
         cur.nil_amt += (ntty === "C" ? -nilAmt : nilAmt);
+        cur.expt_amt += (ntty === "C" ? -exemptAmt : exemptAmt);
         nilMap.set(key, cur);
       }
       v = { ...v, voucher_items: taxableItemsCN };

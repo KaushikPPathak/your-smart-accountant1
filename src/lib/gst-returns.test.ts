@@ -68,7 +68,7 @@ describe("GSTR-1 HSN reconciliation", () => {
   });
   it("excludes INV.035's 25000 tax-free item from B2B taxable value", () => {
     const mixed = voucher("INV.035", "sales", true, [item(25000_00, 12, 1500_00, "4911"),
-      item(36000_00, 18, 3240_00, "9403"), item(25000_00, 0, 0, "69120040")], 95480_00);
+      item(36000_00, 18, 3240_00, "9403"), item(25000_00, 0, 0, "6911")], 95480_00);
     const result = buildGstr1({ company: { name: "Test", gstin: "36AAAAA0000A1Z5", state_code: "36" },
       from: "2026-04-01", to: "2026-04-30", fp: "042026", sales: [mixed], creditNotes: [] });
     expect(result.b2b[0].itms.reduce((sum, line) => sum + line.itm_det.txval, 0)).toBe(61000);
@@ -80,7 +80,7 @@ describe("GSTR-1 HSN reconciliation", () => {
 
   it("separates mixed bill tax-free supplies in GSTR-3B 3.1 and 3.2", () => {
     const mixed = { ...voucher("MIX", "sales", false, [item(61000_00, 18, 5490_00, "9403"),
-      item(25000_00, 0, 0, "69120040")], 96980_00), is_interstate: true };
+      item(25000_00, 0, 0, "6911")], 96980_00), is_interstate: true };
     const result = buildGstr3B({ company: { name: "Test", gstin: "36AAAAA0000A1Z5", state_code: "36" },
       from: "2026-04-01", to: "2026-04-30", fp: "042026", sales: [mixed], purchases: [], creditNotes: [], debitNotes: [] });
     expect(result.sup_details.osup_det.txval).toBe(61000);

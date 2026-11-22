@@ -117,7 +117,7 @@ const company = {
 
 describe("GSTR-9 drill-down provenance", () => {
   it("traces mixed B2B and nil-rated contributions without changing the saved invoice", () => {
-    const source = voucher("MIXED-1", "sales", true, [item(10000, 18, 1800, "1001"), item(5000, 0, 0, "1002")], 16800);
+    const source = voucher("MIXED-1", "sales", true, [item(10000, 18, 1800, "1001"), item(5000, 0, 0, "6911")], 16800);
     const original = structuredClone(source);
     const result = buildGstr9({ company, financialYear: "2025-26", sales: [source], creditNotes: [] });
     expect(result.details?.outward.map((row) => [row.voucherId, row.bucket, row.taxableValue, row.totalTax])).toEqual([
@@ -192,7 +192,7 @@ describe("GSTR-9 outward aggregation", () => {
   it("separates the 25000 tax-free line from INV.035 taxable sales", () => {
     const result = buildGstr9({ company, financialYear: "2025-26", creditNotes: [], sales: [
       voucher("INV.035", "sales", true, [item(25000_00, 12, 3000_00, "4911"),
-        item(36000_00, 18, 6480_00, "9403"), item(25000_00, 0, 0, "69120040")], 95480_00),
+        item(36000_00, 18, 6480_00, "9403"), item(25000_00, 0, 0, "6911")], 95480_00),
     ] });
     expect(result.outward.registeredTaxable.taxableValue).toBe(61000);
     expect(result.outward.nilRated.taxableValue).toBe(25000);
@@ -200,21 +200,29 @@ describe("GSTR-9 outward aggregation", () => {
     expect(result.outward.registeredTaxable.totalTax).toBe(9480);
   });
 
+  it("routes a zero-rate line whose HSN is an exempt entry to exempt, not nil-rated", () => {
+    const result = buildGstr9({ company, financialYear: "2025-26", creditNotes: [], sales: [
+      voucher("POT", "sales", false, [item(4000_00, 0, 0, "69120040")], 4000_00),
+    ] });
+    expect(result.outward.exempt.taxableValue).toBe(4000);
+    expect(result.outward.nilRated.taxableValue).toBe(0);
+  });
+
   it("reconciles 123200 tax-free HSN with nil-rated supplies, separately from 76000 exempt", () => {
     const result = buildGstr9({ company, financialYear: "2025-26", creditNotes: [], sales: [
-      voucher("ZERO", "sales", false, [item(123200_00, 0, 0, "69120040")], 123200_00),
+      voucher("ZERO", "sales", false, [item(123200_00, 0, 0, "6911")], 123200_00),
       voucher("EXEMPT", "sales", false, [item(76000_00, 0, 0, "7009")], 76000_00, "exempt"),
     ] });
     expect(result.outward.nilRated.taxableValue).toBe(123200);
     expect(result.outward.exempt.taxableValue).toBe(76000);
     expect(result.outward.unregisteredTaxable.taxableValue).toBe(0);
-    expect(result.hsn.find((row) => row.hsn === "69120040")?.taxableValue).toBe(123200);
+    expect(result.hsn.find((row) => row.hsn === "6911")?.taxableValue).toBe(123200);
   });
 
   it("nets tax-free credit notes without double counting mixed invoices", () => {
     const result = buildGstr9({ company, financialYear: "2025-26", sales: [
-      voucher("MIX", "sales", true, [item(10000_00, 18, 1800_00, "1001"), item(25000_00, 0, 0, "69120040")], 36800_00),
-    ], creditNotes: [voucher("CN", "credit_note", true, [item(5000_00, 0, 0, "69120040")], 5000_00)] });
+      voucher("MIX", "sales", true, [item(10000_00, 18, 1800_00, "1001"), item(25000_00, 0, 0, "6911")], 36800_00),
+    ], creditNotes: [voucher("CN", "credit_note", true, [item(5000_00, 0, 0, "6911")], 5000_00)] });
     expect(result.outward.nilRated.taxableValue).toBe(20000);
     expect(result.outward.registeredTaxable.taxableValue).toBe(10000);
     expect(result.outward.totalOutward.grossValue).toBe(31800);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { usePhone } from "@/hooks/use-phone";
 import { closestHeadingFor, suggestHsn, type HsnRecord } from "@/services/hsnService";
+import { taxFreeLabel } from "@/lib/gst/exempt-goods";
 
 interface Props {
   value: string;
@@ -107,7 +108,7 @@ export function HsnCodeAutocomplete({
                 <div className="flex justify-between font-mono font-semibold">
                   <span>{rec.hsn_code.replace(/_PP$/i, "")}</span>
                   <span className="text-muted-foreground text-[10px]">
-                    {rec.is_exempt ? "NIL / Exempt" : `GST ${rate}%`}
+                    {rate === 0 ? taxFreeLabel(rec.hsn_code) : `GST ${rate}%`}
                   </span>
                 </div>
                 <span className="text-muted-foreground truncate">{rec.description}</span>
@@ -125,7 +126,7 @@ export function HsnCodeAutocomplete({
             {heading ? (
               <>
                 {typed} is not in the built-in list. Closest heading: <b>{heading.hsn_code}</b> — {heading.description}
-                {heading.is_exempt ? " (NIL / exempt)" : ` (GST ${rate}%)`}. You can keep this code.
+                {rate === 0 ? ` (${taxFreeLabel(heading.hsn_code)})` : ` (GST ${rate}%)`}. You can keep this code.
               </>
             ) : (
               <>HSN code {typed} is not in the built-in list. You can keep this code.</>

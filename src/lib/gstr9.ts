@@ -4,6 +4,7 @@ import {
   type VoucherRow,
 } from "@/lib/gst-returns";
 import { isTaxFreeGstLine } from "@/lib/gst-supply-classification";
+import { natureOfTaxFreeLine } from "@/lib/gst/exempt-goods";
 import { reconcileBillTaxLines } from "@/lib/gst-bill-lines";
 import type { ItcBucket, JournalItc } from "@/lib/gst-itc-from-books";
 import { loadItcClassInputs } from "@/lib/gst-itc-inputs";
@@ -658,12 +659,22 @@ export function buildGstr9(
       || ["overseas", "sez_with_payment", "sez_without_payment"].includes(voucher.ledgers?.gst_treatment ?? "")) return [voucher];
     const taxFree = voucher.voucher_items.filter(isTaxFreeGstLine);
     if (!taxFree.length) return [voucher];
-    const amount = taxFree.reduce((sum, line) => sum + Number(line.taxable_paise || 0), 0);
+    const exemptLines = taxFree.filter((line) => natureOfTaxFreeLine(line) === "exempt");
+    const nilLines = taxFree.filter((line) => natureOfTaxFreeLine(line) !== "exempt");
+    const sumOf = (lines: typeof taxFree) => lines.reduce((sum, line) => sum + Number(line.taxable_paise || 0), 0);
+    const amount = sumOf(taxFree);
     const taxable = voucher.voucher_items.filter((line) => !isTaxFreeGstLine(line));
-    const nilVoucher: VoucherRow = { ...voucher, supply_nature: "nil_rated", voucher_items: taxFree,
-      subtotal_paise: amount, total_paise: amount, cgst_paise: 0, sgst_paise: 0, igst_paise: 0 };
-    return taxable.length ? [{ ...voucher, voucher_items: taxable,
-      subtotal_paise: voucher.subtotal_paise - amount, total_paise: voucher.total_paise - amount }, nilVoucher] : [nilVoucher];
+    const split = (lines: typeof taxFree, nature: "nil_rated" | "exempt"): VoucherRow => {
+      const value = sumOf(lines);
+      return { ...voucher, supply_nature: nature, voucher_items: lines,
+        subtotal_paise: value, total_paise: value, cgst_paise: 0, sgst_paise: 0, igst_paise: 0 };
+    };
+    const parts: VoucherRow[] = [];
+    if (taxable.length) parts.push({ ...voucher, voucher_items: taxable,
+      subtotal_paise: voucher.subtotal_paise - amount, total_paise: voucher.total_paise - amount });
+    if (nilLines.length) parts.push(split(nilLines, "nil_rated"));
+    if (exemptLines.length) parts.push(split(exemptLines, "exempt"));
+    return parts.length ? parts : [voucher];
   });
 
   const outwardDetails: Gstr9Contribution[] = [];
