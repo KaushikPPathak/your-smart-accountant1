@@ -34,6 +34,7 @@ import { KeyboardProvider, useShortcut } from "@/lib/keyboard";
 import { CalculatorDialog } from "@/components/CalculatorDialog";
 import { RestoreInterruptedBanner } from "@/components/RestoreInterruptedBanner";
 import { IntegrityFailedBanner } from "@/components/IntegrityFailedBanner";
+import { PolicyThresholdsBanner } from "@/components/PolicyThresholdsBanner";
 import { SilentWatchers } from "@/components/assistant/SilentWatchers";
 
 import { getLicenseState, isReadOnlyLocked } from "@/lib/license/state";
@@ -361,6 +362,7 @@ function AppLayout() {
         <DataOwnershipDialog />
         <RestoreInterruptedBanner />
         <IntegrityFailedBanner />
+        <PolicyThresholdsBanner />
         <SilentWatchers />
       </div>
     </KeyboardProvider>

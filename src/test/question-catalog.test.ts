@@ -8,9 +8,9 @@ import { TOOL_CATALOG } from "@/lib/ai/tools";
 const REGISTERED_TOOLS = new Set(TOOL_CATALOG.map((t) => t.name));
 
 describe("questionnaire architecture: structure", () => {
-  it("lists all 35 questions once, with unique ids", () => {
-    expect(QUESTION_CATALOG).toHaveLength(35);
-    expect(new Set(QUESTION_CATALOG.map((q) => q.id)).size).toBe(35);
+  it("lists all 37 questions once, with unique ids", () => {
+    expect(QUESTION_CATALOG).toHaveLength(37);
+    expect(new Set(QUESTION_CATALOG.map((q) => q.id)).size).toBe(37);
   });
 
   it("covers seven sections in questionnaire order", () => {
@@ -40,11 +40,11 @@ describe("questionnaire architecture: structure", () => {
     }
   });
 
-  it("the summaries add up to 35", () => {
+  it("the summaries add up to 37", () => {
     const s = catalogSummary();
-    expect(s.answered + s.partial + s.planned + s.not_in_books).toBe(35);
+    expect(s.answered + s.partial + s.planned + s.not_in_books + s.implemented + s.blocked).toBe(37);
     const p = phaseSummary();
-    expect(p[1] + p[2] + p[3]).toBe(35);
+    expect(p[1] + p[2] + p[3]).toBe(37);
   });
 });
 

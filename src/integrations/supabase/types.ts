@@ -493,6 +493,7 @@ export type Database = {
           phone: string | null
           presumptive_mode: string | null
           presumptive_scheme: string
+          policy_thresholds: Json | null
           share_capital_paise: number
           state: string | null
           state_code: string | null
@@ -532,6 +533,7 @@ export type Database = {
           phone?: string | null
           presumptive_mode?: string | null
           presumptive_scheme?: string
+          policy_thresholds?: Json | null
           share_capital_paise?: number
           state?: string | null
           state_code?: string | null
@@ -571,6 +573,7 @@ export type Database = {
           phone?: string | null
           presumptive_mode?: string | null
           presumptive_scheme?: string
+          policy_thresholds?: Json | null
           share_capital_paise?: number
           state?: string | null
           state_code?: string | null

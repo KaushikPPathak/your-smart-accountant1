@@ -73,3 +73,12 @@ describe("supply nature to return buckets", () => {
     expect(r.nil.reduce((s, row) => s + row.nil_amt, 0)).toBe(0);
   });
 });
+
+describe("statutory 3B shape (Section 170)", () => {
+  it("the filed object carries no exact or delta figures, and its tax heads are whole rupees", () => {
+    const b: any = buildGstr3B({ company: COMPANY, from: "2026-04-01", to: "2026-04-30", fp: "042026", sales: [], purchases: [], creditNotes: [], debitNotes: [] });
+    expect(b).not.toHaveProperty("unrounded");
+    const heads = [b.tax_pmt.iamt, b.tax_pmt.camt, b.tax_pmt.samt, b.tax_pmt.iamt_payable, b.tax_pmt.camt_payable, b.tax_pmt.samt_payable];
+    for (const h of heads) expect(Number.isInteger(h)).toBe(true);
+  });
+});

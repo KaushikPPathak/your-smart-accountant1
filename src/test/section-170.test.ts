@@ -31,3 +31,14 @@ describe("Section 170 rounding", () => {
     expect(input.camt).toBe(1.5);
   });
 });
+
+import { taxDeltas } from "@/lib/gst/section-170";
+
+describe("internal books-to-return differences", () => {
+  it("lists only tax figures that the return rounds, with the paise difference", () => {
+    const exact = { osup_det: { txval: 1000.37, camt: 90.5 }, tax_pmt: { iamt_payable: 10 } };
+    const filed = roundReturnTaxes(exact);
+    const d = taxDeltas(exact, filed);
+    expect(d).toEqual([{ path: "osup_det.camt", exactRupees: 90.5, filedRupees: 91, deltaRupees: 0.5 }]);
+  });
+});

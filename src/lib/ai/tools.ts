@@ -13,6 +13,9 @@ import { readCompanies, readLedgers, readVouchers } from "@/lib/offline/cache-re
 import { openDB, DBSchema, IDBPDatabase } from "idb";
 import { provisionalNetGst } from "@/lib/gst/provisional-gst";
 import { bookRuleIssues } from "@/lib/gst/book-rule-issues";
+import { taxComplianceIssues } from "@/lib/gst/tax-compliance";
+import { gstReconciliation } from "@/lib/gst/reconciliation-rows";
+import { explicitMonthFromText, recentCompletedMonths } from "@/lib/gst/period-from-text";
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  TOOL CATALOG
@@ -186,6 +189,18 @@ export const TOOL_CATALOG: ToolDescriptor[] = [
     description:
       "Provisional net GST payable for one month (GSTR-3B basis, rounded per Section 170). Always label the figure PROVISIONAL, state the period and the reconciliation status, and link to the GSTR-3B report screen. It refuses when the period is locked, books are incomplete, or books and GSTR-2B differ beyond tolerance; relay the refusal reason. Read-only.",
     argsHint: `{ "month": "YYYY-MM" }`,
+  },
+  {
+    name: "get_gst_reconciliation",
+    description:
+      "Purchases in books against GSTR-2B for one month: rows only in GSTR-2B, only in books, or with a value, tax, date or number mismatch. Each row states which side is authoritative. Ask for the month first if the question does not name one. Read-only.",
+    argsHint: `{ "month": "YYYY-MM" }`,
+  },
+  {
+    name: "get_tax_compliance_issues",
+    description:
+      "Transactions in a period whose registered party has no well-formed GSTIN, or whose taxable lines have no HSN/SAC code. Advisory and read-only: it checks presence and format, not validity with the GST portal.",
+    argsHint: `{ "from"?: "YYYY-MM-DD", "to"?: "YYYY-MM-DD" }`,
   },
   {
     name: "check_book_rules",
@@ -1279,6 +1294,10 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetGstProvisionalPayable(args);
     case "check_book_rules":
       return execCheckBookRules(args);
+    case "get_gst_reconciliation":
+      return execGetGstReconciliation(args);
+    case "get_tax_compliance_issues":
+      return execGetTaxComplianceIssues(args);
     default:
       return { success: false, error: `unknown tool: ${name}`, latencyMs: 0 };
   }
@@ -1323,15 +1342,37 @@ export { normalizeVoiceInput };
 //  GST (6.1 / 6.2 / 6.3) — read-only
 // ═════════════════════════════════════════════════════════════════════════════
 
+/** The month a tool call names, or undefined. Never inferred: a missing month becomes a clarification. */
+function monthArg(args: Record<string, unknown>): string | undefined {
+  const raw = typeof args.month === "string" ? args.month.trim() : "";
+  return raw ? explicitMonthFromText(raw) : undefined;
+}
+
+function needsMonth(start: number) {
+  return {
+    success: true,
+    data: { status: "needs_month", candidates: recentCompletedMonths(new Date()) },
+    latencyMs: Math.round(performance.now() - start),
+  } as ToolResult;
+}
+
 async function execGetGstProvisionalPayable(args: Record<string, unknown>): Promise<ToolResult> {
   const start = performance.now();
   const cid = await activeCompanyId();
   if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
-  const month = String(args.month ?? "");
-  if (!/^\d{4}-\d{2}$/.test(month)) {
-    return { success: false, error: "month must be YYYY-MM", latencyMs: Math.round(performance.now() - start) };
-  }
+  const month = monthArg(args);
+  if (!month) return needsMonth(start);
   const data = await provisionalNetGst({ companyId: cid, month });
+  return { success: true, data, latencyMs: Math.round(performance.now() - start) };
+}
+
+async function execGetGstReconciliation(args: Record<string, unknown>): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const month = monthArg(args);
+  if (!month) return needsMonth(start);
+  const data = await gstReconciliation(cid, month);
   return { success: true, data, latencyMs: Math.round(performance.now() - start) };
 }
 
@@ -1342,5 +1383,15 @@ async function execCheckBookRules(args: Record<string, unknown>): Promise<ToolRe
   const from = args.from ? String(args.from) : undefined;
   const to = args.to ? String(args.to) : undefined;
   const data = await bookRuleIssues(cid, from, to);
+  return { success: true, data, latencyMs: Math.round(performance.now() - start) };
+}
+
+async function execGetTaxComplianceIssues(args: Record<string, unknown>): Promise<ToolResult> {
+  const start = performance.now();
+  const cid = await activeCompanyId();
+  if (!cid) return { success: false, error: "no active company", latencyMs: Math.round(performance.now() - start) };
+  const from = args.from ? String(args.from) : undefined;
+  const to = args.to ? String(args.to) : undefined;
+  const data = await taxComplianceIssues(cid, from, to);
   return { success: true, data, latencyMs: Math.round(performance.now() - start) };
 }

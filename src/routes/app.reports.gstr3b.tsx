@@ -21,11 +21,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useCompany } from "@/lib/company-context";
 import { formatINR } from "@/lib/money";
 import {
-  buildGstr3B, fetchVouchers, fetchCompanyMeta, gstr3bToJson,
+  buildGstr3B, buildGstr3BExact, fetchVouchers, fetchCompanyMeta, gstr3bToJson,
   monthRange, quarterRange, periodFP, downloadJson, fetchInwardSummary, fetchItcReversal, validateGstr3B,
   type CompanyMeta, type BuiltGstr3B, type InwardSummaryRow, type ItcReversalRow,
 } from "@/lib/gst-returns";
 import { downloadGstr3bOfficial } from "@/lib/gstr3b-template";
+import { taxDeltas } from "@/lib/gst/section-170";
 import { useFyRange } from "@/components/ui/fy-date-picker";
 import { ValidationPanel } from "@/components/reports/ValidationPanel";
 import { PeriodLockCard } from "@/components/reports/PeriodLockCard";
@@ -46,6 +47,8 @@ function GSTR3BPage() {
   const [sel, setSel] = useState<GstPeriodSelection>(() => defaultSelection("monthly"));
   const [company, setCompany] = useState<CompanyMeta | null>(null);
   const [built, setBuilt] = useState<BuiltGstr3B | null>(null);
+  // Exact books figures, for the internal books-to-return reconciliation only. Never exported.
+  const [exact, setExact] = useState<BuiltGstr3B | null>(null);
   const [inward, setInward] = useState<InwardSummaryRow[]>([]);
   const [reversal, setReversal] = useState<ItcReversalRow[]>([]);
   const [eligibleItc, setEligibleItc] = useState<{ i: number; c: number; s: number } | null>(null);
@@ -74,12 +77,14 @@ function GSTR3BPage() {
       setInward(inwardRows);
       setReversal(reversalRows);
       const itcInputs = await loadItcClassInputs(activeCompanyId, period.from, period.to);
-      setBuilt(buildGstr3B({
+      const args3b = {
         company, from: period.from, to: period.to, fp: period.fp,
         sales, purchases, creditNotes, debitNotes,
         inwardSummary: mergeInwardSummaries(inwardRows), itcReversal: reversalRows,
         purchaseBuckets: itcInputs.purchaseBuckets, journalItc: itcInputs.journalItc,
-      }));
+      };
+      setExact(buildGstr3BExact(args3b));
+      setBuilt(buildGstr3B(args3b));
     })();
   }, [activeCompanyId, company, period.from, period.to, period.fp, fpsKey]);
 
@@ -267,7 +272,9 @@ function GSTR3BPage() {
                 fetchVouchers(activeCompanyId, period.from, period.to, ["debit_note"]),
               ]);
               const itcInputs = await loadItcClassInputs(activeCompanyId, period.from, period.to);
-              setBuilt(buildGstr3B({ company, from: period.from, to: period.to, fp: period.fp, sales, purchases, creditNotes, debitNotes, inwardSummary: i, itcReversal: r, purchaseBuckets: itcInputs.purchaseBuckets, journalItc: itcInputs.journalItc }));
+              const args3b = { company, from: period.from, to: period.to, fp: period.fp, sales, purchases, creditNotes, debitNotes, inwardSummary: i, itcReversal: r, purchaseBuckets: itcInputs.purchaseBuckets, journalItc: itcInputs.journalItc };
+              setExact(buildGstr3BExact(args3b));
+              setBuilt(buildGstr3B(args3b));
             }}
           />
           ) : (
@@ -439,30 +446,50 @@ function GSTR3BPage() {
                   <TableRow><TableCell>State/UT Tax</TableCell><TableCell className="text-right font-mono">{moneyR(built.tax_pmt.samt)}</TableCell><TableCell className="text-right font-mono font-semibold">{moneyR(built.tax_pmt.samt_payable)}</TableCell></TableRow>
                 </TableBody>
               </Table></div>
-              <p className="text-xs text-muted-foreground">Tax rounded to nearest rupee per Section 170; ledger retains exact paise.</p>
-              {built.unrounded && (() => {
-                const ex = built.unrounded.tax_pmt;
-                const heads: [string, number, number][] = [
-                  ["Integrated Tax", ex.iamt, built.tax_pmt.iamt],
-                  ["Central Tax", ex.camt, built.tax_pmt.camt],
-                  ["State/UT Tax", ex.samt, built.tax_pmt.samt],
-                ];
-                const moved = heads.filter(([, exact, rounded]) => Math.round(exact * 100) !== Math.round(rounded * 100));
-                if (moved.length === 0) return null;
-                return (
-                  <div className="rounded border border-border/60 bg-muted/30 p-2 text-xs">
-                    <div className="mb-1 font-medium">Books to return difference (Section 170)</div>
-                    {moved.map(([label, exact, rounded]) => (
-                      <div key={label} className="font-mono">{label}: {moneyR(exact)} → {moneyR(rounded)} (difference {moneyR(rounded - exact)})</div>
-                    ))}
-                  </div>
-                );
-              })()}
+              <p className="text-xs text-muted-foreground">Tax rounded to nearest rupee per Section 170; ledger retains exact paise. The paise differences are in the internal books-to-return reconciliation below; they are not part of the filed figures.</p>
             </CardContent>
           </Card>
+          {exact && built && <BooksToReturnReconciliation exact={exact} filed={built} />}
         </>
       )}
     </div>
+  );
+}
+
+/** Internal only: the paise difference between the books and the rounded return. Not a filing figure. */
+function BooksToReturnReconciliation({ exact, filed }: { exact: BuiltGstr3B; filed: BuiltGstr3B }) {
+  const rows = taxDeltas(exact, filed);
+  return (
+    <Card className="print:hidden" id="books-to-return">
+      <CardContent className="space-y-2 p-4">
+        <div className="text-sm font-semibold">Internal: books-to-return reconciliation</div>
+        <p className="text-xs text-muted-foreground">
+          Not a filing figure. The GSTR-3B export and the figures filed use the rounded return amounts (Section 170). This table shows where the books differ from the return, to the paisa, for an accountant or auditor.
+        </p>
+        {rows.length === 0 ? (
+          <p className="text-xs">No difference: every tax figure is already a whole rupee.</p>
+        ) : (
+          <Table>
+            <TableHeader><TableRow>
+              <TableHead>Figure</TableHead>
+              <TableHead className="text-right">Books (exact)</TableHead>
+              <TableHead className="text-right">Return (rounded)</TableHead>
+              <TableHead className="text-right">Difference</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {rows.map((r) => (
+                <TableRow key={r.path}>
+                  <TableCell className="font-mono text-xs">{r.path}</TableCell>
+                  <TableCell className="text-right font-mono">{moneyR(r.exactRupees)}</TableCell>
+                  <TableCell className="text-right font-mono">{moneyR(r.filedRupees)}</TableCell>
+                  <TableCell className="text-right font-mono">{moneyR(r.deltaRupees)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -1,3 +1,4 @@
+import { gstRouteFor } from "./gst-routes";
 import { BANK_ALIAS_PATTERN, findBankInText } from "./bank-aliases";
 import type { AgingSide } from "./aging";
 // src/lib/ai/query-router.ts
@@ -36,6 +37,10 @@ export type IntentType =
   | "stock_reorder"
   | "abnormal_balances"
   | "vendor_spend_cycle"
+  | "gst_provisional"
+  | "gst_reconciliation"
+  | "book_rules"
+  | "tax_compliance"
   | "unknown";
 
 export interface RouteResult {
@@ -617,6 +622,9 @@ export function routeQuery(text: string, contextCard?: StructuredCard): RouteRes
   // "Yes, ..." / "Ok, ..." is an interjection. Without it, "Yes, show bank balance" reads as a
   // party called "Yes bank" and is promoted to YES Bank. "Yes bank balance" (no comma) still means YES Bank.
   const trimmed = originalText.trim().replace(/^(?:yes|yeah|yep|ok|okay)\s*[,.!;:-]\s*/i, "");
+
+  const gstRoute = gstRouteFor(trimmed);
+  if (gstRoute) return gstRoute;
 
   if (vendorSpendCycleQuestion(trimmed)) {
     const dateInfo = extractDateInfo(trimmed);

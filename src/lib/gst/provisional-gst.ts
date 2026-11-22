@@ -3,7 +3,7 @@
 // safe to act on: the period is locked, books are incomplete, or the ITC in books differs from
 // GSTR-2B by more than the company's tolerance (the 5.4 rule).
 import {
-  buildGstr3B, fetchCompanyMeta, fetchInwardSummary, fetchItcReversal, fetchVouchers, type BuiltGstr3B,
+  buildGstr3BExact, fetchCompanyMeta, fetchInwardSummary, fetchItcReversal, fetchVouchers, type BuiltGstr3B,
 } from "@/lib/gst-returns";
 import { loadItcClassInputs } from "@/lib/gst-itc-inputs";
 import { mergeInwardSummaries, resolveGstPeriod, defaultSelection } from "@/lib/gst-period";
@@ -11,6 +11,7 @@ import { fetchLockFor } from "@/lib/period-locks";
 import { loadAllImportLines } from "@/lib/gstr2b-local-store";
 import { g2bPeriodInRange } from "@/lib/gstr2b-periods";
 import { countVarianceNeedsReason, loadPolicy } from "@/lib/policy-settings";
+import { roundReturnTaxes } from "@/lib/gst/section-170";
 import { formatINR } from "@/lib/money";
 
 export const GSTR3B_SCREEN_PATH = "/app/reports/gstr3b";
@@ -106,14 +107,15 @@ export async function provisionalNetGst(opts: ProvisionalGstOptions): Promise<Pr
     fetchItcReversal(opts.companyId, period.fp),
     loadItcClassInputs(opts.companyId, period.from, period.to),
   ]);
-  const built: BuiltGstr3B = buildGstr3B({
+  const exactBuild: BuiltGstr3B = buildGstr3BExact({
     company, from: period.from, to: period.to, fp: period.fp,
     sales, purchases, creditNotes, debitNotes,
     inwardSummary: mergeInwardSummaries(inward), itcReversal: reversal,
     purchaseBuckets: itcInputs.purchaseBuckets, journalItc: itcInputs.journalItc,
   });
 
-  const exactItc = built.unrounded?.itc_elg.itc_net;
+  const built: BuiltGstr3B = roundReturnTaxes(exactBuild);
+  const exactItc = exactBuild.itc_elg.itc_net;
   const booksItcPaise = Math.round(((exactItc?.iamt ?? 0) + (exactItc?.camt ?? 0) + (exactItc?.samt ?? 0)) * 100);
   const rec = await reconciliationFor(opts.companyId, period.fp, period.from, period.to, booksItcPaise);
   if (rec.refuse) return { ...base, reconciliation: { state: rec.state, note: rec.note }, status: "refused", reason: rec.refuse };

@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { DEFAULT_POLICY, policyBlob } from "@/lib/policy-settings";
 import { findExistingClosureVoucherIds } from "@/lib/year-end-state";
 import { useAuth } from "@/lib/auth-context";
 import { useCompany } from "@/lib/company-context";
@@ -440,6 +441,8 @@ function CompaniesPage() {
           const now = new Date().toISOString();
           await offlineDb.cache_companies.put({
             ...payload,
+            // Seed the agreed thresholds so a local-only company is never left without a blob.
+            policy_thresholds: policyBlob(DEFAULT_POLICY),
             id: newId,
             company_id: newId,
             created_by: "local-user",

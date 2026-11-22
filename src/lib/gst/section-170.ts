@@ -27,3 +27,33 @@ export function roundReturnTaxes<T>(node: T): T {
   }
   return node;
 }
+
+export interface TaxDelta {
+  /** Path to the return figure, e.g. "tax_pmt.iamt_payable" or "itc_elg.itc_avl[0].camt". */
+  path: string;
+  /** Exact figure from the books, rupees to 2 decimals. */
+  exactRupees: number;
+  /** Figure on the filed return, rounded per Section 170. */
+  filedRupees: number;
+  /** filed − exact. */
+  deltaRupees: number;
+}
+
+/** Every tax figure where the filed return differs from the exact books figure (internal report only). */
+export function taxDeltas(exact: unknown, filed: unknown, path = ""): TaxDelta[] {
+  if (Array.isArray(exact) && Array.isArray(filed)) {
+    return exact.flatMap((x, i) => taxDeltas(x, filed[i], `${path}[${i}]`));
+  }
+  if (!exact || typeof exact !== "object" || !filed || typeof filed !== "object") return [];
+  const out: TaxDelta[] = [];
+  for (const [k, v] of Object.entries(exact as Record<string, unknown>)) {
+    const f = (filed as Record<string, unknown>)[k];
+    const p = path ? `${path}.${k}` : k;
+    if (TAX_KEYS.has(k) && typeof v === "number" && typeof f === "number") {
+      if (Math.abs(f - v) > 1e-9) out.push({ path: p, exactRupees: v, filedRupees: f, deltaRupees: f - v });
+    } else {
+      out.push(...taxDeltas(v, f, p));
+    }
+  }
+  return out;
+}

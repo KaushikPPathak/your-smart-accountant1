@@ -132,6 +132,10 @@ async function persistMembershipsToOfflineCache(list: CompanyMembership[]): Prom
         list.map((m) => ({ id: m.company_id, name: m.companies.name, has_password: Boolean((m.companies as any).has_password) })),
       ),
     ]);
+    const { mirrorPolicyFromRecords } = await import("./policy-settings");
+    await mirrorPolicyFromRecords(
+      list.map((m) => ({ id: m.company_id, policy_thresholds: (m.companies as any).policy_thresholds })),
+    );
   } catch {
     /* cache is best-effort */
   }

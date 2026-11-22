@@ -31,6 +31,8 @@ export async function getDb() {
       "ALTER TABLE local_users ADD COLUMN password_hash TEXT",
       "ALTER TABLE local_users ADD COLUMN is_active INTEGER DEFAULT 1",
       "ALTER TABLE local_users ADD COLUMN updated_at TEXT",
+      // Mirror of the company record's policy_thresholds (5.4 / 6.5). Written only from the company record.
+      "ALTER TABLE companies ADD COLUMN policy_thresholds TEXT",
     ];
     for (const sql of adds) {
       try { await dbInstance.execute(sql); } catch { /* column exists */ }

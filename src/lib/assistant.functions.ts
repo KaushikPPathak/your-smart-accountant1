@@ -16,6 +16,7 @@ import { recentErrors, questionMentionsError } from "./ai/error-ring";
 import { lookupAnswer, storeAnswer } from "./ai/answer-cache";
 import type { ConversationMemory } from "./ai/conversation-memory";
 import { executeTool, parseToolCall, stripToolCall } from "./ai/tools";
+import { needsMonthText, provisionalText, reconText, ruleListText } from "@/lib/ai/gst-answers";
 import { localFirstAnswer } from "./ai/local-first";
 import { routeQuery } from "./ai/query-router";
 import { searchKb } from "./assistant-engine";
@@ -245,6 +246,10 @@ const DETERMINISTIC_INTENTS = new Set([
   "stock_reorder",
   "abnormal_balances",
   "vendor_spend_cycle",
+  "gst_provisional",
+  "gst_reconciliation",
+  "book_rules",
+  "tax_compliance",
   "party_balance",
   "party_ledger",
   "cash_balance",
@@ -252,6 +257,39 @@ const DETERMINISTIC_INTENTS = new Set([
   "trial_balance",
   "voucher_lookup",
 ]);
+
+/** GST questions answered as text: the figure, the list, or the refusal with its reason. */
+const GST_TEXT_INTENTS = new Set(["gst_provisional", "gst_reconciliation", "book_rules", "tax_compliance"]);
+
+function gstAnswerText(intent: string, data: any, route: any): string | null {
+  if (intent === "gst_provisional") {
+    if (data?.status === "needs_month") return needsMonthText("gst_provisional");
+    return provisionalText(data);
+  }
+  if (intent === "gst_reconciliation") {
+    if (data?.status === "needs_month") return needsMonthText("gst_reconciliation");
+    return reconText(data);
+  }
+  if (intent === "book_rules") {
+    return ruleListText(
+      "Voucher rules that would fail on save",
+      data?.note ?? "",
+      data?.issues ?? [],
+      Number(data?.total ?? 0),
+      route?.from ? `from ${route.from} to ${route.to}` : "across all dates",
+    );
+  }
+  if (intent === "tax_compliance") {
+    return ruleListText(
+      "Transactions without a valid GSTIN or HSN/SAC code",
+      data?.note ?? "",
+      data?.issues ?? [],
+      Number(data?.total ?? 0),
+      route?.from ? `from ${route.from} to ${route.to}` : "across all dates",
+    );
+  }
+  return null;
+}
 
 /** Cheap cache scope derived from the route alone (no retrieval needed). */
 function routeScope(route: any): string {
@@ -296,6 +334,22 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
     case "vendor_spend_cycle":
       toolName = "get_vendor_spend_cycle";
       toolArgs = { vendor: route.entity?.partyName ?? "", from: route.from ?? null, to: route.to ?? null };
+      break;
+    case "gst_provisional":
+      toolName = "get_gst_provisional_payable";
+      toolArgs = { month: route.from ? String(route.from).slice(0, 7) : "" };
+      break;
+    case "gst_reconciliation":
+      toolName = "get_gst_reconciliation";
+      toolArgs = { month: route.from ? String(route.from).slice(0, 7) : "" };
+      break;
+    case "book_rules":
+      toolName = "check_book_rules";
+      toolArgs = { from: route.from ?? null, to: route.to ?? null };
+      break;
+    case "tax_compliance":
+      toolName = "get_tax_compliance_issues";
+      toolArgs = { from: route.from ?? null, to: route.to ?? null };
       break;
     case "stock_reorder":
       toolName = "get_stock_reorder";
@@ -370,6 +424,10 @@ async function tryDirectToolAnswer(route: any, text: string, companyId: string):
   try {
     const result = await executeTool(toolName, toolArgs);
     if (!result.success || !result.data) return null;
+    if (GST_TEXT_INTENTS.has(route.intent)) {
+      const text = gstAnswerText(route.intent, result.data, route);
+      return text ? { ok: true, text } : null;
+    }
     // The accounting engine refused to guess a ledger — surface its
     // clarification instead of any balance figure.
     const clarification = (result.data as any)?.clarification;
