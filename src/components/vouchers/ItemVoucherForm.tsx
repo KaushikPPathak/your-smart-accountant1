@@ -30,6 +30,7 @@ import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components
 import { supabase } from "@/integrations/supabase/client";
 import { isLocalOnlyMode } from "@/lib/local-only-mode";
 import { readVouchers } from "@/lib/offline/cache-read";
+import { findDuplicateInvoice, type InvoiceRow } from "@/lib/invoice-uniqueness";
 import { useCompany } from "@/lib/company-context";
 import { FyDatePicker, useDefaultFyDate } from "@/components/ui/fy-date-picker";
 import { formatINR, rupeesToPaise, amountInWords } from "@/lib/utils/currency-utils";
@@ -937,6 +938,24 @@ export function ItemVoucherForm({ voucherType }: { voucherType: VoucherType }) {
             activeCompanyId
           ).catch(() => {});
         }
+      }
+    }
+
+    // Invoice-number uniqueness: a repeated sales number or a repeated supplier bill (which would
+    // claim its input tax twice) is refused before anything is queued.
+    const invoiceNumberToCheck = snap.voucherType === "purchase" ? snap.refNo.trim() : (snap.voucherNumber ?? "");
+    if (invoiceNumberToCheck && (snap.voucherType === "purchase" || snap.voucherType === "sales" || snap.voucherType === "credit_note" || snap.voucherType === "debit_note")) {
+      const existing = (await readVouchers(snap.companyId)) as unknown as InvoiceRow[];
+      const hits = findDuplicateInvoice(
+        { voucherType: snap.voucherType, voucherDate: snap.voucherDate, number: invoiceNumberToCheck, partyId: snap.partyId, voucherId: originalVoucherId ?? null },
+        existing,
+      );
+      if (hits.length > 0) {
+        const where = snap.voucherType === "purchase" ? "a supplier bill with this number" : "an invoice with this number";
+        toast.error(
+          `This voucher is not saved: ${where} already exists in this financial year (${hits[0].voucher_date}). Change the ${snap.voucherType === "purchase" ? "bill number" : "invoice number"}.`,
+        );
+        return;
       }
     }
 
