@@ -136,6 +136,8 @@ export interface Gstr9Contribution extends Gstr9TaxTotals {
   nature: string;
   bucket: keyof Gstr9OutwardSummary;
   items: VoucherRow["voucher_items"];
+  /** Purchase ITC class: set on purchase and journal contributions in details.inward. */
+  itcClass?: ItcBucket | "ineligible";
 }
 
 export interface Gstr9HsnContribution extends Gstr9Contribution {
@@ -354,6 +356,15 @@ function voucherTotals(
  * are kept apart; everything else is grouped as goods, input services or capital goods.
  * Unclassified purchases count as goods, as they do in the GSTR-3B build.
  */
+/** The ITC class of a purchase: blocked, else the stored class, else the class from the books. */
+function itcClassOfPurchase(v: VoucherRow, hints?: Map<string, ItcBucket>): ItcBucket | "ineligible" {
+  if (v.itc_eligible === false || v.itc_class === "ineligible") return "ineligible";
+  if (v.itc_class === "capital_goods") return "capitalGoods";
+  if (v.itc_class === "input_services") return "inputServices";
+  if (v.itc_class === "inputs") return "inputs";
+  return hints?.get(String(v.id)) ?? "inputs";
+}
+
 function buildItcByClass(
   purchases: VoucherRow[],
   purchaseBuckets?: Map<string, ItcBucket>,
@@ -368,19 +379,19 @@ function buildItcByClass(
   const bucketOf = (k: ItcBucket): Gstr9TaxTotals =>
     k === "capitalGoods" ? out.capitalGoods : k === "inputServices" ? out.inputServices : out.inputs;
   for (const v of purchases) {
-    // A class stored on the voucher wins; otherwise infer it from the books lines.
-    const stored =
-      v.itc_class === "capital_goods" ? "capitalGoods"
-        : v.itc_class === "input_services" ? "inputServices"
-          : v.itc_class === "inputs" ? "inputs"
-            : null;
-    const bucket =
-      v.itc_eligible === false || v.itc_class === "ineligible"
-        ? out.ineligible
-        : bucketOf(stored ?? purchaseBuckets?.get(String(v.id)) ?? "inputs");
-    addTotals(bucket, voucherTotals(v, 1));
+    const k = itcClassOfPurchase(v, purchaseBuckets);
+    addTotals(k === "ineligible" ? out.ineligible : bucketOf(k), voucherTotals(v, 1));
   }
   for (const j of journalItc) {
+    if (j.bucket === "ineligible") {
+      // Blocked credit is shown with the ineligible ITC, not the claimable ITC.
+      addTotals(out.ineligible, {
+        taxableValue: rupees(j.taxablePaise), igst: rupees(j.igstPaise), cgst: rupees(j.cgstPaise),
+        sgst: rupees(j.sgstPaise), cess: 0, totalTax: rupees(j.igstPaise + j.cgstPaise + j.sgstPaise),
+        grossValue: rupees(j.taxablePaise + j.igstPaise + j.cgstPaise + j.sgstPaise),
+      });
+      continue;
+    }
     const t: Gstr9TaxTotals = {
       taxableValue: rupees(j.taxablePaise),
       igst: rupees(j.igstPaise),
@@ -963,7 +974,31 @@ export function buildGstr9(
     details: {
       outward: outwardDetails,
       notes: creditNotes.map((v) => contribution(v, voucherTotals(v, 1), v.supply_nature, "totalOutward")),
-      inward: purchases.map((v) => contribution(v, voucherTotals(v, 1), v.supply_nature, "totalOutward")),
+      inward: [
+        ...purchases.map((v) => ({
+          ...contribution(v, voucherTotals(v, 1), v.supply_nature, "totalOutward"),
+          itcClass: itcClassOfPurchase(v, purchaseBuckets),
+        })),
+        ...journalItc.map((j): Gstr9Contribution => ({
+          voucherId: j.voucherId,
+          voucherNumber: j.voucherNumber,
+          voucherDate: j.voucherDate,
+          voucherType: "journal",
+          party: j.againstLedger,
+          gstin: null,
+          nature: "journal_itc",
+          bucket: "totalOutward",
+          items: [],
+          taxableValue: rupees(j.taxablePaise),
+          igst: rupees(j.igstPaise),
+          cgst: rupees(j.cgstPaise),
+          sgst: rupees(j.sgstPaise),
+          cess: 0,
+          totalTax: rupees(j.igstPaise + j.cgstPaise + j.sgstPaise),
+          grossValue: rupees(j.taxablePaise + j.igstPaise + j.cgstPaise + j.sgstPaise),
+          itcClass: j.bucket,
+        })),
+      ],
       hsnOutward: hsnContributions(allVouchers),
       hsnInward: hsnContributions(purchases.map((v) => ({ ...v, voucher_items: reconcileBillTaxLines(v.voucher_items, v) }))),
     },

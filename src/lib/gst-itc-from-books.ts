@@ -7,7 +7,8 @@
 //   anything else (supplier, Purchase A/c)     → goods (inputs)
 // A class stored on the voucher always wins over this rule.
 
-export type ItcBucket = "inputs" | "inputServices" | "capitalGoods";
+/** "ineligible" is ITC the user has removed from the claim (blocked credit), reported under 4D. */
+export type ItcBucket = "inputs" | "inputServices" | "capitalGoods" | "ineligible";
 
 export interface BooksLedger {
   name: string;

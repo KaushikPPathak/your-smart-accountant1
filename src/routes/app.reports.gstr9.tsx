@@ -4160,6 +4160,7 @@ function Gstr9PrintInputWorking({
                             <option value="inputs">Goods</option>
                             <option value="inputServices">Expenses</option>
                             <option value="capitalGoods">Capital goods</option>
+                            <option value="ineligible">Blocked (remove from ITC)</option>
                           </select>
                         </td>
                       </tr>
@@ -4233,6 +4234,15 @@ function Gstr9PrintInputWorking({
     </div>
   );
 }
+
+/** The class table rows on the GSTR-9 screen, and the purchase ITC classes each one covers. */
+const PURCHASE_CLASS_ROWS: Record<string, ItcBucket[]> = {
+  "Goods (inputs)": ["inputs"],
+  "Expenses (input services)": ["inputServices"],
+  "Capital goods": ["capitalGoods"],
+  "Eligible ITC — goods, expenses and capital goods": ["inputs", "inputServices", "capitalGoods"],
+  "Blocked / ineligible (reported under Table 7 or 4D)": ["ineligible"],
+};
 
 function GSTR9Page() {
   const { activeCompanyId } = useCompany();
@@ -4390,6 +4400,13 @@ function GSTR9Page() {
     setDrill({ title: `${inward ? "Inward" : "Outward"} HSN ${hsn}`, rows: (source ?? []).filter((row) => hsn === "Total" || row.hsn === hsn), expected: hsn === "Total" ? totalGstr9Hsn(summary).taxableValue : summary.filter((row) => row.hsn === hsn).reduce((sum, row) => sum + row.taxableValue, 0) });
   };
   const annualRowAction = (title: string, row: string) => {
+    if (title.startsWith("Purchase ITC from books, by class")) {
+      const classes = PURCHASE_CLASS_ROWS[row];
+      if (!classes) return;
+      const rows = (result?.details?.inward ?? []).filter((r) => r.itcClass !== undefined && classes.includes(r.itcClass));
+      setDrill({ title: row, rows });
+      return;
+    }
     const code = row.split(" — ")[0];
     const map: Record<string, keyof Gstr9Result["outward"]> = { "4A": "unregisteredTaxable", "4B": "registeredTaxable", "4C": "zeroRatedWithPayment", "4E": "deemedExport", "5A": "zeroRatedWithoutPayment", "5D": "exempt", "5E": "nilRated", "5F": "nonGst" };
     if (map[code]) { drillBucket(row, map[code]); return; }

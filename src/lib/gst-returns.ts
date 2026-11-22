@@ -1228,7 +1228,7 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
     ineligible_blocked: zeroClass(),
   };
   const isBlocked = (v: VoucherRow) =>
-    v.itc_eligible === false || v.itc_class === "ineligible";
+    v.itc_eligible === false || v.itc_class === "ineligible" || args.purchaseBuckets?.get(String(v.id)) === "ineligible";
   const classOf = (v: VoucherRow): keyof typeof cb => {
     if (isBlocked(v)) return "ineligible_blocked";
     if (v.itc_class === "capital_goods") return "capital_goods";
@@ -1252,6 +1252,11 @@ export function buildGstr3B(args: BuildGstr3BArgs): BuiltGstr3B {
   }
   // Journal input tax: available as other ITC, classed by the ledger it was posted against.
   for (const j of args.journalItc ?? []) {
+    if (j.bucket === "ineligible") {
+      cb.ineligible_blocked.iamt += j.igstPaise; cb.ineligible_blocked.camt += j.cgstPaise;
+      cb.ineligible_blocked.samt += j.sgstPaise; cb.ineligible_blocked.txval += j.taxablePaise;
+      continue;
+    }
     const klass: keyof typeof cb = j.bucket === "capitalGoods" ? "capital_goods" : j.bucket === "inputServices" ? "input_services" : "inputs";
     cb[klass].iamt += j.igstPaise; cb[klass].camt += j.cgstPaise;
     cb[klass].samt += j.sgstPaise; cb[klass].txval += j.taxablePaise;

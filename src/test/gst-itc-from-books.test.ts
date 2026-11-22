@@ -132,3 +132,17 @@ describe("class chosen by the user for a ledger", () => {
     expect(purchaseBucketHints(lines, ledgers, new Map([["purch", "inputServices" as const]])).get("p1")).toBe("inputServices");
   });
 });
+
+describe("blocked class", () => {
+  it("a ledger set to blocked gives an ineligible journal, not claimable ITC", () => {
+    const lines = [
+      L("j60", "journal", "efo", 1000000, 0),
+      L("j60", "journal", "icgst", 90000, 0),
+      L("j60", "journal", "isgst", 90000, 0),
+      L("j60", "journal", "party", 0, 1180000),
+    ];
+    const [v] = journalItcVouchers(lines, ledgers, new Map([["efo", "ineligible" as const]]));
+    expect(v.bucket).toBe("ineligible");
+    expect(v.cgstPaise + v.sgstPaise).toBe(180000);
+  });
+});
