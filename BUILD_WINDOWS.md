@@ -76,6 +76,8 @@ npm run tauri build
 
 Then re-run the new versioned `.exe` over the old one. Your business data remains in `%LOCALAPPDATA%\com.smartaccountant.app\` and is untouched by re-install or uninstall. Back up from the app before any major change.
 
+The Windows uninstaller never deletes the books folders. The installer uses a custom template (`src-tauri/nsis/installer.nsi`, set in `tauri.conf.json` under `bundle > windows > nsis > template`) which removes the "delete app data" option. When upgrading Tauri, re-apply the template change (see the header of that file).
+
 If the old app opens after updating, close it and check Windows **Installed Apps** for more than one SmartAccountant entry. Uninstall all app entries, keep `%LOCALAPPDATA%\com.smartaccountant.app\` untouched, and install the newest `.exe` once.
 
 ---
