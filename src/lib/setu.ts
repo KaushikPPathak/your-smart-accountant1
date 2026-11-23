@@ -90,16 +90,53 @@ export const GSTIN_LOOKUP_NOTICE =
 const GSTIN_OFFLINE_MESSAGE =
   "Online GSTIN check is not set up in this build. Enter the GSTIN details yourself.";
 
+let proxyUrlForTests: string | null = null;
+
+/** Test seam only: points the lookup at a fake proxy. Passing null restores the build value. */
+export function setGstinProxyUrlForTests(url: string | null): void {
+  proxyUrlForTests = url;
+}
+
 function proxyUrl(): string {
+  if (proxyUrlForTests !== null) return proxyUrlForTests.trim().replace(/\/+$/, "");
   const env = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
   return (env.VITE_GSTIN_PROXY_URL ?? "").trim().replace(/\/+$/, "");
 }
 
-/** Sends only { gstin } to the hosted proxy. */
+const INSTALL_ID_KEY = "gstin_install_id";
+const INSTALL_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** True when the value has the UUID v4 shape the proxy accepts. */
+export function isInstallId(value: unknown): value is string {
+  return typeof value === "string" && INSTALL_ID_RE.test(value);
+}
+
+/** Message shown for a proxy refusal. Null when the status is not a known refusal. */
+export function limitMessageFor(status: number): string | null {
+  if (status === 429) return "Today's GSTIN lookup limit is reached. Enter the details by hand or try tomorrow.";
+  if (status === 401) return "This install could not be identified for GSTIN lookups. Enter the details by hand.";
+  return null;
+}
+
+/**
+ * The install id is random, created once on this PC and kept in local storage. It is not
+ * a login and identifies nothing about the business; the proxy uses it only to count lookups.
+ */
+export async function getInstallId(): Promise<string> {
+  const { getMeta, setMeta } = await import("@/lib/offline/db");
+  const existing = await getMeta<string>(INSTALL_ID_KEY).catch(() => undefined);
+  if (isInstallId(existing)) return existing;
+  const fresh = crypto.randomUUID();
+  await setMeta(INSTALL_ID_KEY, fresh);
+  return fresh;
+}
+
+/** Sends only { gstin } and the install id to the hosted proxy. */
 async function invokeDirect(gstin: string): Promise<{ data: unknown; error?: string }> {
   const url = proxyUrl();
   if (!url) return { data: null, error: GSTIN_OFFLINE_MESSAGE };
   try {
+    const installId = await getInstallId();
     // In the desktop app the request goes through the native HTTP plugin, so
     // it is not subject to the webview's CORS rules. Browsers use plain fetch.
     const w = typeof window !== "undefined" ? (window as unknown as { __TAURI_INTERNALS__?: unknown }) : undefined;
@@ -108,10 +145,12 @@ async function invokeDirect(gstin: string): Promise<{ data: unknown; error?: str
       : fetch;
     const res = await doFetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-install-id": installId },
       body: JSON.stringify({ gstin }),
     });
     const json = await res.json().catch(() => null);
+    const refusal = limitMessageFor(res.status);
+    if (refusal) return { data: null, error: refusal };
     if (!res.ok && !json) {
       return { data: null, error: `GST verification failed (HTTP ${res.status}).` };
     }

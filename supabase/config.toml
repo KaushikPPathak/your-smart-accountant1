@@ -1,5 +1,7 @@
 project_id = "yzymutqvqwjeqnbygpgp"
 [functions.setu-gstin-proxy]
-# Called by the desktop app without a login. The function itself accepts only a
-# valid GSTIN and reads API Setu credentials from server secrets only.
+# Called by the desktop app without a login. The function requires a valid install id
+# (x-install-id), enforces per-install and global daily caps through
+# public.setu_consume_lookup, accepts only a valid GSTIN, and reads API Setu
+# credentials from server secrets only. The install id is not a secret: it bounds cost, not identity.
 verify_jwt = false
