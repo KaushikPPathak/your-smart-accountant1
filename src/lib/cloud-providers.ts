@@ -389,7 +389,7 @@ async function refreshAccessToken(id: ProviderId): Promise<StoredToken> {
   return next;
 }
 
-async function getFreshAccessToken(id: ProviderId): Promise<string> {
+export async function getFreshAccessToken(id: ProviderId): Promise<string> {
   const cur = loadToken(id);
   if (!cur) throw new Error(`Not connected to ${PROVIDERS[id].label}.`);
   if (cur.expires_at > Date.now() + 5000) return cur.access_token;
