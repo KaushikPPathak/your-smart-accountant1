@@ -33,6 +33,14 @@ import {
   type ProviderId,
 } from "@/lib/cloud-providers";
 import { CloudProviderSetupDialog } from "./CloudProviderSetupDialog";
+import {
+  connectOneDrive,
+  disconnectOneDrive,
+  ensureOneDriveClientId,
+  isOneDriveSignedIn,
+  oneDriveTokenProvider,
+} from "@/lib/sync/onedrive-session";
+import { defaultKeychainKeyStore } from "@/lib/sync/keychain-store";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "Never";
@@ -60,7 +68,7 @@ export function CloudBackupCard() {
   const refreshConnections = () => {
     setConnections({
       gdrive: { connected: isConnected("gdrive"), label: loadToken("gdrive")?.account_label },
-      onedrive: { connected: isConnected("onedrive"), label: loadToken("onedrive")?.account_label },
+      onedrive: { connected: isOneDriveSignedIn(), label: loadToken("onedrive")?.account_label },
       dropbox: { connected: isConnected("dropbox"), label: loadToken("dropbox")?.account_label },
     });
   };
@@ -100,6 +108,19 @@ export function CloudBackupCard() {
 
   // ---------- OAuth providers ----------
   const connect = async (id: ProviderId) => {
+    if (id === "onedrive") {
+      // OneDrive tokens go into the encrypted vault, not plain local storage.
+      ensureOneDriveClientId();
+      setBusy(id);
+      try {
+        await connectOneDrive(await defaultKeychainKeyStore());
+        refreshConnections();
+        toast.success("Connected to OneDrive");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to connect to OneDrive");
+      } finally { setBusy(null); }
+      return;
+    }
     if (!getClientId(id)) {
       // Not configured yet — open the setup dialog instead of dead-ending.
       setSetupFor(id);
@@ -117,7 +138,8 @@ export function CloudBackupCard() {
   };
 
   const disconnect = (id: ProviderId) => {
-    disconnectProvider(id);
+    if (id === "onedrive") disconnectOneDrive();
+    else disconnectProvider(id);
     refreshConnections();
     toast.success(`Disconnected from ${PROVIDERS[id].label}`);
   };
@@ -132,7 +154,9 @@ export function CloudBackupCard() {
       const contents = JSON.stringify(envelope);
       const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const fileName = `${safeName(name)}_${stamp}.${LACCBAK_EXT}`;
-      const res = await uploadBackup(id, fileName, contents);
+      const accessToken =
+        id === "onedrive" ? await oneDriveTokenProvider(await defaultKeychainKeyStore())() : undefined;
+      const res = await uploadBackup(id, fileName, contents, accessToken);
       markUserCloudBackupNow();
       setLastAt(getLastUserCloudBackup());
       toast.success(`Uploaded to ${PROVIDERS[id].label}: ${res.path}`);

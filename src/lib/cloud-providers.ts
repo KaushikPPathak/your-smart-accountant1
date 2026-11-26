@@ -451,8 +451,10 @@ export async function uploadBackup(
   id: ProviderId,
   fileName: string,
   contents: string,
+  accessToken?: string,
 ): Promise<UploadResult> {
-  const token = await getFreshAccessToken(id);
+  // accessToken lets a caller supply a token from elsewhere (OneDrive uses the encrypted vault).
+  const token = accessToken ?? (await getFreshAccessToken(id));
   const blob = new Blob([contents], { type: "application/octet-stream" });
 
   if (id === "gdrive") {
