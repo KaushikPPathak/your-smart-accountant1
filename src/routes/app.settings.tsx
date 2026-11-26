@@ -33,6 +33,7 @@ import {
 import { StaffPinPanel } from "@/components/StaffPinPanel";
 import { DataLocationCard } from "@/components/settings/DataLocationCard";
 import { CloudBackupCard } from "@/components/settings/CloudBackupCard";
+import { SyncOneDriveCard } from "@/components/settings/SyncOneDriveCard";
 import { ReleaseChannelPicker } from "@/components/settings/ReleaseChannelPicker";
 import { UpiQrSettingsCard } from "@/components/settings/UpiQrSettingsCard";
 import { ConnectAccountCard } from "@/components/settings/ConnectAccountCard";
@@ -376,6 +377,7 @@ function SettingsPage() {
 
       <DataLocationCard />
       <CloudBackupCard />
+      <SyncOneDriveCard />
       <ConnectAccountCard />
 
 
