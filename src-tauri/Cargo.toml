@@ -26,6 +26,8 @@ tauri-plugin-http = "2"
 tauri-plugin-share-text = { path = "plugins/share-text" }
 
 [target.'cfg(windows)'.dependencies]
+# Windows Credential Manager for per-company sync encryption keys.
+keyring = { version = "3", features = ["windows-native"] }
 # Native Windows clipboard access — used to place the invoice PDF on the
 # clipboard as a real file reference (CF_HDROP) so WhatsApp pastes it as an
 # attachment instead of a bitmap.

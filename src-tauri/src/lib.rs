@@ -81,6 +81,77 @@ fn extract_phone(url: &str) -> Option<String> {
 
 /// Terminates the whole desktop process (main window + hidden WhatsApp
 /// window). Used by the "Exit Software" confirmation.
+// ── Sync encryption keys ────────────────────────────────────────────────
+// One AES-256 key per company, stored in Windows Credential Manager under
+// service "SmartAccountant.sync". The key is never written to a file and
+// never leaves the device except through the pairing flow.
+const SYNC_KEY_SERVICE: &str = "SmartAccountant.sync";
+
+#[cfg(windows)]
+fn sync_key_entry(company_id: &str) -> Result<keyring::Entry, String> {
+    if company_id.is_empty()
+        || company_id.len() > 64
+        || !company_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
+        return Err("Invalid company id".into());
+    }
+    keyring::Entry::new(SYNC_KEY_SERVICE, company_id).map_err(|e| e.to_string())
+}
+
+/// Returns the stored base64 key for a company, or None if there is none.
+#[tauri::command]
+fn sync_key_get(company_id: String) -> Result<Option<String>, String> {
+    let entry = sync_key_entry(&company_id)?;
+    match entry.get_password() {
+        Ok(v) => Ok(Some(v)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Stores a base64 key for a company. Overwrites any existing key.
+#[tauri::command]
+fn sync_key_set(company_id: String, key_base64: String) -> Result<(), String> {
+    if key_base64.len() > 128 {
+        return Err("Key is too long".into());
+    }
+    sync_key_entry(&company_id)?
+        .set_password(&key_base64)
+        .map_err(|e| e.to_string())
+}
+
+/// Removes a company key from this device.
+#[tauri::command]
+fn sync_key_delete(company_id: String) -> Result<(), String> {
+    match sync_key_entry(&company_id)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+// Non-Windows builds have no keychain binding yet (Android uses its own
+// Keystore path). Every call fails closed instead of storing keys in plain text.
+#[cfg(not(windows))]
+#[tauri::command]
+fn sync_key_get(company_id: String) -> Result<Option<String>, String> {
+    let _ = (&company_id, SYNC_KEY_SERVICE);
+    Err("Secure key storage is not available on this platform".into())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn sync_key_set(company_id: String, key_base64: String) -> Result<(), String> {
+    let _ = (&company_id, &key_base64);
+    Err("Secure key storage is not available on this platform".into())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn sync_key_delete(company_id: String) -> Result<(), String> {
+    let _ = &company_id;
+    Err("Secure key storage is not available on this platform".into())
+}
+
 #[tauri::command]
 fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
@@ -184,6 +255,9 @@ pub fn run() {
             show_whatsapp_web,
             start_oauth_window,
             exit_app,
+            sync_key_get,
+            sync_key_set,
+            sync_key_delete,
         ])
         .setup(|app| {
             let local_data = app.path().local_data_dir()?;
