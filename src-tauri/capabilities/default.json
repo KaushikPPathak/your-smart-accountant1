@@ -59,7 +59,13 @@
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "https://evheurqijriyxubswsry.supabase.co/functions/v1/setu-gstin-proxy" }
+        { "url": "https://evheurqijriyxubswsry.supabase.co/functions/v1/setu-gstin-proxy" },
+        { "url": "https://login.microsoftonline.com/**" },
+        { "url": "https://graph.microsoft.com/**" },
+        { "url": "https://oauth2.googleapis.com/**" },
+        { "url": "https://www.googleapis.com/**" },
+        { "url": "https://api.dropboxapi.com/**" },
+        { "url": "https://content.dropboxapi.com/**" }
       ]
     }
   ]

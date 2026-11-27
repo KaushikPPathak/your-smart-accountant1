@@ -1,3 +1,4 @@
+import { appFetch } from "@/lib/http-client";
 // User-owned cloud backup providers — Google Drive / OneDrive / Dropbox.
 //
 // Everything here runs entirely in the browser using OAuth 2.0 PKCE
@@ -348,7 +349,7 @@ async function exchangeCodeForToken(id: ProviderId, code: string, verifier: stri
     client_id: clientId,
     code_verifier: verifier,
   });
-  const res = await fetch(PROVIDERS[id].tokenUrl, {
+  const res = await appFetch(PROVIDERS[id].tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
@@ -368,7 +369,7 @@ async function refreshAccessToken(id: ProviderId): Promise<StoredToken> {
     refresh_token: cur.refresh_token,
     client_id: clientId,
   });
-  const res = await fetch(PROVIDERS[id].tokenUrl, {
+  const res = await appFetch(PROVIDERS[id].tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
@@ -413,21 +414,21 @@ export function disconnectProvider(id: ProviderId): void {
 async function fetchAccountLabel(id: ProviderId, accessToken: string): Promise<string | undefined> {
   try {
     if (id === "gdrive") {
-      const r = await fetch("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)", {
+      const r = await appFetch("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)", {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const j = await r.json() as { user?: { emailAddress?: string; displayName?: string } };
       return j.user?.emailAddress || j.user?.displayName;
     }
     if (id === "onedrive") {
-      const r = await fetch("https://graph.microsoft.com/v1.0/me?$select=userPrincipalName,displayName", {
+      const r = await appFetch("https://graph.microsoft.com/v1.0/me?$select=userPrincipalName,displayName", {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const j = await r.json() as { userPrincipalName?: string; displayName?: string };
       return j.userPrincipalName || j.displayName;
     }
     if (id === "dropbox") {
-      const r = await fetch("https://api.dropboxapi.com/2/users/get_current_account", {
+      const r = await appFetch("https://api.dropboxapi.com/2/users/get_current_account", {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -471,7 +472,7 @@ export async function uploadBackup(
       "Content-Type: application/octet-stream\r\n\r\n" +
       contents +
       close;
-    const r = await fetch(
+    const r = await appFetch(
       "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink",
       {
         method: "POST",
@@ -491,7 +492,7 @@ export async function uploadBackup(
     // App-folder upload; small file simple PUT (<4MB is fine for our JSON backups).
     const path = `${APP_FOLDER}/${fileName}`;
     const url = `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${encodeURIComponent(path)}:/content`;
-    const r = await fetch(url, {
+    const r = await appFetch(url, {
       method: "PUT",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/octet-stream" },
       body: blob,
@@ -504,7 +505,7 @@ export async function uploadBackup(
   if (id === "dropbox") {
     // App-folder-scoped Dropbox app uploads relative to the app folder root.
     const arg = { path: `/${fileName}`, mode: "add", autorename: true, mute: true };
-    const r = await fetch("https://content.dropboxapi.com/2/files/upload", {
+    const r = await appFetch("https://content.dropboxapi.com/2/files/upload", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

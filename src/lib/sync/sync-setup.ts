@@ -6,6 +6,7 @@ import { ensureRecoveryCopy } from "@/lib/sync/recovery-key";
 import type { KeyStore } from "@/lib/sync/sync-crypto";
 import { getOrCreateCompanyKey } from "@/lib/sync/sync-crypto";
 import { oneDriveTokenProvider } from "@/lib/sync/onedrive-session";
+import { appFetch } from "@/lib/http-client";
 
 const DEVICE_KEY = "ym_sync_device_id";
 
@@ -24,7 +25,7 @@ export function getOrCreateDeviceId(): string {
 
 /** The OneDrive folder for sync, using the encrypted token vault. */
 export function oneDriveSyncFolder(store: KeyStore): CloudFolder {
-  return createOneDriveFolder(oneDriveTokenProvider(store));
+  return createOneDriveFolder(oneDriveTokenProvider(store), appFetch);
 }
 
 /**
