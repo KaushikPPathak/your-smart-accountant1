@@ -99,6 +99,7 @@ fn sync_key_entry(company_id: &str) -> Result<keyring::Entry, String> {
 }
 
 /// Returns the stored base64 key for a company, or None if there is none.
+#[cfg(windows)]
 #[tauri::command]
 fn sync_key_get(company_id: String) -> Result<Option<String>, String> {
     let entry = sync_key_entry(&company_id)?;
@@ -110,6 +111,7 @@ fn sync_key_get(company_id: String) -> Result<Option<String>, String> {
 }
 
 /// Stores a base64 key for a company. Overwrites any existing key.
+#[cfg(windows)]
 #[tauri::command]
 fn sync_key_set(company_id: String, key_base64: String) -> Result<(), String> {
     if key_base64.len() > 128 {
@@ -121,6 +123,7 @@ fn sync_key_set(company_id: String, key_base64: String) -> Result<(), String> {
 }
 
 /// Removes a company key from this device.
+#[cfg(windows)]
 #[tauri::command]
 fn sync_key_delete(company_id: String) -> Result<(), String> {
     match sync_key_entry(&company_id)?.delete_credential() {
