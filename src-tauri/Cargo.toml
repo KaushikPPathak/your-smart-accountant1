@@ -25,6 +25,9 @@ serde_json = "1"
 # unsafe-headers lets the app send an empty Origin header, which the plugin then removes.
 tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
 tauri-plugin-share-text = { path = "plugins/share-text" }
+tauri-plugin-secure-key = { path = "plugins/secure-key" }
+# QR scanner for pairing a phone (Android). Version 2 matches the Tauri 2 plugins above.
+tauri-plugin-barcode-scanner = "2"
 
 [target.'cfg(windows)'.dependencies]
 # Windows Credential Manager for per-company sync encryption keys.

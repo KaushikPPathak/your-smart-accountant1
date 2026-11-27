@@ -1,0 +1,3 @@
+[default]
+description = "Allows storing and reading sync keys on this phone"
+permissions = ["allow-set-key", "allow-get-key", "allow-delete-key"]
