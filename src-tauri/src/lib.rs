@@ -241,7 +241,6 @@ async fn show_whatsapp_web(
     Ok(())
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// The QR scanner exists only on phones; desktop builds skip it.
 fn with_mobile_plugins(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
     #[cfg(target_os = "android")]
@@ -254,6 +253,7 @@ fn with_mobile_plugins(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<ta
     }
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     with_mobile_plugins(tauri::Builder::default())
         .manage(WhatsAppState {
