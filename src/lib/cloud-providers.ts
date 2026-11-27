@@ -1,4 +1,5 @@
 import { appFetch } from "@/lib/http-client";
+import { isAndroidTauri } from "@/lib/native-bridge";
 // User-owned cloud backup providers — Google Drive / OneDrive / Dropbox.
 //
 // Everything here runs entirely in the browser using OAuth 2.0 PKCE
@@ -277,10 +278,67 @@ async function runDesktopAuthCodeFlow(id: ProviderId, clientId: string): Promise
   });
 }
 
+// ---------- Android redirect flow ----------
+// Android has a single window, so the desktop sign-in window cannot be shown
+// there. The app's own page navigates to the provider instead. The pending
+// PKCE details are saved first; when the provider redirects back, the
+// /oauth-callback route finishes the exchange (completeAndroidSignIn).
+const ANDROID_PENDING_KEY = "ym_oauth_pending";
+
+interface PendingAndroidSignIn {
+  id: ProviderId;
+  state: string;
+  verifier: string;
+  clientId: string;
+}
+
+function savePendingAndroid(p: PendingAndroidSignIn): void {
+  try { localStorage.setItem(ANDROID_PENDING_KEY, JSON.stringify(p)); } catch { /* ignore */ }
+}
+
+function loadPendingAndroid(): PendingAndroidSignIn | null {
+  try {
+    const raw = localStorage.getItem(ANDROID_PENDING_KEY);
+    return raw ? (JSON.parse(raw) as PendingAndroidSignIn) : null;
+  } catch { return null; }
+}
+
+async function startAndroidRedirectFlow(id: ProviderId, clientId: string): Promise<never> {
+  const verifier = randomString(64);
+  const challenge = await sha256(verifier);
+  const state = randomString(24);
+  savePendingAndroid({ id, state, verifier, clientId });
+  window.location.href = buildAuthUrl(id, clientId, state, challenge);
+  // The page is leaving for the provider; this promise is never resolved here.
+  return new Promise<never>(() => {});
+}
+
+/**
+ * Called by the /oauth-callback route on Android. Checks the state against the
+ * pending sign-in, exchanges the code, and stores the token.
+ * Returns the provider that was connected.
+ */
+export async function completeAndroidSignIn(params: URLSearchParams): Promise<ProviderId> {
+  const pending = loadPendingAndroid();
+  try { localStorage.removeItem(ANDROID_PENDING_KEY); } catch { /* ignore */ }
+  if (!pending) throw new Error("No sign-in was in progress. Please try connecting again.");
+  if ((params.get("state") ?? "") !== `${pending.id}:${pending.state}`) {
+    throw new Error("OAuth state mismatch — aborted for safety.");
+  }
+  const err = params.get("error_description") || params.get("error");
+  const code = params.get("code");
+  if (err || !code) throw new Error(err || "Sign-in cancelled.");
+  const tok = await exchangeCodeForToken(pending.id, code, pending.verifier);
+  tok.account_label = await fetchAccountLabel(pending.id, tok.access_token).catch(() => undefined);
+  saveToken(pending.id, tok);
+  return pending.id;
+}
+
 async function runAuthCodeFlow(id: ProviderId): Promise<{ code: string; verifier: string }> {
   const clientId = getClientId(id);
   if (!clientId) throw new Error(`${PROVIDERS[id].label} is not configured (missing client ID).`);
 
+  if (isAndroidTauri()) return startAndroidRedirectFlow(id, clientId);
   if (isTauriShell()) return runDesktopAuthCodeFlow(id, clientId);
 
   // Browser: open the window synchronously, inside the click gesture.

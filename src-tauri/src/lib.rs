@@ -280,12 +280,36 @@ pub fn run() {
             let webview_dir = local_data.join(WEBVIEW_SUBDIR);
             std::fs::create_dir_all(&webview_dir).ok();
 
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
+            let main_builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("Smart Accountant")
                 .inner_size(1280.0, 800.0)
-                .resizable(true)
-                .data_directory(webview_dir)
-                .build()?;
+                .resizable(true);
+            #[cfg(target_os = "android")]
+            let main_builder = {
+                let handle = app.handle().clone();
+                main_builder.on_navigation(move |nav_url| {
+                    // Android has one window: the sign-in page runs in the main
+                    // webview, so the provider's redirect is caught here and
+                    // the app is sent back to its own /oauth-callback page.
+                    let is_redirect = matches!(nav_url.host_str(), Some("localhost") | Some("127.0.0.1"))
+                        && nav_url.path() == "/oauth-callback";
+                    if !is_redirect {
+                        return true;
+                    }
+                    let target = format!(
+                        "http://tauri.localhost/oauth-callback?{}",
+                        nav_url.query().unwrap_or("")
+                    );
+                    let h = handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let (Some(w), Ok(url)) = (h.get_webview_window("main"), target.parse::<tauri::Url>()) {
+                            let _ = w.navigate(url);
+                        }
+                    });
+                    false
+                })
+            };
+            main_builder.data_directory(webview_dir).build()?;
 
             // WhatsApp Web is NOT pre-loaded at startup: it competed with the
             // main window for CPU, disk and network during launch. The window
