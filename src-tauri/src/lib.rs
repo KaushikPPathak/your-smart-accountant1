@@ -242,8 +242,20 @@ async fn show_whatsapp_web(
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// The QR scanner exists only on phones; desktop builds skip it.
+fn with_mobile_plugins(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    #[cfg(target_os = "android")]
+    {
+        builder.plugin(tauri_plugin_barcode_scanner::init())
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        builder
+    }
+}
+
 pub fn run() {
-    tauri::Builder::default()
+    with_mobile_plugins(tauri::Builder::default())
         .manage(WhatsAppState {
             last_phone: Mutex::new(None),
         })
@@ -253,7 +265,6 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_share_text::init())
         .plugin(tauri_plugin_secure_key::init())
-        .plugin(tauri_plugin_barcode_scanner::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             copy_files_to_clipboard,
