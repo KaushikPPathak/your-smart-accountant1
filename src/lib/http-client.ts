@@ -11,9 +11,21 @@ function inTauri(): boolean {
   return Boolean(w?.__TAURI_INTERNALS__);
 }
 
+/**
+ * The desktop plugin adds an Origin header naming the app's webview. Microsoft
+ * refuses token requests that carry one (AADSTS90023). An empty Origin header
+ * is removed by the plugin, so the request goes out without it.
+ */
+export function withoutOriginHeader(init: RequestInit = {}): RequestInit {
+  const headers = new Headers(init.headers);
+  headers.set("Origin", "");
+  return { ...init, headers };
+}
+
 export async function appFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
-  const doFetch: FetchFn = inTauri()
-    ? ((await import("@tauri-apps/plugin-http")).fetch as unknown as FetchFn)
-    : (fetch as unknown as FetchFn);
-  return doFetch(input, init);
+  if (inTauri()) {
+    const nativeFetch = (await import("@tauri-apps/plugin-http")).fetch as unknown as FetchFn;
+    return nativeFetch(input, withoutOriginHeader(init));
+  }
+  return (fetch as unknown as FetchFn)(input, init);
 }

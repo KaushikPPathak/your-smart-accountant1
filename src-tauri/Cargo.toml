@@ -22,7 +22,8 @@ tauri-plugin-dialog = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri-plugin-http = "2"
+# unsafe-headers lets the app send an empty Origin header, which the plugin then removes.
+tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
 tauri-plugin-share-text = { path = "plugins/share-text" }
 
 [target.'cfg(windows)'.dependencies]
