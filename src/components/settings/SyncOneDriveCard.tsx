@@ -15,7 +15,14 @@ import {
   isOneDriveSignedIn,
 } from "@/lib/sync/onedrive-session";
 import { defaultKeychainKeyStore } from "@/lib/sync/keychain-store";
-import { oneDriveSyncFolder, startPhonePairing, turnOnSync } from "@/lib/sync/sync-setup";
+import {
+  isSyncOn,
+  oneDriveSyncFolder,
+  setSyncOn,
+  startPhonePairing,
+  syncNowPc,
+  turnOnSync,
+} from "@/lib/sync/sync-setup";
 import { PAIRING_TTL_MS, type PairingOffer } from "@/lib/sync/pairing";
 
 type Pairing = PairingOffer & { qr: string };
@@ -24,13 +31,18 @@ export function SyncOneDriveCard() {
   const { activeCompanyId } = useCompany();
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [syncOn, setSyncOn] = useState(false);
+  const [syncOn, setSyncOnState] = useState(false);
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
     setConnected(isOneDriveSignedIn());
   }, []);
+
+  // Sync on/off is remembered per company, so it survives a restart.
+  useEffect(() => {
+    setSyncOnState(activeCompanyId ? isSyncOn(activeCompanyId) : false);
+  }, [activeCompanyId]);
 
   // Count down the pairing offer.
   useEffect(() => {
@@ -59,7 +71,8 @@ export function SyncOneDriveCard() {
   const onDisconnect = () => {
     disconnectOneDrive();
     setConnected(false);
-    setSyncOn(false);
+    if (activeCompanyId) setSyncOn(activeCompanyId, false);
+    setSyncOnState(false);
     setPairing(null);
     toast.success("OneDrive disconnected");
   };
@@ -71,10 +84,29 @@ export function SyncOneDriveCard() {
       ensureOneDriveClientId();
       const store = await defaultKeychainKeyStore();
       const res = await turnOnSync(oneDriveSyncFolder(store), store, activeCompanyId);
-      setSyncOn(true);
+      setSyncOn(activeCompanyId, true);
+      setSyncOnState(true);
       toast.success(res.recoveryCreated ? "Sync is on. Recovery copy saved to OneDrive." : "Sync is on.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not turn on sync");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onSyncNow = async () => {
+    if (!activeCompanyId) return;
+    setBusy("now");
+    try {
+      const store = await defaultKeychainKeyStore();
+      const res = await syncNowPc(store, activeCompanyId);
+      toast.success(
+        res.entriesSent === 0
+          ? "Nothing new to send."
+          : `Sent ${res.entriesSent} change${res.entriesSent === 1 ? "" : "s"} to OneDrive.`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Sync failed");
     } finally {
       setBusy(null);
     }
@@ -131,9 +163,15 @@ export function SyncOneDriveCard() {
                 <ShieldCheck className="mr-2 h-4 w-4" /> Turn on sync for this company
               </Button>
             ) : (
-              <p className="flex items-center gap-2 text-muted-foreground">
-                <ShieldCheck className="h-4 w-4" /> Sync is on for this company
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="flex items-center gap-2 text-muted-foreground">
+                  <ShieldCheck className="h-4 w-4" /> Sync is on for this company
+                </p>
+                <Button size="sm" onClick={onSyncNow} disabled={busy !== null}>
+                  {busy === "now" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Sync now
+                </Button>
+              </div>
             )}
           </div>
         )}

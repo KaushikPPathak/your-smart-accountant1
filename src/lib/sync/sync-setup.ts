@@ -7,6 +7,8 @@ import type { KeyStore } from "@/lib/sync/sync-crypto";
 import { getOrCreateCompanyKey } from "@/lib/sync/sync-crypto";
 import { oneDriveTokenProvider } from "@/lib/sync/onedrive-session";
 import { appFetch } from "@/lib/http-client";
+import { dexieBookReader } from "@/lib/sync/dexie-book-reader";
+import { loadPublishState, publishChanges, type PublishResult } from "@/lib/sync/pc-publisher";
 
 const DEVICE_KEY = "ym_sync_device_id";
 
@@ -51,4 +53,44 @@ export async function startPhonePairing(
   const pcDeviceId = getOrCreateDeviceId();
   const offer = await createPairingOffer({ companyId, companyKey, pcDeviceId, now });
   return { ...offer, pcDeviceId };
+}
+
+// ---------- Sync on / Sync now (PC) ----------
+
+const syncOnKey = (companyId: string) => `ym_sync_on:${companyId}`;
+
+/** Whether sync was turned on for this company on this PC. */
+export function isSyncOn(companyId: string): boolean {
+  try {
+    return localStorage.getItem(syncOnKey(companyId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setSyncOn(companyId: string, on: boolean): void {
+  try {
+    if (on) localStorage.setItem(syncOnKey(companyId), "1");
+    else localStorage.removeItem(syncOnKey(companyId));
+  } catch {
+    // Ignore: the user can turn sync on again.
+  }
+}
+
+/**
+ * Publish this company's changes to the phone through OneDrive.
+ * Requires sync to be turned on for the company first.
+ */
+export async function syncNowPc(store: KeyStore, companyId: string): Promise<PublishResult> {
+  if (!isSyncOn(companyId)) throw new Error("Turn on sync for this company first.");
+  const folder = oneDriveSyncFolder(store);
+  const key = await getOrCreateCompanyKey(store, companyId);
+  return publishChanges({
+    folder,
+    key,
+    companyId,
+    deviceId: getOrCreateDeviceId(),
+    reader: dexieBookReader,
+    state: loadPublishState(companyId),
+  });
 }
